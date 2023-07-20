@@ -7221,6 +7221,27 @@ func IsVolumeStatusUP(vol *volume.Volume) (bool, error) {
 	return true, nil
 }
 
+// GetVolumeReplicationStatus returns PX volume replication status
+func GetVolumeReplicationStatus(vol *volume.Volume) (string, error) {
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return "", err
+	}
+	cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
+
+	output, err := Inst().N.RunCommand(node.GetStorageDriverNodes()[0], cmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+	//sample output : "Replication Status       :  Up"
+	output = strings.Split(strings.TrimSpace(output), ":")[1]
+	return strings.TrimSpace(output), nil
+}
+
 type KvdbNode struct {
 	PeerUrls   []string `json:"PeerUrls"`
 	ClientUrls []string `json:"ClientUrls"`
@@ -7844,4 +7865,178 @@ func IsJournalEnabled() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
+
+	for _, ctx := range *contexts {
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		var timeout time.Duration
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+		err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return err
+		}
+
+		//waiting for volumes replication status should be up
+		for _, v := range appVolumes {
+			t := func() (interface{}, bool, error) {
+				replicationStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					return nil, false, err
+				}
+
+				if replicationStatus == "Up" {
+					return "", false, nil
+				}
+				if replicationStatus == "Resync" {
+					return "", true, fmt.Errorf("volume %s is still in Resync state", v.ID)
+				}
+				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
+			}
+			_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			if err != nil {
+				return err
+			}
+		}
+
+		log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+		applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+		if err != nil {
+			return err
+		}
+
+		applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
+
+		for name, _ := range applicationScaleMap {
+			applicationScaleDownMap[name] = 0
+		}
+		err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+		if err != nil {
+			return err
+		}
+		//waiting for volumes to be detached after scale down
+		for _, v := range appVolumes {
+			t := func() (interface{}, bool, error) {
+				apiVol, err := Inst().V.InspectVolume(v.ID)
+				if err != nil {
+					return "", false, err
+				}
+				if len(apiVol.AttachedOn) == 0 {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("volume %s is still attached to %s", v.ID, apiVol.AttachedOn)
+			}
+			_, err = task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, v := range appVolumes {
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return err
+			}
+
+			var checksum string
+			var primaryVol *opsapi.Volume
+			for _, rs := range replicaSets {
+				poolUuids := rs.PoolUuids
+				for _, poolUuid := range poolUuids {
+					nodeDetail, err := GetNodeWithGivenPoolID(poolUuid)
+					if err != nil {
+						return err
+					}
+					poolID, err := GetPoolIDFromPoolUUID(poolUuid)
+					if err != nil {
+						return err
+					}
+
+					inspectVolume, err := Inst().V.InspectVolume(v.ID)
+					if err != nil {
+						return err
+					}
+					log.Infof("Getting md5sum for volume %s", inspectVolume.Id)
+					//To-Do update the command if set up is dmthin
+					cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
+					output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
+						Timeout:         defaultTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+						Sudo:            true,
+					})
+					if err != nil {
+						return err
+					}
+					vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
+					if checksum == "" {
+						checksum = vChecksum
+						primaryVol = inspectVolume
+					}
+					if checksum != vChecksum {
+						return fmt.Errorf("md5sum of volume [%s[ having [%s] is not matching with volume [%s] having [%s]", inspectVolume.Id, vChecksum, primaryVol.Id, checksum)
+					}
+					log.Infof("md5sum of volume [%s] having [%s] is matching with vol [%s] having [%s]", inspectVolume.Id, vChecksum, primaryVol.Id, checksum)
+				}
+			}
+		}
+
+		//reverting application scale
+		applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
+
+		for name, scale := range applicationScaleMap {
+			log.InfoD(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, scale))
+			applicationScaleUpMap[name] = scale
+		}
+		err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetContextsOnNode returns the contexts which have volumes attached on the given node.
+func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
+	contextsOnNode := make([]*scheduler.Context, 0)
+	log.Infof("Getting contexts on node %s", n.Name)
+	for _, ctx := range *contexts {
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range appVolumes {
+			// case where volume is attached to the given node
+			attachedNode, err := Inst().V.GetNodeForVolume(v, 1*time.Minute, 5*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			if n.VolDriverNodeID == attachedNode.VolDriverNodeID {
+				contextsOnNode = append(contextsOnNode, ctx)
+				break
+			}
+			//case where volume is attached to different node but one of the replicas is the give node
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, rn := range replicaSets[0].Nodes {
+				if rn == n.VolDriverNodeID {
+					contextsOnNode = append(contextsOnNode, ctx)
+					break
+				}
+			}
+		}
+	}
+	return contextsOnNode, nil
 }

@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
@@ -27,6 +29,7 @@ var _ = Describe("{CrashOneNode}", func() {
 		log.InfoD(stepLog)
 		var err error
 		contexts = make([]*scheduler.Context, 0)
+		nodeContexts := make([]*scheduler.Context, 0)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("crashonenode-%d", i))...)
@@ -39,11 +42,13 @@ var _ = Describe("{CrashOneNode}", func() {
 			nodesToCrash := node.GetStorageDriverNodes()
 
 			// Crash node and check driver status
-			stepLog = fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash)
+			stepLog = fmt.Sprintf("crash node one at a time from the pxnode(s)")
 			Step(stepLog, func() {
-				log.InfoD(fmt.Sprintf("crash node one at a time from the node(s): %v", nodesToCrash))
+				log.InfoD(stepLog)
 				for _, n := range nodesToCrash {
 					if n.IsStorageDriverInstalled {
+						nodeContexts, err = GetContextsOnNode(&contexts, &n)
+						log.FailOnError(err, fmt.Sprintf("error getting contexts on node %s", n.Name))
 						stepLog = fmt.Sprintf("crash node: %s", n.Name)
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
@@ -78,11 +83,17 @@ var _ = Describe("{CrashOneNode}", func() {
 							dash.VerifyFatal(err, nil, "Validate volume is driver up")
 						})
 
+						if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+							err = ValidateDataIntegrity(&nodeContexts)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("validate data integrity after node %s crash", n.Name))
+						}
+
 						Step("validate apps", func() {
 							for _, ctx := range contexts {
 								ValidateContext(ctx)
 							}
 						})
+
 					}
 				}
 			})

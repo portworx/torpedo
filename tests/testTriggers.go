@@ -576,6 +576,38 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 				UpdateOutcome(event, err)
 			}
 		}
+
+		if len(*contexts) > 2 {
+			mid := len(*contexts) / 2
+			for i, ctx := range *contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				var volumeSpecUpdate *opsapi.VolumeSpecUpdate
+				if i < mid {
+					volumeSpecUpdate = &opsapi.VolumeSpecUpdate{
+						IoThrottleOpt: &opsapi.VolumeSpecUpdate_IoThrottle{
+							IoThrottle: &opsapi.IoThrottle{
+								ReadBwMbytes:  10,
+								WriteBwMbytes: 10,
+							},
+						},
+					}
+				} else {
+					volumeSpecUpdate = &opsapi.VolumeSpecUpdate{
+						IoThrottleOpt: &opsapi.VolumeSpecUpdate_IoThrottle{
+							IoThrottle: &opsapi.IoThrottle{
+								ReadIops:  1024,
+								WriteIops: 1024,
+							},
+						},
+					}
+				}
+				for _, appVol := range appVolumes {
+					log.Infof(fmt.Sprintf("updating volume %s [app:%s] with volume spec: %+v", appVol.Name, ctx.App.Key, volumeSpecUpdate))
+					err = Inst().V.UpdateVolumeSpec(appVol, volumeSpecUpdate)
+				}
+			}
+		}
 	})
 }
 
