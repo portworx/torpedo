@@ -9885,8 +9885,6 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.FailOnError(err, "failed while getting node")
 			driverName := vsphere.DriverName
 			driver, _ := node.Get(driverName)
-			err = driver.PowerOffVM(selectedNodeForOps)
-			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 			err = driver.DeleteVmOnNode(selectedNodeForOps)
 			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 
