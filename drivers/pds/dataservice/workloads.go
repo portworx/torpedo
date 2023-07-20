@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func CreateServiceAccount(namespace string) (*corev1.ServiceAccount, error) {
+func createServiceAccount(namespace string) (*corev1.ServiceAccount, error) {
 	serviceAccountName := "pds-loadgen"
 	serviceAccount := &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
@@ -45,7 +45,7 @@ func CreateServiceAccount(namespace string) (*corev1.ServiceAccount, error) {
 	return serviceAccount, err
 }
 
-func CreateRole(namespace string, account *corev1.ServiceAccount) error {
+func createRole(namespace string, account *corev1.ServiceAccount) error {
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      account.Name,
@@ -98,7 +98,7 @@ func CreateRole(namespace string, account *corev1.ServiceAccount) error {
 	return err
 }
 
-func CreateRoleBinding(namespace string, account *corev1.ServiceAccount) error {
+func createRoleBinding(namespace string, account *corev1.ServiceAccount) error {
 	roleBindingName := "pds-loadgen:pds-loadgen"
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -137,7 +137,7 @@ func CreateRoleBinding(namespace string, account *corev1.ServiceAccount) error {
 	return err
 }
 
-func CreateClusterRole() (*rbacv1.ClusterRole, error) {
+func createClusterRole() (*rbacv1.ClusterRole, error) {
 	clusterRoleName := "pds-loadgen-cluster"
 	clusterRole := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -169,7 +169,7 @@ func CreateClusterRole() (*rbacv1.ClusterRole, error) {
 	return clusterrole, err
 }
 
-func CreateClusterRoleBinding(namespace string, account *corev1.ServiceAccount, clusterRole *rbacv1.ClusterRole) error {
+func createClusterRoleBinding(namespace string, account *corev1.ServiceAccount, clusterRole *rbacv1.ClusterRole) error {
 	clusterRoleBindingName := "pds-loadgen:pds-loadgen-c"
 
 	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
@@ -209,33 +209,48 @@ func CreateClusterRoleBinding(namespace string, account *corev1.ServiceAccount, 
 }
 
 func CreatePolicies(namespace string) (*corev1.ServiceAccount, error) {
-	serviceAccount, err := CreateServiceAccount(namespace)
+	serviceAccount, err := createServiceAccount(namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating service Account %v", err)
 	}
 
-	err = CreateRole(namespace, serviceAccount)
+	err = createRole(namespace, serviceAccount)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating role %v", err)
 	}
 
-	err = CreateRoleBinding(namespace, serviceAccount)
+	err = createRoleBinding(namespace, serviceAccount)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating rolebinding %v", err)
 	}
 
-	clusterRole, err := CreateClusterRole()
+	clusterRole, err := createClusterRole()
 	if err != nil {
 		return nil, fmt.Errorf("error while creating cluster role %v", err)
 	}
 
-	err = CreateClusterRoleBinding(namespace, serviceAccount, clusterRole)
+	err = createClusterRoleBinding(namespace, serviceAccount, clusterRole)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating cluster rolebinding %v", err)
 	}
 	return serviceAccount, nil
 }
 
+// Inserts Data into the db and returns the checksum
+func (ds *DataserviceType) InsertDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, error) {
+	wkloadGenParams.Mode = "write"
+	cksum, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
+	return cksum, err
+}
+
+// Reads Data from the db and returns the checksum
+func (ds *DataserviceType) ReadDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams pdsdriver.LoadGenParams) (string, error) {
+	wkloadGenParams.Mode = "read"
+	cksum, err := ds.GenerateWorkload(pdsDeployment, wkloadGenParams)
+	return cksum, err
+}
+
+// GenerateWorkload creates a deployment using the given params(perform read/write) and returns the checksum
 func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 	wkloadGenParams pdsdriver.LoadGenParams) (string, error) {
 
