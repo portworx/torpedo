@@ -208,7 +208,7 @@ func createClusterRoleBinding(namespace string, account *corev1.ServiceAccount, 
 	return err
 }
 
-func CreatePolicies(namespace string) (*corev1.ServiceAccount, error) {
+func createPolicies(namespace string) (*corev1.ServiceAccount, error) {
 	serviceAccount, err := createServiceAccount(namespace)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating service Account %v", err)
@@ -268,7 +268,7 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 	replacePassword := wkloadGenParams.ReplacePassword
 	clusterMode := wkloadGenParams.ClusterMode
 
-	_, err := CreatePolicies(namespace)
+	_, err := createPolicies(namespace)
 	if err != nil {
 		return "", fmt.Errorf("error while creating policies")
 	}
