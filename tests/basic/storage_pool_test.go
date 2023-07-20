@@ -9905,13 +9905,13 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 								err = Inst().V.ExpandPool(poolListForOps[i].Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 								log.FailOnError(err, "error while expanding pool")
 								maxDriveAllowed = maxDriveAllowed - 1
-								if maxDriveAllowed == 0 {
-									break
-								}
 								resizeErr := waitForPoolToBeResized(expectedSize, poolListForOps[i].Uuid, isjournal)
 								dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
 								err = Inst().V.RefreshDriverEndpoints()
 								log.FailOnError(err, "error refreshing volume endpoints")
+								if maxDriveAllowed == 0 {
+									break
+								}
 							}
 						}
 					}
