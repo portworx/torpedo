@@ -4768,6 +4768,96 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 	updateMetrics(*event)
 }
 
+// TriggerVolumeUpdate enables to test volume update
+func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(UpdateVolume)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: UpdateVolume,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+	stepLog := "Validate update of the volumes"
+	context(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Update Io priority on volumes "
+		Step(stepLog,
+			func() {
+				log.InfoD(stepLog)
+				updateIOProfileOnVolumes(contexts, event)
+				log.InfoD("Update IO priority call completed")
+			})
+	})
+	updateMetrics(*event)
+	//TODO need to flip this after 15 minutes
+	//Check IO on volumes
+	//Filp it back
+
+}
+
+// updateIOProfileOnVolumes this method is responsible for updating IO priority on Volumes.
+func updateIOProfileOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
+	for _, ctx := range *contexts {
+		var appVolumes []*volume.Volume
+		var err error
+		var requiredIOProfile string
+		appVolumes, err = Inst().S.GetVolumes(ctx)
+		UpdateOutcome(event, err)
+		if len(appVolumes) == 0 {
+			UpdateOutcome(event, fmt.Errorf("found no volumes for app "))
+		}
+		//TODO this should be parameterized
+		//"Auto","none"
+
+		for _, v := range appVolumes {
+			log.InfoD("Getting info from volume: %s", v.ID)
+			appVol, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				log.Errorf("Error inspecting volume: %v", err)
+			}
+			currentIOProfile := appVol.Spec.IoProfile.SimpleString()
+			derivedIOProfile := appVol.DerivedIoProfile.SimpleString()
+
+			log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", v.ID, currentIOProfile, derivedIOProfile)
+			if currentIOProfile == string("auto") {
+				//Set IOProfile to "none"
+				requiredIOProfile = "none"
+			} else if currentIOProfile == "none" {
+				//set IOProfile to "auto"
+				requiredIOProfile = "auto"
+			}
+			log.InfoD("Expected IO Profile %v", requiredIOProfile)
+			err = Inst().V.UpdateIOProfile(v.ID, requiredIOProfile)
+			if err != nil {
+				UpdateOutcome(event, err)
+			}
+			//Verify Volume set with required IOPriority.
+			appVol, err = Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				log.Errorf("Error inspecting volume: %v", err)
+			}
+
+			log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
+			if !strings.EqualFold(requiredIOProfile, appVol.Spec.IoProfile.SimpleString()) {
+				err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", v.ID, requiredIOProfile)
+				UpdateOutcome(event, err)
+			}
+			log.InfoD("Update IO profile on [%v] : [%v]", v.ID, requiredIOProfile)
+			log.InfoD("Completed update on %v", v.ID)
+		}
+	}
+}
+
 // updateIOPriorityOnVolumes this method is responsible for updating IO priority on Volumes.
 func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
 	for _, ctx := range *contexts {

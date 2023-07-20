@@ -1503,6 +1503,22 @@ func (d *portworx) UpdateIOPriority(volumeName string, priorityType string) erro
 	return nil
 }
 
+func (d *portworx) UpdateIOProfile(volumeName string, profileType string) error {
+	nodes := node.GetStorageDriverNodes()
+	cmd := fmt.Sprintf("%s --io_profile %s  %s", pxctlVolumeUpdate, profileType, volumeName)
+	_, err := d.nodeDriver.RunCommandWithNoRetry(
+		nodes[0],
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return fmt.Errorf("failed setting IO profile, Err: %v", err)
+	}
+	return nil
+}
+
 func (d *portworx) UpdateStickyFlag(volumeName, stickyOption string) error {
 	nodes := node.GetStorageDriverNodes()
 	cmd := fmt.Sprintf("%s %s --sticky %s", pxctlVolumeUpdate, volumeName, stickyOption)
