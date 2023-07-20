@@ -1,3 +1,4 @@
+
 for ARGUMENT in "$@"
 do
    KEY=$(echo $ARGUMENT | cut -f1 -d=)
@@ -6,7 +7,6 @@ do
    export "$KEY"="$VALUE"
 done
 
-sh "ls ${filePath}"
 sh "pwd"
 sh "whoami"
 sh "sed -i 's/AWS_ACCESS_KEY_ID/${env.PSB_AWS_ACCESS_KEY_ID_PSW}/g' ${filePath}"
