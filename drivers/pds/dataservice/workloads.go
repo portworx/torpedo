@@ -268,7 +268,7 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 	replacePassword := wkloadGenParams.ReplacePassword
 	clusterMode := wkloadGenParams.ClusterMode
 
-	_, err := createPolicies(namespace)
+	serviceAccount, err := createPolicies(namespace)
 	if err != nil {
 		return "", fmt.Errorf("error while creating policies")
 	}
@@ -317,7 +317,7 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 							},
 						},
 					},
-					ServiceAccountName: "pds-loadgen",
+					ServiceAccountName: serviceAccount.Name,
 				},
 			},
 		},
