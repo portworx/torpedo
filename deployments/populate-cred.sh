@@ -6,7 +6,9 @@ do
    export "$KEY"="$VALUE"
 done
 
-
+sh "ls ${filePath}"
+sh "pwd"
+sh "whoami"
 sh "sed -i 's/AWS_ACCESS_KEY_ID/${env.PSB_AWS_ACCESS_KEY_ID_PSW}/g' ${filePath}"
 sh "sed -i 's/AWS_SECRET_ACCESS_KEY/${env.SAN_CRED_PSW}/g' $FP"
 sh "sed -i 's/AWS_REGION/$AWS_REGION/g' $FP"
