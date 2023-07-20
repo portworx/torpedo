@@ -54,8 +54,11 @@ const (
 )
 
 var (
-	orgID      string
-	bucketName string
+	orgID                   string
+	bucketName              string
+	Expected_kafka_crd_list = []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
+		"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
+		"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
 )
 
 type MigrationStatsType struct {
