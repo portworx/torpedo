@@ -1,4 +1,5 @@
-
+#!/bin/bash
+set +xe
 for ARGUMENT in "$@"
 do
    KEY=$(echo $ARGUMENT | cut -f1 -d=)
