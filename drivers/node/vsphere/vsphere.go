@@ -48,12 +48,15 @@ const (
 // Vsphere ssh driver
 type vsphere struct {
 	ssh.SSH
-	vsphereUsername string
-	vspherePassword string
-	vsphereHostIP   string
-	ctx             context.Context
-	cancel          context.CancelFunc
-	finder          *find.Finder
+	vsphereUsername        string
+	vspherePassword        string
+	vsphereHostIP          string
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	finder                 *find.Finder
+	client                 *govmomi.Client
+	datacenter             *object.Datacenter
+	storageResourceManager *object.StorageResourceManager
 }
 
 var (
@@ -87,6 +90,24 @@ func (v *vsphere) Init(nodeOpts node.InitOptions) error {
 	if err != nil {
 		return err
 	}
+	v.ctx, v.cancel = context.WithCancel(context.Background())
+
+	t := func() (interface{}, bool, error) {
+		client, err := govmomi.NewClient(v.ctx, u, true)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to initialize vCenter, Err: %v", err)
+		}
+		return client, false, nil
+	}
+
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	v.client = out.(*govmomi.Client)
+
+	v.finder = find.NewFinder(v.client.Client, true)
+	v.storageResourceManager = object.NewStorageResourceManager(v.client.Client)
 	err = v.SSH.Init(nodeOpts)
 	if err != nil {
 		return err
