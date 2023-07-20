@@ -91,7 +91,12 @@ func (v *vsphere) Init(nodeOpts node.InitOptions) error {
 		return err
 	}
 	v.ctx, v.cancel = context.WithCancel(context.Background())
+	vCenterUrl := fmt.Sprintf("https://%s:%s@%s/sdk", v.vsphereUsername, v.vspherePassword, v.vsphereHostIP)
 
+	u, err := url.Parse(vCenterUrl)
+	if err != nil {
+		return err
+	}
 	t := func() (interface{}, bool, error) {
 		client, err := govmomi.NewClient(v.ctx, u, true)
 		if err != nil {
