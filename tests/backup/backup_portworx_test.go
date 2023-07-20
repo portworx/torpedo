@@ -88,7 +88,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.InfoD("Register clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -194,7 +194,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 		Step("Register cluster for backup", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -393,7 +393,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		Step("Register cluster for backup", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -546,7 +546,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			log.InfoD("Register clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -611,7 +611,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			for i := 1; i < len(backupNames); i++ {
 				restoreName := fmt.Sprintf("%s-%s-encrypted", restoreNamePrefix, backupNames[i])
 				restoreNames = append(restoreNames, restoreName)
-				for i, _ := range scheduledAppContexts {
+				for i := range scheduledAppContexts {
 					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
 				}
 				log.FailOnError(err, "%s restore failed", restoreName)
@@ -748,7 +748,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 			log.InfoD("Configuring source and destination clusters with px-central-admin ctx")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
 			appClusterName = destinationClusterName
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, appClusterName, ctx)
