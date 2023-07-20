@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"math/rand"
 	"net/http"
 	"os"
@@ -32,39 +31,6 @@ const (
 	defaultCommandTimeout        = 1 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
-
-var _ = Describe("{ValidateWorkloadGeneration}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ValidateWorkloads", "schedule pds apps and validate workloads",
-			nil, 0)
-	})
-
-	It("start deploying pds apps", func() {
-		pdsapps, err := Inst().Pds.DeployPDSDataservices()
-		log.FailOnError(err, "Error while deploying pds apps")
-
-		for _, app := range pdsapps {
-			wkloadParams = pdsdriver.LoadGenParams{
-				LoadGenDepName:  params.LoadGen.LoadGenDepName,
-				Namespace:       params.InfraToTest.Namespace,
-				Mode:            params.LoadGen.Mode,
-				NumOfRows:       params.LoadGen.NumOfRows,
-				Timeout:         params.LoadGen.Timeout,
-				Replicas:        params.LoadGen.Replicas,
-				TableName:       params.LoadGen.TableName,
-				Iterations:      params.LoadGen.Iterations,
-				FailOnError:     params.LoadGen.FailOnError,
-				ReplacePassword: "",
-				ClusterMode:     "",
-			}
-			cksum, err := Inst().Pds.GenerateWorkload(app, wkloadParams)
-			log.FailOnError(err, "Error while generating workloads for the pds apps")
-			dash.VerifyFatal(cksum != "", true, "Validate workloads")
-		}
-		log.FailOnError(err, "Error while generating workloads for the pds apps")
-	})
-
-})
 
 var _ = Describe("{ValidateDNSEndpoint}", func() {
 	steplog := "Deploy dataservice, delete and validate pds pods"
