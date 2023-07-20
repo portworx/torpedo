@@ -195,6 +195,7 @@ type Driver interface {
 	// PowerOffVM powers VM
 	PowerOffVM(node Node) error
 
+	DeleteVmOnNode(node Node) error
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 
@@ -405,6 +406,13 @@ func (d *notSupportedDriver) PowerOffVM(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "PowerOffVM()",
+	}
+}
+
+func (d *notSupportedDriver) DeleteVmOnNode(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DeleteVmOnNode()",
 	}
 }
 

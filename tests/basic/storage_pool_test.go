@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
@@ -9882,45 +9883,16 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 		Step(stepLog, func() {
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting node")
-			//poolListForOps, err := GetPoolsDetailsOnNode(selectedNodeForOps)
-			//poolStatus, err := getPoolLastOperation(poolListForOps[0].Uuid)
-			//log.FailOnError(err, "error getting pool status")
-			//dash.VerifySafely(poolStatus.Status, api.SdkStoragePool_OPERATION_PENDING, "Verify pool status")
-			//dash.VerifySafely(strings.Contains(poolStatus.Msg, "to be clean before starting pool expansion"), true, fmt.Sprintf("verify pool expansion message %s", poolStatus.Msg))
-			//if poolStatus.Msg != "" {
-			//	log.Infof("Pool Resize Status: %v, Message : %s", poolStatus.Status, poolStatus.Msg)
-			//	if poolStatus.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS &&
-			//		(strings.Contains(poolStatus.Msg, "Storage rebalance is running") || strings.Contains(poolStatus.Msg, "Rebalance in progress")) {
-			//		errstring := true
-			//		dash.VerifyFatal(errstring == true, true, "poolresize failed")
-			//	}
-			var connect node.ConnectionOpts
-			connect.Timeout = 60
-			connect.TimeBeforeRetry = 10
-			err = Inst().N.ShutdownNode(selectedNodeForOps, node.ShutdownNodeOpts{
-				Force:          true,
-				ConnectionOpts: connect,
-			})
+			driverName := vsphere.DriverName
+			driver, _ := node.Get(driverName)
+			err = driver.PowerOffVM(selectedNodeForOps)
+			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
+			err = driver.DeleteVmOnNode(selectedNodeForOps)
+			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
+
 			//shutdown for more than 3 mins
 			time.Sleep(300 * time.Second)
 			log.FailOnError(err, "failed to shutdown the node with err %s", err)
-			//}
-			//t := func() (interface{}, bool, error) {
-			//	err = Inst().N.PowerOnVM(selectedNodeForOps)
-			//	if err != nil {
-			//		return nil, false, err
-			//	}
-			//	return nil, false, nil
-			//}
-
-			//_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
-			//log.FailOnError(err, "Failed to powered on the vm")
-			////isjournal, err := isJournalEnabled()
-			//log.FailOnError(err, "Failed to check if Journal enabled")
-			//validatePXStartTimeout := 5 * time.Minute
-			//if err := Inst().V.WaitDriverUpOnNode(selectedNodeForOps, validatePXStartTimeout); err != nil {
-			//		log.FailOnError(err, "failed to shutdown the node with err %s", err)
-			//	}
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			var stNode node.Node
 

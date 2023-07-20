@@ -3,10 +3,12 @@ package vsphere
 import (
 	"context"
 	"fmt"
-	"github.com/vmware/govmomi/vim25/mo"
 	"net/url"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/vmware/govmomi/vim25/mo"
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -38,6 +40,9 @@ const (
 	VMReadyTimeout = 3 * time.Minute
 	// VMReadyRetryInterval interval for retry when checking VM power state
 	VMReadyRetryInterval = 5 * time.Second
+
+	defaultTimeout       = 30 * time.Second
+	defaultRetryInterval = 2 * time.Second
 )
 
 // Vsphere ssh driver
@@ -48,6 +53,7 @@ type vsphere struct {
 	vsphereHostIP   string
 	ctx             context.Context
 	cancel          context.CancelFunc
+	finder          *find.Finder
 }
 
 var (
@@ -350,4 +356,162 @@ func init() {
 	}
 
 	node.Register(DriverName, v)
+}
+
+func (v *vsphere) DeleteVmOnNode(n node.Node) error {
+	if _, ok := vmMap[n.Name]; !ok {
+		return fmt.Errorf("Could not fetch VM for node: %s", n.Name)
+	}
+
+	vm := vmMap[n.Name]
+
+	err := v.DeleteVm(vm.Name())
+	if err != nil {
+		err := fmt.Errorf("failed to delete VM %s. cause %v", vm.Name(), err)
+		return err
+	}
+	return nil
+}
+
+func (v *vsphere) DeleteVm(vmName string) error {
+	vm, err := v.getVmObjectByName(vmName)
+	if err != nil {
+		log.Warn("failed to get VM: %s, because of err: %+v", vmName, err)
+		return nil
+	}
+
+	isRunning, err := v.isVmRunning(vm)
+	if err != nil {
+		return fmt.Errorf("failed to get if VM: %s is running", vmName)
+	}
+
+	if isRunning {
+		err := v.powerOff(vm)
+		if err != nil {
+			return err
+		}
+	}
+	return v.destroy(vm)
+}
+
+func (v *vsphere) getVmObjectByName(vmName string) (*object.VirtualMachine, error) {
+	t := func() (interface{}, bool, error) {
+		vm, err := v.finder.VirtualMachine(v.ctx, vmName)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get VM object by name: %s, Err: %v", vmName, err)
+		}
+		return vm, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return nil, err
+	}
+	return out.(*object.VirtualMachine), nil
+}
+
+func (v *vsphere) powerOff(vm *object.VirtualMachine) error {
+	var err error
+	vmName := vm.Name()
+	if vmName == "" {
+		vmName, err = v.getVmNameFromSummary(vm)
+		if err != nil {
+			return fmt.Errorf("failed to get VM name, cause %+v", err)
+		}
+	}
+	log.Debug("[%s] powering off", vmName)
+
+	t := func() (interface{}, bool, error) {
+		tsk, err := vm.PowerOff(v.ctx)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to power off VM, Err: %v", err)
+		}
+		return tsk, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	tsk := out.(*object.Task)
+
+	_, err = tsk.WaitForResult(v.ctx)
+	// Ignore VM already power off error message
+	if err != nil && !strings.Contains(err.Error(), "cannot be performed in the current state (Powered off)") {
+		return fmt.Errorf("[%s] failed to wait for VM to be powered off, cause %+v", vmName, err)
+	}
+	log.Debug("[%s] powered off", vmName)
+	return nil
+}
+
+func (v *vsphere) destroy(vm *object.VirtualMachine) error {
+	log.Infof("[%s] deleting VM", vm.Name())
+	t := func() (interface{}, bool, error) {
+		tsk, err := vm.Destroy(v.ctx)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to destroy VM, Err: %v", err)
+		}
+		return tsk, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	tsk := out.(*object.Task)
+
+	if err != nil {
+		log.Error("failed to delete VM %s. cause %v", vm.Name(), err)
+	}
+	if _, err := tsk.WaitForResult(v.ctx); err != nil {
+		log.Error("failed to wait for VM %s to be deleted. cause %v", vm.Name(), err)
+	}
+	log.Debug("[%s] deleted successfully", vm.Name())
+	return nil
+}
+
+func (v *vsphere) getVmNameFromSummary(vm *object.VirtualMachine) (string, error) {
+	t := func() (interface{}, bool, error) {
+		vmSummary, err := v.getVmSummary(vm)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get VM name from sumamry, Err: %v", err)
+		}
+		return vmSummary, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return "", err
+	}
+	vmName := out.(types.VirtualMachineSummary).Config.Name
+	return vmName, nil
+}
+
+func (v *vsphere) getVmSummary(vm *object.VirtualMachine) (types.VirtualMachineSummary, error) {
+	var vmMo mo.VirtualMachine
+	if err := vm.Properties(v.ctx, vm.Reference(), []string{"summary"}, &vmMo); err != nil {
+		return vmMo.Summary, fmt.Errorf("failed to get VM summary, cause: %+v", err)
+	}
+	return vmMo.Summary, nil
+}
+
+func (v *vsphere) isVmRunning(vm *object.VirtualMachine) (bool, error) {
+	t := func() (interface{}, bool, error) {
+		vmSummary, err := v.getVmSummary(vm)
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to get VM summary, Err: %v", err)
+		}
+		return vmSummary, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return false, err
+	}
+	vmSummary := out.(types.VirtualMachineSummary)
+
+	if err != nil {
+		return false, err
+	}
+	if vmSummary.Runtime.PowerState == types.VirtualMachinePowerStatePoweredOn {
+		log.Debug("[%s] is running", vm.Name())
+		return true, nil
+	}
+	log.Debug("[%s] is not running", vm.Name())
+	return false, nil
 }
