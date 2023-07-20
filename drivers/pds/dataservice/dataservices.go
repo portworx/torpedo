@@ -65,10 +65,11 @@ const (
 
 // PDS const
 const (
-	deploymentName  = "qa"
-	driverName      = "pds"
-	maxtimeInterval = 30 * time.Second
-	timeOut         = 30 * time.Minute
+	deploymentName   = "qa"
+	driverName       = "pds"
+	maxtimeInterval  = 30 * time.Second
+	timeOut          = 30 * time.Minute
+	pdsWorkloadImage = "portworx/pds-loadtests:sample-load-pds-qa"
 )
 
 // PDS packages

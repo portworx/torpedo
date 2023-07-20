@@ -291,7 +291,7 @@ func (ds *DataserviceType) GenerateWorkload(pdsDeployment *pds.ModelsDeployment,
 					Containers: []corev1.Container{
 						{
 							Name:            "main",
-							Image:           "portworx/pds-loadtests:sample-load-pds-qa",
+							Image:           pdsWorkloadImage,
 							ImagePullPolicy: "Always",
 							Env: []corev1.EnvVar{
 								{Name: "PDS_DEPLOYMENT", Value: dsName},
