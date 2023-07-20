@@ -1377,6 +1377,7 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 })
 
 var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
+	log.Infof("The CreateFastpathVolumeRebootNode test")
 	var testrailID = 0
 	// JIRA ID : https://portworx.atlassian.net/browse/PTX-15700
 	var runID int
@@ -1390,7 +1391,7 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 	// Step 1:  Find all the Storage nodes
 	pxNodes, err := GetStorageNodes()
 	log.FailOnError(err, "Unable to get the storage nodes")
-	log.Infof("The runID  %v ", pxNodes)
+	log.Infof("The  pxNodes %v ", pxNodes)
 
 	// Step 2:  Apply fast path label on only few of the nodes
 	// Step 3:  Schedule application on the nodes with fast path labels
