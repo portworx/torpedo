@@ -6,9 +6,10 @@ do
    export "$KEY"="$VALUE"
 done
 
+
 sh "sed -i 's/AWS_ACCESS_KEY_ID/${env.PSB_AWS_ACCESS_KEY_ID_PSW}/g' ${filePath}"
-sh "sed -i 's/AWS_SECRET_ACCESS_KEY/${env.SAN_CRED_PSW}/g' ${filePath}"
-sh "sed -i 's/AWS_REGION/$AWS_REGION/g' ${filePath}"
+sh "sed -i 's/AWS_SECRET_ACCESS_KEY/${env.SAN_CRED_PSW}/g' $FP"
+sh "sed -i 's/AWS_REGION/$AWS_REGION/g' $FP"
 sh "sed -i 's/AZURE_ACCOUNT_NAME/${env.PSB_AZURE_ACCOUNT_NAME_PSW}/g' ${filePath}"
 sh "sed -i 's/AZURE_ACCOUNT_KEY/${env.PSB_AZURE_ACCOUNT_KEY_PSW}/g' ${filePath}"
 sh "sed -i 's/AZURE_SUBSCRIPTION_ID/${env.AZURE_SUBSCRIPTION_ID_PSW}/g' ${filePath}"
