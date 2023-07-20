@@ -33,6 +33,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	})
 
 	It("Perform multiple restore within same cluster", func() {
+		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		stepLog := "Deploy data service and take adhoc backup, deleting the data service should not delete the backups."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -48,6 +49,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 					log.FailOnError(err, "Error while deploying data services")
 					dsEntity = restoreBkp.DSEntity{
 						Deployment: deployment,
@@ -76,29 +78,34 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), dsEntity, true)
+						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
 						log.Infof("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
 				})
 
 				Step("Delete Deployments", func() {
-					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
-					resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					log.FailOnError(err, "Error while deleting data services")
-					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					log.InfoD("Getting all PV and associated PVCs and deleting them")
-					err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-					log.FailOnError(err, "Error while deleting PV and PVCs")
+					cleanupDeployment(deploymentsToBeCleaned)
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
+
+func cleanupDeployment(dsInstances []*pds.ModelsDeployment) {
+	for _, dsInstance := range dsInstances {
+		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
+		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
+		log.FailOnError(err, "Error while deleting data services")
+		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		log.InfoD("Getting all PV and associated PVCs and deleting them")
+		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
+		log.FailOnError(err, "Error while deleting PV and PVCs")
+	}
+}

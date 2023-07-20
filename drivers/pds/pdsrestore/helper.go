@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const NameSuffixLength = 6
+const NameSuffixLength = 3
 
 var (
 	random = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -30,7 +30,7 @@ func AlphaNumericString(length int) string {
 
 func generateRandomName(prefix string) string {
 	nameSuffix := AlphaNumericString(NameSuffixLength)
-	return fmt.Sprintf("%s-systemtest-%s", prefix, nameSuffix)
+	return fmt.Sprintf("%s-systest-%s", prefix, nameSuffix)
 }
 
 func compareMaps(map1, map2 map[string]interface{}) bool {
@@ -53,19 +53,19 @@ func compareMaps(map1, map2 map[string]interface{}) bool {
 func resourceStructToMap(resources *pds.ModelsDeploymentResources) map[string]interface{} {
 	resourceMap := make(map[string]interface{})
 	if resources.CpuLimit != nil {
-		resourceMap["cpu_limit"] = &resources.CpuLimit
+		resourceMap["cpu_limit"] = resources.GetCpuLimit()
 	}
 	if resources.CpuRequest != nil {
-		resourceMap["cpu_request"] = &resources.CpuRequest
+		resourceMap["cpu_request"] = resources.GetCpuRequest()
 	}
 	if resources.MemoryLimit != nil {
-		resourceMap["memory_limit"] = &resources.MemoryLimit
+		resourceMap["memory_limit"] = resources.GetMemoryLimit()
 	}
 	if resources.MemoryRequest != nil {
-		resourceMap["memory_request"] = &resources.MemoryRequest
+		resourceMap["memory_request"] = resources.GetMemoryRequest()
 	}
 	if resources.StorageRequest != nil {
-		resourceMap["storage_request"] = &resources.StorageRequest
+		resourceMap["storage_request"] = resources.GetStorageRequest()
 	}
 	return resourceMap
 }
@@ -73,19 +73,16 @@ func resourceStructToMap(resources *pds.ModelsDeploymentResources) map[string]in
 func storageOptionsStructToMap(storageOptions *pds.ModelsDeploymentStorageOptions) map[string]interface{} {
 	storageMap := make(map[string]interface{})
 	if storageOptions.Fg != nil {
-		storageMap["fg"] = &storageOptions.Fg
+		storageMap["fg"] = storageOptions.GetFg()
 	}
 	if storageOptions.Fs != nil {
-		storageMap["fs"] = &storageOptions.Fs
-	}
-	if storageOptions.Provisioner != nil {
-		storageMap["provisioner"] = &storageOptions.Provisioner
+		storageMap["fs"] = storageOptions.GetFg()
 	}
 	if storageOptions.Repl != nil {
-		storageMap["repl"] = &storageOptions.Repl
+		storageMap["repl"] = storageOptions.GetRepl()
 	}
 	if storageOptions.Secure != nil {
-		storageMap["secure"] = &storageOptions.Secure
+		storageMap["secure"] = storageOptions.GetSecure()
 	}
 	return storageMap
 }

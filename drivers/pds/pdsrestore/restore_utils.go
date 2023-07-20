@@ -32,7 +32,11 @@ type DSEntity struct {
 	// TODO Add datahash for data validation
 }
 
-func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, bkpDsEntity DSEntity, validate bool) (*pds.ModelsRestore, error) {
+func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, namespace string, bkpDsEntity DSEntity, isRestoreInSameNS, validate bool) (*pds.ModelsRestore, error) {
+	var (
+		bkpJob                 *pds.ModelsBackupJob
+		nsName, pdsNamespaceId string
+	)
 	k8sClusterId, err := restoreClient.RestoreTargetCluster.GetClusterID()
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch the cluster Id")
@@ -41,12 +45,20 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch the cluster details from the control plane")
 	}
-	restoredDeploymentName := generateRandomName("ds-restore")
-	nsName, pdsNamespaceId, err := restoreClient.getNameSpaceId(pdsRestoreTargetClusterId)
-	if err != nil {
-		return nil, err
+	if !isRestoreInSameNS {
+		nsName, pdsNamespaceId, err = restoreClient.getNameSpaceId(pdsRestoreTargetClusterId)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		bkpJob, err = restoreClient.Components.BackupJob.GetBackupJob(backupJobId)
+		if err != nil {
+			return nil, err
+		}
+		nsName, pdsNamespaceId = namespace, bkpJob.GetNamespaceId()
 	}
-	restoredModel, err := restoreClient.Components.Restore.RestoreToNewDeployment(backupJobId, restoredDeploymentName, pdsRestoreTargetClusterId, pdsNamespaceId)
+	log.Infof("backup Job - %v,Restore Target Cluster Id - %v, NamespaceId - %v", backupJobId, pdsRestoreTargetClusterId, pdsNamespaceId)
+	restoredModel, err := restoreClient.Components.Restore.RestoreToNewDeployment(backupJobId, "autom", pdsRestoreTargetClusterId, pdsNamespaceId)
 	if err != nil {
 		return nil, fmt.Errorf("failed during restore")
 	}
@@ -103,31 +115,42 @@ func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string,
 
 func (restoreClient *RestoreClient) ValidateRestore(bkpDsEntity, restoreDsEntity DSEntity) error {
 	// Validate the Application configuration
+	log.Info("Validating application config post restore.")
 	bkpAppConfig := bkpDsEntity.Deployment.Configuration
 	restoreAppConfig := restoreDsEntity.Deployment.Configuration
+	log.Infof("Backed up resource configuration- %v", bkpAppConfig)
+	log.Infof("Restored resource configuration- %v", restoreAppConfig)
 	if !compareMaps(bkpAppConfig, restoreAppConfig) {
 		return fmt.Errorf("restored Application configuration are not same as as backed up app config")
 	}
 
 	// Validate the Resource configuration
+	log.Info("Validating Resource config post restore.")
 	bkpResourceConfig := resourceStructToMap(bkpDsEntity.Deployment.Resources)
 	restoreResourceConfig := resourceStructToMap(restoreDsEntity.Deployment.Resources)
+	log.Infof("Backed up resource configuration- %v", bkpResourceConfig)
+	log.Infof("Restored resource configuration- %v", restoreResourceConfig)
 	if !compareMaps(bkpResourceConfig, restoreResourceConfig) {
 		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
 	}
 
 	// Validate the StorageOption configuration
+	log.Info("Validating StorageOption config post restore.")
 	bkpStorageOptionConfig := storageOptionsStructToMap(bkpDsEntity.Deployment.StorageOptions)
 	restoreStorageOptionConfig := storageOptionsStructToMap(restoreDsEntity.Deployment.StorageOptions)
+	log.Infof("Backed up resource configuration- %v", bkpStorageOptionConfig)
+	log.Infof("Restored resource configuration- %v", restoreStorageOptionConfig)
 	if !compareMaps(bkpStorageOptionConfig, restoreStorageOptionConfig) {
 		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
 	}
 
 	// NodeCount,DeploymentTarget, Image and data service version
-	if &bkpDsEntity.Deployment.NodeCount != &restoreDsEntity.Deployment.NodeCount &&
-		&bkpDsEntity.Deployment.DeploymentTargetId != &restoreDsEntity.Deployment.DeploymentTargetId &&
-		&bkpDsEntity.Deployment.ImageId != &restoreDsEntity.Deployment.ImageId {
-		return fmt.Errorf("validation for nodeCount,deploymentTarget, image and data service version failed")
+	log.Info("Validating application config post restore.")
+	log.Infof("Backed up data- node count: %v, image id: %v", &bkpDsEntity.Deployment.NodeCount, &bkpDsEntity.Deployment.ImageId)
+	log.Infof("Restored data- node count: %v, image id: %v", &restoreDsEntity.Deployment.NodeCount, &restoreDsEntity.Deployment.ImageId)
+	if bkpDsEntity.Deployment.GetNodeCount() != restoreDsEntity.Deployment.GetNodeCount() &&
+		bkpDsEntity.Deployment.GetImageId() != restoreDsEntity.Deployment.GetImageId() {
+		return fmt.Errorf("validation for nodeCount, image and data service version failed")
 	}
 	// TODO implement for data consistency validation.
 
