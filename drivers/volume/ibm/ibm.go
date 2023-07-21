@@ -25,7 +25,7 @@ type ibm struct {
 }
 
 func (i *ibm) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	log.Infof("Using the Pure volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
+	log.Infof("Using the IBM volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = IbmDriverName
 	// Set provisioner for torpedo
 	if storageProvisioner != "" {
