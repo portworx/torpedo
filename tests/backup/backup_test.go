@@ -6,6 +6,7 @@ import (
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
@@ -147,24 +148,30 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Creating pre rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
-				log.FailOnError(err, "Creating pre rule for deployed app [%s] failed", appList[i])
-				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
-				if ruleName != "" {
-					preRuleNameList = append(preRuleNameList, ruleName)
-				}
-			}
+			//for i := 0; i < len(appList); i++ {
+			//	preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
+			//	log.FailOnError(err, "Creating pre rule for deployed app [%s] failed", appList[i])
+			//	dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
+			//	if ruleName != "" {
+			//		preRuleNameList = append(preRuleNameList, ruleName)
+			//	}
+			//}
+			_, _, err = Inst().Backup.CreateBackupRuleForMultipleApplications("combined-pre-rule", orgID, appList, backup.Pre, portworx.DefaultAppBackupRulesMap, ctx)
+			log.FailOnError(err, "failed to create new pre backup rule")
 			log.InfoD("Creating post rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
-				log.FailOnError(err, "Creating post rule for deployed app [%s] failed", appList[i])
-				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
-				if ruleName != "" {
-					postRuleNameList = append(postRuleNameList, ruleName)
-				}
-			}
+			//for i := 0; i < len(appList); i++ {
+			//	postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
+			//	log.FailOnError(err, "Creating post rule for deployed app [%s] failed", appList[i])
+			//	dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
+			//	if ruleName != "" {
+			//		postRuleNameList = append(postRuleNameList, ruleName)
+			//	}
+			//}
+			_, _, err = Inst().Backup.CreateBackupRuleForMultipleApplications("combined-post-rule", orgID, appList, backup.Post, portworx.DefaultAppBackupRulesMap, ctx)
+			log.FailOnError(err, "failed to create new post backup rule")
 		})
 
 		Step("Creating backup location and cloud setting", func() {
