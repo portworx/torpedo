@@ -233,6 +233,30 @@ func (v *vsphere) connect() error {
 	return nil
 }
 
+func (v *vsphere) GetVmName(node node.Node) (string, error) {
+	vm := vmMap[node.Name]
+	return vm.Name(), nil
+}
+
+func (v *vsphere) SetDatacenter(datacenterName string) error {
+	t := func() (interface{}, bool, error) {
+		var dc *object.Datacenter
+		dc, err := v.finder.Datacenter(v.ctx, datacenterName)
+		if err != nil {
+			return nil, true, fmt.Errorf("Failed to set datacenter: %s, Err: %v", datacenterName, err)
+		}
+		return dc, false, nil
+	}
+	out, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
+	dc := out.(*object.Datacenter)
+	v.finder = v.finder.SetDatacenter(dc)
+	v.datacenter = dc
+	return nil
+}
+
 // AddVM adds a new VM object to vmMap
 func (v *vsphere) AddMachine(vmName string) error {
 	var f *find.Finder
@@ -390,7 +414,6 @@ func (v *vsphere) DeleteVmOnNode(n node.Node) error {
 	}
 
 	vm := vmMap[n.Name]
-
 	err := v.DeleteVm(vm.Name())
 	if err != nil {
 		err := fmt.Errorf("failed to delete VM %s. cause %v", vm.Name(), err)
