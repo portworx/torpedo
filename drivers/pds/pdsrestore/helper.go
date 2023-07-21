@@ -33,23 +33,6 @@ func generateRandomName(prefix string) string {
 	return fmt.Sprintf("%s-systest-%s", prefix, nameSuffix)
 }
 
-func compareMaps(map1, map2 map[string]interface{}) bool {
-	if len(map1) != len(map2) {
-		return false
-	}
-	for key, value1 := range map1 {
-		value2, ok := map2[key]
-		if !ok {
-			return false
-		}
-		// Check if the values are equal
-		if value1 != value2 {
-			return false
-		}
-	}
-	return true
-}
-
 func resourceStructToMap(resources *pds.ModelsDeploymentResources) map[string]interface{} {
 	resourceMap := make(map[string]interface{})
 	if resources.CpuLimit != nil {

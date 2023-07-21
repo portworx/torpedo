@@ -8,6 +8,7 @@ import (
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -39,10 +40,12 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 	)
 	k8sClusterId, err := restoreClient.RestoreTargetCluster.GetClusterID()
 	if err != nil {
+		log.Errorf("Unable to fetch the cluster Id")
 		return nil, fmt.Errorf("unable to fetch the cluster Id")
 	}
 	pdsRestoreTargetClusterId, err := restoreClient.RestoreTargetCluster.GetDeploymentTargetID(k8sClusterId, restoreClient.TenantId)
 	if err != nil {
+		log.Errorf("Unable to fetch the cluster details from the control plane")
 		return nil, fmt.Errorf("unable to fetch the cluster details from the control plane")
 	}
 	if !isRestoreInSameNS {
@@ -60,6 +63,7 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 	log.Infof("backup Job - %v,Restore Target Cluster Id - %v, NamespaceId - %v", backupJobId, pdsRestoreTargetClusterId, pdsNamespaceId)
 	restoredModel, err := restoreClient.Components.Restore.RestoreToNewDeployment(backupJobId, "autom", pdsRestoreTargetClusterId, pdsNamespaceId)
 	if err != nil {
+		log.Errorf("Failed during restore.")
 		return nil, fmt.Errorf("failed during restore")
 	}
 	err = wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
@@ -76,7 +80,6 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 		return true, nil
 	})
 	if err != nil {
-		log.Errorf("restore failed {polling}, %v", err)
 		return nil, err
 	}
 
@@ -120,7 +123,7 @@ func (restoreClient *RestoreClient) ValidateRestore(bkpDsEntity, restoreDsEntity
 	restoreAppConfig := restoreDsEntity.Deployment.Configuration
 	log.Infof("Backed up resource configuration- %v", bkpAppConfig)
 	log.Infof("Restored resource configuration- %v", restoreAppConfig)
-	if !compareMaps(bkpAppConfig, restoreAppConfig) {
+	if !reflect.DeepEqual(bkpAppConfig, restoreAppConfig) {
 		return fmt.Errorf("restored Application configuration are not same as as backed up app config")
 	}
 
@@ -130,17 +133,17 @@ func (restoreClient *RestoreClient) ValidateRestore(bkpDsEntity, restoreDsEntity
 	restoreResourceConfig := resourceStructToMap(restoreDsEntity.Deployment.Resources)
 	log.Infof("Backed up resource configuration- %v", bkpResourceConfig)
 	log.Infof("Restored resource configuration- %v", restoreResourceConfig)
-	if !compareMaps(bkpResourceConfig, restoreResourceConfig) {
+	if !reflect.DeepEqual(bkpResourceConfig, restoreResourceConfig) {
 		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
 	}
 
 	// Validate the StorageOption configuration
-	log.Info("Validating StorageOption config post restore.")
+	log.Info("Validating Storage Option config post restore.")
 	bkpStorageOptionConfig := storageOptionsStructToMap(bkpDsEntity.Deployment.StorageOptions)
 	restoreStorageOptionConfig := storageOptionsStructToMap(restoreDsEntity.Deployment.StorageOptions)
 	log.Infof("Backed up resource configuration- %v", bkpStorageOptionConfig)
 	log.Infof("Restored resource configuration- %v", restoreStorageOptionConfig)
-	if !compareMaps(bkpStorageOptionConfig, restoreStorageOptionConfig) {
+	if !reflect.DeepEqual(bkpStorageOptionConfig, restoreStorageOptionConfig) {
 		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
 	}
 
