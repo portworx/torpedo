@@ -18,13 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/credentials/insecure"
-
-	"github.com/portworx/torpedo/pkg/log"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
-
-	"github.com/portworx/torpedo/pkg/s3utils"
-
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/hashicorp/go-version"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -49,11 +42,15 @@ import (
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/aututils"
 	tp_errors "github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
+	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -2948,7 +2945,7 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 	if isOperatorBasedInstall {
 		// Check to see if px-versions configmap exists in PX namespace
 		deployPxVersionsConfigMap := false
-		if isPxVersionsConfigMapExist(d.namespace) {
+		if doesConfigMapExist(pxVersionsConfigmapName, d.namespace) {
 			log.Infof("Configmap [%s] is found", pxVersionsConfigmapName)
 
 			// Delete px-versions configmap
@@ -2959,7 +2956,7 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 		}
 
 		// Run air-gapped script to pull/push images for the new PX version hop, if custom registry configmap found
-		if isPxCustomRegistryConfigMapExist(d.namespace) {
+		if doesConfigMapExist(pxCustomRegistryConfigmapName, d.namespace) {
 			if err := d.pullAndPushImagesToPrivateRegistry(specGenUrl); err != nil {
 				return err
 			}
@@ -3026,21 +3023,11 @@ func configurePxReleaseManifestEnvVars(origEnvVarList []corev1.EnvVar, specGenUR
 	return newEnvVarList, nil
 }
 
-// isPxCustomRegistryConfigMapExist return true or false based wether this custom registry configmap exists or not
-func isPxCustomRegistryConfigMapExist(pxNamespace string) bool {
-	// Get custom registry configmap configmap
-	_, err := core.Instance().GetConfigMap(pxCustomRegistryConfigmapName, pxNamespace)
-	if k8serrors.IsNotFound(err) {
-		return false
-	}
-	return true
-}
-
-// isPxVersionsConfigMapExist( return true or false based on wether px-versions cm exists or not
-func isPxVersionsConfigMapExist(pxNamespace string) bool {
-	// Get px-version configmap
-	_, err := core.Instance().GetConfigMap(pxVersionsConfigmapName, pxNamespace)
-	if k8serrors.IsNotFound(err) {
+// doesConfigMapExist returns true or false wether configmap exists or not
+func doesConfigMapExist(configmapName, namespace string) bool {
+	// Get configmap
+	_, err := core.Instance().GetConfigMap(configmapName, namespace)
+	if err != nil && k8serrors.IsNotFound(err) {
 		return false
 	}
 	return true
@@ -3062,16 +3049,15 @@ func (d *portworx) createPxVersionsConfigmap(specGenUrl, pxNamespace string) err
 	// Download PX versions URL content
 	pxVersionsFile := path.Join("/versions")
 	cmd := fmt.Sprintf("curl -o %s %s", pxVersionsFile, pxVersionURL)
-	strOut, strErr, err := osutils.ExecShell(cmd)
+	_, strErr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to download versions file from URL [%s], Err: %v %v", pxVersionURL, strErr, err)
 	}
-	log.Debug(strOut)
 
 	// Create px-versions configmap
 	log.InfoD("Creating px-versions configmap [%s] in [%s] namespace", pxVersionsConfigmapName, pxNamespace)
 	cmd = fmt.Sprintf("kubectl -n %s create configmap %s --from-file=%s", pxNamespace, pxVersionsConfigmapName, pxVersionsFile)
-	strOut, strErr, err = osutils.ExecShell(cmd)
+	_, strErr, err = osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to create [%s] configmap in [%s] namespace, Err: %v", pxVersionsConfigmapName, pxNamespace, err)
 	}
@@ -3114,25 +3100,23 @@ func (d *portworx) pullAndPushImagesToPrivateRegistry(specGenUrl string) error {
 	pxAgInstallBinary := path.Join("/px-ag-install.sh")
 	log.InfoD("Downloading air-gapped script from [%s] to [%s]", pxAirgappedURL, pxAgInstallBinary)
 	cmd := fmt.Sprintf("curl -o %s -L %s", pxAgInstallBinary, pxAirgappedURL)
-	strOut, strErr, err := osutils.ExecShell(cmd)
+	_, strErr, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to download [%s] script from URL [%s], Err: %v %v", pxAgInstallBinary, pxAirgappedURL, strErr, err)
 	}
-	log.Debug(strOut)
 
 	// Docker login to pull images
 	log.InfoD("Login to pull images")
 	cmd = fmt.Sprintf("docker login -u %s -p %s", portworxDockerRegistryUsername, portworxDockerRegistryPassword)
-	strOut, strErr, err = osutils.ExecShell(cmd)
+	_, strErr, err = osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to execute Docker login, Err: %v %v", strErr, err)
 	}
-	log.Debug(strOut)
 
 	// Pull images via air-gapped script
 	log.InfoD("Pull images using air-gapped script")
 	cmd = fmt.Sprintf("sh %s pull", pxAgInstallBinary)
-	strOut, strErr, err = osutils.ExecShell(cmd)
+	_, strErr, err = osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to pull images using [%s] script, Err: %v %v", pxAgInstallBinary, strErr, err)
 	}
@@ -3140,16 +3124,15 @@ func (d *portworx) pullAndPushImagesToPrivateRegistry(specGenUrl string) error {
 	// Docker login to push images
 	log.InfoD("Login to custom registry [%s] to push images", customDockerRegistryName)
 	cmd = fmt.Sprintf("docker login -u %s -p %s %s", customDockerRegistryUsername, customDockerRegistryPassword, customDockerRegistryName)
-	strOut, strErr, err = osutils.ExecShell(cmd)
+	_, strErr, err = osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to execute Docker login, Err: %v %v", strErr, err)
 	}
-	log.Debug(strOut)
 
 	// Push images to private registry
 	log.InfoD("Tag and push images using air-gapped script")
 	cmd = fmt.Sprintf("sh %s push %s", pxAgInstallBinary, customDockerRegistryName)
-	strOut, strErr, err = osutils.ExecShell(cmd)
+	_, strErr, err = osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("Failed to push images using [%s] script, Err: %v %v", pxAgInstallBinary, strErr, err)
 	}
