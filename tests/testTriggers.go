@@ -6939,7 +6939,7 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 		repoName              = "strimzi"
 		operatorName          = "strimzi-kafka-operator"
 		migrationList         []*storkapi.Migration
-		app_url               = "/root/torpedo/deployments/customconfigs/kafkacr.yaml"
+		app_url               = "/torpedo/deployments/customconfigs/kafkacr.yaml"
 	)
 	stepLog := "Export kubeconfigs"
 	Step(stepLog, func() {
