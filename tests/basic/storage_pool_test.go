@@ -1251,6 +1251,7 @@ var _ = Describe("{AddDriveWithPXRestart}", func() {
 
 })
 
+
 var _ = Describe("{PoolAddDriveVolResize}", func() {
 	//1) Deploy px with cloud drive.
 	//2) Create a volume on that pool and write some data on the volume.
@@ -9762,3 +9763,105 @@ var _ = Describe("{AddDriveMetadataPool}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{AddDriveWithKernelPanic}", func() {
+	//1) Deploy px with cloud drive.
+	//2) Create a volume on that pool and write some data on the volume.
+	//3) Expand pool by adding cloud drives.
+	//4) Inject kernel panic where the pool expansion is in-progress
+	//5) Verify total pool count after addition of cloud drive with kernel panic
+
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveWithKernelPanic", "Initiate pool expansion using add-drive and do kernel panic while it is in progress", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		var initialPoolCount int
+		stNode, err := GetRandomNodeWithPoolIOs(contexts)
+		log.FailOnError(err, "error identifying node to run test")
+		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+		initialPoolCount = len(pools)
+
+		var currentTotalPoolSize uint64
+		var specSize uint64
+		for _, pool := range pools {
+			currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+		}
+
+		driveSpecs, err := GetCloudDriveDeviceSpecs()
+		log.FailOnError(err, "Error getting cloud drive specs")
+		deviceSpec := driveSpecs[0]
+		deviceSpecParams := strings.Split(deviceSpec, ",")
+
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				val := strings.Split(param, "=")[1]
+				specSize, err = strconv.ParseUint(val, 10, 64)
+				log.FailOnError(err, "Error converting size to uint64")
+			}
+		}
+		expectedTotalPoolSize := currentTotalPoolSize + specSize
+
+		stepLog := "Initiate add cloud drive and kernel panic"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
+			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+			time.Sleep(5 * time.Second)
+			cmd := "echo c > /proc/sysrq-trigger"
+
+			// Execute the command to generate kernel panic
+			_, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: 10 * time.Second,
+			})
+
+			log.FailOnError(err, "Unable to execute the kernel panic command")
+			//log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
+			//err = Inst().V.RestartDriver(stNode, nil)
+			log.FailOnError(err, fmt.Sprintf("error kernel panic on node %s", stNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+			log.FailOnError(err, fmt.Sprintf("Kernel Panic on node %s", stNode.Name))
+			log.InfoD("Validate pool rebalance after drive add and Kernel panic")
+			err = ValidateDriveRebalance(stNode)
+			log.FailOnError(err, "Pool re-balance failed")
+			dash.VerifyFatal(err == nil, true, "PX is up after add drive with kernel panic")
+
+			var finalPoolCount int
+			var newTotalPoolSize uint64
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+			log.FailOnError(err, "error getting pools list")
+			dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+			for _, pool := range pools {
+				newTotalPoolSize += pool.GetTotalSize() / units.GiB
+			}
+			finalPoolCount = len(pools)
+			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with kernel panic Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
+})
+
