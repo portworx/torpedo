@@ -12,6 +12,6 @@ parameters:
   max_iops: "30000"
   max_bandwidth: "10G"
   csi.storage.k8s.io/fstype: ext4
-volumeBindingMode: WaitForFirstConsumer
+volumeBindingMode: Immediate
 allowVolumeExpansion: true
 
