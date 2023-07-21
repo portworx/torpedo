@@ -428,7 +428,7 @@ func (v *vsphere) DeleteVm(vmName string) error {
 		log.Warn("failed to get VM: %s, because of err: %+v", vmName, err)
 		return nil
 	}
-
+	v.connect()
 	isRunning, err := v.isVmRunning(vm)
 	if err != nil {
 		return fmt.Errorf("failed to get if VM: %s is running", vmName)
