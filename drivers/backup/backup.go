@@ -28,6 +28,26 @@ const (
 	Sunday            = "Sun"
 )
 
+type BackupRuleType string
+
+const (
+	Pre  BackupRuleType = "pre"
+	Post BackupRuleType = "post"
+)
+
+type BackupRule struct {
+	ActionList      []string
+	PodSelectorList []string
+	Background      []bool
+	RunInSinglePod  []bool
+	Container       []string
+}
+
+type BackupRules struct {
+	Pre  *BackupRule
+	Post *BackupRule
+}
+
 // Driver for backup
 type Driver interface {
 	// Org interface
@@ -355,8 +375,8 @@ type Rule interface {
 	// CreateRuleForBackup creates backup rule
 	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
 
-	// CreateRuleForBackupWithMultipleApplications creates backup rule for multiple application
-	CreateRuleForBackupWithMultipleApplications(ruleName string, orgID string, appList []string, prePostFlag string, ctx context.Context, appParameters map[string]map[string]map[string][]string) (bool, string, error)
+	// CreateBackupRuleForMultipleApplications creates backup rule for multiple applications
+	CreateBackupRuleForMultipleApplications(ruleName string, orgID string, appList []string, prePostFlag BackupRuleType, appBackupRulesMap map[string]*BackupRules, ctx context.Context) (bool, string, error)
 
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error

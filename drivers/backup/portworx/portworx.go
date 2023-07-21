@@ -68,6 +68,16 @@ type portworx struct {
 	token           string
 }
 
+func NewBackupRule(actionList []string, podSelectorList []string, background []bool, runInSinglePod []bool, container []string) *backup.BackupRule {
+	return &backup.BackupRule{
+		ActionList:      actionList,
+		PodSelectorList: podSelectorList,
+		Background:      background,
+		RunInSinglePod:  runInSinglePod,
+		Container:       container,
+	}
+}
+
 var (
 	// AppParameters Here the len of "pre_action_list","pod_selector_list","background", "runInSinglePod", "container"
 	//should be same for any given app for a pre,post rule
@@ -124,6 +134,75 @@ var (
 				"runInSinglePod":    {"false"},
 				"container":         {""},
 			},
+		},
+	}
+
+	DefaultAppBackupRulesMap = map[string]*backup.BackupRules{
+		"cassandra": {
+			Pre: NewBackupRule(
+				[]string{"nodetool flush -- keyspace1;", "echo 'test"},
+				[]string{"app=cassandra", "app=cassandra1"},
+				[]bool{false, false},
+				[]bool{false, false},
+				[]string{"", ""},
+			),
+			Post: NewBackupRule(
+				[]string{"nodetool verify -- keyspace1;", "nodetool verify -- keyspace1;"},
+				[]string{"app=cassandra", "app=cassandra1"},
+				[]bool{false, false},
+				[]bool{false, false},
+				[]string{"", ""},
+			),
+		},
+		"postgres": {
+			Pre: NewBackupRule(
+				[]string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";"},
+				[]string{"app=postgres"},
+				[]bool{false},
+				[]bool{false},
+				[]string{"", ""},
+			),
+		},
+		"postgres-backup": {
+			Pre: NewBackupRule(
+				[]string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\";"},
+				[]string{"app=postgres"},
+				[]bool{false},
+				[]bool{false},
+				[]string{"", ""},
+			),
+		},
+		"mysql-backup": {
+			Pre: NewBackupRule(
+				[]string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"},
+				[]string{"app=mysql"},
+				[]bool{true},
+				[]bool{false},
+				[]string{"", ""},
+			),
+			Post: NewBackupRule(
+				[]string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"},
+				[]string{"app=mysql"},
+				[]bool{false},
+				[]bool{false},
+				[]string{""},
+			),
+		},
+		"mysql": {
+			Pre: NewBackupRule(
+				[]string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"},
+				[]string{"app=mysql"},
+				[]bool{true},
+				[]bool{false},
+				[]string{"", ""},
+			),
+			Post: NewBackupRule(
+				[]string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"},
+				[]string{"app=mysql"},
+				[]bool{false},
+				[]bool{false},
+				[]string{""},
+			),
 		},
 	}
 )
@@ -1561,8 +1640,8 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 	return nil
 }
 
-// CreateRuleForBackupWithMultipleApplications creates backup rule for multiple application in one rule
-func (p *portworx) CreateRuleForBackupWithMultipleApplications(ruleName string, orgID string, appList []string, prePostFlag string, ctx context.Context, appParameters map[string]map[string]map[string][]string) (bool, string, error) {
+// CreateBackupRuleForMultipleApplications creates backup rule for multiple applications
+func (p *portworx) CreateBackupRuleForMultipleApplications(ruleName string, orgID string, appList []string, prePostFlag backup.BackupRuleType, appBackupRulesMap map[string]*backup.BackupRules, ctx context.Context) (bool, string, error) {
 	var podSelector []map[string]string
 	var actionValue []string
 	var container []string
@@ -1570,44 +1649,26 @@ func (p *portworx) CreateRuleForBackupWithMultipleApplications(ruleName string, 
 	var runInSinglePod []bool
 	var rulesInfo api.RulesInfo
 	var uid string
-	for i := 0; i < len(appList); i++ {
-		if prePostFlag == "pre" {
-			if _, ok := appParameters[appList[i]]["pre"]; ok {
-				for j := 0; j < len(appParameters[appList[i]]["pre"]["pod_selector_list"]); j++ {
-					ps := strings.Split(appParameters[appList[i]]["pre"]["pod_selector_list"][j], "=")
-					psMap := make(map[string]string)
-					psMap[ps[0]] = ps[1]
-					podSelector = append(podSelector, psMap)
-					actionValue = append(actionValue, appParameters[appList[i]]["pre"]["pre_action_list"][j])
-					backgroundVal, _ := strconv.ParseBool(appParameters[appList[i]]["pre"]["background"][j])
-					background = append(background, backgroundVal)
-					podVal, _ := strconv.ParseBool(appParameters[appList[i]]["pre"]["runInSinglePod"][j])
-					runInSinglePod = append(runInSinglePod, podVal)
-					containerName := fmt.Sprintf("%s-%s", "container", appList[i])
-					container = append(container, os.Getenv(containerName))
-				}
-			} else {
-				log.Infof("Pre rule not required for this application")
-			}
-
+	for _, appName := range appList {
+		var rules *backup.BackupRule
+		if prePostFlag == backup.Pre {
+			rules = appBackupRulesMap[appName].Pre
 		} else {
-			if _, ok := appParameters[appList[i]]["post"]; ok {
-				for j := 0; j < len(appParameters[appList[i]]["post"]["pod_selector_list"]); j++ {
-					ps := strings.Split(appParameters[appList[i]]["post"]["pod_selector_list"][j], "=")
-					psMap := make(map[string]string)
-					psMap[ps[0]] = ps[1]
-					podSelector = append(podSelector, psMap)
-					actionValue = append(actionValue, appParameters[appList[i]]["post"]["post_action_list"][j])
-					backgroundVal, _ := strconv.ParseBool(appParameters[appList[i]]["post"]["background"][j])
-					background = append(background, backgroundVal)
-					podVal, _ := strconv.ParseBool(appParameters[appList[i]]["post"]["runInSinglePod"][j])
-					runInSinglePod = append(runInSinglePod, podVal)
-					containerName := fmt.Sprintf("%s-%s", "container", appList[i])
-					container = append(container, os.Getenv(containerName))
-				}
-			} else {
-				log.Infof("Post rule not required for this application")
+			rules = appBackupRulesMap[appName].Post
+		}
+		if rules != nil {
+			for i := 0; i < len(rules.PodSelectorList); i++ {
+				ps := strings.Split(rules.PodSelectorList[i], "=")
+				psMap := make(map[string]string)
+				psMap[ps[0]] = ps[1]
+				podSelector = append(podSelector, psMap)
+				actionValue = append(actionValue, rules.ActionList[i])
+				background = append(background, rules.Background[i])
+				runInSinglePod = append(runInSinglePod, rules.RunInSinglePod[i])
+				container = append(container, rules.Container[i])
 			}
+		} else {
+			log.Infof("%s rule not required for this application", prePostFlag)
 		}
 	}
 	totalRules := len(actionValue)
@@ -1656,13 +1717,13 @@ func (p *portworx) CreateRuleForBackupWithMultipleApplications(ruleName string, 
 		Uid:   uid,
 	}
 	_, err = p.InspectRule(ctx, RuleInspectReq)
-	log.Infof(" The error in inspect rule is", err)
+	log.Infof("The error in inspect rule is", err)
 	if err != nil {
-		log.InfoD(" Iside this")
+		log.InfoD("Inside this")
 		err = fmt.Errorf("failed to validate the created rule with Error: [%v]", err)
 		return false, uid, err
 	}
-	log.InfoD(" Resched here")
+	log.InfoD("Reached here")
 	return true, uid, nil
 }
 
