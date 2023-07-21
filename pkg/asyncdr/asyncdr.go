@@ -56,9 +56,9 @@ const (
 var (
 	orgID                   string
 	bucketName              string
-	Expected_kafka_crd_list = []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
-		"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
-		"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
+	ExpectedKafkaCrdList = []string{"kafkabridges.kafka.strimzi.io", "kafkaconnectors.kafka.strimzi.io", "kafkaconnects.kafka.strimzi.io",
+		"kafkamirrormaker2s.kafka.strimzi.io", "kafkamirrormakers.kafka.strimzi.io", "kafkarebalances.kafka.strimzi.io",
+		"kafkas.kafka.strimzi.io", "kafkatopics.kafka.strimzi.io", "kafkausers.kafka.strimzi.io", "strimzipodsets.core.strimzi.io"}
 )
 
 type MigrationStatsType struct {

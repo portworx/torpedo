@@ -6832,12 +6832,15 @@ func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *E
 			}
 			pods_created_len := len(pods_created.Items)
 			log.InfoD("Num of Pods on source: %v", pods_created_len)
+			expected_kafka_crd_list := []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
+				"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
+				"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
 			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("Failed to get cluster config path: %v", err))
 				return
 			}
-			err = asyncdr.ValidateCRD(asyncdr.Expected_kafka_crd_list, sourceClusterConfigPath)
+			err = asyncdr.ValidateCRD(expected_kafka_crd_list, sourceClusterConfigPath)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("CRD validation failed on source, err: %v", err))
 				return
@@ -6885,7 +6888,7 @@ func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *E
 						UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
 						return
 					}
-					err = asyncdr.ValidateCRD(asyncdr.Expected_kafka_crd_list, destClusterConfigPath)
+					err = asyncdr.ValidateCRD(expected_kafka_crd_list, destClusterConfigPath)
 					if err != nil {
 						UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
 						return
@@ -6938,23 +6941,24 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 		migrationList         []*storkapi.Migration
 		app_url               = "/root/torpedo/deployments/customconfigs/kafkacr.yaml"
 	)
-
-	Step(fmt.Sprint("Export kubeconfigs"), func() {
-
+	stepLog := "Export kubeconfigs"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
 		err := asyncdr.WriteKubeconfigToFiles()
 		if err != nil {
-			log.Errorf("Failed to write kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("Failed to write kubeconfig, err: %v", err))
 			return
 		}
-
 		err = SetSourceKubeConfig()
 		if err != nil {
-			log.Errorf("Failed to Set source kubeconfig: %v", err)
+			UpdateOutcome(event, fmt.Errorf("Failed to set source config, err: %v", err))
 			return
 		}
 	})
-	Step(fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel), func() {
+	stepLog = fmt.Sprintf("Deploy applications with %v chaos level", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			//taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			ns, err := core.Instance().GetNamespace(ns_name)
@@ -6980,15 +6984,12 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 			}
 			pods_created_len := len(pods_created.Items)
 			log.InfoD("Num of Pods on source: %v", pods_created_len)
-			expected_kafka_crd_list := []string{"kafkabridges.kafka.strimzi.io", "kafkaconnectors.kafka.strimzi.io", "kafkaconnects.kafka.strimzi.io",
-				"kafkamirrormaker2s.kafka.strimzi.io", "kafkamirrormakers.kafka.strimzi.io", "kafkarebalances.kafka.strimzi.io",
-				"kafkas.kafka.strimzi.io", "kafkatopics.kafka.strimzi.io", "kafkausers.kafka.strimzi.io", "strimzipodsets.core.strimzi.io"}
 			sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("Failed to get cluster config path: %v", err))
 				return
 			}
-			err = asyncdr.ValidateCRD(expected_kafka_crd_list, sourceClusterConfigPath)
+			err = asyncdr.ValidateCRD(asyncdr.ExpectedKafkaCrdList, sourceClusterConfigPath)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("CRD validation failed on source, err: %v", err))
 				return
@@ -7001,12 +7002,16 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 					Key:      "",
 					SpecList: []interface{}{},
 				}}
-			Step("Create cluster pair between source and destination clusters", func() {
+			stepLog = "Create cluster pair between source and destination clusters"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				// Set cluster context to cluster where torpedo is running
 				log.InfoD("ClusterPairing Started")
 				ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
 			})
-			Step("Start migration and validate", func() {
+			stepLog = "Start migration and validate"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				log.InfoD("Migration Started")
 				mig_name := migrationKey + "kafka-" + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
 				mig, err := asyncdr.CreateMigration(mig_name, ns.Name, asyncdr.DefaultClusterPairName, ns.Name, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
@@ -7036,7 +7041,7 @@ func TriggerKafkaAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 						UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
 						return
 					}
-					err = asyncdr.ValidateCRD(expected_kafka_crd_list, destClusterConfigPath)
+					err = asyncdr.ValidateCRD(asyncdr.ExpectedKafkaCrdList, destClusterConfigPath)
 					if err != nil {
 						UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
 						return
