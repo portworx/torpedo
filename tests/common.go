@@ -9,10 +9,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"math/rand"
 	"net/http"
 	"regexp"
+	"runtime"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -240,6 +242,8 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
+
+	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
 // Dashboard params
@@ -413,6 +417,8 @@ const (
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
+
+var dataIntegrityValidationTests string
 
 // TestLogger for logging test logs
 var TestLogger *lumberjack.Logger
@@ -4538,6 +4544,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					}
 				}
 				if newReplID != "" {
+					nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
 
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
 						Inst().V.String(), ctx.App.Key, v)
@@ -4558,7 +4568,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						})
 
 					if err == nil {
-						stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+						action := "reboot"
+						if restartPX {
+							action = "restart px on"
+						}
+						stepLog = fmt.Sprintf("%a target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
 							func() {
@@ -4587,7 +4601,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
+									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
 									log.Error(err)
 									UpdateOutcome(event, err)
 								} else {
@@ -4599,6 +4613,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
+
+						err = ValidateDataIntegrity(&nodeContexts)
+						UpdateOutcome(event, err)
+
 					}
 				} else {
 					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
@@ -4694,7 +4712,20 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 									UpdateOutcome(event, err)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
+
+								for _, nID := range replicaNodes {
+									replNodeToReboot := storageNodeMap[nID]
+									nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
+									if err != nil {
+										UpdateOutcome(event, err)
+										break
+									}
+									err = ValidateDataIntegrity(&nodeContexts)
+									UpdateOutcome(event, err)
+								}
+
 							}
+
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
 							log.Error(err)
@@ -5044,6 +5075,7 @@ func ParseFlags() {
 	var customConfigPath string
 	var hyperConverged bool
 	var enableDash bool
+
 	var pxPodRestartCheck bool
 	var deployPDSApps bool
 
@@ -5127,6 +5159,7 @@ func ParseFlags() {
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
+	flag.StringVar(&dataIntegrityValidationTests, dataIntegrityValidationTestsFlag, "", "list data integrity validation tests to run data integrity validation")
 	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
 	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
@@ -7748,6 +7781,7 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
+<<<<<<< HEAD
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	if err != nil {
@@ -7867,8 +7901,44 @@ func IsJournalEnabled() (bool, error) {
 	return false, nil
 }
 
+func runDataIntegrityValidation(testName string) bool {
+
+	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+		if strings.Contains(testName, "{") {
+			i := strings.Index(testName, "{")
+			j := strings.Index(testName, "}")
+
+			testName = testName[i+1 : j]
+		}
+		if strings.Contains(dataIntegrityValidationTests, testName) {
+			return true
+		}
+
+		if strings.Contains(testName, "Longevity") {
+			pc, _, _, _ := runtime.Caller(1)
+			if strings.Contains(dataIntegrityValidationTests, runtime.FuncForPC(pc).Name()) {
+				return true
+			}
+			return false
+		}
+	}
+
+	return false
+}
+
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 
+	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	if strings.Contains(testName, "{Longevity}") {
+		pc, _, _, _ := runtime.Caller(1)
+		testName = runtime.FuncForPC(pc).Name()
+	}
+
+	if !runDataIntegrityValidation(testName) {
+		return nil
+	}
+
+outer:
 	for _, ctx := range *contexts {
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		var timeout time.Duration
@@ -7877,6 +7947,7 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
+		//Waiting for all the apps in ctx are running
 		err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
 		if err != nil {
 			return err
@@ -7886,8 +7957,17 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 			return err
 		}
 
-		//waiting for volumes replication status should be up
+		//waiting for volumes replication status should be up before calculating md5sum
 		for _, v := range appVolumes {
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return err
+			}
+
+			//skipping the validation if volume is repl 2
+			if len(replicaSets) == 1 && len(replicaSets[0].PoolUuids) == 1 {
+				continue outer
+			}
 			t := func() (interface{}, bool, error) {
 				replicationStatus, err := GetVolumeReplicationStatus(v)
 				if err != nil {
@@ -7941,14 +8021,58 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 			}
 		}
 
+		poolChecksumMap := make(map[string]string)
+
+		//function to calulate md5sum of the given volume in the give pool
+		calChecksum := func(wg *sync.WaitGroup, v *volume.Volume, nodeDetail *node.Node, poolUuid string, errCh chan<- error) {
+			defer ginkgo.GinkgoRecover()
+			defer wg.Done()
+
+			poolID, err := GetPoolIDFromPoolUUID(poolUuid)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			inspectVolume, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
+			//To-Do update the command if set up is dmthin
+			cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
+			isDmthinSetup, err := IsDMthin()
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			if isDmthinSetup {
+				cmd = fmt.Sprintf("md5sum /dev/pwx%d/%s", poolID, inspectVolume.Id)
+			}
+			output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
+				Timeout:         defaultTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+				Sudo:            true,
+			})
+			if err != nil {
+				errCh <- err
+				return
+			}
+			vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
+			poolChecksumMap[poolUuid] = vChecksum
+		}
+
 		for _, v := range appVolumes {
 			replicaSets, err := Inst().V.GetReplicaSets(v)
 			if err != nil {
 				return err
 			}
 
-			var checksum string
-			var primaryVol *opsapi.Volume
+			wGroup := new(sync.WaitGroup)
+			errCh := make(chan error)
+
 			for _, rs := range replicaSets {
 				poolUuids := rs.PoolUuids
 				for _, poolUuid := range poolUuids {
@@ -7956,37 +8080,43 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 					if err != nil {
 						return err
 					}
-					poolID, err := GetPoolIDFromPoolUUID(poolUuid)
-					if err != nil {
-						return err
-					}
-
-					inspectVolume, err := Inst().V.InspectVolume(v.ID)
-					if err != nil {
-						return err
-					}
-					log.Infof("Getting md5sum for volume %s", inspectVolume.Id)
-					//To-Do update the command if set up is dmthin
-					cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
-					output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
-						Timeout:         defaultTimeout,
-						TimeBeforeRetry: defaultRetryInterval,
-						Sudo:            true,
-					})
-					if err != nil {
-						return err
-					}
-					vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
-					if checksum == "" {
-						checksum = vChecksum
-						primaryVol = inspectVolume
-					}
-					if checksum != vChecksum {
-						return fmt.Errorf("md5sum of volume [%s[ having [%s] is not matching with volume [%s] having [%s]", inspectVolume.Id, vChecksum, primaryVol.Id, checksum)
-					}
-					log.Infof("md5sum of volume [%s] having [%s] is matching with vol [%s] having [%s]", inspectVolume.Id, vChecksum, primaryVol.Id, checksum)
+					wGroup.Add(1)
+					go calChecksum(wGroup, v, nodeDetail, poolUuid, errCh)
 				}
 			}
+			wGroup.Wait()
+			close(errCh)
+
+			var errList []error
+
+			for err := range errCh {
+				errList = append(errList, err)
+			}
+
+			if len(errList) != 0 {
+				// Combine all errors into one and return
+				return errors.New(fmt.Sprintf("multiple errors occurred while checking md5sum of volume [%s]", v.ID)).(error)
+			}
+
+			var checksum string
+			var primaryPool string
+			for p, c := range poolChecksumMap {
+				if checksum == "" {
+					primaryPool = p
+					checksum = c
+				} else {
+					if c != checksum {
+						return fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+					}
+					log.InfoD("md5sum of volume [%s] having [%s] on pool [%s] is matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+				}
+
+			}
+			//clearing the pool after the volume validation
+			for k := range poolChecksumMap {
+				delete(poolChecksumMap, k)
+			}
+
 		}
 
 		//reverting application scale
@@ -8007,6 +8137,16 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 // GetContextsOnNode returns the contexts which have volumes attached on the given node.
 func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
 	contextsOnNode := make([]*scheduler.Context, 0)
+	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	if strings.Contains(testName, "{Longevity}") {
+		pc, _, _, _ := runtime.Caller(1)
+		testName = runtime.FuncForPC(pc).Name()
+	}
+
+	if !runDataIntegrityValidation(testName) {
+		return contextsOnNode, nil
+	}
+
 	log.Infof("Getting contexts on node %s", n.Name)
 	for _, ctx := range *contexts {
 		appVolumes, err := Inst().S.GetVolumes(ctx)
@@ -8038,5 +8178,6 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 			}
 		}
 	}
+
 	return contextsOnNode, nil
 }
