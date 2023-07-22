@@ -123,7 +123,7 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
-	// PxLabelNameKey is key for map
+	// 	// PureBlock is the parameter in storageclass to represent FA direct access volumes is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
 	PxLabelValue = "portworx"
@@ -1757,9 +1757,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 
 	if strings.Contains(app.Key, "fastpath") {
 		vpsSpec := "/root/git/go/src/github.com/torpedo/deployments/customconfigs/fastpath-vps.yaml"
-	        log.Infof("Debug --> app.Key")
+		log.Infof("Debug --> app.Key")
 		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
-	                log.Infof("Error applying spec %s", vpsSpec)
+			log.Infof("Error applying spec %s", vpsSpec)
 			log.Warnf("Debug --> Cannot find fastpath-vps.yaml in path %s", vpsSpec)
 		} else {
 			cmdArgs := []string{"apply", "-f", vpsSpec}
@@ -2030,7 +2030,7 @@ func (k *K8s) addSecurityAnnotation(spec interface{}, configMap *corev1.ConfigMa
 					obj.Parameters[encryptionName] = "true"
 				}
 				if app.IsCSI {
-					obj.Parameters [CsiProvisionerSecretName] = configMap.Data[secretNameKey]
+					obj.Parameters[CsiProvisionerSecretName] = configMap.Data[secretNameKey]
 					obj.Parameters[CsiProvisionerSecretNamespace] = configMap.Data[secretNamespaceKey]
 					obj.Parameters[CsiNodePublishSecretName] = configMap.Data[secretNameKey]
 					obj.Parameters[CsiNodePublishSecretNamespace] = configMap.Data[secretNamespaceKey]

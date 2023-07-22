@@ -1411,17 +1411,35 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 			/* var err error */
 			contexts = make([]*scheduler.Context, 0)
 			expReplMap := make(map[*volume.Volume]int64)
-			log.Infof("%v, %v: ", contexts, expReplMap)
+			log.Infof("contexts: %v, expReplMap: %v: ", contexts, expReplMap)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdate-%d", i))...)
 			}
+			ValidateApplications(contexts)
 		})
-		// Step 4:  Check fast path is active on the node
+		stepLog = " Step 3: Get app volumes and Check fast path is active on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			var err1 error
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+					log.Infof("App volumes details: %v ", appVolumes)
+				})
+			}
+		})
 		// Step 5:  Reboot the node
+
 		// Step 6:  After reboot completes verify the fast path is active
+
 		// Step 7:  Bounce the pods back if the fast path if it's not active
 	})
-
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
