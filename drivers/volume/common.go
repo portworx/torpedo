@@ -253,14 +253,6 @@ func (d *DefaultDriver) UpdatePoolIOPriority(n node.Node, poolUUID string, IOPri
 	}
 }
 
-//UpdateIOProfile update IO profile on volume
-func (d *DefaultDriver) UpdateIOProfile(volumeName string, profileType string) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "UpdateIOProfile",
-	}
-}
-
 // RecoverPool will recover a pool from a failure/storage down state.
 // This could be used by a pool driver to recover itself from any underlying storage
 // failure.

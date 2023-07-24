@@ -400,7 +400,8 @@ const (
 	// AutoFsTrim enables Auto Fstrim in PX cluster
 	AutoFsTrim = "autoFsTrim"
 	// UpdateVolume provides option to update volume with properties like iopriority.
-	UpdateVolume = "updateVolume"
+	UpdateVolume    = "updateVolume"
+	UpdateIOProfile = "updateIOProfile"
 	// NodeDecommission decommission random node in the PX cluster
 	NodeDecommission = "nodeDecomm"
 	//NodeRejoin rejoins the decommissioned node into the PX cluster
@@ -4787,59 +4788,69 @@ func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *ch
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-
 	setMetrics(*event)
-	stepLog := "Validate update of the volumes"
+	stepLog := "Validate IO profile update on volumes"
 	context(stepLog, func() {
 		log.InfoD(stepLog)
-		stepLog = "Update Io priority on volumes "
 		Step(stepLog,
 			func() {
+				//count := 0
 				log.InfoD(stepLog)
-				updateIOProfileOnVolumes(contexts, event)
-				log.InfoD("Update IO priority call completed")
+				for count := range [2]int{} {
+					updateIOProfileOnVolumes(contexts, event)
+					for _, ctx := range *contexts {
+						errorChan := make(chan error, errorChannelSize)
+						log.Infof("Validating context: %v", ctx.App.Key)
+						ctx.SkipVolumeValidation = false
+						ValidateContext(ctx, &errorChan)
+						for err := range errorChan {
+							log.Infof("Error: %v", err)
+							UpdateOutcome(event, err)
+						}
+					}
+					if count < 1 {
+						log.InfoD("Wait for 15 minutes before restting back")
+						time.Sleep(15 * time.Minute)
+						log.InfoD("Resetting back")
+					}
+				}
 			})
-	})
-	updateMetrics(*event)
-	//TODO need to flip this after 15 minutes
-	//Check IO on volumes
-	//Filp it back
 
+	})
+	log.InfoD("Update IO profile completed")
+	updateMetrics(*event)
 }
 
 // updateIOProfileOnVolumes this method is responsible for updating IO priority on Volumes.
 func updateIOProfileOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
 	for _, ctx := range *contexts {
 		var appVolumes []*volume.Volume
+		var volumeSpec *apios.VolumeSpecUpdate
 		var err error
-		var requiredIOProfile string
+		//var requiredIOProfile apios.VolumeSpecPolicy_IoProfile
+		var requiredIOProfile apios.IoProfile
 		appVolumes, err = Inst().S.GetVolumes(ctx)
 		UpdateOutcome(event, err)
 		if len(appVolumes) == 0 {
 			UpdateOutcome(event, fmt.Errorf("found no volumes for app "))
 		}
-		//TODO this should be parameterized
-		//"Auto","none"
-
 		for _, v := range appVolumes {
 			log.InfoD("Getting info from volume: %s", v.ID)
 			appVol, err := Inst().V.InspectVolume(v.ID)
 			if err != nil {
 				log.Errorf("Error inspecting volume: %v", err)
 			}
-			currentIOProfile := appVol.Spec.IoProfile.SimpleString()
-			derivedIOProfile := appVol.DerivedIoProfile.SimpleString()
-
+			currentIOProfile := appVol.Spec.IoProfile
+			derivedIOProfile := appVol.DerivedIoProfile
 			log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", v.ID, currentIOProfile, derivedIOProfile)
-			if currentIOProfile == string("auto") {
-				//Set IOProfile to "none"
-				requiredIOProfile = "none"
-			} else if currentIOProfile == "none" {
-				//set IOProfile to "auto"
-				requiredIOProfile = "auto"
+			if currentIOProfile == apios.IoProfile_IO_PROFILE_AUTO {
+				requiredIOProfile = apios.IoProfile_IO_PROFILE_NONE
+			} else if currentIOProfile == apios.IoProfile_IO_PROFILE_NONE {
+				requiredIOProfile = apios.IoProfile_IO_PROFILE_AUTO
 			}
 			log.InfoD("Expected IO Profile %v", requiredIOProfile)
-			err = Inst().V.UpdateIOProfile(v.ID, requiredIOProfile)
+			volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: requiredIOProfile}}
+			Inst().V.UpdateVolumeSpec(v, volumeSpec)
 			if err != nil {
 				UpdateOutcome(event, err)
 			}
@@ -4848,13 +4859,12 @@ func updateIOProfileOnVolumes(contexts *[]*scheduler.Context, event *EventRecord
 			if err != nil {
 				log.Errorf("Error inspecting volume: %v", err)
 			}
-
 			log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
-			if !strings.EqualFold(requiredIOProfile, appVol.Spec.IoProfile.SimpleString()) {
+			log.InfoD("IO profile after update %v", appVol.DerivedIoProfile.SimpleString())
+			if requiredIOProfile != appVol.Spec.IoProfile {
 				err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", v.ID, requiredIOProfile)
 				UpdateOutcome(event, err)
 			}
-			log.InfoD("Update IO profile on [%v] : [%v]", v.ID, requiredIOProfile)
 			log.InfoD("Completed update on %v", v.ID)
 		}
 	}

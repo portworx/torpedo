@@ -353,9 +353,6 @@ type Driver interface {
 	//UpdateIOPriority IO priority using pxctl command
 	UpdateIOPriority(volumeName string, priorityType string) error
 
-	//UpdateIOProfile IO priority using pxctl command
-	UpdateIOProfile(volumeName string, profileType string) error
-
 	//UpdateStickyFlag update sticky flag using pxctl command
 	UpdateStickyFlag(volumeName, stickyOption string) error
 
