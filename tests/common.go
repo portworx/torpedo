@@ -9,10 +9,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"math/rand"
 	"net/http"
 	"regexp"
+
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -3439,6 +3440,7 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	if err != nil {
 		return backupDeleteResponse, err
 	}
+	log.Infof(fmt.Sprintf("all backups inside delete backup %v", curBackups))
 	for _, bkp := range curBackups.GetBackups() {
 		if bkp.Uid == backupUID {
 			backupObj = bkp
@@ -7584,7 +7586,6 @@ func GetClusterProviders() []string {
 	return clusterProviders
 }
 
-
 // GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
 func GetPoolUuidsWithStorageFull() ([]string, error) {
 	var poolUuids []string
@@ -7727,4 +7728,3 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
-

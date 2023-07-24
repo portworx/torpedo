@@ -57,6 +57,16 @@ message ClusterInfo {
     BackupShareStatusInfo backup_share_status_info = 11;
     repeated string owner_group_list = 12;
     ObjectRef platform_credential_ref = 13;
+    // Teleport cluster ID
+    string teleport_cluster_id = 14;
+    // Tenant ID
+    string tenant_id = 15;
+    string service_token = 16 [
+        (gogoproto.jsontag) = "servicetoken",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    Provider provider = 17;
+
     // Message for maintaining status of the cluster.
     message StatusInfo {
         enum Status {
@@ -94,6 +104,17 @@ message ClusterInfo {
         Status status = 1;
         string reason = 2;
     }
+
+     // Cloud provider type
+     enum Provider {
+        Invalid = 0;
+        AWS = 1;
+        Azure = 2;
+        Google = 3;
+        IBM = 4;
+        Rancher = 5;
+    }
+    
 }
 
 message ClusterObject {
@@ -307,6 +328,8 @@ message BackupScheduleInfo {
     BackupType backup_type = 22;
     // Label selectors to choose namespaces
     string ns_label_selectors = 23;
+    // Target namespace of CR
+    string target_namespace = 24;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -465,6 +488,10 @@ message BackupInfo {
     string ns_label_selectors = 31;
     // Name of rancher projects associated with resources
     map<string, string> rancher_projects = 32;
+    // Target namespace of CR
+    string target_namespace = 33;
+    // this flag signifies if the backup involves large number of resources or not
+    bool large_resource_enabled = 34;
     message BackupType {
         Type type = 1;
         enum Type {
@@ -601,6 +628,23 @@ message RestoreInfo {
     map<string, string> rancher_project_mapping = 18;
     // mapping of source rancher project display names to target rancher project display names
     map<string, string> rancher_project_name_mapping = 19;
+    // flag signifies if the restored backup involves large number of resources or not
+    bool large_resource_enabled = 20;
+    // counter to show number of already restored resources
+    uint64 restored_resource_count = 21;
+    // current activity while doing resource restore
+    RestoreResourceState restore_status = 22;
+
+    message RestoreResourceState {
+        enum ResourceStatus {
+            Preparing = 0;
+            Deleting = 1;
+            Verifying = 2;
+            Applying = 3;
+        }
+
+        ResourceStatus restore_status = 1;
+    }
 
     message RestoredResource {
         string name = 1;
@@ -691,6 +735,9 @@ message EnumerateOptions {
     // Currently backup enumerate request should pass this along with cluster
     // name.
     string cluster_uid_filter = 8;
+    // Filter to use owner uids on objects. Any object that contains the
+    // filter will be returned
+    repeated string owners = 9;
 }
 
 service SchedulePolicy {
@@ -923,11 +970,14 @@ message BackupScheduleEnumerateRequest {
     // backup_location is deprecated, not to be used.
     string backup_location = 3;
     ObjectRef backup_location_ref = 4;
+    // Optional arguments for enumeration
+    EnumerateOptions enumerate_options = 5;
 }
 
 // Define BackupScheduleEnumerateResponse struct
 message BackupScheduleEnumerateResponse {
     repeated BackupScheduleObject backup_schedules = 1;
+    uint64 total_count = 2;
 }
 
 // Define BackupScheduleInspectRequest struct
@@ -983,7 +1033,7 @@ service Cluster {
     // Inspect returns detail information about a specified cluster
     rpc Inspect(ClusterInspectRequest) returns (ClusterInspectResponse) {
         option (google.api.http) = {
-            get : "/v1/cluster/{org_id}/{name}"
+            get : "/v1/cluster/{org_id}/{name}/{uid}"
         };
     }
 
@@ -1026,6 +1076,27 @@ message ClusterCreateRequest {
     string cloud_credential = 4;
     ObjectRef cloud_credential_ref = 5;
     ObjectRef platform_credential_ref = 6;
+    // Teleport cluster ID
+    string teleport_cluster_id = 7;
+    // Tenant ID of the user account (aka PDS account)
+    string tenant_id = 8;
+    // PDS account service token to fetch rest.Config for
+    // teleport based cluster
+    string service_token = 9 [
+        (gogoproto.jsontag) = "servicetoken",
+        (gogoproto.moretags) = "secure:\"true\""
+    ];
+    // This is optional field and used by BaaS only
+    Provider provider = 10;
+     // Cloud provider type
+    enum Provider {
+        Invalid = 0;
+        AWS = 1;
+        Azure = 2;
+        Google = 3;
+        IBM = 4;
+        Rancher = 5;
+    }
 }
 
 // Define ClusterCreateResponse struct
@@ -1072,6 +1143,7 @@ message ClusterInspectRequest {
     string org_id = 1;
     string name = 2;
     bool include_secrets = 3;
+    string uid = 4;
 }
 
 // Define ClusterInspectResponse struct
@@ -1664,6 +1736,13 @@ service Organization {
             get : "/v1/organization/{name}"
         };
     }
+
+    rpc Delete(OrganizationDeleteRequest)
+        returns (OrganizationDeleteResponse) {
+        option (google.api.http) = {
+            delete : "/v1/organization/{name}"
+      };
+    }
 }
 
 // Define OrganizationCreateRequest struct
@@ -1687,6 +1766,15 @@ message OrganizationInspectRequest { string name = 2; }
 
 // Define OrganizationInspectResponse struct
 message OrganizationInspectResponse { OrganizationObject organization = 1; }
+
+// Define OrganizationDeleteRequest struct
+message OrganizationDeleteRequest {
+    // Name of the org to be deleted
+    string name = 1;
+}
+
+// Define OrganizationDeleteResponse struct
+message OrganizationDeleteResponse {}
 
 // Request message for creating rules
 message RuleCreateRequest {
