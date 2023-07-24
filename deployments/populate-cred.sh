@@ -11,6 +11,8 @@ for arg in "$@"; do
     fi
 done
 
+echo $AWS_REGION
+echo $SAN_CRED_PSW
 sed -i "s/AWS_ACCESS_KEY_ID/$PXB_AWS_ACCESS_KEY_ID_PSW/g" $FILEPATH
 sed -i "s/AWS_SECRET_ACCESS_KEY/$SAN_CRED_PSW/g" $FILEPATH
 sed -i "s/AWS_REGION/$AWS_REGION/g" $FILEPATH
