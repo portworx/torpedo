@@ -9811,6 +9811,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				err := fmt.Errorf("selected pool is empty")
 				log.FailOnError(err, "selected pool is empty")
 			}
+			isjournal, err := isJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
 			for i := 1; i <= maxDrivesAllowed+1; i++ {
 				drvSize, err := getPoolDiskSize(selectedPool)
 				log.FailOnError(err, "failed while getting pool size")
@@ -9818,8 +9820,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				expectedSize := (selectedPool.TotalSize / units.GiB) + driveSize
 				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 				log.FailOnError(err, "error while expanding pool")
-				isjournal, err := isJournalEnabled()
-				log.FailOnError(err, "Failed to check is journal enabled")
 				resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
 				if i == maxDrivesAllowed+1 {
 					poolStatus, err := getPoolLastOperation(selectedPool.Uuid)
@@ -9885,6 +9885,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				for i := 0; i < len(poolListForOps); i++ {
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "error refreshing volume endpoints")
+					isjournal, err := isJournalEnabled()
+					log.FailOnError(err, "Failed to check is journal enabled")
 					drvSize, err := getPoolDiskSize(poolListForOps[i])
 					log.FailOnError(err, "error getting drive size for pool [%s]", poolListForOps[i].Uuid)
 					drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
@@ -9895,8 +9897,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 							for j := 1; j <= drivesThatCanBeAdded; j++ {
 								driveSize := drvSize * uint64(j)
 								expectedSize := (poolListForOps[i].TotalSize / units.GiB) + driveSize
-								isjournal, err := isJournalEnabled()
-								log.FailOnError(err, "Failed to check is journal enabled")
 								expectedSizeWithJournal := expectedSize
 								if isjournal {
 									journalSize := uint64(3)
