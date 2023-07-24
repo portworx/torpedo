@@ -8,6 +8,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
@@ -1387,6 +1388,7 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 		log.Infof("The runID  %v ", runID)
 	})
 
+	var pxNode node.Node
 	var contexts []*scheduler.Context
 	stepLog := "Create Fastpath Volume Reboot Node, check fastpath is active"
 	It(stepLog, func() {
@@ -1397,31 +1399,33 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 			pxNodes, err := GetStorageNodes()
 			log.FailOnError(err, "Unable to get the storage nodes")
 			log.Infof("The pxNodes %v ", pxNodes)
-			pxNode := pxNodes[0]
+			pxNode = pxNodes[0]
 			log.Infof("The Selected node as Fast path label is %v : ", pxNode)
 			labels := make(map[string]string)
 			labels["fastpath"] = "enable"
 			AddLabelsOnNode(pxNode, labels)
 			log.Infof("Labels on the Fast path node %v: ", pxNode)
+
 		})
 		// var contexts []*scheduler.Context
 		stepLog = "Step 2: Schedule application on the nodes with Fast path labels"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			/* var err error */
+			var err error
+			err = Inst().S.AddLabelOnNode(pxNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", pxNode.Name))
+			Inst().AppList = []string{"fio-fastpath"}
 			contexts = make([]*scheduler.Context, 0)
-			expReplMap := make(map[*volume.Volume]int64)
-			log.Infof("contexts: %v, expReplMap: %v: ", contexts, expReplMap)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdate-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fastpath-%d", i))...)
 			}
 			ValidateApplications(contexts)
 		})
+
 		stepLog = " Step 3: Get app volumes and Check fast path is active on the node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var err error
-			var err1 error
 			for _, ctx := range contexts {
 				var appVolumes []*volume.Volume
 				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
@@ -1434,6 +1438,8 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 				})
 			}
 		})
+		// func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.FastpathStatus)
+
 		// Step 5:  Reboot the node
 
 		// Step 6:  After reboot completes verify the fast path is active
