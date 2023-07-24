@@ -1639,7 +1639,7 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 }
 
 // ValidatePureRawBlockVolumes validates rawblock pure volumes
-func (d *portworx) ValidatePureRawBlockVolumes(volumeName string, pvcObj corev1.PersistentVolumeClaim) error {
+func (d *portworx) ValidatePureRawBlockVolumes(volumeName string, pvcObj *corev1.PersistentVolumeClaim) error {
 
 	tmpFilePath := "/tmp/test.txt"
 	dataSize := ""

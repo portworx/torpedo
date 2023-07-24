@@ -881,7 +881,7 @@ func (d *DefaultDriver) ValidatePureFaCreateOptions(volumeName string, FSType st
 }
 
 // ValidatePureRawBlockVolumes validates rawblock pure volumes
-func (d *DefaultDriver) ValidatePureRawBlockVolumes(volumeName string, pvcObj corev1.PersistentVolumeClaim) error {
+func (d *DefaultDriver) ValidatePureRawBlockVolumes(volumeName string, pvcObj *corev1.PersistentVolumeClaim) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateOptions",
