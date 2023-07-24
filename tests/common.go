@@ -9,10 +9,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"math/rand"
 	"net/http"
 	"regexp"
+
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -809,6 +810,12 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
+
+		Step(fmt.Sprintf("validate %s app's raw block volumes are setup", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateRawBlockPureVolumes(ctx, errChan...)
+			}
+		})
 	})
 }
 
@@ -900,6 +907,12 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 					err := Inst().V.ValidateVolumeSetup(vol)
 					processError(err, errChan...)
 				})
+			}
+		})
+
+		Step(fmt.Sprintf("validate %s app's raw block volumes are setup", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateRawBlockPureVolumes(ctx, errChan...)
 			}
 		})
 	})
@@ -1360,6 +1373,26 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			}
 		} else {
 			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+		}
+	}
+}
+
+// ValidateRawBlockPureVolumes is the ginkgo spec for executing validation for raw block volumes
+func ValidateRawBlockPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
+	vols, err := Inst().S.GetVolumes(ctx)
+	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
+	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
+	for _, v := range vols {
+		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
+		if err != nil {
+			err = fmt.Errorf("Failed to get pvc for volume %s. Err: %v", v, err)
+			processError(err, errChan...)
+		}
+		fmt.Println(pvcObj.Spec.VolumeMode)
+		// Check for raw block volume mode within pvc
+		if fmt.Sprint(pvcObj.Spec.VolumeMode) == "Block" {
+			err = Inst().V.ValidatePureRawBlockVolumes(v.ID, pvcObj)
+			dash.VerifySafely(err, nil, "pure raw block volumes validated successfully")
 		}
 	}
 }

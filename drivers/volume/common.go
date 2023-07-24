@@ -14,6 +14,7 @@ import (
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -873,6 +874,14 @@ func (d *DefaultDriver) ValidatePureFaFbMountOptions(volumeName string, mountopt
 
 // ValidatePureFaCreateOptions validates createoptions for pure volumes
 func (d *DefaultDriver) ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidateCreateOptions",
+	}
+}
+
+// ValidatePureRawBlockVolumes validates rawblock pure volumes
+func (d *DefaultDriver) ValidatePureRawBlockVolumes(volumeName string, pvcObj corev1.PersistentVolumeClaim) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateCreateOptions",

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"reflect"
 	"regexp"
@@ -104,6 +105,10 @@ const (
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
+	ddCopy                                    = "dd if=%s of=%s bs=${%s} count=1 seek=0"
+	ddRead                                    = "dd if=%s status=none bs=${%s} count=1 skip=0"
+	ddReadDataSize                            = "wc -c %s | awk '{print $1}'"
+	ddRawBlockDevicePath                      = "/dev/pure-block-device"
 )
 
 const (
@@ -220,6 +225,16 @@ type statusJSON struct {
 	Status string
 	Error  string
 	Cmd    string
+}
+
+func (d *portworx) executeCommandToPod(podCmd, podName, podNamespace string) (string, error) {
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf(podCmd)}
+	command := exec.Command("kubectl", cmdArgs...)
+	out, err := command.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to write data to pod: %s. Output: %s", err, string(out))
+	}
+	return string(out), nil
 }
 
 // ExpandPool resizes a pool of a given ID
@@ -1619,6 +1634,50 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 			log.Warnf("The filesystem type %s isn't properly implemented as block size 2048 has not been set, Err: %v", FStype, err)
 			return fmt.Errorf("Failed to get %s proper block size in the %s file system, Err: %v", ext4InfoOut, FStype, err)
 		}
+	}
+	return nil
+}
+
+// ValidatePureRawBlockVolumes validates rawblock pure volumes
+func (d *portworx) ValidatePureRawBlockVolumes(volumeName string, pvcObj corev1.PersistentVolumeClaim) error {
+
+	tmpFilePath := "/tmp/test.txt"
+	dataSize := ""
+	data := "this is pure volume rawblock test data"
+	deviceData := ""
+
+	// write data to the files
+	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
+	if err != nil {
+		return fmt.Errorf("failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
+	}
+	pod := podsUsingPVC[0]
+	podCmd := fmt.Sprintf("echo -n %s >> %s", data, tmpFilePath)
+	_, err = d.executeCommandToPod(podCmd, pod.GetName(), pod.GetNamespace())
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// take DATA_SIZE out after writing data to the text file
+	readDataSizeCmd := fmt.Sprintf(ddReadDataSize, tmpFilePath)
+	dataSize, err = d.executeCommandToPod(readDataSizeCmd, pod.GetName(), pod.GetNamespace())
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// copy DATA_SIZE data to the device path of rawblock
+	ddCopyCmd := fmt.Sprintf(ddCopy, tmpFilePath, ddRawBlockDevicePath, dataSize)
+	_, err = d.executeCommandToPod(ddCopyCmd, pod.GetName(), pod.GetNamespace())
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// read data using dd command from the rawblock device path
+	ddReadCmd := fmt.Sprintf(ddRead, ddRawBlockDevicePath, dataSize)
+	deviceData, err = d.executeCommandToPod(ddReadCmd, pod.GetName(), pod.GetNamespace())
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// compare the data copied to device path and data written to the text file
+	if data != deviceData {
+		return fmt.Errorf("Compared data of text file & data copied to device path is not same")
 	}
 	return nil
 }

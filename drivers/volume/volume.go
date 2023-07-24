@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/errors"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -361,6 +362,9 @@ type Driver interface {
 
 	//ValidatePureFaCreateOptions validates create options using xfs_info and tune2fs commands
 	ValidatePureFaCreateOptions(volumeName string, FSType string, volumeNode *node.Node) error
+
+	//ValidatePureRawBlockVolumes validates rawblock pure volumes
+	ValidatePureRawBlockVolumes(volumeName string, pvcObj *corev1.PersistentVolumeClaim) error
 
 	// UpdateSharedv4FailoverStrategyUsingPxctl updates the sharedv4 failover strategy using pxctl
 	UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error
