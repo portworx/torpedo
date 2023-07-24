@@ -428,17 +428,17 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			var wg sync.WaitGroup
 			for deployment, dsEntity := range deploymentDSentityMap {
 				wg.Add(1)
-				log.Info("Fetching back up jobs")
-				backupJobs, err := components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-				log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-
-				log.Info("Create restore client.")
-				ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
-				restoreTarget := tc.NewTargetCluster(ctx)
 				log.Info("Triggering restore.")
 				go func() {
 					defer wg.Done()
 					defer GinkgoRecover()
+					log.Info("Fetching back up jobs")
+					backupJobs, err := components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+
+					log.Info("Create restore client.")
+					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
 						ProjectId:            projectID,
