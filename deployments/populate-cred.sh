@@ -1,11 +1,14 @@
 #!/bin/bash
 set +xe
-for ARGUMENT in "$@"
-do
-   KEY=$(echo $ARGUMENT | cut -f1 -d=)
-   KEY_LENGTH=${#KEY}
-   VALUE="${ARGUMENT:$KEY_LENGTH+1}"
-   export "$KEY"="$VALUE"
+# Loop through all arguments
+for arg in "$@"; do
+    # Use grep and awk to find and extract the key-value pairs
+    if echo "$arg" | grep -q '='; then
+        key=$(echo "$arg" | awk -F= '{print $1}')
+        value=$(echo "$arg" | awk -F= '{print $2}')
+        echo "Setting environment variable: $key=$value"
+        export "$key"="$value"
+    fi
 done
 
 sed -i "s/AWS_ACCESS_KEY_ID/$PXB_AWS_ACCESS_KEY_ID_PSW/g" $FILEPATH
