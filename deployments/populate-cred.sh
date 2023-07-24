@@ -1,19 +1,38 @@
 #!/bin/bash
 set +xe
 # Loop through all arguments
-for arg in "$@"; do
-    # Use grep and awk to find and extract the key-value pairs
-    if echo "$arg" | grep -q '='; then
-        key=$(echo "$arg" | awk -F= '{print $1}')
-        value=$(echo "$arg" | awk -F= '{print $2}')
-        echo "Setting environment variable: $key=$value"
-        export "$key"="$value"
-    fi
-done
+#for arg in "$@"; do
+#    # Use grep and awk to find and extract the key-value pairs
+#    if echo "$arg" | grep -q '='; then
+#        key=$(echo "$arg" | awk -F= '{print $1}')
+#        value=$(echo "$arg" | awk -F= '{print $2}')
+#        echo "Setting environment variable: $key=$value"
+#        export "$key"="$value"
+#    fi
+#done
 
-echo $AWS_REGION
-echo $SAN_CRED_PSW
-echo argsMap["AWS_REGION"]
+# Accessing the FILEPATH argument
+FILEPATH="$1"
+
+# Removing the first argument (FILEPATH) from the arguments list
+shift
+
+# The remaining arguments are stored in the $@ variable
+# which can be accessed as an array or a single string
+ARGS="$@"
+
+# Function to extract the value of a specific argument from the ARGS string
+function get_arg_value() {
+    local arg_name="$1"
+    echo "${ARGS}" | grep -o "${arg_name}=[^ ]*" | awk -F'=' '{print $2}'
+}
+
+# Get the value of AWS_REGION
+AWS_REGION=$(get_arg_value "AWS_REGION")
+
+# Printing the value of AWS_REGION
+echo "AWS_REGION: ${AWS_REGION}"
+
 sed -i "s/AWS_ACCESS_KEY_ID/$PXB_AWS_ACCESS_KEY_ID_PSW/g" $FILEPATH
 sed -i "s/AWS_SECRET_ACCESS_KEY/$SAN_CRED_PSW/g" $FILEPATH
 sed -i "s/AWS_REGION/$AWS_REGION/g" $FILEPATH
