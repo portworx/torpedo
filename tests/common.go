@@ -1474,7 +1474,7 @@ func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.Fastpa
 			expectedStatus = opsapi.FastpathStatus_FASTPATH_INACTIVE
 		}
 		if fpConfig.Status == expectedStatus {
-			log.Infof("Fastpath status is %v", fpConfig.Status)
+			log.Infof("Fastpath status is: %v expected status is: %v ", fpConfig.Status, expectedStatus)
 			if fpConfig.Status == opsapi.FastpathStatus_FASTPATH_ACTIVE {
 				if fpConfig.Dirty {
 					return fmt.Errorf("fastpath vol %s is dirty", vol.Name)
@@ -1482,6 +1482,8 @@ func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.Fastpa
 				if !fpConfig.Promote {
 					return fmt.Errorf("fastpath vol %s is not promoted", vol.Name)
 				}
+			} else {
+				return fmt.Errorf("expected Fastpath Status: %v, Actual: %v", expectedStatus, fpConfig.Status)
 			}
 		} else {
 			return fmt.Errorf("expected Fastpath Status: %v, Actual: %v", expectedStatus, fpConfig.Status)
