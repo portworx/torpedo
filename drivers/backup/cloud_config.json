@@ -27,6 +27,7 @@
     },
     "ibm": {
       "default": {
+        "ibm_account_name": "IBM_ACCOUNT_NAME",
         "api_key": "IBM_CLOUD_API_KEY",
         "region": "IBM_CLOUD_REGION",
         "resource_group": "IBM_CLOUD_RESOURCE_GROUP"
