@@ -945,8 +945,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("AllNSBackupWithIncludeNewNSOption", "Verification of schedule backups created with include new "+
-			"namespaces option", nil, 84760)
+		StartTorpedoTest("AllNSBackupWithIncludeNewNSOption", "Verification of schedule backups created with include new namespaces option", nil, 84760)
 
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
