@@ -2,13 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/google/uuid"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"math/rand"
 	"reflect"
@@ -16,10 +9,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/pkg/log"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/units"
@@ -1310,5 +1312,224 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{TrashcanRecovery}", func() {
+	/*  Create volumes
+	Put the volume in resync state
+	While some volumes are in resync, delete all volumes.
+	Make sure all the volumes are in the trashcan.
+	Recover all volumes from trashcan.
+	Verify the volumes are restored correctly.
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("TrashcanRecovery", "Validate the successful retore from Trashcan when volumes got deleted in resync state", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var isTrashcanEnabled = false
+	stepLog := "Validate the successful retore from Trashcan of voluems in resync"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		if !isTrashcanEnabled {
+			stepLog = "enable trashcan"
+			Step(stepLog,
+				func() {
+					log.InfoD(stepLog)
+					currNode := node.GetStorageDriverNodes()[0]
+					err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+						"--volume-expiration-minutes": "600",
+					})
+					if err != nil {
+						err = fmt.Errorf("error while enabling trashcan, Error:%v", err)
+						log.Error(err.Error())
+
+					} else {
+						log.InfoD("Trashcan is successfully enabled")
+						isTrashcanEnabled = true
+					}
+				})
+		}
+
+		stepLog := "has to schedule apps"
+		var err error
+		contexts = make([]*scheduler.Context, 0)
+		expReplMap := make(map[*volume.Volume]int64)
+
+		appList := Inst().AppList
+		defer func() {
+			Inst().AppList = appList
+
+		}()
+
+		Inst().AppList = []string{"bonnie-sv4-svc"}
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volupdate-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		stepLog = "get volumes for all apps in test and update replication factor"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.Infof("App Volumes are %s", appVolumes)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+				})
+				for _, v := range appVolumes {
+					MaxRF := Inst().V.GetMaxReplicationFactor()
+					MinRF := Inst().V.GetMinReplicationFactor()
+					stepLog = fmt.Sprintf("repl decrease volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v)
+					Step(stepLog,
+						func() {
+							log.InfoD(stepLog)
+							currRep, err := Inst().V.GetReplicationFactor(v)
+							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+							expReplMap[v] = int64(math.Max(float64(MinRF), float64(currRep)-1))
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
+							log.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
+							dash.VerifyFatal(err == nil, true, fmt.Sprintf("Set volume  %s repl factor successful ?", v.Name))
+						})
+					stepLog = fmt.Sprintf("validate successful repl decrease on app %s's volume: %v",
+						ctx.App.Key, v)
+
+					Step(stepLog,
+						func() {
+							log.InfoD(stepLog)
+							newRepl, err := Inst().V.GetReplicationFactor(v)
+							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+							dash.VerifyFatal(newRepl, expReplMap[v], "Repl factor is as expected ?")
+						})
+					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+						Inst().V.String(), ctx.App.Key, v)
+					Step(stepLog,
+						func() {
+							log.InfoD(stepLog)
+							currRep, err := Inst().V.GetReplicationFactor(v)
+							log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+							// GetMaxReplicationFactory is hardcoded to 3
+							// if it increases repl 3 to an aggregated 2 volume, it will fail
+							// because it would require 6 worker nodes, since
+							// number of nodes required = aggregation level * replication factor
+							currAggr, err := Inst().V.GetAggregationLevel(v)
+							log.FailOnError(err, "Failed to get volume  %s aggregate level", v.Name)
+							if currAggr > 1 {
+								MaxRF = int64(len(node.GetStorageDriverNodes())) / currAggr
+							}
+							expReplMap[v] = int64(math.Min(float64(MaxRF), float64(currRep)+1))
+
+							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
+							log.FailOnError(err, "Failed to set volume  %s repl factor", v.Name)
+
+							// wait for few seconds for resync to start
+							time.Sleep(30 * time.Second)
+
+							for _, vol := range appVolumes {
+								runTimeStat, err := getVolumeRuntimeState(vol.ID)
+								if err != nil {
+									fmt.Printf("Error while fetching the volume info")
+								}
+								log.Infof("Runtime state for vol  %s is %s", vol.ID, runTimeStat)
+
+								if runTimeStat == "resync" {
+									for _, ctx := range contexts {
+										Step(fmt.Sprintf("scale down app %s to 0 ", ctx.App.Key), func() {
+											applicationScaleDownMap, err := Inst().S.GetScaleFactorMap(ctx)
+											log.FailOnError(err, "Failed to scale down application ")
+
+											for name := range applicationScaleDownMap {
+												log.Infof("Scaling down application %s to 0", applicationScaleDownMap[name])
+												applicationScaleDownMap[name] = 0
+											}
+											err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+
+											Step("Giving few seconds for scaled down applications to stabilize", func() {
+												time.Sleep(20 * time.Second)
+
+												Step("Start Volume Delete", func() {
+													log.InfoD(fmt.Sprintf("delete PVC [%v]", v))
+													err = lib.CheckAndDeleteIndependentPV(v.ID, true)
+													log.FailOnError(err, "Failed to delete PVC %s ", v.Name)
+													log.FailOnError(Inst().V.DeleteVolume(v.ID), fmt.Sprintf("Delete volume with ID [%v] failed", v))
+													// wait for few seconds for pvc to get deleted and volume to get detached
+													time.Sleep(10 * time.Second)
+													Step("wait for sometime for PVC to get deleted and appear in trashcan", func() {
+														time.Sleep(20 * time.Second)
+														var trashcanVols []string
+														var err error
+														node := node.GetStorageDriverNodes()[0]
+														stepLog = "Validating trashcan"
+														Step(stepLog,
+															func() {
+																log.InfoD(stepLog)
+																trashcanVols, err = Inst().V.GetTrashCanVolumeIds(node)
+																if err != nil {
+																	log.InfoD("Error While getting trashcan volumes, Err %v", err)
+																}
+
+																if len(trashcanVols) == 0 {
+																	err = fmt.Errorf("no volumes present in trashcan")
+
+																}
+															})
+														stepLog = "Validating trashcan restore"
+														Step(stepLog,
+															func() {
+																log.InfoD(stepLog)
+																if len(trashcanVols) != 0 {
+																	volToRestore := trashcanVols[len(trashcanVols)-1]
+																	log.InfoD("Restoring vol [%v] from trashcan", volToRestore)
+																	pxctlCmdFull := fmt.Sprintf("v r %s --trashcan %s", vol.ID, volToRestore)
+																	output, err := Inst().V.GetPxctlCmdOutput(node, pxctlCmdFull)
+																	if err == nil {
+																		log.InfoD("output: %v", output)
+																		if !strings.Contains(output, fmt.Sprintf("Successfully restored: %s", vol.ID)) {
+																			err = fmt.Errorf("volume %v, restore from trashcan failed, Err: %v", volToRestore, output)
+																		}
+																	} else {
+																		log.InfoD("Error restoring: %v", err)
+																	}
+																}
+
+															})
+													})
+												})
+											})
+
+										})
+									}
+
+								}
+							}
+
+							//Step("destroy apps", func() {
+							//	opts := make(map[string]bool)
+							//	opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+							//	for _, ctx := range contexts {
+							//		TearDownContext(ctx, opts)
+							//	}
+							//})
+							//defer appsValidateAndDestroy(contexts)
+
+						})
+
+					//appsValidateAndDestroy(contexts)
+
+					JustAfterEach(func() {
+						defer EndTorpedoTest()
+						AfterEachTest(contexts)
+					})
+				}
+			}
+		})
 	})
 })
