@@ -33,7 +33,7 @@ type DSEntity struct {
 	// TODO Add datahash for data validation
 }
 
-func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, namespace string, bkpDsEntity DSEntity, isRestoreInSameNS, validate bool) (*pds.ModelsRestore, error) {
+func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, namespace string, bkpDsEntity DSEntity, isRestoreInSameNS bool, validate bool) (*pds.ModelsRestore, error) {
 	var (
 		bkpJob                 *pds.ModelsBackupJob
 		nsName, pdsNamespaceId string
@@ -45,33 +45,33 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 	}
 	pdsRestoreTargetClusterId, err := restoreClient.RestoreTargetCluster.GetDeploymentTargetID(k8sClusterId, restoreClient.TenantId)
 	if err != nil {
-		log.Errorf("Unable to fetch the cluster details from the control plane")
-		return nil, fmt.Errorf("unable to fetch the cluster details from the control plane")
+		return nil, fmt.Errorf("unable to fetch the cluster details from the control plane, " +
+			"cluster is registered to control plane")
 	}
-	if !isRestoreInSameNS {
-		nsName, pdsNamespaceId, err = restoreClient.getNameSpaceId(pdsRestoreTargetClusterId)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	if isRestoreInSameNS {
+		log.Info("Using the same namespace for restoring DS .")
 		bkpJob, err = restoreClient.Components.BackupJob.GetBackupJob(backupJobId)
 		if err != nil {
 			return nil, err
 		}
 		nsName, pdsNamespaceId = namespace, bkpJob.GetNamespaceId()
+	} else {
+		log.Info("Restoring the data service to new namespace.")
+		nsName, pdsNamespaceId, err = restoreClient.getNameSpaceId(pdsRestoreTargetClusterId)
+		if err != nil {
+			return nil, err
+		}
 	}
 	log.Infof("backup Job - %v,Restore Target Cluster Id - %v, NamespaceId - %v", backupJobId, pdsRestoreTargetClusterId, pdsNamespaceId)
 	restoredModel, err := restoreClient.Components.Restore.RestoreToNewDeployment(backupJobId, "autom", pdsRestoreTargetClusterId, pdsNamespaceId)
 	if err != nil {
-		log.Errorf("Failed during restore.")
-		return nil, fmt.Errorf("failed during restore")
+		return nil, fmt.Errorf("Failed during restore.Err- %v ", err)
 	}
 	err = wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
 		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
 		state := restore.GetStatus()
 		if err != nil {
-			log.Errorf("failed during fetching the restore object, %v", err)
-			return false, err
+			return false, fmt.Errorf("failed during fetching the restore object, %v", err)
 		}
 		log.Infof("Restore status -  %v", state)
 		if strings.ToLower(state) != strings.ToLower("Successful") {
@@ -104,11 +104,14 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 }
 
 func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string, string, error) {
+
 	randomName := generateRandomName("restore")
-	_, err := restoreClient.RestoreTargetCluster.CreateNamespace(randomName)
-	if err != nil {
-		return "", "", fmt.Errorf("unable to create namespace %v", randomName)
+	log.Infof("Creating new pds namespace %v", randomName)
+	ns, isAvailable, err := restoreClient.RestoreTargetCluster.CreatePDSNamespace(randomName)
+	if err != nil || !isAvailable {
+		return "", "", fmt.Errorf("error while creating PDS enabled Namespaces %v", randomName)
 	}
+	log.Infof("Created pds namespace %v successfully", ns.GetObjectMeta().GetName())
 	nsId, err := restoreClient.RestoreTargetCluster.GetnameSpaceID(randomName, pdsClusterId)
 	if err != nil {
 		return "", "", fmt.Errorf("unable to fetch  %v", randomName)
