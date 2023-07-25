@@ -8,6 +8,7 @@ import (
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
@@ -17,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	. "github.com/onsi/ginkgo"
@@ -33,7 +35,8 @@ const (
 	bufferedBW = 1130
 )
 const (
-	fio = "fio-throttle-io"
+	fio             = "fio-throttle-io"
+	fastpathAppName = "fastpath"
 )
 
 // Volume replication change
@@ -1465,4 +1468,137 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 		AfterEachTest(contexts)
 	})
 
+})
+
+var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
+	var testrailID = 0
+	// JIRA ID : https://portworx.atlassian.net/browse/PTX-15700
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateFastpathVolumeRebootNode",
+			"Create fast path volume, reboot the node, check fastpath is active", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		log.Infof("The runID  %v ", runID)
+	})
+
+	var pxNode node.Node
+	var contexts []*scheduler.Context
+	var applist = Inst().AppList
+	stepLog := "Create fastpath Volume Reboot Node and check if fastpath is active"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Step 1: Find all the Storage nodes and and select a node for test"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Get all the Nodes
+			pxNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Unable to get the storage nodes")
+			log.Infof("The pxNodes %v ", pxNodes)
+
+			// Select the first node for the test
+			pxNode = pxNodes[0]
+			log.Infof("The Selected node as Fast path label is %v : ", pxNode)
+
+			// Remove if node-type label is set before the test
+			for _, node := range pxNodes {
+				log.Infof("Node Name: %s\n", node.Name)
+				Inst().AppList = applist
+				err = Inst().S.RemoveLabelOnNode(node, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", node.Name)
+			}
+
+		})
+
+		stepLog = "Step 2: Schedule application and Add label on the selected storage Node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+
+			/* defer for later removal of label node-type
+			defer func() {
+				Inst().AppList = applist
+				err = Inst().S.RemoveLabelOnNode(pxNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", pxNode.Name)
+			}()
+			*/
+
+			// Add label on the selected node
+			err = Inst().S.AddLabelOnNode(pxNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", pxNode.Name))
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+			contexts = make([]*scheduler.Context, 0)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fastpath-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = " Step 3: Get app volumes and Check fast path is active on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+
+					// Get the app volume details
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+					log.Infof("App volumes details: %v ", appVolumes)
+
+					// Loop through the apps and check if the volumes are fastpath active before reboot
+					for appvolume := range appVolumes {
+						log.Infof("current volume : %v", appvolume)
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+							log.FailOnError(err, "fastpath volume validation failed")
+						}
+					}
+
+				})
+			}
+		})
+		stepLog = " Step 4: Reboot the node wait for it to complete"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			rebootNodeAndWaitForReady(&pxNode)
+		})
+
+		stepLog = " Step 5: Get app volumes and Check fast path is active on the node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var err error
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+
+					// Get the app volume details
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
+					log.Infof("App volumes details: %v ", appVolumes)
+
+					// Loop through the apps and check if the volumes are fastpath active after the reboot
+					for appvolume := range appVolumes {
+						log.Infof("current volume : %v", appvolume)
+						if strings.Contains(ctx.App.Key, fastpathAppName) {
+							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
+							log.FailOnError(err, "fastpath volume validation failed")
+						}
+					}
+
+				})
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })
