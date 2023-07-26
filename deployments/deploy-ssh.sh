@@ -560,6 +560,10 @@ spec:
       value: "${DESTINATION_RKE_TOKEN}"
     - name: AZURE_ACCOUNT_KEY
       value: "${AZURE_ACCOUNT_KEY}"
+    - name: SOURCE_RKE_TOKEN
+      value: "${SOURCE_RKE_TOKEN}"
+    - name: DESTINATION_RKE_TOKEN
+      value: "${DESTINATION_RKE_TOKEN}"
     - name: AZURE_SUBSCRIPTION_ID
       value: "${AZURE_SUBSCRIPTION_ID}"
     - name: AZURE_CLUSTER_NAME

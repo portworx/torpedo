@@ -2565,6 +2565,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
+
 	})
 	It("Share Backup With Different Users having different access level and different role", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -2595,6 +2596,17 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
+
+			for _, user := range users {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				log.Infof(" The admin context is ", ctx)
+				log.Infof(" The user is", user)
+				log.Infof("Sharing with all the user cloud cred ", cloudCredName)
+				err = UpdateCloudCredentialOwnership(cloudCredName, cloudCredUID, []string{user}, nil, Read, 0, ctx)
+				log.Infof("The update error is", err)
+			}
+
 		})
 
 		Step("Register cluster for backup", func() {
@@ -2632,12 +2644,14 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		})
 
 		Step("Adding different roles to users and sharing backup with different access level", func() {
+			log.InfoD("Adding different roles to users and sharing backup with different access level")
 			userRoleAccessBackupList, err = AddRoleAndAccessToUsers(users, backupNames)
 			dash.VerifyFatal(err, nil, "Adding roles and access level to users")
 			log.Infof("The user/access/backup list is %v", userRoleAccessBackupList)
 		})
 
 		Step("Validating the shared backup with user having different access level and roles", func() {
+			log.InfoD("Validating the shared backup with user having different access level and roles")
 			for key, val := range userRoleAccessBackupList {
 				restoreName := fmt.Sprintf("%s-%s-%v", key.user, RestoreNamePrefix, time.Now().Unix())
 				access := key.accesses
@@ -2652,6 +2666,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		})
 	})
 	JustAfterEach(func() {
+
 		var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -2699,6 +2714,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		}
 		wg.Wait()
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
 	})
 })
 

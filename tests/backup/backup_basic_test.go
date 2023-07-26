@@ -188,6 +188,7 @@ var _ = AfterSuite(func() {
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
+
 	// Cleanup all non admin users
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -319,6 +320,7 @@ var _ = AfterSuite(func() {
 			log.Infof("NFS subpath deleted - %s", globalNFSBucketName)
 		}
 	}
+
 })
 
 func TestMain(m *testing.M) {

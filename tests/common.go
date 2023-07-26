@@ -164,6 +164,20 @@ var (
 	clusterProviders = []string{"k8s"}
 )
 
+type OwnershipAccessType int32
+
+const (
+	Invalid OwnershipAccessType = 0
+	// Read access only and cannot affect the resource.
+	Read = 1
+	// Write access and can affect the resource.
+	// This type automatically provides Read access also.
+	Write = 2
+	// Admin gives Administrator access.
+	// This type automatically provides Read and Write access also.
+	Admin = 3
+)
+
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
 	defaultSpecsRoot                     = "/specs"
@@ -3539,6 +3553,7 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
 	var clusterCredName string
 	var clusterCredUid string
+
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
@@ -3596,8 +3611,35 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
-				if err != nil {
-					return err
+				log.Infof(" The error is", err)
+				if err != nil && strings.Contains(err.Error(), "PermissionDenied") {
+
+					log.InfoD("Getting the user first name from the error message")
+					errMessage := err.Error()
+
+					e2 := strings.Split(errMessage, "user")[1]
+					e1 := strings.TrimSpace(e2)
+
+					userFN := strings.Split(e1, " ")[0]
+
+					username, _, _ := backup.FetchUserDetailsFromFN(userFN)
+
+					adminCtx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+					if err != nil {
+						return err
+					}
+					var list1 []string
+					list1 = append(list1, username)
+					log.Infof(" The list 1 is ", list1)
+					log.Infof(" The cloud cred created here us", clusterCredName)
+					err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, list1, nil, Read, 0, adminCtx)
+
+					log.Infof("The update error is", err)
+					if err != nil {
+						return err
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -7725,7 +7767,6 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
-
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	if err != nil {
@@ -7843,4 +7884,67 @@ func IsJournalEnabled() (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// UpdateCloudCredentialOwnership Updates the CloudCredential object ownership
+func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context) error {
+	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		log.Info("add id for the user - %s", userName)
+		userIDs = append(userIDs, userID)
+	}
+	log.Infof(" The user ID is", userIDs)
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+	log.Infof(" Reached her 1")
+	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
+	}
+	log.Infof(" Reached her 2")
+	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
+	}
+	log.Infof(" Reached her 3")
+	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
+		OrgId: OrgID,
+		Name:  cloudCredentialName,
+		Ownership: &api.Ownership{
+			Groups:        groupCloudCredentialOwnershipAccessConfigs,
+			Collaborators: userCloudCredentialOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: cloudCredentialUid,
+	}
+	log.Infof(" Reached her 3")
+	_, err := backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
 }

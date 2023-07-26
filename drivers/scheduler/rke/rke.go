@@ -6,10 +6,10 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"os"
 	"strings"
 )
 
@@ -41,6 +41,7 @@ func (r *Rancher) String() string {
 
 // Init Initializes the driver
 func (r *Rancher) Init(scheduleOpts scheduler.InitOptions) error {
+	log.Infof(" Inside RKE init")
 	var err error
 	err = r.K8s.Init(scheduleOpts)
 	rkeParametersValue, err := r.GetRancherClusterParametersValue()
@@ -69,7 +70,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	masterNodeName := node.GetMasterNodes()[0].Name
 	endpoint := "https://" + masterNodeName + "/v3"
 	rkeParameters.Endpoint = endpoint
-	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+	rkeToken = "token-vjq8w:j8n4q2tjgdmf2cs82s224gt59szj89dvtbchd8px99t42xtg5s5p6r"
 	if rkeToken == "" {
 		return nil, fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 	}
@@ -87,12 +88,12 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	masterNodeName := node.GetMasterNodes()[0].Name
 	endpoint := "https://" + masterNodeName + "/v3"
 	if clusterName == "destination-config" {
-		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
+		rkeToken = "token-vjq8w:j8n4q2tjgdmf2cs82s224gt59szj89dvtbchd8px99t42xtg5s5p6r"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
-		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+		rkeToken = "token-vjq8w:j8n4q2tjgdmf2cs82s224gt59szj89dvtbchd8px99t42xtg5s5p6r"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 		}

@@ -395,30 +395,30 @@ func GetRoleID(role PxBackupRole) (string, error) {
 }
 
 // GetUserRole fetches roles for a given user
-func GetUserRole(userName string) error {
+func GetUserRole(userName string) ([]KeycloakRoleRepresentation, error) {
 	fn := "GetUserRole"
 	// First fetch all users to get the client id for the client
 	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
-		return err
+		return nil, err
 	}
 
 	keycloakEndPoint, err := getKeycloakEndPoint(true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	method := "GET"
 	response, err := processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var users []KeycloakUserRepresentation
 	err = json.Unmarshal(response, &users)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
-		return err
+		return nil, err
 	}
 
 	var clientID string
@@ -431,22 +431,23 @@ func GetUserRole(userName string) error {
 	// Now fetch all the roles for the fetched client ID
 	keycloakEndPoint, err = getKeycloakEndPoint(true)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	reqURL = fmt.Sprintf("%s/users/%s/role-mappings/realm", keycloakEndPoint, clientID)
 	method = "GET"
 	response, err = processHTTPRequest(method, reqURL, headers, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var r []KeycloakRoleRepresentation
-	err = json.Unmarshal(response, &r)
+	var roles []KeycloakRoleRepresentation
+	//var r []KeycloakRoleRepresentation
+	err = json.Unmarshal(response, &roles)
 	if err != nil {
 		log.Errorf("%s: %v", fn, err)
-		return err
+		return nil, err
 	}
 
-	return nil
+	return roles, nil
 }
 
 // FetchIDOfUser fetches ID for a given user
@@ -1144,6 +1145,60 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 
 		for _, user := range users {
 			if user.ID == userID {
+				userName = user.Name
+				email = user.Email
+				break
+			}
+		}
+		if userName == "" || email == "" {
+			// In some case there might be no error but we got empty user name/email, retry again
+			return nil, true, fmt.Errorf("got emptry user/email, retrying again")
+		}
+
+		return nil, false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to fetch user name/email: [%v]", err)
+	}
+
+	return userName, email, nil
+}
+
+// FetchUserDetailsFromFN fetches username and email ID
+func FetchUserDetailsFromFN(fistName string) (string, string, error) {
+	fn := "FetchUserDetailsFromFN"
+
+	// First fetch all users to get the client id for the client
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		log.Errorf("%s: %v", fn, err)
+		return "", "", err
+	}
+	var userName string
+	var email string
+	f := func() (interface{}, bool, error) {
+		keycloakEndPoint, err := getKeycloakEndPoint(true)
+		if err != nil {
+			return nil, true, err
+		}
+		reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+		method := "GET"
+		response, err := processHTTPRequest(method, reqURL, headers, nil)
+		if err != nil {
+			log.Errorf("%s: %v", fn, err)
+			return nil, true, err
+		}
+		var users []KeycloakUserRepresentation
+		err = json.Unmarshal(response, &users)
+		if err != nil {
+			log.Errorf("%s: %v", fn, err)
+			return nil, true, err
+		}
+
+		for _, user := range users {
+			if user.FirstName == fistName {
 				userName = user.Name
 				email = user.Email
 				break
