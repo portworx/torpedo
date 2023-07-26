@@ -41,7 +41,7 @@ var _ = Describe("{testParseConfig}", func() {
 		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
 		log.InfoD("Aws secret Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
 		log.InfoD("Region from backup target: %s", GlobalCredentialConfig.BackupTargets.GetAWSBucket("default").Region)
-		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.BackupTargets.GetNFSServer("default").IP)
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").Region)
 	})
 })
 

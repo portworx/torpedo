@@ -670,6 +670,8 @@ spec:
       value: "${NFS_PATH}"
     - name: SKIP_PX_OPERATOR_UPGRADE
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
+    - name: CLOUD_CRED_CONFIG_PATH
+      value: "${CLOUD_CRED_CONFIG_PATH}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
