@@ -128,7 +128,7 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
-	cloudconfigs := os.Getenv("KUBECONFIGS")
+	cloudconfigs := os.Getenv("CloudConfig")
 	cloudConfigList := []string{cloudconfigs}
 	DumpCloudconfigs(cloudConfigList)
 }
