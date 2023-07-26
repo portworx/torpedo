@@ -332,7 +332,7 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
-kubectl create configmap cloud-config --from-file=cloud_config.json=/tmp/cloud_config.json
+kubectl create configmap cloud-config --from-file=/config/config-json
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
