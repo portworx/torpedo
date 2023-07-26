@@ -129,8 +129,8 @@ func BackupInitInstance() {
 	dash.VerifyFatal(len(kubeconfigList), 2, "2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
 	//cloudconfigs := os.Getenv("CloudConfig")
-	cloudConfigList := []string{"/config/config-json"}
-	DumpCloudconfigs(cloudConfigList)
+	//cloudConfigList := []string{"/config/config-json"}
+	DumpCloudconfigs("/config/config-json")
 }
 
 var dash *aetosutil.Dashboard
