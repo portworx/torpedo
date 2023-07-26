@@ -240,6 +240,8 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
+
+	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 )
 
 // Dashboard params
@@ -5012,6 +5014,7 @@ type Torpedo struct {
 	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
+	SkipSystemChecks                    bool
 }
 
 // ParseFlags parses command line flags
@@ -5050,6 +5053,7 @@ func ParseFlags() {
 	// We should make this more robust.
 	var customAppConfig map[string]scheduler.AppConfig = make(map[string]scheduler.AppConfig)
 
+	var skipSystemChecks bool
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
@@ -5138,6 +5142,7 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system check")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -5367,6 +5372,7 @@ func ParseFlags() {
 				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
+				SkipSystemChecks:                    skipSystemChecks,
 			}
 		})
 	}
@@ -7724,7 +7730,6 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
-
 
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
