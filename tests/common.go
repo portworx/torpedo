@@ -4815,38 +4815,31 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 
 // DumpKubeconfigs gets kubeconfigs from configmap
 func DumpKubeconfigs(kubeconfigList []string) {
-	err := dumpCloudConfigs(configMapName, kubeconfigList)
+	err := dumpKubeConfigs(configMapName, kubeconfigList)
 	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
-func DumpCloudconfigs(kubeconfigList []string) error {
-	err := dumpCloudConfigs("cloud-config", kubeconfigList)
+func DumpCloudconfigs(ccf string) error {
+	err := dumpCloudConfigs("cloud-config", ccf)
 	if err != nil {
-		return fmt.Errorf("Failed to get kubeconfigs [%v] from configmap [%s]: err: %v", kubeconfigList, configMapName, err)
+		return fmt.Errorf("Failed to get kubeconfigs")
 	}
 	return nil
 }
 
-func dumpCloudConfigs(configObject string, kubeconfigList []string) error {
+func dumpCloudConfigs(configObject string, ccf string) error {
 	log.Infof("dump kubeconfigs to file system")
-	cm, err := core.Instance().GetConfigMap(configObject, "default")
+	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
 	if err != nil {
 		log.Errorf("Error reading config map: %v", err)
 		return err
 	}
-	log.Infof("Get over kubeconfig list %v", kubeconfigList)
-	for _, kubeconfig := range kubeconfigList {
-		config := cm.Data[kubeconfig]
-		if len(config) == 0 {
-			configErr := fmt.Sprintf("Error reading kubeconfig: found empty %s in config map %s",
-				kubeconfig, configObject)
-			return fmt.Errorf(configErr)
-		}
-		filePath := fmt.Sprintf("%s/%s", "/tmp", "cloud-config.json")
-		log.Infof("Save kubeconfig to %s", filePath)
-		err := ioutil.WriteFile(filePath, []byte(config), 0644)
-		if err != nil {
-			return err
-		}
+	log.Infof("Get over kubeconfig list %v", "cloud-config")
+	filePath := fmt.Sprintf("%s/%s", "/tmp", "cloud-config.json")
+	log.Infof("Save kubeconfig to %s", filePath)
+	config := cm.Data["/config/config-json"]
+	err = ioutil.WriteFile(filePath, []byte(config), 0644)
+	if err != nil {
+		return err
 	}
 	return nil
 }
