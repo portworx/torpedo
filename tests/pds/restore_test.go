@@ -19,6 +19,7 @@ import (
 var (
 	restoreTargetCluster   *tc.TargetCluster
 	bkpTarget              *pds.ModelsBackupTarget
+	bkpTargets             []*pds.ModelsBackupTarget
 	dsEntity               restoreBkp.DSEntity
 	bkpJob                 *pds.ModelsBackupJobStatusResponse
 	restoredDeployment     *pds.ModelsDeployment
