@@ -4838,7 +4838,7 @@ func dumpCloudConfigs(cloudConfigName string) error {
 	log.Infof("Get over cloudconfig %v", cloudConfigName)
 	filePath := fmt.Sprintf("%s/%s%s", "/mnt", cloudConfigName, ".json")
 	log.Infof("Save cloud config to %s", filePath)
-	config := cm.Data[cloudConfigName]
+	config := cm.Data["cloud-json"]
 	err = ioutil.WriteFile(filePath, []byte(config), 0644)
 	if err != nil {
 		return err
