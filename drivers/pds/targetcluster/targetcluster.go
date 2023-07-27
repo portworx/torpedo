@@ -69,14 +69,14 @@ type TargetCluster struct {
 
 func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
-	err = wait.Poll(DefaultRetryInterval, 5*time.Minute, func() (bool, error) {
+	err = wait.Poll(DefaultRetryInterval, MaxTimeout, func() (bool, error) {
 		targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 		var targetClusterStatus string
 		if err != nil {
-			return true, fmt.Errorf("error while listing deployments: %v", err)
+			return "", fmt.Errorf("error while listing deployments: %v", err)
 		}
 		if targetClusters == nil {
-			return true, fmt.Errorf("target cluster passed is not available to the account/tenant %v", err)
+			return "", fmt.Errorf("target cluster passed is not available to the account/tenant %v", err)
 		}
 		for i := 0; i < len(targetClusters); i++ {
 			if targetClusters[i].GetClusterId() == clusterID {
@@ -87,9 +87,8 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 			}
 		}
 		if targetClusterStatus != "healthy" {
-			return true, fmt.Errorf("target Cluster is not in healthy state due to error : %v", err)
+			return "", fmt.Errorf("target Cluster is not in healthy state due to error : %v", err)
 		}
-
 		log.Infof("There are %d pods present in the namespace %s", len(pods.Items), PDSNamespace)
 		return false, nil
 	})
