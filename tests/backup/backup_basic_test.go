@@ -127,8 +127,8 @@ func BackupInitInstance() {
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
 	//Dumping cloud config
-	cloudConfig := os.Getenv("CLOUD_CRED_CONFIG")
-	DumpCloudconfig(cloudConfig)
+	//cloudConfig := os.Getenv("CLOUD_CRED_CONFIG")
+	//DumpCloudconfig(cloudConfig)
 
 	// Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
 	err = SetDestinationKubeConfig()
@@ -149,7 +149,7 @@ var _ = BeforeSuite(func() {
 	StartTorpedoTest("Setup buckets", "Creating one generic bucket to be used in all cases", nil, 0)
 	defer EndTorpedoTest()
 	// Get all the values from the cloud_config.json persist into struct which can be globally accessed
-	GlobalCredentialConfig, err = backup.GetConfigObj()
+	GlobalCredentialConfig, err = GetConfigObj()
 	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
 	providers := getProviders()

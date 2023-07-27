@@ -1,13 +1,5 @@
 package backup
 
-import (
-	"encoding/json"
-	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"io/ioutil"
-	"os"
-)
-
 // CloudProviders represents the cloud providers configuration.
 type CloudProviders struct {
 	AWS     map[string]AWSCredential     `json:"aws"`
@@ -89,21 +81,21 @@ type Config struct {
 }
 
 // GetConfigObj reads the configuration file and returns a Config object.
-func GetConfigObj() (*Config, error) {
-	var config Config
-	_, err := os.Getwd()
-	// Read JSON file into a variable
-	cloudConfig := os.Getenv("CLOUD_CRED_CONFIG")
-	testConfigPath := fmt.Sprintf("%s/%s%s", "/mnt", cloudConfig, ".json")
-	log.Infof("config file path %s", testConfigPath)
-	jsonData, err := ioutil.ReadFile(testConfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read the test configuration file in the path %s", testConfigPath)
-	}
-	// Parse JSON into Configuration struct
-	err = json.Unmarshal(jsonData, &config)
-	return &config, nil
-}
+//func GetConfigObj() (*Config, error) {
+//	var config Config
+//	_, err := os.Getwd()
+//	// Read JSON file into a variable
+//	cloudConfig := os.Getenv("CLOUD_CRED_CONFIG")
+//	testConfigPath := fmt.Sprintf("%s/%s%s", "/mnt", cloudConfig, ".json")
+//	log.Infof("config file path %s", testConfigPath)
+//	jsonData, err := ioutil.ReadFile(testConfigPath)
+//	if err != nil {
+//		return nil, fmt.Errorf("unable to read the test configuration file in the path %s", testConfigPath)
+//	}
+//	// Parse JSON into Configuration struct
+//	err = json.Unmarshal(jsonData, &config)
+//	return &config, nil
+//}
 
 // GetAWSCredential retrieves the AWS credential based on the provided tag.
 func (p *CloudProviders) GetAWSCredential(tag string) AWSCredential {

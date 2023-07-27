@@ -42,6 +42,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/json"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 )
@@ -3936,3 +3937,16 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 	return false, nil
 }
 
+// GetConfigObj reads the configuration file and returns a Config object.
+func GetConfigObj() (*backup.Config, error) {
+	var config *backup.Config
+	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	if err != nil {
+		log.Errorf("Error reading config map: %v", err)
+		return nil, err
+	}
+	log.Infof("Get over cloud-config")
+	configData := cm.Data["cloud-json"]
+	err = json.Unmarshal([]byte(configData), &config)
+	return config, nil
+}
