@@ -36,6 +36,7 @@ type GKECredential struct {
 
 // IBMCredential represents the IBM credential information.
 type IBMCredential struct {
+	AccountName   string `json:"account_name"`
 	APIKey        string `json:"api_key"`
 	Region        string `json:"region"`
 	ResourceGroup string `json:"resource_group"`
