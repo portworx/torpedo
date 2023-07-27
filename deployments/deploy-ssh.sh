@@ -332,6 +332,8 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
+kubectl create configmap cloud-config --from-file=/config/cloud-json
+
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
 CLUSTER_CONFIGS=""
@@ -672,6 +674,10 @@ spec:
       value: "${NFS_PATH}"
     - name: SKIP_PX_OPERATOR_UPGRADE
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
+    - name: CLOUD_CRED_CONFIG
+      value: "${CLOUD_CRED_CONFIG}"
+    - name: CONFIG_JSON
+      value: "${CONFIG_JSON}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

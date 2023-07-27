@@ -126,6 +126,9 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
+	//Dumping cloud config
+	cloudConfig := os.Getenv("CLOUD_CRED_CONFIG")
+	DumpCloudconfig(cloudConfig)
 
 	// Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
 	err = SetDestinationKubeConfig()
