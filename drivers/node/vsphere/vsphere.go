@@ -181,6 +181,9 @@ func (v *vsphere) getVMFinder() (*find.Finder, error) {
 	// Make future calls local to this datacenter
 	f.SetDatacenter(dc)
 
+	// Make future calls local to this datacenter
+	v.datacenter = dc
+
 	return f, nil
 
 }
@@ -428,6 +431,7 @@ func (v *vsphere) DeleteVm(vmName string) error {
 		log.Warn("failed to get VM: %s, because of err: %+v", vmName, err)
 		return nil
 	}
+
 	v.connect()
 	isRunning, err := v.isVmRunning(vm)
 	if err != nil {
