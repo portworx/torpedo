@@ -75,7 +75,7 @@ type NFSServer struct {
 	Tag           string `json:"tag"`
 }
 
-// BackupCloudConfig represents the overall configuration.
+// BackupCloudConfig represents the struct having credential for cloud platforms.
 type BackupCloudConfig struct {
 	CloudProviders CloudProviders `json:"cloudProviders"`
 	BackupTargets  BackupTargets  `json:"backupTargets"`
