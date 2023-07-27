@@ -69,7 +69,7 @@ type TargetCluster struct {
 
 func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
-	err = wait.Poll(DefaultRetryInterval, MaxTimeout, func() (bool, error) {
+	err = wait.Poll(DefaultRetryInterval, 5*time.Minute, func() (bool, error) {
 		targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 		var targetClusterStatus string
 		if err != nil {
@@ -86,12 +86,15 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 				targetClusterStatus = targetClusters[i].GetStatus()
 			}
 		}
-		if targetClusterStatus != "healthy" {
-			return true, fmt.Errorf("target Cluster is not in healthy state due to error : %v", err)
+		if targetClusterStatus == "healthy" {
+			log.Infof("Target cluster %v is in %v State , proceeding with testcase execution", deploymentTargetID, targetClusterStatus)
+			return true, nil
 		}
-		log.Infof("Target cluster %v is in Healthy State ", deploymentTargetID)
 		return false, nil
 	})
+	if err != nil {
+		return "", fmt.Errorf("target cluster is not in healthy State , terminating the testcase execution: %v", err)
+	}
 	return deploymentTargetID, nil
 }
 
