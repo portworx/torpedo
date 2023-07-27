@@ -85,6 +85,17 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 })
 
+// Reference test to access the cloud config details from the global variable
+var _ = Describe("{testParseConfig}", func() {
+	StartTorpedoTest("testParseConfig", "testcreds", nil, 11111)
+	It("Testing parse config", func() {
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").AccessKeyID)
+		log.InfoD("Aws secret Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").SecretAccessKey)
+		log.InfoD("Region from backup target: %s", GlobalCredentialConfig.BackupTargets.GetAWSBucket("default").Region)
+		log.InfoD("Aws Access Key ID: %s", GlobalCredentialConfig.CloudProviders.GetAWSCredential("default").Region)
+	})
+})
+
 // This testcase verifies basic backup rule,backup location, cloud setting
 var _ = Describe("{BasicBackupCreation}", func() {
 
