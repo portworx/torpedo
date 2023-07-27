@@ -4818,25 +4818,27 @@ func DumpKubeconfigs(kubeconfigList []string) {
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
 	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
-func DumpCloudconfigs(ccf string) error {
-	err := dumpCloudConfigs("cloud-config", ccf)
+
+// DumpCloudconfigs gets kubeconfigs from configmap
+func DumpCloudconfig(cloudConfigName string) error {
+	err := dumpCloudConfigs(cloudConfigName)
 	if err != nil {
-		return fmt.Errorf("Failed to get kubeconfigs")
+		return fmt.Errorf("Failed to get cloudconfig")
 	}
 	return nil
 }
 
-func dumpCloudConfigs(configObject string, ccf string) error {
-	log.Infof("dump kubeconfigs to file system")
-	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+func dumpCloudConfigs(cloudConfigName string) error {
+	log.Infof("dump cloudconfigs to file system")
+	cm, err := core.Instance().GetConfigMap(cloudConfigName, "default")
 	if err != nil {
 		log.Errorf("Error reading config map: %v", err)
 		return err
 	}
-	log.Infof("Get over kubeconfig list %v", "cloud-config")
-	filePath := fmt.Sprintf("%s/%s", "/mnt", "cloud-config.json")
-	log.Infof("Save kubeconfig to %s", filePath)
-	config := cm.Data["config-json"]
+	log.Infof("Get over cloudconfig %v", cloudConfigName)
+	filePath := fmt.Sprintf("%s/%s%s", "/mnt", cloudConfigName, ".json")
+	log.Infof("Save cloud config to %s", filePath)
+	config := cm.Data[cloudConfigName]
 	err = ioutil.WriteFile(filePath, []byte(config), 0644)
 	if err != nil {
 		return err
