@@ -3998,9 +3998,9 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 	return false, nil
 }
 
-// GetConfigObj reads the configuration file and returns a Config object.
-func GetConfigObj() (*backup.Config, error) {
-	var config *backup.Config
+// GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
+func GetConfigObj() (*backup.BackupCloudConfig, error) {
+	var config *backup.BackupCloudConfig
 	cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 	if err != nil {
 		log.Errorf("Error reading config map: %v", err)

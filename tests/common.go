@@ -453,7 +453,7 @@ func InitInstance() {
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
 
 	if Inst().ConfigMap != "" {
-		log.Infof("Using Config Map: %s ", Inst().ConfigMap)
+		log.Infof("Using BackupCloudConfig Map: %s ", Inst().ConfigMap)
 		token, err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 		log.FailOnError(err, "Error occured while getting token from config map")
 		log.Infof("Token used for initializing: %s ", token)
@@ -2750,7 +2750,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
 	err := Inst().S.SetConfig(clusterConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+		return fmt.Errorf("failed to switch to context. Set BackupCloudConfig Error: [%v]", err)
 	}
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {

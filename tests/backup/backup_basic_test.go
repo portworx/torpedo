@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var GlobalCredentialConfig *backup.Config
+var GlobalCredentialConfig *backup.BackupCloudConfig
 
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
