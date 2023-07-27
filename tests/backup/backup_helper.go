@@ -107,6 +107,7 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 5 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	cloudCredConfigMap                        = "cloud-config"
 )
 
 var (
@@ -3940,7 +3941,7 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 // GetConfigObj reads the configuration file and returns a Config object.
 func GetConfigObj() (*backup.Config, error) {
 	var config *backup.Config
-	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 	if err != nil {
 		log.Errorf("Error reading config map: %v", err)
 		return nil, err
