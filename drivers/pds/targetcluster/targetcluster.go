@@ -85,9 +85,13 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 			targetClusterStatus = targetClusters[i].GetStatus()
 		}
 	}
-	if targetClusterStatus != "healthy" {
-		return "", fmt.Errorf("target Cluster is not in healthy state due to error : %v", err)
-	}
+	err = wait.Poll(DefaultRetryInterval, 5*time.Minute, func() (bool, error) {
+		if targetClusterStatus != "healthy" {
+			return true, fmt.Errorf("target Cluster is not in healthy state due to error : %v", err)
+		}
+		log.Infof("There cluster is Healthy and Ready to use")
+		return false, nil
+	})
 	return deploymentTargetID, nil
 }
 
