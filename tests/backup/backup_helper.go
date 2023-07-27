@@ -4003,8 +4003,8 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 	var config *backup.BackupCloudConfig
 	cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 	if err != nil {
-		log.Errorf("Error reading config map: %v", err)
-		return nil, err
+		log.Warnf("Error reading config map, continuing the run ,in case if you are running on cloud platform make sure to add configmap : %v", cloudCredConfigMap)
+		return config, nil
 	}
 	log.Infof("Fetch the cloud-config from the configMap")
 	configData := cm.Data["cloud-json"]
