@@ -3685,7 +3685,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
 						log.Infof("The error is - %v", err.Error())
@@ -3719,7 +3719,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
 						log.Infof("The error is - %v", err.Error())
@@ -3771,6 +3771,20 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 					} else {
 						return fmt.Errorf("failed to create cloud cred with error =%v", err)
 					}
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		case drivers.ProviderIbm:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
+				if err != nil {
+					return err
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -3956,6 +3970,30 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+
+	case drivers.ProviderIbm:
+		log.Infof("Create creds for IBM")
+		// PA-1328
+		apiKey, err := GetIBMApiKey()
+		if err != nil {
+			return err
+		}
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_IBM,
+				Config: &api.CloudCredentialInfo_IbmConfig{
+					IbmConfig: &api.IBMConfig{
+						ApiKey: apiKey,
+					},
+				},
+			},
+		}
+
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -4453,6 +4491,11 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
 
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
+}
+
+func GetIBMApiKey() (string, error) {
+	return "", nil
+
 }
 
 type NfsInfo struct {
