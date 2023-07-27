@@ -4950,34 +4950,6 @@ func DumpKubeconfigs(kubeconfigList []string) {
 	dash.VerifyFatal(err, nil, fmt.Sprintf("verfiy getting kubeconfigs [%v] from configmap [%s]", kubeconfigList, configMapName))
 }
 
-//// DumpCloudconfigs gets kubeconfigs from configmap
-//func DumpCloudconfig(cloudConfigName string) error {
-//	err := dumpCloudConfigs(cloudConfigName)
-//	if err != nil {
-//		return fmt.Errorf("Failed to get cloudconfig")
-//	}
-//	return nil
-//}
-//
-//func dumpCloudConfigs(cloudConfigName string) error {
-//	log.Infof("dump cloudconfigs to file system")
-//	cm, err := core.Instance().GetConfigMap(cloudConfigName, "default")
-//	if err != nil {
-//		log.Errorf("Error reading config map: %v", err)
-//		return err
-//	}
-//	log.Infof("Get over cloudconfig %v", cloudConfigName)
-//	filePath := fmt.Sprintf("%s/%s%s", "/mnt", cloudConfigName, ".json")
-//	log.Infof("Save cloud config to %s", filePath)
-//	cloudConfigobj := os.Getenv("CONFIG_JSON")
-//	config := cm.Data[cloudConfigobj]
-//	err = ioutil.WriteFile(filePath, []byte(config), 0644)
-//	if err != nil {
-//		return err
-//	}
-//	return nil
-//}
-
 // Inst returns the Torpedo instances
 func Inst() *Torpedo {
 	return instance

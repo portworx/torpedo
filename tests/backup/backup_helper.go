@@ -3945,7 +3945,7 @@ func GetConfigObj() (*backup.Config, error) {
 		log.Errorf("Error reading config map: %v", err)
 		return nil, err
 	}
-	log.Infof("Get over cloud-config")
+	log.Infof("Fetch the cloud-config from the configMap")
 	configData := cm.Data["cloud-json"]
 	err = json.Unmarshal([]byte(configData), &config)
 	return config, nil
