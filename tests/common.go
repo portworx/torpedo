@@ -4836,7 +4836,7 @@ func dumpCloudConfigs(cloudConfigName string) error {
 		return err
 	}
 	log.Infof("Get over cloudconfig %v", cloudConfigName)
-	filePath := fmt.Sprintf("%s/%s%s", "/mnt", cloudConfigName, ".json")
+	filePath := fmt.Sprintf("%s/%s%s", KubeconfigDirectory, cloudConfigName, ".json")
 	log.Infof("Save cloud config to %s", filePath)
 	config := cm.Data[cloudConfigName]
 	err = ioutil.WriteFile(filePath, []byte(config), 0644)

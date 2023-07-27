@@ -93,8 +93,8 @@ func GetConfigObj() (*Config, error) {
 	var config Config
 	_, err := os.Getwd()
 	// Read JSON file into a variable
-	//testConfigPath := "../drivers/backup/cloud_config.json"
-	testConfigPath := os.Getenv("CLOUD_CRED_CONFIG_PATH")
+	cloudConfig := os.Getenv("CLOUD_CRED_CONFIG")
+	testConfigPath := fmt.Sprintf("%s/%s%s", "/tmp", cloudConfig, ".json")
 	log.Infof("config file path %s", testConfigPath)
 	jsonData, err := ioutil.ReadFile(testConfigPath)
 	if err != nil {
