@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
+	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -7781,7 +7782,6 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
-<<<<<<< HEAD
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	if err != nil {
@@ -8022,6 +8022,12 @@ outer:
 		}
 
 		poolChecksumMap := make(map[string]string)
+		dmthinPoolChecksumMap := make(map[string]map[string]string)
+
+		isDmthinSetup, err := IsDMthin()
+		if err != nil {
+			return err
+		}
 
 		//function to calulate md5sum of the given volume in the give pool
 		calChecksum := func(wg *sync.WaitGroup, v *volume.Volume, nodeDetail *node.Node, poolUuid string, errCh chan<- error) {
@@ -8042,26 +8048,28 @@ outer:
 			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
 			//To-Do update the command if set up is dmthin
 			cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
-			isDmthinSetup, err := IsDMthin()
-			if err != nil {
-				errCh <- err
-				return
-			}
 
 			if isDmthinSetup {
-				cmd = fmt.Sprintf("md5sum /dev/pwx%d/%s", poolID, inspectVolume.Id)
+
+				err = validateDmthinVolumeDataIntegrity(inspectVolume, nodeDetail, poolID, &dmthinPoolChecksumMap)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			} else {
+				output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
+					Timeout:         defaultTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+					Sudo:            true,
+				})
+				if err != nil {
+					errCh <- err
+					return
+				}
+				vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
+				poolChecksumMap[poolUuid] = vChecksum
 			}
-			output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
-				Timeout:         defaultTimeout,
-				TimeBeforeRetry: defaultRetryInterval,
-				Sudo:            true,
-			})
-			if err != nil {
-				errCh <- err
-				return
-			}
-			vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
-			poolChecksumMap[poolUuid] = vChecksum
+
 		}
 
 		for _, v := range appVolumes {
@@ -8098,23 +8106,49 @@ outer:
 				return errors.New(fmt.Sprintf("multiple errors occurred while checking md5sum of volume [%s]", v.ID)).(error)
 			}
 
-			var checksum string
-			var primaryPool string
-			for p, c := range poolChecksumMap {
-				if checksum == "" {
-					primaryPool = p
-					checksum = c
-				} else {
-					if c != checksum {
-						return fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+			if isDmthinSetup {
+
+				var primaryMap map[string]string
+				var primaryNode string
+
+				for n, m := range dmthinPoolChecksumMap {
+					if primaryMap == nil {
+						primaryNode = n
+						primaryMap = m
+					} else {
+						eq := reflect.DeepEqual(primaryMap, m)
+
+						if !eq {
+							return fmt.Errorf("md5sum of volume [%s] having [%v] on node [%s] is not matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+						}
+						log.InfoD("md5sum of volume [%s] having [%v] on node [%s] is matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+
 					}
-					log.InfoD("md5sum of volume [%s] having [%s] on pool [%s] is matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+				}
+				//clearing the pool after the volume validation
+				for k := range dmthinPoolChecksumMap {
+					delete(dmthinPoolChecksumMap, k)
 				}
 
-			}
-			//clearing the pool after the volume validation
-			for k := range poolChecksumMap {
-				delete(poolChecksumMap, k)
+			} else {
+				var checksum string
+				var primaryPool string
+				for p, c := range poolChecksumMap {
+					if checksum == "" {
+						primaryPool = p
+						checksum = c
+					} else {
+						if c != checksum {
+							return fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+						}
+						log.InfoD("md5sum of volume [%s] having [%s] on pool [%s] is matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+					}
+
+				}
+				//clearing the pool after the volume validation
+				for k := range poolChecksumMap {
+					delete(poolChecksumMap, k)
+				}
 			}
 
 		}
@@ -8132,6 +8166,78 @@ outer:
 		}
 	}
 	return nil
+}
+
+func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail *node.Node, poolID int32, dmthinPoolChecksumMap *map[string]map[string]string) error {
+
+	volPath := fmt.Sprintf("/dev/pwx%d/%s", poolID, inspectVolume.Id)
+	mountPath := fmt.Sprintf("/tmp/%s", inspectVolume.Id)
+	mountCmd := fmt.Sprintf("mount %s %s", volPath, mountPath)
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+	umountCmd := fmt.Sprintf("umount %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	log.Infof("Running command %s on %s", creatDir, nodeDetail.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(*nodeDetail, creatDir, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+	log.Infof("Running command %s on %s", mountCmd, nodeDetail.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(*nodeDetail, mountCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	defer func(N node.Driver, node node.Node, command string, options node.ConnectionOpts) {
+		log.Infof("Running command %s on %s", command, nodeDetail.Name)
+		_, err := N.RunCommandWithNoRetry(node, command, options)
+		if err != nil {
+			log.Errorf(err.Error())
+		}
+	}(Inst().N, *nodeDetail, umountCmd, cmdConnectionOpts)
+
+	eg := errgroup.Group{}
+
+	eg.Go(func() error {
+		md5Cmd := fmt.Sprintf("md5sum %s/*", mountPath)
+		log.Infof("Running command %s  on %s", md5Cmd, nodeDetail.Name)
+		output, err := Inst().N.RunCommand(*nodeDetail, md5Cmd, node.ConnectionOpts{
+			Timeout:         defaultTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+			Sudo:            true,
+		})
+
+		if err != nil {
+			return err
+		}
+		log.Infof("md5sum of vol %s on node %s : %s", inspectVolume.Id, nodeDetail.Name, output)
+		nodeChecksumMap := make(map[string]string)
+		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+			checksumOut := strings.Split(line, "  ")
+			if len(checksumOut) == 2 {
+				nodeChecksumMap[checksumOut[1]] = checksumOut[0]
+			} else {
+				return fmt.Errorf("cannot obtain checksum value from node %s, output: %v", nodeDetail.Name, checksumOut)
+			}
+		}
+		(*dmthinPoolChecksumMap)[nodeDetail.Name] = nodeChecksumMap
+		return nil
+
+	})
+
+	if err = eg.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 // GetContextsOnNode returns the contexts which have volumes attached on the given node.
