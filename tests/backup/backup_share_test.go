@@ -448,6 +448,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	var credName string
 	bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
+	userContextsList := make([]context.Context, 0)
 	var chosenUser string
 
 	JustBeforeEach(func() {
@@ -837,6 +838,17 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContextsList {
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
+		}
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
@@ -2391,6 +2403,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			err := DeleteRestore(restoreName, orgID, ctxNonAdmin)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s] in [%s] ctx", restoreName, username))
 		}
+		CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		err = backup.DeleteUser(username)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the user [%s]", username))
 		opts := make(map[string]bool)
@@ -3928,6 +3941,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 	var credNames []string
 	var cloudCredUID string
 	bkpNamespaces = make([]string, 0)
+	userContextsList := make([]context.Context, 0)
 	var backupLocationCreationInterval time.Duration
 
 	JustBeforeEach(func() {
@@ -4122,6 +4136,18 @@ var _ = Describe("{SwapShareBackup}", func() {
 			}
 			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
 			log.FailOnError(err, fmt.Sprintf("Error deleting backup - %s for user - %s", backupName, users[i]))
+		}
+
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
+
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContextsList {
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
 		// Cleanup all backup locations

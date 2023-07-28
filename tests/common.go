@@ -154,7 +154,8 @@ import (
 
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
-	SkipClusterScopedObjects = "skipClusterScopedObjects"
+	SkipClusterScopedObjects   = "skipClusterScopedObjects"
+	CreateCloudCredentialError = "PermissionDenied desc = Access denied for [Resource: cloudcredential]"
 )
 
 // PDS params
@@ -167,6 +168,19 @@ var (
 	clusterProviders = []string{"k8s"}
 )
 
+type OwnershipAccessType int32
+
+const (
+	Invalid OwnershipAccessType = 0
+	// Read access only and cannot affect the resource.
+	Read = 1
+	// Write access and can affect the resource.
+	// This type automatically provides Read access also.
+	Write = 2
+	// Admin access
+	// This type automatically provides Read and Write access also.
+	Admin = 3
+)
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
 	defaultSpecsRoot                     = "/specs"
@@ -2778,7 +2792,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
-	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+	if "rke" == drivers.ProviderRke {
 		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
@@ -3606,7 +3620,24 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredUid = uuid.New()
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
-					return err
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, Invalid, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -3620,7 +3651,24 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredUid = uuid.New()
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
-					return err
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -3634,7 +3682,24 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredUid = uuid.New()
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
-					return err
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -7632,7 +7697,7 @@ func VerifyNilPointerDereferenceError(n *node.Node) (bool, string, error) {
 
 // GetClusterProviders returns the list of cluster providers
 func GetClusterProviders() []string {
-	providersStr := os.Getenv("CLUSTER_PROVIDER")
+	providersStr := "rke"
 	if providersStr != "" {
 		return strings.Split(providersStr, ",")
 	}
@@ -8286,4 +8351,66 @@ func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*schedul
 	}
 
 	return contextsOnNode, nil
+}
+
+// UpdateCloudCredentialOwnership updates the CloudCredential object ownership
+func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context, orgID string) error {
+	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
+	}
+
+	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
+	}
+
+	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  cloudCredentialName,
+		Ownership: &api.Ownership{
+			Groups:        groupCloudCredentialOwnershipAccessConfigs,
+			Collaborators: userCloudCredentialOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: cloudCredentialUid,
+	}
+
+	_, err := backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
 }

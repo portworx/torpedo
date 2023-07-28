@@ -124,7 +124,7 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
-	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+	if "rke" == drivers.ProviderRke {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
