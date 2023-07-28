@@ -15,7 +15,7 @@ fi
 SECURITY_CONTEXT=false
 
 TORPEDO_SKIP_SYSTEM_CHECKS=false
-if [ -z "${TORPEDO_SKIP_SYSTEM_CHECKS}" ]; then
+if [[ ! -z "${TORPEDO_SKIP_SYSTEM_CHECKS}" ]]; then
     TORPEDO_SKIP_SYSTEM_CHECKS=true
 fi
 
