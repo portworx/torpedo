@@ -106,7 +106,7 @@ const (
 	namespaceDeleteTimeout                    = 10 * time.Minute
 	clusterCreationTimeout                    = 5 * time.Minute
 	clusterCreationRetryTime                  = 10 * time.Second
-	clusterDeleteTimeout                      = 5 * time.Minute
+	clusterDeleteTimeout                      = 10 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
@@ -1103,7 +1103,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				return "", false, nil
 			}
 			_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting clsuter %s", clusterName))
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
@@ -3598,20 +3598,6 @@ func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
 	return nil, fmt.Errorf("unable to find the mount point for %s", AppContextsMapping.App.Key)
 }
 
-type OwnershipAccessType int32
-
-const (
-	Invalid OwnershipAccessType = 0
-	// Read access only and cannot affect the resource.
-	Read = 1
-	// Write access and can affect the resource.
-	// This type automatically provides Read access also.
-	Write = 2
-	// Administrator access.
-	// This type automatically provides Read and Write access also.
-	Admin = 3
-)
-
 // UpdateBackupLocationOwnership Updates the backup location ownership
 func UpdateBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
 	log.Infof("UpdateBackupLocationOwnership for users %v", userNames)
@@ -3864,69 +3850,6 @@ func UpdateRuleOwnership(ruleName string, ruleUid string, userNames []string, gr
 	_, err := backupDriver.UpdateOwnershipRule(ctx, ruleOwnershipUpdateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update rule ownership: %v", err)
-	}
-	return nil
-}
-
-// UpdateCloudCredentialOwnership Updates the CloudCredential object ownership
-func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
-	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
-	backupDriver := Inst().Backup
-	userIDs := make([]string, 0)
-	groupIDs := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		log.Info("add id for the user - %s", userName)
-		userIDs = append(userIDs, userID)
-	}
-
-	for _, group := range groups {
-		groupID, err := backup.FetchIDOfGroup(group)
-		if err != nil {
-			return err
-		}
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, userID := range userIDs {
-		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     userID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
-	}
-
-	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, groupID := range groupIDs {
-		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     groupID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
-	}
-
-	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
-		OrgId: orgID,
-		Name:  cloudCredentialName,
-		Ownership: &api.Ownership{
-			Groups:        groupCloudCredentialOwnershipAccessConfigs,
-			Collaborators: userCloudCredentialOwnershipAccessConfigs,
-			Public: &api.Ownership_PublicAccessControl{
-				Type: api.Ownership_AccessType(publicAccess),
-			},
-		},
-		Uid: cloudCredentialUid,
-	}
-
-	_, err := backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
-	if err != nil {
-		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
 	}
 	return nil
 }
