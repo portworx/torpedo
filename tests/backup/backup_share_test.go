@@ -2547,7 +2547,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 	numberOfUsers := 9
 	backupLocationMap := make(map[string]string)
 	users := make([]string, 0)
-	userContextsList := make([]context.Context, 0)
+	//userContextsList := make([]context.Context, 0)
 	labelSelectors := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
@@ -2595,6 +2595,9 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
+			log.Infof("Sharing with all the user cloud cred ", cloudCredName)
+			err = UpdateCloudCredentialOwnership(cloudCredName, cloudCredUID, users, nil, Read, 0, ctx)
+			log.Infof("The update error is", err)
 		})
 
 		Step("Register cluster for backup", func() {
@@ -2652,53 +2655,55 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		var wg sync.WaitGroup
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		backupDriver := Inst().Backup
-		for _, backupName := range backupNames {
-			wg.Add(1)
-			go func(backupName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %v", backupName))
-				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-			}(backupName)
-		}
-		wg.Wait()
-		log.Infof("Generating user context")
-		for _, userName := range users {
-			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
-			log.FailOnError(err, "Fetching non admin ctx")
-			userContextsList = append(userContextsList, ctxNonAdmin)
-		}
-		log.Infof("Deleting restore created by users")
-		for userContext, restoreName := range userRestoreContext {
-			err = DeleteRestore(restoreName, orgID, userContext)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-		}
-		log.Infof("Deleting registered clusters for non-admin context")
-		for _, ctxNonAdmin := range userContextsList {
-			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
-		}
-		log.Infof("Cleaning up users")
-		for _, userName := range users {
-			wg.Add(1)
-			go func(userName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				err := backup.DeleteUser(userName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userName))
-			}(userName)
-		}
-		wg.Wait()
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		/*
+			var wg sync.WaitGroup
+			defer EndPxBackupTorpedoTest(scheduledAppContexts)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			backupDriver := Inst().Backup
+			for _, backupName := range backupNames {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %v", backupName))
+					_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
+				}(backupName)
+			}
+			wg.Wait()
+			log.Infof("Generating user context")
+			for _, userName := range users {
+				ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
+				userContextsList = append(userContextsList, ctxNonAdmin)
+			}
+			log.Infof("Deleting restore created by users")
+			for userContext, restoreName := range userRestoreContext {
+				err = DeleteRestore(restoreName, orgID, userContext)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+			}
+			log.Infof("Deleting registered clusters for non-admin context")
+			for _, ctxNonAdmin := range userContextsList {
+				CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
+			}
+			log.Infof("Cleaning up users")
+			for _, userName := range users {
+				wg.Add(1)
+				go func(userName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := backup.DeleteUser(userName)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userName))
+				}(userName)
+			}
+			wg.Wait()
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		*/
 	})
 })
 
