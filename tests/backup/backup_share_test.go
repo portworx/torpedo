@@ -4184,3 +4184,460 @@ var _ = Describe("{SwapShareBackup}", func() {
 		wg.Wait()
 	})
 })
+
+// Snigdha
+// DeletedBackupOfUserNonSharedRBAC delete backups created by user from admin with non-shared RBAC object from admin.
+var _ = Describe("{DeletedBackupOfUserNonSharedRBAC}", func() {
+
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87561
+	var userNames []string
+	var periodicSchedulePolicyName string
+	var periodicSchedulePolicyUid string
+	var periodicSchedulePolicyInterval int
+	var scheduledAppContexts []*scheduler.Context
+	var backupLocationUID string
+	var bkpNamespaces []string
+	var credName string
+	var cloudCredUID string
+	var srcClusterUid string
+	var backupLocationName string
+	var preRuleNameMap map[string]map[string]string
+	var preRuleUidsMap map[string]map[string]string
+	var postRuleNameMap map[string]map[string]string
+	var postRuleUidsMap map[string]map[string]string
+	var backupLocationMap map[string]map[string]string
+	var nsLabels map[string]string
+	var namespaceLabel string
+	var singleNSNamespaceBackups []string
+	var mutipleNSNamespaceBackups []string
+	var mutex sync.Mutex
+	var user string
+	var preRuleName string
+	var postRuleName string
+	bkpNamespaces = make([]string, 0)
+	userNames = make([]string, 0)
+	numOfNS := 2
+	commonPassword := "1234"
+	backupLocationMap = make(map[string]map[string]string)
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeletedBackupOfUserNonSharedRBAC",
+			"Delete backups created by user from admin with snon-hared RBAC object from admin", nil, 87561)
+		log.InfoD("Deploy applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < numOfNS; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		log.InfoD("Created namespaces %v", bkpNamespaces)
+	})
+	It("Delete backups by user from admin with non-shared RBAC objects", func() {
+		providers := getProviders()
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Generate and add labels to namespaces", func() {
+			log.InfoD("Generate and add labels to namespaces")
+			nsLabels = GenerateRandomLabels(1)
+			err := AddLabelsToMultipleNamespaces(nsLabels, bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%s]", nsLabels, bkpNamespaces))
+		})
+
+		Step("Generating namespace label string from label map", func() {
+			log.InfoD("Generating namespace label string from label map")
+			namespaceLabel = MapToKeyValueString(nsLabels)
+			log.Infof("Generated labels [%s]", namespaceLabel)
+		})
+
+		Step("Create user with infra role", func() {
+			log.InfoD("Create user with infra role")
+
+			user = fmt.Sprintf("testauser-%v-%v", backup.InfrastructureOwner, RandomString(4))
+			firstName := fmt.Sprintf("FirstName-%v", backup.InfrastructureOwner)
+			lastName := fmt.Sprintf("LastName-%v", backup.InfrastructureOwner)
+			email := fmt.Sprintf("testuser%v-@cnbu.com", backup.InfrastructureOwner)
+			err := backup.AddUser(user, firstName, lastName, email, commonPassword)
+			log.FailOnError(err, "Failed to create user - %s", user)
+			err = backup.AddRoleToUser(user, backup.InfrastructureOwner, fmt.Sprintf("Adding %v role to %s", backup.InfrastructureOwner, userName))
+			log.FailOnError(err, "Failed to add role for user - %s", user)
+			userNames = append(userNames, user)
+
+		})
+
+		userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+		log.FailOnError(err, "Fetching non admin user ctx")
+
+		Step(fmt.Sprintf("Adding cloud account for backup location "), func() {
+			log.InfoD(fmt.Sprintf("Adding cloud account for backup location "))
+			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				credName = fmt.Sprintf("%v-cred-%v", provider, RandomString(5))
+				err = CreateCloudCredential(provider, credName, cloudCredUID, orgID, userCtx)
+				log.FailOnError(err, "Failed to create cloud account for backup location from px-admin user  - %s", err)
+			}
+		})
+
+		Step("Create backup location from non admin user using the cloud cred created by admin user", func() {
+			log.InfoD("Create backup location from non admin user using the cloud cred created by admin user")
+			for _, provider := range providers {
+				backupLocationUID = uuid.New()
+				backupLocationName = fmt.Sprintf("%s-backup-location-%v-%v", user, RandomString(5), provider)
+				err = CreateBackupLocationWithContext(provider, backupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "", "", userCtx)
+				log.FailOnError(err, "Failed to add backup location %s using provider %s for non-admin user %s", backupLocationName, provider, user)
+				backupLocationMap[user][backupLocationUID] = backupLocationName
+			}
+		})
+
+		Step("Create schedule policy from non admin users", func() {
+			log.InfoD("Create schedule policy from non admin users")
+			periodicSchedulePolicyName = fmt.Sprintf("%v-%s-%v", user, "periodic", RandomString(5))
+			periodicSchedulePolicyUid = uuid.New()
+			periodicSchedulePolicyInterval = 15
+			periodicSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(periodicSchedulePolicyInterval), 5)
+			err = Inst().Backup.BackupSchedulePolicy(periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, periodicSchedulePolicyInfo)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
+			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, userCtx, periodicSchedulePolicyName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s] for user %s", periodicSchedulePolicyName, user))
+		})
+
+		Step("Create backup rules for applications for non-admin user", func() {
+			log.InfoD("Create backup rules for applications for non-admin user")
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(orgID, Inst().AppList, userCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation ofbackup rule for applications [%s] for user %s", Inst().AppList, user))
+		})
+
+		Step(fmt.Sprintf("Register source and destination cluster for backup from non admin user- %s ", user), func() {
+			log.InfoD("Register source and destination cluster for backup from non admin user- %s ", user)
+			err = CreateApplicationClusters(orgID, "", "", userCtx)
+			log.FailOnError(err, "Failed creating source and destination cluster for user : %s", user)
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, userCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(userCtx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step(fmt.Sprintf("Taking manual backup of single namespace with and without rules for user :%s", user), func() {
+
+			log.InfoD("Taking manual backup of single namespace as user : %s  with rules", user)
+
+			createBackupWithRulesTask := func(appName string) {
+				backupName := fmt.Sprintf("%s-manual-single-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
+				labelSelectors := make(map[string]string, 0)
+				log.InfoD("Creating a backup of single namespace [%s] with pre and post exec rules", appName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{appName})
+				err := CreateBackupWithValidation(userCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+					labelSelectors, orgID, srcClusterUid, preRuleNameMap[user][appName], preRuleUidsMap[user][appName], postRuleNameMap[user][appName], postRuleUidsMap[user][appName])
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s] of single namespace for user %s with pre/post rule", backupName, user))
+				singleNSNamespaceBackups = SafeAppend(&mutex, singleNSNamespaceBackups, backupName).([]string)
+			}
+			_ = TaskHandler(Inst().AppList, createBackupWithRulesTask, Parallel)
+			log.InfoD("Taking manual backup of single namespace as user : %s  without rules", user)
+			createBackupWithoutRulesTask := func(_ string) {
+				backupName := fmt.Sprintf("%s-manual-single-ns-%s-without-rules-%s", BackupNamePrefix, user, RandomString(4))
+				labelSelectors := make(map[string]string, 0)
+				log.InfoD("Creating a backup of namespace [%s] without pre and post exec rules", bkpNamespaces[0])
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				err := CreateBackupWithValidation(userCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+					labelSelectors, orgID, srcClusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+				singleNSNamespaceBackups = SafeAppend(&mutex, singleNSNamespaceBackups, backupName).([]string)
+			}
+			_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
+		})
+
+		Step(fmt.Sprintf("Taking manual backup with multiple namespace at a time with and without rules for user %s", user), func() {
+			log.InfoD("Taking manual backup with multiple namespace at a time with and without rules")
+
+			log.InfoD("Taking manual backup of multiple namespace as user : %s with rules ", user)
+
+			backupName := fmt.Sprintf("%s-manual-mutiple-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
+			labelSelectors := make(map[string]string, 0)
+			log.InfoD("Creating a backup of multiple namespaces [%v] with pre and post exec rules", bkpNamespaces)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidation(userCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+				labelSelectors, orgID, srcClusterUid, preRuleNameMap[user][appName], preRuleUidsMap[user][appName], postRuleNameMap[user][appName], postRuleUidsMap[user][appName])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+			mutipleNSNamespaceBackups = SafeAppend(&mutex, mutipleNSNamespaceBackups, backupName).([]string)
+
+			backupName := fmt.Sprintf("%s-manual-multiple-ns-%s-without-rules-%s", BackupNamePrefix, user, RandomString(4))
+			labelSelectors := make(map[string]string, 0)
+			log.InfoD("Creating a backup of namespaces [%v] without pre and post exec rules", bkpNamespaces)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithValidation(userCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+				labelSelectors, orgID, srcClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
+			mutipleNSNamespaceBackups = SafeAppend(&mutex, mutipleNSNamespaceBackups, backupName).([]string)
+
+		})
+
+		Step(fmt.Sprintf("Taking schedule backup of single applications as %s user with and without rules", user), func() {
+			ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+
+			log.InfoD("Taking schedule backup of single namespace as user : %s with rules", user)
+			createBackupWithRulesTask := func(appName string) {
+				scheduleName := fmt.Sprintf("%s-schedule-single-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
+				labelSelectors := make(map[string]string, 0)
+				log.InfoD("Creating a backup of namespace [%s] with pre and post exec rules", bkpNamespaces[0])
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+					labelSelectors, orgID, preRuleNameMap[user][appName], preRuleUidsMap[user][appName], postRuleNameMap[user][appName], postRuleUidsMap[user][appName], periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
+				singleNSNamespaceBackups = SafeAppend(&mutex, singleNSNamespaceBackups, scheduleBackupName).([]string)
+			}
+			_ = TaskHandler(Inst().AppList, createBackupWithRulesTask, Parallel)
+
+			createBackupWithoutRulesTask := func(_ string) {
+				scheduleName := fmt.Sprintf("%s-schedule-single-ns-%s-without-rules-%s", BackupNamePrefix, user, RandomString(4))
+				labelSelectors := make(map[string]string, 0)
+				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", bkpNamespaces[0])
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+					labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
+				singleNSNamespaceBackups = SafeAppend(&mutex, singleNSNamespaceBackups, scheduleBackupName).([]string)
+			}
+			_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
+
+		})
+
+		Step(fmt.Sprintf("Taking schedule backup of multiple applications as %s with and without rules", user), func() {
+			ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			/*
+				log.InfoD("Taking schedule backup of multiple namespace as user : %s with rules ", user)
+				scheduleName := fmt.Sprintf("%s-schedule-mutiple-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
+				labelSelectors := make(map[string]string, 0)
+				log.InfoD("Creating a backup of namespaces [%v] with pre and post exec rules", bkpNamespaces)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+					labelSelectors, orgID, preRuleNameMap[user][appName], preRuleUidsMap[user][appName], postRuleNameMap[user][appName], postRuleUidsMap[user][appName], periodicSchedulePolicyName, periodicSchedulePolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
+				mutipleNSNamespaceBackups = SafeAppend(&mutex, mutipleNSNamespaceBackups, scheduleName).([]string)
+			*/
+
+			log.InfoD("Taking schedule backup of multiple namespace as user : %s without rules ", user)
+			scheduleName := fmt.Sprintf("%s-schedule-multiple-ns-%s-without-rules-%s", BackupNamePrefix, user, RandomString(4))
+			labelSelectors := make(map[string]string, 0)
+			log.InfoD("Creating a schedule backup of namespaces [%v] without pre and post exec rules", bkpNamespaces)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+				labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
+			mutipleNSNamespaceBackups = SafeAppend(&mutex, mutipleNSNamespaceBackups, scheduleName).([]string)
+		})
+
+		Step(fmt.Sprintf("Taking namespace label schedule backup of applications as %s without rules", user), func() {
+			ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			log.InfoD("Taking namespace label schedule backup of applications of user : %s ", user)
+			scheduleName := fmt.Sprintf("%s-schedule-nslabel-%s-without-rules-%s", BackupNamePrefix, user, RandomString(4))
+			labelSelectors := make(map[string]string, 0)
+			log.InfoD("Creating a backup of namespaces [%v] without rules", bkpNamespaces)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			scheduleBackupName, err := CreateScheduleBackupWithNamespaceLabelWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup,
+				labelSelectors, orgID, "", "", "", "", namespaceLabel, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
+			mutipleNSNamespaceBackups = SafeAppend(&mutex, mutipleNSNamespaceBackups, scheduleName).([]string)
+
+		})
+
+		// single namespace backups restore
+		Step("Restore single namespace backups", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			restoreSingleNSBackupInVariousWaysTask := func(_ int, singleNSNamespaceBackup string) {
+				restoreConfigs := []struct {
+					namePrefix          string
+					namespaceMapping    map[string]string
+					storageClassMapping map[string]string
+					replacePolicy       ReplacePolicy_Type
+				}{
+					{
+						"test-restore-single-ns",
+						make(map[string]string, 0),
+						make(map[string]string, 0),
+						ReplacePolicy_Retain,
+					},
+					{
+						"test-custom-restore-single-ns",
+						map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0]},
+						make(map[string]string, 0),
+						ReplacePolicy_Retain,
+					},
+					{
+						"test-replace-restore-single-ns",
+						make(map[string]string, 0),
+						make(map[string]string, 0),
+						ReplacePolicy_Delete,
+					},
+				}
+				for _, config := range restoreConfigs {
+					restoreName := fmt.Sprintf("%s-%s-%s", user, config.namePrefix, RandomString(4))
+					log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", singleNSNamespaceBackup, destinationClusterName, restoreName, config.namespaceMapping)
+					if config.replacePolicy == ReplacePolicy_Retain {
+						err = CreateRestore(restoreName, singleNSNamespaceBackup, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping)
+					} else if config.replacePolicy == ReplacePolicy_Delete {
+						err = CreateRestoreWithReplacePolicy(restoreName, singleNSNamespaceBackup, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping, config.replacePolicy)
+					}
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace schedule backup [%s] in cluster [%s]", restoreName, singleNSNamespaceBackup, restoreName))
+				}
+			}
+			_ = TaskHandler(singleNSNamespaceBackups, restoreSingleNSBackupInVariousWaysTask, Parallel)
+		})
+
+		// mutiple namespace and labelled backups restore
+		Step("Restore multiple namespace backups", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
+			restoreSingleNSBackupInVariousWaysTask := func(mutipleNSNamespaceBackup string) {
+				restoreConfigs := []struct {
+					namePrefix          string
+					namespaceMapping    map[string]string
+					storageClassMapping map[string]string
+					replacePolicy       ReplacePolicy_Type
+				}{
+					{
+						"test-restore-mutiple-ns",
+						make(map[string]string, 0),
+						make(map[string]string, 0),
+						ReplacePolicy_Retain,
+					},
+					{
+						"test-custom-restore-mutiple-ns",
+						map[string]string{bkpNamespaces[0]: "custom-" + bkpNamespaces[0],
+							bkpNamespaces[1]: "custom-" + bkpNamespaces[1]},
+						make(map[string]string, 0),
+						ReplacePolicy_Retain,
+					},
+					{
+						"test-replace-restore-mutiple-ns",
+						make(map[string]string, 0),
+						make(map[string]string, 0),
+						ReplacePolicy_Delete,
+					},
+				}
+				for _, config := range restoreConfigs {
+					restoreName := fmt.Sprintf("%s-%s-%s", user, config.namePrefix, RandomString(4))
+					log.InfoD("Restoring mutiple namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", mutipleNSNamespaceBackup, destinationClusterName, restoreName, config.namespaceMapping)
+					if config.replacePolicy == ReplacePolicy_Retain {
+						err = CreateRestore(restoreName, mutipleNSNamespaceBackup, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping)
+					} else if config.replacePolicy == ReplacePolicy_Delete {
+						err = CreateRestoreWithReplacePolicy(restoreName, mutipleNSNamespaceBackup, config.namespaceMapping, destinationClusterName, orgID, ctx, config.storageClassMapping, config.replacePolicy)
+					}
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of mutiple namespace schedule backup [%s] in cluster [%s]", restoreName, mutipleNSNamespaceBackup, restoreName))
+				}
+			}
+			_ = TaskHandler(mutipleNSNamespaceBackups, restoreSingleNSBackupInVariousWaysTask, Parallel)
+		})
+
+		Step("Sleeping before calling backup deletion", func() {
+			time.Sleep(120 * time.Second)
+		})
+		for _, user := range userNames {
+			Step(fmt.Sprintf("Deletion of all the  backup of applications as %s", user), func() {
+				log.InfoD("Deletion of all the  backup of applications as user : %s ", user)
+				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
+				backupNames, err := GetAllBackupsForUser(user, commonPassword)
+				log.FailOnError(err, "Failed getting backup uid for user %s", user)
+				var wg sync.WaitGroup
+				backupDriver := Inst().Backup
+				for _, backup := range backupNames {
+					backupUID, _ := backupDriver.GetBackupUID(ctx, backup, orgID)
+					wg.Add(1)
+					go func(backup string, backupUID string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						_, err = DeleteBackup(backup, backupUID, orgID, ctx)
+						log.FailOnError(err, "Failed to delete backup - %s", backup)
+						err = backupDriver.WaitForBackupDeletion(ctx, backup, orgID, backupDeleteTimeout, backupDeleteRetryTime)
+						log.FailOnError(err, "Error waiting for backup deletion %v", backup)
+					}(backup, backupUID)
+				}
+				wg.Wait()
+
+			})
+
+			Step(fmt.Sprintf("Deletion of all the backup schedules of applications as %s", user), func() {
+				log.InfoD("Deletion of all the backup schedules of applications as user : %s ", user)
+				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
+				scheduleNames, err := GetAllBackupSchedulesForUser(user, commonPassword)
+				log.FailOnError(err, "Failed getting backup uid for user %s", user)
+				var wg sync.WaitGroup
+				for _, schedule := range scheduleNames {
+					wg.Add(1)
+					go func(schedule string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						err = DeleteSchedule(schedule, SourceClusterName, orgID, ctx)
+						log.FailOnError(err, "Failed to delete schedule - %s", schedule)
+					}(schedule)
+				}
+				wg.Wait()
+
+			})
+
+			Step(fmt.Sprintf("Deletion of all the restore of applications as %s", user), func() {
+				log.InfoD("Deletion of all the restore of applications as user : %s ", user)
+				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "Fetching non admin ctx")
+				restoreNames, err := GetAllRestoresNonAdminCtx(ctx)
+				log.FailOnError(err, "Failed getting backup uid for user %s", user)
+				for _, restoreName := range restoreNames {
+					err = DeleteRestore(restoreName, orgID, ctx)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+				}
+				var wg sync.WaitGroup
+				for _, restoreName := range restoreNames {
+					wg.Add(1)
+					go func(restoreName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						err = DeleteRestore(restoreName, orgID, ctx)
+						log.FailOnError(err, "Failed to delete restore - %s", restoreName)
+					}(restoreName)
+				}
+				wg.Wait()
+			})
+
+		}
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting the deployed apps after the testcase")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		log.Infof("Deleting backup schedule policy")
+		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
+		for _, userName := range userNames {
+			err = backup.DeleteUser(userName)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the user [%s]", userName))
+		}
+		for _, appName := range Inst().AppList {
+			if postRuleNameMap[user][appName] != "" {
+				err := DeleteRule(postRuleNameMap[user][appName], orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of post-backup rule [%s]", postRuleNameMap[appName]))
+			}
+			if preRuleNameMap[user][appName] != "" {
+				err := DeleteRule(preRuleNameMap[user][appName], orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of pre-backup rule [%s]", preRuleNameMap[appName]))
+			}
+
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+	})
+})
