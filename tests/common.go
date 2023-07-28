@@ -5142,7 +5142,10 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
-	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system check")
+	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
+	// unstable testing environments.
+	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system checks during after suite")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)

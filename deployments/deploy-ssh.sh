@@ -14,6 +14,9 @@ fi
 
 SECURITY_CONTEXT=false
 
+# System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+# should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
+# unstable testing environments.
 TORPEDO_SKIP_SYSTEM_CHECKS=false
 if [ -z "${TORPEDO_SKIP_SYSTEM_CHECKS}" ]; then
     TORPEDO_SKIP_SYSTEM_CHECKS=true
