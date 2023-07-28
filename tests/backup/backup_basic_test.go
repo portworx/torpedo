@@ -186,6 +186,7 @@ var _ = AfterSuite(func() {
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
+	
 	/*
 		// Cleanup all non admin users
 		ctx, err := backup.GetAdminCtxFromSecret()
