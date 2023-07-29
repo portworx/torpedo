@@ -4012,7 +4012,7 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 		}
 	}
 	if found {
-		log.Infof("ConfigMap with name %s found in the config map list", cloudCredConfigMap)
+		log.Infof(fmt.Sprintf("ConfigMap with name %s found in the config map list", cloudCredConfigMap))
 		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 		if err != nil {
 			log.Errorf("Error reading config map: %v", err)
