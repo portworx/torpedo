@@ -45,6 +45,7 @@ import (
 	"encoding/json"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -4001,14 +4002,28 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 // GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
 func GetConfigObj() (*backup.BackupCloudConfig, error) {
 	var config *backup.BackupCloudConfig
-	cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
-	if err != nil {
-		log.Warnf("Error reading config map, continuing the run ,in case if you are running on cloud platform make sure to add configmap : %v", cloudCredConfigMap)
+	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
+	log.FailOnError(err, fmt.Sprintf("Error listing ConFigMaps in default namespace"))
+	found := false
+	for _, cm := range cmList.Items {
+		if cm.Name == cloudCredConfigMap {
+			found = true
+			break
+		}
+	}
+	if found {
+		log.Infof("ConfigMap with name %s found in the config map list", cloudCredConfigMap)
+		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
+		if err != nil {
+			log.Errorf("Error reading config map: %v", err)
+			return nil, err
+		}
+		log.Infof("Fetch the cloud-config from the configMap")
+		configData := cm.Data["cloud-json"]
+		err = json.Unmarshal([]byte(configData), &config)
 		return config, nil
 	}
-	log.Infof("Fetch the cloud-config from the configMap")
-	configData := cm.Data["cloud-json"]
-	err = json.Unmarshal([]byte(configData), &config)
+	log.Warnf(fmt.Sprintf("ConfigMap with name %s not found in the config map list, if you are running on any cloud provider please provide config map", cloudCredConfigMap))
 	return config, nil
 }
 
