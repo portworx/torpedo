@@ -121,6 +121,13 @@ const (
 	pxVersionError = "ERROR GETTING PX VERSION"
 )
 
+// TODO Need to add for AutoJornal
+//var IOProfileChange = [4]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO_JOURNAL, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
+
+var IOProfileChange = [3]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
+
+var currentIOProfileChangeCounter = 0
+
 var longevityLogger *lumberjack.Logger
 
 // EmailRecipients list of email IDs to send email to
@@ -284,6 +291,11 @@ type PureSecret struct {
 	FlashBlades []FlashBlade
 }
 
+type VolumeIOProfile struct {
+	SpecInfo *volume.Volume
+	Profile  apios.IoProfile
+}
+
 // GenerateUUID generates unique ID
 func GenerateUUID() string {
 	uuidbyte, _ := exec.Command("uuidgen").Output()
@@ -311,9 +323,10 @@ func ProcessErrorWithMessage(event *EventRecord, err error, desc string) {
 }
 
 const (
+
 	// DeployApps installs new apps
 	DeployApps = "deployApps"
-	// ValidatePds Apps checks the healthstate of the pds apps
+	// ValidatePdsApps checks the healthstate of the pds apps
 	ValidatePdsApps = "validatePdsApps"
 	// HAIncrease performs repl-add
 	HAIncrease = "haIncrease"
@@ -359,8 +372,8 @@ const (
 	EmailReporter = "emailReporter"
 	// CoreChecker checks if any cores got generated
 	CoreChecker = "coreChecker"
-	// PoolResizeDisk resize storage pool using resize-disk
-	PoolResizeDisk = "poolResizeDisk"
+	// MetadataPoolResizeDisk resize storage pool using resize-disk
+	MetadataPoolResizeDisk = "metadatapoolResizeDisk"
 	// PoolAddDisk resize storage pool using add-disk
 	PoolAddDisk = "poolAddDisk"
 	// BackupAllApps Perform backups of all deployed apps
@@ -456,6 +469,8 @@ const (
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
 	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
 	DeleteOldNamespaces = "deleteoldnamespaces"
+	// Add Drive to create new pool and resize Drive in maintenance mode
+	AddResizePoolMaintenance = "addResizePoolInMaintenance"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -538,7 +553,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-
+	ValidateDataIntegrity(contexts)
 	Inst().M.IncrementCounterMetric(TotalTriggerCount, event.Event.Type)
 	Inst().M.SetGaugeMetricWithNonDefaultLabels(FailedTestAlert, 0, event.Event.Type, "")
 
@@ -572,6 +587,38 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			for err := range errorChan {
 				log.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
+			}
+		}
+
+		if len(*contexts) > 2 {
+			mid := len(*contexts) / 2
+			for i, ctx := range *contexts {
+				appVolumes, err := Inst().S.GetVolumes(ctx)
+				UpdateOutcome(event, err)
+				var volumeSpecUpdate *opsapi.VolumeSpecUpdate
+				if i < mid {
+					volumeSpecUpdate = &opsapi.VolumeSpecUpdate{
+						IoThrottleOpt: &opsapi.VolumeSpecUpdate_IoThrottle{
+							IoThrottle: &opsapi.IoThrottle{
+								ReadBwMbytes:  10,
+								WriteBwMbytes: 10,
+							},
+						},
+					}
+				} else {
+					volumeSpecUpdate = &opsapi.VolumeSpecUpdate{
+						IoThrottleOpt: &opsapi.VolumeSpecUpdate_IoThrottle{
+							IoThrottle: &opsapi.IoThrottle{
+								ReadIops:  1024,
+								WriteIops: 1024,
+							},
+						},
+					}
+				}
+				for _, appVol := range appVolumes {
+					log.Infof(fmt.Sprintf("updating volume %s [app:%s] with volume spec: %+v", appVol.Name, ctx.App.Key, volumeSpecUpdate))
+					err = Inst().V.UpdateVolumeSpec(appVol, volumeSpecUpdate)
+				}
 			}
 		}
 	})
@@ -1119,6 +1166,9 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 		for _, appNode := range node.GetStorageDriverNodes() {
 			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 				Inst().V.String(), appNode.Name)
+			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
+			UpdateOutcome(event, err)
+
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
@@ -1131,6 +1181,8 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						UpdateOutcome(event, err)
 					}
 				})
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
 			validateContexts(event, contexts)
 		}
 		updateMetrics(*event)
@@ -1162,6 +1214,8 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 		for _, appNode := range node.GetStorageDriverNodes() {
 			stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
 				Inst().V.String(), appNode.Name)
+			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
+			UpdateOutcome(event, err)
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
@@ -1199,6 +1253,8 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 			Step("Giving few seconds for volume driver to stabilize", func() {
 				time.Sleep(20 * time.Second)
 			})
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
 
 			validateContexts(event, contexts)
 		}
@@ -1301,6 +1357,8 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			log.InfoD(stepLog)
 			wg.Wait()
 		})
+		err := ValidateDataIntegrity(contexts)
+		UpdateOutcome(event, err)
 		validateContexts(event, contexts)
 		updateMetrics(*event)
 
@@ -1329,12 +1387,29 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	setMetrics(*event)
 	stepLog := "get kvdb nodes bounce volume driver"
 	Step(stepLog, func() {
-		for _, appNode := range node.GetMetadataNodes() {
+		kvdbNodes, err := GetAllKvdbNodes()
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		stNodes := node.GetNodesByVoDriverNodeID()
+		nodeContexts := make([]*scheduler.Context, 0)
+		for _, kvdbNode := range kvdbNodes {
+
+			appNode, ok := stNodes[kvdbNode.ID]
+			if !ok {
+				UpdateOutcome(event, fmt.Errorf("node with id %s not found in the nodes list", kvdbNode.ID))
+				continue
+			}
+
 			stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
 				Inst().V.String(), appNode.Name)
 			Step(stepLog,
 				func() {
 					log.InfoD(stepLog)
+					appNodeContexts, err := GetContextsOnNode(contexts, &appNode)
+					UpdateOutcome(event, err)
+					nodeContexts = append(nodeContexts, appNodeContexts...)
 					taskStep := fmt.Sprintf("stop volume driver on node: %s.",
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
@@ -1362,9 +1437,10 @@ func TriggerRestartKvdbVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 			Step("Giving few seconds for volume driver to stabilize", func() {
 				time.Sleep(20 * time.Second)
 			})
-
 			validateContexts(event, contexts)
 		}
+		err = ValidateDataIntegrity(&nodeContexts)
+		UpdateOutcome(event, err)
 		updateMetrics(*event)
 	})
 }
@@ -1431,9 +1507,13 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		Step(stepLog, func() {
 			// TODO: Below is the same code from existing nodeReboot test
 			log.InfoD(stepLog)
+			nodeContexts := make([]*scheduler.Context, 0)
 			for _, n := range nodesToReboot {
 				if n.IsStorageDriverInstalled {
 					stepLog = fmt.Sprintf("reboot node: %s", n.Name)
+					appNodeContexts, err := GetContextsOnNode(contexts, &n)
+					UpdateOutcome(event, err)
+					nodeContexts = append(nodeContexts, appNodeContexts...)
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("reboot node: %s.", n.Name)
@@ -1477,10 +1557,11 @@ func TriggerRebootNodes(contexts *[]*scheduler.Context, recordChan *chan *EventR
 						err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 						UpdateOutcome(event, err)
 					})
-
 					validateContexts(event, contexts)
 				}
 			}
+			err := ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
 			updateMetrics(*event)
 		})
 	})
@@ -2193,6 +2274,9 @@ func TriggerLocalSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 		}
 	}
 
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
+
 	setMetrics(*event)
 }
 
@@ -2418,6 +2502,8 @@ func TriggerCloudSnapshotRestore(contexts *[]*scheduler.Context, recordChan *cha
 			delete(cloudsnapMap, k)
 		}
 	})
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
 
 }
 
@@ -4207,6 +4293,35 @@ func getStoragePoolsToExpand() ([]*opsapi.StoragePool, error) {
 
 }
 
+// returns list of pools with metadata disk to expand
+func getStorageMetadataPoolsToExpand() ([]*opsapi.StoragePool, error) {
+	stNodes := node.GetStorageNodes()
+	expectedCapacity := (len(stNodes) / 2) + 1
+	poolsToExpand := make([]*opsapi.StoragePool, 0)
+	for _, stNode := range stNodes {
+		eligibility, err := GetPoolExpansionEligibility(&stNode)
+		if err != nil {
+			return nil, err
+		}
+		if len(poolsToExpand) <= expectedCapacity {
+			if eligibility[stNode.Id] {
+				for _, p := range stNode.Pools {
+					metaPoolUUID, err := GetPoolUUIDWithMetadataDisk(stNode)
+					if err != nil {
+						return nil, err
+					}
+					if eligibility[p.Uuid] && p.Uuid == metaPoolUUID {
+						poolsToExpand = append(poolsToExpand, p)
+					}
+				}
+			}
+			continue
+		}
+		break
+	}
+	return poolsToExpand, nil
+}
+
 func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.StoragePool, chaosLevel uint64, resizeOperationType opsapi.SdkStoragePool_ResizeOperationType, doNodeReboot bool) {
 
 	if wg != nil {
@@ -4257,15 +4372,15 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	}
 }
 
-// TriggerPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
-func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+// TriggerMetadataPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
+func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(PoolResizeDisk)
+	startLongevityTest(MetadataPoolResizeDisk)
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: PoolResizeDisk,
+			Type: MetadataPoolResizeDisk,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -4278,11 +4393,11 @@ func TriggerPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *Eve
 
 	setMetrics(*event)
 
-	chaosLevel := getPoolExpandPercentage(PoolResizeDisk)
+	chaosLevel := getPoolExpandPercentage(MetadataPoolResizeDisk)
 	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
 	Step(stepLog, func() {
 
-		poolsToBeResized, err := getStoragePoolsToExpand()
+		poolsToBeResized, err := getStorageMetadataPoolsToExpand()
 
 		if err != nil {
 			log.Error(err.Error())
@@ -4340,15 +4455,28 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 			UpdateOutcome(event, err)
 		}
 		var poolToBeResized *opsapi.StoragePool
+		nodeContexts := make([]*scheduler.Context, 0)
 		if len(poolsToBeResized) > 0 {
 			for _, pool := range poolsToBeResized {
 				if !isPoolRebalanceEnabled(pool.Uuid) {
 					poolToBeResized = pool
+					break
 				}
 			}
 			log.InfoD("Pool to resize-disk [%v]", poolToBeResized)
+			storageNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+			UpdateOutcome(event, err)
+
+			if err == nil {
+				appNodeContexts, err := GetContextsOnNode(contexts, storageNode)
+				UpdateOutcome(event, err)
+				nodeContexts = append(nodeContexts, appNodeContexts...)
+
+			}
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 2, true)
 		}
+		err = ValidateDataIntegrity(&nodeContexts)
+		UpdateOutcome(event, err)
 	})
 
 	validateContexts(event, contexts)
@@ -4442,10 +4570,18 @@ func TriggerPoolAddDiskAndReboot(contexts *[]*scheduler.Context, recordChan *cha
 			for _, pool := range poolsToBeResized {
 				if !isPoolRebalanceEnabled(pool.Uuid) {
 					poolToBeResized = pool
+					break
 				}
 			}
+			storageNode, err := GetNodeWithGivenPoolID(poolToBeResized.Uuid)
+			UpdateOutcome(event, err)
+			nodeContexts, err := GetContextsOnNode(contexts, storageNode)
+			UpdateOutcome(event, err)
+
 			log.InfoD("Pool to resize-disk [%v]", poolToBeResized)
 			initiatePoolExpansion(event, nil, poolToBeResized, chaosLevel, 1, true)
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
 		}
 	})
 	validateContexts(event, contexts)
@@ -4591,6 +4727,8 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 			validateContexts(event, contexts)
 		}
 	})
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
 	updateMetrics(*event)
 }
 
@@ -4794,78 +4932,152 @@ func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *ch
 		log.InfoD(stepLog)
 		Step(stepLog,
 			func() {
-				//count := 0
 				log.InfoD(stepLog)
+				var pvcProfileMap map[string]VolumeIOProfile
+				pvcProfileMap, err := getIOProfileOnVolumes(contexts)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
 				for count := range [2]int{} {
-					updateIOProfileOnVolumes(contexts, event)
+					if count < 1 {
+						updateIOProfile(event, pvcProfileMap, IOProfileChange[currentIOProfileChangeCounter])
+						log.Infof("Update IO profile completed %s", IOProfileChange[currentIOProfileChangeCounter])
+					} else {
+						//Revert IO profile back
+						revertIOProfile(event, pvcProfileMap)
+					}
 					for _, ctx := range *contexts {
 						errorChan := make(chan error, errorChannelSize)
 						log.Infof("Validating context: %v", ctx.App.Key)
-						ctx.SkipVolumeValidation = false
+						if count == 0 {
+							ctx.SkipVolumeValidation = true
+						} else {
+							ctx.SkipVolumeValidation = false
+						}
 						ValidateContext(ctx, &errorChan)
 						for err := range errorChan {
-							log.Infof("Error: %v", err)
 							UpdateOutcome(event, err)
 						}
 					}
+					log.InfoD("Data integrity check has been started ")
+					err := ValidateDataIntegrity(contexts)
+					if err != nil {
+						UpdateOutcome(event, err)
+					} else {
+						log.Infof("Data integrity check has been successful")
+					}
 					if count < 1 {
-						log.InfoD("Wait for 15 minutes before restting back")
+						log.InfoD("Wait for 15 minutes before resetting back")
 						time.Sleep(15 * time.Minute)
-						log.InfoD("Resetting back")
+						log.InfoD("Resetting IO profile back to %s ", IOProfileChange[currentIOProfileChangeCounter])
 					}
 				}
+				currentIOProfileChangeCounter += 1
 			})
-
+		if currentIOProfileChangeCounter >= len(IOProfileChange) {
+			//Reset back to 0
+			currentIOProfileChangeCounter = 0
+			log.InfoD("Resetting current counter ")
+		}
 	})
 	log.InfoD("Update IO profile completed")
 	updateMetrics(*event)
 }
 
-// updateIOProfileOnVolumes this method is responsible for updating IO priority on Volumes.
-func updateIOProfileOnVolumes(contexts *[]*scheduler.Context, event *EventRecord) {
+func getIOProfileOnVolumes(contexts *[]*scheduler.Context) (map[string]VolumeIOProfile, error) {
+	pvcProfileMap := make(map[string]VolumeIOProfile)
+	var appVolumes []*volume.Volume
+	var err error
+	var volumeInfo VolumeIOProfile
 	for _, ctx := range *contexts {
-		var appVolumes []*volume.Volume
-		var volumeSpec *apios.VolumeSpecUpdate
-		var err error
-		//var requiredIOProfile apios.VolumeSpecPolicy_IoProfile
-		var requiredIOProfile apios.IoProfile
 		appVolumes, err = Inst().S.GetVolumes(ctx)
-		UpdateOutcome(event, err)
-		if len(appVolumes) == 0 {
-			UpdateOutcome(event, fmt.Errorf("found no volumes for app "))
+		if err != nil {
+			log.Errorf("Error inspecting volume: %v", err)
+			return nil, err
 		}
 		for _, v := range appVolumes {
-			log.InfoD("Getting info from volume: %s", v.ID)
+			if v.ID == "" {
+				log.InfoD("Volume info not avialbale %v", v)
+				continue
+			}
 			appVol, err := Inst().V.InspectVolume(v.ID)
 			if err != nil {
 				log.Errorf("Error inspecting volume: %v", err)
 			}
-			currentIOProfile := appVol.Spec.IoProfile
-			derivedIOProfile := appVol.DerivedIoProfile
-			log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", v.ID, currentIOProfile, derivedIOProfile)
-			if currentIOProfile == apios.IoProfile_IO_PROFILE_AUTO {
-				requiredIOProfile = apios.IoProfile_IO_PROFILE_NONE
-			} else if currentIOProfile == apios.IoProfile_IO_PROFILE_NONE {
-				requiredIOProfile = apios.IoProfile_IO_PROFILE_AUTO
-			}
-			log.InfoD("Expected IO Profile %v", requiredIOProfile)
-			volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: requiredIOProfile}}
-			Inst().V.UpdateVolumeSpec(v, volumeSpec)
+			volumeInfo = VolumeIOProfile{v, appVol.Spec.IoProfile}
+			pvcProfileMap[v.ID] = volumeInfo
+		}
+	}
+	return pvcProfileMap, nil
+}
+func revertIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile) {
+	var volumeSpec *apios.VolumeSpecUpdate
+	for pvcName, v := range pvcProfileMap {
+		log.InfoD("Getting info from volume: %s", pvcName)
+		appVol, err := Inst().V.InspectVolume(pvcName)
+		if err != nil {
+			log.Errorf("Error inspecting volume: %v", err)
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", pvcName, appVol.Spec.IoProfile, appVol.DerivedIoProfile)
+		if appVol.Spec.IoProfile != v.Profile {
+			log.InfoD("Expected IO Profile change to  %v", v.Profile)
+			volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: v.Profile}}
+			err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
 			if err != nil {
 				UpdateOutcome(event, err)
 			}
-			//Verify Volume set with required IOPriority.
-			appVol, err = Inst().V.InspectVolume(v.ID)
+			//Verify Volume set with required IO profile.
+			appVol, err = Inst().V.InspectVolume(pvcName)
 			if err != nil {
 				log.Errorf("Error inspecting volume: %v", err)
-			}
-			log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
-			log.InfoD("IO profile after update %v", appVol.DerivedIoProfile.SimpleString())
-			if requiredIOProfile != appVol.Spec.IoProfile {
-				err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", v.ID, requiredIOProfile)
 				UpdateOutcome(event, err)
 			}
-			log.InfoD("Completed update on %v", v.ID)
+			log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
+			if v.Profile != appVol.Spec.IoProfile {
+				err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", pvcName, v.Profile)
+				UpdateOutcome(event, err)
+			}
+
+		}
+	}
+}
+func updateIOProfile(event *EventRecord, pvcProfileMap map[string]VolumeIOProfile, ioProfileTo apios.IoProfile) {
+	//Get all volumes and change IO profile on those volumes.
+	var volumeSpec *apios.VolumeSpecUpdate
+	for pvcName, v := range pvcProfileMap {
+		log.InfoD("Getting info from volume: %s", pvcName)
+		appVol, err := Inst().V.InspectVolume(pvcName)
+		if err != nil {
+			log.Errorf("Error inspecting volume: %v", err)
+		}
+		currentIOProfile := appVol.Spec.IoProfile
+		derivedIOProfile := appVol.DerivedIoProfile
+		log.InfoD("Volume: %s Current IO profile : %s, current derived IO profile %s", pvcName, currentIOProfile, derivedIOProfile)
+		if currentIOProfile != ioProfileTo {
+			if appVol.Spec.HaLevel == 1 && ioProfileTo == apios.IoProfile_IO_PROFILE_DB_REMOTE {
+				log.InfoD(" HA of PVC  %v cannot be set to DB-REMOTE", pvcName)
+			} else {
+				log.InfoD("Expected IO Profile change to  %v", ioProfileTo)
+				volumeSpec = &apios.VolumeSpecUpdate{IoProfileOpt: &apios.VolumeSpecUpdate_IoProfile{IoProfile: ioProfileTo}}
+				err = Inst().V.UpdateVolumeSpec(v.SpecInfo, volumeSpec)
+				if err != nil {
+					UpdateOutcome(event, err)
+				}
+				//Verify Volume set with required IO profile.
+				appVol, err = Inst().V.InspectVolume(pvcName)
+				if err != nil {
+					log.Errorf("Error inspecting volume: %v", err)
+					UpdateOutcome(event, err)
+				}
+				log.InfoD("IO profile after update %v", appVol.Spec.IoProfile.SimpleString())
+				log.InfoD("Dervived IO profile after update %v", appVol.DerivedIoProfile.SimpleString())
+				if ioProfileTo != appVol.Spec.IoProfile {
+					err = fmt.Errorf("Failed to update volume %v with expected IO profile %v ", pvcName, ioProfileTo)
+					UpdateOutcome(event, err)
+				}
+			}
+			log.InfoD("Completed update on %v", pvcName)
 		}
 	}
 }
@@ -5234,16 +5446,17 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		stepLog = fmt.Sprintf("decommission node %s", nodeToDecomm.Name)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			err := Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
+			nodeContexts, err := GetContextsOnNode(contexts, &nodeToDecomm)
+			err = Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
 			if err != nil {
 				UpdateOutcome(event, err)
-			} else {
-				err = Inst().V.DecommissionNode(&nodeToDecomm)
-				if err != nil {
-					log.InfoD("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
-					UpdateOutcome(event, err)
-				}
-
+				return
+			}
+			err = Inst().V.DecommissionNode(&nodeToDecomm)
+			if err != nil {
+				log.InfoD("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
+				UpdateOutcome(event, err)
+				return
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -5266,7 +5479,8 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			} else {
 				decommissionedNode = nodeToDecomm
 			}
-
+			err = ValidateDataIntegrity(&nodeContexts)
+			UpdateOutcome(event, err)
 		})
 		updateMetrics(*event)
 	})
@@ -5704,9 +5918,12 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 				}
 
 				nodeMap := node.GetNodesByVoDriverNodeID()
+				nodeContexts := make([]*scheduler.Context, 0)
 
 				for kvdbID, nodeID := range kvdbNodeIDMap {
 					kvdbNode := nodeMap[nodeID]
+					appNodeContexts, err := GetContextsOnNode(contexts, &kvdbNode)
+					nodeContexts = append(nodeContexts, appNodeContexts...)
 					errorChan := make(chan error, errorChannelSize)
 					StopVolDriverAndWait([]node.Node{kvdbNode}, &errorChan)
 					for err := range errorChan {
@@ -5793,8 +6010,9 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 					for err = range errorChan {
 						UpdateOutcome(event, err)
 					}
-
 				}
+				err = ValidateDataIntegrity(&nodeContexts)
+				UpdateOutcome(event, err)
 			} else {
 				err = fmt.Errorf("not all kvdb members are healthy")
 				log.Errorf(err.Error())
