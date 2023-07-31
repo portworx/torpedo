@@ -4004,7 +4004,7 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 	var config *backup.BackupCloudConfig
 	var found bool
 	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
-	log.FailOnError(err, fmt.Sprintf("Error listing configmaps in default namespace"))
+	log.FailOnError(err, fmt.Sprintf("Error listing Configmaps in default namespace"))
 	for _, cm := range cmList.Items {
 		if cm.Name == cloudCredConfigMap {
 			found = true
@@ -4012,7 +4012,7 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 		}
 	}
 	if found {
-		log.Infof(fmt.Sprintf("ConfigMap with name %s found in the config map list", cloudCredConfigMap))
+		log.Infof(fmt.Sprintf("Configmap with name %s found in the config map list", cloudCredConfigMap))
 		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 		if err != nil {
 			log.Errorf("Error reading config map: %v", err)
@@ -4023,7 +4023,7 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 		err = json.Unmarshal([]byte(configData), &config)
 		return config, nil
 	}
-	log.Warnf(fmt.Sprintf("ConfigMap with name %s not found in the config map list, if you are running on any cloud provider please provide config map", cloudCredConfigMap))
+	log.Warnf(fmt.Sprintf("Configmap with name %s not found in the config map list, if you are running on any cloud provider please provide config map", cloudCredConfigMap))
 	return config, nil
 }
 
