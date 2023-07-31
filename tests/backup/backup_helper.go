@@ -4002,9 +4002,9 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 // GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
 func GetConfigObj() (*backup.BackupCloudConfig, error) {
 	var config *backup.BackupCloudConfig
+	var found bool
 	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
-	log.FailOnError(err, fmt.Sprintf("Error listing ConFigMaps in default namespace"))
-	found := false
+	log.FailOnError(err, fmt.Sprintf("Error listing configmaps in default namespace"))
 	for _, cm := range cmList.Items {
 		if cm.Name == cloudCredConfigMap {
 			found = true
