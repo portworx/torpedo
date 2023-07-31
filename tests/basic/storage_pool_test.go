@@ -9828,6 +9828,7 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 			cmd := "echo c > /proc/sysrq-trigger"
 
 			// Execute the command to generate kernel panic
+			log.Infof("Executing command on node, [%v]", stNode.Name)
 			_, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
 				Timeout:         2 * time.Minute,
 				TimeBeforeRetry: 10 * time.Second,
