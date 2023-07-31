@@ -4012,18 +4012,18 @@ func GetConfigObj() (*backup.BackupCloudConfig, error) {
 		}
 	}
 	if found {
-		log.Infof(fmt.Sprintf("Configmap with name %s found in the config map list", cloudCredConfigMap))
+		log.Infof(fmt.Sprintf("Configmap with name %s found in the Configmaps list", cloudCredConfigMap))
 		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
 		if err != nil {
-			log.Errorf("Error reading config map: %v", err)
+			log.Errorf("Error reading Configmap: %v", err)
 			return nil, err
 		}
-		log.Infof("Fetch the cloud-config from the configMap")
+		log.Infof("Fetch the cloud-config from the Configmap")
 		configData := cm.Data["cloud-json"]
 		err = json.Unmarshal([]byte(configData), &config)
 		return config, nil
 	}
-	log.Warnf(fmt.Sprintf("Configmap with name %s not found in the config map list, if you are running on any cloud provider please provide config map", cloudCredConfigMap))
+	log.Warnf(fmt.Sprintf("Configmap with name %s not found in the Configmaps list, if you are running on any cloud provider please provide Configmap", cloudCredConfigMap))
 	return config, nil
 }
 
