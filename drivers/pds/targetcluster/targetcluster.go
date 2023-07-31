@@ -480,8 +480,14 @@ func (targetCluster *TargetCluster) GetPods(namespace string) (*corev1.PodList, 
 
 // DeleteK8sPods deletes the pods in given namespace
 func (targetCluster *TargetCluster) DeleteK8sPods(pod string, namespace string) error {
-	err := k8sCore.DeletePod(pod, namespace, true)
-	return err
+	cmd := fmt.Sprintf("kubectl --kubeconfig %v -n %v delete pod %v", targetCluster.kubeconfig, namespace, pod)
+	log.Infof("Command: ", cmd)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return err
+	}
+	log.Infof("Terminal output: %v", output)
+	return nil
 }
 
 // NewTargetCluster initialize the target cluster
