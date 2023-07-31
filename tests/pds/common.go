@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"net/http"
 	"time"
 
@@ -259,4 +261,29 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
 		log.FailOnError(err, "Error while deleting PV and PVCs")
 	}
+}
+
+func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDeployment, targetCluster *tc.TargetCluster) (string, bool) {
+	var command, dbMaster string
+	switch dsName {
+	case dataservices.Postgresql:
+		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.FailOnError(err, "Failed while fetching db master pods=.")
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	case dataservices.Mysql:
+		_, connectionDetails, err := pdslib.ApiComponents.DataServiceDeployment.GetConnectionDetails(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching connection details.")
+		cred, err := pdslib.ApiComponents.DataServiceDeployment.GetDeploymentCredentials(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching credentials.")
+		command = fmt.Sprintf("mysqlsh --host=%v --port %v --user=innodb-config "+
+			" --password=%v -- cluster status", connectionDetails["host"], connectionDetails["port"], cred.GetPassword())
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	default:
+		return "", false
+	}
+	return dbMaster, true
 }

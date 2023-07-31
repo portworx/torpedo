@@ -16,6 +16,7 @@ import (
 )
 
 var (
+	sourceTarget           *tc.TargetCluster
 	restoreTargetCluster   *tc.TargetCluster
 	bkpTarget              *pds.ModelsBackupTarget
 	dsEntity               restoreBkp.DSEntity
