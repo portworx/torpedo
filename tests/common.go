@@ -3800,6 +3800,16 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		log.Infof("Create creds for gke")
 
 		gkeCredString := os.Getenv("GKE_CRED")
+		time.Sleep(300 * time.Second)
+
+		//// Create a map to store the JSON data
+		//var jsonData map[string]interface{}
+		//
+		//// Unmarshal the JSON string into the struct
+		//err := json.Unmarshal([]byte(gkeCredString), &jsonData)
+		//if err != nil {
+		//	fmt.Println("Error unmarshaling JSON:")
+		//}
 
 		// PA-1328
 		credCreateRequest = &api.CloudCredentialCreateRequest{
