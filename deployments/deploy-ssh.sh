@@ -674,6 +674,8 @@ spec:
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
     - name: VOLUME_SNAPSHOT_CLASS
       value: "${VOLUME_SNAPSHOT_CLASS}"
+    - name: GKE_CRED
+      value: "${GKE_CRED}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
