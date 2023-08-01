@@ -9819,44 +9819,41 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 		}
 		expectedTotalPoolSize := currentTotalPoolSize + specSize
 
-		stepLog := "Initiate add cloud drive and kernel panic"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
-			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
-			time.Sleep(5 * time.Second)
-			cmd := "echo c > /proc/sysrq-trigger"
+		log.InfoD(stepLog)
+		err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
+		log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+		time.Sleep(5 * time.Second)
+		cmd := "echo c > /proc/sysrq-trigger"
 
-			// Execute the command to generate kernel panic
-			log.Infof("Executing command on node, [%v]", stNode.Name)
-			_, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-				Timeout:         2 * time.Minute,
-				TimeBeforeRetry: 10 * time.Second,
-			})
-
-			log.FailOnError(err, "Unable to execute the kernel panic command")
-			//log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
-			//err = Inst().V.RestartDriver(stNode, nil)
-			log.FailOnError(err, fmt.Sprintf("error kernel panic on node %s", stNode.Name))
-			err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
-			log.FailOnError(err, fmt.Sprintf("Kernel Panic on node %s", stNode.Name))
-			log.InfoD("Validate pool rebalance after drive add and Kernel panic")
-			err = ValidateDriveRebalance(stNode)
-			log.FailOnError(err, "Pool re-balance failed")
-			dash.VerifyFatal(err == nil, true, "PX is up after add drive with kernel panic")
-
-			var finalPoolCount int
-			var newTotalPoolSize uint64
-			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			log.FailOnError(err, "error getting pools list")
-			dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
-			for _, pool := range pools {
-				newTotalPoolSize += pool.GetTotalSize() / units.GiB
-			}
-			finalPoolCount = len(pools)
-			dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
-			dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with kernel panic Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
+		// Execute the command to generate kernel panic
+		log.Infof("Executing command on node, [%v]", stNode.Name)
+		_, err = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
 		})
+
+		log.FailOnError(err, "Unable to execute the kernel panic command")
+		//log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
+		//err = Inst().V.RestartDriver(stNode, nil)
+		log.FailOnError(err, fmt.Sprintf("error kernel panic on node %s", stNode.Name))
+		err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+		log.FailOnError(err, fmt.Sprintf("Kernel Panic on node %s", stNode.Name))
+		log.InfoD("Validate pool rebalance after drive add and Kernel panic")
+		err = ValidateDriveRebalance(stNode)
+		log.FailOnError(err, "Pool re-balance failed")
+		dash.VerifyFatal(err == nil, true, "PX is up after add drive with kernel panic")
+
+		var finalPoolCount int
+		var newTotalPoolSize uint64
+		pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+		log.FailOnError(err, "error getting pools list")
+		dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+		for _, pool := range pools {
+			newTotalPoolSize += pool.GetTotalSize() / units.GiB
+		}
+		finalPoolCount = len(pools)
+		dash.VerifyFatal(newTotalPoolSize, expectedTotalPoolSize, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+		dash.VerifyFatal(initialPoolCount+1 == finalPoolCount, true, fmt.Sprintf("Total pool count after cloud drive add with kernel panic Expected:[%d] Got:[%d]", initialPoolCount, finalPoolCount))
 
 	})
 	JustAfterEach(func() {
