@@ -989,6 +989,14 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
+			appList := Inst().AppList
+
+			defer func() {
+				Inst().AppList = appList
+			}()
+
+			Inst().AppList = []string{"fio-cloudsnap"}
+
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnaprestore-%d", i))...)
 			}
@@ -1204,6 +1212,16 @@ var _ = Describe("{LocalsnapAndRestore}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
+			appList := Inst().AppList
+
+			defer func() {
+
+				Inst().AppList = appList
+
+			}()
+
+			Inst().AppList = []string{"fio-localsnap"}
+
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("localsnaprestore-%d", i))...)
 			}
@@ -1387,12 +1405,12 @@ var _ = Describe("{ResizeVolumeAfterFull}", func() {
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeVolumeAfterFull",
-			"Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity",
+			"Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longrun script",
 			nil, 0)
 	})
 
 	var contexts []*scheduler.Context
-	stepLog := "Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longevity"
+	stepLog := "Fill volumes completely , then resize volume by 50%, verify IO on volumes in Longrun script"
 	It(stepLog, func() {
 		contexts = make([]*scheduler.Context, 0)
 		currAppList := Inst().AppList
