@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -1487,40 +1488,31 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 	stepLog := "Create fastpath Volume Reboot Node and check if fastpath is active"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		stepLog = "Step 1: Find all the Storage nodes and and select a node for test"
+		stepLog = "Step 1: Get all the Storage nodes and select a node for test"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			// Get all the Nodes
 			pxNodes, err := GetStorageNodes()
 			log.FailOnError(err, "Unable to get the storage nodes")
-			log.Infof("The pxNodes %v ", pxNodes)
 
-			// Select the first node for the test
-			pxNode = pxNodes[0]
-			log.Infof("The Selected node as Fast path label is %v : ", pxNode)
-
-			// Remove if node-type label is set before the test
-			for _, node := range pxNodes {
-				log.Infof("Node Name: %s\n", node.Name)
-				Inst().AppList = applist
-				err = Inst().S.RemoveLabelOnNode(node, k8s.NodeType)
-				log.FailOnError(err, "error removing label on node [%s]", node.Name)
+			// Select random Storage node for the test
+			if len(pxNodes) > 0 {
+				pxNode = GetRandomNode(pxNodes)
+			} else {
+				log.FailOnError(errors.New("No Storage Node Availiable"), "Error occured while selecting StorageNode")
 			}
 
+			log.Infof("The Selected node for Fast path label is %v : ", pxNode.Name)
+
+			// Remove if node-type label is set before the test
+			Inst().AppList = applist
+			RemoveLabelsAllNodes(k8s.NodeType, true, false)
 		})
 
 		stepLog = "Step 2: Schedule application and Add label on the selected storage Node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var err error
-
-			/* defer for later removal of label node-type
-			defer func() {
-				Inst().AppList = applist
-				err = Inst().S.RemoveLabelOnNode(pxNode, k8s.NodeType)
-				log.FailOnError(err, "error removing label on node [%s]", pxNode.Name)
-			}()
-			*/
 
 			// Add label on the selected node
 			err = Inst().S.AddLabelOnNode(pxNode, k8s.NodeType, k8s.FastpathNodeType)
@@ -1594,6 +1586,14 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 
 				})
 			}
+
+		})
+		stepLog = " Step 5: Remove the Label from the selected node"
+		Step(stepLog, func() {
+			var err error
+			log.InfoD(stepLog)
+			err = Inst().S.RemoveLabelOnNode(pxNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", pxNode.Name)
 		})
 
 	})

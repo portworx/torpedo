@@ -7726,3 +7726,36 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
+
+// GetRandomNode Gets Random node
+func GetRandomNode(pxNodes []node.Node) node.Node {
+	rand.Seed(time.Now().UnixNano())
+	randomIndex := rand.Intn(len(pxNodes))
+	randomNode := pxNodes[randomIndex]
+	return randomNode
+}
+
+func RemoveLabelsAllNodes(label string, forStorage, forStorageLess bool) {
+
+	if forStorage {
+		pxNodes, err := GetStorageNodes()
+		if err != nil {
+			log.FailOnError(err, "error removing label on node [%s]")
+		}
+
+		for _, node := range pxNodes {
+			log.Infof("Node Name: %s\n", node.Name)
+			err = Inst().S.RemoveLabelOnNode(node, label)
+			log.FailOnError(err, "error removing label on node [%s]", node.Name)
+		}
+	}
+
+	if forStorageLess {
+		pxNodes := node.GetStorageLessNodes()
+		for _, node := range pxNodes {
+			log.Infof("Node Name: %s\n", node.Name)
+			err := Inst().S.RemoveLabelOnNode(node, label)
+			log.FailOnError(err, "error removing label on node [%s]", node.Name)
+		}
+	}
+}

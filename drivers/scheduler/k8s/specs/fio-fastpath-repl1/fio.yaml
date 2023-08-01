@@ -56,7 +56,7 @@ spec:
   - metadata:
       name: fio-data
     spec:
-      storageClassName: fio-vps-sc
+      storageClassName: fio-fast-repl1-vps-sc
       accessModes:
       - ReadWriteOnce
       resources:
@@ -65,7 +65,7 @@ spec:
   - metadata:
       name: fio-log
     spec:
-      storageClassName: fio-vps-log
+      storageClassName: fio-fast-repl1-vps-log
       accessModes:
       - ReadWriteOnce
       resources:
