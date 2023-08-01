@@ -8391,17 +8391,18 @@ func GetDrivePathFromNode(n *node.Node) ([]DriveDetails, error) {
 	return allDrives, nil
 }
 
-func GetDiskSize(path string) (int, error) {
+// GetDriveProperties Returns type of the Disk from Path Specified
+func GetDriveProperties(path string) (CloudDrive, error) {
 	for _, each := range node.GetStorageNodes() {
 		cloudDrives, err := GetAllCloudDriveDetailsOnNode(&each)
 		if err != nil {
-			return -1, err
+			return CloudDrive{}, err
 		}
 		for _, eachDrive := range cloudDrives {
 			if strings.Contains(path, eachDrive.Path) {
-				return eachDrive.Size, nil
+				return eachDrive, nil
 			}
 		}
 	}
-	return -1, nil
+	return CloudDrive{}, nil
 }
