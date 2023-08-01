@@ -1284,6 +1284,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	vol := out.(*api.Volume)
+	fmt.Println("vol.Spec.Format = ", vol.Spec.Format)
 	isRaw = vol.Spec.Format == api.FSType_FS_TYPE_NONE
 
 	// if the volume is a clone or a snap, validate its parent
