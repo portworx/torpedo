@@ -288,6 +288,78 @@ func (cp *ControlPlane) GetDNSZone(tenantID string) (string, error) {
 	return dnsModel.GetDnsZone(), err
 }
 
+// GetResourceTemplateId get the resource template id
+func (cp *ControlPlane) GetResourceTemplateId(tenantID string, dsName string, resTemplateName string) (string, error) {
+	log.Infof("Get the resource template for each data services")
+	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return "", err
+	}
+	isavailable = false
+	isTemplateavailable = false
+	for i := 0; i < len(resourceTemplates); i++ {
+		if resourceTemplates[i].GetName() == resTemplateName {
+			isTemplateavailable = true
+			dataService, err := components.DataService.GetDataService(resourceTemplates[i].GetDataServiceId())
+			if err != nil {
+				return "", err
+			}
+			if dataService.GetName() == dsName {
+				log.Infof("Data service name: %v", dataService.GetName())
+				log.Infof("Resource template details ---> Name %v, Id : %v ,DataServiceId %v , StorageReq %v , Memoryrequest %v",
+					resourceTemplates[i].GetName(),
+					resourceTemplates[i].GetId(),
+					resourceTemplates[i].GetDataServiceId(),
+					resourceTemplates[i].GetStorageRequest(),
+					resourceTemplates[i].GetMemoryRequest())
+
+				isavailable = true
+				resourceTemplateID = resourceTemplates[i].GetId()
+			}
+		}
+	}
+	if !(isavailable && isTemplateavailable) {
+		log.Errorf("Template with Name %v does not exists.", resTemplateName)
+	}
+	return resourceTemplateID, nil
+}
+
+// GetAppConfigTemplateId returns the app config template id
+func (cp *ControlPlane) GetAppConfigTemplateId(tenantID, ds, appConfTemplateName string) (string, error) {
+	appConfigs, err := components.AppConfigTemplate.ListTemplates(tenantID)
+	if err != nil {
+		return "", err
+	}
+	isavailable = false
+	isTemplateavailable = false
+	var dataServiceId string
+
+	dsModel, err := components.DataService.ListDataServices()
+	if err != nil {
+		return "", fmt.Errorf("An Error Occured while listing dataservices %v", err)
+
+	}
+	for _, v := range dsModel {
+		if *v.Name == ds {
+			dataServiceId = *v.Id
+		}
+	}
+
+	for i := 0; i < len(appConfigs); i++ {
+		if appConfigs[i].GetName() == appConfTemplateName {
+			isTemplateavailable = true
+			if dataServiceId == appConfigs[i].GetDataServiceId() {
+				appConfigTemplateID = appConfigs[i].GetId()
+				isavailable = true
+			}
+		}
+	}
+	if !(isavailable && isTemplateavailable) {
+		log.Errorf("App Config Template with name %v does not exist", appConfTemplateName)
+	}
+	return appConfigTemplateID, nil
+}
+
 // NewControlPlane to create control plane instance.
 func NewControlPlane(url string, components *api.Components) *ControlPlane {
 	return &ControlPlane{
