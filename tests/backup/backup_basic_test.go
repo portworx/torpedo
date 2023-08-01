@@ -128,8 +128,8 @@ func BackupInitInstance() {
 	DumpKubeconfigs(kubeconfigList)
 
 	// Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
-	err = SetDestinationKubeConfig()
-	log.FailOnError(err, "Switching context to destination cluster failed")
+	//err = SetDestinationKubeConfig()
+	//log.FailOnError(err, "Switching context to destination cluster failed")
 
 	// Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
 	err = SetSourceKubeConfig()
