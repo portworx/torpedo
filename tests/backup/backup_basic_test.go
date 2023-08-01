@@ -162,7 +162,8 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalAzureBucketName)
 			log.Infof("Bucket created with name - %s", globalAzureBucketName)
 		case drivers.ProviderGke:
-			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			//globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			globalGCPBucketName = fmt.Sprintf("%s", globalGCPBucketPrefix)
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:
