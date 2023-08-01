@@ -7782,7 +7782,6 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
-
 // GetRandomNode Gets Random node
 func GetRandomNode(pxNodes []node.Node) node.Node {
 	rand.Seed(time.Now().UnixNano())
@@ -7814,6 +7813,7 @@ func RemoveLabelsAllNodes(label string, forStorage, forStorageLess bool) {
 			log.FailOnError(err, "error removing label on node [%s]", node.Name)
 		}
 	}
+}
 
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
@@ -8029,7 +8029,7 @@ outer:
 
 		applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
 
-		for name, _ := range applicationScaleMap {
+		for name := range applicationScaleMap {
 			applicationScaleDownMap[name] = 0
 		}
 		err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
