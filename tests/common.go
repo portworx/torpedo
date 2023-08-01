@@ -7845,3 +7845,121 @@ func IsJournalEnabled() (bool, error) {
 	}
 	return false, nil
 }
+
+type CloudDrive struct {
+	Type              string            `json:"Type"`
+	Size              int               `json:"Size"`
+	ID                string            `json:"ID"`
+	Path              string            `json:"Path"`
+	Iops              int               `json:"Iops"`
+	Vpus              int               `json:"Vpus"`
+	PXType            string            `json:"PXType"`
+	State             string            `json:"State"`
+	Labels            map[string]string `json:"labels"`
+	AttachOptions     interface{}       `json:"AttachOptions"`
+	Provisioner       string            `json:"Provisioner"`
+	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
+}
+
+// GetAllCloudDriveDetailsOnNode returns list of cloud drives present on the node
+func GetAllCloudDriveDetailsOnNode(n *node.Node) ([]CloudDrive, error) {
+
+	var drives CloudDrive
+	var allCloudDrives []CloudDrive
+
+	// Execute the command and check the alerts of type POOL
+	command := fmt.Sprintf("pxctl cd inspect --node %v -j", n.Id)
+	out, err := Inst().N.RunCommandWithNoRetry(node.GetStorageNodes()[0], command, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var configData struct {
+		Configs map[string]CloudDrive `json:"Configs"`
+	}
+
+	err = json.Unmarshal([]byte(out), &configData)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, config := range configData.Configs {
+		drives.ID = config.ID
+		drives.Size = config.Size
+		drives.Type = config.Type
+		drives.PXType = config.PXType
+		drives.Iops = config.Iops
+		drives.Vpus = config.Vpus
+		drives.Path = config.Path
+		drives.State = config.State
+		drives.AttachOptions = config.AttachOptions
+		drives.Provisioner = config.Provisioner
+		drives.EncryptionKeyInfo = config.EncryptionKeyInfo
+		drives.Labels = config.Labels
+		allCloudDrives = append(allCloudDrives, drives)
+	}
+	return allCloudDrives, nil
+}
+
+type DriveDetails struct {
+	PoolUUID string
+	Disks    []string
+}
+
+// GetDrivePathFromNode returns drive paths from all the pools on Node
+func GetDrivePathFromNode(n *node.Node) ([]DriveDetails, error) {
+
+	allPools := n.StoragePools
+	var allDrives []DriveDetails
+
+	for i := 0; i < len(allPools); i++ {
+		var drive DriveDetails
+		drive.Disks = []string{}
+		var drives []string
+		cmd := fmt.Sprintf("pxctl sv pool show -j | jq '.datapools[%v].uuid'", i)
+		out, err := runCmdOnce(cmd, *n)
+		if err != nil {
+			return nil, err
+		}
+		// Split the string into lines based on the newline character ("\n")
+		PoolUUID := strings.TrimSpace(out)
+
+		cmd = fmt.Sprintf("pxctl sv pool show -j | jq '.datapools[%v].Info | {Resources, ResourceJournal, ResourceSystemMetadata} | .. | .path? // empty'", i)
+		out, err = runCmdOnce(cmd, *n)
+		if err != nil {
+			return nil, err
+		}
+		// Split the string into lines based on the newline character ("\n")
+		lines := strings.Split(out, "\n")
+
+		// Print each line
+		for _, line := range lines {
+			// Remove leading and trailing spaces or double quotes if present
+			line = strings.TrimSpace(strings.Trim(line, `"`))
+			drives = append(drives, line)
+		}
+		drive.PoolUUID = PoolUUID
+		drive.Disks = drives
+		allDrives = append(allDrives, drive)
+	}
+
+	return allDrives, nil
+}
+
+func GetDiskDize(path string) (int, error) {
+	for _, each := range node.GetStorageNodes() {
+		cloudDrives, err := GetAllCloudDriveDetailsOnNode(&each)
+		if err != nil {
+			return -1, err
+		}
+		for _, eachDrive := range cloudDrives {
+			if strings.Contains(path, eachDrive.Path) {
+				return eachDrive.Size, nil
+			}
+		}
+	}
+	return -1, nil
+}
