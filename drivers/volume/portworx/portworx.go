@@ -1235,6 +1235,7 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
+	isRaw := false
 	token = d.getTokenForVolume(volumeName, params)
 	if val, hasKey := params[refreshEndpointParam]; hasKey {
 		refreshEndpoint, _ := strconv.ParseBool(val)
@@ -1254,6 +1255,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		}
 
 		vol := volumeInspectResponse.Volume
+
 		// Status
 		if vol.Status != api.VolumeStatus_VOLUME_STATUS_UP {
 			return nil, true, &ErrFailedToInspectVolume{
@@ -1282,6 +1284,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	vol := out.(*api.Volume)
+	isRaw = vol.Spec.Format == api.FSType_FS_TYPE_NONE
 
 	// if the volume is a clone or a snap, validate its parent
 	if vol.IsSnapshot() || vol.IsClone() {
@@ -1302,7 +1305,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	// Validate Device Path for a Volume
-	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK {
+	if vol.Spec.ProxySpec != nil && vol.Spec.ProxySpec.ProxyProtocol == api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK && !isRaw {
 		// Checking the device path when state is attached
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && !strings.Contains(vol.DevicePath, DeviceMapper) {
 			return &ErrFailedToInspectVolume{
