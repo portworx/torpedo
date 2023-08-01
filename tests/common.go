@@ -3799,9 +3799,15 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	case drivers.ProviderGke:
 		log.Infof("Create creds for gke")
 
-		gkeCredString := os.Getenv("GKE_CRED")
-		time.Sleep(300 * time.Second)
-
+		//gkeCredString := os.Getenv("GKE_CRED")
+		time.Sleep(100 * time.Second)
+		log.Infof(fmt.Sprintf("Configmap with name found in the Configmaps list"))
+		cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+		if err != nil {
+			log.Errorf("Error reading Configmap: %v", err)
+		}
+		log.Infof("Fetch the cloud-config from the Configmap")
+		gkeCredString := cm.Data["cloud-json"]
 		//// Create a map to store the JSON data
 		//var jsonData map[string]interface{}
 		//
