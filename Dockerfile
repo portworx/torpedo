@@ -74,6 +74,8 @@ COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator 
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
-
-ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
+COPY --from=build /go /go
+COPY --from=build /go/src/github.com/portworx/torpedo torpedo
+#ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
+ENTRYPOINT ["/bin/bash"]
 CMD []
