@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/tests"
 	"log"
 	"net/http"
 )
@@ -33,8 +35,26 @@ func CreateNS(c *gin.Context) {
 	})
 }
 
+func InitializeDrivers(c *gin.Context) {
+	tests.InitInstance()
+}
+
+func GetNodes(c *gin.Context) {
+	nodes := node.GetWorkerNodes()
+	var list []string
+	for _, workerNode := range nodes {
+		list = append(list, fmt.Sprintf("%v", workerNode.Name))
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Nodes are: ",
+		"nodes":   list,
+	})
+}
+
 func main() {
 	router := gin.Default()
+	router.GET("pxone/init", InitializeDrivers)
+	router.GET("pxone/nodes", GetNodes)
 	router.DELETE("pxone/deletens/:namespace", DeleteNamespace)
 	router.POST("pxone/createns", CreateNS)
 	log.Fatal(router.Run(":8080"))
