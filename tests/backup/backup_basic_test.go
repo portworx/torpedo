@@ -132,8 +132,8 @@ func BackupInitInstance() {
 	//log.FailOnError(err, "Switching context to destination cluster failed")
 
 	// Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
-	err = SetSourceKubeConfig()
-	log.FailOnError(err, "Switching context to source cluster failed")
+	//err = SetSourceKubeConfig()
+	//log.FailOnError(err, "Switching context to source cluster failed")
 }
 
 var dash *aetosutil.Dashboard
