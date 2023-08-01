@@ -168,7 +168,8 @@ const (
 )
 
 var (
-	clusterProviders = []string{"k8s"}
+	clusterProviders       = []string{"k8s"}
+	GlobalCredentialConfig backup.BackupCloudConfig
 )
 
 type OwnershipAccessType int32
@@ -3974,7 +3975,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	case drivers.ProviderIbm:
 		log.Infof("Create creds for IBM")
 		// PA-1328
-		apiKey, err := GetIBMApiKey()
+		apiKey, err := GetIBMApiKey("default")
 		if err != nil {
 			return err
 		}
@@ -4493,9 +4494,8 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
-func GetIBMApiKey() (string, error) {
-	return "", nil
-
+func GetIBMApiKey(cluster string) (string, error) {
+	return GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster).APIKey, nil
 }
 
 type NfsInfo struct {
