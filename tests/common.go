@@ -2791,7 +2791,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
-	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+	if "rke" == drivers.ProviderRke {
 		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
@@ -7696,7 +7696,7 @@ func VerifyNilPointerDereferenceError(n *node.Node) (bool, string, error) {
 
 // GetClusterProviders returns the list of cluster providers
 func GetClusterProviders() []string {
-	providersStr := os.Getenv("CLUSTER_PROVIDER")
+	providersStr := "rke"
 	if providersStr != "" {
 		return strings.Split(providersStr, ",")
 	}
