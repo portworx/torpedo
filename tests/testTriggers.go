@@ -456,7 +456,7 @@ const (
 	VolumeCreatePxRestart = "volumeCreatePxRestart"
 	// DeleteOldNamespaces Performs deleting old NS which has age greater than specified in configmap
 	DeleteOldNamespaces = "deleteoldnamespaces"
-	// Add Drive to create new pool and resize Drive in maintenance mode
+	// Volume update repl size and resize volume on aggregated volumes
 	AggrVolDepReplResizeOps = "aggrVolDepReplResizeOps"
 )
 
