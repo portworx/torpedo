@@ -9860,7 +9860,8 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 			Timeout:         2 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
-        log.InfoD("%v", err)
+		
+		log.InfoD("%v", err)
 		//if err != nil {
 		//	log.FailOnError(err, "unable to execute the kernel panic cmd")
 		//}
