@@ -1701,7 +1701,8 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
+// ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
+// the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -6265,6 +6266,23 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		count--
 	}
 	return createdVolIDs, nil
+}
+
+func GetPoolIDsInUse(storageClassName string) ([]string, error) {
+	pvcs, _ := k8sCore.GetPVCsUsingStorageClass(storageClassName)
+	if len(pvcs) == 0 {
+		return nil, fmt.Errorf("no PVCs found using storage class %s", storageClassName)
+	}
+	pv := pvcs[0]
+	volumeInUse := pv.Spec.VolumeName
+
+	pvDescribe, err := Inst().V.InspectVolume(volumeInUse)
+	reps := pvDescribe.GetReplicaSets()
+	if len(reps) == 0 {
+		return nil, fmt.Errorf("no replica sets found for volume %s", volumeInUse)
+	}
+	replicaSet := reps[0]
+	return replicaSet.PoolUuids, err
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
