@@ -9832,10 +9832,13 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 			TimeBeforeRetry: 10 * time.Second,
 		})
 
-		log.FailOnError(err, "Unable to execute the kernel panic command")
+		if err != nil {
+			log.FailOnError(err, "unable to execute the kernel panic cmd")
+		}
+		//log.FailOnError(err, "Unable to execute the kernel panic command")
 		//log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
 		//err = Inst().V.RestartDriver(stNode, nil)
-		log.FailOnError(err, fmt.Sprintf("error kernel panic on node %s", stNode.Name))
+		//log.FailOnError(err, fmt.Sprintf("error kernel panic on node %s", stNode.Name))
 		err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
 		log.FailOnError(err, fmt.Sprintf("Kernel Panic on node %s", stNode.Name))
 		log.InfoD("Validate pool rebalance after drive add and Kernel panic")
