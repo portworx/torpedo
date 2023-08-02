@@ -113,6 +113,7 @@ var _ = Describe("{Longevity}", func() {
 		MetroDRMigrationSchedule: TriggerMetroDRMigrationSchedule,
 		CloudSnapShotRestore:     TriggerCloudSnapshotRestore,
 		LocalSnapShotRestore:     TriggerLocalSnapshotRestore,
+		AggrVolDepReplResizeOps:  TriggerAggrVolDepReplResizeOps,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -694,6 +695,7 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
 	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
+	triggerInterval[AggrVolDepReplResizeOps] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1438,6 +1440,13 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
 
+	triggerInterval[AggrVolDepReplResizeOps][10] = 1 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][9] = 2 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][8] = 3 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][7] = 4 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][6] = 5 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][5] = 6 * baseInterval
+
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
 
@@ -1508,6 +1517,7 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
+	triggerInterval[AggrVolDepReplResizeOps][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
