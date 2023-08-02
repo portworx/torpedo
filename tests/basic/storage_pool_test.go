@@ -6789,6 +6789,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(AddCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
+		log.Infof("Adding disks to the node completed")
 
 		// Refresh endpoints
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")

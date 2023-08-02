@@ -6608,6 +6608,12 @@ func ExitNodesFromMaintenanceMode() error {
 func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
 
+	// Refreshing Node Registry to make sure all changes done to the nodes are refreshed
+	err := Inst().S.RefreshNodeRegistry()
+	if err != nil {
+		return nil, err
+	}
+
 	if node.IsStorageNode(n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
