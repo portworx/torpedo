@@ -223,9 +223,7 @@ func (c *Client) getPodsUsingPVWithListOptions(pvName string, opts metav1.ListOp
 }
 
 func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, opts metav1.ListOptions) ([]corev1.Pod, error) {
-	fmt.Println("Listing pods")
 	pods, err := c.getPodsWithListOptions(pvcNamespace, opts)
-	fmt.Println("List pods : ", pods)
 	if err != nil {
 		return nil, err
 	}

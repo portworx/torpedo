@@ -24,7 +24,7 @@ func GetAppDataDir(namespace string) (string, int) {
 		return "/var/lib/mysql", units.GiB
 	}
 	if strings.HasPrefix(namespace, "nginx-fa-davol") {
-		return "/dev/pure-block-device", units.GiB
+		return "/dev/xvda", units.GiB
 	}
 	return "", 0
 }

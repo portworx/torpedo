@@ -1652,7 +1652,7 @@ func (d *portworx) ValidatePureRawBlockVolumes(volumeName string, pvcObj *corev1
 	tmpFilePath := "/tmp/test.txt"
 	// dataSize := ""
 	data := "this is pure volume rawblock test data"
-	deviceData := ""
+	// deviceData := ""
 
 	// write data to the files
 	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
@@ -1700,10 +1700,12 @@ func (d *portworx) ValidatePureRawBlockVolumes(volumeName string, pvcObj *corev1
 	// compare the data copied to device path and data written to the text file
 	fmt.Println("data = ", data)
 	fmt.Println("deviceData = ", output2)
-	if data != deviceData {
+	if data != output2 {
 		return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+	} else {
+		log.Infof("Compared data of text file & data copied to device path is same")
+		return nil
 	}
-	return nil
 }
 
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {

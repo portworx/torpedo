@@ -16,6 +16,6 @@ spec:
       # Configure a device mount for the volume we defined above
       volumeDevices:
         - name: pure-vol
-          devicePath: /dev/pure-block-device
+          devicePath: /dev/xvda
       ports:
         - containerPort: 80

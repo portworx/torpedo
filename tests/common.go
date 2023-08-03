@@ -730,17 +730,17 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
-		// Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidatePureSnapshotsSDK(ctx, errChan...)
-		// 	}
-		// })
-
-		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
+		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
-				ValidateResizePurePVC(ctx, errChan...)
+				ValidatePureSnapshotsSDK(ctx, errChan...)
 			}
 		})
+
+		// Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
+		// 	if !ctx.SkipVolumeValidation {
+		// 		ValidateResizePurePVC(ctx, errChan...)
+		// 	}
+		// })
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
@@ -759,45 +759,45 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		// Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidateCSIVolumeClone(ctx, errChan...)
-		// 	}
-		// })
+		Step(fmt.Sprintf("validate %s app's pure volumes cloning", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCSIVolumeClone(ctx, errChan...)
+			}
+		})
 
-		// Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidateCSISnapshotAndRestore(ctx, errChan...)
-		// 	}
-		// })
+		Step(fmt.Sprintf("validate %s app's pure volumes snapshot and restore", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateCSISnapshotAndRestore(ctx, errChan...)
+			}
+		})
 
-		// Step(fmt.Sprintf("validate %s app's pure volume snapshot and restoring to many volumes", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
-		// 	}
-		// })
+		Step(fmt.Sprintf("validate %s app's pure volume snapshot and restoring to many volumes", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeLargeNumOfClones(ctx, errChan...)
+			}
+		})
 
-		// Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
-		// 	}
-		// })
+		Step(fmt.Sprintf("validate %s px pool expansion when pure volumes attached", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePoolExpansionWithPureVolumes(ctx, errChan...)
+			}
+		})
 
-		// Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
-		// 	if ctx.SkipVolumeValidation {
-		// 		return
-		// 	}
+		Step(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key), func() {
+			if ctx.SkipVolumeValidation {
+				return
+			}
 
-		// 	vols, err := Inst().S.GetVolumes(ctx)
-		// 	processError(err, errChan...)
+			vols, err := Inst().S.GetVolumes(ctx)
+			processError(err, errChan...)
 
-		// 	for _, vol := range vols {
-		// 		Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
-		// 			err := Inst().V.ValidateVolumeSetup(vol)
-		// 			processError(err, errChan...)
-		// 		})
-		// 	}
-		// })
+			for _, vol := range vols {
+				Step(fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol), func() {
+					err := Inst().V.ValidateVolumeSetup(vol)
+					processError(err, errChan...)
+				})
+			}
+		})
 
 		Step("validate mount options for pure volumes", func() {
 			if !ctx.SkipVolumeValidation {
@@ -991,6 +991,8 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 		})
 
 		for vol, params := range vols {
+			fmt.Println("vol = ", vol)
+			fmt.Println("params = ", params)
 			if Inst().ConfigMap != "" {
 				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 				processError(err, errChan...)
@@ -1002,17 +1004,19 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				processError(err, errChan...)
 			})
-			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateSnapshot(vol, params)
-				if params["backend"] == k8s.PureBlock {
-					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
-				} else if params["backend"] == k8s.PureFile {
-					expect(err).NotTo(beNil(), "error expected but no error received while creating pure_file snapshot")
-					if err != nil {
-						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
+			if params["VolumeMode"] != "Block" {
+				Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
+					err = Inst().V.ValidateCreateSnapshot(vol, params)
+					if params["backend"] == k8s.PureBlock {
+						expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
+					} else if params["backend"] == k8s.PureFile {
+						expect(err).NotTo(beNil(), "error expected but no error received while creating pure_file snapshot")
+						if err != nil {
+							expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
+						}
 					}
-				}
-			})
+				})
+			}
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnap(vol, params)
 				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")

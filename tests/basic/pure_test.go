@@ -80,12 +80,12 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
 		}
 		ValidateApplicationsPureSDK(contexts)
-		// opts := make(map[string]bool)
-		// opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
-		// for _, ctx := range contexts {
-		// 	TearDownContext(ctx, opts)
-		// }
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
 		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
 	})
 
