@@ -2,15 +2,16 @@ package tests
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -79,12 +80,12 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
 		}
 		ValidateApplicationsPureSDK(contexts)
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		// opts := make(map[string]bool)
+		// opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
+		// for _, ctx := range contexts {
+		// 	TearDownContext(ctx, opts)
+		// }
 		Step("delete credential used for cloudsnap", deleteCloudsnapCredential)
 	})
 

@@ -1,8 +1,9 @@
 package pureutils
 
 import (
-	"github.com/portworx/torpedo/pkg/units"
 	"strings"
+
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 // GetAppDataDir checks the pod namespace prefix, and returns a path that we can
@@ -23,7 +24,7 @@ func GetAppDataDir(namespace string) (string, int) {
 		return "/var/lib/mysql", units.GiB
 	}
 	if strings.HasPrefix(namespace, "nginx-fa-davol") {
-		return "/data", units.GiB
+		return "/dev/pure-block-device", units.GiB
 	}
 	return "", 0
 }
