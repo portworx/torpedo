@@ -6400,8 +6400,21 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	if err != nil {
 		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
+
 	storageClassName := originalStorageClass.Name
-	log.Infof("Proceeding with storage class %s", storageClassName)
+
+	// originalScObj, err := k8sStorage.GetStorageClass(storageClassName)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to retrieve storage class with the name %s in namespace: %s : %s", storageClassName, request.Namespace, err)
+	// }
+	originalStorageClass.Name = storageClassName + "-clone"
+	immediate := storageapi.VolumeBindingImmediate
+	originalStorageClass.VolumeBindingMode = &immediate
+	clonedSC, err := k8sStorage.CreateStorageClass(originalStorageClass)
+	if err != nil {
+		return fmt.Errorf("failed to create storage class with the name %s in namespace: %s : %s", clonedSC.Namespace, request.Namespace, err)
+	}
+	log.Infof("Proceeding with cloned storage class %s", clonedSC.Name)
 
 	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
@@ -6417,7 +6430,7 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 		if err != nil {
 			return fmt.Errorf("failed to write data to cloned PVC: %s", err)
 		}
-		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		err = k.cloneAndVerify(size, data, pod.GetNamespace(), clonedSC.Name, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
 		if err != nil {
 			return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
 		}
@@ -6705,6 +6718,7 @@ func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, source
 	PVCSpec.ObjectMeta.Name = name
 	PVCSpec.Namespace = ns
 	PVCSpec.ObjectMeta.Namespace = ns
+
 	if sourcePVCName == "" {
 		return nil, fmt.Errorf("source PVC name is empty for PVC cloning request")
 	}
