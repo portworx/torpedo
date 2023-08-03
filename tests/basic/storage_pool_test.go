@@ -9861,14 +9861,28 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 			TimeBeforeRetry: 10 * time.Second,
 		})
 		
-		log.InfoD("%v", err)
-		//if err != nil {
-		//	log.FailOnError(err, "unable to execute the kernel panic cmd")
-		//}
-		//log.FailOnError(err, "Unable to execute the kernel panic command")
-		//log.Infof(fmt.Sprintf("Restarting volume drive on node [%s]", stNode.Name))
-		//err = Inst().V.RestartDriver(stNode, nil)
-		//log.FailOnError(err, fmt.Sprintf("error kernel panic on node %s", stNode.Name))
+		re, _ := regexp.Compile(".*remote command exited without exit status or exit signal")
+		regMatch := re.MatchString(fmt.Sprintf("%v", err))
+		dash.VerifyFatal(regMatch, true, " force panic the node successful?")
+		
+		err = Inst().N.TestConnection(stNode, node.ConnectionOpts{
+			Timeout:         15 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		if err != nil {
+			log.FailOnError(err, fmt.Sprintf("Verify the node %s is up?", stNode.Name))
+		}
+		
+		err = Inst().V.WaitDriverDownOnNode(stNode)
+		if err != nil {
+			log.FailOnError(err, fmt.Sprintf("Verify the node %s is up? %s", stNode.Name))
+		}
+	
+		err = Inst().S.IsNodeReady(stNode)
+		if err != nil {
+			log.FailOnError(err, fmt.Sprintf("Verify the node %s is up?", stNode.Name))
+		}
+		
 		err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
 		log.FailOnError(err, fmt.Sprintf("Kernel Panic on node %s", stNode.Name))
 		log.InfoD("Validate pool rebalance after drive add and Kernel panic")
