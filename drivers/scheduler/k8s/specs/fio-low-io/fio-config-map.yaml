@@ -24,7 +24,7 @@ data:
         nrfiles=10000
         ioengine=libaio
         iodepth=4
-        rate_min=125k
+        rate_min=64k
         rate_iops=64
 ---
 apiVersion: v1
