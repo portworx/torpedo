@@ -3635,6 +3635,20 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 					return err
 				}
 			}
+		case drivers.ProviderGke:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					return err
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
 		default:
 			for _, kubeconfig := range kubeconfigList {
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
