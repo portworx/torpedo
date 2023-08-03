@@ -6268,21 +6268,15 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
-func GetPoolIDsInUse(storageClassName string) ([]string, error) {
-	pvcs, _ := k8sCore.GetPVCsUsingStorageClass(storageClassName)
-	if len(pvcs) == 0 {
-		return nil, fmt.Errorf("no PVCs found using storage class %s", storageClassName)
+func GetPoolsInUse(storageClassName string) ([]string, error) {
+	pvcs, err := k8sCore.GetPVCsUsingStorageClass(storageClassName)
+	if err != nil || len(pvcs) == 0 {
+		return nil, fmt.Errorf("no PVCs found using storage class %s, error %v: ", storageClassName, err)
 	}
 	pv := pvcs[0]
 	volumeInUse := pv.Spec.VolumeName
 
-	pvDescribe, err := Inst().V.InspectVolume(volumeInUse)
-	reps := pvDescribe.GetReplicaSets()
-	if len(reps) == 0 {
-		return nil, fmt.Errorf("no replica sets found for volume %s", volumeInUse)
-	}
-	replicaSet := reps[0]
-	return replicaSet.PoolUuids, err
+	return GetPoolIDsFromVolName(volumeInUse)
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
@@ -6435,24 +6429,13 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		return nil, err
 	}
 	for _, each := range volDetails.ReplicaSets {
-		for _, uuids := range each.PoolUuids {
-			if len(poolUuids) == 0 {
-				poolUuids = append(poolUuids, uuids)
-			} else {
-				isPresent := false
-				for i := 0; i < len(poolUuids); i++ {
-					if uuids == poolUuids[i] {
-						isPresent = true
-					}
-				}
-				if isPresent == false {
-					poolUuids = append(poolUuids, uuids)
-				}
+		for _, uuid := range each.PoolUuids {
+			if !Contains(poolUuids, uuid) {
+				poolUuids = append(poolUuids, uuid)
 			}
 		}
-
 	}
-	return poolUuids, err
+	return poolUuids, nil
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
@@ -7742,7 +7725,6 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
-
 
 func AddCloudDrive(stNode node.Node, poolID int32) error {
 	driveSpecs, err := GetCloudDriveDeviceSpecs()

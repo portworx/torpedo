@@ -9609,7 +9609,7 @@ func scheduleApps() []*scheduler.Context {
 }
 
 func pickPoolToResize() string {
-	poolIDsInUseByTestingApp, err := GetPoolIDsInUse(TESTING_STORAGE_CLASS)
+	poolIDsInUseByTestingApp, err := GetPoolsInUse(TESTING_STORAGE_CLASS)
 	failOnError(err, "Error identifying pool to run test")
 	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
 	poolIDToResize := poolIDsInUseByTestingApp[0]
