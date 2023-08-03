@@ -9875,7 +9875,7 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 		
 		err = Inst().V.WaitDriverDownOnNode(stNode)
 		if err != nil {
-			log.FailOnError(err, fmt.Sprintf("Verify the node %s is up? %s", stNode.Name))
+			log.FailOnError(err, fmt.Sprintf("Verify the node %s is up?", stNode.Name))
 		}
 	
 		err = Inst().S.IsNodeReady(stNode)
