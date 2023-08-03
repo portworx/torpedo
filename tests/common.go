@@ -2752,14 +2752,14 @@ func SetClusterContext(clusterConfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
-	err = Inst().S.RefreshNodeRegistry()
-	if err != nil {
-		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
-	}
-	err = Inst().V.RefreshDriverEndpoints()
-	if err != nil {
-		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
-	}
+	//err = Inst().S.RefreshNodeRegistry()
+	//if err != nil {
+	//	return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+	//}
+	//err = Inst().V.RefreshDriverEndpoints()
+	//if err != nil {
+	//	return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+	//}
 
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
 		err = ssh.RefreshDriver(sshNodeDriver)

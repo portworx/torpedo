@@ -127,13 +127,13 @@ func BackupInitInstance() {
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
 
-	////Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
-	//err = SetDestinationKubeConfig()
-	//log.FailOnError(err, "Switching context to destination cluster failed")
-	//
-	////Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
-	//err = SetSourceKubeConfig()
-	//log.FailOnError(err, "Switching context to source cluster failed")
+	//Switch context to destination cluster to form destination struct containing the required secret/access key, token key, endpoint
+	err = SetDestinationKubeConfig()
+	log.FailOnError(err, "Switching context to destination cluster failed")
+
+	//Switch context backup to source cluster to form source struct containing the required secret/access key, token key, endpoint
+	err = SetSourceKubeConfig()
+	log.FailOnError(err, "Switching context to source cluster failed")
 }
 
 var dash *aetosutil.Dashboard
