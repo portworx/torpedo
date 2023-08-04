@@ -1502,10 +1502,15 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 
 	var pxNode node.Node
 	var contexts []*scheduler.Context
+	var volumrlidttr []*api.Volume
 	var applist = Inst().AppList
-	stepLog := "Create fastpath Volume Reboot Node and check if fastpath is active"
+	stepLog := "Create fastpath Volume reboot node and check if fastpath is active"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		revertAppList := func() {
+			Inst().AppList = applist
+		}
+		defer revertAppList()
 		stepLog = "Step 1: Get all the Storage nodes and select a node for test"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1527,7 +1532,7 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 			RemoveLabelsAllNodes(k8s.NodeType, true, false)
 		})
 
-		stepLog = "Step 2: Schedule application and Add label on the selected storage Node"
+		stepLog = "Step 2: Schedule application and Add label on the selected storage node"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var err error
@@ -1559,20 +1564,38 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist?")
 					log.Infof("App volumes details: %v ", appVolumes)
 
+					// Store the volume details
+					for _, vol := range appVolumes {
+						apivol, err := Inst().V.InspectVolume(vol.ID)
+						if err != nil {
+							log.FailOnError(err, "failed to inspect volume %v", vol.ID)
+						}
+						volumrlidttr = append(volumrlidttr, apivol)
+					}
+
 					// Loop through the apps and check if the volumes are fastpath active before reboot
-					for appvolume := range appVolumes {
-						log.Infof("current volume : %v", appvolume)
+					for _, appvolume := range appVolumes {
+						log.Infof("current volume : %v", appvolume.Name)
 						if strings.Contains(ctx.App.Key, fastpathAppName) {
 							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 							log.FailOnError(err, "fastpath volume validation failed")
 						}
 					}
-
 				})
 			}
 		})
 		stepLog = " Step 4: Reboot the node wait for it to complete"
 		Step(stepLog, func() {
+			var err error
+			var volExists bool
+			log.Infof(" Before reboot check if the volumes are attached on the local node")
+			for _, volumePtr := range volumrlidttr {
+				volExists, err = Inst().V.IsVolumeAttachedOnNode(volumePtr, pxNode)
+				if !volExists || err != nil {
+					log.FailOnError(err, "Volume attached on local node validation failed")
+				}
+			}
+			log.Infof("The volumes were found attached on local node: %v", pxNode.Name)
 			log.InfoD(stepLog)
 			rebootNodeAndWaitForReady(&pxNode)
 		})
@@ -1594,8 +1617,8 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 					log.Infof("App volumes details: %v ", appVolumes)
 
 					// Loop through the apps and check if the volumes are fastpath active after the reboot
-					for appvolume := range appVolumes {
-						log.Infof("current volume : %v", appvolume)
+					for _, appvolume := range appVolumes {
+						log.Infof("current volume : %s", appvolume.Name)
 						if strings.Contains(ctx.App.Key, fastpathAppName) {
 							err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_ACTIVE)
 							log.FailOnError(err, "fastpath volume validation failed")
@@ -1606,14 +1629,13 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 			}
 
 		})
-		stepLog = " Step 5: Remove the Label from the selected node"
+		stepLog = " Step 6: Remove the Label from the selected node"
 		Step(stepLog, func() {
 			var err error
 			log.InfoD(stepLog)
 			err = Inst().S.RemoveLabelOnNode(pxNode, k8s.NodeType)
 			log.FailOnError(err, "error removing label on node [%s]", pxNode.Name)
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
