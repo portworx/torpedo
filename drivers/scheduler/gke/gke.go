@@ -12,7 +12,7 @@ import (
 
 const (
 	// DriverName is the name of the gke driver
-	DriverName = "gke"
+	schedulerName = "gke"
 )
 
 type gke struct {
@@ -22,7 +22,7 @@ type gke struct {
 }
 
 func (g *gke) String() string {
-	return DriverName
+	return schedulerName
 }
 
 func (g *gke) Init(nodeOpts node.InitOptions) error {
@@ -106,5 +106,5 @@ func init() {
 		SSH: *ssh.New(),
 	}
 
-	node.Register(DriverName, g)
+	node.Register(schedulerName, g)
 }

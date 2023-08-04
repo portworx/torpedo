@@ -111,6 +111,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 
 	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -162,7 +163,7 @@ const (
 
 var (
 	RkeMap           = make(map[string]*rke.RancherClusterParameters)
-	clusterProviders = []string{"k8s"}
+	clusterProviders = []string{"k8s", "gke"}
 )
 
 const (
@@ -2752,14 +2753,14 @@ func SetClusterContext(clusterConfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
-	//err = Inst().S.RefreshNodeRegistry()
-	//if err != nil {
-	//	return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
-	//}
-	//err = Inst().V.RefreshDriverEndpoints()
-	//if err != nil {
-	//	return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
-	//}
+	err = Inst().S.RefreshNodeRegistry()
+	if err != nil {
+		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
+	}
+	err = Inst().V.RefreshDriverEndpoints()
+	if err != nil {
+		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
+	}
 
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
 		err = ssh.RefreshDriver(sshNodeDriver)
