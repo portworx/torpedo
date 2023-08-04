@@ -9,10 +9,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"math/rand"
 	"net/http"
 	"regexp"
+
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -238,6 +239,10 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
+
+	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
+
+	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
 // Dashboard params
@@ -5011,6 +5016,7 @@ type Torpedo struct {
 	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
+	SkipSystemChecks                    bool
 }
 
 // ParseFlags parses command line flags
@@ -5049,6 +5055,7 @@ func ParseFlags() {
 	// We should make this more robust.
 	var customAppConfig map[string]scheduler.AppConfig = make(map[string]scheduler.AppConfig)
 
+	var skipSystemChecks bool
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
@@ -5137,6 +5144,10 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
+	// unstable testing environments.
+	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system checks during after suite")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -5366,6 +5377,7 @@ func ParseFlags() {
 				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
+				SkipSystemChecks:                    skipSystemChecks,
 			}
 		})
 	}
@@ -7607,7 +7619,6 @@ func GetClusterProviders() []string {
 	return clusterProviders
 }
 
-
 // GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
 func GetPoolUuidsWithStorageFull() ([]string, error) {
 	var poolUuids []string
@@ -7750,4 +7761,3 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 
 	return poolSizeUsed, nil
 }
-
