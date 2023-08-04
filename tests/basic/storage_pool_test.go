@@ -9871,11 +9871,10 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					if (int(maxDriveLimit) - numofDrivesInNode) > (int(len(drvs)) + maxDrivesAllowed) {
 						selectedPool = poolListForOps[i]
 						break
-
 					}
 				}
 			}
-			isjournal, err := isJournalEnabled()
+			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "Failed to check is journal enabled")
 			for i := 1; i <= maxDrivesAllowed+1; i++ {
 				drvSize, err := getPoolDiskSize(selectedPool)
