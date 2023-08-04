@@ -9,13 +9,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
-	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"net/http"
 	"regexp"
 	"runtime"
+
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -243,7 +244,6 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
-
 
 	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
@@ -6552,6 +6552,31 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	}
 
 	return eligibilityMap, nil
+}
+
+// GetPoolMaxCloudDriveLimit identifying the max drives allowed based on type of setup
+func GetPoolMaxCloudDriveLimit(stNode *node.Node) (int32, error) {
+	var err error
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return 0, err
+	}
+
+	var maxCloudDrives int32
+
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = FA_MAX_CLOUD_DRIVES
+	} else {
+		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
+	}
+
+	if err != nil {
+		return 0, err
+	}
+	return maxCloudDrives, nil
 }
 
 // WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
