@@ -1,12 +1,11 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: portworx-rawblock-fa-pvc
+  name: nginx-fa-ext4-pvc
 spec:
   accessModes:
     - ReadWriteOnce
-  volumeMode: Block
   resources:
     requests:
-      storage: 10Gi
-  storageClassName: portworx-rawblock-fa
+      storage: 2Gi
+  storageClassName: createoption-fa-ext4-sc
