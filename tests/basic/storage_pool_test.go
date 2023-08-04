@@ -9828,6 +9828,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			}
 
 			numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
+			fmt.Printf("numofDrivesInNode %v", numofDrivesInNode)
 			//check if drives added  to pool will more than permissible for the node
 			poolListForOps, err := GetPoolsDetailsOnNode(selectedNode)
 			log.FailOnError(err, "failed while getting updated node pool list")
@@ -9838,7 +9839,13 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
 					if (int(maxDriveLimit) - numofDrivesInNode) > (int(len(drvs)) + maxDrivesAllowed) {
 						selectedPool = poolListForOps[i]
+						fmt.Printf("selectedPool %v", selectedPool)
+						fmt.Printf("maxDriveLimit %v", maxDriveLimit)
+						fmt.Printf("numofDrivesInNode %v", numofDrivesInNode)
+						fmt.Printf("maxDrivesAllowed %v", selectedPool)
+						fmt.Printf("int(len(drvs)) %v", int(len(drvs)))
 						break
+
 					}
 				}
 			}
