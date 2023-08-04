@@ -35,6 +35,7 @@ const (
 	addDriveUpTimeOut                = time.Minute * 15
 	poolResizeTimeout                = time.Minute * 120
 	poolExpansionStatusCheckInterval = time.Minute * 3
+	maxPoolLength                    = 8
 )
 
 var contexts []*scheduler.Context
@@ -9961,7 +9962,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				for i := 0; i < len(poolListForOps); i++ {
 					err = Inst().V.RefreshDriverEndpoints()
 					log.FailOnError(err, "error refreshing volume endpoints")
-					isjournal, err := isJournalEnabled()
+					isjournal, err := IsJournalEnabled()
 					log.FailOnError(err, "Failed to check is journal enabled")
 					drvSize, err := getPoolDiskSize(poolListForOps[i])
 					log.FailOnError(err, "error getting drive size for pool [%s]", poolListForOps[i].Uuid)
