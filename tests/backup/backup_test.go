@@ -181,6 +181,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, "Creating backup location")
+				time.Sleep(900 * time.Second)
 			}
 		})
 
