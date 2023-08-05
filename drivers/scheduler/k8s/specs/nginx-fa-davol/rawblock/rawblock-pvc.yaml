@@ -1,3 +1,4 @@
+---
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
@@ -9,3 +10,17 @@ spec:
     requests:
       storage: 2Gi
   storageClassName: createoption-fa-ext4-sc
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: fa-pvc-block
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: portworx-fa
+  

@@ -13,4 +13,15 @@ volumeBindingMode: Immediate
 allowVolumeExpansion: true
 mountOptions:
   - nosuid
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: portworx-fa
+provisioner: pxd.portworx.com
+parameters:
+  backend: "pure_block"
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true
 
