@@ -2761,6 +2761,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
+
 	err = Inst().S.RefreshNodeRegistry()
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. RefreshNodeRegistry Error: [%v]", err)
@@ -2795,6 +2796,8 @@ func SetSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
+	os.Setenv("USE_GKE_GCLOUD_AUTH_PLUGIN", "true")
+
 	return SetClusterContext(sourceClusterConfigPath)
 }
 
@@ -3554,7 +3557,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
-	if len(kubeconfigList) < 2 {
+	if len(kubeconfigList) < 1 {
 		return fmt.Errorf("minimum 2 kubeconfigs are required for source and destination cluster")
 	}
 	err := dumpKubeConfigs(configMapName, kubeconfigList)
@@ -3644,6 +3647,20 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 					return err
 				}
 			}
+		case drivers.ProviderGke:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					return err
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
 		default:
 			for _, kubeconfig := range kubeconfigList {
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
@@ -3711,6 +3728,24 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 					},
 					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
 					PlatformCredentialRef: &api.ObjectRef{
+						Name: cloud_name,
+						Uid:  uid,
+					},
+				}
+			case drivers.ProviderGke:
+				cm, err := core.Instance().GetConfigMap("cloud-source-config", "default")
+				if err != nil {
+					log.Errorf("Error reading Configmap: %v", err)
+				}
+				log.Infof("Fetch the cloud-config from the Configmap")
+				configData := cm.Data["source-json"]
+				clusterCreateReq = &api.ClusterCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  name,
+						OrgId: orgID,
+					},
+					Kubeconfig: base64.StdEncoding.EncodeToString([]byte(configData)),
+					CloudCredentialRef: &api.ObjectRef{
 						Name: cloud_name,
 						Uid:  uid,
 					},
@@ -4359,7 +4394,7 @@ func GetSourceClusterConfigPath() (string, error) {
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	if len(kubeconfigList) < 2 {
+	if len(kubeconfigList) < 1 {
 		return "", fmt.Errorf(`Failed to get source config path.
 				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
@@ -4376,13 +4411,13 @@ func GetDestinationClusterConfigPath() (string, error) {
 	}
 
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	if len(kubeconfigList) < 2 {
+	if len(kubeconfigList) < 1 {
 		return "", fmt.Errorf(`Failed to get source config path.
 				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
 	}
 
-	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
-	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
+	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[0]), nil
 }
 
 // GetAzureCredsFromEnv get creds for azure

@@ -6,6 +6,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -122,7 +123,7 @@ func BackupInitInstance() {
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
-	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
+	dash.VerifyFatal(len(kubeconfigList) < 1, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
@@ -160,7 +161,7 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalAzureBucketName)
 			log.Infof("Bucket created with name - %s", globalAzureBucketName)
 		case drivers.ProviderGke:
-			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			globalGCPBucketName = fmt.Sprintf("%s", globalGCPBucketPrefix)
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:

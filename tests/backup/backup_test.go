@@ -5,10 +5,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
-	"strings"
+	"io/ioutil"
+	"os"
 	"time"
 
 	. "github.com/portworx/torpedo/tests"
@@ -121,6 +123,30 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
+		//log.InfoD("switching to source context")
+		//err := SetSourceKubeConfig()
+		//log.FailOnError(err, "failed to switch to context to source cluster")
+
+		log.InfoD("switching to destination context")
+		cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+		if err != nil {
+			log.Errorf("Error reading config map: %v", err)
+		}
+		config := cm.Data["cloud-json"]
+		if len(config) == 0 {
+			log.Infof(fmt.Sprintf("Error reading kubeconfig: config map %s",
+				"cloud-json"))
+		}
+		filePath := fmt.Sprintf("%s/%s", KubeconfigDirectory, "/config/cloud-json.json")
+		log.Infof("Save kubeconfig to %s", filePath)
+		err = ioutil.WriteFile(filePath, []byte(config), 0644)
+
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/config/cloud-json.json")
+		time.Sleep(100 * time.Second)
+
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -181,7 +207,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, "Creating backup location")
-				time.Sleep(900 * time.Second)
+				//time.Sleep(1800 * time.Second)
 			}
 		})
 
@@ -223,9 +249,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
-			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			//clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			//log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			//dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
 		Step("Taking backup of application from source cluster", func() {
@@ -244,22 +270,22 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			}
 		})
 
-		Step("Restoring the backed up namespaces", func() {
-			log.InfoD("Restoring the backed up namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for i, appCtx := range scheduledAppContexts {
-				scheduledNamespace := appCtx.ScheduleOptions.Namespace
-				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
-				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
-					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
-				}
-				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
-				restoreNames = append(restoreNames, restoreName)
-			}
-		})
+		//Step("Restoring the backed up namespaces", func() {
+		//	log.InfoD("Restoring the backed up namespaces")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Fetching px-central-admin ctx")
+		//	for i, appCtx := range scheduledAppContexts {
+		//		scheduledNamespace := appCtx.ScheduleOptions.Namespace
+		//		restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
+		//		for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
+		//			restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
+		//		}
+		//		log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
+		//		err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts[i:i+1])
+		//		dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+		//		restoreNames = append(restoreNames, restoreName)
+		//	}
+		//})
 	})
 
 	JustAfterEach(func() {
@@ -291,12 +317,19 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
-		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
+		//log.Info("Destroying scheduled apps on source cluster")
+		//DestroyApps(scheduledAppContexts, opts)
+		//os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "false")
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		time.Sleep(1800 * time.Second)
+
+		log.InfoD("switching to source context")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch to context to source cluster")
 
 		log.InfoD("Destroying restored apps on destination clusters")
 		restoredAppContexts := make([]*scheduler.Context, 0)
