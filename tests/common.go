@@ -244,7 +244,6 @@ const (
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
 
-
 	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
@@ -3666,6 +3665,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+	case drivers.ProviderGke:
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
 	case drivers.ProviderNfs:
 		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
 	}
@@ -3680,6 +3681,8 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderGke:
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
 	case drivers.ProviderNfs:
 		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
 	}
@@ -3797,6 +3800,35 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 						AccountName:    accountName,
 						AccountKey:     accountKey,
 						SubscriptionId: subscriptionID,
+					},
+				},
+			},
+		}
+
+	case drivers.ProviderGke:
+		log.Infof("Create creds for gke")
+
+		//gkeCredString := os.Getenv("GKE_CRED")
+		time.Sleep(100 * time.Second)
+		log.Infof(fmt.Sprintf("Configmap with name found in the Configmaps list"))
+		cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+		if err != nil {
+			log.Errorf("Error reading Configmap: %v", err)
+		}
+		log.Infof("Fetch the cloud-config from the Configmap")
+		gkeCredString := cm.Data["cloud-json"]
+
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Google,
+				Config: &api.CloudCredentialInfo_GoogleConfig{
+					GoogleConfig: &api.GoogleConfig{
+						JsonKey: gkeCredString,
 					},
 				},
 			},
@@ -3964,6 +3996,68 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateGCPBackupLocation creates backup location for Google cloud
+func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Google,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateGCPBackupLocationWithContext creates backup location for Google cloud
+func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Google,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
