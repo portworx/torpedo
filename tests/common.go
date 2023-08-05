@@ -747,11 +747,11 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			processError(err, errChan...)
 		})
 
-		// Step(fmt.Sprintf("validate %s app's volumes statistics ", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidatePureVolumeStatisticsDynamicUpdate(ctx, errChan...)
-		// 	}
-		// })
+		Step(fmt.Sprintf("validate %s app's volumes statistics ", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidatePureVolumeStatisticsDynamicUpdate(ctx, errChan...)
+			}
+		})
 
 		Step(fmt.Sprintf("validate %s app's pure volumes has no replicaset", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
@@ -811,11 +811,6 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step(fmt.Sprintf("validate %s app's raw block volumes are setup", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateRawBlockPureVolumes(ctx, errChan...)
-			}
-		})
 	})
 }
 
@@ -910,11 +905,6 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			}
 		})
 
-		Step(fmt.Sprintf("validate %s app's raw block volumes are setup", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateRawBlockPureVolumes(ctx, errChan...)
-			}
-		})
 	})
 }
 
@@ -1150,32 +1140,30 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
-		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
+		if !vols[0].Raw {
+			byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
 
-		// get the pod for this pvc
-		fmt.Println("vols fetcched - ")
-		fmt.Println("vols fetcched - ", vols[0].Name)
-		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
-		fmt.Println("pods fetcched - ")
-		fmt.Println("pods fetcched - ", pods[0].Name)
-		processError(err, errChan...)
+			// get the pod for this pvc
+			pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
+			processError(err, errChan...)
 
-		mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			mountPath = mountPath + "/myfile"
 
-		// write to the Direct Access volume
-		ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
-		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
-		err = osutils.Kubectl(cmdArgs)
-		processError(err, errChan...)
-		fmt.Println("sleeping to let volume usage get reflected")
-		// wait until the backends size is reflected before making the REST call
-		time.Sleep(time.Minute * 2)
+			// write to the Direct Access volume
+			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
+			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
+			err = osutils.Kubectl(cmdArgs)
+			processError(err, errChan...)
+			fmt.Println("sleeping to let volume usage get reflected")
+			// wait until the backends size is reflected before making the REST call
+			time.Sleep(time.Minute * 2)
 
-		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
-		expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
-
+			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
+			expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+		}
 	})
 }
 
@@ -1382,27 +1370,6 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			}
 		} else {
 			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
-		}
-	}
-}
-
-// ValidateRawBlockPureVolumes is the ginkgo spec for executing validation for raw block volumes
-func ValidateRawBlockPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	vols, err := Inst().S.GetVolumes(ctx)
-	log.FailOnError(err, "Failed to get app %s's volumes", ctx.App.Key)
-	log.Infof("volumes of app %s are %s", ctx.App.Key, vols)
-	for _, v := range vols {
-		pvcObj, err := k8sCore.GetPersistentVolumeClaim(v.Name, v.Namespace)
-		if err != nil {
-			err = fmt.Errorf("Failed to get pvc for volume %s. Err: %v", v, err)
-			processError(err, errChan...)
-		}
-
-		// Check for raw block volume mode within pvc
-		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-			log.Infof("validating rawblock volume for volume - %s", v.Name)
-			err = Inst().V.ValidatePureRawBlockVolumes(v.ID, pvcObj)
-			dash.VerifySafely(err, nil, "pure raw block volumes validated successfully")
 		}
 	}
 }

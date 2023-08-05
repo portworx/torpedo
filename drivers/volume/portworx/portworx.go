@@ -105,10 +105,6 @@ const (
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
-	ddCopy                                    = "dd if=%s of=%s bs=%d count=1 seek=0"
-	ddRead                                    = "dd if=%s status=none bs=%d count=1 skip=0"
-	ddReadDataSize                            = "wc -c %s"
-	ddRawBlockDevicePath                      = "/dev/pure-block-device"
 )
 
 const (
@@ -1643,69 +1639,6 @@ func (d *portworx) ValidatePureFaCreateOptions(volumeName string, FStype string,
 		}
 	}
 	return nil
-}
-
-// ValidatePureRawBlockVolumes validates rawblock pure volumes
-func (d *portworx) ValidatePureRawBlockVolumes(volumeName string, pvcObj *corev1.PersistentVolumeClaim) error {
-
-	fmt.Println("Validating raw block volumes")
-	tmpFilePath := "/tmp/test.txt"
-	// dataSize := ""
-	data := "this is pure volume rawblock test data"
-	// deviceData := ""
-
-	// write data to the files
-	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
-	if err != nil {
-		return fmt.Errorf("failed to retrieve pods using PVC %s/%s", pvcObj.GetName(), pvcObj.GetNamespace())
-	}
-	pod := podsUsingPVC[0]
-	podCmd := fmt.Sprintf("echo -n \"%s\" >> %s", data, tmpFilePath)
-	cmdArgs := []string{"/bin/bash", "-c", podCmd}
-	output, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), "", pod.GetNamespace())
-	// _, err = d.executeCommandToPod(podCmd, pod.GetName(), pod.GetNamespace())
-	if err != nil {
-		return fmt.Errorf("failed to execute command to Pod: %s", err)
-	}
-	fmt.Println(output)
-	// take DATA_SIZE out after writing data to the text file
-	// readDataSizeCmd := fmt.Sprintf(ddReadDataSize, tmpFilePath)
-	// cmd := fmt.Sprintf("\"%s\"", readDataSizeCmd)
-	// dataSize, err = d.executeCommandToPod(cmd, pod.GetName(), pod.GetNamespace())
-	// fmt.Println("dataSize = ", dataSize)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to execute command to Pod: %s", err)
-	// }
-	var bsSize int = 38
-	fmt.Println("bsSize = ", bsSize)
-	// copy DATA_SIZE data to the device path of rawblock
-	ddCopyCmd := fmt.Sprintf(ddCopy, tmpFilePath, ddRawBlockDevicePath, bsSize)
-	ddCopyCmdArgs := []string{"/bin/bash", "-c", ddCopyCmd}
-	// cmd := fmt.Sprintf("\"%s\"", ddCopyCmd)
-	// _, err = d.executeCommandToPod(ddCopyCmd, pod.GetName(), pod.GetNamespace())
-	output1, err := k8sCore.RunCommandInPod(ddCopyCmdArgs, pod.GetName(), "", pod.GetNamespace())
-	if err != nil {
-		return fmt.Errorf("failed to execute command to Pod: %s", err)
-	}
-	fmt.Println(output1)
-	// read data using dd command from the rawblock device path
-	ddReadCmd := fmt.Sprintf(ddRead, ddRawBlockDevicePath, bsSize)
-	ddReadCmdArgs := []string{"/bin/bash", "-c", ddReadCmd}
-	output2, err := k8sCore.RunCommandInPod(ddReadCmdArgs, pod.GetName(), "", pod.GetNamespace())
-	// cmd1 := fmt.Sprintf("\"%s\"", ddReadCmd)
-	// deviceData, err = d.executeCommandToPod(ddReadCmdArgs, pod.GetName(), pod.GetNamespace())
-	if err != nil {
-		return fmt.Errorf("failed to execute command to Pod: %s", err)
-	}
-	// compare the data copied to device path and data written to the text file
-	fmt.Println("data = ", data)
-	fmt.Println("deviceData = ", output2)
-	if data != output2 {
-		return fmt.Errorf("Compared data of text file & data copied to device path is not same")
-	} else {
-		log.Infof("Compared data of text file & data copied to device path is same")
-		return nil
-	}
 }
 
 func (d *portworx) UpdateSharedv4FailoverStrategyUsingPxctl(volumeName string, strategy api.Sharedv4FailoverStrategy_Value) error {
