@@ -452,10 +452,12 @@ var _ = Describe("{CreateLargeNumberOfVolumes}", func() {
 		deleteVolumes := func() {
 			terminate = true
 			for _, each := range newVolumeIDs {
-				log.InfoD(fmt.Sprintf("delete volume [%v]", each))
-				log.FailOnError(Inst().V.DetachVolume(each), fmt.Sprintf("Failed to detach volume [%v]", each))
-				time.Sleep(500 * time.Millisecond)
-				log.FailOnError(Inst().V.DeleteVolume(each), fmt.Sprintf("Delete volume with ID [%v] failed", each))
+				if IsVolumeExits(each) {
+					log.InfoD(fmt.Sprintf("delete volume [%v]", each))
+					log.FailOnError(Inst().V.DetachVolume(each), fmt.Sprintf("Failed to detach volume [%v]", each))
+					time.Sleep(500 * time.Millisecond)
+					log.FailOnError(Inst().V.DeleteVolume(each), fmt.Sprintf("Delete volume with ID [%v] failed", each))
+				}
 			}
 		}
 
@@ -588,7 +590,9 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 			if !terminate {
 				terminate = true
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
 				}
 			}
 		}
@@ -628,11 +632,13 @@ var _ = Describe("{CreateDeleteVolumeKillKVDBMaster}", func() {
 				if len(volumesCreated) > 5 {
 					deleteVolume := volumesCreated[0]
 
-					err := Inst().V.DeleteVolume(deleteVolume)
-					if err != nil {
-						stopRoutine()
-						log.FailOnError(err,
-							"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+					if IsVolumeExits(deleteVolume) {
+						err := Inst().V.DeleteVolume(deleteVolume)
+						if err != nil {
+							stopRoutine()
+							log.FailOnError(err,
+								"volume deletion failed on the cluster with volume ID [%s]", deleteVolume)
+						}
 					}
 
 					// Remove the first element

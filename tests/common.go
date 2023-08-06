@@ -436,6 +436,8 @@ type PlatformCredentialStruct struct {
 func InitInstance() {
 	var err error
 	var token string
+	torpedo := Inst()
+	log.Infof("%v", torpedo)
 
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:                          Inst().SpecDir,
@@ -8411,4 +8413,60 @@ func GetDriveProperties(path string) (CloudDrive, error) {
 		}
 	}
 	return CloudDrive{}, nil
+}
+
+// returns ID and Name of the volume present
+type VolMap struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ListVolumeNamesUsingPxctl , Returns list of volumes present in the cluster
+// option will get the output of pxctl volume list, records ID and VolName and returns the struct
+func ListVolumeNamesUsingPxctl(n *node.Node) ([]VolMap, error) {
+	volList := []VolMap{}
+	var vols VolMap
+
+	cmd := "pxctl volume list -j | jq "
+	output, err := runCmdGetOutput(cmd, *n)
+	if err != nil {
+		return nil, err
+	}
+
+	// Define a slice of Volume structs
+	var vol []struct {
+		ID      string `json:"id"`
+		Locator struct {
+			Name string `json:"name"`
+		} `json:"locator"`
+	}
+	err = json.Unmarshal([]byte(output), &vol)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, volName := range vol {
+		vols.ID = volName.ID
+		vols.Name = volName.Locator.Name
+		volList = append(volList, vols)
+	}
+
+	return volList, nil
+}
+
+// IsVolumeExits Returns true if volume with ID or Name exists on the cluster
+func IsVolumeExits(volName string) bool {
+	isVolExist := false
+	n := node.GetStorageNodes()
+	allVols, err := ListVolumeNamesUsingPxctl(&n[0])
+	if err != nil {
+		return false
+	}
+
+	for _, eachVol := range allVols {
+		if eachVol.ID == volName || eachVol.Name == volName {
+			isVolExist = true
+		}
+	}
+	return isVolExist
 }

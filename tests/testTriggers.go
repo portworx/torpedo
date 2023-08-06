@@ -7676,6 +7676,9 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 
 // AggrVolDepReplResizeOps crashes vol driver
 func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	/*
+	   TO run this test please make sure to run the applications which creates aggr volumes
+	*/
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(AggrVolDepReplResizeOps)
@@ -7706,19 +7709,6 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.FailOnError(err, "is io running on the volume?")
 		}
 
-		aggrApplication := []string{"aggr-mysql", "postgres"}
-		currAppList := Inst().AppList
-
-		revertAppList := func() {
-			Inst().AppList = currAppList
-		}
-		defer revertAppList()
-
-		Inst().AppList = []string{}
-		for _, eachApp := range aggrApplication {
-			Inst().AppList = append(Inst().AppList, eachApp)
-		}
-
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			*contexts = append(*contexts, ScheduleApplications(fmt.Sprintf("aggrvoldeprepresize-%d", i))...)
 		}
@@ -7731,13 +7721,20 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 				log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
 			}
 			for _, eachVol := range vols {
-				allVolsCreated = append(allVolsCreated, eachVol)
+				aggrLevel, err := Inst().V.GetAggregationLevel(eachVol)
+				if err != nil {
+					log.FailOnError(err, "failed with error while checking for aggr level on volume [%v]", aggrLevel)
+				}
+				// Pick volumes with aggr level > 1
+				if aggrLevel > 1 {
+					allVolsCreated = append(allVolsCreated, eachVol)
+				}
 			}
 		}
 
 		if len(allVolsCreated) < 1 {
-			err := fmt.Errorf("no volumes created with the contexts")
-			log.FailOnError(err, "volume created successfully?")
+			err := fmt.Errorf("no volumes created with aggregation level > 1 in the contexts")
+			log.FailOnError(err, "volume with aggregator level > 1 created?")
 		}
 
 		teardownContext := func() {
