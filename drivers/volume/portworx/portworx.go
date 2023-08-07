@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"regexp"
@@ -221,18 +220,6 @@ type statusJSON struct {
 	Status string
 	Error  string
 	Cmd    string
-}
-
-func (d *portworx) executeCommandToPod(podCmd, podName, podNamespace string) (string, error) {
-	// cmd := fmt.Sprintf("\"%s\"", podCmd)
-	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "bash", "-c", podCmd}
-	command := exec.Command("kubectl", cmdArgs...)
-	fmt.Println("Executing commamnd - ", cmdArgs)
-	out, err := command.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to write data to pod: %s. Output: %s", err, string(out))
-	}
-	return string(out), nil
 }
 
 // ExpandPool resizes a pool of a given ID
