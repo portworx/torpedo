@@ -7,7 +7,7 @@ import (
 )
 
 func createTargetKubeconfigFile() error {
-	path := "/tmp/targetkuebconfig"
+	path := "/tmp/kubeconfig"
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("error while creating the file -> %v", err)
