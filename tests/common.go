@@ -436,8 +436,6 @@ type PlatformCredentialStruct struct {
 func InitInstance() {
 	var err error
 	var token string
-	torpedo := Inst()
-	log.Infof("%v", torpedo)
 
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:                          Inst().SpecDir,

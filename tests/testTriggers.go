@@ -7702,13 +7702,6 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		log.Infof("Starting test case here !!")
-		// Validate minimum set of Storage nodes needed to create aggregated Volumes
-		sNodes := node.GetStorageNodes()
-		if len(sNodes) <= 3 {
-			err := fmt.Errorf("Node needs minimum of 3 Nodes to create aggregated volumes")
-			log.FailOnError(err, "is io running on the volume?")
-		}
-
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			*contexts = append(*contexts, ScheduleApplications(fmt.Sprintf("aggrvoldeprepresize-%d", i))...)
 		}
@@ -7718,12 +7711,12 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		for _, eachContext := range *contexts {
 			vols, err := Inst().S.GetVolumes(eachContext)
 			if err != nil {
-				log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
+				UpdateOutcome(event, fmt.Errorf("Failed to get app %s's volumes", eachContext.App.Key))
 			}
 			for _, eachVol := range vols {
 				aggrLevel, err := Inst().V.GetAggregationLevel(eachVol)
 				if err != nil {
-					log.FailOnError(err, "failed with error while checking for aggr level on volume [%v]", aggrLevel)
+					UpdateOutcome(event, fmt.Errorf("failed with error while checking for aggr level on volume [%v]", aggrLevel))
 				}
 				// Pick volumes with aggr level > 1
 				if aggrLevel > 1 {
@@ -7734,7 +7727,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 
 		if len(allVolsCreated) < 1 {
 			err := fmt.Errorf("no volumes created with aggregation level > 1 in the contexts")
-			log.FailOnError(err, "volume with aggregator level > 1 created?")
+			UpdateOutcome(event, fmt.Errorf("volume with aggregator level > 1 created? Error [%v]", err))
 		}
 
 		teardownContext := func() {
@@ -7750,18 +7743,19 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		setReplFactor := func(volName *volume.Volume) {
 			getReplicaSets, err := Inst().V.GetReplicaSets(volName)
 			log.FailOnError(err, "Failed to get replication factor on the volume")
+			UpdateOutcome(event, fmt.Errorf("Failed to get replication factor on the volume"))
 
 			if len(getReplicaSets[0].Nodes) == 3 || len(getReplicaSets[0].Nodes) == 1 {
 				err := Inst().V.SetReplicationFactor(volName, 2, nil, nil, true)
 				if err != nil {
-					log.FailOnError(err, "failed to set replicaiton for Volume [%v]", volName.Name)
+					UpdateOutcome(event, fmt.Errorf("failed to set replicaiton for Volume [%v]", volName.Name))
 				}
 			}
 
 			if len(getReplicaSets[0].Nodes) == 2 {
 				err := Inst().V.SetReplicationFactor(volName, 3, nil, nil, true)
 				if err != nil {
-					log.FailOnError(err, "failed to set replicaiton for Volume [%v]", volName.Name)
+					UpdateOutcome(event, fmt.Errorf("failed to set replicaiton for Volume [%v] with error : [%v]", volName.Name, err))
 				}
 			}
 		}
@@ -7808,7 +7802,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		for _, eachVol := range allVolsCreated {
 			log.Infof("Resizing Volumes created [%v]", eachVol.Name)
 			err := volumeResize(eachVol)
-			log.FailOnError(err, "Resizing volume failed on the cluster")
+			UpdateOutcome(event, fmt.Errorf("Resizing volume failed on the cluster err: [%v]", err))
 		}
 
 		// Set replication factor to 3 on all the volumes present in the cluster
@@ -7821,6 +7815,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			status, err := IsVolumeStatusUP(eachVol)
 			if err != nil {
 				log.FailOnError(err, "error validating volume status")
+				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")
 		}
