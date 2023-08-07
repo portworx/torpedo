@@ -4,9 +4,9 @@ metadata:
   name: fio
 spec:
   serviceName: fio
-  {{ if .Replicas }}
-  replicas: {{ .Replicas }}
-  {{ else }}
+  { { if .Replicas } }
+  replicas: { { .Replicas } }
+  { { else } }
   replicas: 6{{ end }}
   selector:
     matchLabels:
@@ -59,19 +59,19 @@ spec:
   - metadata:
       name: fio-data
     spec:
-      storageClassName: fio-sc
+      storageClassName: fio-sc-aggr
       accessModes:
       - ReadWriteOnce
       resources:
         requests:
-        {{ if .VolumeSize }}
-          storage: {{ .VolumeSize }}
-        {{ else }}
+          { { if .VolumeSize } }
+          storage: { { .VolumeSize } }
+          { { else } }
           storage: 200Gi{{ end }}
   - metadata:
       name: fio-log
     spec:
-      storageClassName: fio-log
+      storageClassName: fio-log-aggr
       accessModes:
       - ReadWriteOnce
       resources:
@@ -92,4 +92,3 @@ spec:
   - name: grok-port
     port: 9144
     targetPort: 9144
-

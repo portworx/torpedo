@@ -7814,7 +7814,6 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			log.InfoD("Validating Volume Status of Volume [%v]", eachVol.ID)
 			status, err := IsVolumeStatusUP(eachVol)
 			if err != nil {
-				log.FailOnError(err, "error validating volume status")
 				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")
