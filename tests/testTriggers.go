@@ -7703,12 +7703,11 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 		log.InfoD(stepLog)
 		log.Infof("Starting test case here !!")
 
-		/*
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				*contexts = append(*contexts, ScheduleApplications(fmt.Sprintf("aggrvoldeprepresize-%d", i))...)
-			}
-			ValidateApplications(*contexts)
-		*/
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			*contexts = append(*contexts, ScheduleApplications(fmt.Sprintf("aggrvoldeprepresize-%d", i))...)
+		}
+		ValidateApplications(*contexts)
+
 		allVolsCreated := []*volume.Volume{}
 		for _, eachContext := range *contexts {
 			vols, err := Inst().S.GetVolumes(eachContext)
