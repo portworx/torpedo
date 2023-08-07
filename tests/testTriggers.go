@@ -7247,7 +7247,6 @@ func TriggerMongoAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			//taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			ns, err := core.Instance().GetNamespace(nsName)
 			if err != nil {
 				log.InfoD("Creating namespace %v", nsName)
@@ -7308,37 +7307,36 @@ func TriggerMongoAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 				}
 				migrationList = append(migrationList, mig)
 				err = asyncdr.WaitForMigration(migrationList)
-				if err == nil {
-					// Sleeping here, as apps deploys one by one, which takes time to collect all pods
-					time.Sleep(5 * time.Minute)
-					SetDestinationKubeConfig()
-					pods_migrated, err := core.Instance().GetPods(ns.Name, nil)
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("Not able to get migrated pods, err: %v", err))
-						return
-					}
-					pods_migrated_len := len(pods_migrated.Items)
-					log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
-					if pods_created_len != pods_migrated_len {
-						UpdateOutcome(event, fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len))
-						return
-					}
-					destClusterConfigPath, err := GetDestinationClusterConfigPath()
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
-						return
-					}
-					err = asyncdr.ValidateCRD(asyncdr.ExpectedMongoCrdList, destClusterConfigPath)
-					if err != nil {
-						UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
-						return
-					}
-					log.InfoD("Starting crd deletion")
-					asyncdr.DeleteCRAndUninstallCRD(operatorName, appUrl, ns.Name)
-				} else {
+				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("Migration failed"))
 					return
 				}
+				// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+				time.Sleep(5 * time.Minute)
+				SetDestinationKubeConfig()
+				pods_migrated, err := core.Instance().GetPods(ns.Name, nil)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Not able to get migrated pods, err: %v", err))
+					return
+				}
+				pods_migrated_len := len(pods_migrated.Items)
+				log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
+				if pods_created_len != pods_migrated_len {
+					UpdateOutcome(event, fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len))
+					return
+				}
+				destClusterConfigPath, err := GetDestinationClusterConfigPath()
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Failed to get dest config path, err: %v", err))
+					return
+				}
+				err = asyncdr.ValidateCRD(asyncdr.ExpectedMongoCrdList, destClusterConfigPath)
+				if err != nil {
+					UpdateOutcome(event, fmt.Errorf("CRDs not migrated properly, err: %v", err))
+					return
+				}
+				log.InfoD("Starting crd deletion")
+				asyncdr.DeleteCRAndUninstallCRD(operatorName, appUrl, ns.Name)
 				SetSourceKubeConfig()
 				err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
 				if err != nil {
