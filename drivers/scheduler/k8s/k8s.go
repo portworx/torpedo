@@ -6455,6 +6455,12 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 			}
 		} else {
 			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
+			podCmd := fmt.Sprintf("touch %s/aaaa.txt", mountPath)
+			cmdArgs := []string{"/bin/bash", "-c", podCmd}
+			_, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), "", pod.GetNamespace())
+			if err != nil {
+				return fmt.Errorf("failed to execute command to Pod: %s", err)
+			}
 			err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 			if err != nil {
 				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
