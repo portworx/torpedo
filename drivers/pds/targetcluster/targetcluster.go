@@ -415,6 +415,7 @@ func (tc *TargetCluster) RegisterClusterToControlPlane(infraParams *parameters.P
 
 // NewTargetCluster initialize the target cluster
 func NewTargetCluster(context string) *TargetCluster {
+	createTargetKubeconfigFile()
 	return &TargetCluster{
 		kubeconfig: context,
 	}
