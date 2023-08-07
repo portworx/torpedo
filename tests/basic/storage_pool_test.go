@@ -9840,7 +9840,9 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 		isjournal, journalerr := IsJournalEnabled()
 		log.FailOnError(journalerr, "Failed to get Journal Disk Details")
 		
-		time.Sleep(5 * time.Second)
+		err = WaitForExpansionToStart(poolUUID)
+		log.FailOnError(err, "Expansion is not started")
+
 		cmd := "echo c > /proc/sysrq-trigger"
 
 		// Execute the command to generate kernel panic
@@ -9855,7 +9857,7 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 		dash.VerifyFatal(regMatch, true, " force panic the node successful?")
 		
 		err = Inst().N.TestConnection(*stNode, node.ConnectionOpts{
-			Timeout:         15 * time.Minute,
+			Timeout:         addDriveUpTimeOut,
 			TimeBeforeRetry: 10 * time.Second,
 		})
 		log.FailOnError(err, fmt.Sprintf("Verify the Node %s connection is up?", stNode.Name))
