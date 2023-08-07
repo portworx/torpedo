@@ -174,7 +174,7 @@ func (ds *DataServiceDeployment) DeleteDeployment(deploymentID string) (*status.
 	}
 	res, err := dsClient.ApiDeploymentsIdDelete(ctx, deploymentID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdDelete`: %v\n.Full HTTP response: %v", err, res)
+		return res, fmt.Errorf("Error when calling `ApiDeploymentsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return res, err
 }

@@ -679,7 +679,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	resp, err := components.DataServiceDeployment.DeleteDeployment(deploymentID)
 	if err != nil {
 		log.Errorf("An Error Occured while deleting deployment %v", err)
-		return nil, err
+		return resp, err
 	}
 	return resp, nil
 }

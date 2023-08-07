@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -36,7 +35,6 @@ var (
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
-	components    *api.Components
 	wkloadParams  pdsdriver.LoadGenParams
 )
 

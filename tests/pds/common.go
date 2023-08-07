@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/pds/api"
 	"net/http"
 	"time"
 
@@ -99,6 +100,7 @@ var (
 	k8sApps                                 = apps.Instance()
 	pdsLabels                               = make(map[string]string)
 	accountID                               string
+	components                              *api.Components
 )
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
@@ -250,13 +252,41 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 
 // CleanupDeployments used to clean up deployment from pds and all other stale resources in the cluster.
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
+	log.InfoD("Deleting all the ds instances.")
 	for _, dsInstance := range dsInstances {
-		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
+		log.Infof("Delete Deployment %v ", dsInstance)
+		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
-		log.FailOnError(err, "Error while deleting data services")
+		if err != nil {
+			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())
+			err = DeleteAllDsBackupEntities(dsInstance)
+			log.FailOnError(err, "Failed during deleting the backup entities for deployment %v",
+				dsInstance.GetClusterResourceName())
+			resp, err = pdslib.DeleteDeployment(dsInstance.GetId())
+			log.FailOnError(err, "Error while deleting deployment.")
+		}
 		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+
 		log.InfoD("Getting all PV and associated PVCs and deleting them")
 		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
 		log.FailOnError(err, "Error while deleting PV and PVCs")
 	}
+}
+
+func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
+	log.Infof("Fetch backups associated to the deployment %v ",
+		dsInstance.GetClusterResourceName())
+	backups, err := components.Backup.ListBackup(dsInstance.GetId())
+	if err != nil {
+		return fmt.Errorf("failed while fetching the backup objects.Err - %v", err)
+	}
+	for _, backup := range backups {
+		log.Infof("Delete backup.Details: Name - %v, Id - %v", backup.GetClusterResourceName(), backup.GetId())
+		resp, err := components.Backup.DeleteBackup(backup.GetId())
+		if err != nil {
+			return fmt.Errorf("backup object %v deletion failed.Err - %v, Response status - %v",
+				backup.GetClusterResourceName(), err, resp.StatusCode)
+		}
+	}
+	return nil
 }

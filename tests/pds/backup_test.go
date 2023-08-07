@@ -54,7 +54,7 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		deleteAllBkpTargets()
+		DeleteAllPDSBkpTargets()
 	})
 })
 
@@ -130,7 +130,84 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 	})
 })
 
-func deleteAllBkpTargets() {
+var _ = Describe("{ValidateDataServiceDeletionBoundToBackups}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateDataServiceDeletionBoundToBackups", "Validate data service deletion bound to backups", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+	})
+
+	It("Validate data service deletion bound to backups", func() {
+		stepLog := "Create AWS backup target."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+			log.FailOnError(err, "Failed to create S3 backup target.")
+			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+			awsBkpTargets = append(awsBkpTargets, bkpTarget)
+		})
+		stepLog = "Deploy data service and take adhoc backup, deleting the data service should not delete the backups."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				})
+
+				stepLog = "Perform adhoc backup and validate them"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), awsBkpTargets[0].GetId())
+					err := bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), awsBkpTargets[0].GetId(), "s3")
+					log.FailOnError(err, "Failed while performing adhoc backup")
+				})
+
+				Step("Validating deployment deletion bound to the backups", func() {
+					log.InfoD("Deleting Deployment %v ", *deployment.ClusterResourceName)
+					resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					if err != nil {
+						dash.VerifyFatal(resp.StatusCode, http.StatusConflict, "validating the status response")
+						log.Infof("Validating deployment %v post trying to delete.", deployment.GetClusterResourceName())
+						dsTest.ValidateDataServiceDeployment(deployment, params.InfraToTest.Namespace)
+						log.Info("Deletion didn't worked as expected.")
+
+					} else {
+						log.FailOnError(fmt.Errorf("deployment deletion succeeded, which is unexpected"),
+							"Deletion should be prohibited as it has backup entities attached.")
+					}
+
+				})
+				stepLog = "Deploy and validate data service with no backup enabled."
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		CleanupDeployments(deploymentsToBeCleaned)
+		DeleteAllPDSBkpTargets()
+
+	})
+})
+
+func DeleteAllPDSBkpTargets() {
 	log.InfoD("Delete all the backup targets.")
 	for _, bkptarget := range awsBkpTargets {
 		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkptarget.GetId())
