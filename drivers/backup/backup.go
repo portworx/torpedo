@@ -263,6 +263,9 @@ type Restore interface {
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForRestoreCompletion(ctx context.Context, restoreName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// GetRestoreUID returns uid of the given restore name in an organization
+	GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error)
 }
 
 // SchedulePolicy interface

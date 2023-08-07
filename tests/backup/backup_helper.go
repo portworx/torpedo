@@ -43,13 +43,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"encoding/json"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 5 * time.Minute
+	cloudAccountDeleteTimeout                 = 30 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
@@ -106,7 +107,7 @@ const (
 	namespaceDeleteTimeout                    = 10 * time.Minute
 	clusterCreationTimeout                    = 5 * time.Minute
 	clusterCreationRetryTime                  = 10 * time.Second
-	clusterDeleteTimeout                      = 10 * time.Minute
+	clusterDeleteTimeout                      = 5 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
@@ -1084,56 +1085,49 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
 		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-		if err == nil {
-			clusterObj := clusterResp.GetCluster()
-			clusterProvider := GetClusterProviders()
-			for _, provider := range clusterProvider {
-				switch provider {
-				case drivers.ProviderRke:
-					clusterCredName = clusterObj.PlatformCredentialRef.Name
-					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
+		clusterObj := clusterResp.GetCluster()
+		clusterProvider := GetClusterProviders()
+		for _, provider := range clusterProvider {
+			switch provider {
+			case drivers.ProviderRke:
+				clusterCredName = clusterObj.PlatformCredentialRef.Name
+				clusterCredUID = clusterObj.PlatformCredentialRef.Uid
 
-				default:
-					clusterCredName = clusterObj.CloudCredentialRef.Name
-					clusterCredUID = clusterObj.CloudCredentialRef.Uid
+			default:
+				clusterCredName = clusterObj.CloudCredentialRef.Name
+				clusterCredUID = clusterObj.CloudCredentialRef.Uid
+			}
+			err = DeleteCluster(clusterName, orgID, ctx, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+			clusterDeleteStatus := func() (interface{}, bool, error) {
+				status, err := IsClusterPresent(clusterName, ctx, orgID)
+				if err != nil {
+					return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
 				}
-				err = DeleteCluster(clusterName, orgID, ctx, true)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-				clusterDeleteStatus := func() (interface{}, bool, error) {
-					status, err := IsClusterPresent(clusterName, ctx, orgID)
+				if status {
+					return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
+				}
+				return "", false, nil
+			}
+			_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting clsuter %s", clusterName))
+
+			if clusterCredName != "" {
+				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+				cloudCredDeleteStatus := func() (interface{}, bool, error) {
+					status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
 					if err != nil {
-						return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
+						return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
 					}
 					if status {
-						return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
+						return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
 					}
 					return "", false, nil
 				}
-				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-
-				if clusterCredName != "" {
-					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
-					cloudCredDeleteStatus := func() (interface{}, bool, error) {
-						status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
-						if err != nil {
-							return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
-						}
-						if status {
-							return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
-						}
-						return "", false, nil
-					}
-					_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
-				}
-			}
-		} else {
-			if strings.Contains(err.Error(), "object not found") {
-				log.Infof("Cluster %s is not created for the user", clusterName)
-			} else {
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
+				_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
 			}
 		}
 	}
@@ -1324,6 +1318,28 @@ func GetAllRestoresAdmin() ([]string, error) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return restoreNames, err
+	}
+
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
+}
+
+// GetAllRestoresForUser returns all the backups that px-central-admin has access to
+func GetAllRestoresForUser(username string, password string) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
 	}
 
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
@@ -4170,4 +4186,152 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 		return "", "", err
 	}
 	return preRuleName, postRuleName, nil
+}
+
+func GetAllBackupsOfUsersFromAdmin(ownerID []string, adminCtx context.Context) ([]string, error) {
+	backupNames := make([]string, 0)
+	backupDriver := Inst().Backup
+
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: ownerID,
+		},
+	}
+	currentBackups, err := backupDriver.EnumerateBackup(adminCtx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, backup := range currentBackups.GetBackups() {
+		backupNames = append(backupNames, backup.GetName())
+	}
+	return backupNames, nil
+}
+
+func GetAllBackupScheduleOfUsersFromAdmin(ownerID []string) ([]string, error) {
+	backupScheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	backupScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: ownerID,
+		},
+	}
+	currentBackupSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, backupScheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, backupSchedule := range currentBackupSchedules.GetBackupSchedules() {
+		backupScheduleNames = append(backupScheduleNames, backupSchedule.GetName())
+	}
+	return backupScheduleNames, nil
+}
+
+func GetAllRestoreOfUsersFromAdmin(ownerID []string) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: ownerID,
+		},
+	}
+	currentRestores, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, restore := range currentRestores.GetRestores() {
+		restoreNames = append(restoreNames, restore.GetName())
+	}
+	return restoreNames, nil
+}
+
+// GetAllBackupSchedulesForUser returns all current BackupSchedules for user.
+func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
+// CreateRestoreWithReplacePolicyWithValidation Creates in-place restore and validates the success,
+func CreateRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type, scheduledAppContexts []*scheduler.Context) (err error) {
+	err = CreateRestoreWithReplacePolicy(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping, replacePolicy)
+	if err != nil {
+		return
+	}
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err = SetClusterContext(originalClusterConfigPath)
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+	return
+}
+
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+	backupDriver := Inst().Backup
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  periodicSchedulePolicyName,
+			Uid:   periodicSchedulePolicyUid,
+			OrgId: OrgID,
+		},
+
+		SchedulePolicy: &api.SchedulePolicyInfo{
+			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			ForObjectLock: false,
+			AutoDelete:    false,
+		},
+	}
+
+	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		return
+	}
+	return
 }
