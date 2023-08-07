@@ -8,7 +8,7 @@ parameters:
   {{ if .Repl }}
   repl : "{{ .Repl }}"
   {{ else }}
-  repl: "2"{{ end }}
+  repl: "6"{{ end }}
   priority_io: "high"
   {{ if .IoProfile }}
   io_profile: "{{ .IoProfile }}"
@@ -16,6 +16,8 @@ parameters:
   io_profile: "db_remote"{{ end }}
   {{ if .Fs }}
   fs: {{ .Fs }}{{ end }}
+  {{ if .AggregationLevel }}
+  aggregation_level: "{{ .AggregationLevel }}"{{ end }}
 allowVolumeExpansion: true
 ---
 ##### Portworx storage class
