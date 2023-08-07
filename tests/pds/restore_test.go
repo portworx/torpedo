@@ -105,8 +105,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 		DeleteAllPDSBkpTargets()
 	})
 })
@@ -211,8 +209,7 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		DeleteAllPDSBkpTargets()
 	})
 })
 
@@ -308,12 +305,7 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
-		err = bkpClient.AzureStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
-		err = bkpClient.GCPStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		DeleteAllPDSBkpTargets()
 	})
 })
 
@@ -412,8 +404,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		DeleteAllPDSBkpTargets()
 	})
 })
 
@@ -584,8 +575,7 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		DeleteAllPDSBkpTargets()
 	})
 })
 
@@ -719,7 +709,6 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		DeleteAllPDSBkpTargets()
 	})
 })
