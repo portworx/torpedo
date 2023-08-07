@@ -9826,19 +9826,19 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
 
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
-		log.FailOnError(err, "failed to get pool from pool uuid [%v]", poolUUID)
+		log.FailOnError(err, "Failed to get Pool from Pool uuid [%v]", poolUUID)
 		
 		stNode, stNodeerr := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(stNodeerr, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
 		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 200
-		log.InfoD("Current Size of the pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+		log.InfoD("Current Size of the Pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
 		
 		expanderr := Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-		log.FailOnError(expanderr, "Failed to initiate expand on pool [%v]", poolUUID)
+		log.FailOnError(expanderr, "Failed to initiate Expand on Pool [%v]", poolUUID)
 
 		isjournal, journalerr := IsJournalEnabled()
-		log.FailOnError(journalerr, "failed to get journal disk details")
+		log.FailOnError(journalerr, "Failed to get Journal Disk Details")
 		
 		time.Sleep(5 * time.Second)
 		cmd := "echo c > /proc/sysrq-trigger"
@@ -9858,20 +9858,20 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 			Timeout:         15 * time.Minute,
 			TimeBeforeRetry: 10 * time.Second,
 		})
-		log.FailOnError(err, fmt.Sprintf("Verify the node %s is up?", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("Verify the Node %s connection is up?", stNode.Name))
 		
 		err = Inst().V.WaitDriverDownOnNode(*stNode)
-		log.FailOnError(err, fmt.Sprintf("Verify the node %s is up?", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("Verify the Node %s driver down and up?", stNode.Name))
 			
 		err = Inst().S.IsNodeReady(*stNode)
-		log.FailOnError(err, fmt.Sprintf("Verify the node %s is up?", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("Verify the Node %s is ready?", stNode.Name))
 				
 		err = Inst().V.WaitDriverUpOnNode(*stNode, addDriveUpTimeOut)
-		log.FailOnError(err, fmt.Sprintf("Kernel Panic on node %s", stNode.Name))
+		log.FailOnError(err, fmt.Sprintf("Kernel Panic on Node %s", stNode.Name))
 		log.InfoD("Validate pool rebalance after drive add and Kernel panic")
 
 		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
-		log.FailOnError(resizeErr, "failed waiting for pool resize")
+		log.FailOnError(resizeErr, "Failed waiting for Pool Resize")
 		
 		err = ValidateDriveRebalance(*stNode)
 		log.FailOnError(err, "Pool re-balance failed")
