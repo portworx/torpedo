@@ -1528,8 +1528,8 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 			log.Infof("The Selected node for Fast path label is %v : ", pxNode.Name)
 
 			// Remove if node-type label is set before the test
-			Inst().AppList = applist
-			RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			err = RemoveLabelsAllNodes(k8s.NodeType, true, false)
+			log.FailOnError(err, "error removing label on node ")
 		})
 
 		stepLog = "Step 2: Schedule application and Add label on the selected storage node"
@@ -1567,9 +1567,7 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 					// Store the volume details
 					for _, vol := range appVolumes {
 						apivol, err := Inst().V.InspectVolume(vol.ID)
-						if err != nil {
-							log.FailOnError(err, "failed to inspect volume %v", vol.ID)
-						}
+						log.FailOnError(err, "failed to inspect volume %v", vol.ID)
 						volumrlidttr = append(volumrlidttr, apivol)
 					}
 
@@ -1591,8 +1589,9 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 			log.Infof(" Before reboot check if the volumes are attached on the local node")
 			for _, volumePtr := range volumrlidttr {
 				volExists, err = Inst().V.IsVolumeAttachedOnNode(volumePtr, pxNode)
-				if !volExists || err != nil {
-					log.FailOnError(err, "Volume attached on local node validation failed")
+				log.FailOnError(err, "Volume attached on local node validation failed")
+				if !volExists {
+					log.FailOnError(errors.New("Error occured while inspecting volume "), " Volume attached on local node validation failed")
 				}
 			}
 			log.Infof("The volumes were found attached on local node: %v", pxNode.Name)
