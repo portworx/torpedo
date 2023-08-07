@@ -736,11 +736,11 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		// Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-		// 	if !ctx.SkipVolumeValidation {
-		// 		ValidateResizePurePVC(ctx, errChan...)
-		// 	}
-		// })
+		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				ValidateResizePurePVC(ctx, errChan...)
+			}
+		})
 
 		Step(fmt.Sprintf("wait for %s app to start running", ctx.App.Key), func() {
 			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
@@ -1191,7 +1191,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 				Namespace:         vols[0].Namespace,
 				Timestamp:         timestamp,
 				OriginalPVCName:   vols[0].Name,
-				SnapName:          "basic-csi-snapshot-" + timestamp,
+				SnapName:          "basic-csi" + timestamp + "-snapshot",
 				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
@@ -1206,7 +1206,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			for k, v := range volMap {
 				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
 					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
-						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						err = Inst().V.ValidateVolumeInPxctlList(k)
 						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
 					})
 					break

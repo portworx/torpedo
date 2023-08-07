@@ -337,10 +337,11 @@ func (k *k8sSchedOps) validateDevicesInPods(
 			IgnoreError:     true,
 		}
 
+		log.Debugf("findmnt | grep \\\\[ | grep %s", pvName)
 		volDevice, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("findmnt | grep \\[ | grep %s", pvName), connOpts)
+			fmt.Sprintf("findmnt | grep \\\\[ | grep %s", pvName), connOpts)
 		if len(volDevice) == 0 {
-			return validatedDevicePods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
+			return validatedDevicePods, fmt.Errorf("volume %s not bind mounted on node %s", vol.Name, currentNode.Name)
 		}
 
 		validatedDevicePods = append(validatedDevicePods, pod.Name)
