@@ -237,7 +237,6 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 			containerLoop:
 				for _, container := range p.Spec.Containers {
 					for _, mount := range container.VolumeMounts {
-						fmt.Println("Found mount - ", mount)
 						if mount.Name == v.Name {
 							retList = append(retList, p)
 							break containerLoop
@@ -245,7 +244,6 @@ func (c *Client) getPodsUsingPVCWithListOptions(pvcName, pvcNamespace string, op
 					}
 					// adding check for rawblock volume devices
 					for _, device := range container.VolumeDevices {
-						fmt.Println("Found device - ", device)
 						if device.Name == v.Name {
 							retList = append(retList, p)
 							break containerLoop

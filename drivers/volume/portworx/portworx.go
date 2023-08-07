@@ -1282,7 +1282,6 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 	}
 
 	vol := out.(*api.Volume)
-	fmt.Println("vol.Spec.Format = ", vol.Spec.Format)
 	isRaw = vol.Spec.Format == api.FSType_FS_TYPE_NONE
 
 	// if the volume is a clone or a snap, validate its parent
@@ -1485,7 +1484,6 @@ func (d *portworx) ValidateCreateSnapshot(volumeName string, params map[string]s
 	}
 
 	volDriver := d.getVolDriver()
-	fmt.Println("Creating local snap for volume : ", volumeName)
 	if _, err := volDriver.SnapshotCreate(d.getContextWithToken(context.Background(), token), &api.SdkVolumeSnapshotCreateRequest{VolumeId: volumeName, Name: volumeName + "_snapshot"}); err != nil {
 		return fmt.Errorf("failed to create local snapshot, Err: %v", err)
 	}

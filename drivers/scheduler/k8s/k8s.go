@@ -4240,7 +4240,6 @@ func (k *K8s) ResizePVC(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClai
 	if shouldResize {
 		k8sOps := k8sCore
 		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
-		fmt.Println("storageSize=", storageSize)
 
 		// TODO this test is required since stork snapshot doesn't support resizing, remove when feature is added
 		resizeSupported := true
@@ -4250,10 +4249,8 @@ func (k *K8s) ResizePVC(ctx *scheduler.Context, pvc *corev1.PersistentVolumeClai
 		if resizeSupported {
 			extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
 			storageSize.Add(extraAmount)
-			fmt.Println("With Extra = ", storageSize)
 			pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
 			if _, err := k8sOps.UpdatePersistentVolumeClaim(pvc); err != nil {
-				fmt.Println("Failed to resize", err)
 				return nil, &scheduler.ErrFailedToResizeStorage{
 					App:   ctx.App,
 					Cause: err.Error(),
@@ -6778,7 +6775,6 @@ func MakePod(ns string, pvclaims []*v1.PersistentVolumeClaim, command string, pr
 	podSpec.Spec.Containers[0].VolumeMounts = volumeMounts
 	podSpec.Spec.Containers[0].VolumeDevices = volumeDevices
 	podSpec.Spec.Volumes = volumes
-	fmt.Println("podSpec=", podSpec)
 	return podSpec
 }
 
@@ -6840,7 +6836,6 @@ func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, source
 		Kind: "PersistentVolumeClaim",
 		Name: sourcePVCName,
 	}
-	fmt.Println("Cloned pvc spec =", PVCSpec)
 	return PVCSpec, nil
 }
 

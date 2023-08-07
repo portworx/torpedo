@@ -981,8 +981,6 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 		})
 
 		for vol, params := range vols {
-			fmt.Println("vol = ", vol)
-			fmt.Println("params = ", params)
 			if Inst().ConfigMap != "" {
 				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 				processError(err, errChan...)
@@ -994,19 +992,17 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				err = Inst().V.ValidateCreateVolume(vol, params)
 				processError(err, errChan...)
 			})
-			if params["VolumeMode"] != "Block" {
-				Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
-					err = Inst().V.ValidateCreateSnapshot(vol, params)
-					if params["backend"] == k8s.PureBlock {
-						expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
-					} else if params["backend"] == k8s.PureFile {
-						expect(err).NotTo(beNil(), "error expected but no error received while creating pure_file snapshot")
-						if err != nil {
-							expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
-						}
+			Step(fmt.Sprintf("get %s app's volume: %s then create local snapshot", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateSnapshot(vol, params)
+				if params["backend"] == k8s.PureBlock {
+					expect(err).To(beNil(), "unexpected error creating pure_block snapshot")
+				} else if params["backend"] == k8s.PureFile {
+					expect(err).NotTo(beNil(), "error expected but no error received while creating pure_file snapshot")
+					if err != nil {
+						expect(err.Error()).To(contain(errPureFileSnapshotNotSupported.Error()), "incorrect error received creating pure_file snapshot")
 					}
-				})
-			}
+				}
+			})
 			Step(fmt.Sprintf("get %s app's volume: %s then create cloudsnap", ctx.App.Key, vol), func() {
 				err = Inst().V.ValidateCreateCloudsnap(vol, params)
 				expect(err).NotTo(beNil(), "error expected but no error received while creating Pure cloudsnap")
@@ -1140,6 +1136,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
+		// skiping ValidatePureVolumeStatisticsDynamicUpdate test for raw block volumes. Need to change getStats method
 		if !vols[0].Raw {
 			byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 			fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)

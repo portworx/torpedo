@@ -15,7 +15,7 @@ spec:
     # Configure a mount for the volume We define above
     volumeMounts:
     - name: nginx-vol
-      mountPath: /dev/xvda
+      mountPath: /data
     ports:
     - containerPort: 80
 ---
@@ -35,6 +35,6 @@ spec:
     # Configure a mount for the volume We define above
     volumeMounts:
     - name: nginx-vol
-      mountPath: /dev/xvda
+      mountPath: /data
     ports:
     - containerPort: 80
