@@ -30,8 +30,6 @@ import (
 )
 
 const (
-	testingAppNamespace = "testing-apps"
-
 	// defined in testing app path torpedo/scheduler/k8s/fio-low-io/pxd/px-storage-class.yaml
 	TESTING_STORAGE_CLASS            = "fio-sc"
 	replicationUpdateTimeout         = 4 * time.Hour
@@ -9601,8 +9599,8 @@ func scheduleApps() []*scheduler.Context {
 	contexts := make([]*scheduler.Context, 0)
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
 		log.Infof("Deploy app %v", i)
-		contexts = append(contexts, ScheduleApplicationsOnNamespace(
-			testingAppNamespace, fmt.Sprintf("pooltest-%d", i))...)
+		contexts = append(contexts, ScheduleApplications(
+			fmt.Sprintf("pooltest-%d", i))...)
 	}
 	ValidateApplications(contexts)
 	return contexts
