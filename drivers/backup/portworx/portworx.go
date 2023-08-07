@@ -1681,6 +1681,56 @@ func (p *portworx) SetMissingClusterUID(ctx context.Context, req interface{}) (i
 	}
 }
 
+/*
+func (p *portworx) GetRestoreUID(ctx context.Context, orgID string, restoreName string) (string, error) {
+	RestoreEnumerateReq := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreList, err := p.EnumerateRestore(ctx, RestoreEnumerateReq)
+	if err != nil {
+		err = fmt.Errorf("Failed to enumerate restore with error: [%v]", err)
+		return "", err
+	}
+	for i := 0; i < len(restoreList.Restores); i++ {
+		if restoreList.Restores[i].Metadata.Name == restoreName {
+			restoreUid := restoreList.Restores[i].Metadata.Uid
+			return restoreUid, nil
+		}
+	}
+	return "", nil
+}
+
+func init() {
+	backup.Register(driverName, &portworx{})
+}
+*/
+
+func (p *portworx) GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error) {
+	var totalRestores int
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{OrgId: orgID}
+	restoreEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
+	for {
+		enumerateRsp, err := p.EnumerateRestore(ctx, restoreEnumerateReq)
+		if err != nil {
+			log.InfoD("Restore enumeration for the ctx [%v] within org [%s] failed with error [%v]. Restore enumerate request: [%v].", ctx, orgID, err, restoreEnumerateReq)
+			return "", err
+		}
+		for _, restore := range enumerateRsp.GetRestores() {
+			if restore.GetName() == restoreName {
+				return restore.GetUid(), nil
+			}
+			totalRestores++
+		}
+		if uint64(totalRestores) >= enumerateRsp.GetTotalCount() {
+			break
+		} else {
+			restoreEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetRestores()))
+		}
+	}
+
+	return "", fmt.Errorf("restore with name '%s' not found for org '%s'", restoreName, orgID)
+}
+
 func init() {
 	backup.Register(driverName, &portworx{})
 }

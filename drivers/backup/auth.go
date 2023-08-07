@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libopenstorage/openstorage/pkg/auth"
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
@@ -1212,4 +1213,20 @@ func GetRandomUserFromGroup(groupName string) (string, error) {
 	rand.Seed(time.Now().Unix())
 	userName := users[rand.Intn(len(users))]
 	return userName, nil
+}
+
+// GetUserNameFromCtx extract username from context
+func GetUserNameFromCtx(ctx context.Context) string {
+	if userinfo, ok := auth.NewUserInfoFromContext(ctx); ok {
+		return userinfo.Username
+	}
+	return ""
+}
+
+// GetGroupNameListFromCtx extract group list from context
+func GetGroupNameListFromCtx(ctx context.Context) []string {
+	if userinfo, ok := auth.NewUserInfoFromContext(ctx); ok {
+		return userinfo.Claims.Groups
+	}
+	return nil
 }
