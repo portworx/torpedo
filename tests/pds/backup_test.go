@@ -17,6 +17,7 @@ var (
 	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
 	bkpTargetName                                 = "automation--"
 	bucket                                        = "pds-qa-automation"
+	deploymentsToBeCleaned                        = make([]*pds.ModelsDeployment, 0)
 )
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
@@ -153,7 +154,6 @@ var _ = Describe("{ValidateDataServiceDeletionBoundToBackups}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -200,12 +200,15 @@ var _ = Describe("{ValidateDataServiceDeletionBoundToBackups}", func() {
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 
 	})

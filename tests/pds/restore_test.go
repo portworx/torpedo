@@ -45,7 +45,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -98,12 +97,15 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 	})
 })
@@ -147,7 +149,6 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -202,12 +203,15 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 	})
 })
@@ -231,7 +235,6 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -297,6 +300,7 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 				})
 			}
 		})
@@ -304,6 +308,8 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 	})
 })
@@ -321,7 +327,6 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 
 	It("Perform multiple restore within same cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		stepLog := "Deploy data service and take adhoc backup, "
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -400,10 +405,13 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 		Step("Delete all the Deployments.", func() {
 			CleanupDeployments(deploymentsToBeCleaned)
+			deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 	})
 })
@@ -412,7 +420,7 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 	var deps []*pds.ModelsDeployment
 	pdsdeploymentsmd5Hash := make(map[string]string)
 	restoredDeploymentsmd5Hash := make(map[string]string)
-	var deploymentsToBeCleaned []*pds.ModelsDeployment
+	deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 	var wlDeploymentsToBeCleaned []*v1.Deployment
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 
@@ -575,6 +583,8 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 	})
 })
@@ -600,7 +610,6 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -703,12 +712,15 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				})
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					deploymentsToBeCleaned = make([]*pds.ModelsDeployment, 0)
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
+		// In case any of the steps failed
+		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 	})
 })

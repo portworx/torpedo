@@ -254,8 +254,13 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 
 // CleanupDeployments used to clean up deployment from pds and all other stale resources in the cluster.
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
+	if len(dsInstances) < 1 {
+		log.Info("No DS left for deletion as part of this test run.")
+	}
 	log.InfoD("Deleting all the ds instances.")
 	for _, dsInstance := range dsInstances {
+		dsId := *dsInstance.Id
+		components.DataServiceDeployment.GetDeployment(dsId)
 		log.Infof("Delete Deployment %v ", dsInstance)
 		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
