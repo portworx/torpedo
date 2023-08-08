@@ -9,10 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
+	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"net/http"
 	"regexp"
+	"runtime"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -139,6 +142,9 @@ import (
 	// import pso driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/pso"
 
+	// import ibm driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
@@ -158,7 +164,6 @@ const (
 )
 
 var (
-	RkeMap           = make(map[string]*rke.RancherClusterParameters)
 	clusterProviders = []string{"k8s"}
 )
 
@@ -238,6 +243,11 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
+
+
+        skipSystemCheckCliFlag = "torpedo-skip-system-checks"
+
+	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
 // Dashboard params
@@ -306,6 +316,7 @@ const (
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
 	defaultKvdbRetryInterval  = 5 * time.Minute
+	addDriveUpTimeOut         = 15 * time.Minute
 )
 
 const (
@@ -410,6 +421,8 @@ const (
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
+
+var dataIntegrityValidationTests string
 
 // TestLogger for logging test logs
 var TestLogger *lumberjack.Logger
@@ -2767,11 +2780,11 @@ func SetClusterContext(clusterConfigPath string) error {
 
 	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
-	// To update the RkeMap with value like token, endpoint access key, secret key for each cluster
-	if os.Getenv("CLUSTER_PROVIDER") == "rke" {
-		if rke.RancherClusterParametersValue != nil && CurrentClusterConfigPath != "" {
-			RkeMap[strings.Split(CurrentClusterConfigPath, "/tmp/")[1]] = rke.RancherClusterParametersValue
-			log.Infof("The value of RKE map is", RkeMap)
+	// To update the rancher client for current cluster context
+	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		if err != nil {
+			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
 	}
 	return nil
@@ -3581,7 +3594,6 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			}
 			return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 		}
-		clusterStatus()
 		_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 		if err != nil {
 			return err
@@ -3805,8 +3817,8 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				Type: api.CloudCredentialInfo_Rancher,
 				Config: &api.CloudCredentialInfo_RancherConfig{
 					RancherConfig: &api.RancherConfig{
-						Endpoint: RkeMap[kubeconfig[0]].Endpoint,
-						Token:    RkeMap[kubeconfig[0]].Token,
+						Endpoint: rke.RancherMap[kubeconfig[0]].Endpoint,
+						Token:    rke.RancherMap[kubeconfig[0]].Token,
 					},
 				},
 			},
@@ -4536,6 +4548,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					}
 				}
 				if newReplID != "" {
+					nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
 
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
 						Inst().V.String(), ctx.App.Key, v)
@@ -4556,7 +4572,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						})
 
 					if err == nil {
-						stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+						action := "reboot"
+						if restartPX {
+							action = "restart px on"
+						}
+						stepLog = fmt.Sprintf("%a target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
 							func() {
@@ -4585,7 +4605,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
+									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
 									log.Error(err)
 									UpdateOutcome(event, err)
 								} else {
@@ -4597,6 +4617,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
+
+						err = ValidateDataIntegrity(&nodeContexts)
+						UpdateOutcome(event, err)
+
 					}
 				} else {
 					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
@@ -4692,7 +4716,20 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 									UpdateOutcome(event, err)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
+
+								for _, nID := range replicaNodes {
+									replNodeToReboot := storageNodeMap[nID]
+									nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
+									if err != nil {
+										UpdateOutcome(event, err)
+										break
+									}
+									err = ValidateDataIntegrity(&nodeContexts)
+									UpdateOutcome(event, err)
+								}
+
 							}
+
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
 							log.Error(err)
@@ -5012,6 +5049,7 @@ type Torpedo struct {
 	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
+	SkipSystemChecks                    bool
 }
 
 // ParseFlags parses command line flags
@@ -5042,6 +5080,7 @@ func ParseFlags() {
 	var customConfigPath string
 	var hyperConverged bool
 	var enableDash bool
+
 	var pxPodRestartCheck bool
 	var deployPDSApps bool
 
@@ -5050,6 +5089,7 @@ func ParseFlags() {
 	// We should make this more robust.
 	var customAppConfig map[string]scheduler.AppConfig = make(map[string]scheduler.AppConfig)
 
+	var skipSystemChecks bool
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
@@ -5125,6 +5165,7 @@ func ParseFlags() {
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
+	flag.StringVar(&dataIntegrityValidationTests, dataIntegrityValidationTestsFlag, "", "list data integrity validation tests to run data integrity validation")
 	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
 	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
@@ -5138,6 +5179,10 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
+	// unstable testing environments.
+	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system checks during after suite")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -5367,6 +5412,7 @@ func ParseFlags() {
 				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
+				SkipSystemChecks:                    skipSystemChecks,
 			}
 		})
 	}
@@ -7219,6 +7265,27 @@ func IsVolumeStatusUP(vol *volume.Volume) (bool, error) {
 	return true, nil
 }
 
+// GetVolumeReplicationStatus returns PX volume replication status
+func GetVolumeReplicationStatus(vol *volume.Volume) (string, error) {
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return "", err
+	}
+	cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
+
+	output, err := Inst().N.RunCommand(node.GetStorageDriverNodes()[0], cmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+	//sample output : "Replication Status       :  Up"
+	output = strings.Split(strings.TrimSpace(output), ":")[1]
+	return strings.TrimSpace(output), nil
+}
+
 type KvdbNode struct {
 	PeerUrls   []string `json:"PeerUrls"`
 	ClientUrls []string `json:"ClientUrls"`
@@ -7582,7 +7649,6 @@ func GetClusterProviders() []string {
 	return clusterProviders
 }
 
-
 // GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
 func GetPoolUuidsWithStorageFull() ([]string, error) {
 	var poolUuids []string
@@ -7726,3 +7792,542 @@ func GetPoolCapacityUsed(poolUUID string) (float64, error) {
 	return poolSizeUsed, nil
 }
 
+// GetRandomNode Gets Random node
+func GetRandomNode(pxNodes []node.Node) node.Node {
+	rand.Seed(time.Now().UnixNano())
+	randomIndex := rand.Intn(len(pxNodes))
+	randomNode := pxNodes[randomIndex]
+	return randomNode
+}
+
+func RemoveLabelsAllNodes(label string, forStorage, forStorageLess bool) error {
+	if !forStorage && !forStorageLess {
+		return errors.New("at least one of forStorage or forStorageLess must be true")
+	}
+
+	var pxNodes []node.Node
+
+	if forStorage && forStorageLess {
+		pxNodes = node.GetStorageDriverNodes()
+	} else if forStorage {
+		pxNodes = node.GetStorageNodes()
+	} else if forStorageLess {
+		pxNodes = node.GetStorageLessNodes()
+	}
+
+	for _, node := range pxNodes {
+		log.Infof("Node Name: %s\n", node.Name)
+		if err := Inst().S.RemoveLabelOnNode(node, label); err != nil {
+			return fmt.Errorf("error removing label on node [%s]: %w", node.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func AddCloudDrive(stNode node.Node, poolID int32) error {
+	driveSpecs, err := GetCloudDriveDeviceSpecs()
+	if err != nil {
+		return fmt.Errorf("error getting cloud drive specs, err: %v", err)
+	}
+	deviceSpec := driveSpecs[0]
+	deviceSpecParams := strings.Split(deviceSpec, ",")
+	var specSize uint64
+	var driveSize string
+
+	if poolID != -1 {
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
+		if err != nil {
+			return fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+		}
+
+	outer:
+		for _, v := range drivesMap {
+			labels := v.Labels
+			for _, pID := range labels {
+				if pID == fmt.Sprintf("%d", poolID) {
+					driveSize = v.Size
+					i := strings.Index(driveSize, "G")
+					driveSize = driveSize[:i]
+					break outer
+				}
+			}
+		}
+	}
+
+	if driveSize != "" {
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%s,", driveSize))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		deviceSpec = strings.Join(paramsArr, ",")
+		specSize, err = strconv.ParseUint(driveSize, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error converting size to uint64, err: %v", err)
+		}
+	}
+
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+
+	var currentTotalPoolSize uint64
+
+	for _, pool := range pools {
+		currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+
+	log.Info(fmt.Sprintf("current pool size: %d GiB", currentTotalPoolSize))
+
+	expectedTotalPoolSize := currentTotalPoolSize + specSize
+
+	log.InfoD("Initiate add cloud drive and validate")
+	err = Inst().V.AddCloudDrive(&stNode, deviceSpec, poolID)
+	if err != nil {
+		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
+	}
+
+	log.InfoD("Validate pool rebalance after drive add")
+	err = ValidateDriveRebalance(stNode)
+	if err != nil {
+		return fmt.Errorf("pool re-balance failed, err: %v", err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+	if err != nil {
+		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
+	}
+	dash.VerifyFatal(err == nil, true, "PX is up after add drive")
+
+	var newTotalPoolSize uint64
+
+	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+	for _, pool := range pools {
+		newTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+	isPoolSizeUpdated := false
+
+	if newTotalPoolSize >= expectedTotalPoolSize {
+		isPoolSizeUpdated = true
+	}
+	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
+	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+	return nil
+}
+
+func IsJournalEnabled() (bool, error) {
+	storageSpec, err := Inst().V.GetStorageSpec()
+	if err != nil {
+		return false, err
+	}
+	jDev := storageSpec.GetJournalDev()
+	if jDev != "" {
+		log.Infof("JournalDev: %s", jDev)
+		return true, nil
+	}
+	return false, nil
+}
+
+func runDataIntegrityValidation(testName string) bool {
+
+	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+		if strings.Contains(testName, "{") {
+			i := strings.Index(testName, "{")
+			j := strings.Index(testName, "}")
+
+			testName = testName[i+1 : j]
+		}
+		if strings.Contains(dataIntegrityValidationTests, testName) {
+			return true
+		}
+
+		if strings.Contains(testName, "Longevity") {
+			pc, _, _, _ := runtime.Caller(1)
+			if strings.Contains(dataIntegrityValidationTests, runtime.FuncForPC(pc).Name()) {
+				return true
+			}
+			return false
+		}
+	}
+
+	return false
+}
+
+func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
+
+	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	if strings.Contains(testName, "{Longevity}") {
+		pc, _, _, _ := runtime.Caller(1)
+		testName = runtime.FuncForPC(pc).Name()
+	}
+
+	if !runDataIntegrityValidation(testName) {
+		return nil
+	}
+
+outer:
+	for _, ctx := range *contexts {
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		var timeout time.Duration
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+		//Waiting for all the apps in ctx are running
+		err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return err
+		}
+
+		//waiting for volumes replication status should be up before calculating md5sum
+		for _, v := range appVolumes {
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return err
+			}
+
+			//skipping the validation if volume is repl 2
+			if len(replicaSets) == 1 && len(replicaSets[0].PoolUuids) == 1 {
+				continue outer
+			}
+			t := func() (interface{}, bool, error) {
+				replicationStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					return nil, false, err
+				}
+
+				if replicationStatus == "Up" {
+					return "", false, nil
+				}
+				if replicationStatus == "Resync" {
+					return "", true, fmt.Errorf("volume %s is still in Resync state", v.ID)
+				}
+				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
+			}
+			_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			if err != nil {
+				return err
+			}
+		}
+
+		log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+		applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+		if err != nil {
+			return err
+		}
+
+		applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
+
+		for name := range applicationScaleMap {
+			applicationScaleDownMap[name] = 0
+		}
+		err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+		if err != nil {
+			return err
+		}
+		//waiting for volumes to be detached after scale down
+		for _, v := range appVolumes {
+			t := func() (interface{}, bool, error) {
+				apiVol, err := Inst().V.InspectVolume(v.ID)
+				if err != nil {
+					return "", false, err
+				}
+				if len(apiVol.AttachedOn) == 0 {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("volume %s is still attached to %s", v.ID, apiVol.AttachedOn)
+			}
+			_, err = task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+			if err != nil {
+				return err
+			}
+		}
+
+		poolChecksumMap := make(map[string]string)
+		dmthinPoolChecksumMap := make(map[string]map[string]string)
+
+		isDmthinSetup, err := IsDMthin()
+		if err != nil {
+			return err
+		}
+
+		//function to calulate md5sum of the given volume in the give pool
+		calChecksum := func(wg *sync.WaitGroup, v *volume.Volume, nodeDetail *node.Node, poolUuid string, errCh chan<- error) {
+			defer ginkgo.GinkgoRecover()
+			defer wg.Done()
+
+			poolID, err := GetPoolIDFromPoolUUID(poolUuid)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			inspectVolume, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
+			//To-Do update the command if set up is dmthin
+			cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
+
+			if isDmthinSetup {
+
+				err = validateDmthinVolumeDataIntegrity(inspectVolume, nodeDetail, poolID, &dmthinPoolChecksumMap)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			} else {
+				output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
+					Timeout:         defaultTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+					Sudo:            true,
+				})
+				if err != nil {
+					errCh <- err
+					return
+				}
+				vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
+				poolChecksumMap[poolUuid] = vChecksum
+			}
+
+		}
+
+		for _, v := range appVolumes {
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return err
+			}
+
+			wGroup := new(sync.WaitGroup)
+			errCh := make(chan error)
+
+			for _, rs := range replicaSets {
+				poolUuids := rs.PoolUuids
+				for _, poolUuid := range poolUuids {
+					nodeDetail, err := GetNodeWithGivenPoolID(poolUuid)
+					if err != nil {
+						return err
+					}
+					wGroup.Add(1)
+					go calChecksum(wGroup, v, nodeDetail, poolUuid, errCh)
+				}
+			}
+			wGroup.Wait()
+			close(errCh)
+
+			var errList []error
+
+			for err := range errCh {
+				errList = append(errList, err)
+			}
+
+			if len(errList) != 0 {
+				// Combine all errors into one and return
+				return errors.New(fmt.Sprintf("multiple errors occurred while checking md5sum of volume [%s]", v.ID)).(error)
+			}
+
+			if isDmthinSetup {
+
+				var primaryMap map[string]string
+				var primaryNode string
+
+				for n, m := range dmthinPoolChecksumMap {
+					if primaryMap == nil {
+						primaryNode = n
+						primaryMap = m
+					} else {
+						eq := reflect.DeepEqual(primaryMap, m)
+
+						if !eq {
+							return fmt.Errorf("md5sum of volume [%s] having [%v] on node [%s] is not matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+						}
+						log.InfoD("md5sum of volume [%s] having [%v] on node [%s] is matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+
+					}
+				}
+				//clearing the pool after the volume validation
+				for k := range dmthinPoolChecksumMap {
+					delete(dmthinPoolChecksumMap, k)
+				}
+
+			} else {
+				var checksum string
+				var primaryPool string
+				for p, c := range poolChecksumMap {
+					if checksum == "" {
+						primaryPool = p
+						checksum = c
+					} else {
+						if c != checksum {
+							return fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+						}
+						log.InfoD("md5sum of volume [%s] having [%s] on pool [%s] is matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+					}
+
+				}
+				//clearing the pool after the volume validation
+				for k := range poolChecksumMap {
+					delete(poolChecksumMap, k)
+				}
+			}
+
+		}
+
+		//reverting application scale
+		applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
+
+		for name, scale := range applicationScaleMap {
+			log.InfoD(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, scale))
+			applicationScaleUpMap[name] = scale
+		}
+		err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail *node.Node, poolID int32, dmthinPoolChecksumMap *map[string]map[string]string) error {
+
+	volPath := fmt.Sprintf("/dev/pwx%d/%s", poolID, inspectVolume.Id)
+	mountPath := fmt.Sprintf("/tmp/%s", inspectVolume.Id)
+	mountCmd := fmt.Sprintf("mount %s %s", volPath, mountPath)
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+	umountCmd := fmt.Sprintf("umount %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	log.Infof("Running command %s on %s", creatDir, nodeDetail.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(*nodeDetail, creatDir, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+	log.Infof("Running command %s on %s", mountCmd, nodeDetail.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(*nodeDetail, mountCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	defer func(N node.Driver, node node.Node, command string, options node.ConnectionOpts) {
+		log.Infof("Running command %s on %s", command, nodeDetail.Name)
+		_, err := N.RunCommandWithNoRetry(node, command, options)
+		if err != nil {
+			log.Errorf(err.Error())
+		}
+	}(Inst().N, *nodeDetail, umountCmd, cmdConnectionOpts)
+
+	eg := errgroup.Group{}
+
+	eg.Go(func() error {
+		md5Cmd := fmt.Sprintf("md5sum %s/*", mountPath)
+		log.Infof("Running command %s  on %s", md5Cmd, nodeDetail.Name)
+		output, err := Inst().N.RunCommand(*nodeDetail, md5Cmd, node.ConnectionOpts{
+			Timeout:         defaultTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+			Sudo:            true,
+		})
+
+		if err != nil {
+			return err
+		}
+		log.Infof("md5sum of vol %s on node %s : %s", inspectVolume.Id, nodeDetail.Name, output)
+		nodeChecksumMap := make(map[string]string)
+		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+			checksumOut := strings.Split(line, "  ")
+			if len(checksumOut) == 2 {
+				nodeChecksumMap[checksumOut[1]] = checksumOut[0]
+			} else {
+				return fmt.Errorf("cannot obtain checksum value from node %s, output: %v", nodeDetail.Name, checksumOut)
+			}
+		}
+		(*dmthinPoolChecksumMap)[nodeDetail.Name] = nodeChecksumMap
+		return nil
+
+	})
+
+	if err = eg.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// GetContextsOnNode returns the contexts which have volumes attached on the given node.
+func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
+	contextsOnNode := make([]*scheduler.Context, 0)
+	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	if strings.Contains(testName, "{Longevity}") {
+		pc, _, _, _ := runtime.Caller(1)
+		testName = runtime.FuncForPC(pc).Name()
+	}
+
+	if !runDataIntegrityValidation(testName) {
+		return contextsOnNode, nil
+	}
+
+	log.Infof("Getting contexts on node %s", n.Name)
+	for _, ctx := range *contexts {
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range appVolumes {
+			// case where volume is attached to the given node
+			attachedNode, err := Inst().V.GetNodeForVolume(v, 1*time.Minute, 5*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			if n.VolDriverNodeID == attachedNode.VolDriverNodeID {
+				contextsOnNode = append(contextsOnNode, ctx)
+				break
+			}
+			//case where volume is attached to different node but one of the replicas is the give node
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, rn := range replicaSets[0].Nodes {
+				if rn == n.VolDriverNodeID {
+					contextsOnNode = append(contextsOnNode, ctx)
+					break
+				}
+			}
+		}
+	}
+
+	return contextsOnNode, nil
+
+}

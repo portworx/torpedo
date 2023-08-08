@@ -2,9 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
@@ -94,6 +96,7 @@ var (
 	dash                                    *aetosutil.Dashboard
 	deployment                              *pds.ModelsDeployment
 	k8sCore                                 = core.Instance()
+	k8sApps                                 = apps.Instance()
 	pdsLabels                               = make(map[string]string)
 	accountID                               string
 )
@@ -243,4 +246,17 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 		}
 	}
 	return pvcCapacity, err
+}
+
+// CleanupDeployments used to clean up deployment from pds and all other stale resources in the cluster.
+func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
+	for _, dsInstance := range dsInstances {
+		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
+		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
+		log.FailOnError(err, "Error while deleting data services")
+		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+		log.InfoD("Getting all PV and associated PVCs and deleting them")
+		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
+		log.FailOnError(err, "Error while deleting PV and PVCs")
+	}
 }

@@ -8,13 +8,30 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
+	v1 "k8s.io/api/apps/v1"
 	"net/url"
 )
 
+type LoadGenParams struct {
+	LoadGenDepName    string
+	PdsDeploymentName string
+	Namespace         string
+	FailOnError       string
+	Mode              string
+	TableName         string
+	NumOfRows         string
+	Iterations        string
+	Timeout           string //example 60s
+	ReplacePassword   string
+	ClusterMode       string
+	Replicas          int32
+}
+
 type Driver interface {
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
-	CreateSchedulerContextForPDSApps([]*pds.ModelsDeployment) ([]*scheduler.Context, error)
-	ValidateDataServiceDeployment(*pds.ModelsDeployment, string) error
+	CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) ([]*scheduler.Context, error)
+	ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error
+	GenerateWorkload(pdsDeployment *pds.ModelsDeployment, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error)
 }
 
 var (
