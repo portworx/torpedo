@@ -4145,7 +4145,7 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 		}
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			updatedPVC, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			// For raw block volumes resize is failing hence skipping test for it
+			// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
 			if *updatedPVC.Spec.VolumeMode != corev1.PersistentVolumeBlock {
 				shouldResize, err := k.filterPureVolumesIfEnabled(updatedPVC)
 				if err != nil {
