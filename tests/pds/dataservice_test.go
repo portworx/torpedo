@@ -682,6 +682,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var dsVersions = make(map[string]map[string][]string)
 		Step("Deploy Data Services", func() {
+			log.Infof("Sleeping for 3 days now........")
+			time.Sleep(72 * time.Hour)
 			for _, ds := range params.DataServiceToTest {
 				if ds.Name == zookeeper {
 					log.Warnf("Scaling of nodes is not supported for %v dataservice ", ds.Name)

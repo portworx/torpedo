@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine
 
-RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat go
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
