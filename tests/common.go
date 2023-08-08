@@ -13,8 +13,6 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
-
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/pds"
@@ -113,7 +111,7 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
+	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
