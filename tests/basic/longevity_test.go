@@ -116,6 +116,7 @@ var _ = Describe("{Longevity}", func() {
 		CloudSnapShotRestore:     TriggerCloudSnapshotRestore,
 		LocalSnapShotRestore:     TriggerLocalSnapshotRestore,
 		AggrVolDepReplResizeOps:  TriggerAggrVolDepReplResizeOps,
+		AddStorageNode:           TriggerAddOCPStorageNode,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -699,7 +700,10 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
 	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
+
 	triggerInterval[AggrVolDepReplResizeOps] = make(map[int]time.Duration)
+
+	triggerInterval[AddStorageNode] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1370,7 +1374,7 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
 	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
 
-	baseInterval = 300 * time.Minute
+	baseInterval = 2 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
 	triggerInterval[UpgradeStork][9] = 2 * baseInterval
@@ -1476,6 +1480,17 @@ func populateIntervals() {
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
 
+	triggerInterval[AddStorageNode][10] = 1 * baseInterval
+	triggerInterval[AddStorageNode][9] = 3 * baseInterval
+	triggerInterval[AddStorageNode][8] = 6 * baseInterval
+	triggerInterval[AddStorageNode][7] = 9 * baseInterval
+	triggerInterval[AddStorageNode][6] = 12 * baseInterval
+	triggerInterval[AddStorageNode][5] = 15 * baseInterval
+	triggerInterval[AddStorageNode][4] = 18 * baseInterval
+	triggerInterval[AddStorageNode][3] = 21 * baseInterval
+	triggerInterval[AddStorageNode][2] = 24 * baseInterval
+	triggerInterval[AddStorageNode][1] = 30 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1544,8 +1559,11 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][0] = 0
 	triggerInterval[CloudSnapShotRestore][0] = 0
 	triggerInterval[LocalSnapShotRestore][0] = 0
-        triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[UpdateIOProfile][0] = 0
 	triggerInterval[AggrVolDepReplResizeOps][0] = 0
+	triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[AddStorageNode][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

@@ -413,6 +413,9 @@ type Driver interface {
 
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
+
+	// ScaleCluster scale the cluster to the given replicas
+	ScaleCluster(replicas int) error
 }
 
 var (
