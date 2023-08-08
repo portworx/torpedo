@@ -3,7 +3,9 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/pds/api"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"net/http"
+	"strings"
 	"time"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -282,7 +284,22 @@ func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 	}
 	for _, backup := range backups {
 		log.Infof("Delete backup.Details: Name - %v, Id - %v", backup.GetClusterResourceName(), backup.GetId())
-		resp, err := components.Backup.DeleteBackup(backup.GetId())
+		backupId := backup.GetId()
+		resp, err := components.Backup.DeleteBackup(backupId)
+		waitErr := wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+			model, bkpErr := components.Backup.GetBackup(backupId)
+			if model != nil {
+				log.Info(model.GetId())
+				return false, bkpErr
+			}
+			if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
+				return true, nil
+			}
+			return false, bkpErr
+		})
+		if waitErr != nil {
+			return fmt.Errorf("error occured while polling for deleting backup : %v", err)
+		}
 		if err != nil {
 			return fmt.Errorf("backup object %v deletion failed.Err - %v, Response status - %v",
 				backup.GetClusterResourceName(), err, resp.StatusCode)
