@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 # Build a fresh container with just the binaries
 FROM alpine
 
-RUN apk add --no-cache ca-certificates bash curl jq libc6-compat go git
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
@@ -74,8 +74,6 @@ COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator 
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
-COPY apiServer apiServer
-COPY tests tests
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
