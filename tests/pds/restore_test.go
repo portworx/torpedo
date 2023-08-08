@@ -17,15 +17,14 @@ import (
 )
 
 var (
-	restoreTargetCluster   *tc.TargetCluster
-	bkpTarget              *pds.ModelsBackupTarget
-	bkpTargets             []*pds.ModelsBackupTarget
-	dsEntity               restoreBkp.DSEntity
-	bkpJob                 *pds.ModelsBackupJobStatusResponse
-	restoredDeployment     *pds.ModelsDeployment
-	restoredDeployments    []*pds.ModelsDeployment
-	deploymentsToBeCleaned []*pds.ModelsDeployment
-	deploymentDSentityMap  = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
+	restoreTargetCluster  *tc.TargetCluster
+	bkpTarget             *pds.ModelsBackupTarget
+	bkpTargets            []*pds.ModelsBackupTarget
+	dsEntity              restoreBkp.DSEntity
+	bkpJob                *pds.ModelsBackupJobStatusResponse
+	restoredDeployment    *pds.ModelsDeployment
+	restoredDeployments   []*pds.ModelsDeployment
+	deploymentDSentityMap = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
 )
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
@@ -40,13 +39,13 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	})
 
 	It("Perform multiple restore within same cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -116,7 +115,6 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 
 	It("Perform multiple restore having backup present at different cloud object store.", func() {
 		bkpTargetName = "autom-" + pdsbkp.RandString(4)
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		stepLog := "Create AWS S3 Backup target."
@@ -149,6 +147,7 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -226,13 +225,13 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 	})
 
 	It("Perform multiple restore within same cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -322,6 +321,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 
 	It("Perform multiple restore within same cluster", func() {
+		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		stepLog := "Deploy data service and take adhoc backup, "
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -592,7 +592,6 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	})
 
 	It("Perform PVC Resize and restore within same cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var depList []*pds.ModelsDeployment
 		stepLog := "Deploy data service and take adhoc backup."
@@ -601,6 +600,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
