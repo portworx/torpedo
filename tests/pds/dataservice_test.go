@@ -119,6 +119,12 @@ var _ = Describe("{DeletePDSPods}", func() {
 
 				})
 
+				steplog := "Validate the deployment target is healthy in the control plane"
+				Step(steplog, func() {
+					_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+					log.FailOnError(err, "Error while getting deployment target status")
+				})
+
 				Step("Validate Deployments after pods are up", func() {
 					log.InfoD("Validate Deployments after pds pods are up")
 					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
@@ -171,6 +177,12 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 			} else {
 				log.InfoD("Target Cluster is with old pds helm version %s", params.PDSHelmVersions.PreviousHelmVersion)
 			}
+		})
+
+		steplog = "Validate the deployment target is healthy in the control plane"
+		Step(steplog, func() {
+			_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+			log.FailOnError(err, "Error while getting deployment target status")
 		})
 
 		steplog = "Deploy and validate data service"
@@ -237,6 +249,12 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 			log.InfoD(steplog)
 			err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
 			log.FailOnError(err, "Target Cluster Registeration failed")
+		})
+
+		steplog = "Validate the deployment target is healthy in the control plane"
+		Step(steplog, func() {
+			_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+			log.FailOnError(err, "Error while getting deployment target status")
 		})
 
 		steplog = "Validate Deployments after pds-system pods are up"
@@ -465,6 +483,12 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					log.InfoD("Validating new PDS agent Pod")
 					err = k8sCore.ValidatePod(&agentPod, 5*time.Minute, 10*time.Second)
 					log.FailOnError(err, "pds agent pod failed to comeup")
+				})
+
+				steplog := "Validate the deployment target is healthy in the control plane"
+				Step(steplog, func() {
+					_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+					log.FailOnError(err, "Error while getting deployment target status")
 				})
 
 				Step("Validate Deployments after pods are up", func() {
