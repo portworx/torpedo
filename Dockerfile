@@ -61,6 +61,7 @@ COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
 WORKDIR /torpedo
 COPY deployments deployments
 COPY scripts scripts
+COPY apiServer apiServer
 
 WORKDIR /go/src/github.com/portworx/torpedo
 
