@@ -15,5 +15,9 @@ func main() {
 	router.POST("pxone/createns", utils.CreateNS)
 	router.POST("pxone/inittorpedo", utils.InitializeDrivers)
 	router.GET("pxone/getnodes", utils.GetNodes)
+	router.POST("pxone/rebootnode/:nodename", utils.RebootNode)
+	router.GET("pxone/storagenodes", utils.GetStorageNodes)
+	router.GET("pxone/storagelessnodes", utils.GetStorageLessNodes)
+	router.POST("pxone/collectsupport", utils.CollectSupport)
 	log.Fatal(router.Run(":8080"))
 }
