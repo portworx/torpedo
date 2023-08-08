@@ -9,13 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
-	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"net/http"
 	"regexp"
 	"runtime"
+
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -243,7 +243,6 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
-
 
 	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
