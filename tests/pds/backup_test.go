@@ -153,6 +153,7 @@ var _ = Describe("{ValidateDataServiceDeletionBoundToBackups}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				var deploymentsToBeCleaned []*pds.ModelsDeployment
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -196,12 +197,15 @@ var _ = Describe("{ValidateDataServiceDeletionBoundToBackups}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 				})
+
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
 
 	})
