@@ -656,6 +656,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
+					log.Debugf("context is : ************ %v", ctx)
 					log.FailOnError(err, "Unable to create scheduler context")
 					err = IncreasePVCby1Gig(ctx)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
