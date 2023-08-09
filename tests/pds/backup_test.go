@@ -14,11 +14,10 @@ import (
 
 var (
 	bkpClient                                     *pdsbkp.BackupClient
+	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
 	bkpTargetName                                 = "automation--"
 	bucket                                        = "pds-qa-automation"
 	deploymentsToBeCleaned                        = make([]*pds.ModelsDeployment, 0)
-	awsBkpTargets, azureBkpTargets, gcpBkpTargets = make([]*pds.ModelsBackupTarget, 0),
-		make([]*pds.ModelsBackupTarget, 0), make([]*pds.ModelsBackupTarget, 0)
 )
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
@@ -231,7 +230,5 @@ func DeleteAllPDSBkpTargets() {
 	}
 	// Resetting the global param to track backup targets
 	awsBkpTargets, azureBkpTargets, gcpBkpTargets =
-		make([]*pds.ModelsBackupTarget, 0),
-		make([]*pds.ModelsBackupTarget, 0),
-		make([]*pds.ModelsBackupTarget, 0)
+		[]*pds.ModelsBackupTarget{}, []*pds.ModelsBackupTarget{}, []*pds.ModelsBackupTarget{}
 }
