@@ -244,7 +244,6 @@ const (
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
 
-
 	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
@@ -6352,7 +6351,7 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			t := func() (interface{}, bool, error) {
 				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
-				if err != nil {
+				if err != nil || !isIOsInProgress {
 					return false, true, err
 				}
 				return true, false, nil

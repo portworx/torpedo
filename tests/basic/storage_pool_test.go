@@ -9606,6 +9606,10 @@ func scheduleApps() []*scheduler.Context {
 }
 
 func pickPoolToResize() string {
+	poolWithIO, err := GetPoolIDWithIOs(contexts)
+	if poolWithIO == "" || err != nil {
+		log.Warnf("No pool with IO found, picking a random pool in use to resize")
+	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
 	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
