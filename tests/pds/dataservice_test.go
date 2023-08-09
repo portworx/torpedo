@@ -172,12 +172,6 @@ var _ = Describe("{UpdatePDSHelmVersion}", func() {
 			}
 		})
 
-		steplog = "Validate the deployment target is healthy in the control plane"
-		Step(steplog, func() {
-			_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
-			log.FailOnError(err, "Error while getting deployment target status")
-		})
-
 		steplog = "Deploy and validate data service"
 		Step(steplog, func() {
 			log.InfoD(steplog)
@@ -1752,6 +1746,12 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 }
 
 func DeployInANamespaceAndVerify(nname string) []*pds.ModelsDeployment {
+	steplog := "Validate the deployment target is healthy in the control plane"
+	Step(steplog, func() {
+		_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+		log.FailOnError(err, "Error while getting deployment target status")
+	})
+
 	var deployments []*pds.ModelsDeployment
 	for _, ds := range params.DataServiceToTest {
 		Step("Deploy and validate data service", func() {
