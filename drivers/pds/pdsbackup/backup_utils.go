@@ -3,7 +3,6 @@ package pdsbackup
 import (
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/wait"
-	status "net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -55,23 +54,23 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
 	}
-	res, err := backupClient.Components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
-	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("failed to sync to AWS S3 backup target. Err: %v, Http response: %v", err, res)
-	}
-	backupStates, err := backupClient.Components.BackupTarget.LisBackupsStateBelongToBackupTarget(backupTarget.GetId())
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
-	}
-	for _, backupState := range backupStates {
-		if deploymentTargetId == backupState.GetDeploymentTargetId() {
-			if backupState.GetState() == "successful" {
-				log.Infof("Synced successfully to the target cluster and created px credentials, PxCredentialsName: %v", backupState.GetPxCredentialsName())
-			} else {
-				return nil, fmt.Errorf("state: %v, error message: %v, error details: %v", backupState.GetState(), backupState.GetErrorMessage(), backupState.GetErrorDetails())
-			}
-		}
-	}
+	//res, err := backupClient.Components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
+	//if err != nil || res.StatusCode != status.StatusOK {
+	//	return nil, fmt.Errorf("failed to sync to AWS S3 backup target. Err: %v, Http response: %v", err, res)
+	//}
+	//backupStates, err := backupClient.Components.BackupTarget.LisBackupsStateBelongToBackupTarget(backupTarget.GetId())
+	//if err != nil {
+	//	return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
+	//}
+	//for _, backupState := range backupStates {
+	//	if deploymentTargetId == backupState.GetDeploymentTargetId() {
+	//		if backupState.GetState() == "successful" {
+	//			log.Infof("Synced successfully to the target cluster and created px credentials, PxCredentialsName: %v", backupState.GetPxCredentialsName())
+	//		} else {
+	//			return nil, fmt.Errorf("state: %v, error message: %v, error details: %v", backupState.GetState(), backupState.GetErrorMessage(), backupState.GetErrorDetails())
+	//		}
+	//	}
+	//}
 	return backupTarget, nil
 }
 
