@@ -4120,3 +4120,26 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 	}
 	return preRuleName, postRuleName, nil
 }
+
+func CreateBackupScheduleIntervalPolicy(retain int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+	backupDriver := Inst().Backup
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  periodicSchedulePolicyName,
+			Uid:   periodicSchedulePolicyUid,
+			OrgId: OrgID,
+		},
+
+		SchedulePolicy: &api.SchedulePolicyInfo{
+			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retain, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			ForObjectLock: false,
+			AutoDelete:    false,
+		},
+	}
+
+	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		return
+	}
+	return
+}
