@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	"math/rand"
@@ -11,9 +12,11 @@ import (
 )
 
 var (
-	IsTorpedoInitDone bool
+	IsTorpedoInitDone bool                 // flag to check if Drivers init is done
+	context           []*scheduler.Context // Application context will be maintained globally for now
 )
 
+// This method checks if test has done InitInstance once or not. If not, we will try to do it.
 func checkTorpedoInit(c *gin.Context) bool {
 	if !IsTorpedoInitDone {
 		InitializeDrivers(c)
@@ -138,11 +141,24 @@ func GetStorageLessNodes(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"nodes": nodes})
 }
 
-// CollectSupport : collects the support bundle
+// CollectSupport : This API collects the support bundle
 func CollectSupport(c *gin.Context) {
 	if !checkTorpedoInit(c) {
 		return
 	}
 	tests.CollectSupport()
 	c.JSON(http.StatusOK, gin.H{"message": "Collection of support bundle done from Torpedo End"})
+}
+
+// ScheduleAppsAndValidate : This API schedules multiple applications on the cluster and validates them
+// context is created as a global context to be accessed later in further tests
+func ScheduleAppsAndValidate(c *gin.Context) {
+	if !checkTorpedoInit(c) {
+		return
+	}
+	context = tests.ScheduleApplications(testName)
+	tests.ValidateApplications(context)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Apps Created and Validated successfully",
+	})
 }

@@ -19,5 +19,6 @@ func main() {
 	router.GET("pxone/storagenodes", utils.GetStorageNodes)
 	router.GET("pxone/storagelessnodes", utils.GetStorageLessNodes)
 	router.POST("pxone/collectsupport", utils.CollectSupport)
+	router.POST("pxone/scheduleapps", utils.ScheduleAppsAndValidate)
 	log.Fatal(router.Run(":8080"))
 }
