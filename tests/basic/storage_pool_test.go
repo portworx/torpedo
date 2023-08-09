@@ -31,7 +31,6 @@ import (
 
 const (
 	// defined in testing app path torpedo/scheduler/k8s/fio-low-io/pxd/px-storage-class.yaml
-	TESTING_STORAGE_CLASS            = "fio-sc"
 	replicationUpdateTimeout         = 4 * time.Hour
 	retryTimeout                     = time.Minute * 2
 	addDriveUpTimeOut                = time.Minute * 15
@@ -9607,7 +9606,7 @@ func scheduleApps() []*scheduler.Context {
 }
 
 func pickPoolToResize() string {
-	poolIDsInUseByTestingApp, err := GetPoolsInUse(TESTING_STORAGE_CLASS)
+	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
 	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
 	poolIDToResize := poolIDsInUseByTestingApp[0]

@@ -6314,15 +6314,17 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
-func GetPoolsInUse(storageClassName string) ([]string, error) {
-	pvcs, err := k8sCore.GetPVCsUsingStorageClass(storageClassName)
-	if err != nil || len(pvcs) == 0 {
-		return nil, fmt.Errorf("no PVCs found using storage class %s, error %v: ", storageClassName, err)
+// GetPoolsInUse lists all persistent volumes and returns the pool IDs
+func GetPoolsInUse() ([]string, error) {
+	pvlist, err := k8sCore.GetPersistentVolumes()
+	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
+		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
 	}
-	pv := pvcs[0]
-	volumeInUse := pv.Spec.VolumeName
+	volumeInUse := pvlist.Items[0]
+	volumeID := volumeInUse.GetUID()
+	log.Infof("DEBUG: volumeInUse: %v", volumeInUse)
 
-	return GetPoolIDsFromVolName(volumeInUse)
+	return GetPoolIDsFromVolName(string(volumeID))
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
