@@ -825,7 +825,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
-			log.FailOnError(err, "Error waiting for poor resize")
+			log.FailOnError(err, "Error waiting for pool resize")
 
 			//validating new pool rebalance
 			log.InfoD("Validate pool rebalance after drive add")
@@ -6790,6 +6790,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(AddCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
+		log.Infof("Adding disks to the node completed")
 
 		// Refresh endpoints
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
@@ -8725,7 +8726,10 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				terminate = true
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
 				}
 
 			}
@@ -9267,10 +9271,15 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 				terminate = true
 				wg.Done()
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
 				}
 				for _, each := range snapshotsCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					}
 				}
 			}
 		}
@@ -9301,19 +9310,20 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 
 		inspectDeleteVolume := func(volumeId string) error {
 			defer GinkgoRecover()
-			// inspect volume
-			appVol, err := Inst().V.InspectVolume(volumeId)
-			if err != nil {
-				stopRoutine()
-				return err
-			}
+			if IsVolumeExits(volumeId) {
+				// inspect volume
+				appVol, err := Inst().V.InspectVolume(volumeId)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
 
-			err = Inst().V.DeleteVolume(appVol.Id)
-			if err != nil {
-				stopRoutine()
-				return err
+				err = Inst().V.DeleteVolume(appVol.Id)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
 			}
-
 			return nil
 		}
 
@@ -9792,4 +9802,97 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 		log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
 		AfterEachTest(contexts, testrailID, runID)
 	})
+})
+
+var _ = Describe("{AddDriveWithKernelPanic}", func() {
+	//1) Deploy px with cloud drive.
+	//2) Create a volume on that pool and write some data on the volume.
+	//3) Expand pool by adding cloud drives.
+	//4) Inject kernel panic where the pool expansion is in-progress
+	//5) Verify total pool count after addition of cloud drive with kernel panic
+
+	var testrailID = 0
+	var runID int
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("AddDriveWithKernelPanic", "Initiate pool expansion using add-drive and do kernel panic while it is in progress", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "should get the existing storage node and expand the pool by adding a drive"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pladddrvwrst-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get Pool with running IO on the cluster
+		poolUUID, err := GetPoolIDWithIOs(contexts)
+		log.FailOnError(err, "Failed to get pool running with IO")
+		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+
+		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
+		log.FailOnError(err, "Failed to get Pool from Pool uuid [%v]", poolUUID)
+		
+		stNode, stNodeerr := GetNodeWithGivenPoolID(poolUUID)
+		log.FailOnError(stNodeerr, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+
+		expectedSize := (poolToBeResized.TotalSize / units.GiB) + 200
+		log.InfoD("Current Size of the Pool %s is %d", poolUUID, poolToBeResized.TotalSize/units.GiB)
+		
+		expanderr := Inst().V.ExpandPool(poolUUID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+		log.FailOnError(expanderr, "Failed to initiate Expand on Pool [%v]", poolUUID)
+
+		isjournal, journalerr := IsJournalEnabled()
+		log.FailOnError(journalerr, "Failed to get Journal Disk Details")
+		
+		err = WaitForExpansionToStart(poolUUID)
+		log.FailOnError(err, "Expansion is not started")
+
+		cmd := "echo c > /proc/sysrq-trigger"
+
+		// Execute the command to generate kernel panic
+		log.Infof("Executing command on node, [%v]", stNode.Name)
+		_, err = Inst().N.RunCommandWithNoRetry(*stNode, cmd, node.ConnectionOpts{
+			Timeout:         2 * time.Minute,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		
+		re, _ := regexp.Compile(".*remote command exited without exit status or exit signal")
+		regMatch := re.MatchString(fmt.Sprintf("%v", err))
+		dash.VerifyFatal(regMatch, true, " force panic the node successful?")
+		
+		err = Inst().N.TestConnection(*stNode, node.ConnectionOpts{
+			Timeout:         addDriveUpTimeOut,
+			TimeBeforeRetry: 10 * time.Second,
+		})
+		log.FailOnError(err, fmt.Sprintf("Verify the Node %s connection is up?", stNode.Name))
+		
+		err = Inst().V.WaitDriverDownOnNode(*stNode)
+		log.FailOnError(err, fmt.Sprintf("Verify the Node %s driver down and up?", stNode.Name))
+			
+		err = Inst().S.IsNodeReady(*stNode)
+		log.FailOnError(err, fmt.Sprintf("Verify the Node %s is ready?", stNode.Name))
+				
+		err = Inst().V.WaitDriverUpOnNode(*stNode, addDriveUpTimeOut)
+		log.FailOnError(err, fmt.Sprintf("Kernel Panic on Node %s", stNode.Name))
+		log.InfoD("Validate pool rebalance after drive add and Kernel panic")
+
+		resizeErr := waitForPoolToBeResized(expectedSize, poolUUID, isjournal)
+		log.FailOnError(resizeErr, "Failed waiting for Pool Resize")
+		
+		err = ValidateDriveRebalance(*stNode)
+		log.FailOnError(err, "Pool re-balance failed")
+		dash.VerifyFatal(err == nil, true, "PX is up after add drive with kernel panic")
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+
 })
