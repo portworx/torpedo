@@ -6504,6 +6504,20 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	return nil
 }
 
+func (k *K8s) readRawBlockDataFromPod(podName, podNamespace, devicePath string) (string, error) {
+	ddCmd := fmt.Sprintf("dd if=%s status=none bs=25 count=1 skip=0", devicePath)
+	cmdArgs := []string{"/bin/sh", "-c", ddCmd}
+	fileContent, err := k8sCore.RunCommandInPod(cmdArgs, podName, "", podNamespace)
+	return fileContent, err
+}
+
+func (k *K8s) readDataFromPod(podName, podNamespace, mountFilePath string) (string, error) {
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "bin/cat", mountFilePath}
+	command := exec.Command("kubectl", cmdArgs...)
+	fileContent, err := command.CombinedOutput()
+	return string(fileContent), err
+}
+
 func (k *K8s) writeRawBlockDataToPod(data, podName, podNamespace, devicePath string) error {
 	var bsSize int = 25
 	tmpFilePath := "/tmp/test.txt"
@@ -6606,9 +6620,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	mountPath, _ := pureutils.GetAppDataDir(restoredPod.Namespace)
 	// Run a cat command from within the pod to verify the content of dirtydata
 	if *restoredPVC.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-		ddCmd := fmt.Sprintf("dd if=%s status=none bs=25 count=1 skip=0", mountPath)
-		cmdArgs := []string{"/bin/sh", "-c", ddCmd}
-		fileContent, err := k8sCore.RunCommandInPod(cmdArgs, restoredPod.GetName(), "", restoredPod.GetNamespace())
+		fileContent, err := k.readRawBlockDataFromPod(restoredPod.GetName(), restoredPod.GetNamespace(), mountPath)
 		if err != nil {
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
@@ -6616,13 +6628,11 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
 		}
 	} else {
-		cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
-		command := exec.Command("kubectl", cmdArgs...)
-		fileContent, err := command.CombinedOutput()
+		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
 		if err != nil {
 			return fmt.Errorf("error checking content of restored PVC: %s. Output: %s", err, string(fileContent))
 		}
-		if !strings.Contains(string(fileContent), data) {
+		if !strings.Contains(fileContent, data) {
 			return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
@@ -6670,9 +6680,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	mountPath, _ := pureutils.GetAppDataDir(restoredPod.Namespace)
 	// Run a cat command from within the pod to verify the content of dirtydata
 	if *clonedPVC.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-		ddCmd := fmt.Sprintf("dd if=%s status=none bs=25 count=1 skip=0", mountPath)
-		cmdArgs := []string{"/bin/sh", "-c", ddCmd}
-		fileContent, err := k8sCore.RunCommandInPod(cmdArgs, restoredPod.GetName(), "", restoredPod.GetNamespace())
+		fileContent, err := k.readRawBlockDataFromPod(restoredPod.GetName(), restoredPod.GetNamespace(), mountPath)
 		if err != nil {
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
@@ -6680,13 +6688,11 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
 		}
 	} else {
-		cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
-		command := exec.Command("kubectl", cmdArgs...)
-		fileContent, err := command.CombinedOutput()
+		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
 		if err != nil {
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
-		if !strings.Contains(string(fileContent), data) {
+		if !strings.Contains(fileContent, data) {
 			return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
