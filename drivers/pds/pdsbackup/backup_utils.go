@@ -128,7 +128,6 @@ func (backupClient *BackupClient) CreateGcpBackupCredsAndTarget(tenantId, name s
 
 // DeleteAwsS3BackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId string) error {
-
 	log.Info("Removing S3 backup creadentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
