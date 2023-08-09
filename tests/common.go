@@ -6320,7 +6320,7 @@ func GetPoolsInUse() ([]string, error) {
 		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
 	}
 	volumeInUse := pvlist.Items[0]
-	volumeID := volumeInUse.GetUID()
+	volumeID := volumeInUse.GetName()
 	log.Infof("DEBUG: volumeInUse: %v", volumeInUse)
 
 	return GetPoolIDsFromVolName(string(volumeID))
