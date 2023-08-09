@@ -4145,19 +4145,16 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 		}
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
 			updatedPVC, _ := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
-			// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
-			if *updatedPVC.Spec.VolumeMode != corev1.PersistentVolumeBlock {
-				shouldResize, err := k.filterPureVolumesIfEnabled(updatedPVC)
+			shouldResize, err := k.filterPureVolumesIfEnabled(updatedPVC)
+			if err != nil {
+				return nil, err
+			}
+			if shouldResize {
+				vol, err := k.ResizePVC(ctx, updatedPVC, 1)
 				if err != nil {
 					return nil, err
 				}
-				if shouldResize {
-					vol, err := k.ResizePVC(ctx, updatedPVC, 1)
-					if err != nil {
-						return nil, err
-					}
-					vols = append(vols, vol)
-				}
+				vols = append(vols, vol)
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sApps.GetStatefulSet(obj.Name, obj.Namespace)
@@ -4177,19 +4174,16 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 			}
 
 			for _, pvc := range pvcList.Items {
-				// For raw block volumes resize is failing hence skipping test for it
-				if *pvc.Spec.VolumeMode != corev1.PersistentVolumeBlock {
-					shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if shouldResize {
+					vol, err := k.ResizePVC(ctx, &pvc, 1)
 					if err != nil {
 						return nil, err
 					}
-					if shouldResize {
-						vol, err := k.ResizePVC(ctx, &pvc, 1)
-						if err != nil {
-							return nil, err
-						}
-						vols = append(vols, vol)
-					}
+					vols = append(vols, vol)
 				}
 			}
 		} else if obj, ok := specObj.(*pds.ModelsDeployment); ok {
@@ -4210,19 +4204,16 @@ func (k *K8s) ResizeVolume(ctx *scheduler.Context, configMapName string) ([]*vol
 				}
 			}
 			for _, pvc := range pvcList.Items {
-				// For raw block volumes resize is failing hence skipping test for it
-				if *pvc.Spec.VolumeMode != corev1.PersistentVolumeBlock {
-					shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				shouldResize, err := k.filterPureVolumesIfEnabled(&pvc)
+				if err != nil {
+					return nil, err
+				}
+				if shouldResize {
+					vol, err := k.ResizePVC(ctx, &pvc, 1)
 					if err != nil {
 						return nil, err
 					}
-					if shouldResize {
-						vol, err := k.ResizePVC(ctx, &pvc, 1)
-						if err != nil {
-							return nil, err
-						}
-						vols = append(vols, vol)
-					}
+					vols = append(vols, vol)
 				}
 			}
 		}
