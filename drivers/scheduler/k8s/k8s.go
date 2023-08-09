@@ -6376,36 +6376,12 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	dirtyData := "thisIsJustSomeRandomText"
 	snapName := request.SnapName
 	for i := 0; i < 3; i++ {
+		var data string
 		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-			data := "this is pure volume rawblock test data"
-			tmpFilePath := "/tmp/test.txt"
-			podCmd := fmt.Sprintf("echo -n \"%s\" >> %s", data, "/tmp/test.txt")
-			cmdArgs := []string{"/bin/bash", "-c", podCmd}
-			_, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), "", pod.GetNamespace())
+			data := dirtyData
+			err = k.writeRawBlockDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 			if err != nil {
-				return fmt.Errorf("failed to execute command to Pod: %s", err)
-			}
-			var bsSize int = 38
-			// copy DATA_SIZE data to the device path of rawblock
-			ddCopy := "dd if=%s of=%s bs=%d count=1 seek=0"
-			ddCopyCmd := fmt.Sprintf(ddCopy, tmpFilePath, mountPath, bsSize)
-			ddCopyCmdArgs := []string{"/bin/bash", "-c", ddCopyCmd}
-			_, err = k8sCore.RunCommandInPod(ddCopyCmdArgs, pod.GetName(), "", pod.GetNamespace())
-			if err != nil {
-				return fmt.Errorf("failed to execute command to Pod: %s", err)
-			}
-			// Sync the data, wait 20 secs and then proceed to snapshot the volume
-			cmdArgs2 := []string{"exec", "-it", pod.GetName(), "-n", pod.GetNamespace(), "--", "/bin/sync"}
-			command2 := exec.Command("kubectl", cmdArgs2...)
-			out, err := command2.CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("failed to run 'sync' in pod: %s. Output: %s", err, string(out))
-			}
-			fmt.Println("Sleep for 20 secs to let data write through")
-			time.Sleep(time.Second * 20)
-			err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-			if err != nil {
-				return fmt.Errorf("failed to validate restored PVC content: %s ", err)
+				return fmt.Errorf("failed to write data to restored PVC: %s", err)
 			}
 		} else {
 			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
@@ -6413,10 +6389,10 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 			if err != nil {
 				return fmt.Errorf("failed to write data to restored PVC: %s", err)
 			}
-			err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-			if err != nil {
-				return fmt.Errorf("failed to validate restored PVC content: %s ", err)
-			}
+		}
+		err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		if err != nil {
+			return fmt.Errorf("failed to validate restored PVC content: %s ", err)
 		}
 	}
 
@@ -6449,36 +6425,12 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	dirtyData := "thisIsJustSomeRandomText"
 
 	for i := 0; i < 3; i++ {
+		var data string
 		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-			data := "this is pure volume rawblock test data"
-			tmpFilePath := "/tmp/test.txt"
-			podCmd := fmt.Sprintf("echo -n \"%s\" >> %s", data, "/tmp/test.txt")
-			cmdArgs := []string{"/bin/bash", "-c", podCmd}
-			_, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), "", pod.GetNamespace())
+			data := dirtyData
+			err = k.writeRawBlockDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 			if err != nil {
-				return fmt.Errorf("failed to execute command to Pod: %s", err)
-			}
-			var bsSize int = 38
-			// copy DATA_SIZE data to the device path of rawblock
-			ddCopy := "dd if=%s of=%s bs=%d count=1 seek=0"
-			ddCopyCmd := fmt.Sprintf(ddCopy, tmpFilePath, mountPath, bsSize)
-			ddCopyCmdArgs := []string{"/bin/bash", "-c", ddCopyCmd}
-			_, err = k8sCore.RunCommandInPod(ddCopyCmdArgs, pod.GetName(), "", pod.GetNamespace())
-			if err != nil {
-				return fmt.Errorf("failed to execute command to Pod: %s", err)
-			}
-			// Sync the data, wait 20 secs and then proceed to snapshot the volume
-			cmdArgs2 := []string{"exec", "-it", pod.GetName(), "-n", pod.GetNamespace(), "--", "/bin/sync"}
-			command2 := exec.Command("kubectl", cmdArgs2...)
-			out, err := command2.CombinedOutput()
-			if err != nil {
-				return fmt.Errorf("failed to run 'sync' in pod: %s. Output: %s", err, string(out))
-			}
-			fmt.Println("Sleep for 20 secs to let data write through")
-			time.Sleep(time.Second * 20)
-			err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-			if err != nil {
-				return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
+				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
 			}
 		} else {
 			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
@@ -6492,10 +6444,10 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 			if err != nil {
 				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
 			}
-			err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-			if err != nil {
-				return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
-			}
+		}
+		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+		if err != nil {
+			return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
 		}
 	}
 
@@ -6549,6 +6501,35 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 		return fmt.Errorf("%d PVCs did not go into bound after 30 mins: %v", numOfRestoredPVCForCloneManyTest, err)
 	}
 
+	return nil
+}
+
+func (k *K8s) writeRawBlockDataToPod(data, podName, podNamespace, devicePath string) error {
+	var bsSize int = 25
+	tmpFilePath := "/tmp/test.txt"
+	podCmd := fmt.Sprintf("echo -n \"%s\" >> %s", data, "/tmp/test.txt")
+	cmdArgs := []string{"/bin/bash", "-c", podCmd}
+	_, err := k8sCore.RunCommandInPod(cmdArgs, podName, "", podNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// copy DATA_SIZE data to the device path of rawblock
+	ddCopy := "dd if=%s of=%s bs=%d count=1 seek=0"
+	ddCopyCmd := fmt.Sprintf(ddCopy, tmpFilePath, devicePath, bsSize)
+	ddCopyCmdArgs := []string{"/bin/bash", "-c", ddCopyCmd}
+	_, err = k8sCore.RunCommandInPod(ddCopyCmdArgs, podName, "", podNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// Sync the data, wait 20 secs and then proceed to snapshot the volume
+	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
+	command2 := exec.Command("kubectl", cmdArgs2...)
+	out, err := command2.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to run 'sync' in pod: %s. Output: %s", err, string(out))
+	}
+	fmt.Println("Sleep for 20 secs to let data write through")
+	time.Sleep(time.Second * 20)
 	return nil
 }
 
@@ -6625,7 +6606,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	mountPath, _ := pureutils.GetAppDataDir(restoredPod.Namespace)
 	// Run a cat command from within the pod to verify the content of dirtydata
 	if *restoredPVC.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-		ddCmd := fmt.Sprintf("dd if=%s status=none bs=38 count=1 skip=0", mountPath)
+		ddCmd := fmt.Sprintf("dd if=%s status=none bs=25 count=1 skip=0", mountPath)
 		cmdArgs := []string{"/bin/sh", "-c", ddCmd}
 		fileContent, err := k8sCore.RunCommandInPod(cmdArgs, restoredPod.GetName(), "", restoredPod.GetNamespace())
 		if err != nil {
@@ -6689,7 +6670,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	mountPath, _ := pureutils.GetAppDataDir(restoredPod.Namespace)
 	// Run a cat command from within the pod to verify the content of dirtydata
 	if *clonedPVC.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-		ddCmd := fmt.Sprintf("dd if=%s status=none bs=38 count=1 skip=0", mountPath)
+		ddCmd := fmt.Sprintf("dd if=%s status=none bs=25 count=1 skip=0", mountPath)
 		cmdArgs := []string{"/bin/sh", "-c", ddCmd}
 		fileContent, err := k8sCore.RunCommandInPod(cmdArgs, restoredPod.GetName(), "", restoredPod.GetNamespace())
 		if err != nil {
