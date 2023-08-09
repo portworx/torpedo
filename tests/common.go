@@ -6321,9 +6321,8 @@ func GetPoolsInUse() ([]string, error) {
 	}
 	volumeInUse := pvlist.Items[0]
 	volumeID := volumeInUse.GetName()
-	log.Infof("DEBUG: volumeInUse: %v", volumeInUse)
 
-	return GetPoolIDsFromVolName(string(volumeID))
+	return GetPoolIDsFromVolName(volumeID)
 }
 
 // GetPoolIDWithIOs returns the pools with IOs happening
