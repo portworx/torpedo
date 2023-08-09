@@ -20,8 +20,7 @@ spec:
       schedulerName: stork
       containers:
       - name: fio
-        # image: portworx/fio_drv
-        image: alicelol/fio_drv:alyu-test
+        image: portworx/fio_drv:3.16
         command: ["fio"]
         resources:
           limits:
