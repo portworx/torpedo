@@ -90,6 +90,13 @@ var _ = Describe("{DeletePDSPods}", func() {
 	It("Delete pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy dataservice, delete and validate pds pods", func() {
 			for _, ds := range params.DataServiceToTest {
+
+				steplog := "Validate the deployment target is healthy in the control plane"
+				Step(steplog, func() {
+					_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+					log.FailOnError(err, "Error while getting deployment target status")
+				})
+
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
@@ -117,12 +124,6 @@ var _ = Describe("{DeletePDSPods}", func() {
 					err = pdslib.ValidatePods(pdsNamespace, "")
 					log.FailOnError(err, "Error while validating pods")
 
-				})
-
-				steplog := "Validate the deployment target is healthy in the control plane"
-				Step(steplog, func() {
-					_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
-					log.FailOnError(err, "Error while getting deployment target status")
 				})
 
 				Step("Validate Deployments after pods are up", func() {
@@ -450,6 +451,13 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 	It("Restart pds pods and validate if its coming back online and dataserices are not affected", func() {
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
+
+				steplog := "Validate the deployment target is healthy in the control plane"
+				Step(steplog, func() {
+					_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+					log.FailOnError(err, "Error while getting deployment target status")
+				})
+
 				Step("Deploy and validate data service", func() {
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
@@ -483,12 +491,6 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 					log.InfoD("Validating new PDS agent Pod")
 					err = k8sCore.ValidatePod(&agentPod, 5*time.Minute, 10*time.Second)
 					log.FailOnError(err, "pds agent pod failed to comeup")
-				})
-
-				steplog := "Validate the deployment target is healthy in the control plane"
-				Step(steplog, func() {
-					_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
-					log.FailOnError(err, "Error while getting deployment target status")
 				})
 
 				Step("Validate Deployments after pods are up", func() {
@@ -1463,6 +1465,10 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 var _ = Describe("{DeployMultipleNamespaces}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployMultipleNamespaces", "Create multiple namespaces and deploy all dataservices", pdsLabels, 0)
+
+		_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
+		log.FailOnError(err, "Error while getting deployment target status")
+
 	})
 
 	It("Creates multiple namespaces, deploys in each namespace", func() {
