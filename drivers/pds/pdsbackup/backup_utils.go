@@ -2,12 +2,13 @@ package pdsbackup
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/wait"
 	status "net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	bucketName           = "pds-test-automation"
+	bucketName           = "pds-test-pvc-automation"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
 	bkpTimeInterval      = 20 * time.Second
