@@ -134,6 +134,9 @@ type Cluster interface {
 	// EnumerateCluster enumerates the cluster objects
 	EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error)
 
+	// EnumerateAllCluster enumerates all cluster objects
+	EnumerateAllCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error)
+
 	// InspectCluster describes a cluster
 	InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error)
 
