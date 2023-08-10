@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
@@ -67,6 +68,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	var rkeToken string
 	// TODO Rancher URL for cloud cluster will not be fetched from master node IP
 	masterNodeName := node.GetMasterNodes()[0].Name
+	log.Infof("The master node here is %v", masterNodeName)
 	endpoint := "https://" + masterNodeName + "/v3"
 	rkeParameters.Endpoint = endpoint
 	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
@@ -89,7 +91,7 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	if clusterName == "destination-config" {
 		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
 		if rkeToken == "" {
-			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
+			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
 		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
