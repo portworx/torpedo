@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"github.com/golang-jwt/jwt/v4"
+	"google.golang.org/grpc/metadata"
 	"net"
 	"os"
 	"strconv"
@@ -245,23 +247,78 @@ func (p *portworx) CreateCluster(ctx context.Context, req *api.ClusterCreateRequ
 }
 
 func (p *portworx) UpdateCluster(ctx context.Context, req *api.ClusterUpdateRequest) (*api.ClusterUpdateResponse, error) {
-	return p.clusterManager.Update(ctx, req)
+	reqInterface, err := p.SetMissingClusterUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithClusterUID, ok := reqInterface.(*api.ClusterUpdateRequest); ok {
+		return p.clusterManager.Update(ctx, reqWithClusterUID)
+	}
+	return nil, fmt.Errorf("expected *api.ClusterUpdateRequest type after filling missing UID, but received %T", reqInterface)
+
 }
 
 func (p *portworx) InspectCluster(ctx context.Context, req *api.ClusterInspectRequest) (*api.ClusterInspectResponse, error) {
-	return p.clusterManager.Inspect(ctx, req)
+	reqInterface, err := p.SetMissingClusterUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithClusterUID, ok := reqInterface.(*api.ClusterInspectRequest); ok {
+		return p.clusterManager.Inspect(ctx, reqWithClusterUID)
+	}
+	return nil, fmt.Errorf("expected *api.ClusterInspectRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) EnumerateCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
+	clusterEnumerateResponse, err := p.clusterManager.Enumerate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	isAdminCtx, err := IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if isAdminCtx {
+		var pxCentralAdminClusters []*api.ClusterObject
+		for _, clusterObject := range clusterEnumerateResponse.GetClusters() {
+			ownerId := clusterObject.GetOwnership().GetOwner()
+			username, _, err := backup.FetchUserDetailsFromID(ownerId)
+			if err != nil {
+				return nil, err
+			}
+			if username == backup.PxCentralAdminUser {
+				pxCentralAdminClusters = append(pxCentralAdminClusters, clusterObject)
+			}
+		}
+		clusterEnumerateResponse.Clusters = pxCentralAdminClusters
+	}
+	return clusterEnumerateResponse, nil
+}
+
+func (p *portworx) EnumerateAllCluster(ctx context.Context, req *api.ClusterEnumerateRequest) (*api.ClusterEnumerateResponse, error) {
 	return p.clusterManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) DeleteCluster(ctx context.Context, req *api.ClusterDeleteRequest) (*api.ClusterDeleteResponse, error) {
-	return p.clusterManager.Delete(ctx, req)
+	reqInterface, err := p.SetMissingClusterUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithClusterUID, ok := reqInterface.(*api.ClusterDeleteRequest); ok {
+		return p.clusterManager.Delete(ctx, reqWithClusterUID)
+	}
+	return nil, fmt.Errorf("expected *api.ClusterDeleteRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.ClusterBackupShareUpdateRequest) (*api.ClusterBackupShareUpdateResponse, error) {
-	return p.clusterManager.UpdateBackupShare(ctx, req)
+	reqInterface, err := p.SetMissingClusterUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithClusterUID, ok := reqInterface.(*api.ClusterBackupShareUpdateRequest); ok {
+		return p.clusterManager.UpdateBackupShare(ctx, reqWithClusterUID)
+	}
+	return nil, fmt.Errorf("expected *api.ClusterBackupShareUpdateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 // WaitForClusterDeletion waits for cluster to be deleted successfully
@@ -1533,6 +1590,97 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 		}
 	}
 	return nil
+}
+
+// GetTokenClaimsFromCtx returns JWT claims from the outgoing metadata of the given context
+func GetTokenClaimsFromCtx(ctx context.Context) (jwt.MapClaims, error) {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return nil, fmt.Errorf("no metadata found in context")
+	}
+	authHeaders, ok := md[backup.AuthHeader]
+	if !ok || len(authHeaders) == 0 {
+		return nil, fmt.Errorf("no authorization header found")
+	}
+	tokenString := strings.TrimPrefix(authHeaders[0], "bearer ")
+	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid JWT claims")
+	}
+	return claims, nil
+}
+
+// GetGivenNameFromCtx extracts and decodes the JWT token from the outgoing context and then returns the given name
+func GetGivenNameFromCtx(ctx context.Context) (string, error) {
+	claims, err := GetTokenClaimsFromCtx(ctx)
+	if err != nil {
+		return "", err
+	}
+	givenName, ok := claims["given_name"].(string)
+	if !ok {
+		return "", fmt.Errorf("given name not found or is of invalid type")
+	}
+	return givenName, nil
+}
+
+// IsAdminCtx checks if the given ctx is associated with backup.PxCentralAdminUser
+func IsAdminCtx(ctx context.Context) (bool, error) {
+	ctxGivenName, err := GetGivenNameFromCtx(ctx)
+	if err != nil {
+		return false, err
+	}
+	if ctxGivenName != backup.PxCentralAdminGivenName {
+		return false, nil
+	}
+	return true, nil
+}
+
+// SetMissingClusterUID sets the missing UID for cluster-related requests
+func (p *portworx) SetMissingClusterUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.ClusterInspectRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	case *api.ClusterDeleteRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	case *api.ClusterBackupShareUpdateRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	case *api.ClusterUpdateRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
 }
 
 func init() {
