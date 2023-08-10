@@ -47,7 +47,7 @@ if [ -z "${SPEC_DIR}" ]; then
 fi
 
 if [ -z "${SCHEDULER}" ]; then
-    SCHEDULER="k8s"
+    SCHEDULER="rke"
 fi
 
 if [ -z "${LOGLEVEL}" ]; then

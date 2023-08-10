@@ -474,3 +474,265 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
 	})
 })
+
+// This testcase move takes backup and restore multiple namespaces belonging to multiple projects
+var _ = Describe("{MultipleProjectMultipleNamespacesBackupAndRestore}", func() {
+
+	var (
+		credName                          string
+		credUid                           string
+		customBackupLocationName          string
+		backupLocationUID                 string
+		sourceClusterUid                  string
+		backupName                        string
+		sourceProject                     string
+		restoreName                       string
+		sourceProjectID                   string
+		destProjectIDList                 []string
+		appNamespaces                     []string
+		destinationRestoreList            []string
+		destProjectList                   []string
+		sourceProjectList                 []string
+		sourceProjectIDList               []string
+		backupList                        []string
+		sourceClusterRestoreNamespaceList []string
+		fewNamespaceFromEachProject       []string
+		sourceRestoreList                 []string
+
+		contexts             []*scheduler.Context
+		appContexts          []*scheduler.Context
+		scheduledAppContexts []*scheduler.Context
+	)
+	projectNamespaces := make(map[string][]string)
+	projectNameMapping := make(map[string]string)
+	projectUIDMapping := make(map[string]string)
+	namespaceMapping := make(map[string]string)
+	backupLocationMap := make(map[string]string)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleProjectMultipleNamespacesBackupAndRestore",
+			"Take backup and restore multiple namespaces belonging to multiple projects", nil, 84874)
+		log.InfoD("Deploying multiple instances of applications required for the testcase")
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 4; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			contexts = append(contexts, appContexts...)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+				log.Infof("The list of namespaces deployed are", appNamespaces)
+			}
+		}
+	})
+
+	It("Take backup of multiple namespaces belonging to multiple projects and restore them", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			backupLocationProviders := getProviders()
+			for _, provider := range backupLocationProviders {
+				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
+				credUid = uuid.New()
+				err := CreateCloudCredential(provider, credName, credUid, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] as provider %s", credName, orgID, provider))
+				customBackupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = customBackupLocationName
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
+			}
+		})
+
+		Step("Registering application clusters for backup", func() {
+			log.InfoD("Registering application clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+
+		Step("Creating 2 rancher projects in source cluster", func() {
+			log.InfoD("Creating 2 rancher projects in source cluster")
+			for i := 0; i < 2; i++ {
+				sourceProject = fmt.Sprintf("source-project-%v-%v", RandomString(10), i)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, "new project", rancherActiveCluster)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in source cluster", sourceProject))
+				sourceProjectID, err = Inst().S.(*rke.Rancher).GetProjectID(sourceProject)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", sourceProject))
+				sourceProjectList = append(sourceProjectList, sourceProject)
+				sourceProjectIDList = append(sourceProjectIDList, sourceProjectID)
+			}
+		})
+
+		Step("Adding namespaces to project in source cluster and taking backup", func() {
+			log.InfoD("Adding namespaces to project in source cluster and taking backup")
+
+			log.Infof("The list of all namespaces are:", appNamespaces)
+			log.Infof("Adding half of the namespaces to first project in source cluster")
+			err = Inst().S.(*rke.Rancher).AddNamespacesToProject(sourceProjectList[0], appNamespaces[0:len(appNamespaces)/2])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding namespaces %s to project %s in source cluster", appNamespaces[0:len(appNamespaces)/2], sourceProjectList[0]))
+			err = Inst().S.(*rke.Rancher).ValidateProjectOfNamespaces(sourceProjectList[0], appNamespaces[0:len(appNamespaces)/2])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if namespace %s is added to project %s", appNamespaces[0:len(appNamespaces)/2], sourceProjectList[0]))
+			projectNamespaces[sourceProjectList[0]] = appNamespaces[0 : len(appNamespaces)/2]
+			fewNamespaceFromEachProject = append(fewNamespaceFromEachProject, appNamespaces[0:len(appNamespaces)/4]...)
+			log.Infof("The list of fewNamespaceFromEachProject is 11", fewNamespaceFromEachProject)
+			log.Infof("Adding other half of the namespaces to second project in source cluster")
+			err = Inst().S.(*rke.Rancher).AddNamespacesToProject(sourceProjectList[1], appNamespaces[len(appNamespaces)/2:])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding namespaces %s to project %s in source cluster", appNamespaces[len(appNamespaces)/2:], sourceProjectList[1]))
+			err = Inst().S.(*rke.Rancher).ValidateProjectOfNamespaces(sourceProjectList[1], appNamespaces[len(appNamespaces)/2:])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if namespace %s is added to project %s", appNamespaces[len(appNamespaces)/2:], sourceProjectList[1]))
+			projectNamespaces[sourceProjectList[1]] = appNamespaces[len(appNamespaces)/2:]
+			fewNamespaceFromEachProject = append(fewNamespaceFromEachProject, appNamespaces[len(appNamespaces)/2:len(appNamespaces)/2+len(appNamespaces)/4]...)
+			log.Infof("The list of fewNamespaceFromEachProject is 22", fewNamespaceFromEachProject)
+			log.Infof(" The value of projectNamespaces is  ", projectNamespaces)
+			log.InfoD("Taking backup of all applications %s from both the projects in source cluster", appNamespaces)
+			backupName = fmt.Sprintf("%s-%v-all-ns", BackupNamePrefix, RandomString(10))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			backupList = append(backupList, backupName)
+			log.InfoD("Taking backup of few applications %s from each ns project in source cluster", fewNamespaceFromEachProject)
+			backupName = fmt.Sprintf("%s-%v-few-ns-each-project", BackupNamePrefix, RandomString(10))
+			fewAppContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, fewNamespaceFromEachProject)
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, fewAppContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			backupList = append(backupList, backupName)
+			log.Infof("The backup list is %v", backupList)
+		})
+
+		Step("Taking default restore of the backups in destination cluster", func() {
+			log.InfoD("Taking default restore of the backups taken in destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupList {
+				restoreName = fmt.Sprintf("%s-%v-default", restoreNamePrefix, backupName)
+				destinationRestoreList = append(destinationRestoreList, restoreName)
+				err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctx, nil)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating default restore- %s from backup %s", restoreName, backupName))
+			}
+		})
+
+		Step("Restoring to same project but different namespace in source cluster", func() {
+			log.InfoD("Restoring to same project but different namespace in source cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for i, app := range appNamespaces {
+				restoreNamespace := fmt.Sprintf("restore-%v-%v-%v", app, RandomString(5), i)
+				namespaceMapping[app] = restoreNamespace
+				sourceClusterRestoreNamespaceList = append(sourceClusterRestoreNamespaceList, restoreNamespace)
+			}
+			for i, project := range sourceProjectList {
+				projectNameMapping[project] = project
+				projectUIDMapping[sourceProjectIDList[i]] = sourceProjectIDList[i]
+			}
+			restoreName = fmt.Sprintf("%s-%v-same-proj-diff-ns", restoreNamePrefix, backupName)
+			sourceRestoreList = append(sourceRestoreList, restoreName)
+			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMapping, SourceClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in same project but different namespace from backup %s in source cluster", restoreName, backupList[0]))
+		})
+
+		Step("Creating 2 rancher project in destination cluster", func() {
+			log.Infof("Creating 2 rancher project in destination cluster")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			for i := 0; i < 2; i++ {
+				destProject := fmt.Sprintf("dest-rke-project-%v-%v", RandomString(5), i)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, "new project", rancherActiveCluster)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in destination cluster", destProject))
+				destProjectList = append(destProjectList, destProject)
+				destProjectID, err := Inst().S.(*rke.Rancher).GetProjectID(destProject)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting project Id for project: %s in destination cluster", destProject))
+				destProjectIDList = append(destProjectIDList, destProjectID)
+			}
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+		})
+
+		Step("Restoring to different project but same namespace in destination cluster", func() {
+			log.InfoD("Restoring to different project but same namespace in destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for i, project := range sourceProjectList {
+				projectNameMapping[project] = destProjectList[i]
+				projectUIDMapping[sourceProjectIDList[i]] = destProjectIDList[i]
+			}
+			restoreName = fmt.Sprintf("%s-%v-diff-proj-same-ns", restoreNamePrefix, backupName)
+			destinationRestoreList = append(destinationRestoreList, restoreName)
+			sourceRestoreList = append(sourceRestoreList, restoreName)
+			err = CreateRestoreWithProjectMapping(restoreName, backupList[1], make(map[string]string), destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in same project but different namespace from backup %s in source cluster", restoreName, backupList[1]))
+		})
+
+		Step("Restoring to different project and same namespace in destination cluster", func() {
+			log.InfoD("Restoring to different project and same namespace in destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for i, project := range sourceProjectList {
+				projectNameMapping[project] = destProjectList[i]
+				projectUIDMapping[sourceProjectIDList[i]] = destProjectIDList[i]
+			}
+			for i, app := range appNamespaces {
+				restoreNamespace := fmt.Sprintf("restore-%v-%v-%v", app, RandomString(5), i)
+				namespaceMapping[app] = restoreNamespace
+				sourceClusterRestoreNamespaceList = append(sourceClusterRestoreNamespaceList, restoreNamespace)
+			}
+			restoreName = fmt.Sprintf("%s-%v-diff-proj-same-ns", restoreNamePrefix, backupName)
+			destinationRestoreList = append(destinationRestoreList, restoreName)
+			sourceRestoreList = append(sourceRestoreList, restoreName)
+			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in same project but different namespace from backup %s in source cluster", restoreName, backupList[0]))
+		})
+	})
+
+	JustAfterEach(func() {
+		/*
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "Switching context to source cluster")
+				EndPxBackupTorpedoTest(scheduledAppContexts)
+			}()
+			// Switch context to destination cluster
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx for destination cluster")
+			log.Infof("Deleting restored namespace from destination cluster")
+			for _, ns := range restoreNamespaceList {
+				err = core.Instance().DeleteNamespace(ns)
+				log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
+			}
+			log.Infof("Deleting projects from destination cluster")
+			for i, project := range destProjectList {
+				err = Inst().S.(*rke.Rancher).DeleteRancherProject(destProjectIDList[i])
+				log.FailOnError(err, "Deletion of project %s from destination cluster failed", project)
+			}
+			log.Infof("Deleting restore from destination cluster")
+			for _, restoreName := range restoreList {
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
+			}
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			ctx, err = backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx for source cluster")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			log.Infof("Deleting projects from source cluster")
+			err = Inst().S.(*rke.Rancher).DeleteRancherProject(sourceProjectID)
+			log.FailOnError(err, "Deletion of project %s from source cluster failed", sourceProject)
+			CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
+		*/
+	})
+})

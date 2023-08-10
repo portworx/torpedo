@@ -165,7 +165,7 @@ const (
 )
 
 var (
-	clusterProviders = []string{"k8s"}
+	clusterProviders = []string{"rke"}
 )
 
 type OwnershipAccessType int32
@@ -293,7 +293,7 @@ const (
 
 const (
 	oneMegabytes                          = 1024 * 1024
-	defaultScheduler                      = "k8s"
+	defaultScheduler                      = "rke"
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
@@ -2805,7 +2805,8 @@ func SetClusterContext(clusterConfigPath string) error {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
 	}
-
+	masterNodeName := node.GetMasterNodes()[0].Name
+	log.Infof(" The master nodes are %v ---%v", masterNodeName, clusterConfigPath)
 	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
