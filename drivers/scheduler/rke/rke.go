@@ -272,13 +272,17 @@ func (r *Rancher) SaveSchedulerLogsToFile(n node.Node, location string) error {
 
 // RemoveNamespaceFromProject moves namespace to no project
 func (r *Rancher) RemoveNamespaceFromProject(nsList []string) error {
+	var namespaceParameterList []map[string]string
 	for _, ns := range nsList {
 		ns, err := core.Instance().GetNamespace(ns)
 		if err != nil {
 			return err
 		}
-		delete(ns.Labels, "field.cattle.io/projectId")
-		delete(ns.Annotations, "field.cattle.io/projectId")
+		namespaceParameterList = append(namespaceParameterList, ns.Labels)
+		namespaceParameterList = append(namespaceParameterList, ns.Annotations)
+		for _, val := range namespaceParameterList {
+			delete(val, "field.cattle.io/projectId")
+		}
 		_, err = core.Instance().UpdateNamespace(ns)
 		if err != nil {
 			return err
@@ -290,6 +294,7 @@ func (r *Rancher) RemoveNamespaceFromProject(nsList []string) error {
 // ChangeProjectForNamespace moves namespace from one project to other project
 func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string) error {
 	var projectId string
+	var namespaceParameterList []map[string]string
 	namespaceAnnotation := make(map[string]string)
 	namespaceLabel := make(map[string]string)
 	for _, ns := range nsList {
@@ -301,8 +306,11 @@ func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string)
 		if err != nil {
 			return err
 		}
-		delete(ns.Labels, "field.cattle.io/projectId")
-		delete(ns.Annotations, "field.cattle.io/projectId")
+		namespaceParameterList = append(namespaceParameterList, ns.Labels)
+		namespaceParameterList = append(namespaceParameterList, ns.Annotations)
+		for _, val := range namespaceParameterList {
+			delete(val, "field.cattle.io/projectId")
+		}
 		namespaceAnnotation["field.cattle.io/projectId"] = projectId
 		namespaceLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
 		newLabels := kube.MergeMaps(ns.Labels, namespaceLabel)

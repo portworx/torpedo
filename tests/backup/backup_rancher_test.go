@@ -368,8 +368,13 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
+<<<<<<< HEAD
 		Step("Creating 2 rancher projects in destination cluster", func() {
 			log.InfoD("Creating 2 rancher projects in destination cluster")
+=======
+		Step("Creating 2 rancher project in destination cluster", func() {
+			log.InfoD("Creating 2 rancher project in destination cluster")
+>>>>>>> 76214b9d0 (Added tc:Move namespaces from project to project to no project when restore is going on)
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := 0; i < 2; i++ {
@@ -399,7 +404,11 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			restoreName = fmt.Sprintf("%s-%v-default", restoreNamePrefix, RandomString(5))
 			restoreList = append(restoreList, restoreName)
 			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+<<<<<<< HEAD
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s having namespaces: %v", restoreName, backupName, appNamespaces))
+=======
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
+>>>>>>> 76214b9d0 (Added tc:Move namespaces from project to project to no project when restore is going on)
 		})
 
 		Step("Restore the backup taken with replace policy and move destination ns from one project to another project while restoring", func() {
@@ -415,7 +424,11 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Moving namespaces %v from project %s to project %s", restoreNamespaceList, destProjectList[0], destProjectList[1]))
 			log.Infof("Verifying if restore is successful after moving destination namespaces from one project to another")
 			err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Minute, ctx)
+<<<<<<< HEAD
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s taken from backup %v having namespaces %v with destination namespaces: %v", restoreName, backupName, appNamespaces, restoreNamespaceList))
+=======
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s", restoreName))
+>>>>>>> 76214b9d0 (Added tc:Move namespaces from project to project to no project when restore is going on)
 		})
 
 		Step("Restore the backup taken with replace policy and move destination ns to no project while restoring", func() {
@@ -431,7 +444,11 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Moving namespaces %v from project %s to no project", restoreNamespaceList, destProjectList[1]))
 			log.Infof("Verifying if restore is successful after moving destination namespaces to no project")
 			err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Minute, ctx)
+<<<<<<< HEAD
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s with destination namespaces: %v", restoreName, restoreNamespaceList))
+=======
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s", restoreName))
+>>>>>>> 76214b9d0 (Added tc:Move namespaces from project to project to no project when restore is going on)
 		})
 	})
 
@@ -474,3 +491,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
 	})
 })
+<<<<<<< HEAD
+
+var namespaceParameterList []map[string]string
+=======
+>>>>>>> 76214b9d0 (Added tc:Move namespaces from project to project to no project when restore is going on)
