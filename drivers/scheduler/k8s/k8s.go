@@ -6376,12 +6376,15 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	dirtyData := "thisIsJustSomeRandomText"
 	snapName := request.SnapName
 	for i := 0; i < 3; i++ {
-		var data string
 		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-			data := dirtyData
+			data := "this is pure volume rawblock test data"
 			err = k.writeRawBlockDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 			if err != nil {
 				return fmt.Errorf("failed to write data to restored PVC: %s", err)
+			}
+			err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate restored PVC content: %s ", err)
 			}
 		} else {
 			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
@@ -6389,10 +6392,10 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 			if err != nil {
 				return fmt.Errorf("failed to write data to restored PVC: %s", err)
 			}
-		}
-		err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-		if err != nil {
-			return fmt.Errorf("failed to validate restored PVC content: %s ", err)
+			err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate restored PVC content: %s ", err)
+			}
 		}
 	}
 
@@ -6425,12 +6428,15 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	dirtyData := "thisIsJustSomeRandomText"
 
 	for i := 0; i < 3; i++ {
-		var data string
 		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
-			data := dirtyData
+			data := "this is pure volume rawblock test data"
 			err = k.writeRawBlockDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
 			if err != nil {
 				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
+			}
+			err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
 			}
 		} else {
 			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
@@ -6444,10 +6450,10 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 			if err != nil {
 				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
 			}
-		}
-		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-		if err != nil {
-			return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
+			err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
+			}
 		}
 	}
 
@@ -6505,7 +6511,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 }
 
 func (k *K8s) readRawBlockDataFromPod(podName, podNamespace, devicePath string) (string, error) {
-	ddCmd := fmt.Sprintf("dd if=%s status=none bs=25 count=1 skip=0", devicePath)
+	ddCmd := fmt.Sprintf("dd if=%s status=none bs=38 count=1 skip=0", devicePath)
 	cmdArgs := []string{"/bin/sh", "-c", ddCmd}
 	fileContent, err := k8sCore.RunCommandInPod(cmdArgs, podName, "", podNamespace)
 	return fileContent, err
@@ -6519,8 +6525,9 @@ func (k *K8s) readDataFromPod(podName, podNamespace, mountFilePath string) (stri
 }
 
 func (k *K8s) writeRawBlockDataToPod(data, podName, podNamespace, devicePath string) error {
-	var bsSize int = 25
+	var bsSize int = 38
 	tmpFilePath := "/tmp/test.txt"
+
 	podCmd := fmt.Sprintf("echo -n \"%s\" >> %s", data, "/tmp/test.txt")
 	cmdArgs := []string{"/bin/bash", "-c", podCmd}
 	_, err := k8sCore.RunCommandInPod(cmdArgs, podName, "", podNamespace)
