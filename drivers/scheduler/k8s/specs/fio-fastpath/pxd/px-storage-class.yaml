@@ -5,7 +5,7 @@ metadata:
   name: fio-vps-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  placement_strategy: "fastpath-repl1-vdbench-vps"
+  placement_strategy: "fastpath-repl1-vps"
   repl: "2"
   priority_io: "high"
 allowVolumeExpansion: true
