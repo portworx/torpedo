@@ -7532,9 +7532,18 @@ func ClusterVersion() (string, error) {
 func createClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
 	cloneStorageClass := originalStorageClass
 	clonedSCName := cloneStorageClass.Name + "-clone"
-	clonedSCobj, err := k8sStorage.GetStorageClass(clonedSCName)
+
+	t := func() (interface{}, bool, error) {
+		_, err := k8sStorage.GetStorageClass(clonedSCName)
+		if err != nil {
+			return "", true, err
+		}
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
 	if err == nil {
-		return clonedSCobj.Name, nil
+		return clonedSCName, nil
 	} else if strings.Contains(err.Error(), fmt.Sprintf("storageclasses.storage.k8s.io \"%v\" not found", clonedSCName)) {
 		log.Infof("Cloned SC with the name %v does not exist and will be created", clonedSCName)
 

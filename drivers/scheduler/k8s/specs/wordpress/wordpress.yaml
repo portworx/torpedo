@@ -43,7 +43,8 @@ spec:
             path: /
             port: 80
           initialDelaySeconds: 15
-          timeoutSeconds: 5
+          failureThreshold: 6
+          timeoutSeconds: 20
         resources:
           requests:
             memory: "2Gi"
