@@ -189,30 +189,9 @@ var _ = AfterSuite(func() {
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
-	// Cleanup all non admin users
+
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
-	allUsers, err := backup.GetAllUsers()
-	dash.VerifySafely(err, nil, "Verifying cleaning up of all users from keycloak")
-	for _, user := range allUsers {
-		if !strings.Contains(user.Name, "admin") {
-			err = backup.DeleteUser(user.Name)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying user [%s] deletion", user.Name))
-		} else {
-			log.Infof("User %s was not deleted", user.Name)
-		}
-	}
-	// Cleanup all non admin groups
-	allGroups, err := backup.GetAllUsers()
-	dash.VerifySafely(err, nil, "Verifying cleaning up of all groups from keycloak")
-	for _, group := range allGroups {
-		if !strings.Contains(group.Name, "admin") && !strings.Contains(group.Name, "app") {
-			err = backup.DeleteGroup(group.Name)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying group [%s] deletion", group.Name))
-		} else {
-			log.Infof("Group %s was not deleted", group.Name)
-		}
-	}
 
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
@@ -237,24 +216,41 @@ var _ = AfterSuite(func() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	for _, kubeconfig := range kubeconfigList {
 		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
-		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-		if err != nil && strings.Contains(err.Error(), "object not found") {
-			log.InfoD("Cluster %s is not present", clusterName)
-		} else {
-			clusterObj := clusterResp.GetCluster()
-			clusterProvider := GetClusterProviders()
-			for _, provider := range clusterProvider {
-				switch provider {
-				case drivers.ProviderRke:
-					clusterCredName = clusterObj.PlatformCredentialRef.Name
-					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
-				default:
-					clusterCredName = clusterObj.CloudCredentialRef.Name
-					clusterCredUID = clusterObj.CloudCredentialRef.Uid
+		isPresent, err := IsClusterPresent(clusterName, ctx, orgID)
+		if err != nil {
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
+		}
+		if isPresent {
+			clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
+			clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+			if err != nil {
+				if strings.Contains(err.Error(), "object not found") {
+					log.InfoD("Cluster %s is not present", clusterName)
+				} else {
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster [%s]", clusterName))
 				}
-				err = DeleteCluster(clusterName, orgID, ctx, true)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+			} else {
+				clusterObj := clusterResp.GetCluster()
+				clusterProvider := GetClusterProviders()
+				for _, provider := range clusterProvider {
+					switch provider {
+					case drivers.ProviderRke:
+						if clusterObj.PlatformCredentialRef != nil {
+							clusterCredName = clusterObj.PlatformCredentialRef.Name
+							clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+						} else {
+							log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterName)
+						}
+					default:
+						if clusterObj.CloudCredentialRef != nil {
+							clusterCredName = clusterObj.CloudCredentialRef.Name
+							clusterCredUID = clusterObj.CloudCredentialRef.Uid
+						} else {
+							log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
+						}
+					}
+					err = DeleteCluster(clusterName, orgID, ctx, true)
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 				clusterDeleteStatus := func() (interface{}, bool, error) {
 					status, err := IsClusterPresent(clusterName, ctx, orgID)
 					if err != nil {
@@ -267,9 +263,10 @@ var _ = AfterSuite(func() {
 				}
 				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-				if clusterCredName != "" {
-					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+					if clusterCredName != "" {
+						err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+					}
 				}
 			}
 		}
@@ -330,6 +327,30 @@ var _ = AfterSuite(func() {
 		case drivers.ProviderNfs:
 			DeleteBucket(provider, globalNFSBucketName)
 			log.Infof("NFS subpath deleted - %s", globalNFSBucketName)
+		}
+	}
+
+	// Cleanup all non admin users
+	allUsers, err := backup.GetAllUsers()
+	dash.VerifySafely(err, nil, "Verifying cleaning up of all users from keycloak")
+	for _, user := range allUsers {
+		if !strings.Contains(user.Name, "admin") {
+			err = backup.DeleteUser(user.Name)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying user [%s] deletion", user.Name))
+		} else {
+			log.Infof("User %s was not deleted", user.Name)
+		}
+	}
+
+	// Cleanup all non admin groups
+	allGroups, err := backup.GetAllUsers()
+	dash.VerifySafely(err, nil, "Verifying cleaning up of all groups from keycloak")
+	for _, group := range allGroups {
+		if !strings.Contains(group.Name, "admin") && !strings.Contains(group.Name, "app") {
+			err = backup.DeleteGroup(group.Name)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying group [%s] deletion", group.Name))
+		} else {
+			log.Infof("Group %s was not deleted", group.Name)
 		}
 	}
 })
