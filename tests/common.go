@@ -3780,8 +3780,11 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		case drivers.ProviderIbm:
+			log.Infof("Inside IBM")
 			for _, kubeconfig := range kubeconfigList {
+				log.Infof("Creating creds for IBM")
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				log.Infof("Cluster creds for IBM - %s", clusterCredName)
 				clusterCredUid = uuid.New()
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
