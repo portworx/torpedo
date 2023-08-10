@@ -5,7 +5,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	"math/rand"
 	"net/http"
@@ -58,11 +57,10 @@ func RebootNode(c *gin.Context) {
 	if !checkTorpedoInit(c) {
 		return
 	}
+	nodes := node.GetWorkerNodes()
 	nodename := c.Param("nodename")
 	if nodename == "all" {
-		nodes := node.GetWorkerNodes()
 		for _, n := range nodes {
-			log.InfoD("reboot node: %s", n.Name)
 			err := tests.Inst().N.RebootNode(n, node.RebootNodeOpts{
 				Force: true,
 				ConnectionOpts: node.ConnectionOpts{
@@ -78,7 +76,6 @@ func RebootNode(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "All Nodes successfully rebooted"})
 		return
 	} else if nodename == "random" {
-		nodes := node.GetWorkerNodes()
 		randomNode := nodes[rand.Intn(len(nodes))]
 		err := tests.Inst().N.RebootNode(randomNode, node.RebootNodeOpts{
 			Force: true,
@@ -93,7 +90,6 @@ func RebootNode(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Randomly selected node %s successfully rebooted", randomNode.Name)})
 		}
 	} else {
-		nodes := node.GetWorkerNodes()
 		for _, n := range nodes {
 			if n.Name == nodename {
 				err := tests.Inst().N.RebootNode(n, node.RebootNodeOpts{
@@ -111,7 +107,7 @@ func RebootNode(c *gin.Context) {
 				return
 			}
 		}
-		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprint("Node with name %s not found", nodename)})
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Node with name %s not found", nodename)})
 	}
 }
 
