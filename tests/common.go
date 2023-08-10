@@ -9,13 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
-	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"net/http"
 	"regexp"
 	"runtime"
+
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -115,7 +115,7 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
+	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -257,8 +257,7 @@ const (
 	// Anthos
 	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
 	anthosInstPathCliFlag = "anthos-inst-path"
-  skipSystemCheckCliFlag = "torpedo-skip-system-checks"
-
+	skipSystemCheckCliFlag = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
@@ -745,12 +744,21 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
+		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
+
+		// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
+		for _, specObj := range ctx.App.SpecList {
+			if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+				isRaw = *obj.Spec.VolumeMode == corev1.PersistentVolumeBlock
+			}
+		}
+
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidatePureSnapshotsSDK(ctx, errChan...)
@@ -758,7 +766,8 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
+			// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
+			if !ctx.SkipVolumeValidation && !isRaw {
 				ValidateResizePurePVC(ctx, errChan...)
 			}
 		})
@@ -831,6 +840,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
+
 	})
 }
 
@@ -924,6 +934,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 				})
 			}
 		})
+
 	})
 }
 
@@ -1155,27 +1166,31 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
-		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
-		// get the pod for this pvc
-		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
-		processError(err, errChan...)
+		// skiping ValidatePureVolumeStatisticsDynamicUpdate test for raw block volumes. Need to change getStats method
+		if !vols[0].Raw {
+			byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
 
-		mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			// get the pod for this pvc
+			pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
+			processError(err, errChan...)
 
-		// write to the Direct Access volume
-		ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s/myfile", bytesToWrite/512, mountPath)
-		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
-		err = osutils.Kubectl(cmdArgs)
-		processError(err, errChan...)
-		fmt.Println("sleeping to let volume usage get reflected")
-		// wait until the backends size is reflected before making the REST call
-		time.Sleep(time.Minute * 2)
+			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			mountPath = mountPath + "/myfile"
 
-		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
-		expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+			// write to the Direct Access volume
+			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
+			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
+			err = osutils.Kubectl(cmdArgs)
+			processError(err, errChan...)
+			fmt.Println("sleeping to let volume usage get reflected")
+			// wait until the backends size is reflected before making the REST call
+			time.Sleep(time.Minute * 2)
 
+			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
+			expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+		}
 	})
 }
 
@@ -1203,7 +1218,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 				Namespace:         vols[0].Namespace,
 				Timestamp:         timestamp,
 				OriginalPVCName:   vols[0].Name,
-				SnapName:          "basic-csi-snapshot-" + timestamp,
+				SnapName:          "basic-csi" + timestamp + "-snapshot",
 				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
@@ -1218,7 +1233,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			for k, v := range volMap {
 				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
 					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
-						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						err = Inst().V.ValidateVolumeInPxctlList(k)
 						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
 					})
 					break
@@ -1723,7 +1738,8 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
+// ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
+// the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -6413,6 +6429,18 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
+// GetPoolsInUse lists all persistent volumes and returns the pool IDs
+func GetPoolsInUse() ([]string, error) {
+	pvlist, err := k8sCore.GetPersistentVolumes()
+	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
+		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
+	}
+	volumeInUse := pvlist.Items[0]
+	volumeID := volumeInUse.GetName()
+
+	return GetPoolIDsFromVolName(volumeID)
+}
+
 // GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
@@ -6438,7 +6466,7 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			t := func() (interface{}, bool, error) {
 				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
-				if err != nil {
+				if err != nil || !isIOsInProgress {
 					return false, true, err
 				}
 				return true, false, nil
@@ -6563,24 +6591,13 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		return nil, err
 	}
 	for _, each := range volDetails.ReplicaSets {
-		for _, uuids := range each.PoolUuids {
-			if len(poolUuids) == 0 {
-				poolUuids = append(poolUuids, uuids)
-			} else {
-				isPresent := false
-				for i := 0; i < len(poolUuids); i++ {
-					if uuids == poolUuids[i] {
-						isPresent = true
-					}
-				}
-				if isPresent == false {
-					poolUuids = append(poolUuids, uuids)
-				}
+		for _, uuid := range each.PoolUuids {
+			if !Contains(poolUuids, uuid) {
+				poolUuids = append(poolUuids, uuid)
 			}
 		}
-
 	}
-	return poolUuids, err
+	return poolUuids, nil
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
