@@ -30,6 +30,8 @@ var PxCentralAdminPwd string
 const (
 	// PxCentralAdminUser px central admin
 	PxCentralAdminUser = "px-central-admin"
+	// PxCentralAdminGivenName is the given name of the PxCentralAdminUser
+	PxCentralAdminGivenName = "pxcentraladmin"
 	// PxCentralAdminSecretName secret for PxCentralAdminUser
 	PxCentralAdminSecretName = "px-central-admin"
 	// PxCentralAdminSecretNamespace namespace of PxCentralAdminSecretName
@@ -761,7 +763,7 @@ func GetPxCentralAdminToken() (string, error) {
 	return token, nil
 }
 
-// GetCtxWithToken getx ctx with passed token
+// GetCtxWithToken gets ctx with passed token
 func GetCtxWithToken(token string) context.Context {
 	ctx := context.Background()
 	md := metadata.New(map[string]string{
