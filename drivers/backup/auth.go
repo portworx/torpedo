@@ -30,8 +30,6 @@ var PxCentralAdminPwd string
 const (
 	// PxCentralAdminUser px central admin
 	PxCentralAdminUser = "px-central-admin"
-	// PxCentralAdminGivenName is the given name of the PxCentralAdminUser
-	PxCentralAdminGivenName = "pxcentraladmin"
 	// PxCentralAdminSecretName secret for PxCentralAdminUser
 	PxCentralAdminSecretName = "px-central-admin"
 	// PxCentralAdminSecretNamespace namespace of PxCentralAdminSecretName
