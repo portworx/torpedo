@@ -274,24 +274,22 @@ func (p *portworx) EnumerateCluster(ctx context.Context, req *api.ClusterEnumera
 	if err != nil {
 		return nil, err
 	}
-	isAdminCtx, err := IsAdminCtx(ctx)
+	ctxPreferredUsername, err := GetPreferredUsernameFromCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if isAdminCtx {
-		var pxCentralAdminClusters []*api.ClusterObject
-		for _, clusterObject := range clusterEnumerateResponse.GetClusters() {
-			ownerId := clusterObject.GetOwnership().GetOwner()
-			username, _, err := backup.FetchUserDetailsFromID(ownerId)
-			if err != nil {
-				return nil, err
-			}
-			if username == backup.PxCentralAdminUser {
-				pxCentralAdminClusters = append(pxCentralAdminClusters, clusterObject)
-			}
+	var userClusters []*api.ClusterObject
+	for _, clusterObject := range clusterEnumerateResponse.GetClusters() {
+		ownerId := clusterObject.GetOwnership().GetOwner()
+		username, _, err := backup.FetchUserDetailsFromID(ownerId)
+		if err != nil {
+			return nil, err
 		}
-		clusterEnumerateResponse.Clusters = pxCentralAdminClusters
+		if username == ctxPreferredUsername {
+			userClusters = append(userClusters, clusterObject)
+		}
 	}
+	clusterEnumerateResponse.Clusters = userClusters
 	return clusterEnumerateResponse, nil
 }
 
@@ -1614,26 +1612,26 @@ func GetTokenClaimsFromCtx(ctx context.Context) (jwt.MapClaims, error) {
 	return claims, nil
 }
 
-// GetGivenNameFromCtx extracts and decodes the JWT token from the outgoing context and then returns the given name
-func GetGivenNameFromCtx(ctx context.Context) (string, error) {
+// GetPreferredUsernameFromCtx extracts and decodes the JWT token from the outgoing context and then returns the preferred username
+func GetPreferredUsernameFromCtx(ctx context.Context) (string, error) {
 	claims, err := GetTokenClaimsFromCtx(ctx)
 	if err != nil {
 		return "", err
 	}
-	givenName, ok := claims["given_name"].(string)
+	preferredUsername, ok := claims["preferred_username"].(string)
 	if !ok {
 		return "", fmt.Errorf("given name not found or is of invalid type")
 	}
-	return givenName, nil
+	return preferredUsername, nil
 }
 
 // IsAdminCtx checks if the given ctx is associated with backup.PxCentralAdminUser
 func IsAdminCtx(ctx context.Context) (bool, error) {
-	ctxGivenName, err := GetGivenNameFromCtx(ctx)
+	ctxPreferredUsername, err := GetPreferredUsernameFromCtx(ctx)
 	if err != nil {
 		return false, err
 	}
-	if ctxGivenName != backup.PxCentralAdminGivenName {
+	if ctxPreferredUsername != backup.PxCentralAdminUser {
 		return false, nil
 	}
 	return true, nil
