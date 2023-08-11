@@ -1171,12 +1171,12 @@ func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus st
 		deploymentTarget, err = components.DeploymentTarget.GetTarget(DeploymentTargetID)
 		log.FailOnError(err, "Error occurred while getting deployment target")
 		if deploymentTarget.GetStatus() == healthStatus {
+			log.Infof("deployment target status %s", deploymentTarget.GetStatus())
 			return true, nil
 		}
 		log.Infof("deployment target status %s", deploymentTarget.GetStatus())
 		return false, nil
 	})
-	log.Infof("deployment target status %s", deploymentTarget.GetStatus())
 
 	return deploymentTarget, waiError
 }

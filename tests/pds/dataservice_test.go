@@ -1311,6 +1311,7 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 
 	steplog := "Validate the deployment target is healthy in the control plane"
 	Step(steplog, func() {
+		log.Debugf("validating the health status of deploymentTarget %s", deploymentTargetID)
 		_, err := pdslib.ValidatePDSDeploymentTargetHealthStatus(deploymentTargetID, "healthy")
 		log.FailOnError(err, "Error while getting deployment target status")
 	})
