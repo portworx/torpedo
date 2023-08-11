@@ -30,6 +30,7 @@ import (
 )
 
 const (
+	// defined in testing app path torpedo/scheduler/k8s/fio-low-io/pxd/px-storage-class.yaml
 	replicationUpdateTimeout         = 4 * time.Hour
 	retryTimeout                     = time.Minute * 2
 	addDriveUpTimeOut                = time.Minute * 15
@@ -51,7 +52,7 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize(contexts)
+		poolIDToResize = pickPoolToResize()
 		poolToBeResized = getStoragePool(poolIDToResize)
 	})
 
@@ -824,7 +825,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, poolIDToResize, isjournal)
-			log.FailOnError(err, "Error waiting for poor resize")
+			log.FailOnError(err, "Error waiting for pool resize")
 
 			//validating new pool rebalance
 			log.InfoD("Validate pool rebalance after drive add")
@@ -6789,6 +6790,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(AddCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
+		log.Infof("Adding disks to the node completed")
 
 		// Refresh endpoints
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
@@ -8724,7 +8726,10 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 				terminate = true
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
 				}
 
 			}
@@ -9266,10 +9271,15 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 				terminate = true
 				wg.Done()
 				for _, each := range volumesCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+
 				}
 				for _, each := range snapshotsCreated {
-					log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "Snapshot Volume deletion failed on the cluster with ID [%s]", each)
+					}
 				}
 			}
 		}
@@ -9300,19 +9310,20 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 
 		inspectDeleteVolume := func(volumeId string) error {
 			defer GinkgoRecover()
-			// inspect volume
-			appVol, err := Inst().V.InspectVolume(volumeId)
-			if err != nil {
-				stopRoutine()
-				return err
-			}
+			if IsVolumeExits(volumeId) {
+				// inspect volume
+				appVol, err := Inst().V.InspectVolume(volumeId)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
 
-			err = Inst().V.DeleteVolume(appVol.Id)
-			if err != nil {
-				stopRoutine()
-				return err
+				err = Inst().V.DeleteVolume(appVol.Id)
+				if err != nil {
+					stopRoutine()
+					return err
+				}
 			}
-
 			return nil
 		}
 
@@ -9597,16 +9608,22 @@ func scheduleApps() []*scheduler.Context {
 	contexts := make([]*scheduler.Context, 0)
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
 		log.Infof("Deploy app %v", i)
-		contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooltest-%d", i))...)
+		contexts = append(contexts, ScheduleApplications(
+			fmt.Sprintf("pooltest-%d", i))...)
 	}
 	ValidateApplications(contexts)
 	return contexts
 }
 
-func pickPoolToResize(contexts []*scheduler.Context) string {
-	poolIDToResize, err := GetPoolIDWithIOs(contexts)
+func pickPoolToResize() string {
+	poolWithIO, err := GetPoolIDWithIOs(contexts)
+	if poolWithIO == "" || err != nil {
+		log.Warnf("No pool with IO found, picking a random pool in use to resize")
+	}
+	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
-	verifyNonEmpty(poolIDToResize, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	poolIDToResize := poolIDsInUseByTestingApp[0]
 	return poolIDToResize
 }
 
@@ -9625,6 +9642,9 @@ func verifyNonEmpty(value string, message string) {
 	dash.VerifyFatal(len(value) > 0, true, message)
 }
 
+func verifyArrayNotEmpty(values []string, message string) {
+	dash.VerifyFatal(len(values) > 0, true, message)
+}
 func triggerPoolExpansion(poolIDToResize string, targetSizeGiB uint64, expandType api.SdkStoragePool_ResizeOperationType) {
 	stepLog := "Trigger pool expansion"
 	Step(stepLog, func() {
