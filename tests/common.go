@@ -3899,12 +3899,10 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for Aws")
-		// PA-1328
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
 			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
-		// PA-1328
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
 			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
@@ -3928,7 +3926,6 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
-		// PA-1328
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
@@ -3975,7 +3972,6 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 
 	case drivers.ProviderIbm:
 		log.Infof("Create creds for IBM")
-		// PA-1328
 		apiKey, err := GetIBMApiKey("default")
 		if err != nil {
 			return err
@@ -4465,7 +4461,6 @@ func GetDestinationClusterConfigPath() (string, error) {
 }
 
 // GetAzureCredsFromEnv get creds for azure
-// PA-1328
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	expect(accountName).NotTo(equal(""),
@@ -4495,6 +4490,7 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
 }
 
+// GetIBMApiKey will return the IBM API Key from GlobalCredentialConfig
 func GetIBMApiKey(cluster string) (string, error) {
 	return GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster).APIKey, nil
 }
