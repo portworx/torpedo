@@ -5626,7 +5626,7 @@ var _ = Describe("{UpdatesBackupOfUserFromNewAdmin}", func() {
 	})
 })
 
-// DeleteSameNameObjectsOfUserFromAdmin delete backups,cluster restore object created by mutiple user with same name.
+// DeleteSameNameObjectsOfUserFromAdmin delete backups, cluster, and restore objects created by multiple user with same name.
 var _ = Describe("{DeleteSameNameObjectsOfUserFromAdmin}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
 	var scheduledAppContexts []*scheduler.Context
@@ -5655,7 +5655,7 @@ var _ = Describe("{DeleteSameNameObjectsOfUserFromAdmin}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteSameNameObjectsOfUserFromAdmin",
-			"delete backups,cluster restore object created by mutiple user with same name.", nil, 87560)
+			"delete backups, cluster, and restore objects created by multiple user with same name", nil, 87560)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -5671,7 +5671,7 @@ var _ = Describe("{DeleteSameNameObjectsOfUserFromAdmin}", func() {
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 
-	It("Delete backup object with same name of mutiple users from px-admin", func() {
+	It("Delete backup object with same name of multiple users from px-admin", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -5773,6 +5773,8 @@ var _ = Describe("{DeleteSameNameObjectsOfUserFromAdmin}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deltion of backup [%s] with uid [%s]", backupName, backupUid))
 				}
 			})
+		}
+		for _, nonAdminUserName := range userNames {
 			Step(fmt.Sprintf("Verifying deletion of schedule of non-admin user [%s] from px-admin", nonAdminUserName), func() {
 				adminCtx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching admin ctx")
@@ -5787,8 +5789,9 @@ var _ = Describe("{DeleteSameNameObjectsOfUserFromAdmin}", func() {
 					err = DeleteScheduleWithClusterRef(backupScheduleName, backupScheduleUid, SourceClusterName, srcClusterUid, orgID, adminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backupScheudle [%s]", backupScheduleName))
 				}
-
 			})
+		}
+		for _, nonAdminUserName := range userNames {
 			Step(fmt.Sprintf("Verifying deletion of restore of non-admin user [%s] from px-admin", nonAdminUserName), func() {
 				ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
@@ -5802,15 +5805,16 @@ var _ = Describe("{DeleteSameNameObjectsOfUserFromAdmin}", func() {
 					err := DeleteRestoreWithUid(restoreName, restoreUid, orgID, adminCtx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restore [%s] with uid [%s]", restoreName, restoreUid))
 				}
-
 			})
+		}
+		for _, nonAdminUserName := range userNames {
 			Step(fmt.Sprintf("Verifying deletion of cluster of non-admin user [%s] from px-admin", nonAdminUserName), func() {
 				ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
 				adminCtx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching admin ctx")
 				srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster ui d", SourceClusterName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 				err = DeleteClusterWithUid(SourceClusterName, srcClusterUid, orgID, adminCtx, true)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
 				destClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
