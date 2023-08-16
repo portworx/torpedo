@@ -1160,7 +1160,7 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to fetch user name/email: [%v]", err)
+		return "", "", fmt.Errorf("failed to fetch user name/email with id [%v]: [%v]", userID, err)
 	}
 
 	return userName, email, nil
