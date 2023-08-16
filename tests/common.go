@@ -3782,11 +3782,28 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 		case drivers.ProviderIbm:
 			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
-				log.Infof("Cluster credential with name [%s] for IBM", clusterCredName)
 				clusterCredUid = uuid.New()
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
+				log.Infof("Cluster credential with name [%s] for IBM", clusterCredName)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
-					return err
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
