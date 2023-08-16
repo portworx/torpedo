@@ -1083,8 +1083,6 @@ func getMachineSetName() (string, error) {
 		return "", err
 	}
 	result := strings.TrimSpace(string(output))
-	fmt.Printf("retur"+
-		"ning: %s\n", result)
 
 	return result, nil
 

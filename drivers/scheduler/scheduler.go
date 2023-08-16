@@ -79,6 +79,8 @@ type AppConfig struct {
 	Fs                   string   `yaml:"fs"`
 	AggregationLevel     string   `yaml:"aggregation_level"`
 	IoProfile            string   `yaml:"io_profile"`
+	Journal              string   `yaml:"journal"`
+	DataSize             string   `yaml:"data_size"`
 }
 
 // InitOptions initialization options

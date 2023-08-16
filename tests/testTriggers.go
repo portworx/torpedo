@@ -8083,11 +8083,20 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		log.Infof("maxStorageNodesPerZone %d", int(maxStorageNodesPerZone))
 		log.Infof("numOfStorageNodes %d", numOfStorageNodes)
 
+		var updatedMaxStorageNodesPerZone uint32 = 0
 		if int(maxStorageNodesPerZone) == numOfStorageNodes {
 			//increase max per zone
-			updatedMaxStorageNodesPerZone := maxStorageNodesPerZone + 1
+			updatedMaxStorageNodesPerZone = maxStorageNodesPerZone + 1
+		}
+
+		if int(maxStorageNodesPerZone) < numOfStorageNodes {
+			//updating max per zone
+			updatedMaxStorageNodesPerZone = uint32(numOfStorageNodes)
+		}
+		if updatedMaxStorageNodesPerZone != 0 {
+
 			stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
-			log.Infof("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+			log.InfoD("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			if err != nil {
@@ -8099,7 +8108,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		}
 		//Scaling the cluster by one node
 		expReplicas := len(node.GetWorkerNodes()) + 1
-		log.Infof("scaling up the cluster to replicas %d", expReplicas)
+		log.InfoD("scaling up the cluster to replicas %d", expReplicas)
 		err = Inst().S.ScaleCluster(expReplicas)
 		if err != nil {
 			UpdateOutcome(event, err)
@@ -8112,8 +8121,6 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 	if !isClusterScaled {
 		return
 	}
-	err := Inst().V.RefreshDriverEndpoints()
-	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -8121,7 +8128,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 		log.InfoD(stepLog)
 		nodes := node.GetWorkerNodes()
 		for _, n := range nodes {
-			log.Infof("Check PX status on %v", n.Name)
+			log.InfoD("Check PX status on %v", n.Name)
 			err := Inst().V.WaitForPxPodsToBeUp(n)
 			if err != nil {
 				hasPXUp = false
@@ -8132,6 +8139,9 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 	if !hasPXUp {
 		return
 	}
+
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
 	dash.VerifySafely(numOfStorageNodes+1, updatedStorageNodesCount, "verify new storage node is added")
@@ -8187,10 +8197,10 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 		numOfStorageNodes := len(node.GetStorageNodes())
 
 		if int(maxStorageNodesPerZone) > numOfStorageNodes {
-			//increase max per zone
+			//updating max per zone
 			updatedMaxStorageNodesPerZone := uint32(numOfStorageNodes)
 			stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
-			log.Infof("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+			log.InfoD("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
 			pxOperator := operator.Instance()
 			_, err = pxOperator.UpdateStorageCluster(stc)
 			if err != nil {
@@ -8202,7 +8212,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 		}
 		//Scaling the cluster by one node
 		expReplicas := len(node.GetWorkerNodes()) + 1
-		log.Infof("scaling up the cluster to replicas %d", expReplicas)
+		log.InfoD("scaling up the cluster to replicas %d", expReplicas)
 		err = Inst().S.ScaleCluster(expReplicas)
 		if err != nil {
 			UpdateOutcome(event, err)
@@ -8215,8 +8225,6 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !isClusterScaled {
 		return
 	}
-	err := Inst().V.RefreshDriverEndpoints()
-	UpdateOutcome(event, err)
 
 	stepLog = "validate PX on all nodes after cluster scale up"
 	hasPXUp := true
@@ -8224,7 +8232,7 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 		log.InfoD(stepLog)
 		nodes := node.GetWorkerNodes()
 		for _, n := range nodes {
-			log.Infof("Check PX status on %v", n.Name)
+			log.InfoD("Check PX status on %v", n.Name)
 			err := Inst().V.WaitForPxPodsToBeUp(n)
 			if err != nil {
 				hasPXUp = false
@@ -8235,6 +8243,8 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	if !hasPXUp {
 		return
 	}
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
 	dash.VerifySafely(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")

@@ -390,12 +390,8 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
-	err := setSendGridEmailAPIKey(configData)
-	if err != nil {
-		return err
-	}
 
-	err = populateTriggers(configData)
+	err := populateTriggers(configData)
 	if err != nil {
 		return err
 	}
@@ -1376,7 +1372,7 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
 	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
 
-	baseInterval = 2 * time.Minute
+	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
 	triggerInterval[UpgradeStork][9] = 2 * baseInterval
