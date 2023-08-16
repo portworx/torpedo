@@ -481,6 +481,8 @@ const (
 	AddResizePoolMaintenance = "addResizePoolInMaintenance"
 	//AddStorageNode adds storage node to existing OCP set up
 	AddStorageNode = "addStorageNode"
+	//AddStoragelessNode adds storageless node to existing OCP set up
+	AddStoragelessNode = "addStoragelessNode"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -8133,6 +8135,109 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
 	dash.VerifySafely(numOfStorageNodes+1, updatedStorageNodesCount, "verify new storage node is added")
+
+	validateContexts(event, contexts)
+	updateMetrics(*event)
+
+}
+
+func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer endLongevityTest()
+	startLongevityTest(AddStoragelessNode)
+	defer ginkgo.GinkgoRecover()
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AddStoragelessNode,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	if Inst().S.String() != openshift.SchedName {
+		log.Warnf("Failed: This test is not supported for scheduler: [%s]", Inst().S.String())
+		return
+	}
+
+	setMetrics(*event)
+
+	stepLog := "Adding new storageless node to cluster"
+
+	isClusterScaled := true
+	var numOfStoragelessNodes int
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		stc, err := Inst().V.GetDriver()
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		maxStorageNodesPerZone := *stc.Spec.CloudStorage.MaxStorageNodesPerZone
+		numOfStoragelessNodes = len(node.GetStorageLessNodes())
+		log.Infof("maxStorageNodesPerZone %d", int(maxStorageNodesPerZone))
+		log.Infof("numOfStoragelessNodes %d", numOfStoragelessNodes)
+
+		numOfStorageNodes := len(node.GetStorageNodes())
+
+		if int(maxStorageNodesPerZone) > numOfStorageNodes {
+			//increase max per zone
+			updatedMaxStorageNodesPerZone := uint32(numOfStorageNodes)
+			stc.Spec.CloudStorage.MaxStorageNodesPerZone = &updatedMaxStorageNodesPerZone
+			log.Infof("updating maxStorageNodesPerZone from %d to %d", maxStorageNodesPerZone, updatedMaxStorageNodesPerZone)
+			pxOperator := operator.Instance()
+			_, err = pxOperator.UpdateStorageCluster(stc)
+			if err != nil {
+				UpdateOutcome(event, err)
+				isClusterScaled = false
+				return
+			}
+
+		}
+		//Scaling the cluster by one node
+		expReplicas := len(node.GetWorkerNodes()) + 1
+		log.Infof("scaling up the cluster to replicas %d", expReplicas)
+		err = Inst().S.ScaleCluster(expReplicas)
+		if err != nil {
+			UpdateOutcome(event, err)
+			isClusterScaled = false
+			return
+		}
+
+	})
+
+	if !isClusterScaled {
+		return
+	}
+	err := Inst().V.RefreshDriverEndpoints()
+	UpdateOutcome(event, err)
+
+	stepLog = "validate PX on all nodes after cluster scale up"
+	hasPXUp := true
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		nodes := node.GetWorkerNodes()
+		for _, n := range nodes {
+			log.Infof("Check PX status on %v", n.Name)
+			err := Inst().V.WaitForPxPodsToBeUp(n)
+			if err != nil {
+				hasPXUp = false
+				UpdateOutcome(event, err)
+			}
+		}
+	})
+	if !hasPXUp {
+		return
+	}
+
+	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
+	dash.VerifySafely(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)

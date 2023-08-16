@@ -117,6 +117,7 @@ var _ = Describe("{Longevity}", func() {
 		LocalSnapShotRestore:     TriggerLocalSnapshotRestore,
 		AggrVolDepReplResizeOps:  TriggerAggrVolDepReplResizeOps,
 		AddStorageNode:           TriggerAddOCPStorageNode,
+		AddStoragelessNode:       TriggerAddOCPStoragelessNode,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -704,6 +705,7 @@ func populateIntervals() {
 	triggerInterval[AggrVolDepReplResizeOps] = make(map[int]time.Duration)
 
 	triggerInterval[AddStorageNode] = make(map[int]time.Duration)
+	triggerInterval[AddStoragelessNode] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1491,6 +1493,17 @@ func populateIntervals() {
 	triggerInterval[AddStorageNode][2] = 24 * baseInterval
 	triggerInterval[AddStorageNode][1] = 30 * baseInterval
 
+	triggerInterval[AddStoragelessNode][10] = 1 * baseInterval
+	triggerInterval[AddStoragelessNode][9] = 3 * baseInterval
+	triggerInterval[AddStoragelessNode][8] = 6 * baseInterval
+	triggerInterval[AddStoragelessNode][7] = 9 * baseInterval
+	triggerInterval[AddStoragelessNode][6] = 12 * baseInterval
+	triggerInterval[AddStoragelessNode][5] = 15 * baseInterval
+	triggerInterval[AddStoragelessNode][4] = 18 * baseInterval
+	triggerInterval[AddStoragelessNode][3] = 21 * baseInterval
+	triggerInterval[AddStoragelessNode][2] = 24 * baseInterval
+	triggerInterval[AddStoragelessNode][1] = 30 * baseInterval
+
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
 	triggerInterval[RebootNode][0] = 0
@@ -1563,6 +1576,7 @@ func populateIntervals() {
 	triggerInterval[AggrVolDepReplResizeOps][0] = 0
 	triggerInterval[UpdateIOProfile][0] = 0
 	triggerInterval[AddStorageNode][0] = 0
+	triggerInterval[AddStoragelessNode][0] = 0
 
 }
 
