@@ -329,13 +329,129 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 
 // AddNewNode method parse and add node to node registry
 func (k *K8s) AddNewNode(newNode corev1.Node) error {
+	println("debug l20")
 	n := k.parseK8SNode(newNode)
 	if err := k.IsNodeReady(n); err != nil {
 		return err
 	}
+	println("debug l28")
 	if err := node.AddNode(n); err != nil {
 		return err
 	}
+	println("debug l29")
+	return nil
+}
+
+func (k *K8s) SetGkeConfig(kubeconfigPath string, gkeCredString string) error {
+
+	var clientConfig *rest.Config
+	var err error
+
+	println("gke1")
+	if kubeconfigPath == "" {
+		clientConfig = nil
+	} else {
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	println("gke2")
+
+	config, err := os.ReadFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	println("gke3")
+	//configFile := base64.StdEncoding.EncodeToString(bdat)
+	// First parse the config
+	client, err := clientcmd.NewClientConfigFromBytes(config)
+	if err != nil {
+		return err
+	}
+	println("gke4")
+	rawConfig, err := client.RawConfig()
+	if err != nil {
+		return err
+	}
+	println("gke5")
+	// Then create a default client config with the default loading rules
+	client = clientcmd.NewDefaultClientConfig(rawConfig, &clientcmd.ConfigOverrides{})
+	if err != nil {
+		return err
+	}
+	println("gke6")
+	//clientConfig, err = client.ClientConfig()
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	println("gke7")
+	//cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	//if err != nil {
+	//	log.Errorf("Error reading config map: %v", err)
+	//	return err
+	//}
+	println("gke8")
+	//gkeJsonKey := cm.Data["cloud-json"]
+	//println("gke9")
+	//cloudCred := backupapi.CloudCredentialObject{
+	//	Metadata: &backupapi.Metadata{
+	//		Name: "test",
+	//		Uid:  "dsgs",
+	//	},
+	//	CloudCredentialInfo: &backupapi.CloudCredentialInfo{
+	//		Type: backupapi.CloudCredentialInfo_Google,
+	//		Config: &backupapi.CloudCredentialInfo_GoogleConfig{
+	//			GoogleConfig: &backupapi.GoogleConfig{
+	//				ProjectId: "portworx-eng",
+	//				JsonKey:   gkeJsonKey,
+	//			},
+	//		},
+	//	},
+	//}
+	//println("gke10")
+	//// TODO: save the kubeconfig in the datastore if returned
+	//_, err = kubeauth.UpdateClientByCredObject(&cloudCred, clientConfig, &rawConfig)
+	//clientConfig.AuthProvider[]
+	clientConfig.AuthProvider.Config["cred-json"] = gkeCredString
+	if err != nil {
+		return err
+	}
+	println("gke11")
+	k8sCore.SetConfig(clientConfig)
+	println("gke12")
+	k8sApps.SetConfig(clientConfig)
+	println("gke13")
+	k8sApps.SetConfig(clientConfig)
+	println("gke14")
+	k8sStork.SetConfig(clientConfig)
+	println("gke15")
+	k8sStorage.SetConfig(clientConfig)
+	println("gke16")
+	k8sExternalStorage.SetConfig(clientConfig)
+	println("gke17")
+	k8sAutopilot.SetConfig(clientConfig)
+	println("gke18")
+	k8sRbac.SetConfig(clientConfig)
+	println("gke19")
+	k8sMonitoring.SetConfig(clientConfig)
+	println("gke20")
+	k8sPolicy.SetConfig(clientConfig)
+	println("gke21")
+	k8sBatch.SetConfig(clientConfig)
+	println("gke22")
+	k8sMonitoring.SetConfig(clientConfig)
+	println("gke23")
+	k8sAdmissionRegistration.SetConfig(clientConfig)
+	println("gke24")
+	k8sExternalsnap.SetConfig(clientConfig)
+	println("gke25")
+	k8sApiExtensions.SetConfig(clientConfig)
+	println("gke26")
+	k8sOperator.SetConfig(clientConfig)
+	println("gke27")
+
 	return nil
 }
 
@@ -353,6 +469,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 			return err
 		}
 	}
+
 	k8sCore.SetConfig(config)
 	k8sApps.SetConfig(config)
 	k8sApps.SetConfig(config)
@@ -387,18 +504,30 @@ func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 // RefreshNodeRegistry update the k8 node list registry
 func (k *K8s) RefreshNodeRegistry() error {
 
+	kubeconfigFile := "/tmp/key.json"
+	err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", kubeconfigFile)
+	if err != nil {
+		fmt.Println("Error setting environment variable:", err)
+		return nil
+	}
+
+	println("debug l1")
 	nodes, err := k8sCore.GetNodes()
+	println("debug l18")
 	if err != nil {
 		return err
 	}
-
+	println("debug before cleanup registry")
 	node.CleanupRegistry()
-
+	println("debug l19")
 	for _, n := range nodes.Items {
 		if err = k.AddNewNode(n); err != nil {
+			println("debug l30")
 			return err
 		}
+		println("debug l31")
 	}
+	println("debug l32")
 	return nil
 }
 
@@ -785,18 +914,19 @@ func (k *K8s) getAddressesForNode(n corev1.Node) []string {
 func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	var nodeType node.Type
 	var zone, region string
-
+	println("debug l22")
 	if k8sCore.IsNodeMaster(n) && k.NodeDriverName != "ibm" {
 		nodeType = node.TypeMaster
 	} else {
 		nodeType = node.TypeWorker
 	}
-
+	println("debug l23")
 	nodeLabels, err := k8sCore.GetLabelsOnNode(n.GetName())
+	println("debug l25")
 	if err != nil {
 		log.Warn("failed to get node label for ", n.GetName())
 	}
-
+	println("debug l26")
 	for key, value := range nodeLabels {
 		switch key {
 		case ZoneK8SNodeLabel:
@@ -806,7 +936,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 		}
 	}
 	log.Infof("Parsed node [%s] as Type: %s, Zone: %s, Region %s", n.Name, nodeType, zone, region)
-
+	println("debug l27")
 	return node.Node{
 		Name:      n.Name,
 		Addresses: k.getAddressesForNode(n),

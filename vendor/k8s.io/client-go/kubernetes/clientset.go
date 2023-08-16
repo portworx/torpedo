@@ -420,13 +420,14 @@ func (c *Clientset) Discovery() discovery.DiscoveryInterface {
 // where httpClient was generated with rest.HTTPClientFor(c).
 func NewForConfig(c *rest.Config) (*Clientset, error) {
 	configShallowCopy := *c
-
+	println("debug l9")
 	if configShallowCopy.UserAgent == "" {
 		configShallowCopy.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
-
+	println("debug l10")
 	// share the transport between all clients
 	httpClient, err := rest.HTTPClientFor(&configShallowCopy)
+	println("debug l11")
 	if err != nil {
 		return nil, err
 	}
@@ -638,6 +639,7 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	println("debug l12")
 	return &cs, nil
 }
 

@@ -79,15 +79,16 @@ func (c *Client) UpdateNode(n *corev1.Node) (*corev1.Node, error) {
 
 // GetNodes talks to the k8s api server and gets the nodes in the cluster
 func (c *Client) GetNodes() (*corev1.NodeList, error) {
+	println("debug l2")
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-
+	println("debug l14")
 	nodes, err := c.kubernetes.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-
+	println("debug l17")
 	return nodes, nil
 }
 
@@ -147,6 +148,7 @@ func (c *Client) IsNodeMaster(node corev1.Node) bool {
 
 // GetLabelsOnNode gets all the labels on the given node
 func (c *Client) GetLabelsOnNode(name string) (map[string]string, error) {
+	println("debug l24")
 	node, err := c.GetNodeByName(name)
 	if err != nil {
 		return nil, err

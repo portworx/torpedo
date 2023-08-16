@@ -155,18 +155,20 @@ func (c *Client) ResourceExists(gvk schema.GroupVersionKind) (bool, error) {
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient() error {
+	println("debug l3")
 	if c.kubernetes != nil {
 		return nil
 	}
-
+	println("debug l4")
 	return c.setClient()
 }
 
 // setClient instantiates a client.
 func (c *Client) setClient() error {
 	var err error
-
+	println("debug l5")
 	if c.config != nil {
+		println("debug l6")
 		err = c.loadClient()
 	} else {
 		kubeconfig := os.Getenv("KUBECONFIG")
@@ -205,13 +207,16 @@ func (c *Client) loadClient() error {
 	if c.config == nil {
 		return fmt.Errorf("rest config is not provided")
 	}
-
+	println("debug l7")
 	var err error
 	err = common.SetRateLimiter(c.config)
+	println("debug l8")
 	if err != nil {
 		return err
 	}
+	println(c.config)
 	c.kubernetes, err = kubernetes.NewForConfig(c.config)
+	println("debug l13")
 	if err != nil {
 		return err
 	}

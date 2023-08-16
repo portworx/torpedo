@@ -169,6 +169,8 @@ func (s *SSH) updateDriver() error {
 	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
 
 	nodes := node.GetWorkerNodes()
+	println("Is using ssh :")
+	println(s.IsUsingSSH())
 	if s.IsUsingSSH() {
 		err = s.initSSH()
 	} else {
@@ -212,6 +214,7 @@ func (s *SSH) initExecPod() error {
 	var ds *appsv1_api.DaemonSet
 	var err error
 
+	println("inside init exec pod")
 	if ds, err = k8sApps.GetDaemonSet(execPodDaemonSetLabel, s.execPodNamespace); ds == nil {
 		d, err := scheduler.Get(k8s_driver.SchedName)
 		specFactory, err := spec.NewFactory(fmt.Sprintf("%s/%s", s.specDir, execPodDaemonSetLabel), volumedriver.GetStorageProvisioner(), d)
@@ -223,6 +226,7 @@ func (s *SSH) initExecPod() error {
 			return fmt.Errorf("Error while getting debug daemonset spec. Err: %s", err)
 		}
 		dsSpec.SpecList[0].(*appsv1_api.DaemonSet).Namespace = s.execPodNamespace
+		println("creating daemon set ")
 		ds, err = k8sApps.CreateDaemonSet(dsSpec.SpecList[0].(*appsv1_api.DaemonSet), metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("Error while creating debug daemonset. Err: %s", err)

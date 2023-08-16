@@ -1,0 +1,14 @@
+switch cluster context changes
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# Date:      Wed Aug 16 22:00:55 2023 +0530
+#
+# On branch topic/sn/gkenew
+# Your branch is up to date with 'origin/topic/sn/gkenew'.
+#
+# Changes to be committed:
+#	modified:   tests/backup/backup_basic_test.go
+#	modified:   tests/common.go
+#

@@ -30,7 +30,9 @@ import (
 // or transport level security defined by the provided Config. Will return the
 // default http.DefaultClient if no special case behavior is needed.
 func HTTPClientFor(config *Config) (*http.Client, error) {
+	println("debug h1")
 	transport, err := TransportFor(config)
+	println("debug h5")
 	if err != nil {
 		return nil, err
 	}
@@ -40,10 +42,12 @@ func HTTPClientFor(config *Config) (*http.Client, error) {
 			Transport: transport,
 			Timeout:   config.Timeout,
 		}
+		println("debug h6")
 	} else {
 		httpClient = http.DefaultClient
+		println("debug h7")
 	}
-
+	println("debug h8")
 	return httpClient, nil
 }
 
@@ -61,10 +65,13 @@ func TLSConfigFor(config *Config) (*tls.Config, error) {
 // or transport level security defined by the provided Config. Will return the
 // default http.DefaultTransport if no special case behavior is needed.
 func TransportFor(config *Config) (http.RoundTripper, error) {
+	println("debug h2")
 	cfg, err := config.TransportConfig()
+	println("debug h3")
 	if err != nil {
 		return nil, err
 	}
+	println("debug h4")
 	return transport.New(cfg)
 }
 
