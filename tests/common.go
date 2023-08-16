@@ -755,19 +755,11 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
-		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
-		}
-
-		// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
-		for _, specObj := range ctx.App.SpecList {
-			if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
-				isRaw = *obj.Spec.VolumeMode == corev1.PersistentVolumeBlock
-			}
 		}
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
@@ -777,8 +769,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-			// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
-			if !ctx.SkipVolumeValidation && !isRaw {
+			if !ctx.SkipVolumeValidation {
 				ValidateResizePurePVC(ctx, errChan...)
 			}
 		})
