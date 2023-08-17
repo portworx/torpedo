@@ -9,11 +9,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/apps"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"math/rand"
 	"net/http"
 	"regexp"
+
+	"github.com/portworx/sched-ops/k8s/apps"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
