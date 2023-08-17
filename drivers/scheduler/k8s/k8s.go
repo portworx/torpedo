@@ -7638,34 +7638,41 @@ func ClusterVersion() (string, error) {
 func createClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
 	cloneStorageClass := originalStorageClass
 	clonedSCName := cloneStorageClass.Name + "-clone"
+	clonedSCNotFound := false
 
 	t := func() (interface{}, bool, error) {
 		_, err := k8sStorage.GetStorageClass(clonedSCName)
 		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				clonedSCNotFound = true
+				return "", false, err
+			}
 			return "", true, err
 		}
 		return "", false, nil
 	}
 
 	_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
-	if err == nil {
-		return clonedSCName, nil
-	} else if strings.Contains(err.Error(), fmt.Sprintf("storageclasses.storage.k8s.io \"%v\" not found", clonedSCName)) {
-		log.Infof("Cloned SC with the name %v does not exist and will be created", clonedSCName)
+	if err != nil {
+		if clonedSCNotFound {
+			log.Infof("Cloned SC with the name %v does not exist and will be created", clonedSCName)
 
-		cloneStorageClass.Name = clonedSCName
-		immediate := storageapi.VolumeBindingImmediate
-		cloneStorageClass.VolumeBindingMode = &immediate
-		cloneStorageClass.ResourceVersion = ""
-		cloneStorageClass.UID = ""
+			cloneStorageClass.Name = clonedSCName
+			immediate := storageapi.VolumeBindingImmediate
+			cloneStorageClass.VolumeBindingMode = &immediate
+			cloneStorageClass.ResourceVersion = ""
+			cloneStorageClass.UID = ""
 
-		clonedSCobj, err := k8sStorage.CreateStorageClass(cloneStorageClass)
-		if err != nil {
-			log.Infof("Error occurred while creating cloned storage class:- %v", err)
+			clonedSCobj, err := k8sStorage.CreateStorageClass(cloneStorageClass)
+			if err != nil {
+				log.Infof("Error occurred while creating cloned storage class:- %v", err)
+				return "", err
+			}
+			return clonedSCobj.Name, nil
+		} else {
 			return "", err
 		}
-		return clonedSCobj.Name, nil
 	} else {
-		return "", err
+		return clonedSCName, nil
 	}
 }
