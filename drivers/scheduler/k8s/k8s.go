@@ -7636,7 +7636,7 @@ func ClusterVersion() (string, error) {
 }
 
 func createClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
-	cloneStorageClass := originalStorageClass
+	cloneStorageClass := originalStorageClass.DeepCopy()
 	clonedSCName := cloneStorageClass.Name + "-clone"
 	clonedSCNotFound := false
 
@@ -7665,14 +7665,13 @@ func createClonedStorageClassIfRequired(originalStorageClass *storageapi.Storage
 
 			clonedSCobj, err := k8sStorage.CreateStorageClass(cloneStorageClass)
 			if err != nil {
-				log.Infof("Error occurred while creating cloned storage class:- %v", err)
+				log.Errorf("Error occurred while creating cloned storage class:- %v", err)
 				return "", err
 			}
 			return clonedSCobj.Name, nil
 		} else {
 			return "", err
 		}
-	} else {
-		return clonedSCName, nil
 	}
+	return clonedSCName, nil
 }
