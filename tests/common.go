@@ -2113,11 +2113,17 @@ func CollectSupport() {
 	context("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
+		skipSystemCheck := false
+
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
-				return
+				skipSystemCheck = true
 			}
+		}
+
+		if skipSystemCheck || Inst().SkipSystemChecks {
+			log.Infof("skipping diag collection because env for skipping the check has been set to true")
+			return
 		}
 		nodes := node.GetWorkerNodes()
 		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")
@@ -8087,6 +8093,7 @@ func runDataIntegrityValidation(testName string) bool {
 
 			testName = testName[i+1 : j]
 		}
+		log.Infof("validating test-name [%s] for running data integrity validation", testName)
 		if strings.Contains(dataIntegrityValidationTests, testName) {
 			return true
 		}
@@ -8109,6 +8116,11 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 	if strings.Contains(testName, "{Longevity}") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
+		sInd := strings.LastIndex(testName, ".")
+		if sInd != -1 {
+			testName = testName[sInd+1:]
+		}
+
 	}
 
 	if !runDataIntegrityValidation(testName) {
