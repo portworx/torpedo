@@ -168,7 +168,8 @@ const (
 )
 
 var (
-	clusterProviders = []string{"k8s"}
+	clusterProviders       = []string{"k8s"}
+	GlobalCredentialConfig backup.BackupCloudConfig
 )
 
 type OwnershipAccessType int32
@@ -2113,11 +2114,17 @@ func CollectSupport() {
 	context("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
+		skipSystemCheck := false
+
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
-				return
+				skipSystemCheck = true
 			}
+		}
+
+		if skipSystemCheck || Inst().SkipSystemChecks {
+			log.Infof("skipping diag collection because env for skipping the check has been set to true")
+			return
 		}
 		nodes := node.GetWorkerNodes()
 		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")
@@ -3679,7 +3686,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
 						log.Infof("The error is - %v", err.Error())
@@ -3713,7 +3720,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
 						log.Infof("The error is - %v", err.Error())
@@ -3745,6 +3752,38 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		case drivers.ProviderIbm:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				log.Infof("Cluster credential with name [%s] for IBM", clusterCredName)
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
@@ -3877,12 +3916,10 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for Aws")
-		// PA-1328
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
 			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
-		// PA-1328
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
 			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
@@ -3906,7 +3943,6 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
-		// PA-1328
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
@@ -3950,6 +3986,29 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+
+	case drivers.ProviderIbm:
+		log.Infof("Create creds for IBM")
+		apiKey, err := GetIBMApiKey("default")
+		if err != nil {
+			return err
+		}
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_IBM,
+				Config: &api.CloudCredentialInfo_IbmConfig{
+					IbmConfig: &api.IBMConfig{
+						ApiKey: apiKey,
+					},
+				},
+			},
+		}
+
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -4419,7 +4478,6 @@ func GetDestinationClusterConfigPath() (string, error) {
 }
 
 // GetAzureCredsFromEnv get creds for azure
-// PA-1328
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	expect(accountName).NotTo(equal(""),
@@ -4447,6 +4505,11 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
 
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
+}
+
+// GetIBMApiKey will return the IBM API Key from GlobalCredentialConfig
+func GetIBMApiKey(cluster string) (string, error) {
+	return GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster).APIKey, nil
 }
 
 type NfsInfo struct {
@@ -8087,6 +8150,7 @@ func runDataIntegrityValidation(testName string) bool {
 
 			testName = testName[i+1 : j]
 		}
+		log.Infof("validating test-name [%s] for running data integrity validation", testName)
 		if strings.Contains(dataIntegrityValidationTests, testName) {
 			return true
 		}
@@ -8109,6 +8173,11 @@ func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
 	if strings.Contains(testName, "{Longevity}") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
+		sInd := strings.LastIndex(testName, ".")
+		if sInd != -1 {
+			testName = testName[sInd+1:]
+		}
+
 	}
 
 	if !runDataIntegrityValidation(testName) {
