@@ -2,11 +2,13 @@ package tests
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/apiServer/pxone/utils"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
@@ -14,6 +16,7 @@ import (
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	golog "log"
 	"os"
 	"strings"
 	"testing"
@@ -334,6 +337,20 @@ var _ = AfterSuite(func() {
 
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
+	//ParseFlags()
+	//os.Exit(m.Run())
+	go func() {
+		router := gin.Default()
+		router.DELETE("pxone/deletens/:namespace", utils.DeleteNS)
+		router.POST("pxone/createns", utils.CreateNS)
+		router.POST("pxone/inittorpedo", utils.InitializeDrivers)
+		router.GET("pxone/getnodes", utils.GetNodes)
+		router.POST("pxone/rebootnode/:nodename", utils.RebootNode)
+		router.GET("pxone/storagenodes", utils.GetStorageNodes)
+		router.GET("pxone/storagelessnodes", utils.GetStorageLessNodes)
+		router.POST("pxone/collectsupport", utils.CollectSupport)
+		router.POST("pxone/scheduleapps", utils.ScheduleAppsAndValidate)
+		golog.Fatal(router.Run(":8080"))
+	}()
+	time.Sleep(1 * time.Hour)
 }
