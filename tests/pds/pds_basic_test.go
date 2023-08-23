@@ -5,13 +5,8 @@ import (
 	"testing"
 
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/pds/api"
-	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	"github.com/portworx/torpedo/drivers/pds/parameters"
-	"github.com/portworx/torpedo/drivers/pds/targetcluster"
-
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
@@ -29,16 +24,6 @@ func TestDataService(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : pds", specReporters)
 
 }
-
-// imports based on functionalities
-var (
-	dsTest        *dataservices.DataserviceType
-	customParams  *parameters.Customparams
-	targetCluster *targetcluster.TargetCluster
-	controlPlane  *controlplane.ControlPlane
-	components    *api.Components
-	wkloadParams  pdsdriver.LoadGenParams
-)
 
 var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run the pds tests"
