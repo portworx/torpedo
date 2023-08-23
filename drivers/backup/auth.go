@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	k8s "github.com/portworx/sched-ops/k8s/core"
@@ -727,27 +726,28 @@ func AddUser(userName, firstName, lastName, email, password string) error {
 
 // DeleteUser deletes a user with the provided userName
 func DeleteUser(userName string) error {
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
-	if err != nil {
-		return err
-	}
-	userID, err := FetchIDOfUser(userName)
-	if err != nil {
-		return err
-	}
-	reqURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
-	method := "DELETE"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
-	if err != nil {
-		return err
-	}
-
-	response, err := processHTTPRequest(method, reqURL, headers, nil)
-	log.Infof("Response for user [%s] deletion - %s", userName, string(response))
-	if err != nil {
-		return err
-	}
-	log.Infof("Deleted User - %s", userName)
+	//keycloakEndPoint, err := getKeycloakEndPoint(true)
+	//if err != nil {
+	//	return err
+	//}
+	//userID, err := FetchIDOfUser(userName)
+	//if err != nil {
+	//	return err
+	//}
+	//reqURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
+	//method := "DELETE"
+	//headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//response, err := processHTTPRequest(method, reqURL, headers, nil)
+	//log.Infof("Response for user [%s] deletion - %s", userName, string(response))
+	//if err != nil {
+	//	return err
+	//}
+	//log.Infof("Deleted User - %s", userName)
+	log.Warnf("Skipping deletion of user %s in Keycloak", userName)
 	return nil
 }
 
@@ -988,63 +988,64 @@ func AddGroup(group string) error {
 
 // DeleteGroup adds a new group
 func DeleteGroup(group string) error {
-	keycloakEndPoint, err := getKeycloakEndPoint(true)
-	if err != nil {
-		return err
-	}
-	groupID, err := FetchIDOfGroup(group)
-	if err != nil {
-		return err
-	}
-	reqURL := fmt.Sprintf("%s/groups/%s", keycloakEndPoint, groupID)
-	method := "DELETE"
-	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
-	if err != nil {
-		return err
-	}
-	_, err = processHTTPRequest(method, reqURL, headers, nil)
-	if err != nil {
-		return err
-	}
-	log.Infof("Deleted Group - %s", group)
+	//keycloakEndPoint, err := getKeycloakEndPoint(true)
+	//if err != nil {
+	//	return err
+	//}
+	//groupID, err := FetchIDOfGroup(group)
+	//if err != nil {
+	//	return err
+	//}
+	//reqURL := fmt.Sprintf("%s/groups/%s", keycloakEndPoint, groupID)
+	//method := "DELETE"
+	//headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	//if err != nil {
+	//	return err
+	//}
+	//_, err = processHTTPRequest(method, reqURL, headers, nil)
+	//if err != nil {
+	//	return err
+	//}
+	//log.Infof("Deleted Group - %s", group)
+	log.Warnf("Skipping deletion of group %s in Keycloak", group)
 	return nil
 }
 
 // Deletes Multiple groups
 func DeleteMultipleGroups(groups []string) error {
 
-	var wg sync.WaitGroup
-	for _, group := range groups {
-		wg.Add(1)
-		go func(group string) {
-			defer wg.Done()
-			err := DeleteGroup(group)
-			log.FailOnError(err, "Failed to create group - %v", group)
-
-		}(group)
-		log.Infof("Deleted Group - %s", group)
-	}
-	wg.Wait()
-
+	//var wg sync.WaitGroup
+	//for _, group := range groups {
+	//	wg.Add(1)
+	//	go func(group string) {
+	//		defer wg.Done()
+	//		err := DeleteGroup(group)
+	//		log.FailOnError(err, "Failed to create group - %v", group)
+	//
+	//	}(group)
+	//	log.Infof("Deleted Group - %s", group)
+	//}
+	//wg.Wait()
+	log.Warnf("Skipping deletion of groups %s in Keycloak", groups)
 	return nil
 }
 
 // Deletes Multiple users
 func DeleteMultipleUsers(users []string) error {
 
-	var wg sync.WaitGroup
-	for _, user := range users {
-		wg.Add(1)
-		go func(user string) {
-			defer wg.Done()
-			err := DeleteUser(user)
-			log.FailOnError(err, "Failed to create group - %v", user)
-
-		}(user)
-		log.Infof("Deleted User - %s", user)
-	}
-	wg.Wait()
-
+	//var wg sync.WaitGroup
+	//for _, user := range users {
+	//	wg.Add(1)
+	//	go func(user string) {
+	//		defer wg.Done()
+	//		err := DeleteUser(user)
+	//		log.FailOnError(err, "Failed to create group - %v", user)
+	//
+	//	}(user)
+	//	log.Infof("Deleted User - %s", user)
+	//}
+	//wg.Wait()
+	log.Warnf("Skipping deletion of users %s in Keycloak", users)
 	return nil
 }
 
