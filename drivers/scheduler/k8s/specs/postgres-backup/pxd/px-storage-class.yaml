@@ -5,13 +5,7 @@ metadata:
   name: postgres-sc
 provisioner: kubernetes.io/portworx-volume
 parameters:
-  {{ if .Repl }}
-  repl: "{{ .Repl }}"
-  {{ else }}
-  repl: "3"{{ end }}
-  priority_io: "high"
-  {{ if .Fs }}
-  fs: {{ .Fs }}{{ end }}
-  {{ if .AggregationLevel }}
-  aggregation_level: "{{ .AggregationLevel }}"{{ end }}
+  repl: "3"
+  aggregation_level: "1"
+  io_profile: "journal"
 allowVolumeExpansion: true
