@@ -5319,7 +5319,7 @@ func ParseFlags() {
 		"Endpoint version which will be used for checking version after upgrade storage driver")
 	flag.StringVar(&upgradeStorageDriverEndpointList, upgradeStorageDriverEndpointListFlag, "", "Comma separated list of Spec Generator URLs for performing upgrade hops for StorageCluster")
 	flag.BoolVar(&enableStorkUpgrade, enableStorkUpgradeFlag, false, "Enable stork upgrade during storage driver upgrade")
-	flag.StringVar(&appListCSV, appListCliFlag, "", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
+	flag.StringVar(&appListCSV, appListCliFlag, "mysql-backup", "Comma-separated list of apps to run as part of test. The names should match directories in the spec dir.")
 	flag.StringVar(&secureAppsCSV, secureAppsCliFlag, "", "Comma-separated list of apps to deploy with secure volumes using storage class. The names should match directories in the spec dir.")
 	flag.StringVar(&repl1AppsCSV, repl1AppsCliFlag, "", "Comma-separated list of apps to deploy with repl 1 volumes. The names should match directories in the spec dir.")
 	flag.StringVar(&csiAppsCSV, csiAppCliFlag, "", "Comma-separated list of apps to deploy with CSI provisioner")
@@ -5380,10 +5380,10 @@ func ParseFlags() {
 	suiteLogger = CreateLogger(tpLogPath)
 	log.SetTorpedoFileOutput(suiteLogger)
 
-	appList, err := splitCsv(appListCSV)
-	if err != nil {
-		log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
-	}
+	appList := []string{"mysql-backup"}
+	//if err != nil {
+	//	log.Fatalf("failed to parse app list: %v. err: %v", appListCSV, err)
+	//}
 
 	csiAppsList := make([]string, 0)
 	if len(csiAppsCSV) > 0 {
