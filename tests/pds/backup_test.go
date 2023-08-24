@@ -8,7 +8,9 @@ import (
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -210,6 +212,77 @@ var _ = Describe("{ValidateDataServiceDeletionBoundToBackups}", func() {
 		// In case any of the steps failed
 		CleanupDeployments(deploymentsToBeCleaned)
 		DeleteAllPDSBkpTargets()
+
+	})
+})
+
+var _ = Describe("{CleanupStaleBackupJobsAndTargets}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CleanupStaleBackupJobsAndTargets", "Cleanup stale Backup Jobs And Targets", pdsLabels, 0)
+	})
+
+	It("Cleanup stale Backup Jobs And Targets", func() {
+		stepLog := "Cleanup stale Backup Jobs And Targets"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backuptargets, err := components.BackupTarget.ListBackupTarget(tenantID)
+			log.FailOnError(err, "Failed while fetching backup targets")
+			for _, bkpTarget := range backuptargets {
+				backups, err := components.Backup.ListBackupsBelongToTarget(bkpTarget.GetId())
+				log.FailOnError(err, "Failed while fetching backup targets")
+				for _, backup := range backups {
+					log.Infof("Delete backup.Details: Name - %v, Id - %v", backup.GetClusterResourceName(), backup.GetId())
+					backupId := backup.GetId()
+					_, err := components.Backup.DeleteBackup(backupId)
+					waitErr := wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+						model, bkpErr := components.Backup.GetBackup(backupId)
+						if model != nil {
+							log.Info(model)
+							log.Info(model.GetId())
+							log.Info(model.GetState())
+							return false, bkpErr
+						}
+						if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
+							return true, nil
+						}
+						return false, bkpErr
+					})
+					if waitErr != nil {
+						log.FailOnError(err, "error occured while polling for deleting backup")
+					}
+					if err != nil {
+						log.FailOnError(err, "backup object deletion failed")
+					}
+				}
+				credId := bkpTarget.GetBackupCredentialsId()
+				log.Infof("Deleting backup target {Name: %v} to PDS.", bkpTarget.GetName())
+				_, err = components.BackupTarget.DeleteBackupTarget(bkpTarget.GetId())
+				if err != nil {
+					log.FailOnError(err, "Failed to delete AWS S3 backup target, Err: %v ", err)
+				}
+				waitErr := wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+					model, bkpErr := components.BackupTarget.GetBackupTarget(bkpTarget.GetId())
+					if model != nil {
+						log.Info(model.GetName())
+						return false, bkpErr
+					}
+					if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
+						return true, nil
+					}
+					return false, bkpErr
+				})
+				if waitErr != nil {
+					log.FailOnError(err, "error occurred while polling for deleting backup target")
+				}
+				_, err = components.BackupCredential.DeleteBackupCredential(credId)
+				if err != nil {
+					log.FailOnError(err, "Failed to delete backup credentials ")
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 
 	})
 })
