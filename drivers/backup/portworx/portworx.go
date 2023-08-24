@@ -274,18 +274,14 @@ func (p *portworx) EnumerateCluster(ctx context.Context, req *api.ClusterEnumera
 	if err != nil {
 		return nil, err
 	}
-	ctxPreferredUsername, err := GetPreferredUsernameFromCtx(ctx)
+	sub, err := GetSubFromCtx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var userClusters []*api.ClusterObject
 	for _, clusterObject := range clusterEnumerateResponse.GetClusters() {
 		ownerId := clusterObject.GetOwnership().GetOwner()
-		username, _, err := backup.FetchUserDetailsFromID(ownerId)
-		if err != nil {
-			return nil, err
-		}
-		if username == ctxPreferredUsername {
+		if ownerId == sub {
 			userClusters = append(userClusters, clusterObject)
 		}
 	}
@@ -1620,7 +1616,20 @@ func GetPreferredUsernameFromCtx(ctx context.Context) (string, error) {
 	}
 	preferredUsername, ok := claims["preferred_username"].(string)
 	if !ok {
-		return "", fmt.Errorf("given name not found or is of invalid type")
+		return "", fmt.Errorf("preferred_username not found or is of invalid type")
+	}
+	return preferredUsername, nil
+}
+
+// GetSubFromCtx extracts and decodes the JWT token from the outgoing context and then returns the sub which corresponds to Keycloak user id
+func GetSubFromCtx(ctx context.Context) (string, error) {
+	claims, err := GetTokenClaimsFromCtx(ctx)
+	if err != nil {
+		return "", err
+	}
+	preferredUsername, ok := claims["sub"].(string)
+	if !ok {
+		return "", fmt.Errorf("sub not found or is of invalid type")
 	}
 	return preferredUsername, nil
 }
