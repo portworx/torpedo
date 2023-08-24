@@ -153,10 +153,6 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 		return
 	}
 	appToRun := c.Param("appName")
-	apps := tests.Inst().AppList
-	defer func() {
-		tests.Inst().AppList = apps
-	}()
 	tests.Inst().AppList = []string{appToRun}
 	context = tests.ScheduleApplications(testName)
 	for _, ctx := range context {
