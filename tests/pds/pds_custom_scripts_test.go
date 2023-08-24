@@ -35,7 +35,7 @@ var _ = Describe("{DeleteStorageConfigTemplates}", func() {
 		log.InfoD(stepLog)
 		Step(stepLog, func() {
 			storageTemplatePrefix := params.CleanUpParams.StorageTemplatePrefix
-			err := controlPlane.DeleteAppConfigTemplates(tenantID, storageTemplatePrefix)
+			err := controlPlane.DeleteStorageConfigTemplates(tenantID, storageTemplatePrefix)
 			log.FailOnError(err, "error occured while deleting app config templates")
 		})
 	})
@@ -54,7 +54,7 @@ var _ = Describe("{DeleteResourceSettingsTemplates}", func() {
 		log.InfoD(stepLog)
 		Step(stepLog, func() {
 			resourceTemplatePrefix := params.CleanUpParams.ResourceTemplatePrefix
-			err := controlPlane.DeleteAppConfigTemplates(tenantID, resourceTemplatePrefix)
+			err := controlPlane.DeleteResourceSettingTemplates(tenantID, resourceTemplatePrefix)
 			log.FailOnError(err, "error occured while deleting app config templates")
 		})
 	})
