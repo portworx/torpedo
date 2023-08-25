@@ -209,7 +209,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		})
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -360,7 +360,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		Step("Register cluster for backup", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -391,7 +391,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			log.FailOnError(err, "Fetching non admin ctx")
 			userContexts = append(userContexts, ctxNonAdmin)
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			// Try restore with user having RestoreAccess and it should pass
@@ -418,6 +418,11 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+		log.Infof("Generating user context")
+		ctxNonAdmin, err := backup.GetNonAdminCtx(userNames[0], commonPassword)
+		log.FailOnError(err, "Fetching non admin ctx")
+		log.Infof("Deleting registered clusters for non-admin context")
+		CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		err = backup.DeleteUser(userNames[0])
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting user %s", userNames[0]))
 		err = backup.DeleteGroup(groupName)
@@ -448,6 +453,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	var credName string
 	bkpNamespaces = make([]string, 0)
 	backupLocationMap := make(map[string]string)
+	userContextsList := make([]context.Context, 0)
 	var chosenUser string
 
 	JustBeforeEach(func() {
@@ -557,7 +563,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -641,7 +647,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -689,7 +695,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Get Backup UID
@@ -726,7 +732,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -768,7 +774,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -806,7 +812,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -837,6 +843,17 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContextsList {
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
+		}
 
 		var wg sync.WaitGroup
 		log.Infof("Cleaning up users")
@@ -999,7 +1016,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -1063,7 +1080,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -1206,16 +1223,16 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctx)
+		err = DeleteCluster(SourceClusterName, orgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctx)
+		err = DeleteCluster(destinationClusterName, orgID, ctx, true)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 		}
 
@@ -1382,7 +1399,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -1444,7 +1461,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -1479,7 +1496,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -1866,7 +1883,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -1913,7 +1930,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore
@@ -1947,7 +1964,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Get Backup UID
@@ -2078,7 +2095,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -2133,7 +2150,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 
 				// Register Source and Destination cluster
 				log.InfoD("Registering Source and Destination clusters from user context for user -%s", user)
-				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+				err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 				for _, backup := range backupNames {
@@ -2289,7 +2306,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.InfoD("Configuring source and destination clusters with px-central-admin and user ctx")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
 			backupClusterName = SourceClusterName
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, backupClusterName, ctx)
@@ -2300,7 +2317,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			log.InfoD("Uid of [%s] cluster is %s", backupClusterName, clusterUid)
 			ctxNonAdmin, err := backup.GetNonAdminCtx(username, commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with [%s] ctx", SourceClusterName, destinationClusterName, username))
 		})
 		Step("Create schedule policy", func() {
@@ -2391,6 +2408,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 			err := DeleteRestore(restoreName, orgID, ctxNonAdmin)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s] in [%s] ctx", restoreName, username))
 		}
+		CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		err = backup.DeleteUser(username)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the user [%s]", username))
 		opts := make(map[string]bool)
@@ -2465,7 +2483,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 			}
 		})
 		Step("Register cluster for backup", func() {
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -2493,7 +2511,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 				ctxNonAdmin, err = backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
 				log.InfoD("Registering Source and Destination clusters from user context")
-				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+				err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 				userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
@@ -2509,16 +2527,8 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
-		log.Infof("Deleting backup created by px-central-admin")
-
-		log.Infof("Deleting registered clusters for non-admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 
 		backupDriver := Inst().Backup
-
 		log.Infof("Deleting backup created by user - %s", userNames[0])
 		userBackupUID, err := backupDriver.GetBackupUID(ctxNonAdmin, userBackupName, orgID)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID of user for backup %s", userBackupName))
@@ -2527,16 +2537,13 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		err = DeleteBackupAndWait(userBackupName, ctxNonAdmin)
 		log.FailOnError(err, fmt.Sprintf("Failed while waiting for backup %s to be deleted", userBackupName))
 
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
+		log.Infof("Deleting registered clusters for non-admin context")
+		err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+		err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-		log.Infof("Cleaning up users")
-		for _, user := range userNames {
-			err = backup.DeleteUser(user)
-		}
-		log.FailOnError(err, "Error in deleting user")
 	})
 })
 
@@ -2609,7 +2616,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -2783,7 +2790,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		})
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -2838,7 +2845,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context for user -%s", userName)
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			// Validate that backups are shared with user
 			log.Infof("Validating that backups are shared with %s user", userName)
@@ -2893,9 +2900,9 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 		}
 
@@ -2984,7 +2991,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 
 		Step("Register source and destination cluster for backup", func() {
 			log.InfoD("Register source and destination cluster for backup")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			srcClusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -3231,7 +3238,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			// Registering for admin user
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -3282,7 +3289,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 
 			// Register Source and Destination cluster
 			log.InfoD("Registering Source and Destination clusters from user context")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+			err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
 			// Start Restore and confirm that user cannot restore
@@ -3352,9 +3359,9 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin)
+			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
 		}
 
@@ -3420,7 +3427,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		})
 
 		Step("Register cluster for backup", func() {
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -3503,7 +3510,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Share backup %s with  user %s having FullAccess", backupName, userName))
 			userBackups1, _ := GetAllBackupsForUser(userName[0], commonPassword)
 			log.Infof(" the backup are", userBackups1)
-			err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
+			err = CreateApplicationClusters(orgID, "", "", userCtx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster for user")
 		})
 
@@ -3784,7 +3791,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 			log.InfoD("Registering Source and Destination clusters and verifying the status")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(orgID, "", "", ctx)
 			log.FailOnError(err, "Source and Destination cluster creation failed")
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -3821,7 +3828,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 
 				// Register Source and Destination cluster
 				log.InfoD("Registering Source and Destination clusters from user context for user -%s", user)
-				err = CreateSourceAndDestClusters(orgID, "", "", ctxNonAdmin)
+				err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 				log.FailOnError(err, "Failed to create source and destination cluster for user %s", user)
 
 				// Get Backup UID
@@ -3939,6 +3946,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 	var credNames []string
 	var cloudCredUID string
 	bkpNamespaces = make([]string, 0)
+	userContextsList := make([]context.Context, 0)
 	var backupLocationCreationInterval time.Duration
 
 	JustBeforeEach(func() {
@@ -4013,7 +4021,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				log.InfoD("Registering Source and Destination clusters as user : %s and verifying the status", user)
 				ctx, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
-				err = CreateSourceAndDestClusters(orgID, "", "", ctx)
+				err = CreateApplicationClusters(orgID, "", "", ctx)
 				log.FailOnError(err, "Failed creating source and destination cluster for user : %s", user)
 				clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
@@ -4135,6 +4143,18 @@ var _ = Describe("{SwapShareBackup}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error deleting backup - %s for user - %s", backupName, users[i]))
 		}
 
+		log.Infof("Generating user context")
+		for _, userName := range users {
+			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
+			log.FailOnError(err, "Fetching non admin ctx")
+			userContextsList = append(userContextsList, ctxNonAdmin)
+		}
+
+		log.Infof("Deleting registered clusters for non-admin context")
+		for _, ctxNonAdmin := range userContextsList {
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
+		}
+
 		// Cleanup all backup locations
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
@@ -4172,7 +4192,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				cloudCredDeleteStatus := func() (interface{}, bool, error) {
 					err := DeleteCloudCredential(cloudCredentialName, orgID, cloudCredentialUid)
 					if err != nil {
-						return "", true, fmt.Errorf("deleting cloud cred %s", cloudCredentialName)
+						return "", true, fmt.Errorf("deleting cloud cred %s failed - err", cloudCredentialName)
 					}
 					return "", false, nil
 				}

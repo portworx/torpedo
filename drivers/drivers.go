@@ -11,6 +11,10 @@ const (
 	ProviderPortworx = "pxd"
 	// ProviderNfs for nfs provider
 	ProviderNfs = "nfs"
+	// ProviderRke for rke provider
+	ProviderRke = "rke"
+	// ProviderIbm for ibm provider
+	ProviderIbm = "ibm"
 )
 
 // Driver specifies the most basic methods to be implemented by a Torpedo driver.

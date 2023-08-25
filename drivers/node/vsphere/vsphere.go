@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -214,8 +215,17 @@ func (v *vsphere) connect() error {
 		var vmMo mo.VirtualMachine
 		err = vm.Properties(v.ctx, vm.Reference(), []string{"guest"}, &vmMo)
 		if err != nil {
-			log.Errorf("failed to get properties: %v", err)
-			return err
+			re, regErr := regexp.Compile(".*has already been deleted or has not been completely created.*")
+			if regErr != nil {
+				return regErr
+			}
+			if re.MatchString(fmt.Sprintf("%v", err)) {
+				log.Errorf("%v", err)
+				continue
+			} else {
+				log.Errorf("failed to get properties: %v", err)
+				return err
+			}
 		}
 
 		// Get the hostname

@@ -1,23 +1,34 @@
 package asyncdr
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/sirupsen/logrus"
+	storageapi "k8s.io/api/storage/v1"
 
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+
 	"github.com/portworx/sched-ops/task"
 	v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var dash *aetosutil.Dashboard
 
 const (
 	clusterName            = "tp-cluster"
@@ -43,12 +54,116 @@ const (
 	DeleteNamespaceTimeout = 5 * time.Minute
 	migrationKey           = "async-dr-"
 	kubeconfigDirectory    = "/tmp"
+	tempDir                = "/tmp"
+	portworxProvisioner    = "kubernetes.io/portworx-volume"
+	DefaultScName          = "async-sc"
 )
 
 var (
 	orgID      string
 	bucketName string
 )
+
+type MigrationStatsType struct {
+	CreatedOn                       string
+	TotalNumberOfVolumes            string
+	NumOfMigratedVolumes            string
+	TotalNumberOfResources          string
+	NumOfMigratedResources          string
+	TotalBytesMigrated              string
+	ElapsedTimeForVolumeMigration   string
+	ElapsedTimeForResourceMigration string
+	Application                     string
+	StorkVersion                    string
+	PortworxVersion                 string
+}
+
+type AppData struct {
+	AppName         string
+	Ns              string
+	RepoName        string
+	OperatorName    string
+	HelmUrl         string
+	ExpectedCrdList []string
+}
+
+func GetAppData(name string) (appdata *AppData) {
+	data := &AppData{}
+	if name == "mongo" {
+		data.AppName = "mongo"
+		data.Ns = "mongo"
+		data.RepoName = "mongodb"
+		data.OperatorName = "community-operator"
+		data.HelmUrl = "https://mongodb.github.io/helm-charts"
+		data.ExpectedCrdList = []string{"mongodbcommunity.mongodbcommunity.mongodb.com"}
+	} else if name == "kafka" {
+		data.AppName = "kafka"
+		data.Ns = "kafka"
+		data.RepoName = "strimzi"
+		data.OperatorName = "strimzi-kafka-operator"
+		data.HelmUrl = "https://strimzi.io/charts/"
+		data.ExpectedCrdList = []string{"kafkabridges.kafka.strimzi.io", "kafkaconnectors.kafka.strimzi.io", "kafkaconnects.kafka.strimzi.io",
+			"kafkamirrormaker2s.kafka.strimzi.io", "kafkamirrormakers.kafka.strimzi.io", "kafkarebalances.kafka.strimzi.io",
+			"kafkas.kafka.strimzi.io", "kafkatopics.kafka.strimzi.io", "kafkausers.kafka.strimzi.io", "strimzipodsets.core.strimzi.io"}
+	} else if name == "confluent" {
+		data.AppName = "confluent"
+		data.Ns = "confluent"
+		data.RepoName = "confluentinc"
+		data.OperatorName = "confluent-operator"
+		data.HelmUrl = "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
+		data.ExpectedCrdList = []string{"clusterlinks.platform.confluent.io", "confluentrolebindings.platform.confluent.io", "connectors.platform.confluent.io", "connects.platform.confluent.io",
+			"controlcenters.platform.confluent.io", "kafkarestclasses.platform.confluent.io", "kafkarestproxies.platform.confluent.io", "kafkas.platform.confluent.io",
+			"kafkatopics.platform.confluent.io", "ksqldbs.platform.confluent.io", "schemaexporters.platform.confluent.io", "schemaregistries.platform.confluent.io", "schemas.platform.confluent.io", "zookeepers.platform.confluent.io"}
+	}
+	return data
+}
+
+func CreateStats(name, namespace, pxversion string) (map[string]string, error) {
+	migStats := &MigrationStatsType{}
+	mig, err := storkops.Instance().GetMigration(name, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get migration")
+	}
+	storkVersion, err := GetStorkVersion()
+	log.InfoD("Stork Version: %v", storkVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get strok version")
+	}
+
+	migStats.CreatedOn = mig.CreationTimestamp.Format("2006-01-02 15:04:05")
+	migStats.TotalNumberOfVolumes = strconv.Itoa(int(mig.Status.Summary.TotalNumberOfVolumes))
+	migStats.NumOfMigratedVolumes = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedVolumes))
+	migStats.TotalNumberOfResources = strconv.Itoa(int(mig.Status.Summary.TotalNumberOfResources))
+	migStats.NumOfMigratedResources = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedResources))
+	migStats.TotalBytesMigrated = strconv.Itoa(int(mig.Status.Summary.TotalBytesMigrated))
+	migStats.ElapsedTimeForVolumeMigration = mig.Status.Summary.ElapsedTimeForVolumeMigration
+	migStats.ElapsedTimeForResourceMigration = mig.Status.Summary.ElapsedTimeForResourceMigration
+	migStats.Application = getResourceNamesFromMigration(mig)
+	migStats.StorkVersion = storkVersion
+	migStats.PortworxVersion = pxversion
+	data, _ := json.Marshal(migStats)
+	migMap := make(map[string]string)
+	json.Unmarshal(data, &migMap)
+	log.InfoD("Migration Stats are: %v", migMap)
+	return migMap, nil
+}
+
+func getResourceNamesFromMigration(mig *storkapi.Migration) string {
+	var resourceList []string
+	for _, resource := range mig.Status.Resources {
+		if resource.Kind == "Deployment" || resource.Kind == "StatefulSet" {
+			resourceList = append(resourceList, resource.Name)
+		}
+	}
+	if len(resourceList) > 1 {
+		// return comma separated list of apps if there are multiple apps
+		return strings.Join(resourceList, ",")
+	} else if len(resourceList) == 1 {
+		return resourceList[0]
+	}
+	logrus.Info("App name not found for pushing to DB.")
+	return ""
+}
 
 // WriteKubeconfigToFiles - writes kubeconfig to files after reading the names from environment variable
 func WriteKubeconfigToFiles() error {
@@ -437,6 +552,81 @@ func WaitForNamespaceDeletion(namespaces []string) error {
 		if _, err := task.DoRetryWithTimeout(getNamespace, DeleteNamespaceTimeout, 10*time.Second); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func GetStorkVersion() (string, error) {
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return "", err
+	}
+	storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return "", err
+	}
+	storkImage := storkDeployment.Spec.Template.Spec.Containers[0].Image
+	storkImageVersion := strings.Split(storkImage, ":")[len(strings.Split(storkImage, ":"))-1]
+	return storkImageVersion, nil
+}
+
+func PrepareApp(appName string, appPath string) (*v1.PodList, error) {
+	appData := GetAppData(appName)
+	ns, err := core.Instance().GetNamespace(appData.Ns)
+	if err != nil {
+		log.InfoD("Creating namespace %v", ns)
+		nsSpec := &v1.Namespace{
+			ObjectMeta: meta_v1.ObjectMeta{
+				Name: appData.Ns,
+			},
+		}
+		ns, err = core.Instance().CreateNamespace(nsSpec)
+		if err != nil {
+			return nil, err
+		}
+	}
+	err = CheckDefaultPxStorageClass(DefaultScName)
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("Pods Creation Started")
+	pods_created, err := HelmRepoAddandCrInstall(appData.RepoName, appData.HelmUrl, ns.Name, appData.OperatorName, fmt.Sprintf("%v/%v", appData.RepoName, appData.OperatorName), appPath)
+	if err != nil {
+		return nil, err
+	}
+	return pods_created, nil
+}
+
+func CheckDefaultPxStorageClass(name string) error {
+	sc, err := storage.Instance().GetDefaultStorageClasses()
+	if err != nil {
+		return err
+	}
+	if len(sc.Items) != 0 {
+		return nil
+	}
+	var reclaimPolicyDelete v1.PersistentVolumeReclaimPolicy
+	var bindMode storageapi.VolumeBindingMode
+	k8sStorage := storage.Instance()
+
+	v1obj := meta_v1.ObjectMeta{
+		Name:        name,
+		Annotations: map[string]string{},
+	}
+	reclaimPolicyDelete = v1.PersistentVolumeReclaimDelete
+	bindMode = storageapi.VolumeBindingImmediate
+	v1obj.Annotations["storageclass.kubernetes.io/is-default-class"] = "true"
+
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       portworxProvisioner,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+	}
+
+	_, err = k8sStorage.CreateStorageClass(&scObj)
+	if err != nil {
+		return fmt.Errorf("failed to create storage class: %s.Error: %v", name, err)
 	}
 	return nil
 }

@@ -6,4 +6,10 @@ provisioner: pxd.portworx.com
 parameters:
   repl: "1"
   priority_io: "low"
+  {{ if .IoProfile }}
+  io_profile: "{{ .IoProfile }}"{{ end }}
+  {{ if .Fs }}
+  fs: {{ .Fs }}{{ end }}
+  {{ if .Journal }}
+  journal: "true"{{ end }}
 allowVolumeExpansion: true

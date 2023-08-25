@@ -28,6 +28,27 @@ const (
 	Sunday            = "Sun"
 )
 
+type RuleSpec struct {
+	ActionList      []string
+	PodSelectorList []string
+	Background      []string
+	RunInSinglePod  []string
+	Container       []string
+}
+
+type PreRule struct {
+	Rule RuleSpec
+}
+
+type PostRule struct {
+	Rule RuleSpec
+}
+
+type AppRule struct {
+	PreRule  PreRule
+	PostRule PostRule
+}
+
 // Driver for backup
 type Driver interface {
 	// Org interface
@@ -261,8 +282,8 @@ type SchedulePolicy interface {
 	// DeleteSchedulePolicy
 	DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error)
 
-	// UpdateOwnershiSchedulePolicy updating ownership of schedule policy
-	UpdateOwnershiSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error)
+	// UpdateOwnershipSchedulePolicy updating ownership of schedule policy
+	UpdateOwnershipSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error)
 
 	// CreateIntervalSchedulePolicy creates interval schedule policy object
 	CreateIntervalSchedulePolicy(retain int64, min int64, incrCount uint64) *api.SchedulePolicyInfo

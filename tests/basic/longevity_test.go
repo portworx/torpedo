@@ -73,13 +73,14 @@ var _ = Describe("{Longevity}", func() {
 		CloudSnapShot:            TriggerCloudSnapShot,
 		LocalSnapShot:            TriggerLocalSnapShot,
 		DeleteLocalSnapShot:      TriggerDeleteLocalSnapShot,
-		PoolResizeDisk:           TriggerPoolResizeDisk,
+		MetadataPoolResizeDisk:   TriggerMetadataPoolResizeDisk,
 		PoolAddDisk:              TriggerPoolAddDisk,
 		UpgradeStork:             TriggerUpgradeStork,
 		VolumesDelete:            TriggerVolumeDelete,
 		UpgradeVolumeDriver:      TriggerUpgradeVolumeDriver,
 		AutoFsTrim:               TriggerAutoFsTrim,
 		UpdateVolume:             TriggerVolumeUpdate,
+		UpdateIOProfile:          TriggerVolumeIOProfileUpdate,
 		RestartManyVolDriver:     TriggerRestartManyVolDriver,
 		RebootManyNodes:          TriggerRebootManyNodes,
 		NodeDecommission:         TriggerNodeDecommission,
@@ -94,6 +95,8 @@ var _ = Describe("{Longevity}", func() {
 		AsyncDR:                  TriggerAsyncDR,
 		AsyncDRMigrationSchedule: TriggerAsyncDRMigrationSchedule,
 		ConfluentAsyncDR:         TriggerConfluentAsyncDR,
+		KafkaAsyncDR:             TriggerKafkaAsyncDR,
+		MongoAsyncDR:             TriggerMongoAsyncDR,
 		AsyncDRVolumeOnly:        TriggerAsyncDRVolumeOnly,
 		AutoFsTrimAsyncDR:        TriggerAutoFsTrimAsyncDR,
 		IopsBwAsyncDR:            TriggerIopsBwAsyncDR,
@@ -110,6 +113,11 @@ var _ = Describe("{Longevity}", func() {
 		VolumeCreatePxRestart:    TriggerVolumeCreatePXRestart,
 		DeleteOldNamespaces:      TriggerDeleteOldNamespaces,
 		MetroDRMigrationSchedule: TriggerMetroDRMigrationSchedule,
+		CloudSnapShotRestore:     TriggerCloudSnapshotRestore,
+		LocalSnapShotRestore:     TriggerLocalSnapshotRestore,
+		AggrVolDepReplResizeOps:  TriggerAggrVolDepReplResizeOps,
+		AddStorageNode:           TriggerAddOCPStorageNode,
+		AddStoragelessNode:       TriggerAddOCPStoragelessNode,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -382,12 +390,8 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
-	err := setSendGridEmailAPIKey(configData)
-	if err != nil {
-		return err
-	}
 
-	err = populateTriggers(configData)
+	err := populateTriggers(configData)
 	if err != nil {
 		return err
 	}
@@ -402,7 +406,7 @@ func setEmailRecipients(configData *map[string]string) {
 			EmailRecipientsConfigMapField, testTriggersConfigMap, configMapNS, DefaultEmailRecipient)
 		EmailRecipients = []string{DefaultEmailRecipient}
 	} else {
-		EmailRecipients = strings.Split(emailRecipients, ",")
+		EmailRecipients = strings.Split(emailRecipients, ";")
 		delete(*configData, EmailRecipientsConfigMapField)
 	}
 }
@@ -633,7 +637,7 @@ func populateIntervals() {
 	triggerInterval[CoreChecker] = map[int]time.Duration{}
 	triggerInterval[VolumeClone] = map[int]time.Duration{}
 	triggerInterval[VolumeResize] = make(map[int]time.Duration)
-	triggerInterval[PoolResizeDisk] = make(map[int]time.Duration)
+	triggerInterval[MetadataPoolResizeDisk] = make(map[int]time.Duration)
 	triggerInterval[PoolAddDisk] = make(map[int]time.Duration)
 	triggerInterval[BackupAllApps] = map[int]time.Duration{}
 	triggerInterval[BackupScheduleAll] = map[int]time.Duration{}
@@ -658,6 +662,7 @@ func populateIntervals() {
 	triggerInterval[AppTasksDown] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrim] = make(map[int]time.Duration)
 	triggerInterval[UpdateVolume] = make(map[int]time.Duration)
+	triggerInterval[UpdateIOProfile] = make(map[int]time.Duration)
 	triggerInterval[RestartManyVolDriver] = make(map[int]time.Duration)
 	triggerInterval[RebootManyNodes] = make(map[int]time.Duration)
 	triggerInterval[NodeDecommission] = make(map[int]time.Duration)
@@ -676,6 +681,8 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrimAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[IopsBwAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[ConfluentAsyncDR] = make(map[int]time.Duration)
+	triggerInterval[KafkaAsyncDR] = make(map[int]time.Duration)
+	triggerInterval[MongoAsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRVolumeOnly] = make(map[int]time.Duration)
 	triggerInterval[StorkApplicationBackup] = make(map[int]time.Duration)
 	triggerInterval[StorkAppBkpVolResize] = make(map[int]time.Duration)
@@ -688,8 +695,16 @@ func populateIntervals() {
 	triggerInterval[ResizeDiskAndReboot] = make(map[int]time.Duration)
 	triggerInterval[AutopilotRebalance] = make(map[int]time.Duration)
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
+	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
+	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
+
+	triggerInterval[AggrVolDepReplResizeOps] = make(map[int]time.Duration)
+
+	triggerInterval[AddStorageNode] = make(map[int]time.Duration)
+	triggerInterval[AddStoragelessNode] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
+
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
 	triggerInterval[BackupScaleMongo][8] = 3 * baseInterval
@@ -885,6 +900,28 @@ func populateIntervals() {
 	triggerInterval[ConfluentAsyncDR][3] = 21 * baseInterval
 	triggerInterval[ConfluentAsyncDR][2] = 24 * baseInterval
 	triggerInterval[ConfluentAsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[KafkaAsyncDR][10] = 1 * baseInterval
+	triggerInterval[KafkaAsyncDR][9] = 3 * baseInterval
+	triggerInterval[KafkaAsyncDR][8] = 6 * baseInterval
+	triggerInterval[KafkaAsyncDR][7] = 9 * baseInterval
+	triggerInterval[KafkaAsyncDR][6] = 12 * baseInterval
+	triggerInterval[KafkaAsyncDR][5] = 15 * baseInterval
+	triggerInterval[KafkaAsyncDR][4] = 18 * baseInterval
+	triggerInterval[KafkaAsyncDR][3] = 21 * baseInterval
+	triggerInterval[KafkaAsyncDR][2] = 24 * baseInterval
+	triggerInterval[KafkaAsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[MongoAsyncDR][10] = 1 * baseInterval
+	triggerInterval[MongoAsyncDR][9] = 3 * baseInterval
+	triggerInterval[MongoAsyncDR][8] = 6 * baseInterval
+	triggerInterval[MongoAsyncDR][7] = 9 * baseInterval
+	triggerInterval[MongoAsyncDR][6] = 12 * baseInterval
+	triggerInterval[MongoAsyncDR][5] = 15 * baseInterval
+	triggerInterval[MongoAsyncDR][4] = 18 * baseInterval
+	triggerInterval[MongoAsyncDR][3] = 21 * baseInterval
+	triggerInterval[MongoAsyncDR][2] = 24 * baseInterval
+	triggerInterval[MongoAsyncDR][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRVolumeOnly][10] = 1 * baseInterval
 	triggerInterval[AsyncDRVolumeOnly][9] = 3 * baseInterval
@@ -1137,6 +1174,17 @@ func populateIntervals() {
 	triggerInterval[DeleteLocalSnapShot][2] = 24 * baseInterval
 	triggerInterval[DeleteLocalSnapShot][1] = 27 * baseInterval
 
+	triggerInterval[LocalSnapShotRestore][10] = 1 * baseInterval
+	triggerInterval[LocalSnapShotRestore][9] = 3 * baseInterval
+	triggerInterval[LocalSnapShotRestore][8] = 6 * baseInterval
+	triggerInterval[LocalSnapShotRestore][7] = 9 * baseInterval
+	triggerInterval[LocalSnapShotRestore][6] = 12 * baseInterval
+	triggerInterval[LocalSnapShotRestore][5] = 15 * baseInterval
+	triggerInterval[LocalSnapShotRestore][4] = 18 * baseInterval
+	triggerInterval[LocalSnapShotRestore][3] = 21 * baseInterval
+	triggerInterval[LocalSnapShotRestore][2] = 24 * baseInterval
+	triggerInterval[LocalSnapShotRestore][1] = 27 * baseInterval
+
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
 	triggerInterval[EmailReporter][8] = 3 * baseInterval
@@ -1192,16 +1240,16 @@ func populateIntervals() {
 	triggerInterval[PoolAddDisk][2] = 24 * baseInterval
 	triggerInterval[PoolAddDisk][1] = 30 * baseInterval
 
-	triggerInterval[PoolResizeDisk][10] = 1 * baseInterval
-	triggerInterval[PoolResizeDisk][9] = 3 * baseInterval
-	triggerInterval[PoolResizeDisk][8] = 6 * baseInterval
-	triggerInterval[PoolResizeDisk][7] = 9 * baseInterval
-	triggerInterval[PoolResizeDisk][6] = 12 * baseInterval
-	triggerInterval[PoolResizeDisk][5] = 15 * baseInterval
-	triggerInterval[PoolResizeDisk][4] = 18 * baseInterval
-	triggerInterval[PoolResizeDisk][3] = 21 * baseInterval
-	triggerInterval[PoolResizeDisk][2] = 24 * baseInterval
-	triggerInterval[PoolResizeDisk][1] = 30 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][10] = 1 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][9] = 3 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][8] = 6 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][7] = 9 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][6] = 12 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][5] = 15 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][4] = 18 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][3] = 21 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][2] = 24 * baseInterval
+	triggerInterval[MetadataPoolResizeDisk][1] = 30 * baseInterval
 
 	triggerInterval[AutoFsTrim][10] = 1 * baseInterval
 	triggerInterval[AutoFsTrim][9] = 3 * baseInterval
@@ -1224,6 +1272,17 @@ func populateIntervals() {
 	triggerInterval[UpdateVolume][3] = 21 * baseInterval
 	triggerInterval[UpdateVolume][2] = 24 * baseInterval
 	triggerInterval[UpdateVolume][1] = 27 * baseInterval
+
+	triggerInterval[UpdateIOProfile][10] = 1 * baseInterval
+	triggerInterval[UpdateIOProfile][9] = 3 * baseInterval
+	triggerInterval[UpdateIOProfile][8] = 6 * baseInterval
+	triggerInterval[UpdateIOProfile][7] = 9 * baseInterval
+	triggerInterval[UpdateIOProfile][6] = 12 * baseInterval
+	triggerInterval[UpdateIOProfile][5] = 15 * baseInterval
+	triggerInterval[UpdateIOProfile][4] = 18 * baseInterval
+	triggerInterval[UpdateIOProfile][3] = 21 * baseInterval
+	triggerInterval[UpdateIOProfile][2] = 24 * baseInterval
+	triggerInterval[UpdateIOProfile][1] = 27 * baseInterval
 
 	triggerInterval[NodeDecommission][10] = 1 * baseInterval
 	triggerInterval[NodeDecommission][9] = 3 * baseInterval
@@ -1398,8 +1457,48 @@ func populateIntervals() {
 	triggerInterval[AddDrive][6] = 5 * baseInterval
 	triggerInterval[AddDrive][5] = 6 * baseInterval
 
+	triggerInterval[CloudSnapShotRestore][10] = 1 * baseInterval
+	triggerInterval[CloudSnapShotRestore][9] = 3 * baseInterval
+	triggerInterval[CloudSnapShotRestore][8] = 6 * baseInterval
+	triggerInterval[CloudSnapShotRestore][7] = 9 * baseInterval
+	triggerInterval[CloudSnapShotRestore][6] = 12 * baseInterval
+	triggerInterval[CloudSnapShotRestore][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CloudSnapShotRestore][4] = 18 * baseInterval
+	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
+	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
+	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
+
+	triggerInterval[AggrVolDepReplResizeOps][10] = 1 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][9] = 2 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][8] = 3 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][7] = 4 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][6] = 5 * baseInterval
+	triggerInterval[AggrVolDepReplResizeOps][5] = 6 * baseInterval
+
 	// DeleteOldNamespaces trigger will be triggered every 10 hours
 	triggerInterval[DeleteOldNamespaces][10] = 2 * baseInterval
+
+	triggerInterval[AddStorageNode][10] = 1 * baseInterval
+	triggerInterval[AddStorageNode][9] = 3 * baseInterval
+	triggerInterval[AddStorageNode][8] = 6 * baseInterval
+	triggerInterval[AddStorageNode][7] = 9 * baseInterval
+	triggerInterval[AddStorageNode][6] = 12 * baseInterval
+	triggerInterval[AddStorageNode][5] = 15 * baseInterval
+	triggerInterval[AddStorageNode][4] = 18 * baseInterval
+	triggerInterval[AddStorageNode][3] = 21 * baseInterval
+	triggerInterval[AddStorageNode][2] = 24 * baseInterval
+	triggerInterval[AddStorageNode][1] = 30 * baseInterval
+
+	triggerInterval[AddStoragelessNode][10] = 1 * baseInterval
+	triggerInterval[AddStoragelessNode][9] = 3 * baseInterval
+	triggerInterval[AddStoragelessNode][8] = 6 * baseInterval
+	triggerInterval[AddStoragelessNode][7] = 9 * baseInterval
+	triggerInterval[AddStoragelessNode][6] = 12 * baseInterval
+	triggerInterval[AddStoragelessNode][5] = 15 * baseInterval
+	triggerInterval[AddStoragelessNode][4] = 18 * baseInterval
+	triggerInterval[AddStoragelessNode][3] = 21 * baseInterval
+	triggerInterval[AddStoragelessNode][2] = 24 * baseInterval
+	triggerInterval[AddStoragelessNode][1] = 30 * baseInterval
 
 	// Chaos Level of 0 means disable test trigger
 	triggerInterval[DeployApps][0] = 0
@@ -1414,7 +1513,7 @@ func populateIntervals() {
 	triggerInterval[AppTaskDown][0] = 0
 	triggerInterval[VolumeClone][0] = 0
 	triggerInterval[VolumeResize][0] = 0
-	triggerInterval[PoolResizeDisk][0] = 0
+	triggerInterval[MetadataPoolResizeDisk][0] = 0
 	triggerInterval[PoolAddDisk][0] = 0
 	triggerInterval[BackupAllApps][0] = 0
 	triggerInterval[BackupScheduleAll][0] = 0
@@ -1452,6 +1551,8 @@ func populateIntervals() {
 	triggerInterval[AutoFsTrimAsyncDR][0] = 0
 	triggerInterval[IopsBwAsyncDR][0] = 0
 	triggerInterval[ConfluentAsyncDR][0] = 0
+	triggerInterval[KafkaAsyncDR][0] = 0
+	triggerInterval[MongoAsyncDR][0] = 0
 	triggerInterval[AsyncDRVolumeOnly][0] = 0
 	triggerInterval[StorkApplicationBackup][0] = 0
 	triggerInterval[StorkAppBkpVolResize][0] = 0
@@ -1465,6 +1566,14 @@ func populateIntervals() {
 	triggerInterval[ResizeDiskAndReboot][0] = 0
 	triggerInterval[AutopilotRebalance][0] = 0
 	triggerInterval[VolumeCreatePxRestart][0] = 0
+	triggerInterval[CloudSnapShotRestore][0] = 0
+	triggerInterval[LocalSnapShotRestore][0] = 0
+	triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[AggrVolDepReplResizeOps][0] = 0
+	triggerInterval[UpdateIOProfile][0] = 0
+	triggerInterval[AddStorageNode][0] = 0
+	triggerInterval[AddStoragelessNode][0] = 0
+
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {

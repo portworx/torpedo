@@ -2,24 +2,27 @@ package pso
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/portworx/sched-ops/k8s/core"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 const (
 	// PureDriverName is the name of the portworx-pure driver implementation
-	PureDriverName = "pso"
-	PsoServiceName = "pso-csi-controller"
+	PureDriverName     = "pso"
+	PureFileDriverName = "pso-file"
+	PsoServiceName     = "pso-csi-controller"
 )
 
 // Provisioners types of supported provisioners
 var provisionersForPure = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	PureDriverName: "pure-csi",
+	PureDriverName:     "pure-csi",
+	PureFileDriverName: "pure-csi",
 }
 
 // pure is essentially the same as the portworx volume driver, just different in name. This way,
@@ -85,6 +88,12 @@ func (d *pso) GetDriverVersion() (string, error) {
 	return psoVersion, nil
 }
 
+// RefreshDriverEndpoints get the updated driver endpoints for the cluster
+func (d *pso) RefreshDriverEndpoints() error {
+	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 // GetPsoNamespace returns namespace where PSO is running
 func GetPsoNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
@@ -102,4 +111,5 @@ func GetPsoNamespace() (string, error) {
 func init() {
 	log.Infof("Registering pso driver")
 	torpedovolume.Register(PureDriverName, provisionersForPure, &pso{})
+	torpedovolume.Register(PureFileDriverName, provisionersForPure, &pso{})
 }

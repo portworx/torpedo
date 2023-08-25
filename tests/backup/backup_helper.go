@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -14,6 +13,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers"
+	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 
@@ -40,12 +42,14 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/json"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 30 * time.Minute
+	cloudAccountDeleteTimeout                 = 5 * time.Minute
 	cloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
@@ -102,6 +106,11 @@ const (
 	namespaceDeleteTimeout                    = 10 * time.Minute
 	clusterCreationTimeout                    = 5 * time.Minute
 	clusterCreationRetryTime                  = 10 * time.Second
+	clusterDeleteTimeout                      = 10 * time.Minute
+	clusterDeleteRetryTime                    = 5 * time.Second
+	cloudCredConfigMap                        = "cloud-config"
+	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
+	rancherActiveCluster                      = "local"
 )
 
 var (
@@ -125,6 +134,7 @@ var (
 		{"app.kubernetes.io/component": "keycloak"},
 		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
 		{"app.kubernetes.io/component": "pxcentral-mysql"}}
+	cloudPlatformList = []string{"rke", "aws", "azure", "gke"}
 )
 
 type userRoleAccess struct {
@@ -173,6 +183,63 @@ const (
 	Parallel
 )
 
+var (
+	// AppRuleMaster is a map of struct for all the value for rules
+	// This map needs to be updated for new applications as and whe required
+	AppRuleMaster = map[string]backup.AppRule{
+		"cassandra": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"nodetool flush -- keyspace1;", "echo 'test"}, PodSelectorList: []string{"app=cassandra", "app=cassandra1"}, Background: []string{"false", "false"}, RunInSinglePod: []string{"false", "false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"nodetool verify -- keyspace1;", "nodetool verify -- keyspace1;"}, PodSelectorList: []string{"app=cassandra", "app=cassandra1"}, Background: []string{"false", "false"}, RunInSinglePod: []string{"false", "false"}, Container: []string{},
+				},
+			},
+		},
+		"mysql": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"mysql-backup": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH TABLES WITH READ LOCK;system ${WAIT_CMD};'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"true"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+			PostRule: backup.PostRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"mysql --user=root --password=$MYSQL_ROOT_PASSWORD -Bse 'FLUSH LOGS; UNLOCK TABLES;'"}, PodSelectorList: []string{"app=mysql"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+		"postgres-backup": {
+			PreRule: backup.PreRule{
+				Rule: backup.RuleSpec{
+					ActionList: []string{"PGPASSWORD=$POSTGRES_PASSWORD; psql -U \"$POSTGRES_USER\" -c \"CHECKPOINT\""}, PodSelectorList: []string{"app=postgres"}, Background: []string{"false"}, RunInSinglePod: []string{"false"}, Container: []string{},
+				},
+			},
+		},
+	}
+)
+
 // Set default provider as aws
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
@@ -207,7 +274,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	return nil
 }
 
-// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class. Returns the first class if there are multiple
+// GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class based on the env variable - VOLUME_SNAPSHOT_CLASS
 func GetCsiSnapshotClassName() (string, error) {
 	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
 	var err error
@@ -215,18 +282,20 @@ func GetCsiSnapshotClassName() (string, error) {
 		return "", err
 	}
 	if len(snapShotClasses.Items) > 0 {
-		log.InfoD("Volume snapshot classes found - ")
+		log.InfoD("Volume snapshot classes found in the cluster - ")
 		for _, snapshotClass := range snapShotClasses.Items {
 			log.InfoD(snapshotClass.GetName())
-			if strings.Contains(snapshotClass.GetName(), "csi") {
-				log.InfoD("CSI volume snapshot class - %s", snapshotClass.GetName())
-				return snapshotClass.GetName(), nil
-			}
 		}
-		log.Warnf("no csi volume snapshot classes found")
-		return "", nil
+		volumeSnapshotClass, present := os.LookupEnv(volumeSnapshotClassEnv)
+		if present {
+			log.InfoD("Picking the volume snapshot class [%s] from env variable [%s]", volumeSnapshotClass, volumeSnapshotClassEnv)
+			return volumeSnapshotClass, nil
+		} else {
+			log.InfoD("Env variable %s not set hence returning empty volume snapshot class name", volumeSnapshotClassEnv)
+			return "", nil
+		}
 	} else {
-		log.Warnf("no volume snapshot classes found")
+		log.InfoD("no volume snapshot classes found in the cluster")
 		return "", nil
 	}
 }
@@ -306,7 +375,12 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 		},
 		ResourceTypes: resourceTypes,
 	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return err
 	}
@@ -409,18 +483,12 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 		},
 	}
 
-	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
-		log.Infof("Detected generic backup type")
-		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
-		var csiSnapshotClassName string
-		var err error
-		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-			return nil, err
-		}
-		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -484,7 +552,12 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 			Uid:  postRuleUid,
 		},
 	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -688,22 +761,28 @@ func GetAllBackupsForUser(username, password string) ([]string, error) {
 func CreateRestore(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
 
-	var bkp *api.BackupObject
 	var bkpUid string
-	backupDriver := Inst().Backup
-	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
-	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
-	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
 	}
-	for _, bkp = range curBackups.GetBackups() {
-		if bkp.Name == backupName {
-			bkpUid = bkp.Uid
-			break
-		}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
 	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+	backupDriver := Inst().Backup
 	createRestoreReq := &api.RestoreCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  restoreName,
@@ -890,14 +969,14 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
 	var number int
 	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
 	for _, line := range strings.SplitAfter(ret, "\n") {
-		if strings.Contains(line, "pxd") {
+		if strings.Contains(line, volumeMount) {
 			ret = strings.Fields(line)[3]
 		}
 	}
@@ -947,6 +1026,8 @@ func createUsers(numberOfUsers int) []string {
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
+	var clusterCredName string
+	var clusterCredUID string
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			// Delete the backup location object
@@ -994,10 +1075,68 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		}
 	}
-	err := DeleteCluster(SourceClusterName, orgID, ctx)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-	err = DeleteCluster(destinationClusterName, orgID, ctx)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+
+	log.Infof("Deleting the application cluster and their respective cloud credentials if present")
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	Inst().Dash.VerifyFatal(len(strings.Split(kubeconfigs, ",")) >= 2, true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
+		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+		if err == nil {
+			clusterObj := clusterResp.GetCluster()
+			clusterProvider := GetClusterProviders()
+			for _, provider := range clusterProvider {
+				switch provider {
+				case drivers.ProviderRke:
+					clusterCredName = clusterObj.PlatformCredentialRef.Name
+					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
+
+				default:
+					clusterCredName = clusterObj.CloudCredentialRef.Name
+					clusterCredUID = clusterObj.CloudCredentialRef.Uid
+				}
+				err = DeleteCluster(clusterName, orgID, ctx, true)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+				clusterDeleteStatus := func() (interface{}, bool, error) {
+					status, err := IsClusterPresent(clusterName, ctx, orgID)
+					if err != nil {
+						return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
+					}
+					if status {
+						return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
+					}
+					return "", false, nil
+				}
+				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
+
+				if clusterCredName != "" {
+					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
+					cloudCredDeleteStatus := func() (interface{}, bool, error) {
+						status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
+						if err != nil {
+							return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
+						}
+						if status {
+							return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
+						}
+						return "", false, nil
+					}
+					_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
+				}
+			}
+		} else {
+			if strings.Contains(err.Error(), "object not found") {
+				log.Infof("Cluster %s is not created for the user", clusterName)
+			} else {
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
+			}
+		}
+	}
 }
 
 // AddRoleAndAccessToUsers assigns role and access level to the users
@@ -1069,7 +1208,7 @@ func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName 
 	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
-	err = CreateSourceAndDestClusters(orgID, "", "", userCtx)
+	err = CreateApplicationClusters(orgID, "", "", userCtx)
 	Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, backupAccessKeyValue[access], backupName)
 	backupDriver := Inst().Backup
@@ -1563,9 +1702,14 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						}
 
 						var expectedVolumeDriver string
-						if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
+						switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+						case string(NativeCSIWithOffloadToS3):
 							expectedVolumeDriver = "kdmp"
-						} else {
+						case string(NativeCSI):
+							expectedVolumeDriver = "csi"
+						case string(DirectKDMP):
+							expectedVolumeDriver = "kdmp"
+						default:
 							expectedVolumeDriver = Inst().V.String()
 						}
 
@@ -1575,8 +1719,13 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						}
 
 						if backedupVol.StorageClass != *pvcObj.Spec.StorageClassName {
-							err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
-							errors = append(errors, err)
+							switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+							case string(NativeCSI):
+								log.Infof("in case of native CSI backup volumes in backup object is not updated with storage class")
+							default:
+								err := fmt.Errorf("the Storage Class of the volume as per the backup [%s] is [%s], but the one found in the scheduled namesapce is [%s]", backedupVol.GetName(), backedupVol.StorageClass, *pvcObj.Spec.StorageClassName)
+								errors = append(errors, err)
+							}
 						}
 
 						continue volloop
@@ -1859,9 +2008,14 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 				}
 
 				var expectedVolumeDriver string
-				if os.Getenv("BACKUP_TYPE") == "Generic" {
+				switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+				case string(NativeCSIWithOffloadToS3):
 					expectedVolumeDriver = "kdmp"
-				} else {
+				case string(NativeCSI):
+					expectedVolumeDriver = "csi"
+				case string(DirectKDMP):
+					expectedVolumeDriver = "kdmp"
+				default:
 					expectedVolumeDriver = Inst().V.String()
 				}
 
@@ -2663,17 +2817,11 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 		NsLabelSelectors: namespaceLabel,
 	}
 
-	if strings.ToLower(os.Getenv("BACKUP_TYPE")) == "generic" {
-		log.Infof("Detected generic backup type")
-		bkpCreateRequest.BackupType = api.BackupCreateRequest_Generic
-		var csiSnapshotClassName string
-		var err error
-		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-			return nil, err
-		}
-		bkpCreateRequest.CsiSnapshotClassName = csiSnapshotClassName
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return nil, err
 	}
-	_, err := backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -2722,7 +2870,12 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 		},
 		NsLabelSelectors: namespaceLabel,
 	}
-	_, err := backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -3249,6 +3402,7 @@ func ValidatePodByLabel(label map[string]string, namespace string, timeout time.
 // IsMongoDBReady validates if the mongo db pods in Px-Backup namespace are healthy enough for Px-Backup to function
 func IsMongoDBReady() error {
 	log.Infof("Verify that at least 2 mongodb pods are in Ready state at the end of the testcase")
+	errorString := "mongodb pods are not ready yet"
 	pxbNamespace, err := backup.GetPxBackupNamespace()
 	if err != nil {
 		return err
@@ -3258,19 +3412,30 @@ func IsMongoDBReady() error {
 		if err != nil {
 			return "", true, err
 		}
-		// Px-Backup would function with just 2 mongo DB pods in healthy state.
-		// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
-		// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
-		// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
-		if statefulSet.Status.ReadyReplicas < 2 {
-			return "", true, fmt.Errorf("mongodb pods are not ready yet. expected ready pods - %d, actual ready pods - %d",
-				2, statefulSet.Status.ReadyReplicas)
+
+		// Check if all 3 mongo pods have come up
+		if statefulSet.Status.ReadyReplicas < 3 {
+			return "", true, fmt.Errorf("%s. expected ready pods - %d, actual ready pods - %d",
+				errorString, 3, statefulSet.Status.ReadyReplicas)
+
 		}
 		return "", false, nil
 	}
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), errorString) {
+			statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+
+			// Check atleast 2 mongo pods are up if 3 mongo pods have not come up even after waiting for 30 min
+			// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
+			// Px-Backup would function with just 2 mongo DB pods in healthy state.
+			// TODO: Remove the limit to check for only 2 out of 3 pods once fixed
+			// Tracking JIRAs: https://portworx.atlassian.net/browse/PB-3105, https://portworx.atlassian.net/browse/PB-3481
+			log.Infof("Validating atleast 2 mongodb pods are ready")
+			if statefulSet.Status.ReadyReplicas < 2 {
+				return err
+			}
+		}
 	}
 	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
 	if err != nil {
@@ -3420,4 +3585,589 @@ func ValidateBackupLocation(ctx context.Context, orgID string, backupLocationNam
 	}
 	_, err := Inst().Backup.ValidateBackupLocation(ctx, backupLocationValidateRequest)
 	return err
+}
+
+// GetAppLabelFromSpec gets the label of the pod from the spec
+func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]string, error) {
+	for _, specObj := range AppContextsMapping.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			return obj.Spec.Selector.MatchLabels, nil
+		}
+	}
+	return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+}
+
+// GetVolumeMounts gets the volume mounts from the spec
+func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
+	var volumeMounts []string
+	for _, specObj := range AppContextsMapping.App.SpecList {
+		if obj, ok := specObj.(*appsapi.Deployment); ok {
+			mountPoints := obj.Spec.Template.Spec.Containers[0].VolumeMounts
+			for index := range mountPoints {
+				volumeMounts = append(volumeMounts, mountPoints[index].MountPath)
+			}
+			return volumeMounts, nil
+		}
+	}
+	return nil, fmt.Errorf("unable to find the mount point for %s", AppContextsMapping.App.Key)
+}
+
+// UpdateBackupLocationOwnership Updates the backup location ownership
+func UpdateBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+	log.Infof("UpdateBackupLocationOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, userBackupLocationOwnershipAccessConfig)
+	}
+
+	groupBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupBackupLocationOwnershipAccessConfigs = append(groupBackupLocationOwnershipAccessConfigs, groupBackupLocationOwnershipAccessConfig)
+	}
+
+	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  name,
+		Ownership: &api.Ownership{
+			Groups:        groupBackupLocationOwnershipAccessConfigs,
+			Collaborators: userBackupLocationOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: uid,
+	}
+
+	_, err := backupDriver.UpdateOwnershipBackupLocation(ctx, bLocationOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+type BackupTypeForCSI string
+
+const (
+	NativeCSIWithOffloadToS3 BackupTypeForCSI = "csi_offload_s3"
+	NativeCSI                BackupTypeForCSI = "native_csi"
+	DirectKDMP               BackupTypeForCSI = "direct_kdmp"
+)
+
+// AdditionalBackupRequestParams decorates the backupRequest with additional parameters required
+// when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
+func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error {
+	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+	case string(NativeCSIWithOffloadToS3):
+		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
+		backupRequest.BackupType = api.BackupCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(NativeCSI):
+		log.Infof("Detected backup type - %s", NativeCSI)
+		backupRequest.BackupType = api.BackupCreateRequest_Normal
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(DirectKDMP):
+		log.Infof("Detected backup type - %s", DirectKDMP)
+		backupRequest.BackupType = api.BackupCreateRequest_Generic
+	default:
+		log.Infof("Environment variable BACKUP_TYPE is not provided")
+	}
+	return nil
+}
+
+// AdditionalScheduledBackupRequestParams decorates the backupScheduleRequest with additional parameters required
+// when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
+func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupScheduleCreateRequest) error {
+	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
+	case string(NativeCSIWithOffloadToS3):
+		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(NativeCSI):
+		log.Infof("Detected backup type - %s", NativeCSI)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
+	case string(DirectKDMP):
+		log.Infof("Detected backup type - %s", DirectKDMP)
+		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
+	default:
+		log.Infof("Environment variable BACKUP_TYPE is not provided")
+	}
+	return nil
+}
+
+// UpdateSchedulePolicyOwnership Updates the schedulePolicy object ownership
+func UpdateSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+	log.Infof("UpdateScheduleOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userSchdeulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userSchedulePolicyOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userSchdeulePolicyOwnershipAccessConfigs = append(userSchdeulePolicyOwnershipAccessConfigs, userSchedulePolicyOwnershipAccessConfig)
+	}
+
+	groupSchedulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupSchedulePolicyOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupSchedulePolicyOwnershipAccessConfigs = append(groupSchedulePolicyOwnershipAccessConfigs, groupSchedulePolicyOwnershipAccessConfig)
+	}
+
+	schedulePolicyOwnershipUpdateReq := &api.SchedulePolicyOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  schedulePolicyName,
+		Ownership: &api.Ownership{
+			Groups:        groupSchedulePolicyOwnershipAccessConfigs,
+			Collaborators: userSchdeulePolicyOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: schedulePolicyUid,
+	}
+
+	_, err := backupDriver.UpdateOwnershipSchedulePolicy(ctx, schedulePolicyOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update schedule policy: %v", err)
+	}
+	return nil
+}
+
+// UpdateruleOwnership Updates the rule object ownership
+func UpdateRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+	log.Infof("UpdateruleOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userRuleOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userRuleOwnershipAccessConfigs = append(userRuleOwnershipAccessConfigs, userRuleOwnershipAccessConfig)
+	}
+
+	groupRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupRuleOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupRuleOwnershipAccessConfigs = append(groupRuleOwnershipAccessConfigs, groupRuleOwnershipAccessConfig)
+	}
+
+	ruleOwnershipUpdateReq := &api.RuleOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Ownership: &api.Ownership{
+			Groups:        groupRuleOwnershipAccessConfigs,
+			Collaborators: userRuleOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: ruleUid,
+	}
+
+	_, err := backupDriver.UpdateOwnershipRule(ctx, ruleOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update rule ownership: %v", err)
+	}
+	return nil
+}
+
+// CreateRestoreWithProjectMapping creates restore with project mapping
+func CreateRestoreWithProjectMapping(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, rancherProjectMapping map[string]string, rancherProjectNameMapping map[string]string) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		RancherProjectMapping:     rancherProjectMapping,
+		RancherProjectNameMapping: rancherProjectNameMapping,
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+
+	return nil
+}
+
+// CreateRestoreOnRancherWithoutCheck creates restore with project mapping
+func CreateRestoreOnRancherWithoutCheck(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string, rancherProjectMapping map[string]string, rancherProjectNameMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
+
+	var bkp *api.BackupObject
+	var bkpUid string
+	backupDriver := Inst().Backup
+	log.Infof("Getting the UID of the backup %s needed to be restored", backupName)
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID}
+	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	for _, bkp = range curBackups.GetBackups() {
+		if bkp.Name == backupName {
+			bkpUid = bkp.Uid
+			break
+		}
+	}
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+		ReplacePolicy:             api.ReplacePolicy_Type(replacePolicy),
+		RancherProjectMapping:     rancherProjectMapping,
+		RancherProjectNameMapping: rancherProjectNameMapping,
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// IsClusterPresent checks whether the cluster is present or not
+func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bool, error) {
+	clusterEnumerateRequest := &api.ClusterEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	clusterObjs, err := Inst().Backup.EnumerateCluster(ctx, clusterEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, clusterObj := range clusterObjs.GetClusters() {
+		if clusterObj.GetName() == clusterName {
+			log.Infof("Cluster [%s] is present", clusterName)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// GetConfigObj reads the configuration file and returns a BackupCloudConfig object.
+func GetConfigObj() (backup.BackupCloudConfig, error) {
+	var config backup.BackupCloudConfig
+	var found bool
+	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
+	log.FailOnError(err, fmt.Sprintf("Error listing Configmaps in default namespace"))
+	for _, cm := range cmList.Items {
+		if cm.Name == cloudCredConfigMap {
+			found = true
+			break
+		}
+	}
+	if found {
+		log.Infof(fmt.Sprintf("Configmap with name %s found in the Configmaps list", cloudCredConfigMap))
+		cm, err := core.Instance().GetConfigMap(cloudCredConfigMap, "default")
+		if err != nil {
+			log.Errorf("Error reading Configmap: %v", err)
+			return config, err
+		}
+		log.Infof("Fetch the cloud-config from the Configmap")
+		configData := cm.Data["cloud-json"]
+		err = json.Unmarshal([]byte(configData), &config)
+		return config, nil
+	}
+	log.Warnf(fmt.Sprintf("Configmap with name %s not found in the Configmaps list, if you are running on any cloud provider please provide Configmap", cloudCredConfigMap))
+	return config, nil
+}
+
+// CreateRuleForBackupWithMultipleApplications creates backup rule for multiple application in one rule
+func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string, ctx context.Context, appParameters ...map[string]backup.AppRule) (string, string, error) {
+	var (
+		preUid             string
+		preRuleName        string
+		postRuleName       string
+		postUid            string
+		preActionValue     []string
+		preContainer       []string
+		postActionValue    []string
+		postContainer      []string
+		postBackground     []bool
+		postRunInSinglePod []bool
+		preBackground      []bool
+		preRunInSinglePod  []bool
+		preRulesInfo       api.RulesInfo
+		postRulesInfo      api.RulesInfo
+		prePodSelector     []map[string]string
+		postPodSelector    []map[string]string
+		appParameter       map[string]backup.AppRule
+	)
+	if len(appParameters) == 0 {
+		appParameter = AppRuleMaster
+	} else {
+		appParameter = appParameters[0]
+	}
+
+	for i := 0; i < len(appList); i++ {
+		appRule := appParameter[appList[i]]
+		if reflect.DeepEqual(appRule.PreRule, backup.PreRule{}) {
+			log.Infof("Pre rule not required for application %v", appList[i])
+		} else {
+			for j := 0; j < len(appRule.PreRule.Rule.PodSelectorList); j++ {
+				ps := strings.Split(appRule.PreRule.Rule.PodSelectorList[j], "=")
+				psMap := make(map[string]string)
+				psMap[ps[0]] = ps[1]
+				prePodSelector = append(prePodSelector, psMap)
+				preActionValue = append(preActionValue, appRule.PreRule.Rule.ActionList[j])
+				backgroundVal, _ := strconv.ParseBool(appRule.PreRule.Rule.Background[j])
+				preBackground = append(preBackground, backgroundVal)
+				podVal, _ := strconv.ParseBool(appRule.PreRule.Rule.RunInSinglePod[j])
+				preRunInSinglePod = append(preRunInSinglePod, podVal)
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				preContainer = append(preContainer, os.Getenv(containerName))
+			}
+		}
+
+		if reflect.DeepEqual(appRule.PostRule, backup.PostRule{}) {
+			log.Infof("Post rule not required for application %v", appList[i])
+		} else {
+			for j := 0; j < len(appRule.PostRule.Rule.PodSelectorList); j++ {
+				ps := strings.Split(appRule.PostRule.Rule.PodSelectorList[j], "=")
+				psMap := make(map[string]string)
+				psMap[ps[0]] = ps[1]
+				postPodSelector = append(postPodSelector, psMap)
+				postActionValue = append(postActionValue, appRule.PostRule.Rule.ActionList[j])
+				backgroundVal, _ := strconv.ParseBool(appRule.PostRule.Rule.Background[j])
+				postBackground = append(postBackground, backgroundVal)
+				podVal, _ := strconv.ParseBool(appRule.PostRule.Rule.RunInSinglePod[j])
+				postRunInSinglePod = append(postRunInSinglePod, podVal)
+				containerName := fmt.Sprintf("%s-%s", "container", appList[i])
+				postContainer = append(postContainer, os.Getenv(containerName))
+			}
+		}
+
+	}
+	totalPreRules := len(preActionValue)
+	totalPostRules := len(postActionValue)
+
+	if totalPreRules != 0 {
+		preRuleName = fmt.Sprintf("pre-rule-%v", RandomString(5))
+		rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalPreRules)
+		for i := 0; i < totalPreRules; i++ {
+			ruleAction := api.RulesInfo_Action{Background: preBackground[i], RunInSinglePod: preRunInSinglePod[i],
+				Value: preActionValue[i]}
+			var actions = []*api.RulesInfo_Action{&ruleAction}
+			rulesInfoRuleItem[i].PodSelector = prePodSelector[i]
+			rulesInfoRuleItem[i].Actions = actions
+			rulesInfoRuleItem[i].Container = preContainer[i]
+			preRulesInfo.Rules = append(preRulesInfo.Rules, &rulesInfoRuleItem[i])
+		}
+		PreRuleCreateReq := &api.RuleCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  preRuleName,
+				OrgId: orgID,
+			},
+			RulesInfo: &preRulesInfo,
+		}
+
+		_, err := Inst().Backup.CreateRule(ctx, PreRuleCreateReq)
+		if err != nil {
+			err = fmt.Errorf("failed to create backup pre-rules: [%v]", err)
+			return "", "", err
+		}
+	}
+
+	if totalPostRules != 0 {
+		postRuleName = fmt.Sprintf("post-rule-%v", RandomString(5))
+		rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalPostRules)
+		for i := 0; i < totalPostRules; i++ {
+			ruleAction := api.RulesInfo_Action{Background: postBackground[i], RunInSinglePod: postRunInSinglePod[i],
+				Value: postActionValue[i]}
+			var actions = []*api.RulesInfo_Action{&ruleAction}
+			rulesInfoRuleItem[i].PodSelector = postPodSelector[i]
+			rulesInfoRuleItem[i].Actions = actions
+			rulesInfoRuleItem[i].Container = postContainer[i]
+			postRulesInfo.Rules = append(postRulesInfo.Rules, &rulesInfoRuleItem[i])
+		}
+		PostRuleCreateReq := &api.RuleCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  postRuleName,
+				OrgId: orgID,
+			},
+			RulesInfo: &postRulesInfo,
+		}
+
+		_, err := Inst().Backup.CreateRule(ctx, PostRuleCreateReq)
+		if err != nil {
+			err = fmt.Errorf("failed to create backup post-rules: [%v]", err)
+			return "", "", err
+		}
+	}
+
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	ruleList, err := Inst().Backup.EnumerateRule(ctx, RuleEnumerateReq)
+	if err != nil {
+		err = fmt.Errorf("failed to enumerate rule with Error: [%v]", err)
+		return "", "", err
+	}
+	for i := 0; i < len(ruleList.Rules); i++ {
+		if ruleList.Rules[i].Metadata.Name == preRuleName {
+			preUid = ruleList.Rules[i].Metadata.Uid
+
+		} else if ruleList.Rules[i].Metadata.Name == postRuleName {
+			postUid = ruleList.Rules[i].Metadata.Uid
+		}
+	}
+	log.Infof("Validate pre-rules for backup")
+	preRuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  preRuleName,
+		Uid:   preUid,
+	}
+	_, err = Inst().Backup.InspectRule(ctx, preRuleInspectReq)
+	if err != nil {
+		err = fmt.Errorf("failed to validate the created pre-rule with Error: [%v]", err)
+		return "", "", err
+	}
+	log.Infof("Validate post-rules for backup")
+	postRuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  postRuleName,
+		Uid:   postUid,
+	}
+	_, err = Inst().Backup.InspectRule(ctx, postRuleInspectReq)
+	if err != nil {
+		err = fmt.Errorf("failed to validate the created post-rule with Error: [%v]", err)
+		return "", "", err
+	}
+	return preRuleName, postRuleName, nil
 }

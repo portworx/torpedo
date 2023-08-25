@@ -78,6 +78,9 @@ type AppConfig struct {
 	Repl                 string   `yaml:"repl"`
 	Fs                   string   `yaml:"fs"`
 	AggregationLevel     string   `yaml:"aggregation_level"`
+	IoProfile            string   `yaml:"io_profile"`
+	Journal              string   `yaml:"journal"`
+	DataSize             string   `yaml:"data_size"`
 }
 
 // InitOptions initialization options
@@ -237,6 +240,9 @@ type Driver interface {
 
 	// ResizeVolume resizes all the volumes of a given context
 	ResizeVolume(*Context, string) ([]*volume.Volume, error)
+
+	// ResizePVC resizes given PVC
+	ResizePVC(*Context, *corev1.PersistentVolumeClaim, uint64) (*volume.Volume, error)
 
 	// GetSnapshots returns all storage snapshots for the given context
 	GetSnapshots(*Context) ([]*volume.Snapshot, error)
@@ -409,6 +415,9 @@ type Driver interface {
 
 	// GetNamespaceLabel gets the labels on given namespace
 	GetNamespaceLabel(namespace string) (map[string]string, error)
+
+	// ScaleCluster scale the cluster to the given replicas
+	ScaleCluster(replicas int) error
 }
 
 var (

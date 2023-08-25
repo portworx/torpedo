@@ -581,6 +581,14 @@ func (d *dcos) ResizeVolume(cxt *scheduler.Context, configMap string) ([]*volume
 	}
 }
 
+func (d *dcos) ResizePVC(cxt *scheduler.Context, pvc *corev1.PersistentVolumeClaim, sizeInGb uint64) (*volume.Volume, error) {
+	// TODO implement this method
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ResizePVC()",
+	}
+}
+
 func (d *dcos) GetSnapshots(ctx *scheduler.Context) ([]*volume.Snapshot, error) {
 	// TODO: Add implementation
 	return nil, &errors.ErrNotSupported{
@@ -1039,6 +1047,14 @@ func (d *dcos) GetNamespaceLabel(namespace string) (map[string]string, error) {
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNamespaceLabel()",
+	}
+}
+
+func (d *dcos) ScaleCluster(replicas int) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScaleCluster()",
 	}
 }
 
