@@ -198,6 +198,10 @@ type Driver interface {
 	GetVmName(node Node) (string, error)
 
 	DeleteVmOnNode(node Node) error
+
+	// DestroyVM powers VM
+	DestroyVM(node Node) error
+
 	// SystemctlUnitExist checks if a given service exists in a node
 	SystemctlUnitExist(n Node, service string, options SystemctlOpts) (bool, error)
 
@@ -421,6 +425,13 @@ func (d *notSupportedDriver) DeleteVmOnNode(node Node) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "DeleteVmOnNode()",
+	}
+}
+
+func (d *notSupportedDriver) DestroyVM(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "DestroyVM()",
 	}
 }
 
