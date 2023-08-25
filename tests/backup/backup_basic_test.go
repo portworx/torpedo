@@ -351,7 +351,49 @@ func TestMain(m *testing.M) {
 			}
 		})
 
-		err := http.ListenAndServe(":8080", nil)
+		http.HandleFunc("/controller/cluster/validate", func(w http.ResponseWriter, r *http.Request) {
+			configPath := r.URL.Query().Get("configPath")
+			_, err = fmt.Fprintf(w, "Query parameter [configPath] value: %s\n", configPath)
+			log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
+
+			namespace := r.URL.Query().Get("namespace")
+			_, err = fmt.Fprintf(w, "Query parameter [namespace] value: %s\n", namespace)
+			log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
+
+			appKey := r.URL.Query().Get("appKey")
+			_, err = fmt.Fprintf(w, "Query parameter [appKey] value: %s\n", appKey)
+			log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
+
+			if err == nil {
+				err = torpedoTestController.GetClusterController().Cluster(configPath).Namespace(namespace).App(appKey).Validate()
+				if err != nil {
+					log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
+				}
+			}
+		})
+
+		http.HandleFunc("/controller/cluster/teardown", func(w http.ResponseWriter, r *http.Request) {
+			configPath := r.URL.Query().Get("configPath")
+			_, err = fmt.Fprintf(w, "Query parameter [configPath] value: %s\n", configPath)
+			log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
+
+			namespace := r.URL.Query().Get("namespace")
+			_, err = fmt.Fprintf(w, "Query parameter [namespace] value: %s\n", namespace)
+			log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
+
+			appKey := r.URL.Query().Get("appKey")
+			_, err = fmt.Fprintf(w, "Query parameter [appKey] value: %s\n", appKey)
+			log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
+
+			if err == nil {
+				err = torpedoTestController.GetClusterController().Cluster(configPath).Namespace(namespace).App(appKey).TearDown()
+				if err != nil {
+					log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
+				}
+			}
+		})
+
+		err = http.ListenAndServe(":8080", nil)
 		log.FailOnError(err, "ListenAndServe failed")
 	}()
 	// call flag.Parse() here if TestMain uses flags

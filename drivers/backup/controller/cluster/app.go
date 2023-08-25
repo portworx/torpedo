@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/backup/controller/cluster/driver/schedulerapi"
 	"github.com/portworx/torpedo/drivers/backup/utils"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/tests"
+	"strings"
 )
 
 // CanSchedule checks if App CanSchedule
@@ -54,5 +57,51 @@ func (c *AppConfig) Schedule() error {
 	scheduleResponse := resp.(*schedulerapi.ScheduleResponse)
 	app.SetContexts(scheduleResponse.GetContexts())
 	cluster.GetNamespaceManager().GetNamespace(c.GetNamespaceMetaData().GetNamespaceUid()).GetAppManager().SetApp(c.GetAppMetaData().GetAppUid(), app)
+	return nil
+}
+
+// Validate validates App
+func (c *AppConfig) Validate() error {
+	var errors []error
+	err := c.CanSchedule()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
+	app := cluster.GetNamespaceManager().GetNamespace(c.GetNamespaceMetaData().GetNamespaceUid()).GetAppManager().GetApp(c.GetAppMetaData().GetAppUid())
+	errChan := make(chan error, len(app.Contexts))
+	for _, ctx := range app.Contexts {
+		tests.ValidateContext(ctx, &errChan)
+	}
+	for err = range errChan {
+		errors = append(errors, err)
+	}
+	errStrings := make([]string, 0)
+	for _, err = range errors {
+		if err != nil {
+			errStrings = append(errStrings, err.Error())
+		}
+	}
+	if len(errStrings) != 0 {
+		return fmt.Errorf(strings.Join(errStrings, " "))
+	}
+	return nil
+}
+
+// TearDown tears down App
+func (c *AppConfig) TearDown() error {
+	err := c.CanSchedule()
+	if err != nil {
+		return utils.ProcessError(err)
+	}
+	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
+	app := cluster.GetNamespaceManager().GetNamespace(c.GetNamespaceMetaData().GetNamespaceUid()).GetAppManager().GetApp(c.GetAppMetaData().GetAppUid())
+	for _, ctx := range app.Contexts {
+		tests.TearDownContext(ctx, map[string]bool{
+			tests.SkipClusterScopedObjects:              c.GetTearDownAppConfig().GetSkipClusterScopedObjects(),
+			scheduler.OptionsWaitForResourceLeakCleanup: c.GetTearDownAppConfig().GetWaitForResourceLeakCleanup(),
+			scheduler.OptionsWaitForDestroy:             c.GetTearDownAppConfig().GetWaitForDestroy(),
+		})
+	}
 	return nil
 }
