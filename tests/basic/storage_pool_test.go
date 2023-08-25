@@ -10034,22 +10034,24 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 		Step(stepLog, func() {
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting node")
-			driverName := vsphere.DriverName
+			/* driverName := vsphere.DriverName
 			driver, _ := node.Get(driverName)
 			vmName, err := driver.GetVmName(selectedNodeForOps)
 			log.FailOnError(err, "Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 			if err = driver.AddMachine(vmName); err != nil {
 				log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
-			}
-			err = driver.Init(node.InitOptions{
+			} */
+
+			/* err = driver.Init(node.InitOptions{
 				SpecDir: Inst().SpecDir,
 			})
 			err = driver.DeleteVmOnNode(selectedNodeForOps)
 			log.Errorf("Failed to delete vm: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
-
+			*/
+			err = Inst().N.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
 			time.Sleep(300 * time.Second)
-			log.FailOnError(err, "failed to shutdown the node with err %s", err)
+			log.FailOnError(err, "failed to destroy the node with err %s", err)
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			var stNode node.Node
 
