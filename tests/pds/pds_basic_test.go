@@ -30,7 +30,7 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		InitInstance()
+		//InitInstance()
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
@@ -58,42 +58,46 @@ var _ = BeforeSuite(func() {
 
 	})
 
-	steplog = "Check and Register Target Cluster to ControlPlane"
-	Step(steplog, func() {
-		log.InfoD(steplog)
-		err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
-		log.FailOnError(err, "Target Cluster Registeration failed")
-	})
+	if params.CleanUpParams.SkipTargetClusterCheck {
+		log.InfoD("Skipping Target Cluster Check")
+	} else {
+		steplog = "Check and Register Target Cluster to ControlPlane"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
+			log.FailOnError(err, "Target Cluster Registeration failed")
+		})
 
-	steplog = "Get Deployment TargetID"
-	Step(steplog, func() {
-		log.InfoD(steplog)
-		log.Infof("cluster id %v and tenant id %v", clusterID, tenantID)
-		deploymentTargetID, err = targetCluster.GetDeploymentTargetID(clusterID, tenantID)
-		log.FailOnError(err, "Failed to get the deployment TargetID")
-		dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
-		log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
+		steplog = "Get Deployment TargetID"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			log.Infof("cluster id %v and tenant id %v", clusterID, tenantID)
+			deploymentTargetID, err = targetCluster.GetDeploymentTargetID(clusterID, tenantID)
+			log.FailOnError(err, "Failed to get the deployment TargetID")
+			dash.VerifyFatal(deploymentTargetID != "", true, "Verifying deployment target is registerd to control plane")
+			log.InfoD("DeploymentTargetID %s ", deploymentTargetID)
 
-	})
+		})
 
-	steplog = "Get StorageTemplateID and Replicas"
-	Step(steplog, func() {
-		log.InfoD(steplog)
-		storageTemplateID, err = controlPlane.GetStorageTemplate(tenantID)
-		log.FailOnError(err, "Failed while getting storage template ID")
-		log.InfoD("storageTemplateID %v", storageTemplateID)
-	})
+		steplog = "Get StorageTemplateID and Replicas"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			storageTemplateID, err = controlPlane.GetStorageTemplate(tenantID)
+			log.FailOnError(err, "Failed while getting storage template ID")
+			log.InfoD("storageTemplateID %v", storageTemplateID)
+		})
 
-	Step(steplog, func() {
-		log.InfoD(steplog)
-		namespace = params.InfraToTest.Namespace
-		_, isavailable, err := targetCluster.CreatePDSNamespace(namespace)
-		log.FailOnError(err, "Error while Create/Get Namespaces")
-		dash.VerifyFatal(bool(true), isavailable, "Verifying if Namespace available for pds to deploy data services")
-		namespaceID, err = targetCluster.GetnameSpaceID(namespace, deploymentTargetID)
-		log.FailOnError(err, "Error while getting namespace id")
-		dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
-	})
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			namespace = params.InfraToTest.Namespace
+			_, isavailable, err := targetCluster.CreatePDSNamespace(namespace)
+			log.FailOnError(err, "Error while Create/Get Namespaces")
+			dash.VerifyFatal(bool(true), isavailable, "Verifying if Namespace available for pds to deploy data services")
+			namespaceID, err = targetCluster.GetnameSpaceID(namespace, deploymentTargetID)
+			log.FailOnError(err, "Error while getting namespace id")
+			dash.VerifyFatal(namespaceID != "", true, "validating namespace ID")
+		})
+	}
 })
 
 var _ = AfterSuite(func() {

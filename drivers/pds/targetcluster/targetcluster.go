@@ -72,7 +72,7 @@ func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (stri
 			return true, fmt.Errorf("error while listing deployment targets: %v", err)
 		}
 		if targetClusters == nil {
-			return true, fmt.Errorf("target cluster passed is not available to the account/tenant")
+			return false, fmt.Errorf("target cluster passed is not available to the account/tenant")
 		}
 		for i := 0; i < len(targetClusters); i++ {
 			if targetClusters[i].GetClusterId() == clusterID {

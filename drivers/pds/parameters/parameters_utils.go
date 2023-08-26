@@ -50,6 +50,7 @@ type Parameter struct {
 		AppTemplatePrefix      string `json:"AppTemplatePrefix"`
 		ResourceTemplatePrefix string `json:"ResourceTemplatePrefix"`
 		StorageTemplatePrefix  string `json:"StorageTemplatePrefix"`
+		SkipTargetClusterCheck bool   `json:"SkipTargetClusterCheck"`
 	}
 	Users struct {
 		AdminUsername    string `json:"AdminUsername"`
