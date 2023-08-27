@@ -47,10 +47,10 @@ type Parameter struct {
 		Replicas        int32  `json:"Replicas"`
 	}
 	CleanUpParams struct {
-		AppTemplatePrefix      string `json:"AppTemplatePrefix"`
-		ResourceTemplatePrefix string `json:"ResourceTemplatePrefix"`
-		StorageTemplatePrefix  string `json:"StorageTemplatePrefix"`
-		SkipTargetClusterCheck bool   `json:"SkipTargetClusterCheck"`
+		AppTemplatePrefix      []string `json:"AppTemplatePrefix"`
+		ResourceTemplatePrefix []string `json:"ResourceTemplatePrefix"`
+		StorageTemplatePrefix  []string `json:"StorageTemplatePrefix"`
+		SkipTargetClusterCheck bool     `json:"SkipTargetClusterCheck"`
 	}
 	Users struct {
 		AdminUsername    string `json:"AdminUsername"`
