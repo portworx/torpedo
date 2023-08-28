@@ -2,9 +2,32 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
+
+var _ = Describe("{TestDestKubeconfig}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("TestDestKubeconfig", "Checks the new k8s config",
+			pdsLabels, 0)
+	})
+	It("Get the pds pods from new target cluster", func() {
+		stepLog := "Get the pds pods from new target cluster"
+		log.InfoD(stepLog)
+		Step(stepLog, func() {
+			dest_ctx := pdslib.GetAndExpectStringEnvVar("DESTINATION_TARGET_KUBECONFIG")
+			dest_target := tc.NewTargetCluster(dest_ctx)
+			destClusterID, err := dest_target.GetClusterID()
+			log.FailOnError(err, "failed while getting dest cluster id")
+			log.Infof("Destination Cluster ID %s", destClusterID)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
 
 var _ = Describe("{DeleteAppConfigTemplates}", func() {
 	JustBeforeEach(func() {
