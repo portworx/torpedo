@@ -2,6 +2,7 @@ package openshift
 
 import (
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -38,7 +39,7 @@ const (
 	SystemdSchedServiceName = "atomic-openshift-node"
 	// OpenshiftMirror is the mirror we use do download ocp client
 	OpenshiftMirror             = "https://mirror.openshift.com/pub/openshift-v4/clients/ocp"
-	mdFileName                  = "changelog.md"
+	releaseFileName             = "release.txt"
 	defaultCmdTimeout           = 5 * time.Minute
 	driverUpTimeout             = 10 * time.Minute
 	generationNumberWaitTime    = 10 * time.Minute
@@ -46,6 +47,7 @@ const (
 	defaultUpgradeTimeout       = 4 * time.Hour
 	defaultUpgradeRetryInterval = 5 * time.Minute
 	ocPath                      = " -c oc"
+	OpenshiftMachineNamespace   = "openshift-machine-api"
 )
 
 var (
@@ -423,7 +425,7 @@ spec:
 // getImageSha get Image sha
 func getImageSha(ocpVersion string) (string, error) {
 	downloadURL := fmt.Sprintf("%s/%s/%s", OpenshiftMirror,
-		ocpVersion, mdFileName)
+		ocpVersion, releaseFileName)
 	request := netutil.HttpRequest{
 		Method:   "GET",
 		Url:      downloadURL,
@@ -440,8 +442,8 @@ func getImageSha(ocpVersion string) (string, error) {
 	contentInString := string(content)
 	parts := strings.Split(contentInString, "\n")
 	for _, a := range parts {
-		if strings.Contains(a, "Image Digest:") {
-			return strings.Split(a, "`")[1], nil
+		if strings.Contains(a, "Digest:") {
+			return strings.TrimSpace(strings.Split(a, ": ")[1]), nil
 		}
 	}
 	return "", fmt.Errorf("Failed to find Image sha: in  %s", downloadURL)
@@ -723,22 +725,30 @@ func ackAPIRemoval(version string) error {
 	if err != nil {
 		return err
 	}
-	// this issue happens on OCP 4.9
+	// this issue happens on OCP 4.9, 4.12 and 4.13
 	parsedVersion49, _ := semver.Parse("4.9.0")
-
-	if parsedVersion.GTE(parsedVersion49) {
-		t := func() (interface{}, bool, error) {
-			var output []byte
-			patchData := "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
-			args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
-			if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-				return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
-			}
-			log.Info(string(output))
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	parsedVersion412, _ := semver.Parse("4.12.0")
+	parsedVersion413, _ := semver.Parse("4.13.0")
+	var patchData string
+	if parsedVersion.GTE(parsedVersion49) && parsedVersion.LT(parsedVersion412) {
+		patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
+	} else if parsedVersion.GTE(parsedVersion412) && parsedVersion.LT(parsedVersion413) {
+		patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
+	} else if parsedVersion.GTE(parsedVersion413) {
+		patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
+	} else {
+		return nil
 	}
+	t := func() (interface{}, bool, error) {
+		var output []byte
+		args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
+		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
+			return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
+		}
+		log.Info(string(output))
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
 	return err
 }
 
@@ -848,6 +858,7 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 
 	// Delete the node from machineset using kubectl command
 	t := func() (interface{}, bool, error) {
+		log.Infof("Deleting machine %s", nodeName)
 		cmd := "kubectl delete machines -n openshift-machine-api " + nodeName
 		if _, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
 			return "", true, fmt.Errorf("failed to delete machine. cause: %v", err)
@@ -919,15 +930,40 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		var driverName = k.K8s.NodeDriverName
 		if driverName == vsphere.DriverName {
 			driver, _ := node.Get(driverName)
-			driver.PowerOffVM(n)
+			err = driver.PowerOffVM(n)
+			if err != nil {
+				return err
+			}
+			//wait for power off complete before deleting machine
+			time.Sleep(5 * time.Second)
 		}
-		err = k.deleteAMachine(n.Name)
-		if err != nil {
-			log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, err)
+
+		eg := errgroup.Group{}
+
+		eg.Go(func() error {
+			delErr := k.deleteAMachine(n.Name)
+			if delErr != nil {
+				log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, delErr)
+			}
+			return delErr
+		})
+
+		eg.Go(func() error {
+			var destroyErr error
+			if !isStoragelessNode && driverName == vsphere.DriverName {
+				driver, _ := node.Get(driverName)
+				destroyErr = driver.DestroyVM(n)
+				return destroyErr
+			}
+			return destroyErr
+		})
+
+		if err = eg.Wait(); err != nil {
 			return err
 		}
 
 		// Removing the node from the nodeRegistry
+		log.Infof("Deleting node %s from node registry", n.Name)
 		err = node.DeleteNode(n)
 		if err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
@@ -1065,6 +1101,51 @@ func getParsedVersion(version string) (semver.Version, error) {
 		return semver.Version{}, err
 	}
 	return parsedVersion, nil
+}
+
+func getMachineSetName() (string, error) {
+	cmd := fmt.Sprintf("kubectl get machineset -n %s -o name", OpenshiftMachineNamespace)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+	result := strings.TrimSpace(string(output))
+
+	return result, nil
+
+}
+
+// ScaleCluster scale the cluster to the given replicas
+func (k *openshift) ScaleCluster(replicas int) error {
+
+	machineSetName, err := getMachineSetName()
+	if err != nil {
+		return err
+	}
+	// kubectl scale machineset leela-ocp-vx6zf-worker-0 --replicas 6 -n openshift-machine-api
+	cmd := fmt.Sprintf("kubectl -n %s scale %s --replicas %d", OpenshiftMachineNamespace, machineSetName, replicas)
+	log.Infof("Running cmnd : %s", cmd)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return err
+	}
+
+	log.Infof("output : %s", string(output))
+
+	if !strings.Contains(string(output), fmt.Sprintf("%s scaled", machineSetName)) {
+		return fmt.Errorf("failed to scale %s, output %s", machineSetName, string(output))
+	}
+
+	_, err = k.checkAndGetNewNode()
+	if err != nil {
+		return err
+	}
+	err = k.RefreshNodeRegistry()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func init() {

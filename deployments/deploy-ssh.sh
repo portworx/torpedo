@@ -4,6 +4,10 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
+if [ -z "${DATA_INTEGRITY_VALIDATION_TESTS}" ]; then
+    DATA_INTEGRITY_VALIDATION_TESTS=""
+fi
+
 if [ -z "${DASH_UID}" ]; then
     if [ -e /build.properties ]; then
       DASH_UID=`cat /build.properties | grep -i "DASH_UID=" | grep -Eo '[0-9]+'`
@@ -13,6 +17,15 @@ if [ -z "${DASH_UID}" ]; then
 fi
 
 SECURITY_CONTEXT=false
+
+# System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+# should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
+# unstable testing environments.
+TORPEDO_SKIP_SYSTEM_CHECKS=false
+if [[ ! -z "${TORPEDO_SKIP_SYSTEM_CHECKS}" ]]; then
+    TORPEDO_SKIP_SYSTEM_CHECKS=true
+fi
+
 if [ "${IS_OCP}" == true ]; then
     SECURITY_CONTEXT=true
 fi
@@ -332,6 +345,8 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
 fi
 
+kubectl create configmap cloud-config --from-file=/config/cloud-json
+
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
 CLUSTER_CONFIGS=""
@@ -517,6 +532,7 @@ spec:
             "--jira-account-id=$JIRA_ACCOUNT_ID",
             "--user=$USER",
             "--enable-dash=$ENABLE_DASH",
+            "--data-integrity-validation-tests=$DATA_INTEGRITY_VALIDATION_TESTS",
             "--test-desc=$TEST_DESCRIPTION",
             "--test-type=$TEST_TYPE",
             "--test-tags=$TEST_TAGS",
@@ -525,6 +541,7 @@ spec:
             "--product=$PRODUCT",
             "--torpedo-job-name=$TORPEDO_JOB_NAME",
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
+            "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "$APP_DESTROY_TIMEOUT_ARG",
     ]
     tty: true
@@ -554,6 +571,10 @@ spec:
       value: "${AZURE_CLIENTSECRET}"
     - name: AZURE_ACCOUNT_NAME
       value: "${AZURE_ACCOUNT_NAME}"
+    - name: SOURCE_RKE_TOKEN
+      value: "${SOURCE_RKE_TOKEN}"
+    - name: DESTINATION_RKE_TOKEN
+      value: "${DESTINATION_RKE_TOKEN}"
     - name: AZURE_ACCOUNT_KEY
       value: "${AZURE_ACCOUNT_KEY}"
     - name: AZURE_SUBSCRIPTION_ID
@@ -672,6 +693,8 @@ spec:
       value: "${NFS_PATH}"
     - name: SKIP_PX_OPERATOR_UPGRADE
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
+    - name: VOLUME_SNAPSHOT_CLASS
+      value: "${VOLUME_SNAPSHOT_CLASS}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

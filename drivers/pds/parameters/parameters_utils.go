@@ -34,6 +34,24 @@ type Parameter struct {
 		LatestHelmVersion   string `json:"LatestHelmVersion"`
 		PreviousHelmVersion string `json:"PreviousHelmVersion"`
 	} `json:"PDSHelmVersions"`
+	LoadGen struct {
+		LoadGenDepName  string `json:"LoadGenDepName"`
+		FailOnError     string `json:"FailOnError"`
+		Mode            string `json:"Mode"` //example: read,write
+		TableName       string `json:"TableName"`
+		NumOfRows       string `json:"NumOfRows"`
+		Iterations      string `json:"Iterations"`
+		Timeout         string `json:"Timeout"` //example: 60s
+		ReplacePassword string `json:"ReplacePassword"`
+		ClusterMode     string `json:"ClusterMode"`
+		Replicas        int32  `json:"Replicas"`
+	}
+	CleanUpParams struct {
+		AppTemplatePrefix      []string `json:"AppTemplatePrefix"`
+		ResourceTemplatePrefix []string `json:"ResourceTemplatePrefix"`
+		StorageTemplatePrefix  []string `json:"StorageTemplatePrefix"`
+		SkipTargetClusterCheck bool     `json:"SkipTargetClusterCheck"`
+	}
 	Users struct {
 		AdminUsername    string `json:"AdminUsername"`
 		AdminPassword    string `json:"AdminPassword"`

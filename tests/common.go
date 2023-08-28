@@ -9,10 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/rke"
 	"math/rand"
 	"net/http"
 	"regexp"
+	"runtime"
+
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -21,6 +24,7 @@ import (
 
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
@@ -77,6 +81,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -109,10 +114,11 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
+	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -139,6 +145,9 @@ import (
 	// import pso driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/pso"
 
+	// import ibm driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
@@ -148,7 +157,8 @@ import (
 
 const (
 	// SkipClusterScopedObjects describes option for skipping deletion of cluster wide objects
-	SkipClusterScopedObjects = "skipClusterScopedObjects"
+	SkipClusterScopedObjects   = "skipClusterScopedObjects"
+	CreateCloudCredentialError = "PermissionDenied desc = Access denied for [Resource: cloudcredential]"
 )
 
 // PDS params
@@ -158,10 +168,23 @@ const (
 )
 
 var (
-	RkeMap           = make(map[string]*rke.RancherClusterParameters)
-	clusterProviders = []string{"k8s"}
+	clusterProviders       = []string{"k8s"}
+	GlobalCredentialConfig backup.BackupCloudConfig
 )
 
+type OwnershipAccessType int32
+
+const (
+	Invalid OwnershipAccessType = 0
+	// Read access only and cannot affect the resource.
+	Read = 1
+	// Write access and can affect the resource.
+	// This type automatically provides Read access also.
+	Write = 2
+	// Admin access
+	// This type automatically provides Read and Write access also.
+	Admin = 3
+)
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
 	defaultSpecsRoot                     = "/specs"
@@ -236,8 +259,10 @@ const (
 	clusterCreationRetryTime = 10 * time.Second
 
 	// Anthos
-	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
-	anthosInstPathCliFlag = "anthos-inst-path"
+	anthosWsNodeIpCliFlag            = "anthos-ws-node-ip"
+	anthosInstPathCliFlag            = "anthos-inst-path"
+	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
+	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
 // Dashboard params
@@ -306,6 +331,7 @@ const (
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
 	defaultKvdbRetryInterval  = 5 * time.Minute
+	addDriveUpTimeOut         = 15 * time.Minute
 )
 
 const (
@@ -374,6 +400,14 @@ var (
 )
 
 var (
+	includeResourcesFlag  = true
+	includeVolumesFlag    = true
+	startApplicationsFlag = true
+	tempDir               = "/tmp"
+	migrationList         []*storkapi.Migration
+)
+
+var (
 	// ClusterConfigPathMap maps cluster name registered in px-backup to the path to the kubeconfig
 	ClusterConfigPathMap = make(map[string]string, 2)
 )
@@ -410,6 +444,8 @@ const (
 // TpLogPath torpedo log path
 var tpLogPath string
 var suiteLogger *lumberjack.Logger
+
+var dataIntegrityValidationTests string
 
 // TestLogger for logging test logs
 var TestLogger *lumberjack.Logger
@@ -720,12 +756,21 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
+		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
+
+		// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
+		for _, specObj := range ctx.App.SpecList {
+			if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+				isRaw = *obj.Spec.VolumeMode == corev1.PersistentVolumeBlock
+			}
+		}
+
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidatePureSnapshotsSDK(ctx, errChan...)
@@ -733,7 +778,8 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
+			// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
+			if !ctx.SkipVolumeValidation && !isRaw {
 				ValidateResizePurePVC(ctx, errChan...)
 			}
 		})
@@ -806,6 +852,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
+
 	})
 }
 
@@ -899,6 +946,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 				})
 			}
 		})
+
 	})
 }
 
@@ -1130,27 +1178,31 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
-		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
-		// get the pod for this pvc
-		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
-		processError(err, errChan...)
+		// skiping ValidatePureVolumeStatisticsDynamicUpdate test for raw block volumes. Need to change getStats method
+		if !vols[0].Raw {
+			byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
 
-		mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			// get the pod for this pvc
+			pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
+			processError(err, errChan...)
 
-		// write to the Direct Access volume
-		ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s/myfile", bytesToWrite/512, mountPath)
-		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
-		err = osutils.Kubectl(cmdArgs)
-		processError(err, errChan...)
-		fmt.Println("sleeping to let volume usage get reflected")
-		// wait until the backends size is reflected before making the REST call
-		time.Sleep(time.Minute * 2)
+			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			mountPath = mountPath + "/myfile"
 
-		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
-		expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+			// write to the Direct Access volume
+			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
+			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
+			err = osutils.Kubectl(cmdArgs)
+			processError(err, errChan...)
+			fmt.Println("sleeping to let volume usage get reflected")
+			// wait until the backends size is reflected before making the REST call
+			time.Sleep(time.Minute * 2)
 
+			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
+			expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+		}
 	})
 }
 
@@ -1178,7 +1230,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 				Namespace:         vols[0].Namespace,
 				Timestamp:         timestamp,
 				OriginalPVCName:   vols[0].Name,
-				SnapName:          "basic-csi-snapshot-" + timestamp,
+				SnapName:          "basic-csi" + timestamp + "-snapshot",
 				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
@@ -1193,7 +1245,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			for k, v := range volMap {
 				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
 					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
-						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						err = Inst().V.ValidateVolumeInPxctlList(k)
 						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
 					})
 					break
@@ -1698,7 +1750,8 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
+// ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
+// the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -2061,11 +2114,17 @@ func CollectSupport() {
 	context("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
+		skipSystemCheck := false
+
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
-				return
+				skipSystemCheck = true
 			}
+		}
+
+		if skipSystemCheck || Inst().SkipSystemChecks {
+			log.Infof("skipping diag collection because env for skipping the check has been set to true")
+			return
 		}
 		nodes := node.GetWorkerNodes()
 		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")
@@ -2767,11 +2826,11 @@ func SetClusterContext(clusterConfigPath string) error {
 
 	CurrentClusterConfigPath = clusterConfigPath
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
-	// To update the RkeMap with value like token, endpoint access key, secret key for each cluster
-	if os.Getenv("CLUSTER_PROVIDER") == "rke" {
-		if rke.RancherClusterParametersValue != nil && CurrentClusterConfigPath != "" {
-			RkeMap[strings.Split(CurrentClusterConfigPath, "/tmp/")[1]] = rke.RancherClusterParametersValue
-			log.Infof("The value of RKE map is", RkeMap)
+	// To update the rancher client for current cluster context
+	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
+		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		if err != nil {
+			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
 	}
 	return nil
@@ -3581,7 +3640,6 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			}
 			return "", true, fmt.Errorf("the %s cluster state is not Online yet", SourceClusterName)
 		}
-		clusterStatus()
 		_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
 		if err != nil {
 			return err
@@ -3595,9 +3653,27 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
+				log.Infof("Creating cloud credential for cluster")
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
-					return err
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, Invalid, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -3609,9 +3685,29 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				log.Infof("Creating cloud credential for cluster")
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
-					return err
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				} else {
+					log.Infof("Created cloud cred %s for cluster creation", clusterCredName)
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -3623,9 +3719,91 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				log.Infof("Creating cloud credential for cluster")
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
+				}
+			}
+		case drivers.ProviderGke:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				log.Infof("Creating cloud credential for cluster")
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		case drivers.ProviderIbm:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				log.Infof("Cluster credential with name [%s] for IBM", clusterCredName)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
 				}
 				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
@@ -3738,12 +3916,10 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for Aws")
-		// PA-1328
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
 			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
-		// PA-1328
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
 			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
@@ -3767,7 +3943,6 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
-		// PA-1328
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
@@ -3805,12 +3980,35 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				Type: api.CloudCredentialInfo_Rancher,
 				Config: &api.CloudCredentialInfo_RancherConfig{
 					RancherConfig: &api.RancherConfig{
-						Endpoint: RkeMap[kubeconfig[0]].Endpoint,
-						Token:    RkeMap[kubeconfig[0]].Token,
+						Endpoint: rke.RancherMap[kubeconfig[0]].Endpoint,
+						Token:    rke.RancherMap[kubeconfig[0]].Token,
 					},
 				},
 			},
 		}
+
+	case drivers.ProviderIbm:
+		log.Infof("Create creds for IBM")
+		apiKey, err := GetIBMApiKey("default")
+		if err != nil {
+			return err
+		}
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_IBM,
+				Config: &api.CloudCredentialInfo_IbmConfig{
+					IbmConfig: &api.IBMConfig{
+						ApiKey: apiKey,
+					},
+				},
+			},
+		}
+
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -4280,7 +4478,6 @@ func GetDestinationClusterConfigPath() (string, error) {
 }
 
 // GetAzureCredsFromEnv get creds for azure
-// PA-1328
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	expect(accountName).NotTo(equal(""),
@@ -4308,6 +4505,11 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
 
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
+}
+
+// GetIBMApiKey will return the IBM API Key from GlobalCredentialConfig
+func GetIBMApiKey(cluster string) (string, error) {
+	return GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster).APIKey, nil
 }
 
 type NfsInfo struct {
@@ -4536,6 +4738,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 					}
 				}
 				if newReplID != "" {
+					nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &newReplNode)
+					if err != nil {
+						UpdateOutcome(event, err)
+					}
 
 					stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
 						Inst().V.String(), ctx.App.Key, v)
@@ -4556,7 +4762,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						})
 
 					if err == nil {
-						stepLog = fmt.Sprintf("reboot target node %s while repl increase is in-progres",
+						action := "reboot"
+						if restartPX {
+							action = "restart px on"
+						}
+						stepLog = fmt.Sprintf("%a target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
 							func() {
@@ -4585,7 +4795,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									err = fmt.Errorf("error in ha-increse after  target node reboot. Error: %v", err)
+									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
 									log.Error(err)
 									UpdateOutcome(event, err)
 								} else {
@@ -4597,6 +4807,10 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
+
+						err = ValidateDataIntegrity(&nodeContexts)
+						UpdateOutcome(event, err)
+
 					}
 				} else {
 					UpdateOutcome(event, fmt.Errorf("no node identified to repl increase for vol: %s", v.Name))
@@ -4692,7 +4906,20 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 									UpdateOutcome(event, err)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
+
+								for _, nID := range replicaNodes {
+									replNodeToReboot := storageNodeMap[nID]
+									nodeContexts, err := GetContextsOnNode(&[]*scheduler.Context{ctx}, &replNodeToReboot)
+									if err != nil {
+										UpdateOutcome(event, err)
+										break
+									}
+									err = ValidateDataIntegrity(&nodeContexts)
+									UpdateOutcome(event, err)
+								}
+
 							}
+
 						} else {
 							err = fmt.Errorf("error getting relicasets for volume %s, Error: %v", v.Name, err)
 							log.Error(err)
@@ -5012,6 +5239,7 @@ type Torpedo struct {
 	IsPDSApps                           bool
 	AnthosAdminWorkStationNodeIP        string
 	AnthosInstPath                      string
+	SkipSystemChecks                    bool
 }
 
 // ParseFlags parses command line flags
@@ -5042,6 +5270,7 @@ func ParseFlags() {
 	var customConfigPath string
 	var hyperConverged bool
 	var enableDash bool
+
 	var pxPodRestartCheck bool
 	var deployPDSApps bool
 
@@ -5050,6 +5279,7 @@ func ParseFlags() {
 	// We should make this more robust.
 	var customAppConfig map[string]scheduler.AppConfig = make(map[string]scheduler.AppConfig)
 
+	var skipSystemChecks bool
 	var enableStorkUpgrade bool
 	var secretType string
 	var pureVolumes bool
@@ -5125,6 +5355,7 @@ func ParseFlags() {
 	flag.StringVar(&jirautils.AccountID, jiraAccountIDFlag, "", "AccountID for issue assignment")
 	flag.BoolVar(&hyperConverged, hyperConvergedFlag, true, "To enable/disable hyper-converged type of deployment")
 	flag.BoolVar(&enableDash, enableDashBoardFlag, true, "To enable/disable aetos dashboard reporting")
+	flag.StringVar(&dataIntegrityValidationTests, dataIntegrityValidationTestsFlag, "", "list data integrity validation tests to run data integrity validation")
 	flag.StringVar(&user, userFlag, "nouser", "user name running the tests")
 	flag.StringVar(&testDescription, testDescriptionFlag, "Torpedo Workflows", "test suite description")
 	flag.StringVar(&testType, testTypeFlag, "system-test", "test types like system-test,functional,integration")
@@ -5138,6 +5369,10 @@ func ParseFlags() {
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
 	flag.StringVar(&anthosWsNodeIp, anthosWsNodeIpCliFlag, "", "Anthos admin work station node IP")
 	flag.StringVar(&anthosInstPath, anthosInstPathCliFlag, "", "Anthos config path where all conf files present")
+	// System checks https://github.com/portworx/torpedo/blob/86232cb195400d05a9f83d57856f8f29bdc9789d/tests/common.go#L2173
+	// should be skipped from AfterSuite() if this flag is set to true. This is to avoid distracting test failures due to
+	// unstable testing environments.
+	flag.BoolVar(&skipSystemChecks, skipSystemCheckCliFlag, false, "Skip system checks during after suite")
 	flag.Parse()
 
 	log.SetLoglevel(logLevel)
@@ -5367,6 +5602,7 @@ func ParseFlags() {
 				AnthosAdminWorkStationNodeIP:        anthosWsNodeIp,
 				AnthosInstPath:                      anthosInstPath,
 				IsPDSApps:                           deployPDSApps,
+				SkipSystemChecks:                    skipSystemChecks,
 			}
 		})
 	}
@@ -6267,6 +6503,18 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
+// GetPoolsInUse lists all persistent volumes and returns the pool IDs
+func GetPoolsInUse() ([]string, error) {
+	pvlist, err := k8sCore.GetPersistentVolumes()
+	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
+		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
+	}
+	volumeInUse := pvlist.Items[0]
+	volumeID := volumeInUse.GetName()
+
+	return GetPoolIDsFromVolName(volumeID)
+}
+
 // GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
@@ -6292,7 +6540,7 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			t := func() (interface{}, bool, error) {
 				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
-				if err != nil {
+				if err != nil || !isIOsInProgress {
 					return false, true, err
 				}
 				return true, false, nil
@@ -6417,24 +6665,13 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		return nil, err
 	}
 	for _, each := range volDetails.ReplicaSets {
-		for _, uuids := range each.PoolUuids {
-			if len(poolUuids) == 0 {
-				poolUuids = append(poolUuids, uuids)
-			} else {
-				isPresent := false
-				for i := 0; i < len(poolUuids); i++ {
-					if uuids == poolUuids[i] {
-						isPresent = true
-					}
-				}
-				if isPresent == false {
-					poolUuids = append(poolUuids, uuids)
-				}
+		for _, uuid := range each.PoolUuids {
+			if !Contains(poolUuids, uuid) {
+				poolUuids = append(poolUuids, uuid)
 			}
 		}
-
 	}
-	return poolUuids, err
+	return poolUuids, nil
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
@@ -6571,6 +6808,12 @@ func ExitNodesFromMaintenanceMode() error {
 // GetPoolsDetailsOnNode returns all pools present in the Nodes
 func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	var poolDetails []*opsapi.StoragePool
+
+	// Refreshing Node Registry to make sure all changes done to the nodes are refreshed
+	err := Inst().S.RefreshNodeRegistry()
+	if err != nil {
+		return nil, err
+	}
 
 	if node.IsStorageNode(n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
@@ -7219,6 +7462,27 @@ func IsVolumeStatusUP(vol *volume.Volume) (bool, error) {
 	return true, nil
 }
 
+// GetVolumeReplicationStatus returns PX volume replication status
+func GetVolumeReplicationStatus(vol *volume.Volume) (string, error) {
+	apiVol, err := Inst().V.InspectVolume(vol.ID)
+	if err != nil {
+		return "", err
+	}
+	cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", apiVol.Id)
+
+	output, err := Inst().N.RunCommand(node.GetStorageDriverNodes()[0], cmd, node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+	//sample output : "Replication Status       :  Up"
+	output = strings.Split(strings.TrimSpace(output), ":")[1]
+	return strings.TrimSpace(output), nil
+}
+
 type KvdbNode struct {
 	PeerUrls   []string `json:"PeerUrls"`
 	ClientUrls []string `json:"ClientUrls"`
@@ -7580,4 +7844,1003 @@ func GetClusterProviders() []string {
 		return strings.Split(providersStr, ",")
 	}
 	return clusterProviders
+}
+
+// GetPoolUuidsWithStorageFull returns list of pool uuids if storage full
+func GetPoolUuidsWithStorageFull() ([]string, error) {
+	var poolUuids []string
+
+	isPoolOffline := func(n node.Node) (bool, error) {
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(n)
+		if err != nil {
+			return false, err
+		}
+
+		for _, v := range poolsStatus {
+			if v == "Offline" {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return nil, err
+	}
+	calculatePercentage := func(usedValue float64, totalValue float64) float64 {
+		percentage := (usedValue / totalValue) * 100
+		return float64(percentage)
+	}
+
+	for _, eachPool := range pools {
+		nodeDetail, err := GetNodeWithGivenPoolID(eachPool.Uuid)
+		if err != nil {
+			return nil, err
+		}
+
+		poolOfflineStatus, err := isPoolOffline(*nodeDetail)
+		if err != nil {
+			return nil, err
+		}
+
+		if calculatePercentage(float64(eachPool.Used), float64(eachPool.TotalSize)) > 90.0 || poolOfflineStatus {
+			poolUuids = append(poolUuids, eachPool.GetUuid())
+		}
+	}
+
+	return poolUuids, nil
+}
+
+// GetVolumeConsumedSize returns size of the volume
+func GetVolumeConsumedSize(vol volume.Volume) (uint64, error) {
+	// Get Random Storage Node
+	cmd := fmt.Sprintf("pxctl v i %v -j | jq '.[].usage'", vol.ID)
+	output, err := runCmdGetOutput(cmd, node.GetStorageNodes()[0])
+	if err != nil {
+		return 0, err
+	}
+	output = strings.ReplaceAll(output, "\"", "")
+	output = strings.TrimSpace(output)
+
+	num, err := strconv.ParseUint(output, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return num, nil
+}
+
+// GetAllVolumesWithIO Returns list of volumes with IO
+func GetAllVolumesWithIO(contexts []*scheduler.Context) ([]*volume.Volume, error) {
+
+	allVolsWithIO := []*volume.Volume{}
+	for _, eachContext := range contexts {
+		vols, err := Inst().S.GetVolumes(eachContext)
+		if err != nil {
+			log.Errorf("Failed to get app %s's volumes", eachContext.App.Key)
+		}
+		log.Infof("list of all volumes present in the cluster [%v]", vols)
+		for _, eachVol := range vols {
+			isIOsInProgress, err := Inst().V.IsIOsInProgressForTheVolume(&node.GetStorageNodes()[0], eachVol.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			if isIOsInProgress {
+				allVolsWithIO = append(allVolsWithIO, eachVol)
+			}
+		}
+	}
+	return allVolsWithIO, nil
+}
+
+func IsVolumeFull(vol volume.Volume) (bool, error) {
+	volPercentage, err := GetVolumeFullPercentage(vol)
+	if err != nil {
+		return false, err
+	}
+	if volPercentage > 80.0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// GetVolumeFullPercentage returns percentage of volume size consumed
+func GetVolumeFullPercentage(vol volume.Volume) (float64, error) {
+	calculatePercentage := func(usedSize float64, totalSize float64) float64 {
+		percentage := (usedSize / totalSize) * 100
+		return float64(percentage)
+	}
+
+	appVol, err := Inst().V.InspectVolume(vol.ID)
+	log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol.ID))
+
+	totalSize := appVol.Spec.Size
+	usedSize, err := GetVolumeConsumedSize(vol)
+	if err != nil {
+		return 0, err
+	}
+
+	log.Infof("Total size of Volume is [%v] and used size is [%v]", totalSize, usedSize)
+	percentageFull := calculatePercentage(float64(usedSize), float64(totalSize))
+	log.Infof("Volume [%v] : Percentage of size consumed [%v]", vol.Name, percentageFull)
+
+	return percentageFull, nil
+}
+
+// GetPoolCapacityUsed Get Pool capacity percentage used
+func GetPoolCapacityUsed(poolUUID string) (float64, error) {
+
+	calculatePercentage := func(usedSize float64, totalSize float64) float64 {
+		percentage := (usedSize / totalSize) * 100
+		return float64(percentage)
+	}
+
+	pool, err := GetStoragePoolByUUID(poolUUID)
+	log.FailOnError(err, "Failed to get pool Details from PoolUUID [%v]", poolUUID)
+
+	usedSize, totalSize := pool.Used, pool.TotalSize
+	log.Infof("Used vs Total volume stats [%v]/[%v]", usedSize, totalSize)
+
+	poolSizeUsed := calculatePercentage(float64(usedSize), float64(totalSize))
+
+	return poolSizeUsed, nil
+}
+
+// GetRandomNode Gets Random node
+func GetRandomNode(pxNodes []node.Node) node.Node {
+	rand.Seed(time.Now().UnixNano())
+	randomIndex := rand.Intn(len(pxNodes))
+	randomNode := pxNodes[randomIndex]
+	return randomNode
+}
+
+func RemoveLabelsAllNodes(label string, forStorage, forStorageLess bool) error {
+	if !forStorage && !forStorageLess {
+		return errors.New("at least one of forStorage or forStorageLess must be true")
+	}
+
+	var pxNodes []node.Node
+
+	if forStorage && forStorageLess {
+		pxNodes = node.GetStorageDriverNodes()
+	} else if forStorage {
+		pxNodes = node.GetStorageNodes()
+	} else if forStorageLess {
+		pxNodes = node.GetStorageLessNodes()
+	}
+
+	for _, node := range pxNodes {
+		log.Infof("Node Name: %s\n", node.Name)
+		if err := Inst().S.RemoveLabelOnNode(node, label); err != nil {
+			return fmt.Errorf("error removing label on node [%s]: %w", node.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func AddCloudDrive(stNode node.Node, poolID int32) error {
+	driveSpecs, err := GetCloudDriveDeviceSpecs()
+	if err != nil {
+		return fmt.Errorf("error getting cloud drive specs, err: %v", err)
+	}
+	deviceSpec := driveSpecs[0]
+	deviceSpecParams := strings.Split(deviceSpec, ",")
+	var specSize uint64
+	var driveSize string
+
+	if poolID != -1 {
+		systemOpts := node.SystemctlOpts{
+			ConnectionOpts: node.ConnectionOpts{
+				Timeout:         2 * time.Minute,
+				TimeBeforeRetry: defaultRetryInterval,
+			},
+			Action: "start",
+		}
+		drivesMap, err := Inst().N.GetBlockDrives(stNode, systemOpts)
+		if err != nil {
+			return fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
+		}
+
+	outer:
+		for _, v := range drivesMap {
+			labels := v.Labels
+			for _, pID := range labels {
+				if pID == fmt.Sprintf("%d", poolID) {
+					driveSize = v.Size
+					i := strings.Index(driveSize, "G")
+					driveSize = driveSize[:i]
+					break outer
+				}
+			}
+		}
+	}
+
+	if driveSize != "" {
+		paramsArr := make([]string, 0)
+		for _, param := range deviceSpecParams {
+			if strings.Contains(param, "size") {
+				paramsArr = append(paramsArr, fmt.Sprintf("size=%s,", driveSize))
+			} else {
+				paramsArr = append(paramsArr, param)
+			}
+		}
+		deviceSpec = strings.Join(paramsArr, ",")
+		specSize, err = strconv.ParseUint(driveSize, 10, 64)
+		if err != nil {
+			return fmt.Errorf("error converting size to uint64, err: %v", err)
+		}
+	}
+
+	pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+
+	var currentTotalPoolSize uint64
+
+	for _, pool := range pools {
+		currentTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+
+	log.Info(fmt.Sprintf("current pool size: %d GiB", currentTotalPoolSize))
+
+	expectedTotalPoolSize := currentTotalPoolSize + specSize
+
+	log.InfoD("Initiate add cloud drive and validate")
+	err = Inst().V.AddCloudDrive(&stNode, deviceSpec, poolID)
+	if err != nil {
+		return fmt.Errorf("add cloud drive failed on node %s, err: %v", stNode.Name, err)
+	}
+
+	log.InfoD("Validate pool rebalance after drive add")
+	err = ValidateDriveRebalance(stNode)
+	if err != nil {
+		return fmt.Errorf("pool re-balance failed, err: %v", err)
+	}
+	err = Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
+	if err != nil {
+		return fmt.Errorf("volume driver is down on node %s, err: %v", stNode.Name, err)
+	}
+	dash.VerifyFatal(err == nil, true, "PX is up after add drive")
+
+	var newTotalPoolSize uint64
+
+	pools, err = Inst().V.ListStoragePools(metav1.LabelSelector{})
+	if err != nil {
+		return fmt.Errorf("error getting pools list, err: %v", err)
+	}
+	dash.VerifyFatal(len(pools) > 0, true, "Verify pools exist")
+	for _, pool := range pools {
+		newTotalPoolSize += pool.GetTotalSize() / units.GiB
+	}
+	isPoolSizeUpdated := false
+
+	if newTotalPoolSize >= expectedTotalPoolSize {
+		isPoolSizeUpdated = true
+	}
+	log.Info(fmt.Sprintf("updated pool size: %d GiB", newTotalPoolSize))
+	dash.VerifyFatal(isPoolSizeUpdated, true, fmt.Sprintf("Validate total pool size after add cloud drive on node %s", stNode.Name))
+	return nil
+}
+
+func IsJournalEnabled() (bool, error) {
+	storageSpec, err := Inst().V.GetStorageSpec()
+	if err != nil {
+		return false, err
+	}
+	jDev := storageSpec.GetJournalDev()
+	if jDev != "" {
+		log.Infof("JournalDev: %s", jDev)
+		return true, nil
+	}
+	return false, nil
+}
+
+func runDataIntegrityValidation(testName string) bool {
+
+	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+		if strings.Contains(testName, "{") {
+			i := strings.Index(testName, "{")
+			j := strings.Index(testName, "}")
+
+			testName = testName[i+1 : j]
+		}
+		log.Infof("validating test-name [%s] for running data integrity validation", testName)
+		if strings.Contains(dataIntegrityValidationTests, testName) {
+			return true
+		}
+
+		if strings.Contains(testName, "Longevity") {
+			pc, _, _, _ := runtime.Caller(1)
+			if strings.Contains(dataIntegrityValidationTests, runtime.FuncForPC(pc).Name()) {
+				return true
+			}
+			return false
+		}
+	}
+
+	return false
+}
+
+func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
+	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	if strings.Contains(testName, "{Longevity}") {
+		pc, _, _, _ := runtime.Caller(1)
+		testName = runtime.FuncForPC(pc).Name()
+		sInd := strings.LastIndex(testName, ".")
+		if sInd != -1 {
+			fnNames := strings.Split(testName, ".")
+			for _, fn := range fnNames {
+				if strings.Contains(fn, "Trigger") {
+					testName = fn
+					break
+				}
+			}
+		}
+
+	}
+
+	if !runDataIntegrityValidation(testName) {
+		return nil
+	}
+
+outer:
+	for _, ctx := range *contexts {
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		var timeout time.Duration
+		if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
+		//Waiting for all the apps in ctx are running
+		err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+		if err != nil {
+			return err
+		}
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return err
+		}
+
+		//waiting for volumes replication status should be up before calculating md5sum
+		for _, v := range appVolumes {
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return err
+			}
+
+			//skipping the validation if volume is repl 2
+			if len(replicaSets) == 1 && len(replicaSets[0].PoolUuids) == 1 {
+				continue outer
+			}
+			t := func() (interface{}, bool, error) {
+				replicationStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					return nil, false, err
+				}
+
+				if replicationStatus == "Up" {
+					return "", false, nil
+				}
+				if replicationStatus == "Resync" {
+					return "", true, fmt.Errorf("volume %s is still in Resync state", v.ID)
+				}
+				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
+			}
+			_, err = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			if err != nil {
+				return err
+			}
+		}
+
+		log.InfoD(fmt.Sprintf("scale down app %s to 0", ctx.App.Key))
+		applicationScaleMap, err := Inst().S.GetScaleFactorMap(ctx)
+		if err != nil {
+			return err
+		}
+
+		applicationScaleDownMap := make(map[string]int32, len(ctx.App.SpecList))
+
+		for name := range applicationScaleMap {
+			applicationScaleDownMap[name] = 0
+		}
+		err = Inst().S.ScaleApplication(ctx, applicationScaleDownMap)
+		if err != nil {
+			return err
+		}
+		//waiting for volumes to be detached after scale down
+		for _, v := range appVolumes {
+			t := func() (interface{}, bool, error) {
+				apiVol, err := Inst().V.InspectVolume(v.ID)
+				if err != nil {
+					return "", false, err
+				}
+				if len(apiVol.AttachedOn) == 0 {
+					return "", false, nil
+				}
+				return "", true, fmt.Errorf("volume %s is still attached to %s", v.ID, apiVol.AttachedOn)
+			}
+			_, err = task.DoRetryWithTimeout(t, waitResourceCleanup, 10*time.Second)
+			if err != nil {
+				return err
+			}
+		}
+
+		poolChecksumMap := make(map[string]string)
+		dmthinPoolChecksumMap := make(map[string]map[string]string)
+
+		isDmthinSetup, err := IsDMthin()
+		if err != nil {
+			return err
+		}
+
+		//function to calulate md5sum of the given volume in the give pool
+		calChecksum := func(wg *sync.WaitGroup, v *volume.Volume, nodeDetail *node.Node, poolUuid string, errCh chan<- error) {
+			defer ginkgo.GinkgoRecover()
+			defer wg.Done()
+
+			poolID, err := GetPoolIDFromPoolUUID(poolUuid)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			inspectVolume, err := Inst().V.InspectVolume(v.ID)
+			if err != nil {
+				errCh <- err
+				return
+			}
+			log.InfoD("Getting md5sum for volume %s on pool %s in node %s", inspectVolume.Id, poolUuid, nodeDetail.Name)
+			//To-Do update the command if set up is dmthin
+			cmd := fmt.Sprintf("/opt/pwx/bin/runc exec -t portworx md5sum /var/.px/%d/%s/pxdev", poolID, inspectVolume.Id)
+
+			if isDmthinSetup {
+
+				err = validateDmthinVolumeDataIntegrity(inspectVolume, nodeDetail, poolID, &dmthinPoolChecksumMap)
+				if err != nil {
+					errCh <- err
+					return
+				}
+			} else {
+				output, err := Inst().N.RunCommand(*nodeDetail, cmd, node.ConnectionOpts{
+					Timeout:         defaultTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+					Sudo:            true,
+				})
+				if err != nil {
+					errCh <- err
+					return
+				}
+				vChecksum := strings.Split(strings.TrimSpace(output), " ")[0]
+				poolChecksumMap[poolUuid] = vChecksum
+			}
+
+		}
+
+		for _, v := range appVolumes {
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return err
+			}
+
+			wGroup := new(sync.WaitGroup)
+			errCh := make(chan error)
+
+			for _, rs := range replicaSets {
+				poolUuids := rs.PoolUuids
+				for _, poolUuid := range poolUuids {
+					nodeDetail, err := GetNodeWithGivenPoolID(poolUuid)
+					if err != nil {
+						return err
+					}
+					wGroup.Add(1)
+					go calChecksum(wGroup, v, nodeDetail, poolUuid, errCh)
+				}
+			}
+			wGroup.Wait()
+			close(errCh)
+
+			var errList []error
+
+			for err := range errCh {
+				errList = append(errList, err)
+			}
+
+			if len(errList) != 0 {
+				// Combine all errors into one and return
+				return errors.New(fmt.Sprintf("multiple errors occurred while checking md5sum of volume [%s]", v.ID)).(error)
+			}
+
+			if isDmthinSetup {
+
+				var primaryMap map[string]string
+				var primaryNode string
+
+				for n, m := range dmthinPoolChecksumMap {
+					if primaryMap == nil {
+						primaryNode = n
+						primaryMap = m
+					} else {
+						eq := reflect.DeepEqual(primaryMap, m)
+
+						if !eq {
+							return fmt.Errorf("md5sum of volume [%s] having [%v] on node [%s] is not matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+						}
+						log.InfoD("md5sum of volume [%s] having [%v] on node [%s] is matching with checksum [%v] on node [%s]", v.ID, primaryMap, primaryNode, m, n)
+
+					}
+				}
+				//clearing the pool after the volume validation
+				for k := range dmthinPoolChecksumMap {
+					delete(dmthinPoolChecksumMap, k)
+				}
+
+			} else {
+				var checksum string
+				var primaryPool string
+				for p, c := range poolChecksumMap {
+					if checksum == "" {
+						primaryPool = p
+						checksum = c
+					} else {
+						if c != checksum {
+							return fmt.Errorf("md5sum of volume [%s] having [%s] on pool [%s] is not matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+						}
+						log.InfoD("md5sum of volume [%s] having [%s] on pool [%s] is matching with checksum [%s] on pool [%s]", v.ID, checksum, primaryPool, c, p)
+					}
+
+				}
+				//clearing the pool after the volume validation
+				for k := range poolChecksumMap {
+					delete(poolChecksumMap, k)
+				}
+			}
+
+		}
+
+		//reverting application scale
+		applicationScaleUpMap := make(map[string]int32, len(ctx.App.SpecList))
+
+		for name, scale := range applicationScaleMap {
+			log.InfoD(fmt.Sprintf("scale up app %s to %d", ctx.App.Key, scale))
+			applicationScaleUpMap[name] = scale
+		}
+		err = Inst().S.ScaleApplication(ctx, applicationScaleUpMap)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail *node.Node, poolID int32, dmthinPoolChecksumMap *map[string]map[string]string) error {
+
+	volPath := fmt.Sprintf("/dev/pwx%d/%s", poolID, inspectVolume.Id)
+	mountPath := fmt.Sprintf("/tmp/%s", inspectVolume.Id)
+	mountCmd := fmt.Sprintf("mount %s %s", volPath, mountPath)
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+	umountCmd := fmt.Sprintf("umount %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	log.Infof("Running command %s on %s", creatDir, nodeDetail.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(*nodeDetail, creatDir, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+	log.Infof("Running command %s on %s", mountCmd, nodeDetail.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(*nodeDetail, mountCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	defer func(N node.Driver, node node.Node, command string, options node.ConnectionOpts) {
+		log.Infof("Running command %s on %s", command, nodeDetail.Name)
+		_, err := N.RunCommandWithNoRetry(node, command, options)
+		if err != nil {
+			log.Errorf(err.Error())
+		}
+	}(Inst().N, *nodeDetail, umountCmd, cmdConnectionOpts)
+
+	eg := errgroup.Group{}
+
+	eg.Go(func() error {
+		md5Cmd := fmt.Sprintf("md5sum %s/*", mountPath)
+		log.Infof("Running command %s  on %s", md5Cmd, nodeDetail.Name)
+		output, err := Inst().N.RunCommand(*nodeDetail, md5Cmd, node.ConnectionOpts{
+			Timeout:         defaultTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+			Sudo:            true,
+		})
+
+		if err != nil {
+			return err
+		}
+		log.Infof("md5sum of vol %s on node %s : %s", inspectVolume.Id, nodeDetail.Name, output)
+		nodeChecksumMap := make(map[string]string)
+		for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+			checksumOut := strings.Split(line, "  ")
+			if len(checksumOut) == 2 {
+				nodeChecksumMap[checksumOut[1]] = checksumOut[0]
+			} else {
+				return fmt.Errorf("cannot obtain checksum value from node %s, output: %v", nodeDetail.Name, checksumOut)
+			}
+		}
+		(*dmthinPoolChecksumMap)[nodeDetail.Name] = nodeChecksumMap
+		return nil
+
+	})
+
+	if err = eg.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// GetContextsOnNode returns the contexts which have volumes attached on the given node.
+func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
+	contextsOnNode := make([]*scheduler.Context, 0)
+	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	if strings.Contains(testName, "{Longevity}") {
+		pc, _, _, _ := runtime.Caller(1)
+		testName = runtime.FuncForPC(pc).Name()
+	}
+
+	if !runDataIntegrityValidation(testName) {
+		return contextsOnNode, nil
+	}
+
+	log.Infof("Getting contexts on node %s", n.Name)
+	for _, ctx := range *contexts {
+		appVolumes, err := Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range appVolumes {
+			// case where volume is attached to the given node
+			attachedNode, err := Inst().V.GetNodeForVolume(v, 1*time.Minute, 5*time.Second)
+			if err != nil {
+				return nil, err
+			}
+			if n.VolDriverNodeID == attachedNode.VolDriverNodeID {
+				contextsOnNode = append(contextsOnNode, ctx)
+				break
+			}
+			//case where volume is attached to different node but one of the replicas is the give node
+			replicaSets, err := Inst().V.GetReplicaSets(v)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, rn := range replicaSets[0].Nodes {
+				if rn == n.VolDriverNodeID {
+					contextsOnNode = append(contextsOnNode, ctx)
+					break
+				}
+			}
+		}
+	}
+
+	return contextsOnNode, nil
+
+}
+
+type CloudDrive struct {
+	Type              string            `json:"Type"`
+	Size              int               `json:"Size"`
+	ID                string            `json:"ID"`
+	Path              string            `json:"Path"`
+	Iops              int               `json:"Iops"`
+	Vpus              int               `json:"Vpus"`
+	PXType            string            `json:"PXType"`
+	State             string            `json:"State"`
+	Labels            map[string]string `json:"labels"`
+	AttachOptions     interface{}       `json:"AttachOptions"`
+	Provisioner       string            `json:"Provisioner"`
+	EncryptionKeyInfo string            `json:"EncryptionKeyInfo"`
+}
+
+// GetAllCloudDriveDetailsOnNode returns list of cloud drives present on the node
+func GetAllCloudDriveDetailsOnNode(n *node.Node) ([]CloudDrive, error) {
+
+	var drives CloudDrive
+	var allCloudDrives []CloudDrive
+
+	// Execute the command and check the alerts of type POOL
+	command := fmt.Sprintf("pxctl cd inspect --node %v -j", n.Id)
+	out, err := Inst().N.RunCommandWithNoRetry(node.GetStorageNodes()[0], command, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var configData struct {
+		Configs map[string]CloudDrive `json:"Configs"`
+	}
+
+	err = json.Unmarshal([]byte(out), &configData)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, config := range configData.Configs {
+		drives.ID = config.ID
+		drives.Size = config.Size
+		drives.Type = config.Type
+		drives.PXType = config.PXType
+		drives.Iops = config.Iops
+		drives.Vpus = config.Vpus
+		drives.Path = config.Path
+		drives.State = config.State
+		drives.AttachOptions = config.AttachOptions
+		drives.Provisioner = config.Provisioner
+		drives.EncryptionKeyInfo = config.EncryptionKeyInfo
+		drives.Labels = config.Labels
+		allCloudDrives = append(allCloudDrives, drives)
+	}
+	return allCloudDrives, nil
+}
+
+type DriveDetails struct {
+	PoolUUID string
+	Disks    []string
+}
+
+// GetDrivePathFromNode returns drive paths from all the pools on Node
+func GetDrivePathFromNode(n *node.Node) ([]DriveDetails, error) {
+
+	allPools := n.StoragePools
+	var allDrives []DriveDetails
+
+	for i := 0; i < len(allPools); i++ {
+		var drive DriveDetails
+		drive.Disks = []string{}
+		var drives []string
+		cmd := fmt.Sprintf("pxctl sv pool show -j | jq '.datapools[%v].uuid'", i)
+		out, err := runCmdOnce(cmd, *n)
+		if err != nil {
+			return nil, err
+		}
+		// Split the string into lines based on the newline character ("\n")
+		PoolUUID := strings.TrimSpace(out)
+
+		cmd = fmt.Sprintf("pxctl sv pool show -j | jq '.datapools[%v].Info | {Resources, ResourceJournal, ResourceSystemMetadata} | .. | .path? // empty'", i)
+		out, err = runCmdOnce(cmd, *n)
+		if err != nil {
+			return nil, err
+		}
+		// Split the string into lines based on the newline character ("\n")
+		lines := strings.Split(out, "\n")
+
+		// Print each line
+		for _, line := range lines {
+			// Remove leading and trailing spaces or double quotes if present
+			line = strings.TrimSpace(strings.Trim(line, `"`))
+			drives = append(drives, line)
+		}
+		drive.PoolUUID = PoolUUID
+		drive.Disks = drives
+		allDrives = append(allDrives, drive)
+	}
+
+	return allDrives, nil
+}
+
+// GetDriveProperties Returns type of the Disk from Path Specified
+func GetDriveProperties(path string) (CloudDrive, error) {
+	for _, each := range node.GetStorageNodes() {
+		cloudDrives, err := GetAllCloudDriveDetailsOnNode(&each)
+		if err != nil {
+			return CloudDrive{}, err
+		}
+		for _, eachDrive := range cloudDrives {
+			if strings.Contains(path, eachDrive.Path) {
+				return eachDrive, nil
+			}
+		}
+	}
+	return CloudDrive{}, nil
+}
+
+// returns ID and Name of the volume present
+type VolMap struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// ListVolumeNamesUsingPxctl , Returns list of volumes present in the cluster
+// option will get the output of pxctl volume list, records ID and VolName and returns the struct
+func ListVolumeNamesUsingPxctl(n *node.Node) ([]VolMap, error) {
+	volList := []VolMap{}
+	var vols VolMap
+
+	cmd := "pxctl volume list -j | jq "
+	output, err := runCmdGetOutput(cmd, *n)
+	if err != nil {
+		return nil, err
+	}
+
+	// Define a slice of Volume structs
+	var vol []struct {
+		ID      string `json:"id"`
+		Locator struct {
+			Name string `json:"name"`
+		} `json:"locator"`
+	}
+	err = json.Unmarshal([]byte(output), &vol)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, volName := range vol {
+		vols.ID = volName.ID
+		vols.Name = volName.Locator.Name
+		volList = append(volList, vols)
+	}
+
+	return volList, nil
+}
+
+// IsVolumeExits Returns true if volume with ID or Name exists on the cluster
+func IsVolumeExits(volName string) bool {
+	isVolExist := false
+	n := node.GetStorageNodes()
+	allVols, err := ListVolumeNamesUsingPxctl(&n[0])
+	if err != nil {
+		return false
+	}
+
+	for _, eachVol := range allVols {
+		if eachVol.ID == volName || eachVol.Name == volName {
+			isVolExist = true
+		}
+	}
+	return isVolExist
+}
+
+// UpdateCloudCredentialOwnership updates the CloudCredential object ownership
+func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context, orgID string) error {
+	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
+	}
+
+	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
+	}
+
+	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  cloudCredentialName,
+		Ownership: &api.Ownership{
+			Groups:        groupCloudCredentialOwnershipAccessConfigs,
+			Collaborators: userCloudCredentialOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: cloudCredentialUid,
+	}
+
+	_, err := backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
+}
+
+func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
+	pods_created_len := len(pods.Items)
+	log.InfoD("Num of Pods on source: %v", pods_created_len)
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	options := scheduler.ScheduleOptions{Namespace: appData.Ns}
+	var emptyCtx = &scheduler.Context{
+		UID:             "",
+		ScheduleOptions: options,
+		App: &spec.AppSpec{
+			Key:      "",
+			SpecList: []interface{}{},
+		}}
+	log.InfoD("Create cluster pair between source and destination clusters")
+	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
+	migName := migrationKey + time.Now().Format("15h03m05s")
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	if err != nil {
+		return err
+	}
+	migrationList = append(migrationList, mig)
+	err = asyncdr.WaitForMigration(migrationList)
+	if err != nil {
+		return fmt.Errorf("Migration failed")
+	}
+	// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+	time.Sleep(5 * time.Minute)
+	SetDestinationKubeConfig()
+	pods_migrated, err := core.Instance().GetPods(appData.Ns, nil)
+	if err != nil {
+		return err
+	}
+	pods_migrated_len := len(pods_migrated.Items)
+	log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
+	if pods_created_len != pods_migrated_len {
+		return fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len)
+	}
+	destClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, destClusterConfigPath)
+	if err != nil {
+		return fmt.Errorf("CRDs not migrated properly, err: %v", err)
+	}
+	SetSourceKubeConfig()
+	err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
+	SetDestinationKubeConfig()
+	log.InfoD("Starting crd deletion")
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	SetSourceKubeConfig()
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	return nil
 }

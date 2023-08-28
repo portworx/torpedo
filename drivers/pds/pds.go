@@ -8,13 +8,41 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
+	v1 "k8s.io/api/apps/v1"
 	"net/url"
 )
 
+type LoadGenParams struct {
+	LoadGenDepName    string
+	PdsDeploymentName string
+	Namespace         string
+	FailOnError       string
+	Mode              string
+	TableName         string
+	NumOfRows         string
+	Iterations        string
+	Timeout           string //example 60s
+	ReplacePassword   string
+	ClusterMode       string
+	Replicas          int32
+}
+
 type Driver interface {
+
+	//DeployPDSDataservices Deploys the given PDS dataservice and retruns the models deployment object
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
-	CreateSchedulerContextForPDSApps([]*pds.ModelsDeployment) ([]*scheduler.Context, error)
-	ValidateDataServiceDeployment(*pds.ModelsDeployment, string) error
+
+	//CreateSchedulerContextForPDSApps Creates Context for the pds deployed applications
+	CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) ([]*scheduler.Context, error)
+
+	//ValidateDataServiceDeployment Validate the PDS deployments
+	ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error
+
+	//InsertDataAndReturnChecksum Inserts data and returns md5 hash for the data inserted
+	InsertDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error)
+
+	//ReadDataAndReturnChecksum Reads data and returns md5 hash for the data
+	ReadDataAndReturnChecksum(pdsDeployment *pds.ModelsDeployment, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error)
 }
 
 var (

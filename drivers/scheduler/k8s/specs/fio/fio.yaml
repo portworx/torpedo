@@ -92,3 +92,4 @@ spec:
   - name: grok-port
     port: 9144
     targetPort: 9144
+

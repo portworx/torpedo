@@ -6,6 +6,7 @@ import (
 	"github.com/vmware/govmomi/vim25/mo"
 	"net/url"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/portworx/sched-ops/task"
@@ -179,8 +180,17 @@ func (v *vsphere) connect() error {
 		var vmMo mo.VirtualMachine
 		err = vm.Properties(v.ctx, vm.Reference(), []string{"guest"}, &vmMo)
 		if err != nil {
-			log.Errorf("failed to get properties: %v", err)
-			return err
+			re, regErr := regexp.Compile(".*has already been deleted or has not been completely created.*")
+			if regErr != nil {
+				return regErr
+			}
+			if re.MatchString(fmt.Sprintf("%v", err)) {
+				log.Errorf("%v", err)
+				continue
+			} else {
+				log.Errorf("failed to get properties: %v", err)
+				return err
+			}
 		}
 
 		// Get the hostname
@@ -316,9 +326,31 @@ func (v *vsphere) PowerOffVM(n node.Node) error {
 		return fmt.Errorf("Failed to power off %s: %v", vm.Name(), err)
 	}
 	if _, err := tsk.WaitForResult(v.ctx); err != nil {
-		return &node.ErrFailedToRebootNode{
+		return &node.ErrFailedToShutdownNode{
 			Node:  n,
 			Cause: fmt.Sprintf("failed to power off  VM %s. cause %v", vm.Name(), err),
+		}
+	}
+
+	return nil
+}
+
+// DestroyVM powers off the VM if not already off
+func (v *vsphere) DestroyVM(n node.Node) error {
+	var err error
+	vm := vmMap[n.Name]
+
+	log.Infof("\nDestroying VM: %s  ", vm.Name())
+	tsk, err := vm.Destroy(v.ctx)
+
+	if err != nil {
+		return fmt.Errorf("Failed to power off %s: %v", vm.Name(), err)
+	}
+	if _, err := tsk.WaitForResult(v.ctx); err != nil {
+
+		return &node.ErrFailedToDeleteNode{
+			Node:  n,
+			Cause: fmt.Sprintf("failed to destroy VM %s. cause %v", vm.Name(), err),
 		}
 	}
 
