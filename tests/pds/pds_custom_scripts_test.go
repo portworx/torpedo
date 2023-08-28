@@ -6,6 +6,7 @@ import (
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"time"
 )
 
 var _ = Describe("{TestDestKubeconfig}", func() {
@@ -19,6 +20,7 @@ var _ = Describe("{TestDestKubeconfig}", func() {
 		Step(stepLog, func() {
 			dest_ctx := pdslib.GetAndExpectStringEnvVar("DESTINATION_TARGET_KUBECONFIG")
 			dest_target := tc.NewTargetCluster(dest_ctx)
+			time.Sleep(10000 * time.Minute)
 			destClusterID, err := dest_target.GetClusterID()
 			log.FailOnError(err, "failed while getting dest cluster id")
 			log.Infof("Destination Cluster ID %s", destClusterID)
