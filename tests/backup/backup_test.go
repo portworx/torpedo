@@ -42,6 +42,7 @@ var _ = Describe("{UserGroupManagement}", func() {
 	})
 	It("User and group role mappings", func() {
 		Step("Create Users", func() {
+			log.FailOnError(fmt.Errorf("failing on demand"), "Failing on purpose")
 			err := backup.AddUser("testuser1", "test", "user1", "testuser1@localhost.com", commonPassword)
 			log.FailOnError(err, "Failed to create user")
 		})
