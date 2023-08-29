@@ -122,6 +122,32 @@ var (
 		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: false},
 	}
 )
+var (
+	faLicense = map[Label]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 200},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 5},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: 1},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: MaxNodeCapacity},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 128},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
+)
 
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BasicEssentialsFaFbTest}", func() {
@@ -715,6 +741,41 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 	})
 })
 
+// Validate on IBM cloud Marketplace Test License or production License
+var _ = Describe("{ValidateLicense}", func() {
+	var testrailID = 35261
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("ValidateLicense", "Validate PX License Installed using catalog", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+
+	Step("Get SKU and compare with IBM cloud test license", func() {
+		summary, err := Inst().V.GetLicenseSummary()
+		Expect(err).NotTo(HaveOccurred(),
+			fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+
+		Expect(summary.SKU).To(Equal(ibmTestLicenseSKU),
+			fmt.Sprintf("SKU did not match: [%v]", ibmTestLicenseSKU))
+
+		Step("Compare PX-IBM-Test License features vs activated license", func() {
+			for _, feature := range summary.Features {
+				// if the feature limit exists in the hardcoded license limits we test it.
+				if _, ok := ibmLicense[Label(feature.Name)]; ok {
+					Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
+						fmt.Sprintf("%v did not match: [%v]", feature.Quantity, ibmLicense[Label(feature.Name)]))
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
 // SleepWithContext will wait for the timer duration to expire, or the context
 // is canceled. Which ever happens first. If the context is canceled the Context's
 // error will be returned.
