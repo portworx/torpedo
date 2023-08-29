@@ -1,0 +1,40 @@
+{
+  "DataServiceToTest": [
+     {
+        "Name": "Cassandra",
+        "Version": "4.1.2",
+        "Image": "0e6d7ae",
+        "Replicas": 2,
+        "ScaleReplicas": 3
+      },
+    {
+      "Name": "Elasticsearch",
+      "Version": "8.8.0",
+      "Image": "2b2f60c",
+      "Replicas": 2,
+      "ScaleReplicas": 3
+  }
+],
+  "InfraToTest": {
+    "ControlPlaneURL": "https://staging.pds.portworx.com/",
+    "AccountName": "QA 2",
+    "TenantName": "Default",
+    "ProjectName": "Default",
+    "ClusterType": "onprem",
+    "Namespace": "pds-automation",
+    "PxNamespace": "portworx"
+  },
+  "ResiliencyTest": {
+    "CheckTillReplica": 1
+  },
+  "PDSHelmVersions": {
+    "LatestHelmVersion": "1.17.2",
+    "PreviousHelmVersion": "1.16.1"
+  },
+  "Users": {
+    "AdminUsername": "agaurav+2@gmail.com",
+    "AdminPassword": "Password@2",
+    "NonAdminUsername": "agaurav+3@gmail.com",
+    "NonAdminPassword": "Password@3"
+  }
+}

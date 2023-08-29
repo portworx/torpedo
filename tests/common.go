@@ -5147,6 +5147,43 @@ func CreateAzureBucket(bucketName string) {
 		fmt.Sprintf("Failed to create container. Error: [%v]", err))
 }
 
+func DumpKubeConfigs(configObject string) error {
+	log.Infof("dump kubeconfigs to file system")
+
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return fmt.Errorf("empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	if len(kubeconfigList) < 2 {
+		return fmt.Errorf(`Failed to get source config path.
+				At least minimum two kubeconfigs required but has %d`, len(kubeconfigList))
+	}
+
+	cm, err := core.Instance().GetConfigMap(configObject, "default")
+	if err != nil {
+		log.Errorf("Error reading config map: %v", err)
+		return err
+	}
+	log.Infof("Get over kubeconfig list %v", kubeconfigList)
+	for _, kubeconfig := range kubeconfigList {
+		config := cm.Data[kubeconfig]
+		if len(config) == 0 {
+			configErr := fmt.Sprintf("Error reading kubeconfig: found empty %s in config map %s",
+				kubeconfig, configObject)
+			return fmt.Errorf(configErr)
+		}
+		filePath := fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfig)
+		log.Infof("Save kubeconfig to %s", filePath)
+		err := ioutil.WriteFile(filePath, []byte(config), 0644)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 	log.Infof("dump kubeconfigs to file system")
 	cm, err := core.Instance().GetConfigMap(configObject, "default")

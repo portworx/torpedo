@@ -2,11 +2,9 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"time"
 )
 
 var _ = Describe("{TestDestKubeconfig}", func() {
@@ -18,12 +16,26 @@ var _ = Describe("{TestDestKubeconfig}", func() {
 		stepLog := "Get the pds pods from new target cluster"
 		log.InfoD(stepLog)
 		Step(stepLog, func() {
-			dest_ctx := pdslib.GetAndExpectStringEnvVar("DESTINATION_TARGET_KUBECONFIG")
+
+			err := DumpKubeConfigs("kubeconfigs")
+			log.FailOnError(err, "failed while dumping the kubeconfigs")
+
+			dest_ctx, err := GetDestinationClusterConfigPath()
+			log.FailOnError(err, "failed while getting dest cluster path")
+			SetDestinationKubeConfig()
 			dest_target := tc.NewTargetCluster(dest_ctx)
-			time.Sleep(10000 * time.Minute)
 			destClusterID, err := dest_target.GetClusterID()
 			log.FailOnError(err, "failed while getting dest cluster id")
 			log.Infof("Destination Cluster ID %s", destClusterID)
+
+			src_ctx, err := GetSourceClusterConfigPath()
+			log.FailOnError(err, "failed while getting dest cluster path")
+			SetSourceKubeConfig()
+			src_target := tc.NewTargetCluster(src_ctx)
+			srcClusterID, err := src_target.GetClusterID()
+			log.FailOnError(err, "failed while getting dest cluster id")
+			log.Infof("Source Cluster ID %s", srcClusterID)
+
 		})
 	})
 	JustAfterEach(func() {
