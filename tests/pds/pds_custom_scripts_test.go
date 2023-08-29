@@ -22,7 +22,6 @@ var _ = Describe("{TestDestKubeconfig}", func() {
 
 			dest_ctx, err := GetDestinationClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
-			SetDestinationKubeConfig()
 			dest_target := tc.NewTargetCluster(dest_ctx)
 			destClusterID, err := dest_target.GetClusterID()
 			log.FailOnError(err, "failed while getting dest cluster id")
@@ -30,7 +29,6 @@ var _ = Describe("{TestDestKubeconfig}", func() {
 
 			src_ctx, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
-			SetSourceKubeConfig()
 			src_target := tc.NewTargetCluster(src_ctx)
 			srcClusterID, err := src_target.GetClusterID()
 			log.FailOnError(err, "failed while getting dest cluster id")
