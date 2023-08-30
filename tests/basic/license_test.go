@@ -73,6 +73,8 @@ const (
 	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
 
 	essentialsFaFbSKU = "Portworx CSI for FA/FB"
+	ibmTestLicenseSKU = "PX-Enterprise IBM Cloud (test)"
+	ibmProdLicenseSKU = "PX-Enterprise IBM Cloud"
 
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
@@ -743,8 +745,8 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 
 // Validate on IBM cloud Marketplace Test License or production License
 var _ = Describe("{ValidateLicense}", func() {
-	var testrailID = 35261
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
+	var testrailID = 82741
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82741
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidateLicense", "Validate PX License Installed using catalog", nil, testrailID)
