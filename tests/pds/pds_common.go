@@ -64,6 +64,7 @@ const (
 	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
 	KillTeleportPodDuringDeployment  = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion   = "restore-ds-during-px-pool-expansion"
 )
 
 var (
