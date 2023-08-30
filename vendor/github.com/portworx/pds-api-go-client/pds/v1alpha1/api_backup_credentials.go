@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"fmt"
 )
 
 // Linger please
@@ -681,6 +682,9 @@ type ApiApiTenantsIdBackupCredentialsPostRequest struct {
 // Request body containing the backup credentials config
 func (r ApiApiTenantsIdBackupCredentialsPostRequest) Body(body ControllersCreateBackupCredentialsRequest) ApiApiTenantsIdBackupCredentialsPostRequest {
 	r.body = &body
+	fmt.Println("printing body inside the body accesskey %+v", *r.body.Credentials.S3.AccessKey)
+	fmt.Println("printing body inside the body secretkey %+v", *r.body.Credentials.S3.SecretKey)
+	fmt.Println("printing body inside the body endpoint %+v", *r.body.Credentials.S3.Endpoint)
 	return r
 }
 
