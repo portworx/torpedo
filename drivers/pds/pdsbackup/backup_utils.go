@@ -17,7 +17,7 @@ import (
 
 const (
 	bucketName           = "pds-qa-automation"
-	awsS3endpoint        = "s3.amazonaws.com"
+	awsS3endpoint        = "http://s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
 	bkpTimeInterval      = 20 * time.Second
 	bkpMaxtimeInterval   = 10 * time.Minute
