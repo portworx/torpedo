@@ -776,7 +776,7 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPostExecute(r
 	}
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	fmt.Println("err response ", err)
-	fmt.Println("req response ", req.Response.Body)
+	fmt.Println("req response ", req)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
