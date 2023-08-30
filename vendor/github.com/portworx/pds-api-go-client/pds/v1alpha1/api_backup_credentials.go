@@ -788,6 +788,7 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPostExecute(r
 	}
 
 	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	fmt.Println("localVarBody", localVarBody)
 	localVarHTTPResponse.Body.Close()
 	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
