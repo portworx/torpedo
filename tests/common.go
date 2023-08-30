@@ -3468,7 +3468,7 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 	return nil
 }
 
-// DeleteRestore creates restore
+// DeleteRestore deletes restore
 func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	dash.VerifyFatal(backupDriver != nil, true, "Getting the backup driver")
@@ -3479,6 +3479,17 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	_, err := backupDriver.DeleteRestore(ctx, deleteRestoreReq)
 	return err
 	// TODO: validate createClusterResponse also
+}
+
+// DeleteRestoreWithUID deletes restore with the given restore name and uid
+func DeleteRestoreWithUID(restoreName string, restoreUID string, orgID string, ctx context1.Context) error {
+	deleteRestoreReq := &api.RestoreDeleteRequest{
+		Name:  restoreName,
+		Uid:   restoreUID,
+		OrgId: orgID,
+	}
+	_, err := Inst().Backup.DeleteRestore(ctx, deleteRestoreReq)
+	return err
 }
 
 // DeleteBackup deletes backup
@@ -3526,6 +3537,20 @@ func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBacku
 	return err
 }
 
+// DeleteClusterWithUID deletes cluster with the given cluster name and uid
+func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
+	backupDriver := Inst().Backup
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId:          orgID,
+		Name:           name,
+		Uid:            uid,
+		DeleteBackups:  cleanupBackupsRestores,
+		DeleteRestores: cleanupBackupsRestores,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	return err
+}
+
 // DeleteBackupLocation deletes backup location
 func DeleteBackupLocation(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool) error {
 
@@ -3547,6 +3572,22 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 	// TODO: validate createBackupLocationResponse also
 	return nil
 
+}
+
+// DeleteBackupLocationWithContext deletes backup location with the given context
+func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+		Name:          name,
+		Uid:           backupLocationUID,
+		OrgId:         orgID,
+		DeleteBackups: DeleteExistingBackups,
+	}
+	_, err := backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteSchedule deletes backup schedule
@@ -3585,6 +3626,24 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 		clusterObj,
 		backupLocationDeleteTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteScheduleWithUID deletes backup schedule with the given backup schedule name and uid
+func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
 	if err != nil {
 		return err
 	}
