@@ -681,6 +681,7 @@ type ApiApiTenantsIdBackupCredentialsPostRequest struct {
 // Request body containing the backup credentials config
 func (r ApiApiTenantsIdBackupCredentialsPostRequest) Body(body ControllersCreateBackupCredentialsRequest) ApiApiTenantsIdBackupCredentialsPostRequest {
 	r.body = &body
+	println("post body from client %v", body)
 	return r
 }
 
