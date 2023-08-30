@@ -205,6 +205,9 @@ type Backup interface {
 	// EnumerateBackup enumerates backup objects
 	EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
 
+	// EnumerateAllBackup enumerates all backup objects, including backups shared by other users
+	EnumerateAllBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
+
 	// InspectBackup inspects a backup object
 	InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error)
 
@@ -255,6 +258,9 @@ type Restore interface {
 
 	// EnumerateRestore lists restore objects
 	EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
+
+	// EnumerateAllRestore enumerates all restore objects, including restores shared by other users
+	EnumerateAllRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
 
 	// InspectRestore inspects a restore object
 	InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error)
@@ -320,6 +326,9 @@ type ScheduleBackup interface {
 
 	// EnumerateBackupSchedule
 	EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
+
+	// EnumerateAllBackupSchedule enumerates all backup-schedule objects, including backup-schedules shared by other users
+	EnumerateAllBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
 
 	// InspectBackupSchedule
 	InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error)
