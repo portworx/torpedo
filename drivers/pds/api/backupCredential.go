@@ -78,9 +78,9 @@ func stringPtr(i string) *string {
 func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID string, name string, accessKey string, endpoint string, secretKey string) (*pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
 	s3CredsModel := pds.ModelsS3Credentials{
-		AccessKey: stringPtr(accessKey),
-		Endpoint:  stringPtr(endpoint),
-		SecretKey: stringPtr(secretKey),
+		AccessKey: &accessKey,
+		Endpoint:  &endpoint,
+		SecretKey: &secretKey,
 	}
 	controllerCreds := pds.ControllersCredentials{
 		S3: &s3CredsModel,
@@ -96,7 +96,6 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
 	log.Debugf("body %+v", res)
-	log.Debugf("body %d", res.StatusCode)
 
 	if err != nil {
 		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)

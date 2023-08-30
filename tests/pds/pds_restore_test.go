@@ -154,8 +154,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		//err := bkpClient.AWSStorageClient.DeleteBucket()
+		//log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
