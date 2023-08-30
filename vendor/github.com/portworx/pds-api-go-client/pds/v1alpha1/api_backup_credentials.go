@@ -783,6 +783,8 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPostExecute(r
 
 	localVarHTTPResponse, err := a.client.callAPI(req)
 	fmt.Println("localVarHTTPResponse", localVarHTTPResponse)
+	fmt.Println("localVarReturnValue", localVarReturnValue)
+	fmt.Println("err:", err)
 	if err != nil || localVarHTTPResponse == nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
