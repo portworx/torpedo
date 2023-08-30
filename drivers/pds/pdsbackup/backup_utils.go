@@ -39,6 +39,11 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	akid := backupClient.AWSStorageClient.accessKey
 	skid := backupClient.AWSStorageClient.secretKey
 	region := backupClient.AWSStorageClient.region
+
+	log.Debugf("access key %s", akid)
+	log.Debugf("secret key %s", skid)
+	log.Debugf("aws region %s", region)
+
 	backupCred, err := backupClient.Components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
 	if err != nil {
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
