@@ -123,7 +123,7 @@ var (
 	}
 )
 var (
-	faLicense = map[Label]interface{}{
+	ibmLicense = map[Label]interface{}{
 		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
 		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
 		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 200},
