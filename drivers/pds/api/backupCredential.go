@@ -95,7 +95,8 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
-	log.Debugf("body %+v", res.Body)
+	log.Debugf("body %+v", res)
+	log.Debugf("body %d", res.StatusCode)
 
 	if err != nil {
 		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)
