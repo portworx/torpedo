@@ -116,11 +116,17 @@ type CloudCredential interface {
 	// EnumerateCloudCredential lists the cloud credentials for given Org
 	EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
 
+	// EnumerateAllCloudCredential enumerates all cloud-credential objects, including cloud-credentials shared by other users
+	EnumerateAllCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
+
 	// DeleteCloudCredential deletes a cloud credential object
 	DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error)
 
 	// UpdateOwnershipCloudCredential update ownership of cloud credential object
 	UpdateOwnershipCloudCredential(ctx context.Context, req *api.CloudCredentialOwnershipUpdateRequest) (*api.CloudCredentialOwnershipUpdateResponse, error)
+
+	// GetCloudCredentialUID returns uid of the given cloud credential name in an organization
+	GetCloudCredentialUID(ctx context.Context, orgID string, cloudCredentialName string) (string, error)
 }
 
 // Cluster obj interface
@@ -177,21 +183,27 @@ type BLocation interface {
 	// EnumerateBackupLocation lists backup locations for an org
 	EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
 
+	// EnumerateAllBackupLocation enumerates all backup-location objects, including backup-locations shared by other users
+	EnumerateAllBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
+
 	// InspectBackupLocation enumerates backup location objects
 	InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error)
 
 	// DeleteBackupLocation deletes backup location objects
 	DeleteBackupLocation(ctx context.Context, req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error)
 
-	// ValidateBackupLocation validates the backuplocation object
+	// ValidateBackupLocation validates the backup location object
 	ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error)
 
-	// UpdateOwnershipBackupLocation updates backuplocation ownership
+	// UpdateOwnershipBackupLocation updates backup location ownership
 	UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error)
 
-	// WaitForBackupLocationDeletion watis for backup location to be deleted
+	// WaitForBackupLocationDeletion waits for backup location to be deleted
 	WaitForBackupLocationDeletion(ctx context.Context, backupLocationName, backupLocationUID string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// GetBackupLocationUID returns uid of the given backup location name in an organization
+	GetBackupLocationUID(ctx context.Context, orgID string, backupLocationName string) (string, error)
 }
 
 // Backup obj interface
@@ -268,6 +280,9 @@ type Restore interface {
 	// DeleteRestore deletes a restore object
 	DeleteRestore(ctx context.Context, req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
 
+	// GetRestoreUID returns uid of the given restore name in an organization
+	GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error)
+
 	// WaitForRestoreCompletion waits for restore to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForRestoreCompletion(ctx context.Context, restoreName string, orgID string,
@@ -284,6 +299,9 @@ type SchedulePolicy interface {
 
 	// EnumerateSchedulePolicy
 	EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
+
+	// EnumerateAllSchedulePolicy enumerates all schedule-policy objects, including schedule-policies shared by other users
+	EnumerateAllSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
 
 	// InspectSchedulePolicy
 	InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error)
@@ -351,6 +369,9 @@ type ScheduleBackup interface {
 
 	// GetAllScheduleBackupUIDs returns uids of all scheduled backups for the given schedule
 	GetAllScheduleBackupUIDs(ctx context.Context, scheduleName string, orgID string) ([]string, error)
+
+	// GetBackupScheduleUID returns uid of the given backup schedule name in an organization
+	GetBackupScheduleUID(ctx context.Context, scheduleName string, orgID string) (string, error)
 }
 
 // License interface
@@ -375,6 +396,9 @@ type Rule interface {
 
 	// EnumerateRule enumerates rule objects
 	EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
+
+	// EnumerateAllRule enumerates all rule objects, including rules shared by other users
+	EnumerateAllRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
 
 	// InspectRule inspects a rule object
 	InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error)
