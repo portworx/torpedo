@@ -223,23 +223,131 @@ func (p *portworx) CreateCloudCredential(ctx context.Context, req *api.CloudCred
 }
 
 func (p *portworx) UpdateCloudCredential(ctx context.Context, req *api.CloudCredentialUpdateRequest) (*api.CloudCredentialUpdateResponse, error) {
-	return p.cloudCredentialManager.Update(ctx, req)
+	reqInterface, err := p.SetMissingCloudCredentialUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithCloudCredentialUID, ok := reqInterface.(*api.CloudCredentialUpdateRequest); ok {
+		return p.cloudCredentialManager.Update(ctx, reqWithCloudCredentialUID)
+	}
+	return nil, fmt.Errorf("expected *api.CloudCredentialUpdateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) InspectCloudCredential(ctx context.Context, req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error) {
-	return p.cloudCredentialManager.Inspect(ctx, req)
+	reqInterface, err := p.SetMissingCloudCredentialUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithCloudCredentialUID, ok := reqInterface.(*api.CloudCredentialInspectRequest); ok {
+		return p.cloudCredentialManager.Inspect(ctx, reqWithCloudCredentialUID)
+	}
+	return nil, fmt.Errorf("expected *api.CloudCredentialInspectRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
+	cloudCredentialEnumerateResponse, err := p.cloudCredentialManager.Enumerate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := GetSubFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var userCloudCredentials []*api.CloudCredentialObject
+	for _, cloudCredentialObject := range cloudCredentialEnumerateResponse.GetCloudCredentials() {
+		ownerId := cloudCredentialObject.GetOwnership().GetOwner()
+		if ownerId == sub {
+			userCloudCredentials = append(userCloudCredentials, cloudCredentialObject)
+		}
+	}
+	cloudCredentialEnumerateResponse.CloudCredentials = userCloudCredentials
+	return cloudCredentialEnumerateResponse, nil
+}
+
+func (p *portworx) EnumerateAllCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
 	return p.cloudCredentialManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error) {
-	return p.cloudCredentialManager.Delete(ctx, req)
+	reqInterface, err := p.SetMissingCloudCredentialUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithCloudCredentialUID, ok := reqInterface.(*api.CloudCredentialDeleteRequest); ok {
+		return p.cloudCredentialManager.Delete(ctx, reqWithCloudCredentialUID)
+	}
+	return nil, fmt.Errorf("expected *api.CloudCredentialDeleteRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) UpdateOwnershipCloudCredential(ctx context.Context, req *api.CloudCredentialOwnershipUpdateRequest) (*api.CloudCredentialOwnershipUpdateResponse, error) {
-	return p.cloudCredentialManager.UpdateOwnership(ctx, req)
+	reqInterface, err := p.SetMissingCloudCredentialUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithCloudCredentialUID, ok := reqInterface.(*api.CloudCredentialOwnershipUpdateRequest); ok {
+		return p.cloudCredentialManager.UpdateOwnership(ctx, reqWithCloudCredentialUID)
+	}
+	return nil, fmt.Errorf("expected *api.CloudCredentialOwnershipUpdateRequest type after filling missing UID, but received %T", reqInterface)
+}
+
+func (p *portworx) GetCloudCredentialUID(ctx context.Context, orgID string, cloudCredentialName string) (string, error) {
+	cloudCredentialEnumerateReq := &api.CloudCredentialEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateRsp, err := p.EnumerateCloudCredential(ctx, cloudCredentialEnumerateReq)
+	if err != nil {
+		return "", err
+	}
+	for _, cloudCredential := range enumerateRsp.GetCloudCredentials() {
+		if cloudCredential.GetName() == cloudCredentialName {
+			return cloudCredential.GetUid(), nil
+		}
+	}
+	return "", fmt.Errorf("cloud credential with name '%s' not found for org '%s'", cloudCredentialName, orgID)
+}
+
+// SetMissingCloudCredentialUID sets the missing cloud-credential UID for cloud-credential-related requests
+func (p *portworx) SetMissingCloudCredentialUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.CloudCredentialInspectRequest:
+		if r.GetUid() == "" {
+			cloudCredentialUid, err := p.GetCloudCredentialUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = cloudCredentialUid
+		}
+		return r, nil
+	case *api.CloudCredentialDeleteRequest:
+		if r.GetUid() == "" {
+			cloudCredentialUid, err := p.GetCloudCredentialUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = cloudCredentialUid
+		}
+		return r, nil
+	case *api.CloudCredentialUpdateRequest:
+		if r.GetUid() == "" {
+			cloudCredentialUid, err := p.GetCloudCredentialUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = cloudCredentialUid
+		}
+		return r, nil
+	case *api.CloudCredentialOwnershipUpdateRequest:
+		if r.GetUid() == "" {
+			cloudCredentialUid, err := p.GetCloudCredentialUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = cloudCredentialUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
 }
 
 func (p *portworx) CreateCluster(ctx context.Context, req *api.ClusterCreateRequest) (*api.ClusterCreateResponse, error) {
@@ -399,32 +507,131 @@ func (p *portworx) GetClusterStatus(orgID string, clusterName string, ctx contex
 	return api.ClusterInfo_StatusInfo_Invalid, fmt.Errorf("cluster with name '%s' not found for org '%s'", clusterName, orgID)
 }
 
+// SetMissingClusterUID sets the missing cluster UID for cluster-related requests
+func (p *portworx) SetMissingClusterUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.ClusterInspectRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	case *api.ClusterDeleteRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	case *api.ClusterBackupShareUpdateRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	case *api.ClusterUpdateRequest:
+		if r.GetUid() == "" {
+			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = clusterUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
+}
+
 func (p *portworx) CreateBackupLocation(ctx context.Context, req *api.BackupLocationCreateRequest) (*api.BackupLocationCreateResponse, error) {
 	return p.backupLocationManager.Create(ctx, req)
 }
 
 func (p *portworx) UpdateBackupLocation(ctx context.Context, req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error) {
-	return p.backupLocationManager.Update(ctx, req)
+	reqInterface, err := p.SetMissingBackupLocationUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithBackupLocationUID, ok := reqInterface.(*api.BackupLocationUpdateRequest); ok {
+		return p.backupLocationManager.Update(ctx, reqWithBackupLocationUID)
+	}
+	return nil, fmt.Errorf("expected *api.BackupLocationUpdateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
+	backupLocationEnumerateResponse, err := p.backupLocationManager.Enumerate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := GetSubFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var userBackupLocations []*api.BackupLocationObject
+	for _, backupLocationObject := range backupLocationEnumerateResponse.GetBackupLocations() {
+		ownerId := backupLocationObject.GetOwnership().GetOwner()
+		if ownerId == sub {
+			userBackupLocations = append(userBackupLocations, backupLocationObject)
+		}
+	}
+	backupLocationEnumerateResponse.BackupLocations = userBackupLocations
+	return backupLocationEnumerateResponse, nil
+}
+
+func (p *portworx) EnumerateAllBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
 	return p.backupLocationManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error) {
-	return p.backupLocationManager.Inspect(ctx, req)
+	reqInterface, err := p.SetMissingBackupLocationUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithBackupLocationUID, ok := reqInterface.(*api.BackupLocationInspectRequest); ok {
+		return p.backupLocationManager.Inspect(ctx, reqWithBackupLocationUID)
+	}
+	return nil, fmt.Errorf("expected *api.BackupLocationInspectRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) DeleteBackupLocation(ctx context.Context, req *api.BackupLocationDeleteRequest) (*api.BackupLocationDeleteResponse, error) {
-	return p.backupLocationManager.Delete(ctx, req)
+	reqInterface, err := p.SetMissingBackupLocationUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithBackupLocationUID, ok := reqInterface.(*api.BackupLocationDeleteRequest); ok {
+		return p.backupLocationManager.Delete(ctx, reqWithBackupLocationUID)
+	}
+	return nil, fmt.Errorf("expected *api.BackupLocationDeleteRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) ValidateBackupLocation(ctx context.Context, req *api.BackupLocationValidateRequest) (*api.BackupLocationValidateResponse, error) {
-	return p.backupLocationManager.Validate(ctx, req)
+	reqInterface, err := p.SetMissingBackupLocationUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithBackupLocationUID, ok := reqInterface.(*api.BackupLocationValidateRequest); ok {
+		return p.backupLocationManager.Validate(ctx, reqWithBackupLocationUID)
+	}
+	return nil, fmt.Errorf("expected *api.BackupLocationValidateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) UpdateOwnershipBackupLocation(ctx context.Context, req *api.BackupLocationOwnershipUpdateRequest) (*api.BackupLocationOwnershipUpdateResponse, error) {
-	return p.backupLocationManager.UpdateOwnership(ctx, req)
+	reqInterface, err := p.SetMissingBackupLocationUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithBackupLocationUID, ok := reqInterface.(*api.BackupLocationOwnershipUpdateRequest); ok {
+		return p.backupLocationManager.UpdateOwnership(ctx, reqWithBackupLocationUID)
+	}
+	return nil, fmt.Errorf("expected *api.BackupLocationOwnershipUpdateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 // WaitForBackupLocationDeletion waits for backup location to be deleted successfully
@@ -470,6 +677,75 @@ func (p *portworx) WaitForBackupLocationDeletion(
 		return fmt.Errorf("failed to wait for backup location deletion. Error:[%v]", err)
 	}
 	return nil
+}
+
+func (p *portworx) GetBackupLocationUID(ctx context.Context, orgID string, backupLocationName string) (string, error) {
+	backupLocationEnumerateReq := &api.BackupLocationEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateRsp, err := p.EnumerateBackupLocation(ctx, backupLocationEnumerateReq)
+	if err != nil {
+		return "", err
+	}
+	for _, backupLocation := range enumerateRsp.GetBackupLocations() {
+		if backupLocation.GetName() == backupLocationName {
+			return backupLocation.GetUid(), nil
+		}
+	}
+	return "", fmt.Errorf("backup location with name '%s' not found for org '%s'", backupLocationName, orgID)
+}
+
+// SetMissingBackupLocationUID sets the missing backup-location UID for backup-location-related requests
+func (p *portworx) SetMissingBackupLocationUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.BackupLocationInspectRequest:
+		if r.GetUid() == "" {
+			backupLocationUid, err := p.GetBackupLocationUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupLocationUid
+		}
+		return r, nil
+	case *api.BackupLocationUpdateRequest:
+		if r.GetUid() == "" {
+			backupLocationUid, err := p.GetBackupLocationUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupLocationUid
+		}
+		return r, nil
+	case *api.BackupLocationValidateRequest:
+		if r.GetUid() == "" {
+			backupLocationUid, err := p.GetBackupLocationUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupLocationUid
+		}
+		return r, nil
+	case *api.BackupLocationOwnershipUpdateRequest:
+		if r.GetUid() == "" {
+			backupLocationUid, err := p.GetBackupLocationUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupLocationUid
+		}
+		return r, nil
+	case *api.BackupLocationDeleteRequest:
+		if r.GetUid() == "" {
+			backupLocationUid, err := p.GetBackupLocationUID(ctx, r.GetOrgId(), r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupLocationUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
 }
 
 func (p *portworx) CreateBackup(ctx context.Context, req *api.BackupCreateRequest) (*api.BackupCreateResponse, error) {
@@ -732,6 +1008,50 @@ func (p *portworx) WaitForBackupDeletion(
 	return nil
 }
 
+// SetMissingBackupUID sets the missing backup UID for backup-related requests
+func (p *portworx) SetMissingBackupUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.BackupInspectRequest:
+		if r.GetUid() == "" {
+			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupUid
+		}
+		return r, nil
+	case *api.BackupDeleteRequest:
+		if r.GetUid() == "" {
+			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupUid
+		}
+		return r, nil
+	case *api.BackupUpdateRequest:
+		if r.GetUid() == "" {
+			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupUid
+		}
+		return r, nil
+	case *api.BackupShareUpdateRequest:
+		if r.GetUid() == "" {
+			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
+}
+
 // WaitForBackupDeletion waits for restore to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry
 func (p *portworx) WaitForRestoreDeletion(
@@ -865,7 +1185,6 @@ func (p *portworx) EnumerateRestore(ctx context.Context, req *api.RestoreEnumera
 	}
 	restoreEnumerateResponse.Restores = userRestores
 	return restoreEnumerateResponse, nil
-
 }
 
 func (p *portworx) EnumerateAllRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
@@ -968,28 +1287,155 @@ func (p *portworx) GetRestoreUID(ctx context.Context, restoreName string, orgID 
 	return "", fmt.Errorf("restore with name '%s' not found for org '%s'", restoreName, orgID)
 }
 
+// SetMissingRestoreUID sets the missing restore UID for restore-related requests
+func (p *portworx) SetMissingRestoreUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.RestoreInspectRequest:
+		if r.GetUid() == "" {
+			restoreUid, err := p.GetRestoreUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = restoreUid
+		}
+		return r, nil
+	case *api.RestoreDeleteRequest:
+		if r.GetUid() == "" {
+			restoreUid, err := p.GetRestoreUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = restoreUid
+		}
+		return r, nil
+	case *api.RestoreUpdateRequest:
+		if r.GetUid() == "" {
+			restoreUid, err := p.GetRestoreUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = restoreUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
+}
+
 func (p *portworx) CreateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyCreateRequest) (*api.SchedulePolicyCreateResponse, error) {
 	return p.schedulePolicyManager.Create(ctx, req)
 }
 
 func (p *portworx) UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error) {
-	return p.schedulePolicyManager.Update(ctx, req)
+	reqInterface, err := p.SetMissingSchedulePolicyUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithSchedulePolicyUID, ok := reqInterface.(*api.SchedulePolicyUpdateRequest); ok {
+		return p.schedulePolicyManager.Update(ctx, reqWithSchedulePolicyUID)
+	}
+	return nil, fmt.Errorf("expected *api.SchedulePolicyUpdateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
+	schedulePolicyEnumerateResponse, err := p.schedulePolicyManager.Enumerate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := GetSubFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var userSchedulePolicies []*api.SchedulePolicyObject
+	for _, clusterObject := range schedulePolicyEnumerateResponse.GetSchedulePolicies() {
+		ownerId := clusterObject.GetOwnership().GetOwner()
+		if ownerId == sub {
+			userSchedulePolicies = append(userSchedulePolicies, clusterObject)
+		}
+	}
+	schedulePolicyEnumerateResponse.SchedulePolicies = userSchedulePolicies
+	return schedulePolicyEnumerateResponse, nil
+}
+
+func (p *portworx) EnumerateAllSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
 	return p.schedulePolicyManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
-	return p.schedulePolicyManager.Inspect(ctx, req)
+	reqInterface, err := p.SetMissingSchedulePolicyUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithSchedulePolicyUID, ok := reqInterface.(*api.SchedulePolicyInspectRequest); ok {
+		return p.schedulePolicyManager.Inspect(ctx, reqWithSchedulePolicyUID)
+	}
+	return nil, fmt.Errorf("expected *api.SchedulePolicyInspectRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) DeleteSchedulePolicy(ctx context.Context, req *api.SchedulePolicyDeleteRequest) (*api.SchedulePolicyDeleteResponse, error) {
-	return p.schedulePolicyManager.Delete(ctx, req)
+	reqInterface, err := p.SetMissingSchedulePolicyUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithSchedulePolicyUID, ok := reqInterface.(*api.SchedulePolicyDeleteRequest); ok {
+		return p.schedulePolicyManager.Delete(ctx, reqWithSchedulePolicyUID)
+	}
+	return nil, fmt.Errorf("expected *api.SchedulePolicyDeleteRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) UpdateOwnershipSchedulePolicy(ctx context.Context, req *api.SchedulePolicyOwnershipUpdateRequest) (*api.SchedulePolicyOwnershipUpdateResponse, error) {
-	return p.schedulePolicyManager.UpdateOwnership(ctx, req)
+	reqInterface, err := p.SetMissingSchedulePolicyUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithSchedulePolicyUID, ok := reqInterface.(*api.SchedulePolicyOwnershipUpdateRequest); ok {
+		return p.schedulePolicyManager.UpdateOwnership(ctx, reqWithSchedulePolicyUID)
+	}
+	return nil, fmt.Errorf("expected *api.SchedulePolicyOwnershipUpdateRequest type after filling missing UID, but received %T", reqInterface)
+}
+
+// SetMissingSchedulePolicyUID sets the missing schedule-policy UID for schedule-policy-related requests
+func (p *portworx) SetMissingSchedulePolicyUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.SchedulePolicyInspectRequest:
+		if r.GetUid() == "" {
+			backupPolicyUid, err := p.GetSchedulePolicyUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupPolicyUid
+		}
+		return r, nil
+	case *api.SchedulePolicyDeleteRequest:
+		if r.GetUid() == "" {
+			backupPolicyUid, err := p.GetSchedulePolicyUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupPolicyUid
+		}
+		return r, nil
+	case *api.SchedulePolicyUpdateRequest:
+		if r.GetUid() == "" {
+			backupPolicyUid, err := p.GetSchedulePolicyUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupPolicyUid
+		}
+		return r, nil
+	case *api.SchedulePolicyOwnershipUpdateRequest:
+		if r.GetUid() == "" {
+			backupPolicyUid, err := p.GetSchedulePolicyUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupPolicyUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
 }
 
 func (p *portworx) CreateBackupSchedule(ctx context.Context, req *api.BackupScheduleCreateRequest) (*api.BackupScheduleCreateResponse, error) {
@@ -1211,7 +1657,42 @@ func (p *portworx) GetBackupScheduleUID(ctx context.Context, scheduleName string
 		}
 	}
 
-	return "", fmt.Errorf("backupschedule with name '%s' not found for org '%s'", scheduleName, orgID)
+	return "", fmt.Errorf("backup schedule with name '%s' not found for org '%s'", scheduleName, orgID)
+}
+
+// SetMissingBackupScheduleUID sets the missing backup-schedule UID for backup-schedule-related requests
+func (p *portworx) SetMissingBackupScheduleUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.BackupScheduleInspectRequest:
+		if r.GetUid() == "" {
+			backupScheduleUid, err := p.GetBackupScheduleUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupScheduleUid
+		}
+		return r, nil
+	case *api.BackupScheduleDeleteRequest:
+		if r.GetUid() == "" {
+			backupScheduleUid, err := p.GetBackupScheduleUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupScheduleUid
+		}
+		return r, nil
+	case *api.BackupScheduleUpdateRequest:
+		if r.GetUid() == "" {
+			backupScheduleUid, err := p.GetBackupScheduleUID(ctx, r.GetName(), r.GetOrgId())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = backupScheduleUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
 }
 
 // WaitForBackupRunning wait for backup to start running
@@ -1347,23 +1828,115 @@ func (p *portworx) CreateRule(ctx context.Context, req *api.RuleCreateRequest) (
 }
 
 func (p *portworx) UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error) {
-	return p.ruleManager.Update(ctx, req)
+	reqInterface, err := p.SetMissingRuleUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithRuleUID, ok := reqInterface.(*api.RuleUpdateRequest); ok {
+		return p.ruleManager.Update(ctx, reqWithRuleUID)
+	}
+	return nil, fmt.Errorf("expected *api.RuleUpdateRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
+	ruleEnumerateResponse, err := p.ruleManager.Enumerate(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	sub, err := GetSubFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var userRules []*api.RuleObject
+	for _, ruleObject := range ruleEnumerateResponse.GetRules() {
+		ownerId := ruleObject.GetOwnership().GetOwner()
+		if ownerId == sub {
+			userRules = append(userRules, ruleObject)
+		}
+	}
+	ruleEnumerateResponse.Rules = userRules
+	return ruleEnumerateResponse, nil
+}
+
+func (p *portworx) EnumerateAllRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
 	return p.ruleManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
-	return p.ruleManager.Inspect(ctx, req)
+	reqInterface, err := p.SetMissingRuleUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithRuleUID, ok := reqInterface.(*api.RuleInspectRequest); ok {
+		return p.ruleManager.Inspect(ctx, reqWithRuleUID)
+	}
+	return nil, fmt.Errorf("expected *api.RuleInspectRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) DeleteRule(ctx context.Context, req *api.RuleDeleteRequest) (*api.RuleDeleteResponse, error) {
-	return p.ruleManager.Delete(ctx, req)
+	reqInterface, err := p.SetMissingRuleUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithRuleUID, ok := reqInterface.(*api.RuleDeleteRequest); ok {
+		return p.ruleManager.Delete(ctx, reqWithRuleUID)
+	}
+	return nil, fmt.Errorf("expected *api.RuleDeleteRequest type after filling missing UID, but received %T", reqInterface)
 }
 
 func (p *portworx) UpdateOwnershipRule(ctx context.Context, req *api.RuleOwnershipUpdateRequest) (*api.RuleOwnershipUpdateResponse, error) {
-	return p.ruleManager.UpdateOwnership(ctx, req)
+	reqInterface, err := p.SetMissingRuleUID(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if reqWithRuleUID, ok := reqInterface.(*api.RuleOwnershipUpdateRequest); ok {
+		return p.ruleManager.UpdateOwnership(ctx, reqWithRuleUID)
+	}
+	return nil, fmt.Errorf("expected *api.RuleOwnershipUpdateRequest type after filling missing UID, but received %T", reqInterface)
+}
+
+// SetMissingRuleUID sets the missing rule UID for rule-related requests
+func (p *portworx) SetMissingRuleUID(ctx context.Context, req interface{}) (interface{}, error) {
+	switch r := req.(type) {
+	case *api.RuleInspectRequest:
+		if r.GetUid() == "" {
+			ruleUid, err := p.GetRuleUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = ruleUid
+		}
+		return r, nil
+	case *api.RuleDeleteRequest:
+		if r.GetUid() == "" {
+			ruleUid, err := p.GetRuleUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = ruleUid
+		}
+		return r, nil
+	case *api.RuleUpdateRequest:
+		if r.GetUid() == "" {
+			ruleUid, err := p.GetRuleUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = ruleUid
+		}
+		return r, nil
+	case *api.RuleOwnershipUpdateRequest:
+		if r.GetUid() == "" {
+			ruleUid, err := p.GetRuleUid(r.GetOrgId(), ctx, r.GetName())
+			if err != nil {
+				return nil, err
+			}
+			r.Uid = ruleUid
+		}
+		return r, nil
+	default:
+		return nil, fmt.Errorf("received unsupported request type %T", req)
+	}
 }
 
 func (p *portworx) GetPxBackupVersion(ctx context.Context, req *api.VersionGetRequest) (*api.VersionGetResponse, error) {
@@ -1826,164 +2399,6 @@ func IsAdminCtx(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	return true, nil
-}
-
-// SetMissingClusterUID sets the missing cluster UID for cluster-related requests
-func (p *portworx) SetMissingClusterUID(ctx context.Context, req interface{}) (interface{}, error) {
-	switch r := req.(type) {
-	case *api.ClusterInspectRequest:
-		if r.GetUid() == "" {
-			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = clusterUid
-		}
-		return r, nil
-	case *api.ClusterDeleteRequest:
-		if r.GetUid() == "" {
-			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = clusterUid
-		}
-		return r, nil
-	case *api.ClusterBackupShareUpdateRequest:
-		if r.GetUid() == "" {
-			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = clusterUid
-		}
-		return r, nil
-	case *api.ClusterUpdateRequest:
-		if r.GetUid() == "" {
-			clusterUid, err := p.GetClusterUID(ctx, r.GetOrgId(), r.GetName())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = clusterUid
-		}
-		return r, nil
-	default:
-		return nil, fmt.Errorf("received unsupported request type %T", req)
-	}
-}
-
-// SetMissingBackupUID sets the missing backup UID for backup-related requests
-func (p *portworx) SetMissingBackupUID(ctx context.Context, req interface{}) (interface{}, error) {
-	switch r := req.(type) {
-	case *api.BackupInspectRequest:
-		if r.GetUid() == "" {
-			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupUid
-		}
-		return r, nil
-	case *api.BackupDeleteRequest:
-		if r.GetUid() == "" {
-			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupUid
-		}
-		return r, nil
-	case *api.BackupUpdateRequest:
-		if r.GetUid() == "" {
-			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupUid
-		}
-		return r, nil
-	case *api.BackupShareUpdateRequest:
-		if r.GetUid() == "" {
-			backupUid, err := p.GetBackupUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupUid
-		}
-		return r, nil
-	default:
-		return nil, fmt.Errorf("received unsupported request type %T", req)
-	}
-}
-
-// SetMissingRestoreUID sets the missing restore UID for restore-related requests
-func (p *portworx) SetMissingRestoreUID(ctx context.Context, req interface{}) (interface{}, error) {
-	switch r := req.(type) {
-	case *api.RestoreInspectRequest:
-		if r.GetUid() == "" {
-			restoreUid, err := p.GetRestoreUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = restoreUid
-		}
-		return r, nil
-	case *api.RestoreDeleteRequest:
-		if r.GetUid() == "" {
-			restoreUid, err := p.GetRestoreUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = restoreUid
-		}
-		return r, nil
-	case *api.RestoreUpdateRequest:
-		if r.GetUid() == "" {
-			restoreUid, err := p.GetRestoreUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = restoreUid
-		}
-		return r, nil
-	default:
-		return nil, fmt.Errorf("received unsupported request type %T", req)
-	}
-}
-
-// SetMissingBackupScheduleUID sets the missing backup-schedule UID for backup-schedule-related requests
-func (p *portworx) SetMissingBackupScheduleUID(ctx context.Context, req interface{}) (interface{}, error) {
-	switch r := req.(type) {
-	case *api.BackupScheduleInspectRequest:
-		if r.GetUid() == "" {
-			backupScheduleUid, err := p.GetBackupScheduleUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupScheduleUid
-		}
-		return r, nil
-	case *api.BackupScheduleDeleteRequest:
-		if r.GetUid() == "" {
-			backupScheduleUid, err := p.GetBackupScheduleUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupScheduleUid
-		}
-		return r, nil
-	case *api.BackupScheduleUpdateRequest:
-		if r.GetUid() == "" {
-			backupScheduleUid, err := p.GetBackupScheduleUID(ctx, r.GetName(), r.GetOrgId())
-			if err != nil {
-				return nil, err
-			}
-			r.Uid = backupScheduleUid
-		}
-		return r, nil
-	default:
-		return nil, fmt.Errorf("received unsupported request type %T", req)
-	}
 }
 
 func init() {
