@@ -69,6 +69,9 @@ func (c *AppConfig) Validate() error {
 	}
 	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
 	app := cluster.GetNamespaceManager().GetNamespace(c.GetNamespaceMetaData().GetNamespaceUid()).GetAppManager().GetApp(c.GetAppMetaData().GetAppUid())
+	if app == nil {
+		return utils.ProcessError(fmt.Errorf("app [%s] in namespace [%s] of cluster [%s] is not recorded", c.AppMetaData.AppKey, c.NamespaceMetaData.Namespace, c.ClusterMetaData.ConfigPath))
+	}
 	errChan := make(chan error, len(app.Contexts))
 	for _, ctx := range app.Contexts {
 		tests.ValidateContext(ctx, &errChan)
@@ -96,6 +99,9 @@ func (c *AppConfig) TearDown() error {
 	}
 	cluster := c.GetClusterController().GetClusterManager().GetCluster(c.GetClusterMetaData().GetClusterUid())
 	app := cluster.GetNamespaceManager().GetNamespace(c.GetNamespaceMetaData().GetNamespaceUid()).GetAppManager().GetApp(c.GetAppMetaData().GetAppUid())
+	if app == nil {
+		return utils.ProcessError(fmt.Errorf("app [%s] in namespace [%s] of cluster [%s] is not recorded", c.AppMetaData.AppKey, c.NamespaceMetaData.Namespace, c.ClusterMetaData.ConfigPath))
+	}
 	for _, ctx := range app.Contexts {
 		tests.TearDownContext(ctx, map[string]bool{
 			tests.SkipClusterScopedObjects:              c.GetTearDownAppConfig().GetSkipClusterScopedObjects(),

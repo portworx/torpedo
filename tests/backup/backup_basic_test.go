@@ -326,7 +326,7 @@ func TestMain(m *testing.M) {
 			log.Infof("Path /: Error %v", utils.ProcessError(err))
 			_, err = fmt.Fprintf(w, "Source Cluster Config Path: %s\n", sourceClusterConfigPath)
 			log.Infof("Path /: Error %v", utils.ProcessError(err))
-			_, err = fmt.Fprintf(w, "Source Cluster Config Path: %s\n", destinationClusterConfigPath)
+			_, err = fmt.Fprintf(w, "Destination Cluster Config Path: %s\n", destinationClusterConfigPath)
 			log.Infof("Path /: Error %v", utils.ProcessError(err))
 		})
 
@@ -346,6 +346,12 @@ func TestMain(m *testing.M) {
 			if err == nil {
 				err = torpedoTestController.GetClusterController().Cluster(configPath).Namespace(namespace).App(appKey).Schedule()
 				if err != nil {
+					log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
+
+					_, err = fmt.Fprintf(w, "Schedule failed with error: %v\n", err)
+					log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
+				} else {
+					_, err = fmt.Fprintf(w, "Scheduled app [%s] in namespace [%s] of cluster [%s] successfully\n", appKey, namespace, configPath)
 					log.Infof("Path /controller/cluster/schedule: Error %v", utils.ProcessError(err))
 				}
 			}
@@ -368,6 +374,12 @@ func TestMain(m *testing.M) {
 				err = torpedoTestController.GetClusterController().Cluster(configPath).Namespace(namespace).App(appKey).Validate()
 				if err != nil {
 					log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
+
+					_, err = fmt.Fprintf(w, "Validate failed with error: %v\n", err)
+					log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
+				} else {
+					_, err = fmt.Fprintf(w, "Validated app [%s] in namespace [%s] of cluster [%s] successfully\n", appKey, namespace, configPath)
+					log.Infof("Path /controller/cluster/validate: Error %v", utils.ProcessError(err))
 				}
 			}
 		})
@@ -388,6 +400,12 @@ func TestMain(m *testing.M) {
 			if err == nil {
 				err = torpedoTestController.GetClusterController().Cluster(configPath).Namespace(namespace).App(appKey).TearDown()
 				if err != nil {
+					log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
+
+					_, err = fmt.Fprintf(w, "Teardown failed with error: %v\n", err)
+					log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
+				} else {
+					_, err = fmt.Fprintf(w, "Torndown app [%s] in namespace [%s] of cluster [%s] successfully\n", appKey, namespace, configPath)
 					log.Infof("Path /controller/cluster/teardown: Error %v", utils.ProcessError(err))
 				}
 			}
