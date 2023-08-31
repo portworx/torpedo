@@ -181,9 +181,10 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 		}
 	})
 
-	It("Perform multiple restore within same cluster", func() {
+	It("Perform multiple restore to different cluster", func() {
 		var deploymentsToBeCleaned []*pds.ModelsDeployment
-		var wlDeploymentsToBeCleaned []*v1.Deployment
+		var wlDeploymentsToBeCleanedinSrc []*v1.Deployment
+		var wlDeploymentsToBeCleanedinDest []*v1.Deployment
 		var deps []*pds.ModelsDeployment
 		pdsdeploymentsmd5Hash := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
@@ -213,12 +214,18 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 				Step(stepLog, func() {
 					for _, pdsDeployment := range deps {
 						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
-						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
 						log.FailOnError(err, "Error while Running workloads")
 						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
 						pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 					}
 				})
+
+				defer func() {
+					err := CleanupWorkloadDeployments(wlDeploymentsToBeCleanedinSrc, true)
+					log.FailOnError(err, "Failed while deleting the workload deployment")
+				}()
+
 				stepLog = "Perform adhoc backup and validate them"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -241,6 +248,8 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 					}
 					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					err = SetDestinationKubeConfig()
+					log.FailOnError(err, "failed while setting dest cluster path")
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
 						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
@@ -256,21 +265,20 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 					log.InfoD(stepLog)
 					for _, pdsDeployment := range deploymentsToBeCleaned {
 						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
-						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+						wlDeploymentsToBeCleanedinDest = append(wlDeploymentsToBeCleanedinDest, wlDep)
 						log.FailOnError(err, "Error while Running workloads")
 						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
 						restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 					}
 
-					defer func() {
-						for _, wlDep := range wlDeploymentsToBeCleaned {
-							err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-							log.FailOnError(err, "Failed while deleting the workload deployment")
-						}
-					}()
-
 					dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
 						true, "Validate md5 hash after restore")
+
+					log.InfoD("Cleaning up workload deployments")
+					for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
 				})
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)

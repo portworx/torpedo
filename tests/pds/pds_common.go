@@ -263,6 +263,21 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 	return pvcCapacity, err
 }
 
+func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
+	if isSrc {
+		SetSourceKubeConfig()
+	} else {
+		SetDestinationKubeConfig()
+	}
+	for _, wlDep := range wlDeploymentsToBeCleaned {
+		err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // CleanupDeployments used to clean up deployment from pds and all other stale resources in the cluster.
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 	for _, dsInstance := range dsInstances {
