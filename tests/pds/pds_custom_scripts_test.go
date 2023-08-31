@@ -27,6 +27,9 @@ var _ = Describe("{TestDestKubeconfig}", func() {
 			log.FailOnError(err, "failed while getting dest cluster id")
 			log.Infof("Destination Cluster ID %s", destClusterID)
 
+			err = DumpKubeConfigs("kubeconfigs")
+			log.FailOnError(err, "failed while dumping the kubeconfigs")
+
 			src_ctx, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
 			src_target := tc.NewTargetCluster(src_ctx)
