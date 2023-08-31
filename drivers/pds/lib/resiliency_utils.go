@@ -272,8 +272,9 @@ func RestartPXDuringDSScaleUp(ns string, deployment *pds.ModelsDeployment) error
 	return testError
 }
 
+// RestoreAndValidateConfiguration triggers restore of DS and validates configuration post restore
 func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment) (bool, error) {
-
+	//Get Cluster context and create restoreClient obj
 	ctx := GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
 	restoreTarget := tc.NewTargetCluster(ctx)
 	restoreClient := restoreBkp.RestoreClient{
@@ -286,7 +287,8 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 	dsEntity = restoreBkp.DSEntity{
 		Deployment: deployment,
 	}
-	
+
+	//List all backups created on the deployment and trigger restore
 	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(restoreClient.ProjectId, deployment.GetId())
 	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 	for _, backupJob := range backupJobs {
@@ -304,9 +306,7 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 			CapturedErrors <- error
 			return false, error
 		}
-		log.Debugf("restoredDeployment ********* is : %v", restoredDeployment)
-		log.InfoD("Restored successfully")
-		//log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 	}
 
 	return true, nil
