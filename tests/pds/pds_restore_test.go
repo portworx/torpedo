@@ -257,13 +257,14 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+						restoredDeployments = append(restoredDeployments, restoredDeployment)
 						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
 				})
 				stepLog = "Validate md5hash for the restored deployments"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					for _, pdsDeployment := range deploymentsToBeCleaned {
+					for _, pdsDeployment := range restoredDeployments {
 						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
 						wlDeploymentsToBeCleanedinDest = append(wlDeploymentsToBeCleanedinDest, wlDep)
 						log.FailOnError(err, "Error while Running workloads")
