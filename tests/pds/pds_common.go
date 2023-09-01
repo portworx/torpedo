@@ -217,6 +217,22 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	return err
 }
 
+// CleanupWorkloadDeployments will clean up the wldeployment based on the kubeconfigs
+func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
+	if isSrc {
+		SetSourceKubeConfig()
+	} else {
+		SetDestinationKubeConfig()
+	}
+	for _, wlDep := range wlDeploymentsToBeCleaned {
+		err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Increase PVC by 1 gb
 func IncreasePVCby1Gig(context []*scheduler.Context) error {
 	log.Info("Resizing of the PVC begins")
