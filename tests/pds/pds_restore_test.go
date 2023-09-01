@@ -160,7 +160,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(4)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore to different cluster.", pdsLabels, 0)
+		StartTorpedoTest("PerformRestoreToDifferentCluster", "Perform multiple restore to different cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", bkpTargetName), deploymentTargetID)
