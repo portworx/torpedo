@@ -280,7 +280,6 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		log.Infof("Delete Deployment %v ", dsInstance)
 		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
-		log.FailOnError(err, "Error while deleting data services")
 		if err != nil {
 			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())
 			err = DeleteAllDsBackupEntities(dsInstance)
@@ -289,6 +288,7 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 			resp, err = pdslib.DeleteDeployment(dsInstance.GetId())
 			log.FailOnError(err, "Error while deleting deployment.")
 		}
+		log.FailOnError(err, "Error while deleting data services")
 		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 
 		log.InfoD("Getting all PV and associated PVCs and deleting them")
