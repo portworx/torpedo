@@ -3,11 +3,12 @@ package lib
 import (
 	"errors"
 	"fmt"
-	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
@@ -275,7 +276,8 @@ func RestartPXDuringDSScaleUp(ns string, deployment *pds.ModelsDeployment) error
 // RestoreAndValidateConfiguration triggers restore of DS and validates configuration post restore
 func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment) (bool, error) {
 	//Get Cluster context and create restoreClient obj
-	ctx := GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+	ctx, err := tests.GetSourceClusterConfigPath()
+	log.FailOnError(err, "failed while getting src cluster path")
 	restoreTarget := tc.NewTargetCluster(ctx)
 	restoreClient := restoreBkp.RestoreClient{
 		TenantId:             deployment.GetTenantId(),

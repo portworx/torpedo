@@ -1157,7 +1157,8 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 			log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
 			err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 			log.FailOnError(err, "Failed while performing adhoc backup")
-			ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+			ctx, err := GetSourceClusterConfigPath()
+			log.FailOnError(err, "failed while getting src cluster path")
 			restoreTarget := tc.NewTargetCluster(ctx)
 			restoreClient := restoreBkp.RestoreClient{
 				TenantId:             tenantID,
