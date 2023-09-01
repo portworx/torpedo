@@ -2473,7 +2473,7 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 		log.Infof("Validating context: %v", ctx.App.Key)
 		ValidateContext(ctx, &errorChan)
 		for err := range errorChan {
-			log.Infof("Error: %v", err)
+			log.FailOnError(err, "Error: %v")
 		}
 	}
 	resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
