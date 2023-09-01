@@ -70,6 +70,10 @@ func (backupCredential *BackupCredential) CreateAzureBackupCredential(tenantID s
 
 }
 
+func stringPtr(i string) *string {
+	return &i
+}
+
 // CreateS3BackupCredential func
 func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID string, name string, accessKey string, endpoint string, secretKey string) (*pds.ModelsBackupCredentials, error) {
 	backupClient := backupCredential.apiClient.BackupCredentialsApi
@@ -90,7 +94,13 @@ func (backupCredential *BackupCredential) CreateS3BackupCredential(tenantID stri
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
+	log.Debugf("tenant id %s", tenantID)
+	log.Debugf("create request access key %+v", *createRequest.Credentials.S3.AccessKey)
+	log.Debugf("create request secret key %+v", *createRequest.Credentials.S3.SecretKey)
+	log.Debugf("create request endpoint %+v", *createRequest.Credentials.S3.Endpoint)
+
 	backupModel, res, err := backupClient.ApiTenantsIdBackupCredentialsPost(ctx, tenantID).Body(createRequest).Execute()
+	log.Debugf("body %+v", res)
 
 	if err != nil {
 		return nil, fmt.Errorf("error when called `ApiTenantsIdBackupCredentialsPost` to create credentials - %v", err)

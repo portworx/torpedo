@@ -653,6 +653,8 @@ spec:
       value: "${PDS_CLIENT_SECRET}"
     - name: PDS_CLIENT_ID
       value: "${PDS_CLIENT_ID}"
+    - name: DESTINATION_TARGET_KUBECONFIG
+      value: "${DESTINATION_TARGET_KUBECONFIG}"
     - name: PDS_PARAM_CM
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL

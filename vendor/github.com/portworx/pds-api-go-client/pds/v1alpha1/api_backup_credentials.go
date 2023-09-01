@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"fmt"
 )
 
 // Linger please
@@ -681,6 +682,10 @@ type ApiApiTenantsIdBackupCredentialsPostRequest struct {
 // Request body containing the backup credentials config
 func (r ApiApiTenantsIdBackupCredentialsPostRequest) Body(body ControllersCreateBackupCredentialsRequest) ApiApiTenantsIdBackupCredentialsPostRequest {
 	r.body = &body
+	fmt.Println("printing accesskey inside the client ", *r.body.Credentials.S3.AccessKey)
+	fmt.Println("printing secretkey inside the client ", *r.body.Credentials.S3.SecretKey)
+	fmt.Println("printing endpoint inside the client ", *r.body.Credentials.S3.Endpoint)
+	fmt.Println("printing name inside the client", *r.body.Name)
 	return r
 }
 
@@ -714,6 +719,12 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPostExecute(r
 		formFiles            []formFile
 		localVarReturnValue  *ModelsBackupCredentials
 	)
+
+	fmt.Println("printing accesskey inside the exec client ", *r.body.Credentials.S3.AccessKey)
+	fmt.Println("printing secretkey inside the  exec client ", *r.body.Credentials.S3.SecretKey)
+	fmt.Println("printing endpoint inside the  exec client ", *r.body.Credentials.S3.Endpoint)
+	fmt.Println("printing name inside the exec client", *r.body.Name)
+
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "BackupCredentialsApiService.ApiTenantsIdBackupCredentialsPost")
 	if err != nil {
@@ -764,16 +775,22 @@ func (a *BackupCredentialsApiService) ApiTenantsIdBackupCredentialsPostExecute(r
 		}
 	}
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	fmt.Println("err response ", err)
+	fmt.Println("req response ", req)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
 
 	localVarHTTPResponse, err := a.client.callAPI(req)
+	fmt.Println("localVarHTTPResponse", localVarHTTPResponse)
+	fmt.Println("localVarReturnValue", localVarReturnValue)
+	fmt.Println("err:", err)
 	if err != nil || localVarHTTPResponse == nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	localVarBody, err := ioutil.ReadAll(localVarHTTPResponse.Body)
+	fmt.Println("localVarBody", localVarBody)
 	localVarHTTPResponse.Body.Close()
 	localVarHTTPResponse.Body = ioutil.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
