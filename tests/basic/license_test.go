@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -744,33 +745,43 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 })
 
 // Validate on IBM cloud Marketplace Test License or production License
-var _ = Describe("{ValidateLicense}", func() {
-	var testrailID = 82741
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82741
-	var runID int
+var _ = Describe("{LicenseValidation}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ValidateLicense", "Validate PX License Installed using catalog", nil, testrailID)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("LicenseValidation", "Validate PX License Activated using catalog", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
-	Step("Get SKU and compare with IBM cloud test license", func() {
-		summary, err := Inst().V.GetLicenseSummary()
-		Expect(err).NotTo(HaveOccurred(),
-			fmt.Sprintf("Failed to get license SKU. Error: [%v]", err))
+	stepLog := "Get SKU and compare with IBM cloud test license"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
 
-		Expect(summary.SKU).To(Equal(ibmTestLicenseSKU),
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("LicenseValidation-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		summary, err := Inst().V.GetLicenseSummary()
+		log.FailOnError(err, "Failed to get license SKU")
+		
+		// Get SKU and compare with IBM cloud test license
+		stepLog = "Get SKU and compare with IBM cloud license type"
+		Step(stepLog, func() {
+			log.InfoD("validate IBM cloud test license")
+			Expect(summary.SKU).To(Equal(ibmTestLicenseSKU),
 			fmt.Sprintf("SKU did not match: [%v]", ibmTestLicenseSKU))
 
-		Step("Compare PX-IBM-Test License features vs activated license", func() {
-			for _, feature := range summary.Features {
-				// if the feature limit exists in the hardcoded license limits we test it.
-				if _, ok := ibmLicense[Label(feature.Name)]; ok {
-					Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
-						fmt.Sprintf("%v did not match: [%v]", feature.Quantity, ibmLicense[Label(feature.Name)]))
+			Step("Compare PX-IBM-Test License features vs activated license", func() {
+				log.InfoD("Compare with IBM cloud test license features")
+				for _, feature := range summary.Features {
+					if _, ok := ibmLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, ibmLicense[Label(feature.Name)]))
 				}
 			}
 		})
+		})	
 	})
 
 	JustAfterEach(func() {
@@ -778,6 +789,8 @@ var _ = Describe("{ValidateLicense}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+
 // SleepWithContext will wait for the timer duration to expire, or the context
 // is canceled. Which ever happens first. If the context is canceled the Context's
 // error will be returned.
