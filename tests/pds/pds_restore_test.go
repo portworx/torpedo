@@ -100,8 +100,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				stepLog = "Perform restore for the backup jobs."
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					ctx, err := GetDestinationClusterConfigPath()
-					log.FailOnError(err, "failed while getting dest cluster path")
+					ctx, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "failed while getting src cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
