@@ -33,6 +33,7 @@ type DSEntity struct {
 	// TODO Add datahash for data validation
 }
 
+// TriggerAndValidateRestore will trigger restore and validate if flag is true
 func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string, namespace string, bkpDsEntity DSEntity, isRestoreInSameNS, validate bool) (*pds.ModelsRestore, error) {
 	var (
 		bkpJob                 *pds.ModelsBackupJob
@@ -77,6 +78,7 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 	return restoredModel, nil
 }
 
+// WaitForRestoreAndValidate will wait for the restore to complete and validate its configuration
 func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds.ModelsRestore, bkpDsEntity DSEntity, nsName string) error {
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
 		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())

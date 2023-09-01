@@ -287,7 +287,6 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 	dsEntity = restoreBkp.DSEntity{
 		Deployment: deployment,
 	}
-
 	//List all backups created on the deployment and trigger restore
 	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(restoreClient.ProjectId, deployment.GetId())
 	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
@@ -308,7 +307,6 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 		}
 		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 	}
-
 	return true, nil
 }
 

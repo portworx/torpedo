@@ -2493,6 +2493,7 @@ func getStoragePool(poolIDToResize string) *api.StoragePool {
 	return pool
 }
 
+// pickPoolToResize Picks any random px-pool to resize if I/0s are not running
 func pickPoolToResize(contexts []*scheduler.Context) string {
 	poolWithIO, err := GetPoolIDWithIOs(contexts)
 	if poolWithIO == "" || err != nil {
@@ -2503,15 +2504,17 @@ func pickPoolToResize(contexts []*scheduler.Context) string {
 	poolIDToResize := poolIDsInUseByTestingApp[0]
 	return poolIDToResize
 }
+
+// roundUpValue func to round up fetched values to 10
 func roundUpValue(toRound uint64) uint64 {
 	if toRound%10 == 0 {
 		return toRound
 	}
 	rs := (10 - toRound%10) + toRound
 	return rs
-
 }
 
+// poolResizeIsInProgress checks the status of PX-Pool resize
 func poolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
 	if poolToBeResized.LastOperation != nil {
 		f := func() (interface{}, bool, error) {
@@ -2557,10 +2560,10 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	return true, nil
 }
 
+// waitForPoolToBeResized will wait for PX-Pool resize and report the status post expansion
 func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
 	currentLastMsg := ""
 	f := func() (interface{}, bool, error) {

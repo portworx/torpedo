@@ -1072,7 +1072,6 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
-
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
 			LoadGenDepName: params.LoadGen.LoadGenDepName,
@@ -1102,7 +1101,6 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 						Deployment: deployment,
 					}
 				})
-
 			}
 		})
 		defer func() {
@@ -1122,7 +1120,6 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 				log.FailOnError(err, "Error while Running workloads")
 				log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
 				pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-
 			}
 		})
 		Step("Perform adhoc backup and validate them", func() {
@@ -1189,14 +1186,12 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 				log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
 				restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 			}
-
 			defer func() {
 				for _, wlDep := range wlDeploymentsToBeCleaned {
 					err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
 					log.FailOnError(err, "Failed while deleting the workload deployment")
 				}
 			}()
-
 			dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
 				true, "Validate md5 hash after restore")
 		})
