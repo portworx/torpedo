@@ -1134,7 +1134,7 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 					Method: func() error {
 						ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 						log.Infof("Created scheduler context", ctx)
-						log.FailOnError(err, "Unable to create scheduler context")
+						log.FailOnError(err, "Unable to create the scheduler context")
 						return pdslib.ExpandAndValidatePxPool(ctx)
 					},
 				}

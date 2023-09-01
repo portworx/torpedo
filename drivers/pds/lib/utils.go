@@ -24,8 +24,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 
-	state "net/http"
-
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -38,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	state "net/http"
 )
 
 type PDS_Health_Status string
@@ -172,6 +171,7 @@ const (
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Degraded"
 	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Healthy"
 
+	errorChannelSize             = 50
 	defaultCommandRetry          = 5 * time.Second
 	defaultCommandTimeout        = 1 * time.Minute
 	storageTemplateName          = "QaDefault"
@@ -2468,7 +2468,14 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	if resizeErr != nil {
 		log.FailOnError(resizeErr, fmt.Sprintf("Failed to resize pool with ID-  %s", poolIDToResize))
 	}
-	ValidateApplications(context)
+	errorChan := make(chan error, errorChannelSize)
+	for _, ctx := range context {
+		log.Infof("Validating context: %v", ctx.App.Key)
+		ValidateContext(ctx, &errorChan)
+		for err := range errorChan {
+			log.Infof("Error: %v", err)
+		}
+	}
 	resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
 	log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 	newPoolSize := resizedPool.TotalSize / units.GiB
