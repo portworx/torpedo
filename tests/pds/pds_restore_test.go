@@ -957,6 +957,7 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 					log.FailOnError(err, "Failed while performing adhoc backup")
 				})
+				var wg sync.WaitGroup
 				stepLog = "Perform multiple backups and restores simultaneously."
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -966,7 +967,8 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 
 					log.Info("Create restore client.")
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed while getting dest cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
@@ -977,21 +979,21 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 					}
 
 					log.Info("Triggering backup")
-					var wg sync.WaitGroup
-					defer wg.Wait()
+					wg.Add(numberOfIterations)
 					for i := 0; i < numberOfIterations; i++ {
-						wg.Add(1)
 						go func() {
+							defer wg.Done()
 							defer GinkgoRecover()
 							log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
 							err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 							log.FailOnError(err, "Failed while performing adhoc backup")
 						}()
 					}
+					wg.Add(numberOfIterations)
 					for i := 0; i < numberOfIterations; i++ {
-						wg.Add(1)
 						log.Info("Triggering restore")
 						go func() {
+							defer wg.Done()
 							defer GinkgoRecover()
 							for _, backupJob := range backupJobs {
 								log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
@@ -1005,6 +1007,9 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 						}()
 					}
 				})
+
+				wg.Wait()
+				log.Info("Multiple adhoc backup and validation succeeded")
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
@@ -1077,7 +1082,8 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 				log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 
 				log.Info("Create restore client.")
-				ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+				ctx, err := GetDestinationClusterConfigPath()
+				log.FailOnError(err, "failed while getting dest cluster path")
 				restoreTarget := tc.NewTargetCluster(ctx)
 				restoreClient := restoreBkp.RestoreClient{
 					TenantId:             tenantID,
@@ -1089,19 +1095,21 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 				log.Info("Triggering backup")
 				var wg sync.WaitGroup
+				wg.Add(numberOfIterations)
 				for i := 0; i < numberOfIterations; i++ {
-					wg.Add(1)
 					go func() {
+						defer wg.Done()
 						defer GinkgoRecover()
 						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
 						err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 					}()
 				}
+				wg.Add(numberOfIterations)
 				for i := 0; i < numberOfIterations; i++ {
-					wg.Add(1)
 					log.Info("Triggering restore")
 					go func() {
+						defer wg.Done()
 						defer GinkgoRecover()
 						for _, backupJob := range backupJobs {
 							log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())

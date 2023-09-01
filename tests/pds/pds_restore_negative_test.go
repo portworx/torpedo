@@ -26,7 +26,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
-        ctx, err = GetDestinationClusterConfigPath()
+		ctx, err = GetDestinationClusterConfigPath()
 		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
@@ -68,9 +68,10 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 
 				stepLog = "Kill set of pods for HA."
 				Step(stepLog, func() {
+					log.InfoD(stepLog)
 					dbMaster, isNativelyDistributed := GetDbMasterNode(nsName, ds.Name, deployment, sourceTarget)
 					log.FailOnError(err, "Failed while fetching db master node.")
-					isNativelyDistributed = false
+					log.InfoD("dbMaster Node is %s", dbMaster)
 					if !isNativelyDistributed {
 						err = sourceTarget.DeleteK8sPods(dbMaster, nsName)
 						log.FailOnError(err, "Failed while deleting db master pod.")
@@ -152,7 +153,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
-        ctx, err = GetDestinationClusterConfigPath()
+		ctx, err = GetDestinationClusterConfigPath()
 		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
@@ -193,21 +194,25 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 				})
 
 				var wg sync.WaitGroup
-				wg.Add(1)
+				wg.Add(2)
 				go func() {
+					defer wg.Done()
 					defer GinkgoRecover()
+
 					log.InfoD("Delete backup controller manager pod")
-					sourceTarget.DeleteK8sPods(pdslib.PdsBackupControllerPod, "pds-system")
-				}()
+					pdsBackupControllerPod := pdslib.GetPDSPods(pdslib.PdsBackupControllerPod, "pds-system")
+					err = sourceTarget.DeleteK8sPods(pdsBackupControllerPod.Name, "pds-system")
+					log.FailOnError(err, "Failed While deleting backup controller manager pod.")
 
-				wg.Add(1)
-				go func() {
-					defer GinkgoRecover()
 					log.InfoD("Delete target controller manager pod")
-					sourceTarget.DeleteK8sPods(pdslib.PdsTargetControllerPod, "pds-system")
+					pdsTargetControllerPod := pdslib.GetPDSPods(pdslib.PdsTargetControllerPod, "pds-system")
+					err = sourceTarget.DeleteK8sPods(pdsTargetControllerPod.Name, "pds-system")
+					log.FailOnError(err, "Failed While deleting backup target controller pod.")
 				}()
 
 				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
 					log.InfoD("Perform restore for the backup jobs.")
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
@@ -244,7 +249,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		defer EndTorpedoTest()
 		err := bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
-	}
+	})
 })
 
 var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
@@ -259,7 +264,7 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
-        ctx, err = GetDestinationClusterConfigPath()
+		ctx, err = GetDestinationClusterConfigPath()
 		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
@@ -300,13 +305,16 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 				})
 
 				var wg sync.WaitGroup
-				wg.Add(1)
+				wg.Add(2)
 				go func() {
+					defer wg.Done()
 					defer GinkgoRecover()
 					// TODO: Add backup job deletion for in parallel backup delete and restore operation.
 				}()
 
 				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
 					log.InfoD("Perform restore for the backup jobs.")
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,

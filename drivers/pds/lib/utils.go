@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 
 	"github.com/portworx/torpedo/pkg/log"
 
@@ -2196,13 +2197,13 @@ func DeleteK8sPDSNamespace(nname string) error {
 	return err
 }
 
-// GetPDSAgentPods returns the pds agent pod
-func GetPDSAgentPods(pdsNamespace string) corev1.Pod {
+// GetPDSPods returns Name of the pds pod
+func GetPDSPods(podName string, pdsNamespace string) corev1.Pod {
 	log.InfoD("Get agent pod from %v namespace", pdsNamespace)
 	podList, err := GetPods(pdsNamespace)
 	log.FailOnError(err, "Error while getting pods")
 	for _, pod := range podList.Items {
-		if strings.Contains(pod.Name, "pds-agent") {
+		if strings.Contains(pod.Name, podName) {
 			log.Infof("%v", pod.Name)
 			pdsAgentpod = pod
 			break
