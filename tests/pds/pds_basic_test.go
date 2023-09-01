@@ -3,6 +3,7 @@ package tests
 import (
 	"os"
 	"testing"
+	"time"
 
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/api"
@@ -41,6 +42,9 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	log.InfoD("=============== Sleeping for 3 Days now ===============")
+	time.Sleep(72 * time.Hour)
+
 	steplog := "Get prerequisite params to run the pds tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
