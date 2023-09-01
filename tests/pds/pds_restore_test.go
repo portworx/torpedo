@@ -103,7 +103,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				stepLog = "Perform restore for the backup jobs."
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "failed while getting src cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
@@ -228,7 +229,8 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 				stepLog = "Perform restore for the backup jobs."
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "failed while getting src cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
@@ -319,7 +321,8 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 						go func() {
 							defer wg.Done()
 							defer GinkgoRecover()
-							ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+							ctx, err := GetSourceClusterConfigPath()
+							log.FailOnError(err, "failed while getting src cluster path")
 							restoreTarget := tc.NewTargetCluster(ctx)
 							restoreClient := restoreBkp.RestoreClient{
 								TenantId:             tenantID,
@@ -428,7 +431,8 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 					backupJobs, err := components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 					log.Info("Create restore client.")
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "failed while getting src cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
@@ -499,7 +503,8 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 		steplog := "Install older helm verison"
 		Step(steplog, func() {
 			log.InfoD(steplog)
-			ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+			ctx, err := GetSourceClusterConfigPath()
+			log.FailOnError(err, "failed while getting src cluster path")
 			target := tc.NewTargetCluster(ctx)
 			isOldversion, err := target.IsLatestPDSHelm(params.PDSHelmVersions.PreviousHelmVersion)
 			if !isOldversion {
@@ -576,7 +581,8 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 		steplog = "Perform restore for the backup jobs."
 		Step(steplog, func() {
 			log.InfoD(steplog)
-			ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+			ctx, err := GetSourceClusterConfigPath()
+			log.FailOnError(err, "failed while getting src cluster path")
 			restoreTarget := tc.NewTargetCluster(ctx)
 			for _, pdsDeployment := range deps {
 				restoreClient := restoreBkp.RestoreClient{
@@ -688,7 +694,8 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				stepLog = "Perform Restore before PVC Resize"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "failed while getting src cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,

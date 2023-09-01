@@ -23,9 +23,11 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
-		ctx = pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+		log.FailOnError(err, "failed while getting src cluster path")
+        ctx, err = GetDestinationClusterConfigPath()
+		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
 
@@ -147,9 +149,11 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
-		ctx = pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+		log.FailOnError(err, "failed while getting src cluster path")
+        ctx, err = GetDestinationClusterConfigPath()
+		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
 
@@ -240,7 +244,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		defer EndTorpedoTest()
 		err := bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
-	})
+	}
 })
 
 var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
@@ -252,9 +256,11 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		ctx := pdslib.GetAndExpectStringEnvVar("TARGET_KUBECONFIG")
+		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
-		ctx = pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+		log.FailOnError(err, "failed while getting src cluster path")
+        ctx, err = GetDestinationClusterConfigPath()
+		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
 
