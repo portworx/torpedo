@@ -76,8 +76,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					deps = append(deps, deployment)
 					log.FailOnError(err, "Error while deploying data services")
 
-					// TODO: Add workload generation
-
 					dsEntity = restoreBkp.DSEntity{
 						Deployment: deployment,
 					}
@@ -102,7 +100,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				stepLog = "Perform restore for the backup jobs."
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed while getting dest cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
