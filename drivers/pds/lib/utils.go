@@ -2440,11 +2440,11 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 // ExpandAndValidatePxPool will pick a random px-pool and expand its size
 func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	log.InfoD("Entering into PX-POOL Expansion...")
-	poolIDToResize := pickPoolToResize(context)
-	poolToBeResized := getStoragePool(poolIDToResize)
+	poolIDToResize := PickPoolToResize(context)
+	poolToBeResized := GetStoragePool(poolIDToResize)
 	log.InfoD("Pool to be resized is %v", poolToBeResized)
 	log.InfoD("Verify that pool resize is not in progress")
-	if val, err := poolResizeIsInProgress(poolToBeResized); val {
+	if val, err := PoolResizeIsInProgress(poolToBeResized); val {
 		// wait until resize is completed and get the updated pool again
 		poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
 		log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
@@ -2455,7 +2455,7 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	var expectedSizeWithJournal uint64
 	log.InfoD("Calculate expected pool size and trigger pool resize")
 	expectedSize = poolToBeResized.TotalSize * 2 / units.GiB
-	expectedSize = roundUpValue(expectedSize)
+	expectedSize = RoundUpValue(expectedSize)
 	isjournal, err := IsJournalEnabled()
 	log.FailOnError(err, "Failed to check is Journal enabled")
 	expectedSizeWithJournal = expectedSize
@@ -2464,7 +2464,7 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	}
 	log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
 	err = tests.Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-	resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+	resizeErr := WaitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
 	if resizeErr != nil {
 		log.FailOnError(resizeErr, fmt.Sprintf("Failed to resize pool with ID-  %s", poolIDToResize))
 	}
@@ -2494,14 +2494,14 @@ func ExpandAndValidatePxPool(context []*scheduler.Context) error {
 	return nil
 }
 
-func getStoragePool(poolIDToResize string) *api.StoragePool {
+func GetStoragePool(poolIDToResize string) *api.StoragePool {
 	pool, err := GetStoragePoolByUUID(poolIDToResize)
 	log.FailOnError(err, "Failed to get pool using UUID %s", poolIDToResize)
 	return pool
 }
 
-// pickPoolToResize Picks any random px-pool to resize if I/0s are not running
-func pickPoolToResize(contexts []*scheduler.Context) string {
+// PickPoolToResize Picks any random px-pool to resize if I/0s are not running
+func PickPoolToResize(contexts []*scheduler.Context) string {
 	poolWithIO, err := GetPoolIDWithIOs(contexts)
 	if poolWithIO == "" || err != nil {
 		log.Warnf("No pool with IO found, picking a random pool in use to resize")
@@ -2512,8 +2512,8 @@ func pickPoolToResize(contexts []*scheduler.Context) string {
 	return poolIDToResize
 }
 
-// roundUpValue func to round up fetched values to 10
-func roundUpValue(toRound uint64) uint64 {
+// RoundUpValue func to round up fetched values to 10
+func RoundUpValue(toRound uint64) uint64 {
 	if toRound%10 == 0 {
 		return toRound
 	}
@@ -2521,8 +2521,8 @@ func roundUpValue(toRound uint64) uint64 {
 	return rs
 }
 
-// poolResizeIsInProgress checks the status of PX-Pool resize
-func poolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
+// PoolResizeIsInProgress checks the status of PX-Pool resize
+func PoolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
 	if poolToBeResized.LastOperation != nil {
 		f := func() (interface{}, bool, error) {
 			pools, err := tests.Inst().V.ListStoragePools(metav1.LabelSelector{})
@@ -2570,8 +2570,8 @@ func poolResizeIsInProgress(poolToBeResized *api.StoragePool) (bool, error) {
 	return true, nil
 }
 
-// waitForPoolToBeResized will wait for PX-Pool resize and report the status post expansion
-func waitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
+// WaitForPoolToBeResized will wait for PX-Pool resize and report the status post expansion
+func WaitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJournalEnabled bool) error {
 	currentLastMsg := ""
 	f := func() (interface{}, bool, error) {
 		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
