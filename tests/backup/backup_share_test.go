@@ -4865,10 +4865,10 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 	backupNameMap := make(map[string]string)
 	scheduleNameMap := make(map[string]string)
 	restoreNameMap := make(map[string]string)
-	userBackupNamesMap := make(map[string][]string)
-	userBackupSchedulesMap := make(map[string][]string)
-	userRestoresMap := make(map[string][]string)
-	backupDriver := Inst().Backup
+	//userBackupNamesMap := make(map[string][]string)
+	//userBackupSchedulesMap := make(map[string][]string)
+	//userRestoresMap := make(map[string][]string)
+	//backupDriver := Inst().Backup
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteBackupOfUserNonSharedRBAC",
@@ -5226,242 +5226,245 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 			}
 			wg.Wait()
 		})
+		/*
+			log.InfoD("Deletion of all non-rbac (backup,restore,schedule,cluster) of users when user is present in keycloak ")
+			Step(fmt.Sprintf("Listing and Deletion of backup of non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[:2] {
+					log.InfoD(fmt.Sprintf("Verifying listing backups of non-admin user [%s] from px-admin user", nonAdminUserName))
+					userBackupNames, err := GetAllBackupsOfUsersFromAdmin([]string{userIdMap[nonAdminUserName]}, adminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backups [%v] of user [%s] from px-admin user", userBackupNames, nonAdminUserName))
+					userBackupNamesMap[nonAdminUserName] = userBackupNames
+					log.Infof(fmt.Sprintf("The list of user [%s] backups from px-admin %v", nonAdminUserName, userBackupNamesMap[nonAdminUserName]))
+				}
+				for _, nonAdminUserName := range userNames[:2] {
+					ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
+					log.FailOnError(err, "Fetching non admin ctx")
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, backupName := range userBackupNamesMap[nonAdminUserName] {
+							wg.Add(1)
+							go func(backupName string) {
+								defer GinkgoRecover()
+								defer wg.Done()
+								log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
+								backupUID, _ := backupDriver.GetBackupUID(ctx, backupName, orgID)
+								_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+								log.FailOnError(err, "Failed to delete backup - %s", backupName)
+								err = DeleteBackupAndWait(backupName, ctx)
+								log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+							}(backupName)
+						}
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
 
-		log.InfoD("Deletion of all non-rbac (backup,restore,schedule,cluster) of users when user is present in keycloak ")
-		Step(fmt.Sprintf("Listing and Deletion of backup of non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[:2] {
-				log.InfoD(fmt.Sprintf("Verifying listing backups of non-admin user [%s] from px-admin user", nonAdminUserName))
-				userBackupNames, err := GetAllBackupsOfUsersFromAdmin([]string{userIdMap[nonAdminUserName]}, adminCtx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backups [%v] of user [%s] from px-admin user", userBackupNames, nonAdminUserName))
-				userBackupNamesMap[nonAdminUserName] = userBackupNames
-				log.Infof(fmt.Sprintf("The list of user [%s] backups from px-admin %v", nonAdminUserName, userBackupNamesMap[nonAdminUserName]))
-			}
-			for _, nonAdminUserName := range userNames[:2] {
-				ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
-				log.FailOnError(err, "Fetching non admin ctx")
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for _, backupName := range userBackupNamesMap[nonAdminUserName] {
-						wg.Add(1)
-						go func(backupName string) {
-							defer GinkgoRecover()
-							defer wg.Done()
-							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
-							backupUID, _ := backupDriver.GetBackupUID(ctx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
-							log.FailOnError(err, "Failed to delete backup - %s", backupName)
-							err = DeleteBackupAndWait(backupName, ctx)
-							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
-						}(backupName)
-					}
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
+			Step(fmt.Sprintf("Deletion of backup schedules of non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[:2] {
+					log.InfoD(fmt.Sprintf("Verifying listing of backup schedule of non-admin user [%s] from px-admin user", nonAdminUserName))
+					userBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUserName, commonPassword)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backup schedules of user from px-admin user"))
+					userBackupSchedulesMap[nonAdminUserName] = userBackupSchedules
+					log.Infof(fmt.Sprintf("the list of user [%s ]backup schedules from px-admin user %v", nonAdminUserName, userBackupSchedulesMap[nonAdminUserName]))
+				}
+				for _, nonAdminUserName := range userNames[:2] {
+					ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
+					log.FailOnError(err, "Fetching non admin ctx")
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, backupScheduleName := range userBackupSchedulesMap[nonAdminUserName] {
+							log.InfoD(fmt.Sprintf("Verifying deletion of backup schedule [%s] of non-admin user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
+							backupScheduleUid, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+							log.FailOnError(err, fmt.Sprintf("Fetching schedule uid for shedule [%s]", backupScheduleName))
+							err = DeleteScheduleWithClusterRef(backupScheduleName, backupScheduleUid, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backup scheudle [%s] of user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
+						}
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
 
-		Step(fmt.Sprintf("Deletion of backup schedules of non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[:2] {
-				log.InfoD(fmt.Sprintf("Verifying listing of backup schedule of non-admin user [%s] from px-admin user", nonAdminUserName))
-				userBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUserName, commonPassword)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backup schedules of user from px-admin user"))
-				userBackupSchedulesMap[nonAdminUserName] = userBackupSchedules
-				log.Infof(fmt.Sprintf("the list of user [%s ]backup schedules from px-admin user %v", nonAdminUserName, userBackupSchedulesMap[nonAdminUserName]))
-			}
-			for _, nonAdminUserName := range userNames[:2] {
-				ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
-				log.FailOnError(err, "Fetching non admin ctx")
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for _, backupScheduleName := range userBackupSchedulesMap[nonAdminUserName] {
-						log.InfoD(fmt.Sprintf("Verifying deletion of backup schedule [%s] of non-admin user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
-						backupScheduleUid, err := GetScheduleUID(backupScheduleName, orgID, ctx)
-						log.FailOnError(err, fmt.Sprintf("Fetching schedule uid for shedule [%s]", backupScheduleName))
-						err = DeleteScheduleWithClusterRef(backupScheduleName, backupScheduleUid, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backup scheudle [%s] of user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
-					}
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
+			Step(fmt.Sprintf("Deletion of restores of non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[:2] {
+					log.InfoD(fmt.Sprintf("Verifying  listing of restores of non-admin user [%s] from px-admin user", nonAdminUserName))
+					userRestores, err := GetAllRestoresForUser(nonAdminUserName, commonPassword)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching restores of user ffrom px-admin user"))
+					userRestoresMap[nonAdminUserName] = userRestores
+					log.Infof(fmt.Sprintf("the list of user [%s] restores from px-admin user %v", nonAdminUserName, userRestoresMap[nonAdminUserName]))
+				}
+				for _, nonAdminUserName := range userNames[:2] {
+					ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
+					log.FailOnError(err, "Fetching non admin ctx")
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, restoreName := range userRestoresMap[nonAdminUserName] {
+							log.InfoD(fmt.Sprintf("Verifying  Deletion of restores [%s] of non-admin user [%s] from px-admin user", restoreName, nonAdminUserName))
+							restoreUid, _ := Inst().Backup.GetRestoreUID(ctx, restoreName, orgID)
+							err := DeleteRestoreWithUid(restoreName, restoreUid, orgID, adminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restore [%s] of user [%s] from px-admin user", restoreName, nonAdminUserName))
+						}
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
+			Step(fmt.Sprintf("Deletion of clusters of non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[:2] {
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						err = DeleteClusterWithUid(SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+						err = DeleteClusterWithUid(destinationClusterName, clusterUidMap[nonAdminUserName][destinationClusterName], orgID, adminCtx, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
 
-		Step(fmt.Sprintf("Deletion of restores of non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[:2] {
-				log.InfoD(fmt.Sprintf("Verifying  listing of restores of non-admin user [%s] from px-admin user", nonAdminUserName))
-				userRestores, err := GetAllRestoresForUser(nonAdminUserName, commonPassword)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching restores of user ffrom px-admin user"))
-				userRestoresMap[nonAdminUserName] = userRestores
-				log.Infof(fmt.Sprintf("the list of user [%s] restores from px-admin user %v", nonAdminUserName, userRestoresMap[nonAdminUserName]))
-			}
-			for _, nonAdminUserName := range userNames[:2] {
-				ctx, err := backup.GetNonAdminCtx(nonAdminUserName, commonPassword)
-				log.FailOnError(err, "Fetching non admin ctx")
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for _, restoreName := range userRestoresMap[nonAdminUserName] {
-						log.InfoD(fmt.Sprintf("Verifying  Deletion of restores [%s] of non-admin user [%s] from px-admin user", restoreName, nonAdminUserName))
-						restoreUid, _ := Inst().Backup.GetRestoreUID(ctx, restoreName, orgID)
-						err := DeleteRestoreWithUid(restoreName, restoreUid, orgID, adminCtx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restore [%s] of user [%s] from px-admin user", restoreName, nonAdminUserName))
-					}
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
-		Step(fmt.Sprintf("Deletion of clusters of non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[:2] {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err = DeleteClusterWithUid(SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx, true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-					err = DeleteClusterWithUid(destinationClusterName, clusterUidMap[nonAdminUserName][destinationClusterName], orgID, adminCtx, true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
+			log.InfoD("Deletion of all backups,restores,schedules,clusters of users when user is deleted from keycloak ")
+			Step(fmt.Sprintf("Verifying deletion of non-admin user from keycloak"), func() {
+				for _, nonAdminUserName := range userNames[2:4] {
+					log.InfoD(fmt.Sprintf("Verifying deletion of user  [%s] from keycloak", nonAdminUserName))
+					log.Infof(fmt.Sprintf("Fetching user [%s] backup schedules and restore before user deletion ", nonAdminUserName))
+					userBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUserName, commonPassword)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backup schedules of user from px-admin user"))
+					userBackupSchedulesMap[nonAdminUserName] = userBackupSchedules
+					log.Infof(fmt.Sprintf("the list of user [%s] backup schedules [%s] ", nonAdminUserName, userBackupSchedulesMap[nonAdminUserName]))
+					userRestores, err := GetAllRestoresForUser(nonAdminUserName, commonPassword)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching restores of user ffrom px-admin user"))
+					userRestoresMap[nonAdminUserName] = userRestores
+					log.Infof(fmt.Sprintf("the list of user [%s] restores [%s] ", nonAdminUserName, userRestoresMap[nonAdminUserName]))
+					err = backup.DeleteUser(nonAdminUserName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the deletion of the user [%s]", nonAdminUserName))
+				}
+			})
+			Step(fmt.Sprintf("Listing and deletion of backup of deleted non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[2:4] {
+					log.InfoD(fmt.Sprintf("Verifying listing backups of non-admin user [%s] from px-admin user", nonAdminUserName))
+					userBackupNames, err := GetAllBackupsOfUsersFromAdmin([]string{userIdMap[nonAdminUserName]}, adminCtx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backups [%v] of user [%s] from px-admin user", userBackupNames, nonAdminUserName))
+					userBackupNamesMap[nonAdminUserName] = userBackupNames
+					log.Infof(fmt.Sprintf("The list of user [%s] backups from px-admin  %v", nonAdminUserName, userBackupNamesMap[nonAdminUserName]))
+				}
+				for _, nonAdminUserName := range userNames[2:4] {
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, backupName := range userBackupNamesMap[nonAdminUserName] {
+							wg.Add(1)
+							go func(backupName string) {
+								defer GinkgoRecover()
+								defer wg.Done()
+								log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
+								backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
+								_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+								log.FailOnError(err, "Failed to delete backup - %s", backupName)
+								err = DeleteBackupAndWait(backupName, adminCtx)
+								log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+							}(backupName)
+						}
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
 
-		log.InfoD("Deletion of all backups,restores,schedules,clusters of users when user is deleted from keycloak ")
-		Step(fmt.Sprintf("Verifying deletion of non-admin user from keycloak"), func() {
-			for _, nonAdminUserName := range userNames[2:4] {
-				log.InfoD(fmt.Sprintf("Verifying deletion of user  [%s] from keycloak", nonAdminUserName))
-				log.Infof(fmt.Sprintf("Fetching user [%s] backup schedules and restore before user deletion ", nonAdminUserName))
-				userBackupSchedules, err := GetAllBackupSchedulesForUser(nonAdminUserName, commonPassword)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backup schedules of user from px-admin user"))
-				userBackupSchedulesMap[nonAdminUserName] = userBackupSchedules
-				log.Infof(fmt.Sprintf("the list of user [%s] backup schedules [%s] ", nonAdminUserName, userBackupSchedulesMap[nonAdminUserName]))
-				userRestores, err := GetAllRestoresForUser(nonAdminUserName, commonPassword)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching restores of user ffrom px-admin user"))
-				userRestoresMap[nonAdminUserName] = userRestores
-				log.Infof(fmt.Sprintf("the list of user [%s] restores [%s] ", nonAdminUserName, userRestoresMap[nonAdminUserName]))
-				err = backup.DeleteUser(nonAdminUserName)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the deletion of the user [%s]", nonAdminUserName))
-			}
-		})
-		Step(fmt.Sprintf("Listing and deletion of backup of deleted non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[2:4] {
-				log.InfoD(fmt.Sprintf("Verifying listing backups of non-admin user [%s] from px-admin user", nonAdminUserName))
-				userBackupNames, err := GetAllBackupsOfUsersFromAdmin([]string{userIdMap[nonAdminUserName]}, adminCtx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of fetching backups [%v] of user [%s] from px-admin user", userBackupNames, nonAdminUserName))
-				userBackupNamesMap[nonAdminUserName] = userBackupNames
-				log.Infof(fmt.Sprintf("The list of user [%s] backups from px-admin  %v", nonAdminUserName, userBackupNamesMap[nonAdminUserName]))
-			}
-			for _, nonAdminUserName := range userNames[2:4] {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for _, backupName := range userBackupNamesMap[nonAdminUserName] {
-						wg.Add(1)
-						go func(backupName string) {
-							defer GinkgoRecover()
-							defer wg.Done()
-							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
-							backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
-							log.FailOnError(err, "Failed to delete backup - %s", backupName)
-							err = DeleteBackupAndWait(backupName, adminCtx)
-							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
-						}(backupName)
-					}
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
+			Step(fmt.Sprintf("Verifying  deletion of backup schedule of deleted non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[2:4] {
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, backupScheduleName := range userBackupSchedulesMap[nonAdminUserName] {
+							log.InfoD(fmt.Sprintf("Verifying deletion of backup schedule [%s] of non-admin user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
+							backupScheduleUid, err := GetScheduleUID(backupScheduleName, orgID, adminCtx)
+							log.FailOnError(err, fmt.Sprintf("Fetching schedule uid for shedule [%s]", backupScheduleName))
+							err = DeleteScheduleWithClusterRef(backupScheduleName, backupScheduleUid, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backup scheudle [%s] of user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
+						}
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
 
-		Step(fmt.Sprintf("Verifying  deletion of backup schedule of deleted non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[2:4] {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for _, backupScheduleName := range userBackupSchedulesMap[nonAdminUserName] {
-						log.InfoD(fmt.Sprintf("Verifying deletion of backup schedule [%s] of non-admin user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
-						backupScheduleUid, err := GetScheduleUID(backupScheduleName, orgID, adminCtx)
-						log.FailOnError(err, fmt.Sprintf("Fetching schedule uid for shedule [%s]", backupScheduleName))
-						err = DeleteScheduleWithClusterRef(backupScheduleName, backupScheduleUid, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting backup scheudle [%s] of user [%s] from px-admin user", backupScheduleName, nonAdminUserName))
-					}
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
-
-		Step(fmt.Sprintf("Verifying  deletion of restore of deleted non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[2:4] {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for _, restoreName := range userRestoresMap[nonAdminUserName] {
-						log.InfoD(fmt.Sprintf("Verifying  Deletion of restores [%s] of non-admin user [%s] from px-admin user", restoreName, nonAdminUserName))
-						restoreUid, _ := Inst().Backup.GetRestoreUID(adminCtx, restoreName, orgID)
-						err := DeleteRestoreWithUid(restoreName, restoreUid, orgID, adminCtx)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restore [%s] of user [%s] from px-admin user", restoreName, nonAdminUserName))
-					}
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
-		Step(fmt.Sprintf("Verifying  deletion of clusters of deleted non-admin user from px-admin user"), func() {
-			adminCtx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-admin ctx")
-			for _, nonAdminUserName := range userNames[2:4] {
-				wg.Add(1)
-				go func(nonAdminUserName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					log.InfoD(fmt.Sprintf("Verifying  deletion of clusters of deleted non-admin user [%s] from px-admin user", nonAdminUserName))
-					err := DeleteClusterWithUid(SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx, true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-					err = DeleteClusterWithUid(destinationClusterName, clusterUidMap[nonAdminUserName][destinationClusterName], orgID, adminCtx, true)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
-				}(nonAdminUserName)
-			}
-			wg.Wait()
-		})
+			Step(fmt.Sprintf("Verifying  deletion of restore of deleted non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[2:4] {
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						for _, restoreName := range userRestoresMap[nonAdminUserName] {
+							log.InfoD(fmt.Sprintf("Verifying  Deletion of restores [%s] of non-admin user [%s] from px-admin user", restoreName, nonAdminUserName))
+							restoreUid, _ := Inst().Backup.GetRestoreUID(adminCtx, restoreName, orgID)
+							err := DeleteRestoreWithUid(restoreName, restoreUid, orgID, adminCtx)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of deleting restore [%s] of user [%s] from px-admin user", restoreName, nonAdminUserName))
+						}
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
+			Step(fmt.Sprintf("Verifying  deletion of clusters of deleted non-admin user from px-admin user"), func() {
+				adminCtx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-admin ctx")
+				for _, nonAdminUserName := range userNames[2:4] {
+					wg.Add(1)
+					go func(nonAdminUserName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						log.InfoD(fmt.Sprintf("Verifying  deletion of clusters of deleted non-admin user [%s] from px-admin user", nonAdminUserName))
+						err := DeleteClusterWithUid(SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+						err = DeleteClusterWithUid(destinationClusterName, clusterUidMap[nonAdminUserName][destinationClusterName], orgID, adminCtx, true)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+					}(nonAdminUserName)
+				}
+				wg.Wait()
+			})
+		*/
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		log.Infof("Deleting backup schedule policy")
-		schedulePolicyNames, err := backupDriver.GetAllSchedulePolicys(ctx, orgID)
-		for _, schedulePolicyName := range schedulePolicyNames {
-			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
-		}
-		ruleNames, err := backupDriver.GetAllRules(ctx, orgID)
-		for _, ruleName := range ruleNames {
-			err = Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  rule %s ", ruleName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, adminCredName, adminCloudCredUID, ctx)
+		/*
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Deleting the deployed apps after the testcase")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			log.Infof("Deleting backup schedule policy")
+			schedulePolicyNames, err := backupDriver.GetAllSchedulePolicys(ctx, orgID)
+			for _, schedulePolicyName := range schedulePolicyNames {
+				err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
+			}
+			ruleNames, err := backupDriver.GetAllRules(ctx, orgID)
+			for _, ruleName := range ruleNames {
+				err = Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  rule %s ", ruleName))
+			}
+			CleanupCloudSettingsAndClusters(backupLocationMap, adminCredName, adminCloudCredUID, ctx)
+		*/
 	})
 })
 
