@@ -3425,6 +3425,7 @@ func IsMongoDBReady() error {
 
 // DeleteAppNamespace deletes the given namespace and wait for termination
 func DeleteAppNamespace(namespace string) error {
+	var ns *corev1.Namespace
 	k8sCore := core.Instance()
 	err := k8sCore.DeleteNamespace(namespace)
 	if err != nil {
@@ -3434,13 +3435,24 @@ func DeleteAppNamespace(namespace string) error {
 		nsObj, err := core.Instance().GetNamespace(namespace)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
+				log.Infof("Namespace - %s is not found and hence deleted", namespace)
 				return "", false, nil
 			} else {
 				return "", false, err
 			}
 		}
 		if nsObj.Status.Phase == "Terminating" {
-			return "", true, fmt.Errorf("namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
+			log.Infof("Namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
+			ns, err = k8sCore.GetNamespace(namespace)
+			if err != nil {
+				return "", false, err
+			}
+			ns.Spec.Finalizers = nil
+			ns, err = k8sCore.UpdateNamespace(ns)
+			if err != nil {
+				return "", false, err
+			}
+			return "", true, fmt.Errorf("namespace - %s was in %s phase and finalizers has been updated", namespace, nsObj.Status.Phase)
 		}
 		return "", false, nil
 	}

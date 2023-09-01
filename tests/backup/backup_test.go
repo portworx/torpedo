@@ -297,17 +297,23 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch to context to destination cluster")
 
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//log.InfoD("Destroying restored apps on destination clusters")
+		//restoredAppContexts := make([]*scheduler.Context, 0)
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//DestroyApps(restoredAppContexts, opts)
+		for _, appCtx := range scheduledAppContexts {
+			err := DeleteAppNamespace(appCtx.ScheduleOptions.Namespace)
 			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
+				return
 			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 		}
-		DestroyApps(restoredAppContexts, opts)
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
