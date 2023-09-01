@@ -3512,6 +3512,9 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 			break
 		}
 	}
+	if backupObj == nil {
+		return nil, fmt.Errorf("unable to find backup [%s] with uid [%s]", backupName, backupUID)
+	}
 
 	bkpDeleteRequest := &api.BackupDeleteRequest{
 		Name:    backupName,
@@ -3521,6 +3524,20 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	}
 	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
+}
+
+func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
+	backupDeleteRequest := &api.BackupDeleteRequest{
+		Name:    backupName,
+		Uid:     backupUID,
+		OrgId:   orgID,
+		Cluster: clusterUid,
+	}
+	backupDeleteResponse, err := Inst().Backup.DeleteBackup(ctx, backupDeleteRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupDeleteResponse, nil
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
