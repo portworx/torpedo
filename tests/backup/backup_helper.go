@@ -3442,24 +3442,61 @@ func DeleteAppNamespace(namespace string) error {
 			}
 		}
 		if nsObj.Status.Phase == "Terminating" {
-			log.Infof("Namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
-			ns, err = k8sCore.GetNamespace(namespace)
-			if err != nil {
-				return "", false, err
-			}
-			ns.Spec.Finalizers = nil
-			ns, err = k8sCore.UpdateNamespace(ns)
-			if err != nil {
-				return "", false, err
-			}
-			return "", true, fmt.Errorf("namespace - %s was in %s phase and finalizers has been updated", namespace, nsObj.Status.Phase)
+			return "", true, fmt.Errorf("namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
 		}
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
 	if err != nil {
+		ns, err = k8sCore.GetNamespace(namespace)
+		if ns.Status.Phase == "Terminating" {
+			log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
+			err = DeleteTerminatingNamespace(namespace)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteTerminatingNamespace deletes the given namespace which has been in terminating state
+func DeleteTerminatingNamespace(namespace string) error {
+	k8sCore := core.Instance()
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
 		return err
 	}
+	if ns.Status.Phase == "Terminating" {
+		log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
+		ns.Spec.Finalizers = nil
+		ns, err = k8sCore.UpdateNamespace(ns)
+		if err != nil {
+			return err
+		}
+		namespaceDeleteCheck := func() (interface{}, bool, error) {
+			nsObj, err := core.Instance().GetNamespace(namespace)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					log.Infof("Namespace - %s is not found and hence deleted", namespace)
+					return "", false, nil
+				} else {
+					return "", false, err
+				}
+			}
+			if nsObj.Status.Phase == "Terminating" {
+				return "", true, fmt.Errorf("namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
+			}
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
 	return nil
 }
 
