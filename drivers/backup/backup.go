@@ -157,6 +157,7 @@ type Cluster interface {
 	WaitForClusterDeletion(
 		ctx context.Context,
 		clusterName,
+		clusterUid,
 		orgID string,
 		timeout time.Duration,
 		timeBeforeRetry time.Duration,
@@ -280,13 +281,13 @@ type Restore interface {
 	// DeleteRestore deletes a restore object
 	DeleteRestore(ctx context.Context, req *api.RestoreDeleteRequest) (*api.RestoreDeleteResponse, error)
 
-	// GetRestoreUID returns uid of the given restore name in an organization
-	GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error)
-
 	// WaitForRestoreCompletion waits for restore to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForRestoreCompletion(ctx context.Context, restoreName string, orgID string,
 		timeout time.Duration, timeBeforeRetry time.Duration) error
+
+	// GetRestoreUID returns uid of the given restore name in an organization
+	GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error)
 }
 
 // SchedulePolicy interface
@@ -332,6 +333,9 @@ type SchedulePolicy interface {
 
 	// GetSchedulePolicyUid gets the uid for the given schedule policy
 	GetSchedulePolicyUid(orgID string, ctx context.Context, schedulePolicyName string) (string, error)
+
+	// GetAllSchedulePolicies returns names of all schedulePolicy for the given org
+	GetAllSchedulePolicies(ctx context.Context, orgID string) ([]string, error)
 }
 
 // ScheduleBackup interface
@@ -417,6 +421,9 @@ type Rule interface {
 
 	// GetRuleUid fetches uid for the given rule
 	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)
+
+	// GetAllRules returns names of all rules for the given org
+	GetAllRules(ctx context.Context, orgID string) ([]string, error)
 }
 
 var backupDrivers = make(map[string]Driver)

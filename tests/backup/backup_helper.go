@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	"github.com/portworx/torpedo/drivers"
 	appsapi "k8s.io/api/apps/v1"
@@ -44,6 +45,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"encoding/json"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -4192,6 +4194,74 @@ func GetAllBackupNamesByOwnerID(ownerID string, orgID string, ctx context.Contex
 		}
 	}
 	return backupNames, nil
+}
+
+// CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+	backupDriver := Inst().Backup
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  periodicSchedulePolicyName,
+			Uid:   periodicSchedulePolicyUid,
+			OrgId: OrgID,
+		},
+
+		SchedulePolicy: &api.SchedulePolicyInfo{
+			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			ForObjectLock: false,
+			AutoDelete:    false,
+		},
+	}
+
+	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetAllRestoresForUser returns all the backups that px-central-admin has access to
+func GetAllRestoresForUser(username string, password string) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
+}
+
+// GetAllBackupSchedulesForUser returns all current BackupSchedules for user.
+func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
 }
 
 // GetAllBackupScheduleNamesByOwnerID gets all backup schedule names associated with the given ownerID

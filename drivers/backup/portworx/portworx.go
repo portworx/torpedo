@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	"google.golang.org/grpc/metadata"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v4"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -427,6 +428,7 @@ func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.Cluste
 func (p *portworx) WaitForClusterDeletion(
 	ctx context.Context,
 	clusterName,
+	clusterUid,
 	orgID string,
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
@@ -434,6 +436,7 @@ func (p *portworx) WaitForClusterDeletion(
 	req := &api.ClusterInspectRequest{
 		Name:  clusterName,
 		OrgId: orgID,
+		Uid:   clusterUid,
 	}
 	f := func() (interface{}, bool, error) {
 		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
@@ -2422,6 +2425,41 @@ func IsAdminCtx(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// GetAllRules gets the all rule names for the given org
+func (p *portworx) GetAllRules(ctx context.Context, orgID string) ([]string, error) {
+	var ruleNames []string
+	rulesEnumerateRequest := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	resp, err := p.EnumerateRule(ctx, rulesEnumerateRequest)
+	if err != nil {
+		return ruleNames, err
+	}
+	Rules := resp.GetRules()
+	for _, rule := range Rules {
+		ruleNames = append(ruleNames, rule.Name)
+	}
+	return ruleNames, nil
+}
+
+// GetAllSchedulePolicies gets the all SchedulePolicys names for the given org
+func (p *portworx) GetAllSchedulePolicies(ctx context.Context, orgID string) ([]string, error) {
+	var schedulePolicyNames []string
+	schedulePolicyRequest := &api.SchedulePolicyEnumerateRequest{
+		OrgId:  orgID,
+		Labels: map[string]string{},
+	}
+	resp, err := p.EnumerateSchedulePolicy(ctx, schedulePolicyRequest)
+	if err != nil {
+		return nil, err
+	}
+	schedulePolicys := resp.GetSchedulePolicies()
+	for _, schedulePolicy := range schedulePolicys {
+		schedulePolicyNames = append(schedulePolicyNames, schedulePolicy.Name)
+	}
+	return schedulePolicyNames, nil
 }
 
 func init() {
