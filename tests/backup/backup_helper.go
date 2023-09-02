@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -42,7 +43,9 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/base64"
 	"encoding/json"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -4170,4 +4173,177 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 		return "", "", err
 	}
 	return preRuleName, postRuleName, nil
+}
+
+// CreateBackupScheduleIntervalPolicy create periodic schedule policy with give interval.
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+	backupDriver := Inst().Backup
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  periodicSchedulePolicyName,
+			Uid:   periodicSchedulePolicyUid,
+			OrgId: OrgID,
+		},
+
+		SchedulePolicy: &api.SchedulePolicyInfo{
+			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			ForObjectLock: false,
+			AutoDelete:    false,
+		},
+	}
+
+	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// GetAllBackupSchedulesForUser returns all current BackupSchedules for user.
+func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
+// DeleteScheduleWithClusterRef deletes backup schedule when clusteRef is given
+func DeleteScheduleWithClusterRef(backupScheduleName string, backupUid string, clusterName string, clusterUid string, orgID string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUid}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
+		clusterObj,
+		backupDeleteTimeout,
+		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllBackupsOfUsersFromAdmin get all backups of given ownerID from admin context.
+func GetAllBackupsOfUsersFromAdmin(ownerID []string, adminCtx context.Context) ([]string, error) {
+	backupNames := make([]string, 0)
+	backupDriver := Inst().Backup
+
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: ownerID,
+		},
+	}
+	currentBackups, err := backupDriver.EnumerateBackup(adminCtx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, backup := range currentBackups.GetBackups() {
+		backupNames = append(backupNames, backup.GetName())
+	}
+	return backupNames, nil
+}
+
+// DeleteCluster deletes/de-registers cluster from px-backup
+func DeleteClusterWithUid(clusterName string, clusterUid string, orgID string, ctx context.Context, cleanupBackupsRestores bool) error {
+
+	backupDriver := Inst().Backup
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId:          orgID,
+		Name:           clusterName,
+		DeleteBackups:  cleanupBackupsRestores,
+		DeleteRestores: cleanupBackupsRestores,
+		Uid:            clusterUid,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	if err != nil {
+		return err
+	}
+	err = backupDriver.WaitForClusterDeletion(ctx, clusterName, clusterUid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateInvalidAWSCloudCredential creates cloud credentials with invalid paramaters
+func createInvalidAWSCloudCredential(credName string, uid, orgID string, ctx context.Context, kubeconfig ...string) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] ", credName, orgID)
+	var credCreateRequest *api.CloudCredentialCreateRequest
+	credCreateRequest = &api.CloudCredentialCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  credName,
+			Uid:   uid,
+			OrgId: orgID,
+		},
+		CloudCredential: &api.CloudCredentialInfo{
+			Type: api.CloudCredentialInfo_AWS,
+			Config: &api.CloudCredentialInfo_AwsConfig{
+				AwsConfig: &api.AWSConfig{
+					AccessKey: "admin",
+					SecretKey: backup.PxCentralAdminPwd + RandomString(10),
+				},
+			},
+		},
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		err := fmt.Errorf("Failed to create invalid cloud credential with name [%s] in org [%s] with [AWS/S3] as provider", credName, orgID)
+		return err
+	}
+	return nil
+}
+
+// UpdateCluster will update cluster credentials and kubeconfig.
+func UpdateCluster(clusterName string, clusterUid string, kubeConfigPath string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.ClusterUpdateResponse, error) {
+	backupDriver := Inst().Backup
+	kubeconfigRaw, err := ioutil.ReadFile(kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	clusterUpdateRequest := &api.ClusterUpdateRequest{
+		CreateMetadata:        &api.CreateMetadata{Name: clusterName, OrgId: orgId, Uid: clusterUid},
+		PxConfig:              &api.PXConfig{},
+		Kubeconfig:            base64.StdEncoding.EncodeToString(kubeconfigRaw),
+		CloudCredential:       cloudCred,
+		CloudCredentialRef:    &api.ObjectRef{Name: cloudCred, Uid: cloudCredUID},
+		PlatformCredentialRef: &api.ObjectRef{},
+	}
+	status, err := backupDriver.UpdateCluster(ctx, clusterUpdateRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	return status, err
 }

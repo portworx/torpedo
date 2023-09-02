@@ -269,6 +269,7 @@ func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.Cluste
 func (p *portworx) WaitForClusterDeletion(
 	ctx context.Context,
 	clusterName,
+	clusterUid,
 	orgID string,
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
@@ -276,6 +277,7 @@ func (p *portworx) WaitForClusterDeletion(
 	req := &api.ClusterInspectRequest{
 		Name:  clusterName,
 		OrgId: orgID,
+		Uid:   clusterUid,
 	}
 	f := func() (interface{}, bool, error) {
 		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
