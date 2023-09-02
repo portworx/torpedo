@@ -269,6 +269,7 @@ func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.Cluste
 func (p *portworx) WaitForClusterDeletion(
 	ctx context.Context,
 	clusterName,
+	clusterUid,
 	orgID string,
 	timeout time.Duration,
 	timeBeforeRetry time.Duration,
@@ -276,6 +277,7 @@ func (p *portworx) WaitForClusterDeletion(
 	req := &api.ClusterInspectRequest{
 		Name:  clusterName,
 		OrgId: orgID,
+		Uid:   clusterUid,
 	}
 	f := func() (interface{}, bool, error) {
 		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
@@ -1533,6 +1535,68 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 		}
 	}
 	return nil
+}
+
+// GetRestoreUID gets the uid for the given restore
+func (p *portworx) GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error) {
+	var totalRestores int
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{OrgId: orgID}
+	restoreEnumerateReq.EnumerateOptions = &api.EnumerateOptions{MaxObjects: uint64(enumerateBatchSize), ObjectIndex: 0}
+	for {
+		enumerateRsp, err := p.EnumerateRestore(ctx, restoreEnumerateReq)
+		if err != nil {
+			log.InfoD("Restore enumeration for the ctx [%v] within org [%s] failed with error [%v]. Restore enumerate request: [%v].", ctx, orgID, err, restoreEnumerateReq)
+			return "", err
+		}
+		for _, restore := range enumerateRsp.GetRestores() {
+			if restore.GetName() == restoreName {
+				return restore.GetUid(), nil
+			}
+			totalRestores++
+		}
+		if uint64(totalRestores) >= enumerateRsp.GetTotalCount() {
+			break
+		} else {
+			restoreEnumerateReq.EnumerateOptions.ObjectIndex += uint64(len(enumerateRsp.GetRestores()))
+		}
+	}
+
+	return "", fmt.Errorf("restore with name '%s' not found for org '%s'", restoreName, orgID)
+}
+
+// GetAllRules gets the all rule names for the given org
+func (p *portworx) GetAllRules(ctx context.Context, orgID string) ([]string, error) {
+	var ruleNames []string
+	rulesEnumerateRequest := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	resp, err := p.EnumerateRule(ctx, rulesEnumerateRequest)
+	if err != nil {
+		return ruleNames, err
+	}
+	Rules := resp.GetRules()
+	for _, rule := range Rules {
+		ruleNames = append(ruleNames, rule.Name)
+	}
+	return ruleNames, nil
+}
+
+// GetAllSchedulePolicys gets the all SchedulePolicys names for the given org
+func (p *portworx) GetAllSchedulePolicys(ctx context.Context, orgID string) ([]string, error) {
+	var schedulePolicyNames []string
+	schedulePolicyRequest := &api.SchedulePolicyEnumerateRequest{
+		OrgId:  orgID,
+		Labels: map[string]string{},
+	}
+	resp, err := p.EnumerateSchedulePolicy(ctx, schedulePolicyRequest)
+	if err != nil {
+		return schedulePolicyNames, err
+	}
+	schedulePolicys := resp.GetSchedulePolicies()
+	for _, schedulePolicy := range schedulePolicys {
+		schedulePolicyNames = append(schedulePolicyNames, schedulePolicy.Name)
+	}
+	return schedulePolicyNames, nil
 }
 
 func init() {
