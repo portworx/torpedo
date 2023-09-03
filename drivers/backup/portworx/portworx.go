@@ -245,6 +245,10 @@ func (p *portworx) InspectCloudCredential(ctx context.Context, req *api.CloudCre
 }
 
 func (p *portworx) EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
+	return p.cloudCredentialManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateCloudCredentialByUser(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
 	cloudCredentialEnumerateResponse, err := p.cloudCredentialManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -262,10 +266,6 @@ func (p *portworx) EnumerateCloudCredential(ctx context.Context, req *api.CloudC
 	}
 	cloudCredentialEnumerateResponse.CloudCredentials = userCloudCredentials
 	return cloudCredentialEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error) {
-	return p.cloudCredentialManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error) {
@@ -567,6 +567,10 @@ func (p *portworx) UpdateBackupLocation(ctx context.Context, req *api.BackupLoca
 }
 
 func (p *portworx) EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
+	return p.backupLocationManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateBackupLocationByUser(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
 	backupLocationEnumerateResponse, err := p.backupLocationManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -584,10 +588,6 @@ func (p *portworx) EnumerateBackupLocation(ctx context.Context, req *api.BackupL
 	}
 	backupLocationEnumerateResponse.BackupLocations = userBackupLocations
 	return backupLocationEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error) {
-	return p.backupLocationManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error) {
@@ -764,6 +764,10 @@ func (p *portworx) UpdateBackup(ctx context.Context, req *api.BackupUpdateReques
 }
 
 func (p *portworx) EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
+	return p.backupManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateBackupByUser(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
 	backupEnumerateResponse, err := p.backupManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -781,10 +785,6 @@ func (p *portworx) EnumerateBackup(ctx context.Context, req *api.BackupEnumerate
 	}
 	backupEnumerateResponse.Backups = userBackups
 	return backupEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error) {
-	return p.backupManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error) {
@@ -1168,6 +1168,10 @@ func (p *portworx) UpdateRestore(ctx context.Context, req *api.RestoreUpdateRequ
 }
 
 func (p *portworx) EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
+	return p.restoreManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateRestoreByUser(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
 	restoreEnumerateResponse, err := p.restoreManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1185,10 +1189,6 @@ func (p *portworx) EnumerateRestore(ctx context.Context, req *api.RestoreEnumera
 	}
 	restoreEnumerateResponse.Restores = userRestores
 	return restoreEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error) {
-	return p.restoreManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error) {
@@ -1338,6 +1338,10 @@ func (p *portworx) UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePo
 }
 
 func (p *portworx) EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
+	return p.schedulePolicyManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateSchedulePolicyByUser(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
 	schedulePolicyEnumerateResponse, err := p.schedulePolicyManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1355,10 +1359,6 @@ func (p *portworx) EnumerateSchedulePolicy(ctx context.Context, req *api.Schedul
 	}
 	schedulePolicyEnumerateResponse.SchedulePolicies = userSchedulePolicies
 	return schedulePolicyEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error) {
-	return p.schedulePolicyManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error) {
@@ -1454,6 +1454,10 @@ func (p *portworx) UpdateBackupSchedule(ctx context.Context, req *api.BackupSche
 }
 
 func (p *portworx) EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
+	return p.backupScheduleManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateBackupScheduleByUser(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
 	backupScheduleEnumerateResponse, err := p.backupScheduleManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1471,10 +1475,6 @@ func (p *portworx) EnumerateBackupSchedule(ctx context.Context, req *api.BackupS
 	}
 	backupScheduleEnumerateResponse.BackupSchedules = userBackupSchedules
 	return backupScheduleEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error) {
-	return p.backupScheduleManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error) {
@@ -1839,6 +1839,10 @@ func (p *portworx) UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (
 }
 
 func (p *portworx) EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
+	return p.ruleManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateRuleByUser(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
 	ruleEnumerateResponse, err := p.ruleManager.Enumerate(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1856,10 +1860,6 @@ func (p *portworx) EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequ
 	}
 	ruleEnumerateResponse.Rules = userRules
 	return ruleEnumerateResponse, nil
-}
-
-func (p *portworx) EnumerateAllRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error) {
-	return p.ruleManager.Enumerate(ctx, req)
 }
 
 func (p *portworx) InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error) {
