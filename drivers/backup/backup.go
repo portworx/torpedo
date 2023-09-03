@@ -113,11 +113,11 @@ type CloudCredential interface {
 	// InspectCloudCredential describes the cloud credential
 	InspectCloudCredential(ctx context.Context, req *api.CloudCredentialInspectRequest) (*api.CloudCredentialInspectResponse, error)
 
-	// EnumerateCloudCredential lists the cloud credentials for given Org
+	// EnumerateCloudCredential enumerates all cloud-credential objects, including cloud-credentials shared by other users
 	EnumerateCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
 
-	// EnumerateAllCloudCredential enumerates all cloud-credential objects, including cloud-credentials shared by other users
-	EnumerateAllCloudCredential(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
+	// EnumerateCloudCredentialByUser enumerates the cloud credentials created by the given user
+	EnumerateCloudCredentialByUser(ctx context.Context, req *api.CloudCredentialEnumerateRequest) (*api.CloudCredentialEnumerateResponse, error)
 
 	// DeleteCloudCredential deletes a cloud credential object
 	DeleteCloudCredential(ctx context.Context, req *api.CloudCredentialDeleteRequest) (*api.CloudCredentialDeleteResponse, error)
@@ -180,11 +180,11 @@ type BLocation interface {
 	// UpdateBackupLocation updates backup location object
 	UpdateBackupLocation(ctx context.Context, req *api.BackupLocationUpdateRequest) (*api.BackupLocationUpdateResponse, error)
 
-	// EnumerateBackupLocation lists backup locations for an org
+	// EnumerateBackupLocation enumerates all backup-location objects, including backup-locations shared by other users
 	EnumerateBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
 
-	// EnumerateAllBackupLocation enumerates all backup-location objects, including backup-locations shared by other users
-	EnumerateAllBackupLocation(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
+	// EnumerateBackupLocationByUser enumerates the backup locations created by the given user
+	EnumerateBackupLocationByUser(ctx context.Context, req *api.BackupLocationEnumerateRequest) (*api.BackupLocationEnumerateResponse, error)
 
 	// InspectBackupLocation enumerates backup location objects
 	InspectBackupLocation(ctx context.Context, req *api.BackupLocationInspectRequest) (*api.BackupLocationInspectResponse, error)
@@ -214,11 +214,11 @@ type Backup interface {
 	// UpdateBackup updates backup object
 	UpdateBackup(ctx context.Context, req *api.BackupUpdateRequest) (*api.BackupUpdateResponse, error)
 
-	// EnumerateBackup enumerates backup objects
+	// EnumerateBackup enumerates all backup objects, including backups shared by other users
 	EnumerateBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
 
-	// EnumerateAllBackup enumerates all backup objects, including backups shared by other users
-	EnumerateAllBackup(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
+	// EnumerateBackupByUser enumerates the backups created by the given user
+	EnumerateBackupByUser(ctx context.Context, req *api.BackupEnumerateRequest) (*api.BackupEnumerateResponse, error)
 
 	// InspectBackup inspects a backup object
 	InspectBackup(ctx context.Context, req *api.BackupInspectRequest) (*api.BackupInspectResponse, error)
@@ -268,11 +268,11 @@ type Restore interface {
 	// UpdateRestore updates restore object
 	UpdateRestore(ctx context.Context, req *api.RestoreUpdateRequest) (*api.RestoreUpdateResponse, error)
 
-	// EnumerateRestore lists restore objects
+	// EnumerateRestore enumerates all restore objects, including restores shared by other users
 	EnumerateRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
 
-	// EnumerateAllRestore enumerates all restore objects, including restores shared by other users
-	EnumerateAllRestore(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
+	// EnumerateRestoreByUser enumerates the restores created by the given user
+	EnumerateRestoreByUser(ctx context.Context, req *api.RestoreEnumerateRequest) (*api.RestoreEnumerateResponse, error)
 
 	// InspectRestore inspects a restore object
 	InspectRestore(ctx context.Context, req *api.RestoreInspectRequest) (*api.RestoreInspectResponse, error)
@@ -297,11 +297,11 @@ type SchedulePolicy interface {
 	// UpdateSchedulePolicy
 	UpdateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyUpdateRequest) (*api.SchedulePolicyUpdateResponse, error)
 
-	// EnumerateSchedulePolicy
+	// EnumerateSchedulePolicy enumerates all schedule-policy objects, including schedule-policies shared by other users
 	EnumerateSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
 
-	// EnumerateAllSchedulePolicy enumerates all schedule-policy objects, including schedule-policies shared by other users
-	EnumerateAllSchedulePolicy(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
+	// EnumerateSchedulePolicyByUser enumerates the schedule policies created by the given user
+	EnumerateSchedulePolicyByUser(ctx context.Context, req *api.SchedulePolicyEnumerateRequest) (*api.SchedulePolicyEnumerateResponse, error)
 
 	// InspectSchedulePolicy
 	InspectSchedulePolicy(ctx context.Context, req *api.SchedulePolicyInspectRequest) (*api.SchedulePolicyInspectResponse, error)
@@ -342,11 +342,11 @@ type ScheduleBackup interface {
 	// UpdateBackupSchedule
 	UpdateBackupSchedule(ctx context.Context, req *api.BackupScheduleUpdateRequest) (*api.BackupScheduleUpdateResponse, error)
 
-	// EnumerateBackupSchedule
+	// EnumerateBackupSchedule enumerates all backup-schedule objects, including backup-schedules shared by other users
 	EnumerateBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
 
-	// EnumerateAllBackupSchedule enumerates all backup-schedule objects, including backup-schedules shared by other users
-	EnumerateAllBackupSchedule(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
+	// EnumerateBackupScheduleByUser enumerates the backup schedules created by the given user
+	EnumerateBackupScheduleByUser(ctx context.Context, req *api.BackupScheduleEnumerateRequest) (*api.BackupScheduleEnumerateResponse, error)
 
 	// InspectBackupSchedule
 	InspectBackupSchedule(ctx context.Context, req *api.BackupScheduleInspectRequest) (*api.BackupScheduleInspectResponse, error)
@@ -394,11 +394,11 @@ type Rule interface {
 	// UpdateRule updates rule object
 	UpdateRule(ctx context.Context, req *api.RuleUpdateRequest) (*api.RuleUpdateResponse, error)
 
-	// EnumerateRule enumerates rule objects
+	// EnumerateRule enumerates all rule objects, including rules shared by other users
 	EnumerateRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
 
-	// EnumerateAllRule enumerates all rule objects, including rules shared by other users
-	EnumerateAllRule(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
+	// EnumerateRuleByUser enumerates the rules created by the given user
+	EnumerateRuleByUser(ctx context.Context, req *api.RuleEnumerateRequest) (*api.RuleEnumerateResponse, error)
 
 	// InspectRule inspects a rule object
 	InspectRule(ctx context.Context, req *api.RuleInspectRequest) (*api.RuleInspectResponse, error)
