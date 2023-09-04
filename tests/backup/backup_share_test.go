@@ -5089,7 +5089,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 			err = backup.DeleteUser(user)
 			log.FailOnError(err, "failed to delete user %s", user)
 		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Sequential)
 		log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })
