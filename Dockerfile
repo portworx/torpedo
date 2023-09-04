@@ -32,6 +32,8 @@ COPY porx porx
 COPY scripts scripts
 COPY drivers drivers
 COPY deployments deployments
+COPY kubeconfig kubeconfig
+COPY id_rsa id_rsa
 
 # Why? Errors if this is removed
 COPY .git .git
@@ -75,5 +77,6 @@ COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 
-ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
+#ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
+ENTRYPOINT []
 CMD []
