@@ -144,7 +144,21 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
-
+		adminGroup := "px-admin-group"
+		Step(fmt.Sprintf("Add new user to %s group", ""), func() {
+			log.InfoD(fmt.Sprintf("Adding new user to %s group", adminGroup))
+			for _, user := range createUsers(1) {
+				err := backup.AddGroupToUser(user, adminGroup)
+				log.FailOnError(err, "failed to add user %s to the group %s", user, adminGroup)
+				for _, provider := range providers {
+					ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+					cloudCredName := fmt.Sprintf("%s-%s-%v-%s", "cred", provider, time.Now().Unix(), RandomString(4))
+					cloudCredUID := uuid.New()
+					err = CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of create cloud credential %s from new admin %s", cloudCredName, user))
+				}
+			}
+		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
 			log.InfoD("Creating pre rule for deployed apps")
