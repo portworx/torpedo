@@ -746,13 +746,6 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 
 // Validate on IBM cloud Marketplace Test License or production License
 var _ = Describe("{LicenseValidation}", func() {
-	var testrailID = 35261
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35261
-	var runID int
-	JustBeforeEach(func() {
-		StartTorpedoTest("ValidateLicense", "Validate PX License Installed using catalog", nil, testrailID)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
-	})
 	JustBeforeEach(func() {
 		StartTorpedoTest("LicenseValidation", "Validate PX License Activated using catalog", nil, 0)
 	})
