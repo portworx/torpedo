@@ -32,8 +32,6 @@ COPY porx porx
 COPY scripts scripts
 COPY drivers drivers
 COPY deployments deployments
-COPY kubeconfig kubeconfig
-COPY id_rsa id_rsa
 
 # Why? Errors if this is removed
 COPY .git .git

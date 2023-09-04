@@ -764,14 +764,14 @@ var _ = Describe("{LicenseValidation}", func() {
 
 		summary, err := Inst().V.GetLicenseSummary()
 		log.FailOnError(err, "Failed to get license SKU")
-		log.InfoD(summary)
+		log.InfoD("%v", summary)
 
 		// Get SKU and compare with IBM cloud test license
 		stepLog = "Get SKU and compare with IBM cloud license type"
 		Step(stepLog, func() {
 			log.InfoD("validate IBM cloud test license")
-			log.InfoD(summary.SKU)
-			strmatch := strings.compare(summary.SKU, ibmTestLicenseSKU)
+			log.InfoD("%v", summary.SKU)
+			strmatch := strings.Contains(summary.SKU, ibmTestLicenseSKU)
 			dash.VerifyFatal(strmatch, true, "IBM test license got activated?")
 
 			Step("Compare PX-IBM-Test License features vs activated license", func() {
