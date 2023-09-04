@@ -2743,6 +2743,18 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error
 	return err
 }
 
+// DeleteCloudCredentialWithContext deletes the cloud credential with the given context
+func DeleteCloudCredentialWithContext(cloudCredName string, orgID string, cloudCredUID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	credDeleteRequest := &api.CloudCredentialDeleteRequest{
+		Name:  cloudCredName,
+		OrgId: orgID,
+		Uid:   cloudCredUID,
+	}
+	_, err := backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+	return err
+}
+
 // ValidateVolumeParametersGetErr validates volume parameters using volume driver and returns err instead of failing
 func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error {
 	var err error
