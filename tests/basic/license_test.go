@@ -82,6 +82,7 @@ const (
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited = int64(0x7FFFFFFFFFFFFFFF)
 
 	// -- Testing maximums below
 
@@ -141,7 +142,7 @@ var (
 		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: UnlimitedNumber},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
 		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
 		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
@@ -783,7 +784,7 @@ var _ = Describe("{LicenseValidation}", func() {
 					// if the feature limit exists in the hardcoded license limits we test it.
 					if _, ok := ibmLicense[Label(feature.Name)]; ok {
 						Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, ibmLicense[Label(feature.Name)]))
+							fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, ibmLicense[Label(feature.Name)]))
 					}
 				}
 			})
