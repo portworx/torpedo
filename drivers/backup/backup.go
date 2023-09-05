@@ -157,6 +157,7 @@ type Cluster interface {
 	WaitForClusterDeletion(
 		ctx context.Context,
 		clusterName,
+		clusterUid,
 		orgID string,
 		timeout time.Duration,
 		timeBeforeRetry time.Duration,
@@ -332,6 +333,9 @@ type SchedulePolicy interface {
 
 	// GetSchedulePolicyUid gets the uid for the given schedule policy
 	GetSchedulePolicyUid(orgID string, ctx context.Context, schedulePolicyName string) (string, error)
+
+	// GetAllSchedulePolicys returns names of all chedulePolicy for the given org
+	GetAllSchedulePolicys(ctx context.Context, orgID string) ([]string, error)
 }
 
 // ScheduleBackup interface
@@ -417,6 +421,9 @@ type Rule interface {
 
 	// GetRuleUid fetches uid for the given rule
 	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)
+
+	// GetAllRules returns names of all rules for the given org
+	GetAllRules(ctx context.Context, orgID string) ([]string, error)
 }
 
 var backupDrivers = make(map[string]Driver)
