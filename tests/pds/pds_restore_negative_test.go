@@ -26,7 +26,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
-		ctx, err = GetDestinationClusterConfigPath()
+		ctx, err = GetSourceClusterConfigPath()
 		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
@@ -144,7 +144,7 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform restore while validating HA.", pdsLabels, 0)
+		StartTorpedoTest("PerformRestoreToSameCluster", "Perform restore while simultaneously deleting backup controller manager & target controller pods", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
@@ -153,12 +153,12 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
-		ctx, err = GetDestinationClusterConfigPath()
+		ctx, err = GetSourceClusterConfigPath()
 		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
 
-	It("Perform restore while validating HA.", func() {
+	It("Perform restore while simultaneously deleting backup controller manager & target controller pods.", func() {
 		var (
 			deploymentsToBeCleaned []*pds.ModelsDeployment
 			nsName                 = params.InfraToTest.Namespace
@@ -207,7 +207,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 					log.InfoD("Delete target controller manager pod")
 					pdsTargetControllerPod := pdslib.GetPDSPods(pdslib.PdsTargetControllerPod, "pds-system")
 					err = sourceTarget.DeleteK8sPods(pdsTargetControllerPod.Name, "pds-system")
-					log.FailOnError(err, "Failed While deleting backup target controller pod.")
+					log.FailOnError(err, "Failed While deleting  target controller pod.")
 				}()
 
 				go func() {
@@ -255,7 +255,7 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform restore while validating HA.", pdsLabels, 0)
+		StartTorpedoTest("PerformRestoreToSameCluster", "Delete a running backup job and trigger a restore.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
@@ -264,12 +264,12 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
-		ctx, err = GetDestinationClusterConfigPath()
+		ctx, err = GetSourceClusterConfigPath()
 		log.FailOnError(err, "failed while getting dest cluster path")
 		restoreTargetCluster = tc.NewTargetCluster(ctx)
 	})
 
-	It("Perform restore while validating HA.", func() {
+	It("Delete a running backup job and trigger a restore.", func() {
 		var (
 			deploymentsToBeCleaned []*pds.ModelsDeployment
 			nsName                 = params.InfraToTest.Namespace

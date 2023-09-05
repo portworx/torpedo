@@ -967,7 +967,7 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 
 					log.Info("Create restore client.")
-					ctx, err := GetDestinationClusterConfigPath()
+					ctx, err := GetSourceClusterConfigPath()
 					log.FailOnError(err, "failed while getting dest cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
@@ -1082,7 +1082,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 				log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 
 				log.Info("Create restore client.")
-				ctx, err := GetDestinationClusterConfigPath()
+				ctx, err := GetSourceClusterConfigPath()
 				log.FailOnError(err, "failed while getting dest cluster path")
 				restoreTarget := tc.NewTargetCluster(ctx)
 				restoreClient := restoreBkp.RestoreClient{
