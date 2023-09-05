@@ -72,6 +72,8 @@ const (
 	LabOIDCSecurity Label = "OIDCSecurity"
 	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
 	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath Label = "FastPath"
 
 	essentialsFaFbSKU = "Portworx CSI for FA/FB"
 	ibmTestLicenseSKU = "PX-Enterprise IBM Cloud (test)"
@@ -129,26 +131,27 @@ var (
 	ibmLicense = map[Label]interface{}{
 		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
 		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
-		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 200},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
 		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
-		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 5},
-		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
 		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: 1},
-		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: UnlimitedNumber},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
 		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
 		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: MaxNodeCapacity},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
 		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
-		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 128},
-		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: false},
-		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
 	}
 )
 
@@ -776,12 +779,13 @@ var _ = Describe("{LicenseValidation}", func() {
 
 			Step("Compare PX-IBM-Test License features vs activated license", func() {
 				log.InfoD("Compare with IBM cloud test license features")
-/*				for _, feature := range summary.Features {
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
 					if _, ok := ibmLicense[Label(feature.Name)]; ok {
 						Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
 							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, ibmLicense[Label(feature.Name)]))
 					}
-				}*/
+				}
 			})
 		})
 	})
