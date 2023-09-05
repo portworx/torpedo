@@ -783,7 +783,7 @@ var _ = Describe("{LicenseValidation}", func() {
 					// if the feature limit exists in the hardcoded license limits we test it.
 					if _, ok := ibmLicense[Label(feature.Name)]; ok {
 						Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v did not match: [%v]", feature.Quantity, ibmLicense[Label(feature.Name)]))
+							fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, ibmLicense[Label(feature.Name)]))
 					}
 				}
 			})
