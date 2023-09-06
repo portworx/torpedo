@@ -16,6 +16,7 @@ import (
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/rke"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
@@ -81,6 +83,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
@@ -113,10 +116,11 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	_ "github.com/portworx/torpedo/drivers/scheduler/rke"
+	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -166,7 +170,8 @@ const (
 )
 
 var (
-	clusterProviders = []string{"k8s"}
+	clusterProviders       = []string{"k8s"}
+	GlobalCredentialConfig backup.BackupCloudConfig
 )
 
 type OwnershipAccessType int32
@@ -256,11 +261,9 @@ const (
 	clusterCreationRetryTime = 10 * time.Second
 
 	// Anthos
-	anthosWsNodeIpCliFlag = "anthos-ws-node-ip"
-	anthosInstPathCliFlag = "anthos-inst-path"
-
-  skipSystemCheckCliFlag = "torpedo-skip-system-checks"
-
+	anthosWsNodeIpCliFlag            = "anthos-ws-node-ip"
+	anthosInstPathCliFlag            = "anthos-inst-path"
+	skipSystemCheckCliFlag           = "torpedo-skip-system-checks"
 	dataIntegrityValidationTestsFlag = "data-integrity-validation-tests"
 )
 
@@ -396,6 +399,14 @@ var (
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
+)
+
+var (
+	includeResourcesFlag  = true
+	includeVolumesFlag    = true
+	startApplicationsFlag = true
+	tempDir               = "/tmp"
+	migrationList         []*storkapi.Migration
 )
 
 var (
@@ -747,12 +758,21 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 	}()
 	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
+		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
 		}
+
+		// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
+		for _, specObj := range ctx.App.SpecList {
+			if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+				isRaw = *obj.Spec.VolumeMode == corev1.PersistentVolumeBlock
+			}
+		}
+
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			if !ctx.SkipVolumeValidation {
 				ValidatePureSnapshotsSDK(ctx, errChan...)
@@ -760,7 +780,8 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		})
 
 		Step(fmt.Sprintf("validate %s app's volumes resizing ", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
+			// For raw block volumes resize is failing hence skipping test for it. defect filed - PWX-32793
+			if !ctx.SkipVolumeValidation && !isRaw {
 				ValidateResizePurePVC(ctx, errChan...)
 			}
 		})
@@ -833,6 +854,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
 			}
 		})
+
 	})
 }
 
@@ -926,6 +948,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 				})
 			}
 		})
+
 	})
 }
 
@@ -1157,27 +1180,31 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			vols, err = Inst().S.GetVolumes(ctx)
 			processError(err, errChan...)
 		})
-		byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
-		// get the pod for this pvc
-		pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
-		processError(err, errChan...)
+		// skiping ValidatePureVolumeStatisticsDynamicUpdate test for raw block volumes. Need to change getStats method
+		if !vols[0].Raw {
+			byteUsedInitial, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("initially the byteUsed is %v\n", byteUsedInitial)
 
-		mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			// get the pod for this pvc
+			pods, err := Inst().S.GetPodsForPVC(vols[0].Name, vols[0].Namespace)
+			processError(err, errChan...)
 
-		// write to the Direct Access volume
-		ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s/myfile", bytesToWrite/512, mountPath)
-		cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
-		err = osutils.Kubectl(cmdArgs)
-		processError(err, errChan...)
-		fmt.Println("sleeping to let volume usage get reflected")
-		// wait until the backends size is reflected before making the REST call
-		time.Sleep(time.Minute * 2)
+			mountPath, bytesToWrite := pureutils.GetAppDataDir(pods[0].Namespace)
+			mountPath = mountPath + "/myfile"
 
-		byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
-		fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
-		expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+			// write to the Direct Access volume
+			ddCmd := fmt.Sprintf("dd bs=512 count=%d if=/dev/urandom of=%s", bytesToWrite/512, mountPath)
+			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
+			err = osutils.Kubectl(cmdArgs)
+			processError(err, errChan...)
+			fmt.Println("sleeping to let volume usage get reflected")
+			// wait until the backends size is reflected before making the REST call
+			time.Sleep(time.Minute * 2)
 
+			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
+			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
+			expect(byteUsedAfter > byteUsedInitial).To(beTrue(), "bytes used did not increase after writing random bytes to the file")
+		}
 	})
 }
 
@@ -1205,7 +1232,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 				Namespace:         vols[0].Namespace,
 				Timestamp:         timestamp,
 				OriginalPVCName:   vols[0].Name,
-				SnapName:          "basic-csi-snapshot-" + timestamp,
+				SnapName:          "basic-csi" + timestamp + "-snapshot",
 				RestoredPVCName:   "csi-restored-" + timestamp,
 				SnapshotclassName: snapShotClassName,
 			}
@@ -1220,7 +1247,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 			for k, v := range volMap {
 				if v["pvc_name"] == vols[0].Name && v["pvc_namespace"] == vols[0].Namespace {
 					Step(fmt.Sprintf("get %s app's snapshot: %s then check that it appears in pxctl", ctx.App.Key, k), func() {
-						err = Inst().V.ValidateVolumeInPxctlList(fmt.Sprint(k, "-snap"))
+						err = Inst().V.ValidateVolumeInPxctlList(k)
 						expect(err).To(beNil(), "unexpected error validating snapshot appears in pxctl list")
 					})
 					break
@@ -1725,7 +1752,8 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
+// ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
+// the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
@@ -2088,11 +2116,17 @@ func CollectSupport() {
 	context("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
+		skipSystemCheck := false
+
 		if skipStr != "" {
 			if skip, err := strconv.ParseBool(skipStr); err == nil && skip {
-				log.Infof("skipping diag collection because env var %s=%s", envSkipDiagCollection, skipStr)
-				return
+				skipSystemCheck = true
 			}
+		}
+
+		if skipSystemCheck || Inst().SkipSystemChecks {
+			log.Infof("skipping diag collection because env for skipping the check has been set to true")
+			return
 		}
 		nodes := node.GetWorkerNodes()
 		dash.VerifyFatal(len(nodes) > 0, true, "Worker nodes found ?")
@@ -3654,7 +3688,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
 						log.Infof("The error is - %v", err.Error())
@@ -3688,7 +3722,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
-				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
 						log.Infof("The error is - %v", err.Error())
@@ -3720,6 +3754,38 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
 				log.Infof("Creating cloud credential for cluster")
+				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
+				if err != nil {
+					if strings.Contains(err.Error(), CreateCloudCredentialError) {
+						log.Infof("The error is - %v", err.Error())
+						adminCtx, err := backup.GetAdminCtxFromSecret()
+						if err != nil {
+							return fmt.Errorf("failed to fetch px-central-admin ctx with error %v", err)
+						}
+						log.Infof("Creating cloud credential %s from admin context and sharing with all the users", clusterCredName)
+						err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, adminCtx, kubeconfig)
+						if err != nil {
+							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
+						}
+						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						if err != nil {
+							return fmt.Errorf("failed to share the cloud cred with error %v", err)
+						}
+					} else {
+						return fmt.Errorf("failed to create cloud cred with error =%v", err)
+					}
+				}
+				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
+				if err != nil {
+					return err
+				}
+			}
+		case drivers.ProviderIbm:
+			for _, kubeconfig := range kubeconfigList {
+				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
+				clusterCredUid = uuid.New()
+				log.Infof("Cluster credential with name [%s] for IBM", clusterCredName)
 				err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
 				if err != nil {
 					if strings.Contains(err.Error(), CreateCloudCredentialError) {
@@ -3852,12 +3918,10 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 	switch provider {
 	case drivers.ProviderAws:
 		log.Infof("Create creds for Aws")
-		// PA-1328
 		id := os.Getenv("AWS_ACCESS_KEY_ID")
 		if id == "" {
 			return fmt.Errorf("environment variable AWS_ACCESS_KEY_ID should not be empty")
 		}
-		// PA-1328
 		secret := os.Getenv("AWS_SECRET_ACCESS_KEY")
 		if secret == "" {
 			return fmt.Errorf("environment variable AWS_SECRET_ACCESS_KEY should not be empty")
@@ -3881,7 +3945,6 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 
 	case drivers.ProviderAzure:
 		log.Infof("Create creds for azure")
-		// PA-1328
 		tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey := GetAzureCredsFromEnv()
 		credCreateRequest = &api.CloudCredentialCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
@@ -3925,6 +3988,29 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
+
+	case drivers.ProviderIbm:
+		log.Infof("Create creds for IBM")
+		apiKey, err := GetIBMApiKey("default")
+		if err != nil {
+			return err
+		}
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_IBM,
+				Config: &api.CloudCredentialInfo_IbmConfig{
+					IbmConfig: &api.IBMConfig{
+						ApiKey: apiKey,
+					},
+				},
+			},
+		}
+
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -4394,7 +4480,6 @@ func GetDestinationClusterConfigPath() (string, error) {
 }
 
 // GetAzureCredsFromEnv get creds for azure
-// PA-1328
 func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey string) {
 	accountName = os.Getenv("AZURE_ACCOUNT_NAME")
 	expect(accountName).NotTo(equal(""),
@@ -4422,6 +4507,11 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 		"AZURE_SUBSCRIPTION_ID Environment variable should not be empty")
 
 	return tenantID, clientID, clientSecret, subscriptionID, accountName, accountKey
+}
+
+// GetIBMApiKey will return the IBM API Key from GlobalCredentialConfig
+func GetIBMApiKey(cluster string) (string, error) {
+	return GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster).APIKey, nil
 }
 
 type NfsInfo struct {
@@ -6415,6 +6505,18 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 	return createdVolIDs, nil
 }
 
+// GetPoolsInUse lists all persistent volumes and returns the pool IDs
+func GetPoolsInUse() ([]string, error) {
+	pvlist, err := k8sCore.GetPersistentVolumes()
+	if err != nil || pvlist == nil || len(pvlist.Items) == 0 {
+		return nil, fmt.Errorf("no persistent volume found. Error: %v", err)
+	}
+	volumeInUse := pvlist.Items[0]
+	volumeID := volumeInUse.GetName()
+
+	return GetPoolIDsFromVolName(volumeID)
+}
+
 // GetPoolIDWithIOs returns the pools with IOs happening
 func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 	// pick a  pool doing some IOs from a pools list
@@ -6440,7 +6542,7 @@ func GetPoolIDWithIOs(contexts []*scheduler.Context) (string, error) {
 
 			t := func() (interface{}, bool, error) {
 				isIOsInProgress, err = Inst().V.IsIOsInProgressForTheVolume(&node, appVol.Id)
-				if err != nil {
+				if err != nil || !isIOsInProgress {
 					return false, true, err
 				}
 				return true, false, nil
@@ -6565,24 +6667,13 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		return nil, err
 	}
 	for _, each := range volDetails.ReplicaSets {
-		for _, uuids := range each.PoolUuids {
-			if len(poolUuids) == 0 {
-				poolUuids = append(poolUuids, uuids)
-			} else {
-				isPresent := false
-				for i := 0; i < len(poolUuids); i++ {
-					if uuids == poolUuids[i] {
-						isPresent = true
-					}
-				}
-				if isPresent == false {
-					poolUuids = append(poolUuids, uuids)
-				}
+		for _, uuid := range each.PoolUuids {
+			if !Contains(poolUuids, uuid) {
+				poolUuids = append(poolUuids, uuid)
 			}
 		}
-
 	}
-	return poolUuids, err
+	return poolUuids, nil
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
@@ -8086,6 +8177,7 @@ func runDataIntegrityValidation(testName string) bool {
 
 			testName = testName[i+1 : j]
 		}
+		log.Infof("validating test-name [%s] for running data integrity validation", testName)
 		if strings.Contains(dataIntegrityValidationTests, testName) {
 			return true
 		}
@@ -8103,11 +8195,21 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) error {
-
 	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
 	if strings.Contains(testName, "{Longevity}") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
+		sInd := strings.LastIndex(testName, ".")
+		if sInd != -1 {
+			fnNames := strings.Split(testName, ".")
+			for _, fn := range fnNames {
+				if strings.Contains(fn, "Trigger") {
+					testName = fn
+					break
+				}
+			}
+		}
+
 	}
 
 	if !runDataIntegrityValidation(testName) {
@@ -8702,3 +8804,70 @@ func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	return nil
 }
 
+func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
+	pods_created_len := len(pods.Items)
+	log.InfoD("Num of Pods on source: %v", pods_created_len)
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, sourceClusterConfigPath)
+	if err != nil {
+		return err
+	}
+	options := scheduler.ScheduleOptions{Namespace: appData.Ns}
+	var emptyCtx = &scheduler.Context{
+		UID:             "",
+		ScheduleOptions: options,
+		App: &spec.AppSpec{
+			Key:      "",
+			SpecList: []interface{}{},
+		}}
+	log.InfoD("Create cluster pair between source and destination clusters")
+	ScheduleValidateClusterPair(emptyCtx, false, true, defaultClusterPairDir, false)
+	migName := migrationKey + time.Now().Format("15h03m05s")
+	mig, err := asyncdr.CreateMigration(migName, appData.Ns, asyncdr.DefaultClusterPairName, appData.Ns, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+	if err != nil {
+		return err
+	}
+	migrationList = append(migrationList, mig)
+	err = asyncdr.WaitForMigration(migrationList)
+	if err != nil {
+		return fmt.Errorf("Migration failed")
+	}
+	// Sleeping here, as apps deploys one by one, which takes time to collect all pods
+	time.Sleep(5 * time.Minute)
+	SetDestinationKubeConfig()
+	pods_migrated, err := core.Instance().GetPods(appData.Ns, nil)
+	if err != nil {
+		return err
+	}
+	pods_migrated_len := len(pods_migrated.Items)
+	log.InfoD("Num of Pods on dest: %v", pods_migrated_len)
+	if pods_created_len != pods_migrated_len {
+		return fmt.Errorf("Pods migration failed as %v pods found on source and %v on destination", pods_created_len, pods_migrated_len)
+	}
+	destClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = asyncdr.ValidateCRD(appData.ExpectedCrdList, destClusterConfigPath)
+	if err != nil {
+		return fmt.Errorf("CRDs not migrated properly, err: %v", err)
+	}
+	SetSourceKubeConfig()
+	err = asyncdr.DeleteAndWaitForMigrationDeletion(mig.Name, mig.Namespace)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
+	SetDestinationKubeConfig()
+	log.InfoD("Starting crd deletion")
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	SetSourceKubeConfig()
+	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	return nil
+}

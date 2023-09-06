@@ -72,6 +72,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
+	policyv1 "k8s.io/api/policy/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
@@ -710,7 +711,7 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*apiextensionsv1.CustomResourceDefinition); ok {
 		return specObj, nil
-	} else if specObj, ok := in.(*policyv1beta1.PodDisruptionBudget); ok {
+	} else if specObj, ok := in.(*policyv1.PodDisruptionBudget); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*netv1.NetworkPolicy); ok {
 		return specObj, nil
@@ -825,7 +826,7 @@ func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
 	return false
 }
 
-// Schedule Schedule the application
+// Schedule Schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
@@ -846,7 +847,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
-
 		appNamespace := app.GetID(instanceID)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
@@ -871,9 +871,10 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		ctx := &scheduler.Context{
 			UID: instanceID,
 			App: &spec.AppSpec{
-				Key:      app.Key,
-				SpecList: specObjects,
-				Enabled:  app.Enabled,
+				Key:       app.Key,
+				SpecList:  specObjects,
+				Enabled:   app.Enabled,
+				NameSpace: appNamespace,
 			},
 			ScheduleOptions: options,
 		}
@@ -3982,6 +3983,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 
 			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
 			pvcSize, _ := pvcSizeObj.AsInt64()
+			isRaw := *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock
 			vol := &volume.Volume{
 				ID:          string(pvcObj.Spec.VolumeName),
 				Name:        obj.Name,
@@ -3990,6 +3992,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				Annotations: make(map[string]string),
 				Labels:      pvcObj.Labels,
 				Size:        uint64(pvcSize),
+				Raw:         isRaw,
 			}
 			for key, val := range obj.Annotations {
 				vol.Annotations[key] = val
@@ -4064,6 +4067,7 @@ func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*vol
 			if err != nil {
 				return nil, err
 			}
+
 			shouldAdd, err := k.filterPureVolumesIfEnabledByPureVolBackend(pvcObj, pureVolType)
 			if err != nil {
 				return nil, err
@@ -4074,6 +4078,7 @@ func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*vol
 
 			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
 			pvcSize, _ := pvcSizeObj.AsInt64()
+			isRaw := *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock
 			vol := &volume.Volume{
 				ID:          string(pvcObj.Spec.VolumeName),
 				Name:        obj.Name,
@@ -4082,6 +4087,7 @@ func (k *K8s) GetPureVolumes(ctx *scheduler.Context, pureVolType string) ([]*vol
 				Annotations: make(map[string]string),
 				Labels:      pvcObj.Labels,
 				Size:        uint64(pvcSize),
+				Raw:         isRaw,
 			}
 			for key, val := range obj.Annotations {
 				vol.Annotations[key] = val
@@ -6279,6 +6285,15 @@ func (k *K8s) RecycleNode(n node.Node) error {
 	}
 }
 
+// ScaleCluster scale the cluster to the given replicas
+func (k *K8s) ScaleCluster(replicas int) error {
+	// ScaleCluster is not supported
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ScaleCluster()",
+	}
+}
+
 // CreateCsiSnapsForVolumes create csi snapshots for Apps
 func (k *K8s) CreateCsiSnapsForVolumes(ctx *scheduler.Context, snapClass string) (map[string]*volsnapv1.VolumeSnapshot, error) {
 	// Only FA (pure_block) volume is supported
@@ -6359,8 +6374,13 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	if err != nil {
 		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
-	storageClassName := originalStorageClass.Name
-	log.Infof("Proceeding with storage class %s", storageClassName)
+	//PWX-32475:- Creating a clone of the original SC so that we can change the VolumeBindingMode to Immediate without changing the original storageclass spec
+	storageClassName, err := createClonedStorageClassIfRequired(originalStorageClass)
+	if err != nil {
+		return fmt.Errorf("failed to create cloned storage class with the name %s : %s", originalStorageClass.Name+"-clone", err)
+	}
+
+	log.Infof("Proceeding with cloned storage class %s", storageClassName)
 
 	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
@@ -6371,15 +6391,26 @@ func (k *K8s) CSISnapshotTest(ctx *scheduler.Context, request scheduler.CSISnaps
 	dirtyData := "thisIsJustSomeRandomText"
 	snapName := request.SnapName
 	for i := 0; i < 3; i++ {
-		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
-		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
-		if err != nil {
-			return fmt.Errorf("failed to write data to restored PVC: %s", err)
-
-		}
-		err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-		if err != nil {
-			return fmt.Errorf("failed to validate restored PVC content: %s ", err)
+		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
+			data := "this is pure volume rawblock test data"
+			err = k.writeRawBlockDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+			if err != nil {
+				return fmt.Errorf("failed to write data to restored PVC: %s", err)
+			}
+			err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate restored PVC content: %s ", err)
+			}
+		} else {
+			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
+			err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+			if err != nil {
+				return fmt.Errorf("failed to write data to restored PVC: %s", err)
+			}
+			err = k.snapshotAndVerify(size, data, fmt.Sprint(snapName, i), pod.GetNamespace(), storageClassName, request.SnapshotclassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate restored PVC content: %s ", err)
+			}
 		}
 	}
 
@@ -6400,8 +6431,13 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	if err != nil {
 		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
-	storageClassName := originalStorageClass.Name
-	log.Infof("Proceeding with storage class %s", storageClassName)
+
+	//PWX-32475:- Creating a clone of the original SC so that we can change the VolumeBindingMode to Immediate without changing the original storageclass spec
+	storageClassName, err := createClonedStorageClassIfRequired(originalStorageClass)
+	if err != nil {
+		return fmt.Errorf("failed to create cloned storage class with the name %s : %s", originalStorageClass.Name+"-clone", err)
+	}
+	log.Infof("Proceeding with cloned storage class %s", storageClassName)
 
 	podsUsingPVC, err := k8sCore.GetPodsUsingPVC(pvcObj.GetName(), pvcObj.GetNamespace())
 	if err != nil {
@@ -6412,14 +6448,32 @@ func (k *K8s) CSICloneTest(ctx *scheduler.Context, request scheduler.CSICloneReq
 	dirtyData := "thisIsJustSomeRandomText"
 
 	for i := 0; i < 3; i++ {
-		data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
-		err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
-		if err != nil {
-			return fmt.Errorf("failed to write data to cloned PVC: %s", err)
-		}
-		err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
-		if err != nil {
-			return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
+		if *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
+			data := "this is pure volume rawblock test data"
+			err = k.writeRawBlockDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+			if err != nil {
+				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
+			}
+			err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
+			}
+		} else {
+			data := fmt.Sprint(dirtyData, strconv.Itoa(int(time.Now().Unix())))
+			podCmd := fmt.Sprintf("touch %s/aaaa.txt", mountPath)
+			cmdArgs := []string{"/bin/bash", "-c", podCmd}
+			_, err := k8sCore.RunCommandInPod(cmdArgs, pod.GetName(), "", pod.GetNamespace())
+			if err != nil {
+				return fmt.Errorf("failed to execute command to Pod: %s", err)
+			}
+			err = k.writeDataToPod(data, pod.GetName(), pod.GetNamespace(), mountPath)
+			if err != nil {
+				return fmt.Errorf("failed to write data to cloned PVC: %s", err)
+			}
+			err = k.cloneAndVerify(size, data, pod.GetNamespace(), storageClassName, fmt.Sprint(request.RestoredPVCName, i), request.OriginalPVCName)
+			if err != nil {
+				return fmt.Errorf("failed to validate cloned PVC content: %s ", err)
+			}
 		}
 	}
 
@@ -6443,7 +6497,7 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	}
 	originalStorageClass, err := k8sCore.GetStorageClassForPVC(pvcObj)
 	if err != nil {
-		return fmt.Errorf("Failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
+		return fmt.Errorf("failed to retrieve storage class for PVC %s in namespace: %s : %s", request.OriginalPVCName, request.Namespace, err)
 	}
 	storageClassName := originalStorageClass.Name
 	log.Infof("Proceeding with storage class %s", storageClassName)
@@ -6476,6 +6530,50 @@ func (k *K8s) CSISnapshotAndRestoreMany(ctx *scheduler.Context, request schedule
 	return nil
 }
 
+func (k *K8s) readRawBlockDataFromPod(podName, podNamespace, devicePath string) (string, error) {
+	ddCmd := fmt.Sprintf("dd if=%s status=none bs=38 count=1 skip=0", devicePath)
+	cmdArgs := []string{"/bin/sh", "-c", ddCmd}
+	fileContent, err := k8sCore.RunCommandInPod(cmdArgs, podName, "", podNamespace)
+	return fileContent, err
+}
+
+func (k *K8s) readDataFromPod(podName, podNamespace, mountFilePath string) (string, error) {
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "bin/cat", mountFilePath}
+	command := exec.Command("kubectl", cmdArgs...)
+	fileContent, err := command.CombinedOutput()
+	return string(fileContent), err
+}
+
+func (k *K8s) writeRawBlockDataToPod(data, podName, podNamespace, devicePath string) error {
+	var bsSize int = 38
+	tmpFilePath := "/tmp/test.txt"
+
+	podCmd := fmt.Sprintf("echo -n \"%s\" >> %s", data, "/tmp/test.txt")
+	cmdArgs := []string{"/bin/bash", "-c", podCmd}
+	_, err := k8sCore.RunCommandInPod(cmdArgs, podName, "", podNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// copy DATA_SIZE data to the device path of rawblock
+	ddCopy := "dd if=%s of=%s bs=%d count=1 seek=0"
+	ddCopyCmd := fmt.Sprintf(ddCopy, tmpFilePath, devicePath, bsSize)
+	ddCopyCmdArgs := []string{"/bin/bash", "-c", ddCopyCmd}
+	_, err = k8sCore.RunCommandInPod(ddCopyCmdArgs, podName, "", podNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to execute command to Pod: %s", err)
+	}
+	// Sync the data, wait 20 secs and then proceed to snapshot the volume
+	cmdArgs2 := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sync"}
+	command2 := exec.Command("kubectl", cmdArgs2...)
+	out, err := command2.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to run 'sync' in pod: %s. Output: %s", err, string(out))
+	}
+	fmt.Println("Sleep for 20 secs to let data write through")
+	time.Sleep(time.Second * 20)
+	return nil
+}
+
 func (k *K8s) writeDataToPod(data, podName, podNamespace, mountPath string) error {
 	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("echo -n %s >>  %s/aaaa.txt", data, mountPath)}
 	command := exec.Command("kubectl", cmdArgs...)
@@ -6502,6 +6600,10 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	if err != nil {
 		return fmt.Errorf("failed to get kube client: %s", err)
 	}
+	originalPVCObj, err := k8sCore.GetPersistentVolumeClaim(originalPVC, namespace)
+	if err != nil {
+		return fmt.Errorf("error getting original PVC: %s", originalPVC)
+	}
 
 	// creating the snapshot
 	volSnapshot, err := k.CreateCsiSnapshot(snapName, namespace, snapClass, originalPVC)
@@ -6511,6 +6613,9 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 
 	log.Infof("Successfully created snapshot: [%s] for pvc: %s", volSnapshot.Name, originalPVC)
 	restoredPVCSpec, err := GeneratePVCRestoreSpec(size, namespace, restoredPVCName, volSnapshot.Name, storageClass)
+	if *originalPVCObj.Spec.VolumeMode == corev1.PersistentVolumeBlock {
+		restoredPVCSpec.Spec.VolumeMode = originalPVCObj.Spec.VolumeMode
+	}
 	if err != nil {
 		return fmt.Errorf("failed to build restored PVC Spec: %s", err)
 	}
@@ -6539,15 +6644,24 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
 		}
 	}
+	mountPath, _ := pureutils.GetAppDataDir(restoredPod.Namespace)
 	// Run a cat command from within the pod to verify the content of dirtydata
-	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
-	command := exec.Command("kubectl", cmdArgs...)
-	fileContent, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error checking content of restored PVC: %s. Output: %s", err, string(fileContent))
-	}
-	if !strings.Contains(string(fileContent), data) {
-		return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
+	if *restoredPVC.Spec.VolumeMode == corev1.PersistentVolumeBlock {
+		fileContent, err := k.readRawBlockDataFromPod(restoredPod.GetName(), restoredPod.GetNamespace(), mountPath)
+		if err != nil {
+			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
+		}
+		if data != fileContent {
+			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+		}
+	} else {
+		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
+		if err != nil {
+			return fmt.Errorf("error checking content of restored PVC: %s. Output: %s", err, string(fileContent))
+		}
+		if !strings.Contains(fileContent, data) {
+			return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
+		}
 	}
 	log.Info("Validation complete")
 	return nil
@@ -6590,15 +6704,24 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			Cause: fmt.Sprintf("restored pod is not ready. Error: %v", err),
 		}
 	}
+	mountPath, _ := pureutils.GetAppDataDir(restoredPod.Namespace)
 	// Run a cat command from within the pod to verify the content of dirtydata
-	cmdArgs := []string{"exec", "-it", restoredPod.Name, "-n", namespace, "--", "bin/cat", "/mnt/volume1/aaaa.txt"}
-	command := exec.Command("kubectl", cmdArgs...)
-	fileContent, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
-	}
-	if !strings.Contains(string(fileContent), data) {
-		return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
+	if *clonedPVC.Spec.VolumeMode == corev1.PersistentVolumeBlock {
+		fileContent, err := k.readRawBlockDataFromPod(restoredPod.GetName(), restoredPod.GetNamespace(), mountPath)
+		if err != nil {
+			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
+		}
+		if data != fileContent {
+			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+		}
+	} else {
+		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
+		if err != nil {
+			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
+		}
+		if !strings.Contains(fileContent, data) {
+			return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
+		}
 	}
 	log.Info("Validation complete")
 	return nil
@@ -6650,7 +6773,7 @@ func MakePod(ns string, pvclaims []*v1.PersistentVolumeClaim, command string, pr
 			volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
 		} else {
 			// Raw block device
-			volumeDevices = append(volumeDevices, v1.VolumeDevice{Name: volumename, DevicePath: fmt.Sprintf("/dev/xvda%d", index)})
+			volumeDevices = append(volumeDevices, v1.VolumeDevice{Name: volumename, DevicePath: "/dev/xvda"})
 			volumes[index] = v1.Volume{Name: volumename, VolumeSource: v1.VolumeSource{PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{ClaimName: pvclaim.Name, ReadOnly: false}}}
 		}
 	}
@@ -6701,10 +6824,15 @@ func GeneratePVCRestoreSpec(size resource.Quantity, ns string, name string, sour
 
 // GeneratePVCCloneSpec takes namespace, name, source snapshot name and storageclass as parameter and returns a PersistentVolumeClaim spec for PVC creation
 func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, sourcePVCName string, storageClass string) (*v1.PersistentVolumeClaim, error) {
+	pvcObj, err := k8sCore.GetPersistentVolumeClaim(sourcePVCName, ns)
+	if err != nil {
+		return nil, fmt.Errorf("error getting PVC: %s", name)
+	}
 	PVCSpec := MakePVC(size, ns, name, storageClass)
 	PVCSpec.ObjectMeta.Name = name
 	PVCSpec.Namespace = ns
 	PVCSpec.ObjectMeta.Namespace = ns
+	PVCSpec.Spec.VolumeMode = pvcObj.Spec.VolumeMode
 	if sourcePVCName == "" {
 		return nil, fmt.Errorf("source PVC name is empty for PVC cloning request")
 	}
@@ -6713,7 +6841,6 @@ func GeneratePVCCloneSpec(size resource.Quantity, ns string, name string, source
 		Kind: "PersistentVolumeClaim",
 		Name: sourcePVCName,
 	}
-
 	return PVCSpec, nil
 }
 
@@ -7516,4 +7643,45 @@ func ClusterVersion() (string, error) {
 		return "", err
 	}
 	return strings.TrimLeft(ver.String(), "v"), nil
+}
+
+func createClonedStorageClassIfRequired(originalStorageClass *storageapi.StorageClass) (string, error) {
+	cloneStorageClass := originalStorageClass.DeepCopy()
+	clonedSCName := cloneStorageClass.Name + "-clone"
+	clonedSCNotFound := false
+
+	t := func() (interface{}, bool, error) {
+		_, err := k8sStorage.GetStorageClass(clonedSCName)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				clonedSCNotFound = true
+				return "", false, err
+			}
+			return "", true, err
+		}
+		return "", false, nil
+	}
+
+	_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 10*time.Second)
+	if err != nil {
+		if clonedSCNotFound {
+			log.Infof("Cloned SC with the name %v does not exist and will be created", clonedSCName)
+
+			cloneStorageClass.Name = clonedSCName
+			immediate := storageapi.VolumeBindingImmediate
+			cloneStorageClass.VolumeBindingMode = &immediate
+			cloneStorageClass.ResourceVersion = ""
+			cloneStorageClass.UID = ""
+
+			clonedSCobj, err := k8sStorage.CreateStorageClass(cloneStorageClass)
+			if err != nil {
+				log.Errorf("Error occurred while creating cloned storage class:- %v", err)
+				return "", err
+			}
+			return clonedSCobj.Name, nil
+		} else {
+			return "", err
+		}
+	}
+	return clonedSCName, nil
 }

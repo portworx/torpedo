@@ -45,6 +45,7 @@ var targetSizeInBytes uint64
 var originalSizeInBytes uint64
 var testDescription string
 var testName string
+
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
 		StartTorpedoTest(testName, testDescription, nil, 0)
@@ -52,8 +53,13 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize(contexts)
+		poolIDToResize = pickPoolToResize()
 		poolToBeResized = getStoragePool(poolIDToResize)
+		isJournalEnabled, _ = IsJournalEnabled()
+		bufferSizeInGB = uint64(0)
+		if isJournalEnabled {
+			bufferSizeInGB = JournalDeviceSizeInGB
+		}
 	})
 
 	testName = "StoragePoolExpandDiskResize"
@@ -63,9 +69,9 @@ var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB // getDesiredSize(originalSizeInBytes)
 		targetSizeGiB := targetSizeInBytes / units.GiB
 
-		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB",
+		log.InfoD("Current size of pool %s is %d GiB. Trying to expand to %v GiB",
 			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
-		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB+bufferSizeInGB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
@@ -9608,16 +9614,22 @@ func scheduleApps() []*scheduler.Context {
 	contexts := make([]*scheduler.Context, 0)
 	for i := 0; i < Inst().GlobalScaleFactor; i++ {
 		log.Infof("Deploy app %v", i)
-		contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooltest-%d", i))...)
+		contexts = append(contexts, ScheduleApplications(
+			fmt.Sprintf("pooltest-%d", i))...)
 	}
 	ValidateApplications(contexts)
 	return contexts
 }
 
-func pickPoolToResize(contexts []*scheduler.Context) string {
-	poolIDToResize, err := GetPoolIDWithIOs(contexts)
+func pickPoolToResize() string {
+	poolWithIO, err := GetPoolIDWithIOs(contexts)
+	if poolWithIO == "" || err != nil {
+		log.Warnf("No pool with IO found, picking a random pool in use to resize")
+	}
+	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
-	verifyNonEmpty(poolIDToResize, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	poolIDToResize := poolIDsInUseByTestingApp[0]
 	return poolIDToResize
 }
 
@@ -9636,6 +9648,9 @@ func verifyNonEmpty(value string, message string) {
 	dash.VerifyFatal(len(value) > 0, true, message)
 }
 
+func verifyArrayNotEmpty(values []string, message string) {
+	dash.VerifyFatal(len(values) > 0, true, message)
+}
 func triggerPoolExpansion(poolIDToResize string, targetSizeGiB uint64, expandType api.SdkStoragePool_ResizeOperationType) {
 	stepLog := "Trigger pool expansion"
 	Step(stepLog, func() {

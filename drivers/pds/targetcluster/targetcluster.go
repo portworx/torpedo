@@ -24,11 +24,7 @@ import (
 )
 
 const (
-	k8sNodeReadyTimeout    = 5 * time.Minute
-	volDirCleanupTimeout   = 5 * time.Minute
 	k8sObjectCreateTimeout = 2 * time.Minute
-	k8sDestroyTimeout      = 5 * time.Minute
-
 	// DefaultRetryInterval default time to retry
 	DefaultRetryInterval = 10 * time.Second
 
@@ -37,7 +33,6 @@ const (
 	MaxTimeout     = 30 * time.Minute
 	timeOut        = 30 * time.Minute
 	timeInterval   = 10 * time.Second
-	minTimeOut     = 5 * time.Minute
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
@@ -70,14 +65,14 @@ type TargetCluster struct {
 
 func (tc *TargetCluster) GetDeploymentTargetID(clusterID, tenantID string) (string, error) {
 	log.InfoD("Get the Target cluster details")
-	err = wait.Poll(DefaultRetryInterval, minTimeOut, func() (bool, error) {
+	err = wait.Poll(DefaultRetryInterval, DefaultTimeout, func() (bool, error) {
 		targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 		var targetClusterStatus string
 		if err != nil {
 			return true, fmt.Errorf("error while listing deployment targets: %v", err)
 		}
 		if targetClusters == nil {
-			return true, fmt.Errorf("target cluster passed is not available to the account/tenant")
+			return false, fmt.Errorf("target cluster passed is not available to the account/tenant")
 		}
 		for i := 0; i < len(targetClusters); i++ {
 			if targetClusters[i].GetClusterId() == clusterID {
@@ -352,6 +347,31 @@ func (targetCluster *TargetCluster) SetConfig() error {
 	}
 	k8sCore.SetConfig(config)
 	k8sApps.SetConfig(config)
+	return nil
+}
+
+// DeleteDeploymentTargets deletes the unhealthy deployment targets
+func (tc *TargetCluster) DeleteDeploymentTargets(tenantID string) error {
+	deploymentsTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
+	if err != nil {
+		return fmt.Errorf("error occued while listing templates %v", err)
+	}
+	count := 0
+	for _, deploymentTarget := range deploymentsTargets {
+		if strings.Contains(*deploymentTarget.Status, "unhealthy") {
+			log.Debugf("deployment target name %s", *deploymentTarget.Name)
+			resp, err := components.DeploymentTarget.DeleteTarget(deploymentTarget.GetId())
+			if resp.StatusCode != http.StatusConflict {
+				//TODO: Delete backups and deployments in unhealthy target cluster
+				if err != nil {
+					return err
+				}
+				log.InfoD("Deployment Target %s Deleted", *deploymentTarget.Name)
+				count++
+			}
+		}
+	}
+	log.Debugf("Number of deployment targets deleted: %d", count)
 	return nil
 }
 
