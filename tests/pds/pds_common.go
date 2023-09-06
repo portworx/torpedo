@@ -67,6 +67,7 @@ const (
 	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
 	KillTeleportPodDuringDeployment  = "kill-teleport-pod-during-deployment"
 	RestoreDSDuringPXPoolExpansion   = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver      = "restore-ds-during-kvdb-fail-over"
 )
 
 var (
