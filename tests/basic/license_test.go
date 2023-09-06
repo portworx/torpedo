@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -71,12 +72,17 @@ const (
 	LabOIDCSecurity Label = "OIDCSecurity"
 	// LabGlobalSecretsOnly - Limit BYOK encryption to cluster-wide secrets
 	LabGlobalSecretsOnly Label = "GlobalSecretsOnly"
+	// LabFastPath - FastPath extension [PX-FAST]
+	LabFastPath Label = "FastPath"
 
 	essentialsFaFbSKU = "Portworx CSI for FA/FB"
+	ibmTestLicenseSKU = "PX-Enterprise IBM Cloud (test)"
+	ibmProdLicenseSKU = "PX-Enterprise IBM Cloud"
 
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
+	Unlimited = int64(0x7FFFFFFFFFFFFFFF)
 
 	// -- Testing maximums below
 
@@ -123,6 +129,33 @@ var (
 	}
 )
 
+var (
+	ibmLicense = map[Label]interface{}{
+		LabNodes:              &pxapi.LicensedFeature_Count{Count: 1000},
+		LabVolumeSize:         &pxapi.LicensedFeature_CapacityTb{CapacityTb: 40},
+		LabVolumes:            &pxapi.LicensedFeature_Count{Count: 16384},
+		LabHaLevel:            &pxapi.LicensedFeature_Count{Count: MaxHaLevel},
+		LabSnapshots:          &pxapi.LicensedFeature_Count{Count: 64},
+		LabAggregatedVol:      &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabSharedVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabEncryptedVol:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabGlobalSecretsOnly:  &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabScaledVol:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabResizeVolume:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnap:          &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabCloudSnapDaily:     &pxapi.LicensedFeature_Count{Count: Unlimited},
+		LabCloudMigration:     &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabDisasterRecovery:   &pxapi.LicensedFeature_Enabled{Enabled: false},
+		LabPlatformBare:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabPlatformVM:         &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabNodeCapacity:       &pxapi.LicensedFeature_CapacityTb{CapacityTb: 256},
+		LabNodeCapacityExtend: &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabLocalAttaches:      &pxapi.LicensedFeature_Count{Count: 256},
+		LabOIDCSecurity:       &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabAUTCapacityMgmt:    &pxapi.LicensedFeature_Enabled{Enabled: true},
+		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
+	}
+)
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 	var testrailID = 56354
@@ -712,6 +745,55 @@ var _ = Describe("{DisableCallHomeTest}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// Validate on IBM cloud Marketplace Test License or production License
+var _ = Describe("{LicenseValidation}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("LicenseValidation", "Validate PX License Activated using catalog", nil, 0)
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "Get SKU and compare with IBM cloud test license"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("license-validation-%d", i))...)
+		}
+
+		ValidateApplications(contexts)
+
+		summary, err := Inst().V.GetLicenseSummary()
+		log.FailOnError(err, "Failed to get license SKU")
+		log.InfoD("%v", summary)
+
+		// Get SKU and compare with IBM cloud test license
+		stepLog = "Get SKU and compare with IBM cloud license type"
+		Step(stepLog, func() {
+			log.InfoD("validate IBM cloud test license")
+			log.InfoD("%v", summary.SKU)
+			strmatch := strings.Contains(summary.SKU, ibmTestLicenseSKU)
+			dash.VerifyFatal(strmatch, true, "IBM test license got activated?")
+
+			Step("Compare PX-IBM-Test License features vs activated license", func() {
+				log.InfoD("Compare with IBM cloud test license features")
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if _, ok := ibmLicense[Label(feature.Name)]; ok {
+						Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
+							fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, ibmLicense[Label(feature.Name)]))
+					}
+				}
+			})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+
 	})
 })
 
