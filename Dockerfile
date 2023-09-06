@@ -75,5 +75,4 @@ COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 
-ENTRYPOINT ["bin/bash -c"]
-CMD []
+
