@@ -9986,7 +9986,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				log.FailOnError(err, "error in getting pool with IO with error")
 				if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
 					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
-					if (int(maxDriveLimit) - numofDrivesInNode) > (int(len(drvs)) + maxDrivesAllowed) {
+					if (int(maxDriveLimit) - numofDrivesInNode) > POOL_MAX_CLOUD_DRIVES {
 						selectedPool = poolListForOps[i]
 						break
 					}
