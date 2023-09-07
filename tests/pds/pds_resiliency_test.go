@@ -1248,8 +1248,8 @@ var _ = Describe("{RestoreDSDuringKVDBFailOver}", func() {
 		Step("Running Workloads before taking backups", func() {
 			for _, pdsDeployment := range deps {
 				ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
-				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 				log.FailOnError(err, "Error while Running workloads")
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 				log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
 				pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 			}
