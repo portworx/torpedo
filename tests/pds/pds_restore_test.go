@@ -495,10 +495,6 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 		defer EndTorpedoTest()
 		err := bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
-		//err = bkpClient.AzureStorageClient.DeleteBucket()
-		//log.FailOnError(err, "Failed while deleting the bucket")
-		//err = bkpClient.GCPStorageClient.DeleteBucket()
-		//log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
