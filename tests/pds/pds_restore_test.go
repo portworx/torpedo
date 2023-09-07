@@ -403,7 +403,7 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
+		StartTorpedoTest("PerformSimultaneousRestoresSameDataService", "Perform multiple restore within same cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
@@ -495,10 +495,10 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 		defer EndTorpedoTest()
 		err := bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
-		err = bkpClient.AzureStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
-		err = bkpClient.GCPStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
+		//err = bkpClient.AzureStorageClient.DeleteBucket()
+		//log.FailOnError(err, "Failed while deleting the bucket")
+		//err = bkpClient.GCPStorageClient.DeleteBucket()
+		//log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
