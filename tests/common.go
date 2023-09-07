@@ -3538,6 +3538,7 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	return backupDeleteResponse, err
 }
 
+// DeleteBackupWithClusterUID deletes the backup using the given cluster uid
 func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	backupDeleteRequest := &api.BackupDeleteRequest{
 		Name:    backupName,
