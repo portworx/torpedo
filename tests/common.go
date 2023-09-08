@@ -3680,6 +3680,41 @@ func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, 
 	return nil
 }
 
+// DeleteScheduleWithUIDAndWait deletes backup schedule with the given backup schedule name and uid and waits for its deletion
+func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid string, clusterName string, clusterUid string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	clusterReq := &api.ClusterInspectRequest{
+		OrgId:          orgID,
+		Name:           clusterName,
+		Uid:            clusterUid,
+		IncludeSecrets: true,
+	}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(
+		ctx, backupScheduleName, namespace, orgID, clusterObj,
+		backupLocationDeleteTimeoutMin*time.Minute,
+		RetrySeconds*time.Second,
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateApplicationClusters adds application clusters to backup
 // 1st cluster in KUBECONFIGS ENV var is source cluster while
 // 2nd cluster is destination cluster
