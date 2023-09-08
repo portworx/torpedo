@@ -120,7 +120,6 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
