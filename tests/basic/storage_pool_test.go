@@ -10053,7 +10053,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			poolLeft := maxPoolLength - len(poolList)
 			err = addNewPools(selectedNode, poolLeft)
 			//get the number of available drives in the node
-			drvNum, err := Inst().N.RunCommand(selectedNode, "lsblk -l -d -e 11 -n -o NAME|wc -l", node.ConnectionOpts{
+			drvNumInt := GetNumOfDrivesInNode(selectedNode)
+			/*drvNum, err := Inst().N.RunCommand(selectedNode, "lsblk -l -d -e 11 -n -o NAME|wc -l", node.ConnectionOpts{
 				Timeout:         defaultCommandTimeout,
 				TimeBeforeRetry: defaultCommandRetry,
 				IgnoreError:     false,
@@ -10063,9 +10064,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			drvNum1 := strings.TrimSpace(string(drvNum))
 			drvNum1 = strings.Trim(drvNum1, "\n")
 			drvNumInt, err := strconv.Atoi(drvNum1)
-			log.FailOnError(err, "failed to convert to int")
+			log.FailOnError(err, "failed to convert to int")*/
 			maxDriveLimitInt := int(maxDriveLimit)
-			maxDriveAllowed := maxDriveLimitInt - drvNumInt
+			maxDriveAllowed := maxDriveLimitInt - (drvNumInt + 1)
 			err = Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing volume endpoints")
 			//expand by adding disk
@@ -10101,8 +10102,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 								maxDriveAllowed = maxDriveAllowed - 1
 								resizeErr := waitForPoolToBeResized(expectedSize, poolListForOps[i].Uuid, isjournal)
 								dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d'", expectedSize, expectedSize-3))
-								err = Inst().V.RefreshDriverEndpoints()
-								log.FailOnError(err, "error refreshing volume endpoints")
 								if maxDriveAllowed == 0 {
 									break
 								}
@@ -10111,6 +10110,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 					}
 				}
 			}
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing volume endpoints")
 			//get a pool where we can add one more drive
 			sNode, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting updated node pool list")
