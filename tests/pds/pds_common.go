@@ -2,13 +2,16 @@ package tests
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	"github.com/portworx/torpedo/drivers/pds/targetcluster"
-	"net/http"
-	"time"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -16,6 +19,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -64,6 +68,8 @@ const (
 	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"
 	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
 	KillTeleportPodDuringDeployment  = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion   = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver      = "restore-ds-during-kvdb-fail-over"
 )
 
 var (
@@ -215,6 +221,22 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	return err
 }
 
+// CleanupWorkloadDeployments will clean up the wldeployment based on the kubeconfigs
+func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
+	if isSrc {
+		SetSourceKubeConfig()
+	} else {
+		SetDestinationKubeConfig()
+	}
+	for _, wlDep := range wlDeploymentsToBeCleaned {
+		err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Increase PVC by 1 gb
 func IncreasePVCby1Gig(context []*scheduler.Context) error {
 	log.Info("Resizing of the PVC begins")
@@ -263,15 +285,89 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 	return pvcCapacity, err
 }
 
-// CleanupDeployments used to clean up deployment from pds and all other stale resources in the cluster.
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
+	if len(dsInstances) < 1 {
+		log.Info("No DS left for deletion as part of this test run.")
+	}
+	log.InfoD("Deleting all the ds instances.")
 	for _, dsInstance := range dsInstances {
 		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
+		dsId := *dsInstance.Id
+		components.DataServiceDeployment.GetDeployment(dsId)
+		log.Infof("Delete Deployment %v ", dsInstance)
+		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
-		log.FailOnError(err, "Error while deleting data services")
+		if err != nil {
+			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())
+			err = DeleteAllDsBackupEntities(dsInstance)
+			log.FailOnError(err, "Failed during deleting the backup entities for deployment %v",
+				dsInstance.GetClusterResourceName())
+			resp, err = pdslib.DeleteDeployment(dsInstance.GetId())
+			log.FailOnError(err, "Error while deleting deployment.")
+		}
+		log.FailOnError(err, "Error while deleting deployment.")
 		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+
 		log.InfoD("Getting all PV and associated PVCs and deleting them")
 		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
 		log.FailOnError(err, "Error while deleting PV and PVCs")
 	}
+}
+
+func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
+	log.Infof("Fetch backups associated to the deployment %v ",
+		dsInstance.GetClusterResourceName())
+	backups, err := components.Backup.ListBackup(dsInstance.GetId())
+	if err != nil {
+		return fmt.Errorf("failed while fetching the backup objects.Err - %v", err)
+	}
+	for _, backup := range backups {
+		log.Infof("Delete backup.Details: Name - %v, Id - %v", backup.GetClusterResourceName(), backup.GetId())
+		backupId := backup.GetId()
+		resp, err := components.Backup.DeleteBackup(backupId)
+		waitErr := wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+			model, bkpErr := components.Backup.GetBackup(backupId)
+			if model != nil {
+				log.Info(model.GetId())
+				return false, bkpErr
+			}
+			if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
+				return true, nil
+			}
+			return false, bkpErr
+		})
+		if waitErr != nil {
+			return fmt.Errorf("error occured while polling for deleting backup : %v", err)
+		}
+		if err != nil {
+			return fmt.Errorf("backup object %v deletion failed.Err - %v, Response status - %v",
+				backup.GetClusterResourceName(), err, resp.StatusCode)
+		}
+	}
+	return nil
+}
+
+func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDeployment, targetCluster *tc.TargetCluster) (string, bool) {
+	var command, dbMaster string
+	switch dsName {
+	case dataservices.Postgresql:
+		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.FailOnError(err, "Failed while fetching db master pods=.")
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	case dataservices.Mysql:
+		_, connectionDetails, err := pdslib.ApiComponents.DataServiceDeployment.GetConnectionDetails(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching connection details.")
+		cred, err := pdslib.ApiComponents.DataServiceDeployment.GetDeploymentCredentials(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching credentials.")
+		command = fmt.Sprintf("mysqlsh --host=%v --port %v --user=innodb-config "+
+			" --password=%v -- cluster status", connectionDetails["host"], connectionDetails["port"], cred.GetPassword())
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	default:
+		return "", false
+	}
+	return dbMaster, true
 }
