@@ -9965,20 +9965,7 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			log.InfoD(stepStr)
 			var selectedPool *api.StoragePool
 			var maxDrivesAllowed int
-			selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode, contexts)
-			log.FailOnError(err, "error in getting pool with IO with error")
-			if selectedPool != nil {
-				drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
-				log.FailOnError(err, "error getting pool drives from node [%s]", selectedNode.Name)
-				if drvs, ok := drvMap[fmt.Sprintf("%d", selectedPool.ID)]; ok {
-					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
-				}
-			} else {
-				log.FailOnError(fmt.Errorf("selected pool is empty"), "selected pool is empty")
-			}
-
-			numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
-			//check if drives added  to pool will more than permissible for the node
+			//select a pool to add drives
 			poolListForOps, err := GetPoolsDetailsOnNode(selectedNode)
 			log.FailOnError(err, "failed while getting updated node pool list")
 			for i := 0; i < len(poolListForOps); i++ {
@@ -9986,7 +9973,9 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				log.FailOnError(err, "error in getting pool with IO with error")
 				if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
 					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
-					if (int(maxDriveLimit) - numofDrivesInNode) > POOL_MAX_CLOUD_DRIVES {
+					numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
+					//check if drives added  to pool will more than permissible for the node
+					if (int(maxDriveLimit) - numofDrivesInNode) > maxDrivesAllowed {
 						selectedPool = poolListForOps[i]
 						break
 					}
@@ -10021,23 +10010,23 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 		stepStr = "Test beyond max pool count"
 		Step(stepStr, func() {
 			log.InfoD(stepStr)
-			poolList, err := GetPoolsDetailsOnNode(selectedNode)
-			poolLeft := maxPoolLength - len(poolList)
-			numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
-			if poolLeft > int(maxDriveLimit)-numofDrivesInNode {
-				stNodes := node.GetStorageNodes()
-				dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
-				for _, node := range stNodes {
-					poolList, err := GetPoolsDetailsOnNode(node)
-					log.FailOnError(err, "failed while getting updated node pool list")
-					poolLeft := maxPoolLength - len(poolList)
-					numofDrivesInNode = GetNumOfDrivesInNode(selectedNode)
-					if poolLeft < int(maxDriveLimit)-numofDrivesInNode {
-						selectedNode = node
-						break
-					}
+			//search for suitable node
+			stNodes := node.GetStorageNodes()
+			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
+			for _, node := range stNodes {
+				poolList, err := GetPoolsDetailsOnNode(node)
+				log.FailOnError(err, "failed while getting updated node pool list")
+				poolLeft := maxPoolLength - len(poolList)
+				numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
+				if poolLeft < int(maxDriveLimit)-numofDrivesInNode {
+					selectedNode = node
+					break
 				}
 			}
+			//add new pools to selected node
+			poolList, err := GetPoolsDetailsOnNode(selectedNode)
+			log.FailOnError(err, "failed while getting updated node pool list")
+			poolLeft := maxPoolLength - len(poolList)
 			err = addNewPools(selectedNode, poolLeft)
 			log.FailOnError(err, "error adding new pools")
 			err = addNewPools(selectedNode, 1)
@@ -10054,17 +10043,6 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			err = addNewPools(selectedNode, poolLeft)
 			//get the number of available drives in the node
 			drvNumInt := GetNumOfDrivesInNode(selectedNode)
-			/*drvNum, err := Inst().N.RunCommand(selectedNode, "lsblk -l -d -e 11 -n -o NAME|wc -l", node.ConnectionOpts{
-				Timeout:         defaultCommandTimeout,
-				TimeBeforeRetry: defaultCommandRetry,
-				IgnoreError:     false,
-				Sudo:            false,
-			})
-			log.FailOnError(err, "failed to run command")
-			drvNum1 := strings.TrimSpace(string(drvNum))
-			drvNum1 = strings.Trim(drvNum1, "\n")
-			drvNumInt, err := strconv.Atoi(drvNum1)
-			log.FailOnError(err, "failed to convert to int")*/
 			maxDriveLimitInt := int(maxDriveLimit)
 			maxDriveAllowed := maxDriveLimitInt - (drvNumInt + 1)
 			err = Inst().V.RefreshDriverEndpoints()
