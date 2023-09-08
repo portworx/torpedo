@@ -3198,6 +3198,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		cloudCredName        string
 		backupLocationName   string
 		backupLocationUID    string
+		sourceClusterUid     string
 		backupLocationMap    map[string]string
 		providers            []string
 		labelSelectors       map[string]string
@@ -3250,17 +3251,22 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			dash.VerifyFatal(err, nil, "Creating backup location")
 		})
 
-		Step("Register cluster for backup", func() {
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
-			log.InfoD("Uid of [%s] cluster is %s", SourceClusterName, clusterUid)
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
 	})
