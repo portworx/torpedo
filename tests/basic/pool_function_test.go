@@ -9,7 +9,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-var _ = Describe("{StoragePoolExpandSmoky}", func() {
+var _ = Describe("{PoolExpandSmoky}", func() {
 	BeforeEach(func() {
 		StartTorpedoTest(testName, testDescription, nil, 0)
 		contexts = scheduleApps()
@@ -29,7 +29,7 @@ var _ = Describe("{StoragePoolExpandSmoky}", func() {
 		EndTorpedoTest()
 	})
 
-	testName = "StoragePoolExpandDiskAdd"
+	testName = "PoolExpandDiskAdd"
 	testDescription = "Validate storage pool expansion using add-disk option"
 	Describe(testName, func() {
 		It("select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
@@ -46,7 +46,7 @@ var _ = Describe("{StoragePoolExpandSmoky}", func() {
 		})
 	})
 
-	testName = "StoragePoolExpandDiskResize"
+	testName = "PoolExpandDiskResize"
 	testDescription = "Validate storage pool expansion using resize-disk option"
 	Describe(testName, func() {
 		It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
@@ -63,7 +63,7 @@ var _ = Describe("{StoragePoolExpandSmoky}", func() {
 		})
 	})
 
-	testName = "StoragePoolExpandDiskAuto"
+	testName = "PoolExpandDiskAuto"
 	testDescription = "Validate storage pool expansion using auto option"
 	Describe(testName, func() {
 		It("select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
