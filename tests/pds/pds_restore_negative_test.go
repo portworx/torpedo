@@ -301,6 +301,7 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 					log.FailOnError(err, "Failed while performing adhoc backup")
 				})
 
+				log.Info("Simultaneous backup delete and restores working as expected.")
 				var wg sync.WaitGroup
 				wg.Add(2)
 				go func() {
@@ -337,7 +338,6 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 				}()
 
 				wg.Wait()
-				log.Info("Simultaneous backup delete and restores working as expected.")
 
 				// TODO trigger workload for restored deployment
 

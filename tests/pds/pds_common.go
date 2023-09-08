@@ -294,8 +294,7 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
 		dsId := *dsInstance.Id
 		components.DataServiceDeployment.GetDeployment(dsId)
-		log.Infof("Delete Deployment %v ", dsInstance)
-		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
+		log.Infof("Deleting Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
 		if err != nil {
 			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())
