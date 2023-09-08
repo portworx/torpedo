@@ -64,6 +64,7 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -194,6 +195,7 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -334,6 +336,7 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -420,6 +423,7 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -517,6 +521,7 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -795,6 +800,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -928,6 +934,7 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -1038,6 +1045,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				restoredDeployments = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
