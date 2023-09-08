@@ -277,6 +277,7 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -343,6 +344,8 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					//clearing up the previous entries
+
 				})
 			}
 		})
