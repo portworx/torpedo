@@ -30,21 +30,8 @@ import (
 )
 
 const (
-	replicationUpdateTimeout         = 4 * time.Hour
-	retryTimeout                     = time.Minute * 2
-	addDriveUpTimeOut                = time.Minute * 15
-	poolResizeTimeout                = time.Minute * 120
-	poolExpansionStatusCheckInterval = time.Minute * 3
-	maxPoolLength                    = 8
+	maxPoolLength = 8
 )
-
-var contexts []*scheduler.Context
-var poolIDToResize string
-var poolToBeResized *api.StoragePool
-var targetSizeInBytes uint64
-var originalSizeInBytes uint64
-var testDescription string
-var testName string
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
