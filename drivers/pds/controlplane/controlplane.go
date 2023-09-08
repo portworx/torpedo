@@ -337,7 +337,7 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
-	time.Sleep(5 * time.Minute)
+	time.Sleep(15 * time.Minute)
 	_, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)
