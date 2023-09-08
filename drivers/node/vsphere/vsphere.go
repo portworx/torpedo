@@ -3,11 +3,12 @@ package vsphere
 import (
 	"context"
 	"fmt"
-	"github.com/vmware/govmomi/vim25/mo"
 	"net/url"
 	"os"
 	"regexp"
 	"time"
+
+	"github.com/vmware/govmomi/vim25/mo"
 
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -209,6 +210,10 @@ func (v *vsphere) connect() error {
 		}
 	}
 	return nil
+}
+func (v *vsphere) GetVmName(node node.Node) (string, error) {
+	vm := vmMap[node.Name]
+	return vm.Name(), nil
 }
 
 // AddVM adds a new VM object to vmMap
