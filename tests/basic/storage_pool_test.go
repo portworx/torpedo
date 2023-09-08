@@ -10016,13 +10016,13 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 		Step(stepLog, func() {
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting node")
-			/* driverName := vsphere.DriverName
+			driverName := vsphere.DriverName
 			driver, _ := node.Get(driverName)
 			vmName, err := driver.GetVmName(selectedNodeForOps)
 			log.FailOnError(err, "Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 			if err = driver.AddMachine(vmName); err != nil {
 				log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
-			} */
+			}
 
 			/* err = driver.Init(node.InitOptions{
 				SpecDir: Inst().SpecDir,
@@ -10030,7 +10030,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			err = driver.DeleteVmOnNode(selectedNodeForOps)
 			log.Errorf("Failed to delete vm: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 			*/
-			driver, _ := node.Get(vsphere.DriverName)
+			driver, _ = node.Get(vsphere.DriverName)
 			destroyErr := driver.DestroyVM(selectedNodeForOps)
 			//err = Inst().N.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
