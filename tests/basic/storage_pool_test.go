@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
@@ -10029,7 +10030,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			err = driver.DeleteVmOnNode(selectedNodeForOps)
 			log.Errorf("Failed to delete vm: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 			*/
-			driver, _ := node.Get(driverName)
+			driver, _ := node.Get(vsphere.DriverName)
 			destroyErr := driver.DestroyVM(selectedNodeForOps)
 			//err = Inst().N.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
