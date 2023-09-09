@@ -4832,14 +4832,6 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 				infraAdminUsers = append(infraAdminUsers, user)
 			}
 		})
-		Step(fmt.Sprintf("Add new user to %s group", adminGroup), func() {
-			log.InfoD(fmt.Sprintf("Adding new user to %s group", adminGroup))
-			for _, user := range createUsers(1) {
-				err := backup.AddGroupToUser(user, adminGroup)
-				log.FailOnError(err, "failed to add user %s to the group %s", user, adminGroup)
-				newAdmin = user
-			}
-		})
 		createObjectsFromUser := func(user string) {
 			Step(fmt.Sprintf("Create cloud credential and backup location from the user %s", user), func() {
 				log.InfoD(fmt.Sprintf("Creating cloud credential and backup location from the user %s", user))
@@ -4971,8 +4963,16 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 				log.Infof("The list of user restores taken are: %v", userRestoreMap)
 			})
 		}
+		Step(fmt.Sprintf("Add new user to %s group", adminGroup), func() {
+			log.InfoD(fmt.Sprintf("Adding new user to %s group", adminGroup))
+			for _, user := range createUsers(1) {
+				err := backup.AddGroupToUser(user, adminGroup)
+				log.FailOnError(err, "failed to add user %s to the group %s", user, adminGroup)
+				newAdmin = user
+			}
+		})
 		newAdminCtx, err := backup.GetNonAdminCtx(newAdmin, commonPassword)
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.FailOnError(err, "Fetching new admin %s ctx", newAdmin)
 		cleanupUserObjectsFromAdmin := func(user string) {
 			defer GinkgoRecover()
 			Step(fmt.Sprintf("Delete user %s schedule backups, backup schedule and schedule policy from the admin", user), func() {
