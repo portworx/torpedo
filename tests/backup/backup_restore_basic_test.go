@@ -3194,27 +3194,17 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
-		cloudCredUID         string
 		cloudCredName        string
-		backupLocationName   string
-		backupLocationUID    string
-		sourceClusterUid     string
-		backupLocationMap    map[string]string
-		providers            []string
-		labelSelectors       map[string]string
-		appList              []string
-		appNamespaces        []string
-		numDeployments       int
-		restoreNames         []string
-		clusterUid           string
+		//sourceClusterUid     string
+		backupLocationMap map[string]string
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("AlternateBackupBetweenNfsAndS3", "To perform alternate backups between NFS and S3, and then perform the restore", nil, 86088)
-		appList = Inst().AppList
+		//appList = Inst().AppList
 		backupLocationMap = make(map[string]string)
-		labelSelectors = make(map[string]string)
-		providers = getProviders()
+		//labelSelectors = make(map[string]string)
+		//providers = getProviders()
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3261,7 +3251,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			//sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
