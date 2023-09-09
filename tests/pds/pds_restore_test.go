@@ -196,6 +196,9 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
 				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+				log.InfoD("setting source kubeconfig")
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "failed while setting set cluster path")
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -250,6 +253,7 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 					}
 					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					log.InfoD("setting destination kubeconfig")
 					err = SetDestinationKubeConfig()
 					log.FailOnError(err, "failed while setting dest cluster path")
 					for _, backupJob := range backupJobs {
