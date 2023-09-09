@@ -110,6 +110,7 @@ const (
 	errorTimeDuration            = 15 * time.Minute
 	defaultTestConnectionTimeout = 15 * time.Minute
 	defaultWaitUpgradeRetry      = 10 * time.Second
+	AnthosNodeTimeCheckVersion   = "1.13.0"
 )
 
 var (
@@ -265,8 +266,17 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	if err := anth.RefreshNodeRegistry(); err != nil {
 		return err
 	}
-	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
-		return err
+
+	isVersionRight, err := anth.compareCurrentVersionWith(AnthosNodeTimeCheckVersion)
+	if err != nil {
+		return fmt.Errorf("comparin two versions fails with error: %v", err)
+	}
+
+	// skipping time measuring if version is older
+	if !isVersionRight {
+		if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
+			return err
+		}
 	}
 	if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 		return err
@@ -341,15 +351,11 @@ func (anth *anthos) VerifyUpgradeVersion(upgradeVersion string) error {
 	parseV2 := strings.Split(upgradeVersion, "-")
 	v1 := strings.TrimSpace(parseV1[0])
 	v2 := strings.TrimSpace(parseV2[0])
-	version1, err := version.NewVersion(v1)
+	isVersionRight, err := anth.compareCurrentVersionWith(upgradeVersion)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to compare the version. Failing with error: %s", err)
 	}
-	version2, err := version.NewVersion(v2)
-	if err != nil {
-		return err
-	}
-	if version1.GreaterThanOrEqual(version2) {
+	if !isVersionRight {
 		return fmt.Errorf("incorrect upgrade version:%s is provided."+
 			"Upgrade version should be higher", upgradeVersion)
 	}
@@ -548,6 +554,7 @@ func (anth *anthos) unsetUserNameAndKey() error {
 // checkUserClusterNodesUpgradeTime measure the time taken by each node and report error
 func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
 	log.Info("Validating user cluster nodes upgrade time")
+
 	userCluster, err := anth.getUserClusterName()
 	if err != nil {
 		return err
@@ -633,6 +640,28 @@ func (anth *anthos) updateFileOwnership(dirPath string) error {
 		return fmt.Errorf("updating file permission after upgrade is failing: [%s]. Err: (%v)", out, err)
 	}
 	return nil
+}
+
+// compareCurrentVersionWith return true if given version is greater than anthos version else false
+func (anth *anthos) compareCurrentVersionWith(newVersion string) (bool, error) {
+	parseV1 := strings.Split(anth.version, "-")
+	parseV2 := strings.Split(newVersion, "-")
+	v1 := strings.TrimSpace(parseV1[0])
+	v2 := strings.TrimSpace(parseV2[0])
+	version1, err := version.NewVersion(v1)
+	if err != nil {
+		return false, err
+	}
+	version2, err := version.NewVersion(v2)
+	if err != nil {
+		return false, err
+	}
+
+	if version1.GreaterThanOrEqual(version2) {
+		return false, nil
+	}
+	return true, nil
+
 }
 
 // getNodesSortByAge return pool node list map of sorted node list by their age
