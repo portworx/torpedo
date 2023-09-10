@@ -10030,8 +10030,8 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			destroyErr := driver.PowerOffVM(selectedNodeForOps)
 			destroyErr1 := driver.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
-			log.FailOnError(destroyErr, "failed to destroy the node with err %s", destroyErr)
-			log.FailOnError(destroyErr1, "failed to destroy the node with err %s", destroyErr1)
+			log.FailOnError(destroyErr, "Failed to destroy the node with err %s", destroyErr)
+			log.FailOnError(destroyErr1, "Failed to destroy the node with err %s", destroyErr1)
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			var stNode node.Node
 			time.Sleep(500 * time.Second)
