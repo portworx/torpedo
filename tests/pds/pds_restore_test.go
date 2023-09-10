@@ -53,8 +53,6 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 	})
 
 	It("Perform multiple restore within same cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
-		var wlDeploymentsToBeCleaned []*v1.Deployment
 		var deps []*pds.ModelsDeployment
 		pdsdeploymentsmd5Hash := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
@@ -64,21 +62,13 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				deploymentsToBeCleaned := []*pds.ModelsDeployment{}
+				restoredDeployments := []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleaned := []*v1.Deployment{}
 
 				//clearing up the previous entries
-				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
-				restoredDeployments = []*pds.ModelsDeployment{}
-				wlDeploymentsToBeCleaned = []*v1.Deployment{}
-
-				for hash := range pdsdeploymentsmd5Hash {
-					delete(pdsdeploymentsmd5Hash, hash)
-				}
-				log.Debugf("length of map after deleting %d", len(pdsdeploymentsmd5Hash))
-
-				for hash1 := range restoredDeploymentsmd5Hash {
-					delete(restoredDeploymentsmd5Hash, hash1)
-				}
-				log.Debugf("length of map after deleting %d", len(restoredDeploymentsmd5Hash))
+				CleanMapEntries(pdsdeploymentsmd5Hash)
+				CleanMapEntries(restoredDeploymentsmd5Hash)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
@@ -199,9 +189,6 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 	})
 
 	It("Perform multiple restore to different cluster", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
-		var wlDeploymentsToBeCleanedinSrc []*v1.Deployment
-		var wlDeploymentsToBeCleanedinDest []*v1.Deployment
 		var deps []*pds.ModelsDeployment
 		pdsdeploymentsmd5Hash := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
@@ -211,8 +198,15 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
-				restoredDeployments = []*pds.ModelsDeployment{}
+				deploymentsToBeCleaned := []*pds.ModelsDeployment{}
+				restoredDeployments := []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleanedinSrc := []*v1.Deployment{}
+				wlDeploymentsToBeCleanedinDest := []*v1.Deployment{}
+
+				//clearing up the previous entries
+				CleanMapEntries(pdsdeploymentsmd5Hash)
+				CleanMapEntries(restoredDeploymentsmd5Hash)
+
 				log.InfoD("setting source kubeconfig")
 				err = SetSourceKubeConfig()
 				log.FailOnError(err, "failed while setting set cluster path")

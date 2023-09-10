@@ -221,6 +221,13 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	return err
 }
 
+func CleanMapEntries(deleteMapEntries map[string]string) {
+	for hash := range deleteMapEntries {
+		delete(deleteMapEntries, hash)
+	}
+	log.Debugf("size of map post deletion %d", len(deleteMapEntries))
+}
+
 // CleanupWorkloadDeployments will clean up the wldeployment based on the kubeconfigs
 func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
 	if isSrc {
