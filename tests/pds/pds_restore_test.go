@@ -217,13 +217,11 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 				})
 				stepLog = "Running Workloads before taking backups"
 				Step(stepLog, func() {
-					for _, pdsDeployment := range deps {
-						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
-						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
-						log.FailOnError(err, "Error while Running workloads")
-						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
-						pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-					}
+					ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+					wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
+					log.FailOnError(err, "Error while Running workloads")
+					log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+					pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
 				})
 
 				defer func() {
