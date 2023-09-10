@@ -9933,7 +9933,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.FailOnError(err, "error while adding metadata disk")
 		}
 
-		/*stepLog := "adding max supported drives"
+		stepLog := "adding max supported drives"
 		Step(stepLog, func() {
 			log.FailOnError(err, "error adding cloud drive")
 			err = Inst().V.RefreshDriverEndpoints()
@@ -10011,7 +10011,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 				}
 			}
 
-		})*/
+		})
 		stepLog = "shutdown node and wait for storageless node to become storage node"
 		Step(stepLog, func() {
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
@@ -10035,12 +10035,11 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			destroyErr1 := driver.DestroyVM(selectedNodeForOps)
 			//err = Inst().N.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
-			time.Sleep(300 * time.Second)
-			log.FailOnError(destroyErr, "failed to destroy the node with err %s", err)
-			log.FailOnError(destroyErr1, "failed to destroy the node with err %s", err)
+			log.FailOnError(destroyErr, "failed to destroy the node with err %s", destroyErr)
+			log.FailOnError(destroyErr1, "failed to destroy the node with err %s", destroyErr1)
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			var stNode node.Node
-
+			time.Sleep(500 * time.Second)
 			slNodes := node.GetStorageLessNodes()
 			if len(slNodes) == 0 {
 				dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
