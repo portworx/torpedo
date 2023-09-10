@@ -10041,12 +10041,12 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			}
 
 			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
-			for _, n := range stNodes {
-				if n.Id == slNode.Id {
-					stNode = n
-					break
-				}
-			}
+			//for _, n := range stNodes {
+			//	if n.Id == slNode.Id {
+			//		stNode = n
+			//		break
+			//	}
+			//}
 			//dash.VerifyFatal(stNode.Name != "", true, fmt.Sprintf("Verify node %s is converted to storage node", slNode.Name))
 		})
 	})
