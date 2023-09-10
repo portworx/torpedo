@@ -10023,9 +10023,9 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			driverName := vsphere.DriverName
 			driver, _ := node.Get(driverName)
 			vmName, err := driver.GetVmName(selectedNodeForOps)
-			log.FailOnError(err, "Failed to get Vm name", err)
+			log.FailOnError(err, "Failed to get Vm name")
 			err = driver.AddMachine(vmName)
-			log.FailOnError(err, "Failed to get Vm name", err)
+			log.FailOnError(err, "Failed to get Vm name")
 			driver, _ = node.Get(vsphere.DriverName)
 			destroyErr := driver.PowerOffVM(selectedNodeForOps)
 			destroyErr1 := driver.DestroyVM(selectedNodeForOps)
