@@ -64,7 +64,22 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+
+				//clearing up the previous entries
 				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+				restoredDeployments = []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
+
+				for hash := range pdsdeploymentsmd5Hash {
+					delete(pdsdeploymentsmd5Hash, hash)
+				}
+				log.Debugf("length of map after deleting %d", len(pdsdeploymentsmd5Hash))
+
+				for hash1 := range restoredDeploymentsmd5Hash {
+					delete(restoredDeploymentsmd5Hash, hash1)
+				}
+				log.Debugf("length of map after deleting %d", len(restoredDeploymentsmd5Hash))
+
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -84,13 +99,12 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				})
 				stepLog = "Running Workloads before taking backups"
 				Step(stepLog, func() {
-					for _, pdsDeployment := range deps {
-						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(pdsDeployment, wkloadParams)
-						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
-						log.FailOnError(err, "Error while Running workloads")
-						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
-						pdsdeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-					}
+					ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+					log.FailOnError(err, "Error while Running workloads")
+					log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+					pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+
 				})
 				stepLog = "Perform adhoc backup and validate them"
 				Step(stepLog, func() {
@@ -121,13 +135,14 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+						restoredDeployments = append(restoredDeployments, restoredDeployment)
 						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
 				})
 				stepLog = "Validate md5hash for the restored deployments"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					for _, pdsDeployment := range deploymentsToBeCleaned {
+					for _, pdsDeployment := range restoredDeployments {
 						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
 						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 						log.FailOnError(err, "Error while Running workloads")
@@ -135,16 +150,17 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 						restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 					}
 
-					defer func() {
-						for _, wlDep := range wlDeploymentsToBeCleaned {
-							err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-							log.FailOnError(err, "Failed while deleting the workload deployment")
-						}
-					}()
-
 					dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
 						true, "Validate md5 hash after restore")
 				})
+
+				Step("Clean up workload deployments", func() {
+					for _, wlDep := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
+				})
+
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
 				})
@@ -196,6 +212,7 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
 				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+				restoredDeployments = []*pds.ModelsDeployment{}
 				log.InfoD("setting source kubeconfig")
 				err = SetSourceKubeConfig()
 				log.FailOnError(err, "failed while setting set cluster path")
