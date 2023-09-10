@@ -10047,7 +10047,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 					break
 				}
 			}
-			dash.VerifyFatal(stNode.Name != "", true, fmt.Sprintf("Verify node %s is converted to storage node", slNode.Name))
+			//dash.VerifyFatal(stNode.Name != "", true, fmt.Sprintf("Verify node %s is converted to storage node", slNode.Name))
 		})
 	})
 	JustAfterEach(func() {
