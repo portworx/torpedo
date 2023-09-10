@@ -29,6 +29,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var (
+	maxPoolLength = 8
+)
+
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
 	BeforeEach(func() {
 		StartTorpedoTest(testName, testDescription, nil, 0)
@@ -9985,7 +9989,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 							for j := 1; j <= drivesThatCanBeAdded; j++ {
 								driveSize := drvSize * uint64(j)
 								expectedSize := (poolListForOps[i].TotalSize / units.GiB) + driveSize
-								isjournal, err := isJournalEnabled()
+								isjournal, err := IsJournalEnabled()
 								log.FailOnError(err, "Failed to check is journal enabled")
 								expectedSizeWithJournal := expectedSize
 								if isjournal {
@@ -10019,21 +10023,12 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			driverName := vsphere.DriverName
 			driver, _ := node.Get(driverName)
 			vmName, err := driver.GetVmName(selectedNodeForOps)
-			log.FailOnError(err, "Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
-			if err = driver.AddMachine(vmName); err != nil {
-				log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
-			}
-
-			/* err = driver.Init(node.InitOptions{
-				SpecDir: Inst().SpecDir,
-			})
-			err = driver.DeleteVmOnNode(selectedNodeForOps)
-			log.Errorf("Failed to delete vm: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
-			*/
+			log.FailOnError(err, "Failed to get Vm name", err)
+			err = driver.AddMachine(vmName)
+			log.FailOnError(err, "Failed to get Vm name", err)
 			driver, _ = node.Get(vsphere.DriverName)
 			destroyErr := driver.PowerOffVM(selectedNodeForOps)
 			destroyErr1 := driver.DestroyVM(selectedNodeForOps)
-			//err = Inst().N.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
 			log.FailOnError(destroyErr, "failed to destroy the node with err %s", destroyErr)
 			log.FailOnError(destroyErr1, "failed to destroy the node with err %s", destroyErr1)
