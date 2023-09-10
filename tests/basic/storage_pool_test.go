@@ -10031,11 +10031,13 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.Errorf("Failed to delete vm: [%s] due to err: [%v]", selectedNodeForOps.Name, err)
 			*/
 			driver, _ = node.Get(vsphere.DriverName)
-			destroyErr := driver.DestroyVM(selectedNodeForOps)
+			destroyErr := driver.PowerOffVM(selectedNodeForOps)
+			destroyErr1 := driver.DestroyVM(selectedNodeForOps)
 			//err = Inst().N.DestroyVM(selectedNodeForOps)
 			//shutdown for more than 3 mins
 			time.Sleep(300 * time.Second)
 			log.FailOnError(destroyErr, "failed to destroy the node with err %s", err)
+			log.FailOnError(destroyErr1, "failed to destroy the node with err %s", err)
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			var stNode node.Node
 
