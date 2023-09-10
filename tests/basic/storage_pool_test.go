@@ -10033,7 +10033,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.FailOnError(destroyErr1, "Failed to destroy the node with err %s", destroyErr1)
 			//shutdown for more than 3 mins
 			//check if storageless nodes has taken over the storage and pools from shutdown node
-			var stNode node.Node
+			//var stNode node.Node
 			time.Sleep(500 * time.Second)
 			slNodes := node.GetStorageLessNodes()
 			if len(slNodes) == 0 {
