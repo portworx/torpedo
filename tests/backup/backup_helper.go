@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -4157,4 +4158,106 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 		return "", "", err
 	}
 	return preRuleName, postRuleName, nil
+}
+
+// GetAllBackupNamesByOwnerID gets all backup names associated with the given ownerID
+func GetAllBackupNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				if isAdminCtx {
+					return []string{ownerID}
+				}
+				return nil
+			}(),
+		},
+	}
+	backupEnumerateResp, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupNames := make([]string, 0)
+	for _, backupObj := range backupEnumerateResp.GetBackups() {
+		if isAdminCtx {
+			backupNames = append(backupNames, backupObj.GetName())
+		} else {
+			if backupObj.GetOwnership().GetOwner() == ownerID {
+				backupNames = append(backupNames, backupObj.GetName())
+			}
+		}
+	}
+	return backupNames, nil
+}
+
+// GetAllBackupScheduleNamesByOwnerID gets all backup schedule names associated with the given ownerID
+func GetAllBackupScheduleNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				if isAdminCtx {
+					return []string{ownerID}
+				}
+				return nil
+			}(),
+		},
+	}
+	backupScheduleEnumerateResp, err := Inst().Backup.EnumerateBackupSchedule(ctx, backupScheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleNames := make([]string, 0)
+	for _, backupScheduleObj := range backupScheduleEnumerateResp.GetBackupSchedules() {
+		if isAdminCtx {
+			backupScheduleNames = append(backupScheduleNames, backupScheduleObj.GetName())
+		} else {
+			if backupScheduleObj.GetOwnership().GetOwner() == ownerID {
+				backupScheduleNames = append(backupScheduleNames, backupScheduleObj.GetName())
+			}
+		}
+	}
+	return backupScheduleNames, nil
+}
+
+// GetAllRestoreNamesByOwnerID gets all restore names associated with the given ownerID
+func GetAllRestoreNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				if isAdminCtx {
+					return []string{ownerID}
+				}
+				return nil
+			}(),
+		},
+	}
+	restoreEnumerateResp, err := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	restoreNames := make([]string, 0)
+	for _, restoreObj := range restoreEnumerateResp.GetRestores() {
+		if isAdminCtx {
+			restoreNames = append(restoreNames, restoreObj.GetName())
+		} else {
+			if restoreObj.GetOwnership().GetOwner() == ownerID {
+				restoreNames = append(restoreNames, restoreObj.GetName())
+			}
+		}
+	}
+	return restoreNames, nil
 }
