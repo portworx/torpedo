@@ -5144,7 +5144,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 // DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin deletes failed and in-progress backups and restores of user from the admin
 var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func() {
 
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87564
 
 	var (
 		scheduledAppContexts                           = make([]*scheduler.Context, 0)
@@ -5166,7 +5166,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin", "Delete failed and in-progress backups and restores of user from the admin side", nil, 87560)
+		StartTorpedoTest("DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin", "Delete failed and in-progress backups and restores of user from the admin side", nil, 87564)
 		log.InfoD("Scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -5249,12 +5249,35 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 			wg.Wait()
 			log.Infof("The list of in progress user backups taken are: %v", userInProgressBackupNames)
 		})
-		Step(fmt.Sprintf("Remove in progress backups taken by user %s from the admin", infraAdminUser), func() {
-			log.InfoD(fmt.Sprintf("Removing in progress backups taken by user %s from the admin", infraAdminUser))
+		Step(fmt.Sprintf("Verify in progress backups of the user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Verifying in progress backups of the user %s from the admin", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", infraAdminUser)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, ctx)
+			log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
+			for _, backupName := range userInProgressBackupNames {
+				if !IsPresent(backupNamesByOwnerID, backupName) {
+					err := fmt.Errorf("in progress backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
+		Step(fmt.Sprintf("Delete in progress backups taken by user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Deleting in progress backups taken by user %s from the admin", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
 			backupEnumerateRequest := &api.BackupEnumerateRequest{
 				OrgId: orgID,
+				EnumerateOptions: &api.EnumerateOptions{
+					Owners: []string{userOwnerID},
+				},
 			}
 			deletedUserBackupMap := make(map[string]bool)
 			deleteInProgressBackup := func() (interface{}, bool, error) {
@@ -5347,6 +5370,23 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 			wg.Wait()
 			log.Infof("The list of failed user backups taken are: %v", userFailedBackupNames)
 		})
+		Step(fmt.Sprintf("Verify failed backups of the user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Verifying failed backups of the user %s from the admin", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", infraAdminUser)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, ctx)
+			log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
+			for _, backupName := range userFailedBackupNames {
+				if !IsPresent(backupNamesByOwnerID, backupName) {
+					err := fmt.Errorf("failed backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
 		Step(fmt.Sprintf("Delete failed backups taken by user %s from the admin", infraAdminUser), func() {
 			log.InfoD(fmt.Sprintf("Deleting failed backups taken by user %s from the admin", infraAdminUser))
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -5387,6 +5427,23 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 			wg.Wait()
 			log.Infof("The list of successful user backups taken are: %v", userSuccessfulBackupMap)
 		})
+		Step(fmt.Sprintf("Verify successful backups of the user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Verifying successful backups of the user %s from the admin", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", infraAdminUser)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, ctx)
+			log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
+			for backupName := range userSuccessfulBackupMap {
+				if !IsPresent(backupNamesByOwnerID, backupName) {
+					err := fmt.Errorf("successful backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
 		Step(fmt.Sprintf("Take in progress restore of backups from the user %s", infraAdminUser), func() {
 			log.InfoD(fmt.Sprintf("Taking in progress restore of backups from the user %s", infraAdminUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
@@ -5411,8 +5468,25 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 			wg.Wait()
 			log.Infof("The list of in progress user restores taken are: %v", userInProgressRestoreNames)
 		})
-		Step(fmt.Sprintf("Remove in progress restores taken by user %s from the admin", infraAdminUser), func() {
-			log.InfoD(fmt.Sprintf("Removing in progress restores taken by user %s from the admin", infraAdminUser))
+		Step(fmt.Sprintf("Verify in progress restores of the user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Verifying in progress restores of the user %s from the admin", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", infraAdminUser)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, orgID, ctx)
+			log.FailOnError(err, "failed to fetch restore names with owner id %s from the admin", userOwnerID)
+			for _, restoreName := range userInProgressRestoreNames {
+				if !IsPresent(restoreNamesByOwnerID, restoreName) {
+					err := fmt.Errorf("in progress restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
+		Step(fmt.Sprintf("Delete in progress restores taken by user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Deleting in progress restores taken by user %s from the admin", infraAdminUser))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreEnumerateRequest := &api.RestoreEnumerateRequest{
@@ -5507,6 +5581,23 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 			}
 			wg.Wait()
 			log.Infof("The list of failed user restores taken are: %v", userFailedRestoreNames)
+		})
+		Step(fmt.Sprintf("Verify failed restores of the user %s from the admin", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Verifying failed restores of the user %s from the admin", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", infraAdminUser)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, orgID, ctx)
+			log.FailOnError(err, "failed to fetch restore names with owner id %s from the admin", userOwnerID)
+			for _, restoreName := range userFailedRestoreNames {
+				if !IsPresent(restoreNamesByOwnerID, restoreName) {
+					err := fmt.Errorf("failed restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
 		})
 		Step(fmt.Sprintf("Delete failed restores taken by user %s from the admin", infraAdminUser), func() {
 			log.InfoD(fmt.Sprintf("Deleting failed restores taken by user %s from the admin", infraAdminUser))
