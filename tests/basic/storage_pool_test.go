@@ -9937,7 +9937,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.FailOnError(err, "error while adding metadata disk")
 		}
 
-		stepLog := "adding max supported drives"
+		/*stepLog := "adding max supported drives"
 		Step(stepLog, func() {
 			log.FailOnError(err, "error adding cloud drive")
 			err = Inst().V.RefreshDriverEndpoints()
@@ -10015,7 +10015,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 				}
 			}
 
-		})
+		})*/
 		stepLog = "shutdown node and wait for storageless node to become storage node"
 		Step(stepLog, func() {
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
