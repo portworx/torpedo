@@ -4576,7 +4576,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 // DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin deletes user backups and restores of the deleted and inactive cluster from the admin
 var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin}", func() {
 
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87569
 
 	var (
 		scheduledAppContexts                       = make([]*scheduler.Context, 0)
@@ -4596,7 +4596,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin", "Delete user backups and restores of the deleted and inactive cluster from the admin", nil, 87560)
+		StartTorpedoTest("DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin", "Delete user backups and restores of the deleted and inactive cluster from the admin", nil, 87569)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -4688,6 +4688,23 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					wg.Wait()
 					log.Infof("The list of user backups taken are: %v", userBackupMap)
 				})
+				Step(fmt.Sprintf("Verify backups of the user %s from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Verifying backups of the user %s from the admin", user))
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+					log.FailOnError(err, "failed to fetch user owner id %s", user)
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, ctx)
+					log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
+					for backupName := range userBackupMap[user] {
+						if !IsPresent(backupNamesByOwnerID, backupName) {
+							err := fmt.Errorf("backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+							log.FailOnError(fmt.Errorf(""), err.Error())
+						}
+					}
+				})
 			}
 			err := TaskHandler([]string{infraAdminUsers[i]}, createObjectsFromUser, Parallel)
 			log.FailOnError(err, "failed to create objects from user")
@@ -4719,6 +4736,23 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					}
 					wg.Wait()
 					log.Infof("The list of user restores taken are: %v", userRestoreMap)
+				})
+				Step(fmt.Sprintf("Verify restores of the user %s from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Verifying restores of the user %s from the admin", user))
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+					log.FailOnError(err, "failed to fetch user owner id %s", user)
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Fetching px-central-admin ctx")
+					restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, orgID, ctx)
+					log.FailOnError(err, "failed to fetch restore names with owner id %s from the admin", userOwnerID)
+					for _, restoreName := range userRestoreMap[user] {
+						if !IsPresent(restoreNamesByOwnerID, restoreName) {
+							err := fmt.Errorf("restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
+							log.FailOnError(fmt.Errorf(""), err.Error())
+						}
+					}
 				})
 				if i == 0 {
 					Step(fmt.Sprintf("Delete user %s source and destination cluster", user), func() {
@@ -4768,10 +4802,8 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 				defer GinkgoRecover()
 				Step(fmt.Sprintf("Delete user %s backups from the admin", user), func() {
 					log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user))
-					nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
-					log.FailOnError(err, "failed to fetch user %s ctx", user)
 					for backupName := range userBackupMap[user] {
-						backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
+						backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 						log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
 						_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user][SourceClusterName], orgID, ctx)
 						log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
