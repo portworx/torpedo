@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -5616,6 +5617,23 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 				log.FailOnError(err, "failed to share user %s backup %s [backup-share] with user %s with ViewOnlyAccess", user1, backupName, user2)
 			}
 		})
+		Step(fmt.Sprintf("Verify shared backups of the user %s from the user %s", user1, user2), func() {
+			log.InfoD(fmt.Sprintf("Verifying shared backups of the user %s from the admin", user1))
+			nonAdminCtx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", user1)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", user1)
+			nonAdmin2Ctx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", user1)
+			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, nonAdmin2Ctx)
+			log.FailOnError(err, "failed to fetch backup names with owner id %s from the user %s", userOwnerID, user2)
+			for backupName := range userBackupMap[user1] {
+				if !IsPresent(backupNamesByOwnerID, backupName) {
+					err := fmt.Errorf("backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
 		Step(fmt.Sprintf("Share user %s backups [cluster-share] with user %s with ViewOnlyAccess", user1, user3), func() {
 			log.InfoD(fmt.Sprintf("Sharing user %s backups [cluster-share] with user %s with ViewOnlyAccess", user1, user3))
 			nonAdminCtx, err := backup.GetNonAdminCtx(user1, commonPassword)
@@ -5623,19 +5641,51 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{user3}, ViewOnlyAccess, true, nonAdminCtx)
 			log.FailOnError(err, "failed to share user %s backups %s [cluster-share] with user %s with ViewOnlyAccess", user1, userBackupMap[user1], user3)
 		})
+		Step(fmt.Sprintf("Verify shared backups of the user %s from the user %s", user1, user3), func() {
+			log.InfoD(fmt.Sprintf("Verifying shared backups of the user %s from the admin", user1))
+			nonAdminCtx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", user1)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", user1)
+			nonAdmin3Ctx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", user1)
+			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, nonAdmin3Ctx)
+			log.FailOnError(err, "failed to fetch backup names with owner id %s from the user %s", userOwnerID, user3)
+			for backupName := range userBackupMap[user1] {
+				if !IsPresent(backupNamesByOwnerID, backupName) {
+					err := fmt.Errorf("backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
 		Step(fmt.Sprintf("Delete the owner [%s] of the backups", user1), func() {
 			log.InfoD(fmt.Sprintf("Deleting the owner [%s] of the backups", user1))
 			err := backup.DeleteUser(user1)
 			log.FailOnError(err, "failed to delete user %s", user1)
 		})
+		Step(fmt.Sprintf("Verify shared backups of the user %s from the admin", user1), func() {
+			log.InfoD(fmt.Sprintf("Verifying shared backups of the user %s from the admin", user1))
+			nonAdminCtx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", user1)
+			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+			log.FailOnError(err, "failed to fetch user owner id %s", user1)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, ctx)
+			log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
+			for backupName := range userBackupMap[user1] {
+				if !IsPresent(backupNamesByOwnerID, backupName) {
+					err := fmt.Errorf("backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+		})
 		Step(fmt.Sprintf("Delete user %s backups from the admin", user2), func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user2))
-			nonAdminCtx, err := backup.GetNonAdminCtx(user2, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", user2)
 			for backupName := range userBackupMap[user1] {
-				backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
+				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user2)
 				_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user2][SourceClusterName], orgID, ctx)
 				log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user2)
@@ -5643,15 +5693,15 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 		})
 		Step(fmt.Sprintf("Wait for the backups to be deleted"), func() {
 			log.InfoD("Waiting for the backups to be deleted")
-			nonAdminCtx, err := backup.GetNonAdminCtx(user2, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", user2)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
 			for backupName := range userBackupMap[user1] {
 				wg.Add(1)
 				go func(backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = Inst().Backup.WaitForBackupDeletion(nonAdminCtx, backupName, orgID, backupDeleteTimeout, backupDeleteRetryTime)
+					err = Inst().Backup.WaitForBackupDeletion(ctx, backupName, orgID, backupDeleteTimeout, backupDeleteRetryTime)
 					log.FailOnError(err, "failed while waiting for backup %s to be deleted", backupName)
 				}(backupName)
 			}
@@ -5673,5 +5723,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 		}
 		err = backup.DeleteUser(user2)
 		log.FailOnError(err, "failed to delete user %s", user2)
+		err = backup.DeleteUser(user3)
+		log.FailOnError(err, "failed to delete user %s", user3)
 	})
 })
