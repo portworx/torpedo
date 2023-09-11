@@ -4191,9 +4191,12 @@ func WaitForBackupLocationAddition(
 
 // CreateNFSBackupLocation creates backup location for nfs
 func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKey string, subPath string, validate bool) error {
-	serverAddr := os.Getenv("NFS_SERVER_ADDR")
-	mountOption := os.Getenv("NFS_MOUNT_OPTION")
-	path := os.Getenv("NFS_PATH")
+	// serverAddr := os.Getenv("NFS_SERVER_ADDR")
+	// mountOption := os.Getenv("NFS_MOUNT_OPTION")
+	// path := os.Getenv("NFS_PATH")
+	serverAddr := "10.13.42.13"
+	mountOption := "/DevNFS"
+	path := "abrartest"
 	backupDriver := Inst().Backup
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
