@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"net/http"
 	"strings"
 	"time"
@@ -290,6 +291,22 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 		}
 	}
 	return pvcCapacity, err
+}
+
+func CleanUpBackUpTargets(projectID, prefix string) error {
+	bkpClient, err := pdsbkp.InitializePdsBackup()
+	if err != nil {
+		return err
+	}
+	bkpTargets, err := bkpClient.GetAllBackUpTargets(projectID, prefix)
+	for _, bkpTarget := range bkpTargets {
+		log.Debugf("Deleting bkptarget %s", bkpTarget.GetName())
+		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
