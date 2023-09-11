@@ -28,13 +28,18 @@ var (
 	deploymentsToBeCleaned []*pds.ModelsDeployment
 	deploymentDSentityMap  = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
 )
+
+const (
+	targetName = "automation--"
+)
+
 var _ = Describe("{PerformRestoreToSameCluster}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -165,12 +170,12 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 })
 
 var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(4)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreToDifferentCluster", "Perform multiple restore to different cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -315,14 +320,14 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 	})
 
 	It("Perform multiple restore having backup present at different cloud object store.", func() {
-		bkpTargetName = "autom-" + pdsbkp.RandString(4)
+		credName := targetName + pdsbkp.RandString(8)
 		var deploymentsToBeCleaned []*pds.ModelsDeployment
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		stepLog := "Create AWS S3 Backup target."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 			log.FailOnError(err, "Failed to create AWS backup target.")
 			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 			bkpTargets = append(bkpTargets, bkpTarget)
@@ -417,12 +422,12 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 })
 
 var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousRestoresSameDataService", "Perform multiple restore within same cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -516,12 +521,12 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 })
 
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -623,14 +628,13 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 	restoredDeploymentsmd5Hash := make(map[string]string)
 	var deploymentsToBeCleaned []*pds.ModelsDeployment
 	var wlDeploymentsToBeCleaned []*v1.Deployment
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 
 	JustBeforeEach(func() {
-		bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 		StartTorpedoTest("PerformRestoreToSameCluster", "Perform multiple restore within same cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -792,12 +796,12 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 })
 
 var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreAfterPVCResize", "Perform PVC Resize and restore within same cluster.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -934,7 +938,8 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 		StartTorpedoTest("PerformSimultaneousBackupRestore", "Perform multiple backup and restore simultaneously..", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 	})
@@ -1041,12 +1046,12 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 })
 
 var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 	})

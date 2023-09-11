@@ -15,12 +15,12 @@ import (
 )
 
 var _ = Describe("{PerformRestoreValidatingHA}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestoreValidatingHA", "Perform restore while validating HA.", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
@@ -140,12 +140,12 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 })
 
 var _ = Describe("{PerformRestorePDSPodsDown}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("PerformRestorePDSPodsDown", "Perform restore while simultaneously deleting backup controller manager & target controller pods", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
@@ -252,12 +252,12 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 })
 
 var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
-	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteBackupJobTriggerRestore", "Delete a running backup job and trigger a restore.", pdsLabels, 0)
+		credName := targetName + pdsbkp.RandString(8)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		ctx, err := GetSourceClusterConfigPath()
