@@ -1,0 +1,117 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: prometheus
+  namespace: prometheus
+spec:
+  replicas: 1
+  serviceAccountName: prometheus
+  serviceMonitorSelector:
+    matchLabels:
+      monitor: node
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: node-monitor
+  namespace: prometheus
+  labels:
+    monitor: node
+spec:
+  selector:
+    matchLabels:
+      k8s-app: node-exporter
+      release: prometheus
+  endpoints:
+    - port: metrics
+      interval: 1s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    role: alert-rules
+    release: prometheus
+  name: prometheus-node-alerts
+  namespace: prometheus
+spec:
+  groups:
+    - name: node-alerts
+      rules:
+        - alert: NodeDown
+          expr: up{job="node-exporter"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node {{ $labels.instance }} is down"
+            description: "{{ $labels.instance }} has been down for more than 5 minutes."
+        - alert: NodeRestart
+          expr: changes(node_boot_time_seconds[5m]) > 0
+#          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} has restarted"
+            description: "{{ $labels.instance }} has restarted within the last 5 minutes."
+        - alert: HighCPUUsage
+          expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} has high CPU usage"
+            description: "{{ $labels.instance }} has CPU usage above 80% for more than 5 minutes."
+        - alert: HighMemoryUsage
+          expr: (node_memory_MemTotal_bytes - node_memory_MemFree_bytes) / node_memory_MemTotal_bytes * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} has high memory usage"
+            description: "{{ $labels.instance }} has memory usage above 80% for more than 5 minutes."
+        - alert: HighDiskUsage
+          expr: (node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} - node_filesystem_free_bytes{fstype!~"tmpfs|overlay"}) / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} has high disk usage"
+            description: "{{ $labels.instance }} has disk usage above 80% for more than 5 minutes."
+        - alert: HighNetworkLatency
+          expr: histogram_quantile(0.99, sum(rate(node_network_transmit_duration_seconds_bucket[5m])) by (le, instance)) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} has high network latency"
+            description: "{{ $labels.instance }} has network latency above 1 second for more than 5 minutes."
+        - alert: NodeAutoScaled
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels:
+            severity: info
+          annotations:
+            summary: "Node {{ $labels.node }} has auto-scaled"
+            description: "{{ $labels.node }} has been auto-scaled within the last 5 minutes."
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    release: prometheus
+    role: alert-rules
+  name: pod-restart-alerts
+  namespace: prometheus
+spec:
+  groups:
+    - name: pod-restart-rules
+      rules:
+        - alert: PodRestartedInNamespace
+          expr: increase(kube_pod_container_status_restarts_total{namespace="px-backup"}[5m]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod in {{ $labels.namespace }} restarted"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times within the last 5 minutes."
