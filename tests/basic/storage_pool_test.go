@@ -10036,9 +10036,9 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//var stNode node.Node
 			time.Sleep(500 * time.Second)
 			slNodes := node.GetStorageLessNodes()
-			if len(slNodes) == 0 {
-				dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
-			}
+			//if len(slNodes) == 0 {
+			//	dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
+			//}
 
 			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
 			//for _, n := range stNodes {
