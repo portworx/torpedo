@@ -3205,6 +3205,8 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		nfsBackupLocationUID  string
 		bkpNamespaces         []string
 		labelSelectors        map[string]string
+		backupNames           []string
+		restoreNames          []string
 	)
 
 	JustBeforeEach(func() {
@@ -3279,10 +3281,25 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", s3backupName, SourceClusterName, sourceClusterUid, orgID, s3BackupLocationName)
 			err = CreateBackupWithValidation(ctx, s3backupName, SourceClusterName, s3BackupLocationName, s3BackupLocationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", s3backupName))
+			backupNames = append(backupNames, s3backupName)
 			nfsBackupName := fmt.Sprintf("%s-%s-%v", "nfs", BackupNamePrefix, time.Now().Unix())
 			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", nfsBackupName, SourceClusterName, sourceClusterUid, orgID, s3BackupLocationName)
 			err = CreateBackupWithValidation(ctx, nfsBackupName, SourceClusterName, nfsBackupLocationName, nfsBackupLocationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", nfsBackupName))
+			backupNames = append(backupNames, nfsBackupName)
+			log.InfoD("The final backups are %s", backupNames)
+		})
+
+		Step("Restoring backups on destination cluster", func() {
+			log.InfoD("Restoring  backup on destination cluster")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
+			for _, backupName := range backupNames {
+				restoreName := fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
+				err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from backup [%s]", backupName))
+				restoreNames = append(restoreNames, restoreName)
+			}
 		})
 	})
 })
