@@ -3211,10 +3211,8 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("AlternateBackupBetweenNfsAndS3", "To perform alternate backups between NFS and S3, and then perform the restore", nil, 86088)
-		//appList = Inst().AppList
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
-		//providers = getProviders()
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3288,6 +3286,16 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", nfsBackupName))
 			backupNames = append(backupNames, nfsBackupName)
 			log.InfoD("The final backups are %s", backupNames)
+		})
+
+		Step("Verifying if the backups are full or incremental", func() {
+			log.InfoD("Verifying if the backups are full or incremental")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				err = IsFullBackup(backupName, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
+			}
 		})
 
 		Step("Restoring backups on destination cluster", func() {
