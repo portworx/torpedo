@@ -2382,23 +2382,46 @@ func GetSubFromCtx(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	preferredUsername, ok := claims["sub"].(string)
+	sub, ok := claims["sub"].(string)
 	if !ok {
 		return "", fmt.Errorf("sub not found or is of invalid type")
 	}
-	return preferredUsername, nil
+	return sub, nil
 }
 
-// IsAdminCtx checks if the given ctx is associated with backup.PxCentralAdminUser
+// GetGroupsFromCtx extracts and decodes the JWT token from the outgoing context and then returns the groups
+func GetGroupsFromCtx(ctx context.Context) ([]string, error) {
+	claims, err := GetTokenClaimsFromCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	groups := make([]string, 0)
+	groupClaims, ok := claims["groups"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("groups not found or is of invalid type")
+	}
+	for _, groupClaim := range groupClaims {
+		groups = append(groups, groupClaim.(string))
+	}
+	return groups, nil
+}
+
+// IsAdminCtx checks if the given ctx is associated with any user in px-admin-group
 func IsAdminCtx(ctx context.Context) (bool, error) {
-	ctxPreferredUsername, err := GetPreferredUsernameFromCtx(ctx)
+	ctxGroups, err := GetGroupsFromCtx(ctx)
 	if err != nil {
 		return false, err
 	}
-	if ctxPreferredUsername != backup.PxCentralAdminUser {
-		return false, nil
+	found := false
+	for _, group := range ctxGroups {
+		if group == "/px-admin-group" {
+			found = true
+		}
 	}
-	return true, nil
+	if found {
+		return true, nil
+	}
+	return false, nil
 }
 
 func init() {
