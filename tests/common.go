@@ -4195,8 +4195,8 @@ func CreateNFSBackupLocation(name string, uid string, orgID string, encryptionKe
 	// mountOption := os.Getenv("NFS_MOUNT_OPTION")
 	// path := os.Getenv("NFS_PATH")
 	serverAddr := "10.13.42.13"
-	mountOption := "/DevNFS"
-	path := "abrartest"
+	mountOption := ""
+	path := "/DevNFS"
 	backupDriver := Inst().Backup
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
