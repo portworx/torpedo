@@ -17,6 +17,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToBeResized = getStoragePool(poolIDToResize)
 	})
 
@@ -31,52 +32,46 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 
 	testName = "PoolExpandDiskAdd"
 	testDescription = "Validate storage pool expansion using add-disk option"
-	Describe(testName, func() {
-		It("select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
-			originalSizeInBytes = poolToBeResized.TotalSize
-			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-			targetSizeGiB := targetSizeInBytes / units.GiB
+	It("select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+		originalSizeInBytes = poolToBeResized.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB := targetSizeInBytes / units.GiB
 
-			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-				poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
-			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-		})
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
 	testName = "PoolExpandDiskResize"
 	testDescription = "Validate storage pool expansion using resize-disk option"
-	Describe(testName, func() {
-		It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
-			originalSizeInBytes = poolToBeResized.TotalSize
-			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-			targetSizeGiB := targetSizeInBytes / units.GiB
+	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+		originalSizeInBytes = poolToBeResized.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB := targetSizeInBytes / units.GiB
 
-			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
-				poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
-			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-		})
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
+			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
 	testName = "PoolExpandDiskAuto"
 	testDescription = "Validate storage pool expansion using auto option"
-	Describe(testName, func() {
-		It("select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
-			originalSizeInBytes = poolToBeResized.TotalSize
-			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-			targetSizeGiB := targetSizeInBytes / units.GiB
+	It("select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
+		originalSizeInBytes = poolToBeResized.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB := targetSizeInBytes / units.GiB
 
-			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type auto",
-				poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
-			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_AUTO)
-			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-		})
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type auto",
+			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_AUTO)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 })
