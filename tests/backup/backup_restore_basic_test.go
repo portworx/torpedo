@@ -3193,11 +3193,10 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 // AlternateBackupBetweenNfsAndS3 Validates the type of backups(Full/Incremental) when alternate backups are taken between two backup locations of NFS and S3
 var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 	var (
-		scheduledAppContexts []*scheduler.Context
-		cloudCredName        string
-		sourceClusterUid     string
-		backupLocationMap    map[string]string
-		//backupNames           []string
+		scheduledAppContexts  []*scheduler.Context
+		cloudCredName         string
+		sourceClusterUid      string
+		backupLocationMap     map[string]string
 		s3CloudCredName       string
 		s3BackupLocationName  string
 		s3CloudCredUID        string
@@ -3274,15 +3273,16 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.InfoD("Taking backup of application from source cluster to both S3 and NFS backup locations")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-
-			//backupNames = make([]string, 0)
-			s3backupName := fmt.Sprintf("%s-%s-%v", "s3", BackupNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+
+			s3backupName := fmt.Sprintf("%s-%s-%v", "s3", BackupNamePrefix, time.Now().Unix())
 			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", s3backupName, SourceClusterName, sourceClusterUid, orgID, s3BackupLocationName)
 			err = CreateBackupWithValidation(ctx, s3backupName, SourceClusterName, s3BackupLocationName, s3BackupLocationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", s3backupName))
-			//backupNames = append(backupNames, s3backupName)
-
+			nfsBackupName := fmt.Sprintf("%s-%s-%v", "nfs", BackupNamePrefix, time.Now().Unix())
+			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", nfsBackupName, SourceClusterName, sourceClusterUid, orgID, s3BackupLocationName)
+			err = CreateBackupWithValidation(ctx, nfsBackupName, SourceClusterName, nfsBackupLocationName, nfsBackupLocationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", nfsBackupName))
 		})
 	})
 })
