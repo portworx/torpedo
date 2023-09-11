@@ -5491,11 +5491,11 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 	})
 })
 
-// 1339-T1
+// 1399-T1
 // DeleteSharedBackupOfUserFromAdmin deletes backups shared by the user from the admin
 var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87562
 
 	var (
 		scheduledAppContexts                       = make([]*scheduler.Context, 0)
@@ -5509,10 +5509,11 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 		infraAdminRole         backup.PxBackupRole = backup.InfrastructureOwner
 		user1                  string
 		user2                  string
+		user3                  string
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteSharedBackupOfUserFromAdmin", "Delete deletes backups shared by the user from the admin", nil, 87560)
+		StartTorpedoTest("DeleteSharedBackupOfUserFromAdmin", "Delete backups shared by the user from the admin", nil, 87562)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -5531,14 +5532,17 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
-		Step(fmt.Sprintf("Create %d users with %s role", 2, infraAdminRole), func() {
-			log.InfoD(fmt.Sprintf("Creating %d users with %s role", 2, infraAdminRole))
+		Step(fmt.Sprintf("Create %d users with %s role", 3, infraAdminRole), func() {
+			log.InfoD(fmt.Sprintf("Creating %d users with %s role", 3, infraAdminRole))
 			user1 = createUsers(1)[0]
 			err := backup.AddRoleToUser(user1, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, user1))
 			log.FailOnError(err, "failed to add role %s to the user %s", infraAdminRole, user1)
 			user2 = createUsers(1)[0]
 			err = backup.AddRoleToUser(user1, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, user2))
 			log.FailOnError(err, "failed to add role %s to the user %s", infraAdminRole, user2)
+			user3 = createUsers(1)[0]
+			err = backup.AddRoleToUser(user1, infraAdminRole, fmt.Sprintf("Adding %v role to %s", infraAdminRole, user3))
+			log.FailOnError(err, "failed to add role %s to the user %s", infraAdminRole, user3)
 		})
 		Step(fmt.Sprintf("Create cloud credential and backup location from the user %s", user1), func() {
 			log.InfoD(fmt.Sprintf("Creating cloud credential and backup location from the user %s", user1))
@@ -5603,14 +5607,21 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			wg.Wait()
 			log.Infof("The list of user backups taken are: %v", userBackupMap)
 		})
-		Step(fmt.Sprintf("Share user %s backups with user %s with ViewOnlyAccess", user1, user2), func() {
-			log.InfoD(fmt.Sprintf("Sharing user %s backups with user %s with ViewOnlyAccess", user1, user2))
+		Step(fmt.Sprintf("Share user %s backups [backup-share] with user %s with ViewOnlyAccess", user1, user2), func() {
+			log.InfoD(fmt.Sprintf("Sharing user %s backups [backup-share] with user %s with ViewOnlyAccess", user1, user2))
 			nonAdminCtx, err := backup.GetNonAdminCtx(user1, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user1)
 			for backupName := range userBackupMap[user1] {
 				err := ShareBackup(backupName, nil, []string{user2}, ViewOnlyAccess, nonAdminCtx)
-				log.FailOnError(err, "failed to share user %s backup %s with user %s with ViewOnlyAccess", user1, backupName, user2)
+				log.FailOnError(err, "failed to share user %s backup %s [backup-share] with user %s with ViewOnlyAccess", user1, backupName, user2)
 			}
+		})
+		Step(fmt.Sprintf("Share user %s backups [cluster-share] with user %s with ViewOnlyAccess", user1, user3), func() {
+			log.InfoD(fmt.Sprintf("Sharing user %s backups [cluster-share] with user %s with ViewOnlyAccess", user1, user3))
+			nonAdminCtx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", user1)
+			err = ClusterUpdateBackupShare(SourceClusterName, nil, []string{user3}, ViewOnlyAccess, true, nonAdminCtx)
+			log.FailOnError(err, "failed to share user %s backups %s [cluster-share] with user %s with ViewOnlyAccess", user1, userBackupMap[user1], user3)
 		})
 		Step(fmt.Sprintf("Delete the owner [%s] of the backups", user1), func() {
 			log.InfoD(fmt.Sprintf("Deleting the owner [%s] of the backups", user1))
