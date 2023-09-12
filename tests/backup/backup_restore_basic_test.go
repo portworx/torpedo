@@ -3270,21 +3270,31 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 
 		Step("Taking backup of application from source cluster to both S3 and NFS backup locations", func() {
 			log.InfoD("Taking backup of application from source cluster to both S3 and NFS backup locations")
+			var sem = make(chan struct{}, 10)
+			var wg sync.WaitGroup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			numberOfAlternateBackups := 2
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 
-			s3backupName := fmt.Sprintf("%s-%s-%v", "s3", BackupNamePrefix, time.Now().Unix())
-			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", s3backupName, SourceClusterName, sourceClusterUid, orgID, s3BackupLocationName)
-			err = CreateBackupWithValidation(ctx, s3backupName, SourceClusterName, s3BackupLocationName, s3BackupLocationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", s3backupName))
-			backupNames = append(backupNames, s3backupName)
-			nfsBackupName := fmt.Sprintf("%s-%s-%v", "nfs", BackupNamePrefix, time.Now().Unix())
-			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], in backup location [%s]", nfsBackupName, SourceClusterName, sourceClusterUid, orgID, s3BackupLocationName)
-			err = CreateBackupWithValidation(ctx, nfsBackupName, SourceClusterName, nfsBackupLocationName, nfsBackupLocationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", nfsBackupName))
-			backupNames = append(backupNames, nfsBackupName)
-			log.InfoD("The final backups are %s", backupNames)
+			for i := 0; i < numberOfAlternateBackups; i++ {
+				for locationUID, locationName := range backupLocationMap {
+					sem <- struct{}{}
+					time.Sleep(10 * time.Second)
+					backupName := fmt.Sprintf("%s-%s-%v", "alternate", BackupNamePrefix, time.Now().Unix())
+					backupNames = append(backupNames, backupName)
+					wg.Add(1)
+					go func(backupName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						defer func() { <-sem }()
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					}(backupName)
+				}
+				wg.Wait()
+			}
+			log.Infof("List of backups - %v", backupNames)
 		})
 
 		Step("Verifying if the backups are full or incremental", func() {
