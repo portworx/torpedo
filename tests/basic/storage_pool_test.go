@@ -9960,9 +9960,12 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//shutdown for more than 3 mins
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			time.Sleep(300 * time.Second)
-			//get fresh list of nodes by re-initializing scheduler and volume driver
-			err = Inst().S.RefreshNodeRegistry()
-			log.FailOnError(err, "Failed to destroy the node with err %s", err)
+			// Removing the node from the nodeRegistry
+			log.Infof("Deleting node %s from node registry", selectedNodeForOps.Name)
+			err = node.DeleteNode(selectedNodeForOps)
+			log.FailOnError(err, "Failed to remove OCP node [%s] from node list. Error: [%v]", selectedNodeForOps.Name, err)
+			log.Infof("Successfully deleted the OCP node: [%s] ", selectedNodeForOps.Name)
+
 			//err = Inst().V.RefreshDriverEndpoints()
 			//log.FailOnError(err, "Verify driver end points refresh")
 			slNodes = node.GetStorageLessNodes()
