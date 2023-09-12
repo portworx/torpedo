@@ -4860,7 +4860,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 // DeleteObjectsByMultipleUsersFromNewAdmin delete backups, backup schedules, restore and cluster objects created by multiple user from the new admin
 var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87567
 
 	var (
 		scheduledAppContexts       = make([]*scheduler.Context, 0)
@@ -4883,7 +4883,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteObjectsByMultipleUsersFromNewAdmin", "Delete backups, backup schedules, restore and cluster objects created by multiple user from the new admin", nil, 87560)
+		StartTorpedoTest("DeleteObjectsByMultipleUsersFromNewAdmin", "Delete backups, backup schedules, restore and cluster objects created by multiple user from the new admin", nil, 87567)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -5040,12 +5040,59 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 				wg.Wait()
 				log.Infof("The list of user restores taken are: %v", userRestoreMap)
 			})
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			Step(fmt.Sprintf("Verify backups of the user %s from the admin", user), func() {
+				log.InfoD(fmt.Sprintf("Verifying backups of the user %s from the admin", user))
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+				log.FailOnError(err, "failed to fetch user owner id %s", user)
+				backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, ctx)
+				log.FailOnError(err, "failed to fetch backup names with owner id %s from the admin", userOwnerID)
+				for backupName := range userBackupMap[user] {
+					if !IsPresent(backupNamesByOwnerID, backupName) {
+						err := fmt.Errorf("backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+						log.FailOnError(fmt.Errorf(""), err.Error())
+					}
+				}
+			})
+			Step(fmt.Sprintf("Verify backup schedules of the user %s from the admin", user), func() {
+				log.InfoD(fmt.Sprintf("Verifying backup schedules of the user %s from the admin", user))
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+				log.FailOnError(err, "failed to fetch user owner id %s", user)
+				backupScheduleNamesByOwnerID, err := GetAllBackupScheduleNamesByOwnerID(userOwnerID, orgID, ctx)
+				log.FailOnError(err, "failed to fetch backup schedule names with owner id %s from the admin", userOwnerID)
+				for _, backupScheduleName := range userScheduleNameMap {
+					if !IsPresent(backupScheduleNamesByOwnerID, backupScheduleName) {
+						err := fmt.Errorf("backup schedule %s is not listed in backup schedule names %s", backupScheduleName, backupScheduleNamesByOwnerID)
+						log.FailOnError(fmt.Errorf(""), err.Error())
+					}
+				}
+			})
+			Step(fmt.Sprintf("Verify restores of the user %s from the admin", user), func() {
+				log.InfoD(fmt.Sprintf("Verifying restores of the user %s from the admin", user))
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+				log.FailOnError(err, "failed to fetch user owner id %s", user)
+				restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, orgID, ctx)
+				log.FailOnError(err, "failed to fetch restore names with owner id %s from the admin", userOwnerID)
+				for _, restoreName := range userRestoreMap[user] {
+					if !IsPresent(restoreNamesByOwnerID, restoreName) {
+						err := fmt.Errorf("restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
+						log.FailOnError(fmt.Errorf(""), err.Error())
+					}
+				}
+			})
 		}
 		Step(fmt.Sprintf("Add new user to %s group", adminGroup), func() {
 			log.InfoD(fmt.Sprintf("Adding new user to %s group", adminGroup))
 			for _, user := range createUsers(1) {
 				err := backup.AddGroupToUser(user, adminGroup)
-				log.FailOnError(err, "failed to add user %s to the group %s", user, adminGroup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("failed to add user %s to the group %s", user, adminGroup))
 				newAdmin = user
 			}
 		})
@@ -5053,6 +5100,51 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 		log.FailOnError(err, "Fetching new admin %s ctx", newAdmin)
 		cleanupUserObjectsFromAdmin := func(user string) {
 			defer GinkgoRecover()
+			Step(fmt.Sprintf("Verify backups of the user %s from the new admin %s", user, newAdmin), func() {
+				log.InfoD(fmt.Sprintf("Verifying backups of the user %s from new admin %s", user, newAdmin))
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+				log.FailOnError(err, "failed to fetch user owner id %s", user)
+				backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, newAdminCtx)
+				log.FailOnError(err, "failed to fetch backup names with owner id %s from the new admin %s", userOwnerID, newAdmin)
+				for backupName := range userBackupMap[user] {
+					if !IsPresent(backupNamesByOwnerID, backupName) {
+						err := fmt.Errorf("backup %s is not listed in backup names %s", backupName, backupNamesByOwnerID)
+						log.FailOnError(fmt.Errorf(""), err.Error())
+					}
+				}
+			})
+			Step(fmt.Sprintf("Verify backup schedules of the user %s from the new admin %s", user, newAdmin), func() {
+				log.InfoD(fmt.Sprintf("Verifying backup schedules of the user %s from the new admin %s", user, newAdmin))
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+				log.FailOnError(err, "failed to fetch user owner id %s", user)
+				backupScheduleNamesByOwnerID, err := GetAllBackupScheduleNamesByOwnerID(userOwnerID, orgID, newAdminCtx)
+				log.FailOnError(err, "failed to fetch backup schedule names with owner id %s from the new admin %s", userOwnerID, newAdmin)
+				for _, backupScheduleName := range userScheduleNameMap {
+					if !IsPresent(backupScheduleNamesByOwnerID, backupScheduleName) {
+						err := fmt.Errorf("backup schedule %s is not listed in backup schedule names %s", backupScheduleName, backupScheduleNamesByOwnerID)
+						log.FailOnError(fmt.Errorf(""), err.Error())
+					}
+				}
+			})
+			Step(fmt.Sprintf("Verify restores of the user %s from the new admin %s", user, newAdmin), func() {
+				log.InfoD(fmt.Sprintf("Verifying restores of the user %s from the new admin %s", user, newAdmin))
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+				log.FailOnError(err, "failed to fetch user owner id %s", user)
+				restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, orgID, newAdminCtx)
+				log.FailOnError(err, "failed to fetch restore names with owner id %s from the new admin %s", userOwnerID, newAdmin)
+				for _, restoreName := range userRestoreMap[user] {
+					if !IsPresent(restoreNamesByOwnerID, restoreName) {
+						err := fmt.Errorf("restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
+						log.FailOnError(fmt.Errorf(""), err.Error())
+					}
+				}
+			})
 			Step(fmt.Sprintf("Delete user %s schedule backups, backup schedule and schedule policy from the admin", user), func() {
 				log.InfoD(fmt.Sprintf("Deleting user %s schedule backups, backup schedule and schedule policy from the admin", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -5073,10 +5165,8 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 			})
 			Step(fmt.Sprintf("Delete user %s backups from the admin", user), func() {
 				log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user))
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
-				log.FailOnError(err, "failed to fetch user %s ctx", user)
 				for backupName := range userBackupMap[user] {
-					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
+					backupUid, err := Inst().Backup.GetBackupUID(newAdminCtx, backupName, orgID)
 					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
 					_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user][SourceClusterName], orgID, newAdminCtx)
 					log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
