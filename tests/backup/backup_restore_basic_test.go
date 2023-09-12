@@ -3194,7 +3194,6 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 	var (
 		scheduledAppContexts  []*scheduler.Context
-		cloudCredName         string
 		sourceClusterUid      string
 		backupLocationMap     map[string]string
 		s3CloudCredName       string
@@ -3242,7 +3241,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			s3BackupLocationUID = uuid.New()
 			backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
 			err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, "aws"))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "aws"))
 			err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName("aws"), orgID, "")
 			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), time.Now().Unix())
 			nfsBackupLocationUID = uuid.New()
@@ -3309,5 +3308,23 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.InfoD("Deleting the deployed apps after the testcase")
+		// Cleaning up restores
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+		// Cleaning up applications created
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(scheduledAppContexts, opts)
+		// Cleaning up px-backup cluster
+		CleanupCloudSettingsAndClusters(backupLocationMap, s3CloudCredName, s3CloudCredUID, ctx)
 	})
 })
