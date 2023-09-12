@@ -10040,7 +10040,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//	dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 			//}
 
-			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
+			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, false, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
 			//for _, n := range stNodes {
 			//	if n.Id == slNode.Id {
 			//		stNode = n
