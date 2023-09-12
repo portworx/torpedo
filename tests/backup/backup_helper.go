@@ -1076,52 +1076,36 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 	}
 
 	// Deleting clusters and the corresponding cloud cred
-	var clusterCredName string
-	var clusterCredUID string
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	for _, kubeconfig := range kubeconfigList {
-		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
-		isPresent, err := IsClusterPresent(clusterName, ctx, orgID)
-		if err != nil {
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
-		}
-		if isPresent {
-			clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
-			clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-			if err != nil {
-				if strings.Contains(err.Error(), "object not found") {
-					log.InfoD("Cluster %s is deleted", clusterName)
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("failed to enumerate cluster in organization %s", orgID))
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		clusterProvider := GetClusterProviders()
+		for _, provider := range clusterProvider {
+			var clusterCredName, clusterCredUID string
+			switch provider {
+			case drivers.ProviderRke:
+				if clusterObj.PlatformCredentialRef != nil {
+					clusterCredName = clusterObj.PlatformCredentialRef.Name
+					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
 				} else {
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster [%s]", clusterName))
+					log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
-			} else {
-				clusterObj := clusterResp.GetCluster()
-				clusterProvider := GetClusterProviders()
-				for _, provider := range clusterProvider {
-					switch provider {
-					case drivers.ProviderRke:
-						if clusterObj.PlatformCredentialRef != nil {
-							clusterCredName = clusterObj.PlatformCredentialRef.Name
-							clusterCredUID = clusterObj.PlatformCredentialRef.Uid
-						} else {
-							log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterName)
-						}
-					default:
-						if clusterObj.CloudCredentialRef != nil {
-							clusterCredName = clusterObj.CloudCredentialRef.Name
-							clusterCredUID = clusterObj.CloudCredentialRef.Uid
-						} else {
-							log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
-						}
-					}
-					err = DeleteCluster(clusterName, orgID, ctx, true)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-					if clusterCredName != "" {
-						err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
-						Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
-					}
+			default:
+				if clusterObj.CloudCredentialRef != nil {
+					clusterCredName = clusterObj.CloudCredentialRef.Name
+					clusterCredUID = clusterObj.CloudCredentialRef.Uid
+				} else {
+					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
+			}
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
+			if clusterCredName != "" {
+				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
 			}
 		}
 	}
