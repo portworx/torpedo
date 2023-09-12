@@ -5881,7 +5881,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", user1)
 			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
 			log.FailOnError(err, "failed to fetch user owner id %s", user1)
-			nonAdmin2Ctx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			nonAdmin2Ctx, err := backup.GetNonAdminCtx(user2, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user1)
 			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, nonAdmin2Ctx)
 			log.FailOnError(err, "failed to fetch backup names with owner id %s from the user %s", userOwnerID, user2)
@@ -5905,7 +5905,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", user1)
 			userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
 			log.FailOnError(err, "failed to fetch user owner id %s", user1)
-			nonAdmin3Ctx, err := backup.GetNonAdminCtx(user1, commonPassword)
+			nonAdmin3Ctx, err := backup.GetNonAdminCtx(user3, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user1)
 			backupNamesByOwnerID, err := GetAllBackupNamesByOwnerID(userOwnerID, orgID, nonAdmin3Ctx)
 			log.FailOnError(err, "failed to fetch backup names with owner id %s from the user %s", userOwnerID, user3)
@@ -5915,11 +5915,6 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 					log.FailOnError(fmt.Errorf(""), err.Error())
 				}
 			}
-		})
-		Step(fmt.Sprintf("Delete the owner [%s] of the backups", user1), func() {
-			log.InfoD(fmt.Sprintf("Deleting the owner [%s] of the backups", user1))
-			err := backup.DeleteUser(user1)
-			log.FailOnError(err, "failed to delete user %s", user1)
 		})
 		Step(fmt.Sprintf("Verify shared backups of the user %s from the admin", user1), func() {
 			log.InfoD(fmt.Sprintf("Verifying shared backups of the user %s from the admin", user1))
@@ -5937,6 +5932,11 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 					log.FailOnError(fmt.Errorf(""), err.Error())
 				}
 			}
+		})
+		Step(fmt.Sprintf("Delete the owner [%s] of the backups", user1), func() {
+			log.InfoD(fmt.Sprintf("Deleting the owner [%s] of the backups", user1))
+			err := backup.DeleteUser(user1)
+			log.FailOnError(err, "failed to delete user %s", user1)
 		})
 		Step(fmt.Sprintf("Delete user %s backups from the admin", user2), func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
