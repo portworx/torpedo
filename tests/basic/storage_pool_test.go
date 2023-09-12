@@ -9924,7 +9924,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 		}
 		numOfSlNodeBefore := len(slNodes)
-		fmt.Printf("slnodes %s", len(slNodes))
+		fmt.Printf("slnodes %v", len(slNodes))
 		slNode := GetRandomStorageLessNode(slNodes)
 		stNodes := node.GetStorageNodes()
 		selectedNode := stNodes[0]
@@ -9956,7 +9956,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//check if storageless nodes has taken over the storage and pools from shutdown node
 			time.Sleep(300 * time.Second)
 			slNodes := node.GetStorageLessNodes()
-			fmt.Printf("slnodes %s", len(slNodes))
+			fmt.Printf("slnodes %v", len(slNodes))
 			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, false, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
 		})
 	})
