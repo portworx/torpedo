@@ -48,7 +48,7 @@ FROM alpine
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
 
  # Install Azure Cli
-RUN apk add --no-cache --update python3 py3-pip
+RUN apk add --no-cache --update python3 py3-pip go git && git clone https://github.com/portworx/torpedo.git /torpedo-gin
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
 
 # Install kubectl from Docker Hub.
