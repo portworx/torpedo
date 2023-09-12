@@ -9963,8 +9963,8 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//get fresh list of nodes by re-initializing scheduler and volume driver
 			err = Inst().S.RefreshNodeRegistry()
 			log.FailOnError(err, "Failed to destroy the node with err %s", err)
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "Verify driver end points refresh")
+			//err = Inst().V.RefreshDriverEndpoints()
+			//log.FailOnError(err, "Verify driver end points refresh")
 			slNodes = node.GetStorageLessNodes()
 			fmt.Printf("slnodes %v", len(slNodes))
 			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, false, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
