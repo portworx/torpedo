@@ -26,7 +26,7 @@ var (
 	restoredDeployment     *pds.ModelsDeployment
 	restoredDeployments    []*pds.ModelsDeployment
 	deploymentsToBeCleaned []*pds.ModelsDeployment
-	deploymentDSentityMap  = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
+	//deploymentDSentityMap  = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
 )
 
 const (
@@ -534,12 +534,14 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 
 	It("Perform multiple restore within same cluster", func() {
 		stepLog := "Deploy data service and take adhoc backup, "
+		var deploymentDSentityMap = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
+		deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+		restoredDeployments = []*pds.ModelsDeployment{}
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -612,6 +614,10 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 		})
 
 		Step("Delete all the Deployments.", func() {
+			log.Debugf("len of deployments to be cleaned %d", len(deploymentsToBeCleaned))
+			for _, dep := range deploymentsToBeCleaned {
+				log.Infof("deployment to be deleted %s", *dep.ClusterResourceName)
+			}
 			CleanupDeployments(deploymentsToBeCleaned)
 		})
 	})
@@ -1057,13 +1063,15 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 
 	It("Perform multiple restore within same cluster", func() {
+		var deploymentDSentityMap = make(map[*pds.ModelsDeployment]restoreBkp.DSEntity)
+		restoredDeployments = []*pds.ModelsDeployment{}
+		deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 		stepLog := "Deploy data service and take adhoc backup, deleting the data service should not delete the backups."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
-				restoredDeployments = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -1074,6 +1082,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 					log.InfoD(stepLog)
 					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 
 					// TODO: Add workload generation
 
@@ -1094,6 +1103,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 		stepLog = "Perform multiple backups and restores simultaneously."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			log.Debugf("len of deploymentDSentityMap %d", len(deploymentDSentityMap))
 			for deployment, dsEntity := range deploymentDSentityMap {
 				log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
 				err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
@@ -1105,7 +1115,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 				log.Info("Create restore client.")
 				ctx, err := GetSourceClusterConfigPath()
-				log.FailOnError(err, "failed while getting dest cluster path")
+				log.FailOnError(err, "failed while getting source cluster path")
 				restoreTarget := tc.NewTargetCluster(ctx)
 				restoreClient := restoreBkp.RestoreClient{
 					TenantId:             tenantID,
@@ -1151,6 +1161,7 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 
 		Step("Delete Deployments", func() {
 			CleanupDeployments(restoredDeployments)
+			CleanupDeployments(deploymentsToBeCleaned)
 		})
 	})
 	JustAfterEach(func() {

@@ -40,8 +40,6 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	skid := backupClient.AWSStorageClient.secretKey
 	region := backupClient.AWSStorageClient.region
 	log.Debugf("Creating backup %s credentials", name)
-	log.Debugf("Sleeping for a min before creating creds.")
-	time.Sleep(1 * time.Minute)
 	backupCred, err := backupClient.Components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
 	if err != nil {
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
@@ -149,11 +147,11 @@ func (backupClient *BackupClient) GetAllBackUpTargets(projectID, bkptargetPrefix
 
 // DeleteAwsS3BackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId string) error {
-	log.Info("Delete S3 bucket from AWS cloud.")
-	err := backupClient.AWSStorageClient.DeleteBucket()
-	if err != nil {
-		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
-	}
+	//log.Info("Delete S3 bucket from AWS cloud.")
+	//err := backupClient.AWSStorageClient.DeleteBucket()
+	//if err != nil {
+	//	return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
+	//}
 	log.Info("Removing S3 backup creadentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
