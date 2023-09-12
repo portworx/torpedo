@@ -9963,14 +9963,15 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			// Removing the node from the nodeRegistry
 			log.Infof("Deleting node %s from node registry", selectedNodeForOps.Name)
 			err = node.DeleteNode(selectedNodeForOps)
-			log.FailOnError(err, "Failed to remove OCP node [%s] from node list. Error: [%v]", selectedNodeForOps.Name, err)
-			log.Infof("Successfully deleted the OCP node: [%s] ", selectedNodeForOps.Name)
-
+			log.FailOnError(err, "Failed to remove node [%s] from node list. Error: [%v]", selectedNodeForOps.Name, err)
+			log.Infof("Successfully deleted the node: [%s] ", selectedNodeForOps.Name)
+			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "Failed to destroy the node with err %s", err)
 			//err = Inst().V.RefreshDriverEndpoints()
 			//log.FailOnError(err, "Verify driver end points refresh")
 			slNodes = node.GetStorageLessNodes()
 			fmt.Printf("slnodes %v", len(slNodes))
-			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, false, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
+			dash.VerifyFatal(len(slNodes) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
 		})
 	})
 	JustAfterEach(func() {
