@@ -9923,8 +9923,8 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 		if len(slNodes) == 0 {
 			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 		}
-		numOfSlNodeBefore := len(slNodes)
-		fmt.Printf("slnodes %v", len(slNodes))
+		//numOfSlNodeBefore := len(slNodes)
+		//fmt.Printf("slnodes %v", len(slNodes))
 		slNode := GetRandomStorageLessNode(slNodes)
 		stNodes := node.GetStorageNodes()
 		selectedNode := stNodes[0]
@@ -9939,6 +9939,12 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 		}
 		stepLog = "shutdown node and wait for storageless node to become storage node"
 		Step(stepLog, func() {
+			slNodes := node.GetStorageLessNodes()
+			if len(slNodes) == 0 {
+				dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
+			}
+			numOfSlNodeBefore := len(slNodes)
+			fmt.Printf("slnodes %v", len(slNodes))
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting node")
 			driverName := vsphere.DriverName
@@ -9954,6 +9960,10 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.FailOnError(destroyErr1, "Failed to destroy the node with err %s", destroyErr1)
 			//shutdown for more than 3 mins
 			//check if storageless nodes has taken over the storage and pools from shutdown node
+			err = k.RefreshNodeRegistry()
+			if err != nil {
+				return err
+			}
 			time.Sleep(300 * time.Second)
 			slNodes := node.GetStorageLessNodes()
 			fmt.Printf("slnodes %v", len(slNodes))
