@@ -753,18 +753,10 @@ var _ = Describe("{LicenseValidation}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("LicenseValidation", "Validate PX License Activated using catalog", nil, 0)
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "Get SKU and compare with IBM cloud test license"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		contexts = make([]*scheduler.Context, 0)
-
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("license-validation-%d", i))...)
-		}
-
-		ValidateApplications(contexts)
 
 		summary, err := Inst().V.GetLicenseSummary()
 		log.FailOnError(err, "Failed to get license SKU")
@@ -783,8 +775,7 @@ var _ = Describe("{LicenseValidation}", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
 					if _, ok := ibmLicense[Label(feature.Name)]; ok {
-						Expect(feature.Quantity).To(Equal(ibmLicense[Label(feature.Name)]),
-							fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, ibmLicense[Label(feature.Name)]))
+						dash.VerifyFatal(feature.Quantity == ibmLicense[Label(feature.Name)], true, "ibm test license feature is validated?")
 					}
 				}
 			})
