@@ -3191,7 +3191,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 	})
 })
 
-// AlternateBackupBetweenNfsAndS3 Validates the type of backups(Full/Incremental) when alternate backups are taken between two backup locations of NFS and S3
+// AlternateBackupBetweenNfsAndS3 Validates the type of backups(Full/Incremental) when alternate backups are taken between two different backup locations of NFS and S3
 var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 	var (
 		scheduledAppContexts     []*scheduler.Context
@@ -3233,10 +3233,11 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
-		Step("Creating backup location and cloud setting", func() {
-			log.InfoD("Creating backup location and cloud setting")
+		Step("Creating cloud setting for aws and backup locations for S3 and NFS", func() {
+			log.InfoD("Creating cloud setting for aws and backup locations for S3 and NFS")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+			//Creating S3 backup locations
 			s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", time.Now().Unix())
 			s3BackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "s3", getGlobalBucketName("aws"), time.Now().Unix())
 			s3CloudCredUID = uuid.New()
@@ -3245,6 +3246,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "aws"))
 			err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName("aws"), orgID, "")
+			//Creating NFS backup locations
 			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), time.Now().Unix())
 			nfsBackupLocationUID = uuid.New()
 			backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
@@ -3258,7 +3260,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-
+			//Verifying cluster status for both source and destination clusters
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
@@ -3278,11 +3280,14 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 
 			for i := 0; i < numberOfAlternateBackups; i++ {
 				for locationUID, locationName := range backupLocationMap {
+					log.InfoD("Creating backup using the backup location of [%s]", locationName)
 					time.Sleep(10 * time.Second)
 					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					log.InfoD("Verifying the type of backup")
+					//Fist backup for each backup location must be a full backup, rest should be incremental
 					if i == 0 {
 						err = IsFullBackup(backupName, orgID, ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
@@ -3299,18 +3304,8 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.Infof("List of backups - %v", backupNames)
 		})
 
-		// Step("Verifying if the backups are full or incremental", func() {
-		// 	log.InfoD("Verifying if the backups are full or incremental")
-		// 	ctx, err := backup.GetAdminCtxFromSecret()
-		// 	log.FailOnError(err, "Fetching px-central-admin ctx")
-		// 	for _, backupName := range backupNames {
-		// 		err = IsFullBackup(backupName, orgID, ctx)
-		// 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
-		// 	}
-		// })
-
 		Step("Restoring backups on destination cluster", func() {
-			log.InfoD("Restoring  backup on destination cluster")
+			log.InfoD("Restoring backup on destination cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, backupName := range backupNames {
