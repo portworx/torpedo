@@ -775,7 +775,7 @@ var _ = Describe("{LicenseValidation}", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
 					if _, ok := ibmLicense[Label(feature.Name)]; ok {
-                        log.InfoD("%v", feature.Quantity)
+						log.InfoD("%v", feature.Quantity)
 						log.InfoD("[%v]", ibmLicense[Label(feature.Name)])
 						dash.VerifyFatal( feature.Quantity == ibmLicense[Label(feature.Name)], true, fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, ibmLicense[Label(feature.Name)]))
 					}
