@@ -170,6 +170,7 @@ const (
 var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
+	GloabalGkeSecretString string
 )
 
 type OwnershipAccessType int32
@@ -397,6 +398,7 @@ var (
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
+	clusterProvider                      = "aws"
 )
 
 var (
@@ -2793,6 +2795,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	// an empty string indicates the default kubeconfig.
 	// This variable is used to clearly indicate that in logs
 	var clusterConfigPathForLog string
+	var err error
 	if clusterConfigPath == "" {
 		clusterConfigPathForLog = "default"
 	} else {
@@ -2804,7 +2807,28 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	err := Inst().S.SetConfig(clusterConfigPath)
+
+	provider := getClusterProvider()
+	if clusterConfigPath != "" {
+		switch provider {
+		case drivers.ProviderGke:
+			err = Inst().S.SetGkeConfig(clusterConfigPath, GloabalGkeSecretString)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		default:
+			err = Inst().S.SetConfig(clusterConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		}
+	} else {
+		err = Inst().S.SetConfig(clusterConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+		}
+	}
+
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
@@ -2817,11 +2841,18 @@ func SetClusterContext(clusterConfigPath string) error {
 		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
 
+	// Check if the Node driver is of type SSH
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
+		// If it is an SSH driver, refresh the driver
 		err = ssh.RefreshDriver(sshNodeDriver)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
+	} else {
+		// If the Node driver is not of type SSH, initialize it to create Daemon set to spin up debug pods
+		err = Inst().N.Init(node.InitOptions{
+			SpecDir: Inst().SpecDir,
+		})
 	}
 
 	CurrentClusterConfigPath = clusterConfigPath
@@ -3832,6 +3863,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+	case drivers.ProviderGke:
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
 	case drivers.ProviderNfs:
 		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
 	}
@@ -3846,6 +3879,8 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderGke:
+		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
 	case drivers.ProviderNfs:
 		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
 	}
@@ -3874,6 +3909,18 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 					},
 					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
 					PlatformCredentialRef: &api.ObjectRef{
+						Name: cloud_name,
+						Uid:  uid,
+					},
+				}
+			case drivers.ProviderGke:
+				clusterCreateReq = &api.ClusterCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  name,
+						OrgId: orgID,
+					},
+					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+					CloudCredentialRef: &api.ObjectRef{
 						Name: cloud_name,
 						Uid:  uid,
 					},
@@ -4004,6 +4051,22 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				Config: &api.CloudCredentialInfo_IbmConfig{
 					IbmConfig: &api.IBMConfig{
 						ApiKey: apiKey,
+					},
+				},
+			},
+		}
+	case drivers.ProviderGke:
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Google,
+				Config: &api.CloudCredentialInfo_GoogleConfig{
+					GoogleConfig: &api.GoogleConfig{
+						JsonKey: GloabalGkeSecretString,
 					},
 				},
 			},
@@ -4150,6 +4213,68 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateGCPBackupLocation creates backup location for Google cloud
+func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Google,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateGCPBackupLocationWithContext creates backup location for Google cloud
+func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Google,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -8852,4 +8977,18 @@ func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
 	SetSourceKubeConfig()
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	return nil
+}
+
+// Set default provider as aws
+func getClusterProvider() string {
+	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
+	return clusterProvider
+}
+
+func GetGkeSecret() (string, error) {
+	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	if err != nil {
+		return "", err
+	}
+	return cm.Data["cloud-json"], nil
 }

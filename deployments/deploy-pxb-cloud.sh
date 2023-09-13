@@ -333,6 +333,7 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
 fi
 
 kubectl create configmap cloud-config --from-file=/config/cloud-json
+kubectl create configmap cloud-source-config --from-file=/cluster/cloud-source-config
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""

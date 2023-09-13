@@ -340,6 +340,67 @@ func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	return nil
 }
 
+func (k *K8s) SetGkeConfig(kubeconfigPath string, gkeCredString string) error {
+
+	var clientConfig *rest.Config
+	var err error
+
+	if kubeconfigPath == "" {
+		clientConfig = nil
+	} else {
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	config, err := os.ReadFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+
+	// First parse the config
+	client, err := clientcmd.NewClientConfigFromBytes(config)
+	if err != nil {
+		return err
+	}
+
+	rawConfig, err := client.RawConfig()
+	if err != nil {
+		return err
+	}
+
+	// Then create a default client config with the default loading rules
+	client = clientcmd.NewDefaultClientConfig(rawConfig, &clientcmd.ConfigOverrides{})
+	if err != nil {
+		return err
+	}
+
+	clientConfig.AuthProvider.Config["cred-json"] = gkeCredString
+	if err != nil {
+		return err
+	}
+
+	k8sCore.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sStork.SetConfig(clientConfig)
+	k8sStorage.SetConfig(clientConfig)
+	k8sExternalStorage.SetConfig(clientConfig)
+	k8sAutopilot.SetConfig(clientConfig)
+	k8sRbac.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sPolicy.SetConfig(clientConfig)
+	k8sBatch.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sAdmissionRegistration.SetConfig(clientConfig)
+	k8sExternalsnap.SetConfig(clientConfig)
+	k8sApiExtensions.SetConfig(clientConfig)
+	k8sOperator.SetConfig(clientConfig)
+
+	return nil
+}
+
 // SetConfig sets kubeconfig. If kubeconfigPath == "" then
 // sets it to inClusterConfig
 func (k *K8s) SetConfig(kubeconfigPath string) error {

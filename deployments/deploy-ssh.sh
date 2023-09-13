@@ -290,7 +290,7 @@ if [ -n "${ORACLE_API_KEY}" ]; then
     ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
 fi
 
-TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"persistentVolumeClaim\": {\"claimName\": \"testresults\"}}"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
@@ -346,6 +346,7 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
 fi
 
 kubectl create configmap cloud-config --from-file=/config/cloud-json
+kubectl create configmap cloud-source-config --from-file=/cluster/cloud-source-config
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
@@ -414,6 +415,17 @@ roleRef:
   kind: ClusterRole
   name: torpedo-role
   apiGroup: rbac.authorization.k8s.io
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: testresults
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
 ---
 apiVersion: v1
 kind: Pod
