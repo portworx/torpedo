@@ -774,11 +774,15 @@ var _ = Describe("{LicenseValidation}", func() {
 				log.InfoD("Compare with IBM cloud test license features")
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
-					if _, ok := ibmLicense[Label(feature.Name)]; ok {
+					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
 						log.InfoD("%v", feature.Quantity)
-						log.InfoD("[%v]", ibmLicense[Label(feature.Name)])
-						dash.VerifyFatal( feature.Quantity == ibmLicense[Label(feature.Name)], true, fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, ibmLicense[Label(feature.Name)]))
+						log.InfoD("%v", ibmLicense[Label(feature.Name)])
+						log.InfoD("%T", feature.Quantity)
+						log.InfoD("%T", ibmLicense[Label(feature.Name)])
+						if feature.Quantity != limit {
+							dash.Errorf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit)
 					}
+				}
 				}
 			})
 		})
