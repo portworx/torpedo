@@ -340,6 +340,7 @@ if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
 fi
 
 BUSYBOX_IMG="busybox"
+INTERNAL_DOCKER_REGISTRY=docker.pwx.dev.purestorage.com/portworx
 if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
     BUSYBOX_IMG="${INTERNAL_DOCKER_REGISTRY}/busybox"
     TORPEDO_IMG="${INTERNAL_DOCKER_REGISTRY}/${TORPEDO_IMG}"
