@@ -688,10 +688,7 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 			steplog = "Delete created dataservice deployments"
 			Step(steplog, func() {
 				log.InfoD(steplog)
-				for _, dep := range deps {
-					_, err := pdslib.DeleteDeployment(*dep.Id)
-					log.FailOnError(err, "error while deleting deployments")
-				}
+				CleanupDeployments(deps)
 				isDeploymentsDeleted = true
 			})
 		}()

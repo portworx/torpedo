@@ -42,6 +42,9 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				if ds.Name != postgresql {
+					continue
+				}
 				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
