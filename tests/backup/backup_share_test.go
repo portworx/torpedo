@@ -5092,7 +5092,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 			log.InfoD(fmt.Sprintf("Adding new user to %s group", adminGroup))
 			for _, user := range createUsers(1) {
 				err := backup.AddGroupToUser(user, adminGroup)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("failed to add user %s to the group %s", user, adminGroup))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying addition of user %s to the group %s", user, adminGroup))
 				newAdmin = user
 			}
 		})
