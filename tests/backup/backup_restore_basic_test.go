@@ -3237,6 +3237,13 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.InfoD("Creating cloud setting for aws and backup locations for S3 and NFS")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			//Creating NFS backup location
+			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), time.Now().Unix())
+			nfsBackupLocationUID = uuid.New()
+			backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
+			err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, orgID, " ", getGlobalBucketName("nfs"), true)
+			dash.VerifyFatal(err, nil, "Creating backup location")
 			//Creating S3 backup locations
 			s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", time.Now().Unix())
 			s3BackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "s3", getGlobalBucketName("aws"), time.Now().Unix())
@@ -3246,12 +3253,6 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "aws"))
 			err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName("aws"), orgID, "")
-			//Creating NFS backup locations
-			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), time.Now().Unix())
-			nfsBackupLocationUID = uuid.New()
-			backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
-			err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, orgID, " ", getGlobalBucketName("nfs"), true)
-			dash.VerifyFatal(err, nil, "Creating backup location")
 		})
 
 		Step("Registering cluster for backup", func() {
