@@ -3233,20 +3233,20 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
+
 		Step("Creating cloud setting for aws and backup locations for S3 and NFS", func() {
 			log.InfoD("Creating cloud setting for aws and backup locations for S3 and NFS")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-
-			//Creating NFS backup location
-			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), time.Now().Unix())
+			log.InfoD("Creating NFS backup location")
+			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), RandomString(4))
 			nfsBackupLocationUID = uuid.New()
 			backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
 			err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, orgID, " ", getGlobalBucketName("nfs"), true)
 			dash.VerifyFatal(err, nil, "Creating backup location")
-			//Creating S3 backup locations
-			s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", time.Now().Unix())
-			s3BackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "s3", getGlobalBucketName("aws"), time.Now().Unix())
+			log.InfoD("Creating AWS cred and S3 backup location")
+			s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", RandomString(4))
+			s3BackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "s3", getGlobalBucketName("aws"), RandomString(4))
 			s3CloudCredUID = uuid.New()
 			s3BackupLocationUID = uuid.New()
 			backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
@@ -3261,13 +3261,12 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			//Verifying cluster status for both source and destination clusters
+			log.InfoD("Verifying cluster status for both source and destination clusters")
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
 			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
-
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
@@ -3278,17 +3277,15 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-
 			for i := 0; i < numberOfAlternateBackups; i++ {
 				for locationUID, locationName := range backupLocationMap {
 					log.InfoD("Creating backup using the backup location of [%s]", locationName)
-					time.Sleep(10 * time.Second)
-					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
 					backupNames = append(backupNames, backupName)
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					log.InfoD("Verifying the type of backup")
-					//Fist backup for each backup location must be a full backup, rest should be incremental
+					//First backup for each backup location must be a full backup, rest should be incremental
 					if i == 0 {
 						err = IsFullBackup(backupName, orgID, ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
@@ -3297,7 +3294,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 						if strings.Contains(err.Error(), "is an incremental backup") {
 							log.InfoD("The backup [%s] is an incremental backup", backupName)
 						} else {
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
+							log.FailOnError(err, "Issue with created backup.")
 						}
 					}
 				}
@@ -3310,7 +3307,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, backupName := range backupNames {
-				restoreName := fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
+				restoreName := fmt.Sprintf("%s-%v", restoreNamePrefix, RandomString(10))
 				err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from backup [%s]", backupName))
 				restoreNames = append(restoreNames, restoreName)
@@ -3322,17 +3319,16 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Deleting the deployed apps after the testcase")
-		// Cleaning up restores
+		log.InfoD("Deleting the restores")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
-		// Cleaning up applications created
+		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
-		// Cleaning up px-backup cluster
+		log.InfoD("Deleting the px-backup objects")
 		CleanupCloudSettingsAndClusters(backupLocationMap, s3CloudCredName, s3CloudCredUID, ctx)
 	})
 })
