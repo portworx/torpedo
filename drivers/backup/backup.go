@@ -372,6 +372,9 @@ type ScheduleBackup interface {
 
 	// GetBackupScheduleUID returns uid of the given backup schedule name in an organization
 	GetBackupScheduleUID(ctx context.Context, scheduleName string, orgID string) (string, error)
+
+	// GetAllSchedulePolicies returns names of all schedulePolicy for the given org
+	GetAllSchedulePolicies(ctx context.Context, orgID string) ([]string, error)
 }
 
 // License interface
@@ -417,6 +420,9 @@ type Rule interface {
 
 	// GetRuleUid fetches uid for the given rule
 	GetRuleUid(orgID string, ctx context.Context, ruleName string) (string, error)
+
+	// GetAllRules returns names of all rules for the given org
+	GetAllRules(ctx context.Context, orgID string) ([]string, error)
 }
 
 var backupDrivers = make(map[string]Driver)
