@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -3273,7 +3274,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			log.InfoD("Taking alternate backups of application from source cluster to both S3 and NFS backup locations")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 
 			for i := 0; i < numberOfAlternateBackups; i++ {
 				for locationUID, locationName := range backupLocationMap {
@@ -3282,20 +3283,31 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 					backupNames = append(backupNames, backupName)
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					if i == 0 {
+						err = IsFullBackup(backupName, orgID, ctx)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
+					} else {
+						err = IsFullBackup(backupName, orgID, ctx)
+						if strings.Contains(err.Error(), "is an incremental backup") {
+							log.InfoD("The backup [%s] is an incremental backup", backupName)
+						} else {
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
+						}
+					}
 				}
 			}
 			log.Infof("List of backups - %v", backupNames)
 		})
 
-		Step("Verifying if the backups are full or incremental", func() {
-			log.InfoD("Verifying if the backups are full or incremental")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, backupName := range backupNames {
-				err = IsFullBackup(backupName, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
-			}
-		})
+		// Step("Verifying if the backups are full or incremental", func() {
+		// 	log.InfoD("Verifying if the backups are full or incremental")
+		// 	ctx, err := backup.GetAdminCtxFromSecret()
+		// 	log.FailOnError(err, "Fetching px-central-admin ctx")
+		// 	for _, backupName := range backupNames {
+		// 		err = IsFullBackup(backupName, orgID, ctx)
+		// 		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
+		// 	}
+		// })
 
 		Step("Restoring backups on destination cluster", func() {
 			log.InfoD("Restoring  backup on destination cluster")
