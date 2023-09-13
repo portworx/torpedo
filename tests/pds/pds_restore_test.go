@@ -138,6 +138,8 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					for _, pdsDeployment := range restoredDeployments {
+						err := dsTest.ValidateDataServiceDeployment(pdsDeployment, params.InfraToTest.Namespace)
+						log.FailOnError(err, "Error while validating deployment before validating checksum")
 						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
 						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 						log.FailOnError(err, "Error while Running workloads")
