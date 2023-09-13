@@ -3193,19 +3193,20 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 // AlternateBackupBetweenNfsAndS3 Validates the type of backups(Full/Incremental) when alternate backups are taken between two backup locations of NFS and S3
 var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 	var (
-		scheduledAppContexts  []*scheduler.Context
-		sourceClusterUid      string
-		backupLocationMap     map[string]string
-		s3CloudCredName       string
-		s3BackupLocationName  string
-		s3CloudCredUID        string
-		s3BackupLocationUID   string
-		nfsBackupLocationName string
-		nfsBackupLocationUID  string
-		bkpNamespaces         []string
-		labelSelectors        map[string]string
-		backupNames           []string
-		restoreNames          []string
+		scheduledAppContexts     []*scheduler.Context
+		sourceClusterUid         string
+		backupLocationMap        map[string]string
+		s3CloudCredName          string
+		s3BackupLocationName     string
+		s3CloudCredUID           string
+		s3BackupLocationUID      string
+		nfsBackupLocationName    string
+		nfsBackupLocationUID     string
+		bkpNamespaces            []string
+		labelSelectors           map[string]string
+		backupNames              []string
+		restoreNames             []string
+		numberOfAlternateBackups int = 2
 	)
 
 	JustBeforeEach(func() {
@@ -3268,31 +3269,20 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
-		Step("Taking backup of application from source cluster to both S3 and NFS backup locations", func() {
-			log.InfoD("Taking backup of application from source cluster to both S3 and NFS backup locations")
-			var sem = make(chan struct{}, 10)
-			var wg sync.WaitGroup
+		Step("Taking alternate backups of application from source cluster to both S3 and NFS backup locations", func() {
+			log.InfoD("Taking alternate backups of application from source cluster to both S3 and NFS backup locations")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			numberOfAlternateBackups := 2
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 
 			for i := 0; i < numberOfAlternateBackups; i++ {
 				for locationUID, locationName := range backupLocationMap {
-					sem <- struct{}{}
 					time.Sleep(10 * time.Second)
-					backupName := fmt.Sprintf("%s-%s-%v", "alternate", BackupNamePrefix, time.Now().Unix())
+					backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 					backupNames = append(backupNames, backupName)
-					wg.Add(1)
-					go func(backupName string) {
-						defer GinkgoRecover()
-						defer wg.Done()
-						defer func() { <-sem }()
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-					}(backupName)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}
-				wg.Wait()
 			}
 			log.Infof("List of backups - %v", backupNames)
 		})
