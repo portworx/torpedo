@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
+	"github.com/portworx/px-backup-api/pkg/kubeauth"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -36,6 +37,7 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	backupapi "github.com/portworx/px-backup-api/pkg/apis/v1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -339,6 +341,86 @@ func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	return nil
 }
 
+func (k *K8s) SetGkeConfig(kubeconfigPath string) error {
+
+	var clientConfig *rest.Config
+	var err error
+
+	if kubeconfigPath == "" {
+		clientConfig = nil
+	} else {
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	config, err := os.ReadFile(kubeconfigPath)
+	if err != nil {
+		return err
+	}
+	//configFile := base64.StdEncoding.EncodeToString(bdat)
+	// First parse the config
+	client, err := clientcmd.NewClientConfigFromBytes(config)
+	if err != nil {
+		return err
+	}
+	rawConfig, err := client.RawConfig()
+	if err != nil {
+		return err
+	}
+	// Then create a default client config with the default loading rules
+	client = clientcmd.NewDefaultClientConfig(rawConfig, &clientcmd.ConfigOverrides{})
+	if err != nil {
+		return err
+	}
+
+	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	if err != nil {
+		log.Errorf("Error reading config map: %v", err)
+		return err
+	}
+	gkeJsonKey := cm.Data["cloud-json"]
+	cloudCred := backupapi.CloudCredentialObject{
+		Metadata: &backupapi.Metadata{
+			Name: "test",
+			Uid:  "dsgs",
+		},
+		CloudCredentialInfo: &backupapi.CloudCredentialInfo{
+			Type: backupapi.CloudCredentialInfo_Google,
+			Config: &backupapi.CloudCredentialInfo_GoogleConfig{
+				GoogleConfig: &backupapi.GoogleConfig{
+					ProjectId: "portworx-eng",
+					JsonKey:   gkeJsonKey,
+				},
+			},
+		},
+	}
+	// TODO: save the kubeconfig in the datastore if returned
+	_, err = kubeauth.UpdateClientByCredObject(&cloudCred, clientConfig, &rawConfig)
+	if err != nil {
+		return err
+	}
+	k8sCore.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sStork.SetConfig(clientConfig)
+	k8sStorage.SetConfig(clientConfig)
+	k8sExternalStorage.SetConfig(clientConfig)
+	k8sAutopilot.SetConfig(clientConfig)
+	k8sRbac.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sPolicy.SetConfig(clientConfig)
+	k8sBatch.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sAdmissionRegistration.SetConfig(clientConfig)
+	k8sExternalsnap.SetConfig(clientConfig)
+	k8sApiExtensions.SetConfig(clientConfig)
+	k8sOperator.SetConfig(clientConfig)
+
+	return nil
+}
+
 // SetConfig sets kubeconfig. If kubeconfigPath == "" then
 // sets it to inClusterConfig
 func (k *K8s) SetConfig(kubeconfigPath string) error {
@@ -386,6 +468,13 @@ func (k *K8s) RescanSpecs(specDir, storageDriver string) error {
 
 // RefreshNodeRegistry update the k8 node list registry
 func (k *K8s) RefreshNodeRegistry() error {
+
+	kubeconfigFile := "/tmp/key.json"
+	err := os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", kubeconfigFile)
+	if err != nil {
+		fmt.Println("Error setting environment variable:", err)
+		return nil
+	}
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -806,7 +895,7 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 		}
 	}
 	log.Infof("Parsed node [%s] as Type: %s, Zone: %s, Region %s", n.Name, nodeType, zone, region)
-
+	
 	return node.Node{
 		Name:      n.Name,
 		Addresses: k.getAddressesForNode(n),

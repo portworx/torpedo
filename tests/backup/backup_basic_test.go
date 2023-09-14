@@ -6,6 +6,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -71,6 +72,15 @@ func BackupInitInstance() {
 	var token string
 	var commitID string
 	log.Infof("Inside BackupInitInstance")
+
+	// Dumping source and destination kubeconfig to file system path
+	log.Infof("Dumping source and destination kubeconfig to file system path")
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
+	DumpKubeconfigs(kubeconfigList)
+
 	err = Inst().S.Init(scheduler.InitOptions{
 		SpecDir:            Inst().SpecDir,
 		VolDriverName:      Inst().V.String(),
@@ -81,6 +91,7 @@ func BackupInitInstance() {
 	err = Inst().N.Init(node.InitOptions{
 		SpecDir: Inst().SpecDir,
 	})
+
 	log.FailOnError(err, "Error occurred while Node Driver Initialization")
 	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
 	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
@@ -90,7 +101,7 @@ func BackupInitInstance() {
 	}
 	SetupTestRail()
 
-	// Getting Px version info
+	//Getting Px version info
 	pxVersion, err := Inst().V.GetDriverVersion()
 	log.FailOnError(err, "Error occurred while getting PX version")
 	if len(strings.Split(pxVersion, "-")) > 1 {
@@ -116,15 +127,21 @@ func BackupInitInstance() {
 	t.Tags["pureSANType"] = Inst().PureSANType
 
 	Inst().Dash.TestSetUpdate(t)
-	// Setting the common password
+	//Setting the common password
+
 	commonPassword = backup.PxCentralAdminPwd + RandomString(4)
-	// Dumping source and destination kubeconfig to file system path
-	log.Infof("Dumping source and destination kubeconfig to file system path")
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
-	DumpKubeconfigs(kubeconfigList)
+
+	//// Set kubeconfig env var
+	//kubeconfigFile := "/tmp/destination-config"
+	//log.Debug("Export KUBECONFIG=%s", kubeconfigFile)
+	//os.Setenv("KUBECONFIG", kubeconfigFile)
+
+	//log.Infof("sleep for sometime")
+	//time.Sleep(1800 * time.Second)
+	// Switch context to destination cluster to update RancherMap with destination cluster details
+	//err = SetDestinationKubeConfig()
+	//log.FailOnError(err, "Switching context to destination cluster failed")
+
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
 		err = SetDestinationKubeConfig()
@@ -161,7 +178,8 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalAzureBucketName)
 			log.Infof("Bucket created with name - %s", globalAzureBucketName)
 		case drivers.ProviderGke:
-			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			//globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			globalGCPBucketName = fmt.Sprintf("%s", globalGCPBucketPrefix)
 			CreateBucket(provider, globalGCPBucketName)
 			log.Infof("Bucket created with name - %s", globalGCPBucketName)
 		case drivers.ProviderNfs:

@@ -346,6 +346,7 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
 fi
 
 kubectl create configmap cloud-config --from-file=/config/cloud-json
+kubectl create configmap cloud-source-config --from-file=/cluster/cloud-source-config
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
@@ -695,6 +696,8 @@ spec:
       value: "${SKIP_PX_OPERATOR_UPGRADE}"
     - name: VOLUME_SNAPSHOT_CLASS
       value: "${VOLUME_SNAPSHOT_CLASS}"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: "/tmp/key.json"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

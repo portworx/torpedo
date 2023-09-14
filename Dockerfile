@@ -22,6 +22,8 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
     ibmcloud plugin install -f container-service
 
 
+# Your additional build steps can go here
+
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
 COPY Makefile Makefile
@@ -50,6 +52,15 @@ RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
+
+# Download and install the Google Cloud SDK
+CMD ["pwd"]
+ENV CLOUDSDK_INSTALL_DIR /
+RUN curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-443.0.0-linux-arm.tar.gz
+RUN ls -lh
+RUN tar xvf google-cloud-cli-443.0.0-linux-arm.tar.gz -C /
+RUN rm google-cloud-cli-443.0.0-linux-arm.tar.gz
+RUN /google-cloud-sdk/install.sh --quiet
 
 # Install kubectl from Docker Hub.
 COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
