@@ -6,6 +6,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"

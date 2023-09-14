@@ -397,6 +397,7 @@ var (
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
+	clusterProvider                      = "aws"
 )
 
 var (
@@ -2793,6 +2794,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	// an empty string indicates the default kubeconfig.
 	// This variable is used to clearly indicate that in logs
 	var clusterConfigPathForLog string
+	var err error
 	if clusterConfigPath == "" {
 		clusterConfigPathForLog = "default"
 	} else {
@@ -2804,7 +2806,27 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	err := Inst().S.SetConfig(clusterConfigPath)
+	//err := Inst().S.SetConfig(clusterConfigPath)
+	provider := getClusterProvider()
+	if clusterConfigPath != "" {
+		switch provider {
+		case drivers.ProviderGke:
+			err = Inst().S.SetGkeConfig(clusterConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		default:
+			err = Inst().S.SetConfig(clusterConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		}
+	} else {
+		err = Inst().S.SetConfig(clusterConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
@@ -8852,4 +8874,10 @@ func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
 	SetSourceKubeConfig()
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	return nil
+}
+
+// Set default provider as aws
+func getClusterProvider() string {
+	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
+	return clusterProvider
 }
