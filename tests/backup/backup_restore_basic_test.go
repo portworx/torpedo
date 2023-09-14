@@ -3244,7 +3244,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			nfsBackupLocationUID = uuid.New()
 			backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
 			err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, orgID, " ", getGlobalBucketName(drivers.ProviderNfs), true)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of NFS backup location %s", nfsBackupLocationName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of NFS backup location [%s]", nfsBackupLocationName))
 			log.InfoD("Creating AWS cred and S3 backup location")
 			s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", RandomString(4))
 			s3BackupLocationName = fmt.Sprintf("%s-%s-%v", "s3", getGlobalBucketName(drivers.ProviderAws), RandomString(4))
@@ -3254,7 +3254,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "AWS"))
 			err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(drivers.ProviderAws), orgID, "")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location %s", s3BackupLocationName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location [%s]", s3BackupLocationName))
 		})
 
 		Step("Registering cluster for backup", func() {
@@ -3287,7 +3287,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, locationName, locationUID, appContextsToBackup, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					log.InfoD("Verifying the type of backup")
-					//First backup for each backup location must be a full backup, rest should be incremental
+					//First backup for each backup location must be a full backup, rest should be incremental.
 					if i == 0 {
 						err = IsFullBackup(backupName, orgID, ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
@@ -3296,7 +3296,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 						if strings.Contains(err.Error(), "is an incremental backup") {
 							log.InfoD("The backup [%s] is an incremental backup", backupName)
 						} else {
-							log.FailOnError(err, "Issue with created backup.")
+							log.FailOnError(err, "Encountered an issue with backup creation. Either the backup created is a full backup or backup was unsuccessful.")
 						}
 					}
 				}
@@ -3334,10 +3334,10 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, s3CloudCredName, s3CloudCredUID, ctx)
 		log.InfoD("Switching context to destination cluster for clean up")
 		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "Unable to switch context to destination cluster %s", destinationClusterName)
+		log.FailOnError(err, "Unable to switch context to destination cluster [%s]", destinationClusterName)
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Switching back context to Source cluster")
 		err = SetSourceKubeConfig()
-		log.FailOnError(err, "Unable to switch context to source cluster %s", SourceClusterName)
+		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 	})
 })
