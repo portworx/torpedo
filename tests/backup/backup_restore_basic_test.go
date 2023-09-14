@@ -11,6 +11,7 @@ import (
 	"github.com/blang/semver"
 
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	storageApi "k8s.io/api/storage/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -3239,20 +3240,21 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Creating NFS backup location")
-			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName("nfs"), RandomString(4))
+			nfsBackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "nfs", getGlobalBucketName(drivers.ProviderNfs), RandomString(4))
 			nfsBackupLocationUID = uuid.New()
 			backupLocationMap[nfsBackupLocationUID] = nfsBackupLocationName
-			err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, orgID, " ", getGlobalBucketName("nfs"), true)
-			dash.VerifyFatal(err, nil, "Creating backup location")
+			err = CreateNFSBackupLocation(nfsBackupLocationName, nfsBackupLocationUID, orgID, " ", getGlobalBucketName(drivers.ProviderNfs), true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of NFS backup location %s", nfsBackupLocationName))
 			log.InfoD("Creating AWS cred and S3 backup location")
 			s3CloudCredName = fmt.Sprintf("%s-%s-%v", "cred", "s3", RandomString(4))
-			s3BackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "s3", getGlobalBucketName("aws"), RandomString(4))
+			s3BackupLocationName = fmt.Sprintf("%s-%s-bl-%v", "s3", getGlobalBucketName(drivers.ProviderAws), RandomString(4))
 			s3CloudCredUID = uuid.New()
 			s3BackupLocationUID = uuid.New()
 			backupLocationMap[s3BackupLocationUID] = s3BackupLocationName
 			err = CreateCloudCredential("aws", s3CloudCredName, s3CloudCredUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "aws"))
-			err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName("aws"), orgID, "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", s3CloudCredName, orgID, "AWS"))
+			err = CreateS3BackupLocation(s3BackupLocationName, s3BackupLocationUID, s3CloudCredName, s3CloudCredUID, getGlobalBucketName(drivers.ProviderAws), orgID, "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of S3 backup location %s", s3BackupLocationName))
 		})
 
 		Step("Registering cluster for backup", func() {
@@ -3303,13 +3305,13 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		})
 
 		Step("Restoring backups on destination cluster", func() {
-			log.InfoD("Restoring backup on destination cluster")
+			log.InfoD("Restoring backups on destination cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			for _, backupName := range backupNames {
 				restoreName := fmt.Sprintf("%s-%v", restoreNamePrefix, RandomString(10))
-				err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore from backup [%s]", backupName))
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, backupName))
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
