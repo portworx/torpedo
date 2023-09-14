@@ -77,8 +77,8 @@ const (
 
 	essentialsFaFbSKU = "Portworx CSI for FA/FB"
 	ibmTestLicenseSKU = "PX-Enterprise IBM Cloud (test)"
-	ibmProdLicenseSKU = "PX-Enterprise IBM Cloud"
-
+	ibmTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
+	
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
@@ -766,17 +766,18 @@ var _ = Describe("{LicenseValidation}", func() {
 		stepLog = "Get SKU and compare with IBM cloud license type"
 		Step(stepLog, func() {
 			log.InfoD("validate IBM cloud license type")
-			verifyLicenseBool := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU 
-			dash.VerifyFatal( verifyLicenseBool, true, fmt.Sprintf("License type is invalid: %v", summary.SKU))
+			isValidLicense := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU 
+			dash.VerifyFatal( isValidLicense, true, fmt.Sprintf("License type is invalid: %v", summary.SKU))
 
 			Step("Compare PX-IBM License features vs activated license", func() {
 				log.InfoD("Compare with IBM cloud license features")
-				if summary.SKU == ibmTestLicenseSKU {
+				if (summary.SKU == ibmTestLicenseSKU) {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
 					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
 						dash.VerifyFatal(feature.Quantity != limit, false,
 						 fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
+					}
 				}
 				} else {
 					for _, feature := range summary.Features {
@@ -786,7 +787,6 @@ var _ = Describe("{LicenseValidation}", func() {
 						 		fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
 						}
 					}
-				}
 				}
 			})
 		})
