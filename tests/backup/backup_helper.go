@@ -3,7 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/backup/portworx"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	"github.com/portworx/torpedo/drivers"
 	appsapi "k8s.io/api/apps/v1"
@@ -43,7 +45,9 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/base64"
 	"encoding/json"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -4119,27 +4123,31 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 			postUid = ruleList.Rules[i].Metadata.Uid
 		}
 	}
-	log.Infof("Validate pre-rules for backup")
-	preRuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  preRuleName,
-		Uid:   preUid,
+	if totalPreRules != 0 {
+		log.Infof("Validate pre-rules for backup")
+		preRuleInspectReq := &api.RuleInspectRequest{
+			OrgId: orgID,
+			Name:  preRuleName,
+			Uid:   preUid,
+		}
+		_, err = Inst().Backup.InspectRule(ctx, preRuleInspectReq)
+		if err != nil {
+			err = fmt.Errorf("failed to validate the created pre-rule with Error: [%v]", err)
+			return "", "", err
+		}
 	}
-	_, err = Inst().Backup.InspectRule(ctx, preRuleInspectReq)
-	if err != nil {
-		err = fmt.Errorf("failed to validate the created pre-rule with Error: [%v]", err)
-		return "", "", err
-	}
-	log.Infof("Validate post-rules for backup")
-	postRuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  postRuleName,
-		Uid:   postUid,
-	}
-	_, err = Inst().Backup.InspectRule(ctx, postRuleInspectReq)
-	if err != nil {
-		err = fmt.Errorf("failed to validate the created post-rule with Error: [%v]", err)
-		return "", "", err
+	if totalPostRules != 0 {
+		log.Infof("Validate post-rules for backup")
+		postRuleInspectReq := &api.RuleInspectRequest{
+			OrgId: orgID,
+			Name:  postRuleName,
+			Uid:   postUid,
+		}
+		_, err = Inst().Backup.InspectRule(ctx, postRuleInspectReq)
+		if err != nil {
+			err = fmt.Errorf("failed to validate the created post-rule with Error: [%v]", err)
+			return "", "", err
+		}
 	}
 	return preRuleName, postRuleName, nil
 }
@@ -4244,4 +4252,126 @@ func GetAllRestoreNamesByOwnerID(ownerID string, orgID string, ctx context.Conte
 		}
 	}
 	return restoreNames, nil
+}
+
+// GetAllBackupSchedulesForUser returns all current BackupSchedules for user.
+func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
+// GetAllRestoresForUser returns all the current restores for the user.
+func GetAllRestoresForUser(username string, password string) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
+}
+
+// CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+	backupDriver := Inst().Backup
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  periodicSchedulePolicyName,
+			Uid:   periodicSchedulePolicyUid,
+			OrgId: OrgID,
+		},
+
+		SchedulePolicy: &api.SchedulePolicyInfo{
+			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			ForObjectLock: false,
+			AutoDelete:    false,
+		},
+	}
+
+	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// CreateInvalidAWSCloudCredential creates cloud credentials with invalid paramaters.
+func createInvalidAWSCloudCredential(credName string, uid, orgID string, ctx context.Context) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] ", credName, orgID)
+	var credCreateRequest *api.CloudCredentialCreateRequest
+	credCreateRequest = &api.CloudCredentialCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  credName,
+			Uid:   uid,
+			OrgId: orgID,
+		},
+		CloudCredential: &api.CloudCredentialInfo{
+			Type: api.CloudCredentialInfo_AWS,
+			Config: &api.CloudCredentialInfo_AwsConfig{
+				AwsConfig: &api.AWSConfig{
+					AccessKey: "admin",
+					SecretKey: backup.PxCentralAdminPwd + RandomString(10),
+				},
+			},
+		},
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		log.Errorf("failed to create invalid cloud credential with name [%s] in org [%s] with [AWS/S3] as provider", credName, orgID)
+		return err
+	}
+	return nil
+}
+
+// UpdateCluster updates cluster with given credentials.
+func UpdateCluster(clusterName string, clusterUid string, kubeConfigPath string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.ClusterUpdateResponse, error) {
+	backupDriver := Inst().Backup
+	kubeconfigRaw, err := ioutil.ReadFile(kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	clusterUpdateRequest := &api.ClusterUpdateRequest{
+		CreateMetadata:        &api.CreateMetadata{Name: clusterName, OrgId: orgId, Uid: clusterUid},
+		PxConfig:              &api.PXConfig{},
+		Kubeconfig:            base64.StdEncoding.EncodeToString(kubeconfigRaw),
+		CloudCredential:       cloudCred,
+		CloudCredentialRef:    &api.ObjectRef{Name: cloudCred, Uid: cloudCredUID},
+		PlatformCredentialRef: &api.ObjectRef{},
+	}
+	status, err := backupDriver.UpdateCluster(ctx, clusterUpdateRequest)
+	if err != nil {
+		return nil, err
+	}
+	return status, err
 }
