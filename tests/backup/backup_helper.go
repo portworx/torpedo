@@ -4188,9 +4188,9 @@ func GetAllBackupScheduleNamesByOwnerID(ownerID string, orgID string, ctx contex
 		OrgId: orgID,
 		EnumerateOptions: &api.EnumerateOptions{
 			Owners: func() []string {
-				if isAdminCtx {
-					return []string{ownerID}
-				}
+				//if isAdminCtx { // PB-4199
+				//	return []string{ownerID}
+				//}
 				return nil
 			}(),
 		},
