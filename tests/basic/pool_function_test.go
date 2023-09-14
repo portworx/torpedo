@@ -11,7 +11,6 @@ import (
 
 var _ = Describe("{PoolExpandSmoky}", func() {
 	BeforeEach(func() {
-		StartTorpedoTest(testName, testDescription, nil, 0)
 		contexts = scheduleApps()
 	})
 
@@ -33,6 +32,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 	testName = "PoolExpandDiskAdd"
 	testDescription = "Validate storage pool expansion using add-disk option"
 	It("select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+		StartTorpedoTest(testName, testDescription, nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB := targetSizeInBytes / units.GiB
@@ -48,6 +48,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 	testName = "PoolExpandDiskResize"
 	testDescription = "Validate storage pool expansion using resize-disk option"
 	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+		StartTorpedoTest(testName, testDescription, nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB := targetSizeInBytes / units.GiB
@@ -63,6 +64,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 	testName = "PoolExpandDiskAuto"
 	testDescription = "Validate storage pool expansion using auto option"
 	It("select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
+		StartTorpedoTest(testName, testDescription, nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB := targetSizeInBytes / units.GiB
