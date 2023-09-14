@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/portworx/sched-ops/k8s"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -32,6 +32,7 @@ import (
 
 var (
 	maxPoolLength = 8
+	k8s1          = core.Instance()
 )
 
 var _ = Describe("{StoragePoolExpandDiskResize}", func() {
@@ -9906,7 +9907,9 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			err = node.DeleteNode(selectedNodeForOps)
 			log.FailOnError(err, "Failed to remove node [%s] from node list. Error: [%v]", selectedNodeForOps.Name, err)
 			log.Infof("Successfully deleted the node: [%s] ", selectedNodeForOps.Name)
-			err = k8s.RefreshNodeRegistry()
+			//k8sCorelist, err := core.NodeOps.GetNodes()
+			err = k8s1.DeleteNode(selectedNodeForOps.Name)
+			err = Inst().S.RefreshNodeRegistry()
 			slNodes1 := node.GetStorageLessNodes()
 			fmt.Printf("slnodes1 %v", len(slNodes1))
 			dash.VerifyFatal(len(slNodes1) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
