@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
@@ -903,7 +902,8 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				stepLog = "Perform Restore after PVC Resize"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					ctx := pdslib.GetAndExpectStringEnvVar("PDS_RESTORE_TARGET_CLUSTER")
+					ctx, err := GetSourceClusterConfigPath()
+					log.FailOnError(err, "failed while getting src cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
