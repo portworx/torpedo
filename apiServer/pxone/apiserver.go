@@ -23,5 +23,6 @@ func main() {
 	router.POST("pxone/deploypxagent", utils.ExecuteHelmCmd)
 	router.GET("pxone/getclusterid/:namespace", utils.GetNamespaceID)
 	router.GET("pxone/getclusternodestatus", utils.GetNodeStatus)
+	router.POST("pxone/runhelmcmd", utils.ExecuteHelmCmd)
 	log.Fatal(router.Run(":8080"))
 }
