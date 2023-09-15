@@ -107,11 +107,8 @@ var _ = Describe("{PoolExpandWithReboot}", func() {
 		EndTorpedoTest()
 	})
 
-	testrailID = 51309
-	testName = "PoolExpandDiskAddWithReboot"
-	testDescription = "Initiate pool expansion using add-disk and reboot node"
-	It(testName+" - "+testDescription, func() {
-		StartTorpedoTest(testName, testDescription, nil, testrailID)
+	It("Initiate pool expansion using add-disk and reboot node", func() {
+		StartTorpedoTest("PoolExpandDiskAddWithReboot", "Initiate pool expansion using add-disk and reboot node", nil, 51309)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 		Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
 			originalSizeInBytes = poolToBeResized.TotalSize
