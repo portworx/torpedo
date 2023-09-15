@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"os"
+	"testing"
+
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
@@ -8,8 +11,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
 	"github.com/portworx/torpedo/drivers/pds/targetcluster"
-	"os"
-	"testing"
 
 	"github.com/portworx/torpedo/pkg/log"
 
