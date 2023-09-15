@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -1026,12 +1027,10 @@ func createUsers(numberOfUsers int) []string {
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
-	var clusterCredName string
-	var clusterCredUID string
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			// Delete the backup location object
-			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err := DeleteBackupLocationWithContext(bkpLocationName, backupLocationUID, orgID, true, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
@@ -1059,7 +1058,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		status, err := IsCloudCredPresent(credName, ctx, orgID)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cloud cred [%s] is present", credName))
 		if status {
-			err = DeleteCloudCredential(credName, orgID, cloudCredUID)
+			err = DeleteCloudCredentialWithContext(credName, orgID, cloudCredUID, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
 			cloudCredDeleteStatus := func() (interface{}, bool, error) {
 				status, err = IsCloudCredPresent(credName, ctx, orgID)
@@ -1076,64 +1075,37 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		}
 	}
 
-	log.Infof("Deleting the application cluster and their respective cloud credentials if present")
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	Inst().Dash.VerifyFatal(len(strings.Split(kubeconfigs, ",")) >= 2, true, "Getting KUBECONFIGS Environment variable")
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	for _, kubeconfig := range kubeconfigList {
-		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
-		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-		if err == nil {
-			clusterObj := clusterResp.GetCluster()
-			clusterProvider := GetClusterProviders()
-			for _, provider := range clusterProvider {
-				switch provider {
-				case drivers.ProviderRke:
+	// Deleting clusters and the corresponding cloud cred
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("failed to enumerate cluster in organization %s", orgID))
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		clusterProvider := GetClusterProviders()
+		for _, provider := range clusterProvider {
+			var clusterCredName, clusterCredUID string
+			switch provider {
+			case drivers.ProviderRke:
+				if clusterObj.PlatformCredentialRef != nil {
 					clusterCredName = clusterObj.PlatformCredentialRef.Name
 					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
-
-				default:
+				} else {
+					log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterObj.GetName())
+				}
+			default:
+				if clusterObj.CloudCredentialRef != nil {
 					clusterCredName = clusterObj.CloudCredentialRef.Name
 					clusterCredUID = clusterObj.CloudCredentialRef.Uid
-				}
-				err = DeleteCluster(clusterName, orgID, ctx, true)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-				clusterDeleteStatus := func() (interface{}, bool, error) {
-					status, err := IsClusterPresent(clusterName, ctx, orgID)
-					if err != nil {
-						return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
-					}
-					if status {
-						return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
-					}
-					return "", false, nil
-				}
-				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-
-				if clusterCredName != "" {
-					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
-					cloudCredDeleteStatus := func() (interface{}, bool, error) {
-						status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
-						if err != nil {
-							return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
-						}
-						if status {
-							return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
-						}
-						return "", false, nil
-					}
-					_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
+				} else {
+					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-		} else {
-			if strings.Contains(err.Error(), "object not found") {
-				log.Infof("Cluster %s is not created for the user", clusterName)
-			} else {
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
+			if clusterCredName != "" {
+				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
 			}
 		}
 	}
@@ -4170,4 +4142,106 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 		return "", "", err
 	}
 	return preRuleName, postRuleName, nil
+}
+
+// GetAllBackupNamesByOwnerID gets all backup names associated with the given ownerID
+func GetAllBackupNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				if isAdminCtx {
+					return []string{ownerID}
+				}
+				return nil
+			}(),
+		},
+	}
+	backupEnumerateResp, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupNames := make([]string, 0)
+	for _, backupObj := range backupEnumerateResp.GetBackups() {
+		if isAdminCtx {
+			backupNames = append(backupNames, backupObj.GetName())
+		} else {
+			if backupObj.GetOwnership().GetOwner() == ownerID {
+				backupNames = append(backupNames, backupObj.GetName())
+			}
+		}
+	}
+	return backupNames, nil
+}
+
+// GetAllBackupScheduleNamesByOwnerID gets all backup schedule names associated with the given ownerID
+func GetAllBackupScheduleNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				//if isAdminCtx { // PB-4199
+				//	return []string{ownerID}
+				//}
+				return nil
+			}(),
+		},
+	}
+	backupScheduleEnumerateResp, err := Inst().Backup.EnumerateBackupSchedule(ctx, backupScheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleNames := make([]string, 0)
+	for _, backupScheduleObj := range backupScheduleEnumerateResp.GetBackupSchedules() {
+		if isAdminCtx {
+			backupScheduleNames = append(backupScheduleNames, backupScheduleObj.GetName())
+		} else {
+			if backupScheduleObj.GetOwnership().GetOwner() == ownerID {
+				backupScheduleNames = append(backupScheduleNames, backupScheduleObj.GetName())
+			}
+		}
+	}
+	return backupScheduleNames, nil
+}
+
+// GetAllRestoreNamesByOwnerID gets all restore names associated with the given ownerID
+func GetAllRestoreNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				//if isAdminCtx {  // PB-4199
+				//	return []string{ownerID}
+				//}
+				return nil
+			}(),
+		},
+	}
+	restoreEnumerateResp, err := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	restoreNames := make([]string, 0)
+	for _, restoreObj := range restoreEnumerateResp.GetRestores() {
+		if isAdminCtx {
+			restoreNames = append(restoreNames, restoreObj.GetName())
+		} else {
+			if restoreObj.GetOwnership().GetOwner() == ownerID {
+				restoreNames = append(restoreNames, restoreObj.GetName())
+			}
+		}
+	}
+	return restoreNames, nil
 }
