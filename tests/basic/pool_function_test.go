@@ -34,10 +34,9 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		EndTorpedoTest()
 	})
 
-	testName = "PoolExpandDiskAdd"
-	testDescription = "Validate storage pool expansion using add-disk option"
-	It("select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
-		StartTorpedoTest(testName, testDescription, nil, 0)
+	It("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskAdd",
+			"Validate storage pool expansion with type=add-disk", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
@@ -50,10 +49,9 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
-	testName = "PoolExpandDiskResize"
-	testDescription = "Validate storage pool expansion using resize-disk option"
-	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
-		StartTorpedoTest(testName, testDescription, nil, 0)
+	It("Select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskResize",
+			"Validate storage pool expansion with type=resize-disk", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
@@ -66,10 +64,9 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
-	testName = "PoolExpandDiskAuto"
-	testDescription = "Validate storage pool expansion using auto option"
-	It("select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
-		StartTorpedoTest(testName, testDescription, nil, 0)
+	It("Select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
+		StartTorpedoTest("PoolExpandDiskAuto",
+			"Validate storage pool expansion with type=auto ", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
