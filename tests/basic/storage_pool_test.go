@@ -9866,7 +9866,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 		}
 		//numOfSlNodeBefore := len(slNodes)
-		//fmt.Printf("slnodes %v", len(slNodes))
+
 		slNode := GetRandomStorageLessNode(slNodes)
 		stNodes := node.GetStorageNodes()
 		selectedNode := stNodes[0]
@@ -9886,6 +9886,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 				dash.VerifyFatal(len(slNodes) > 0, true, "Storage less nodes found?")
 			}
 			numOfSlNodeBefore := len(slNodes)
+			fmt.Printf("slnodes %v", len(slNodes))
 			selectedNodeForOps, err := node.GetNodeByName(selectedNode.Name)
 			log.FailOnError(err, "failed while getting node")
 			driverName := vsphere.DriverName
@@ -9910,6 +9911,9 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//k8sCorelist, err := core.NodeOps.GetNodes()
 			err = k8s1.DeleteNode(selectedNodeForOps.Name)
 			err = Inst().S.RefreshNodeRegistry()
+			log.FailOnError(err, "error refreshing driver end points")
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
 			slNodes1 := node.GetStorageLessNodes()
 			fmt.Printf("slnodes1 %v", len(slNodes1))
 			dash.VerifyFatal(len(slNodes1) == numOfSlNodeBefore-1, true, fmt.Sprintf("Verified storageless node and got one node converted to storage node as expected"))
