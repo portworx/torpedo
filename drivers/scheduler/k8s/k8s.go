@@ -828,6 +828,7 @@ func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
 
 // Schedule Schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+	log.InfoD("Start scheduling")
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
@@ -937,6 +938,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Namespace created")
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
