@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
-	"google.golang.org/grpc/metadata"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -25,6 +24,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -2428,6 +2428,40 @@ func IsAdminCtx(ctx context.Context) (bool, error) {
 
 func (p *portworx) EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error) {
 	return p.activityTimeLineManager.Enumerate(ctx, req)
+}
+
+// GetAllSchedulePolicies gets the all SchedulePolicys names for the given org
+func (p *portworx) GetAllSchedulePolicies(ctx context.Context, orgID string) ([]string, error) {
+	var schedulePolicyNames []string
+	schedulePolicyRequest := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	resp, err := p.EnumerateSchedulePolicy(ctx, schedulePolicyRequest)
+	if err != nil {
+		return schedulePolicyNames, err
+	}
+	schedulePolicys := resp.GetSchedulePolicies()
+	for _, schedulePolicy := range schedulePolicys {
+		schedulePolicyNames = append(schedulePolicyNames, schedulePolicy.Name)
+	}
+	return schedulePolicyNames, nil
+}
+
+// GetAllRules gets the all rule names for the given org
+func (p *portworx) GetAllRules(ctx context.Context, orgID string) ([]string, error) {
+	var ruleNames []string
+	rulesEnumerateRequest := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	resp, err := p.EnumerateRule(ctx, rulesEnumerateRequest)
+	if err != nil {
+		return ruleNames, err
+	}
+	Rules := resp.GetRules()
+	for _, rule := range Rules {
+		ruleNames = append(ruleNames, rule.Name)
+	}
+	return ruleNames, nil
 }
 
 func init() {
