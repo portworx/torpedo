@@ -766,8 +766,8 @@ var _ = Describe("{LicenseValidation}", func() {
 		stepLog = "Get SKU and compare with IBM cloud license type"
 		Step(stepLog, func() {
 			log.InfoD("validate IBM cloud license type")
-			isValidLicense := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU 
-			dash.VerifyFatal( isValidLicense, true, fmt.Sprintf("License type is invalid: %v", summary.SKU))
+			verifyLicenseBool := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU 
+			dash.VerifyFatal( verifyLicenseBool, true, fmt.Sprintf("License type is valid: %v", summary.SKU))
 
 			Step("Compare PX-IBM License features vs activated license", func() {
 				log.InfoD("Compare with IBM cloud license features")
@@ -775,15 +775,15 @@ var _ = Describe("{LicenseValidation}", func() {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
 					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-						dash.VerifyFatal(feature.Quantity != limit, false,
-						 fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
+						dash.VerifyFatal(feature.Quantity != limit, true,
+							fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
 					}
 				}
 				} else {
 					for _, feature := range summary.Features {
 						// if the feature limit exists in the hardcoded license limits we test it.
 						if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-							dash.VerifyFatal(feature.Quantity != limit, false,
+							dash.VerifyFatal(feature.Quantity != limit, true,
 						 		fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
 						}
 					}
