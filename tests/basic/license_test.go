@@ -771,6 +771,21 @@ var _ = Describe("{LicenseValidation}", func() {
 
 			Step("Compare PX-IBM License features vs activated license", func() {
 				log.InfoD("Compare with IBM cloud license features")
+				for _, feature := range summary.Features {
+					// if the feature limit exists in the hardcoded license limits we test it.
+					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
+						
+						expectedVal := feature.Quantity
+						if (summary.SKU == ibmTestLicenseDRSKU) && (feature.Name == "DisasterRecovery"){
+							 expectedVal := "true"
+						} 
+						log.InfoD("Limit : [%v] an type [%T]", limit, limit)
+						log.InfoD("Name : [%v] an type [%T]", feature.Name,feature.Name )
+						log.InfoD("Expected Value [%v] an type [%T]", expectedVal, expectedVal)
+						dash.VerifyFatal(expectedVal != limit, true,
+							fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, expectedVal, limit))
+					}					
+				}/*
 				if (summary.SKU == ibmTestLicenseSKU) {
 				for _, feature := range summary.Features {
 					// if the feature limit exists in the hardcoded license limits we test it.
@@ -787,7 +802,7 @@ var _ = Describe("{LicenseValidation}", func() {
 						 		fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
 						}
 					}
-				}
+				}*/
 			})
 		})
 	})
