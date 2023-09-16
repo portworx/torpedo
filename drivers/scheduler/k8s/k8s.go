@@ -596,8 +596,10 @@ func isValidProvider(specPath, storageProvisioner string) bool {
 }
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {
+	log.Infof("Inside decodeSpec")
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 	if err != nil {
+		log.Infof("Inside decodeSpec error is not nil")
 		schemeObj := runtime.NewScheme()
 		if err := snapv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
