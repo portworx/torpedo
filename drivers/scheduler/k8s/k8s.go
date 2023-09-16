@@ -90,6 +90,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -626,6 +627,11 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		}
 
 		if err := storageapi.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
+		if err := kubevirtv1.AddToScheme(schemeObj); err != nil {
+			log.Infof("Adding kubevirt to scheme")
 			return nil, err
 		}
 
