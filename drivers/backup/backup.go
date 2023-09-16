@@ -159,6 +159,7 @@ type Cluster interface {
 	WaitForClusterDeletion(
 		ctx context.Context,
 		clusterName,
+		clusterUid,
 		orgID string,
 		timeout time.Duration,
 		timeBeforeRetry time.Duration,
