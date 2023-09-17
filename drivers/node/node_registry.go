@@ -2,8 +2,9 @@ package node
 
 import (
 	"fmt"
-	"github.com/pborman/uuid"
 	"sync"
+
+	"github.com/pborman/uuid"
 )
 
 var (
@@ -100,6 +101,7 @@ func GetStorageDriverNodes() []Node {
 
 // IsStorageNode returns true if the node is a storage node, false otherwise
 func IsStorageNode(n Node) bool {
+	fmt.Printf("length n.pools %v", len(n.Pools))
 	return len(n.Pools) > 0
 }
 
@@ -109,6 +111,7 @@ func GetStorageNodes() []Node {
 	storageDriverNodes := GetStorageDriverNodes()
 	for _, n := range storageDriverNodes {
 		if IsStorageNode(n) {
+			fmt.Printf("nodespool %v", n)
 			nodeList = append(nodeList, n)
 		}
 	}
@@ -119,8 +122,11 @@ func GetStorageNodes() []Node {
 func GetStorageLessNodes() []Node {
 	var nodeList []Node
 	storageDriverNodes := GetStorageDriverNodes()
+	fmt.Printf("storagesrivernodes %v", storageDriverNodes)
 	for _, n := range storageDriverNodes {
+		fmt.Printf("node %v", n)
 		if !IsStorageNode(n) {
+
 			nodeList = append(nodeList, n)
 		}
 	}
