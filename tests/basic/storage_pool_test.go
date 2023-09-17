@@ -9915,7 +9915,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			//log.FailOnError(err, "error refreshing driver end points")
 			err = Inst().S.RefreshNodeRegistry()
 			log.FailOnError(err, "error refreshing node registry")
-			slNodes1 := node.GetStorageLessNodes()
+			slNodes1 := node.GetStorageLessNodesPools()
 			fmt.Printf("slnodes1 %v", len(slNodes1))
 			dash.VerifyFatal(len(slNodes1) == numOfSlNodeBefore-1, true, fmt.Sprintf("Failed to convert one storageless to storage node"))
 		})

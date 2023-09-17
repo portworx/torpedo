@@ -133,6 +133,27 @@ func GetStorageLessNodes() []Node {
 	return nodeList
 }
 
+// GetStorageLessNodes gets all the nodes with empty StoragePools
+func GetStorageLessNodesPools() []Node {
+	var nodeList []Node
+	storageDriverNodes := GetStorageDriverNodes()
+	fmt.Printf("storagesrivernodes %v", storageDriverNodes)
+	fmt.Printf("nodeRegistry %v", nodeRegistry)
+	for _, n := range nodeRegistry {
+		if n.IsStorageDriverInstalled {
+			nodeList = append(nodeList, n)
+		}
+	}
+	for _, n := range storageDriverNodes {
+		fmt.Printf("node %v", n)
+		if !IsStorageNode(n) {
+
+			nodeList = append(nodeList, n)
+		}
+	}
+	return nodeList
+}
+
 // GetNodesByTopologyZoneLabel gets all the nodes with Topology Zone Value matching
 func GetNodesByTopologyZoneLabel(zone string) []Node {
 	var nodeList []Node
