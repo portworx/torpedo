@@ -442,16 +442,16 @@ github.com/go-errors/errors
 # github.com/go-gorp/gorp/v3 v3.0.2
 ## explicit; go 1.13
 github.com/go-gorp/gorp/v3
-# github.com/go-logr/logr v1.2.4 => github.com/go-logr/logr v1.2.3
+# github.com/go-logr/logr v1.2.3 => github.com/go-logr/logr v1.2.3
 ## explicit; go 1.16
 github.com/go-logr/logr
 # github.com/go-openapi/inflect v0.19.0
 ## explicit
 github.com/go-openapi/inflect
-# github.com/go-openapi/jsonpointer v0.19.6
+# github.com/go-openapi/jsonpointer v0.19.5
 ## explicit; go 1.13
 github.com/go-openapi/jsonpointer
-# github.com/go-openapi/jsonreference v0.20.1
+# github.com/go-openapi/jsonreference v0.20.0
 ## explicit; go 1.13
 github.com/go-openapi/jsonreference
 github.com/go-openapi/jsonreference/internal
@@ -517,7 +517,7 @@ github.com/golang/groupcache/lru
 ## explicit; go 1.11
 github.com/golang/mock/gomock
 github.com/golang/mock/mockgen/model
-# github.com/golang/protobuf v1.5.3
+# github.com/golang/protobuf v1.5.2
 ## explicit; go 1.9
 github.com/golang/protobuf/descriptor
 github.com/golang/protobuf/jsonpb
@@ -1041,8 +1041,8 @@ github.com/opencontainers/image-spec/specs-go/v1
 # github.com/opencontainers/runc v1.1.4
 ## explicit; go 1.16
 github.com/opencontainers/runc/libcontainer/user
-# github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
-## explicit; go 1.20
+# github.com/openshift/api v0.0.0-20230426193520-54a14470e5dc
+## explicit; go 1.19
 github.com/openshift/api/apps/v1
 github.com/openshift/api/config/v1
 github.com/openshift/api/console/v1
@@ -1669,7 +1669,7 @@ helm.sh/helm/v3/pkg/storage/driver
 helm.sh/helm/v3/pkg/strvals
 helm.sh/helm/v3/pkg/time
 helm.sh/helm/v3/pkg/uploader
-# k8s.io/api v0.27.1 => k8s.io/api v0.25.1
+# k8s.io/api v0.26.3 => k8s.io/api v0.25.1
 ## explicit; go 1.19
 k8s.io/api/admission/v1
 k8s.io/api/admission/v1beta1
@@ -1720,7 +1720,7 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apiextensions-apiserver v0.26.3 => k8s.io/apiextensions-apiserver v0.25.1
+# k8s.io/apiextensions-apiserver v0.26.1 => k8s.io/apiextensions-apiserver v0.25.1
 ## explicit; go 1.19
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1
@@ -1732,7 +1732,7 @@ k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextension
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1/fake
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1
 k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/typed/apiextensions/v1beta1/fake
-# k8s.io/apimachinery v0.27.1 => k8s.io/apimachinery v0.25.1
+# k8s.io/apimachinery v0.26.3 => k8s.io/apimachinery v0.25.1
 ## explicit; go 1.19
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -2071,13 +2071,13 @@ k8s.io/klog/v2/internal/clock
 k8s.io/klog/v2/internal/dbg
 k8s.io/klog/v2/internal/serialize
 k8s.io/klog/v2/internal/severity
-# k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a
+# k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280
 ## explicit; go 1.18
 k8s.io/kube-openapi/pkg/builder3/util
-k8s.io/kube-openapi/pkg/cached
 k8s.io/kube-openapi/pkg/common
 k8s.io/kube-openapi/pkg/handler3
 k8s.io/kube-openapi/pkg/internal
+k8s.io/kube-openapi/pkg/internal/handler
 k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json
 k8s.io/kube-openapi/pkg/openapiconv
 k8s.io/kube-openapi/pkg/schemaconv
@@ -2108,7 +2108,7 @@ k8s.io/kubernetes/pkg/registry/core/service/portallocator
 k8s.io/kubernetes/pkg/util/goroutinemap
 k8s.io/kubernetes/pkg/util/goroutinemap/exponentialbackoff
 k8s.io/kubernetes/pkg/util/slice
-# k8s.io/utils v0.0.0-20230505201702-9f6742963106
+# k8s.io/utils v0.0.0-20230313181309-38a27ef9d749
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock
@@ -2120,12 +2120,12 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
-# kubevirt.io/api v1.0.0-beta.0.0.20230915224111-b7475cdc14ab
+# kubevirt.io/api v1.0.0-alpha.0
 ## explicit; go 1.17
 kubevirt.io/api/core
 kubevirt.io/api/core/v1
-# kubevirt.io/containerized-data-importer-api v1.57.0-alpha1
-## explicit; go 1.19
+# kubevirt.io/containerized-data-importer-api v1.55.0
+## explicit; go 1.18
 kubevirt.io/containerized-data-importer-api/pkg/apis/core
 kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1
 # kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90

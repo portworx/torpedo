@@ -631,7 +631,6 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		}
 
 		if err := kubevirtv1.AddToScheme(schemeObj); err != nil {
-			log.Infof("Adding kubevirt to scheme")
 			return nil, err
 		}
 

@@ -23,16 +23,6 @@ var (
 )
 
 var (
-	FeatureGateGatewayAPI = FeatureGateName("GatewayAPI")
-	gateGatewayAPI        = FeatureGateDescription{
-		FeatureGateAttributes: FeatureGateAttributes{
-			Name: FeatureGateGatewayAPI,
-		},
-		OwningJiraComponent: "Routing",
-		ResponsiblePerson:   "miciah",
-		OwningProduct:       ocpSpecific,
-	}
-
 	FeatureGateOpenShiftPodSecurityAdmission = FeatureGateName("OpenShiftPodSecurityAdmission")
 	openShiftPodSecurityAdmission            = FeatureGateDescription{
 		FeatureGateAttributes: FeatureGateAttributes{
