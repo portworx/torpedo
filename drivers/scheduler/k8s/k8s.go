@@ -734,6 +734,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*corev1.PersistentVolume); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
+		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
