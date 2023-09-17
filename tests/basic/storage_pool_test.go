@@ -9902,7 +9902,7 @@ var _ = Describe("{NodeShutdownStorageMovetoStoragelessNode}", func() {
 			log.FailOnError(destroyErr1, "Failed to destroy the node with err %s", destroyErr1)
 			//shutdown for more than 3 mins
 			//check if storageless nodes has taken over the storage and pools from shutdown node
-			time.Sleep(600 * time.Second)
+			time.Sleep(1000 * time.Second)
 			// Removing the node from the nodeRegistry
 			log.Infof("Deleting node %s from node registry", selectedNodeForOps.Name)
 			err = node.DeleteNode(selectedNodeForOps)
