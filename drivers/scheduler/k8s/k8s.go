@@ -631,12 +631,14 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		}
 
 		if err := kubevirtv1.AddToScheme(schemeObj); err != nil {
+			log.Infof("Error occurred while trying to add kubevirt scheme")
 			return nil, err
 		}
 
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
+			log.Infof("Error occurred after adding kubevirt scheme")
 			return nil, err
 		}
 	}
