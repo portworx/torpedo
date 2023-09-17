@@ -17,7 +17,7 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gofrs/flock v0.8.1
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.2
 	github.com/google/gnostic v0.6.9
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-version v1.6.0
@@ -32,7 +32,7 @@ require (
 	github.com/libopenstorage/stork v1.4.1-0.20230330233319-e17ea1b3fd81
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.21.1
-	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
+	github.com/openshift/api v0.0.0-20230426193520-54a14470e5dc
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
@@ -60,11 +60,11 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.6.0
-	k8s.io/api v0.27.1
-	k8s.io/apiextensions-apiserver v0.26.3
-	k8s.io/apimachinery v0.27.1
+	k8s.io/api v0.26.3
+	k8s.io/apiextensions-apiserver v0.26.1
+	k8s.io/apimachinery v0.26.3
 	k8s.io/client-go v12.0.0+incompatible
-	kubevirt.io/api v1.0.0-beta.0.0.20230915224111-b7475cdc14ab
+	kubevirt.io/api v1.0.0-alpha.0
 )
 
 require (
@@ -131,10 +131,10 @@ require (
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.0.2 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
+	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
-	github.com/go-openapi/jsonpointer v0.19.6 // indirect
-	github.com/go-openapi/jsonreference v0.20.1 // indirect
+	github.com/go-openapi/jsonpointer v0.19.5 // indirect
+	github.com/go-openapi/jsonreference v0.20.0 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
@@ -271,11 +271,11 @@ require (
 	k8s.io/component-helpers v0.25.1 // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20230308215209-15aac26d736a // indirect
+	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280 // indirect
 	k8s.io/kubectl v0.25.2 // indirect
 	k8s.io/kubernetes v1.25.1 // indirect
-	k8s.io/utils v0.0.0-20230505201702-9f6742963106 // indirect
-	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
+	k8s.io/utils v0.0.0-20230313181309-38a27ef9d749 // indirect
+	kubevirt.io/containerized-data-importer-api v1.55.0 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
 	oras.land/oras-go v1.2.0 // indirect
 	sigs.k8s.io/cluster-api v0.2.11 // indirect
