@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	baseErrors "errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -5161,7 +5160,15 @@ func (k *K8s) createVirtualMachineObjects(
 		if err != nil {
 			return nil, fmt.Errorf("Error getting pwd, [%s], [%s], [%s]", stdout, stderr, err)
 		}
-		flag.StringVar(&specDir, SpecDirCliFlag, "defaultSpecsRoot", "Root directory containing the application spec files")
+		//flag.StringVar(&specDir, SpecDirCliFlag, "defaultSpecsRoot", "Root directory containing the application spec files")
+		specDir = filepath.Join("go", "src", "github.com", "portworx", "torpedo", "drivers", "scheduler", "k8s", "specs")
+
+		lsArgs := fmt.Sprintf("ls -ltr %s", specDir)
+		stdout, stderr, err = osutils.ExecShell(lsArgs)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting list of files, [%s], [%s], [%s]", stdout, stderr, err)
+		}
+
 		specPath := filepath.Join(specDir, app.Key, "*")
 		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("Cannot find yaml in path %s", specPath)
