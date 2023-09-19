@@ -241,6 +241,8 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	if !isRegistered {
 		log.InfoD("Installing PDS ( helm version -  %v)", helmChartversion)
+		log.Infof("===============Sleeping for 3 days===============")
+		time.Sleep(72 * time.Hour)
 		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=https://portworx.github.io/pds-charts --version=%s --set tenantId=%s "+
 			"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		if strings.EqualFold(clusterType, "ocp") {
