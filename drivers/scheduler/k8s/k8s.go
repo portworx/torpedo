@@ -852,6 +852,8 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			if isCsiApp(options, key) {
 				appSpec.IsCSI = true
 			}
+			log.Infof("Appspec key - %s", appSpec.Key)
+			log.Infof("Appspec details - %v", appSpec.SpecList)
 			apps = append(apps, appSpec)
 		}
 	} else {
@@ -862,6 +864,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
 		appNamespace := app.GetID(instanceID)
+		log.Infof("appNamespace will be %s", appNamespace)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
 		} else {
@@ -1150,6 +1153,23 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 			return nil, err
 		}
 
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
