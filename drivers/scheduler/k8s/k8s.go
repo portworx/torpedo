@@ -5161,7 +5161,7 @@ func (k *K8s) createVirtualMachineObjects(
 			return nil, fmt.Errorf("Error getting pwd, [%s], [%s], [%s]", stdout, stderr, err)
 		}
 		//flag.StringVar(&specDir, SpecDirCliFlag, "defaultSpecsRoot", "Root directory containing the application spec files")
-		specDir = filepath.Join("go", "src", "github.com", "portworx", "torpedo", "drivers", "scheduler", "k8s", "specs")
+		specDir = filepath.Join("/go", "src", "github.com", "portworx", "torpedo", "drivers", "scheduler", "k8s", "specs")
 
 		lsArgs := fmt.Sprintf("ls -ltr %s", specDir)
 		stdout, stderr, err = osutils.ExecShell(lsArgs)
