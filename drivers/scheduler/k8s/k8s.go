@@ -850,7 +850,10 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				appSpec.IsCSI = true
 			}
 			log.Infof("Appspec key - %s", appSpec.Key)
-			log.Infof("Appspec details - %v", appSpec.SpecList)
+			specLists := appSpec.SpecList
+			for _, s := range specLists {
+				log.Infof("Spec - %v", s)
+			}
 			apps = append(apps, appSpec)
 		}
 	} else {
