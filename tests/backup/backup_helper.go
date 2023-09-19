@@ -1085,7 +1085,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		OrgId: orgID,
 	}
 	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("failed to enumerate cluster in organization %s", orgID))
+	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying enumerate cluster in organization %s", orgID))
 	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
 		clusterProvider := GetClusterProviders()
 		for _, provider := range clusterProvider {

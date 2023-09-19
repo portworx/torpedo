@@ -259,7 +259,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 					backupName := allScheduleBackupNames[i]
 					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
 					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, orgID, ctx)
+					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], orgID, ctx)
 					log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, user)
 				}
 				scheduleUid, err := Inst().Backup.GetBackupScheduleUID(nonAdminCtx, userScheduleNameMap[user], orgID)
@@ -274,7 +274,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 				for backupName := range userBackupMap[user] {
 					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
 					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-					_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user][SourceClusterName], orgID, ctx)
+					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], orgID, ctx)
 					log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
 				}
 			})
@@ -600,8 +600,10 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					for backupName := range userBackupMap[user] {
 						backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 						log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-						_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user][SourceClusterName], orgID, ctx)
+						_, err = DeleteBackup(backupName, backupUid, orgID, ctx)
 						log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
+						err = DeleteBackupAndWait(backupName, ctx)
+						log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
 					}
 				})
 				Step(fmt.Sprintf("Delete user %s restores from the admin", user), func() {
@@ -949,7 +951,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 					backupName := allScheduleBackupNames[i]
 					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
 					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, orgID, newAdminCtx)
+					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], orgID, newAdminCtx)
 					log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, user)
 				}
 				scheduleUid, err := Inst().Backup.GetBackupScheduleUID(nonAdminCtx, userScheduleNameMap[user], orgID)
@@ -962,7 +964,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 				for backupName := range userBackupMap[user] {
 					backupUid, err := Inst().Backup.GetBackupUID(newAdminCtx, backupName, orgID)
 					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-					_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user][SourceClusterName], orgID, newAdminCtx)
+					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], orgID, newAdminCtx)
 					log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
 				}
 			})
@@ -1737,7 +1739,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 			for backupName := range userBackupMap[user1] {
 				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 				log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user2)
-				_, err = DeleteBackupWithClusterUID(backupName, backupUid, userClusterMap[user2][SourceClusterName], orgID, ctx)
+				_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user2][SourceClusterName], orgID, ctx)
 				log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user2)
 			}
 		})
@@ -2233,7 +2235,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 							defer wg.Done()
 							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
 							backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+							_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
 							log.FailOnError(err, "Failed to delete backup - %s", backupName)
 							err = DeleteBackupAndWait(backupName, adminCtx)
 							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
@@ -2362,7 +2364,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 							defer wg.Done()
 							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
 							backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+							_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
 							log.FailOnError(err, "Failed to delete backup - %s", backupName)
 							err = DeleteBackupAndWait(backupName, adminCtx)
 							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
@@ -2819,7 +2821,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 							defer wg.Done()
 							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
 							backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+							_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
 							log.FailOnError(err, "Failed to delete backup - %s", backupName)
 							err = DeleteBackupAndWait(backupName, adminCtx)
 							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
@@ -2953,7 +2955,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 							defer wg.Done()
 							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
 							backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+							_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
 							log.FailOnError(err, "Failed to delete backup - %s", backupName)
 							err = DeleteBackupAndWait(backupName, adminCtx)
 							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
@@ -3213,7 +3215,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			}
 			for _, backupName := range userBackupNamesFromAdmin {
 				backupUID, _ := Inst().Backup.GetBackupUID(adminCtx, backupName, orgID)
-				_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+				_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, srcClusterUid, orgID, adminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
 				err = DeleteBackupAndWait(backupName, adminCtx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
@@ -3572,7 +3574,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 							defer wg.Done()
 							log.InfoD(fmt.Sprintf("Verifying deletion backup [%s] of non-admin user [%s] from px-admin user", backupName, nonAdminUserName))
 							backupUID, _ := backupDriver.GetBackupUID(adminCtx, backupName, orgID)
-							_, err = DeleteBackup(backupName, backupUID, orgID, adminCtx)
+							_, err = DeleteBackupWithClusterUID(backupName, backupUID, SourceClusterName, clusterUidMap[nonAdminUserName][SourceClusterName], orgID, adminCtx)
 							log.FailOnError(err, "Failed to delete backup - %s", backupName)
 							err = DeleteBackupAndWait(backupName, adminCtx)
 							log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))

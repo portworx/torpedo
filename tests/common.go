@@ -284,6 +284,7 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
+	clusterDeleteTimeout              = 10 * time.Minute
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -3529,22 +3530,24 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	}
 
 	bkpDeleteRequest := &api.BackupDeleteRequest{
-		Name:    backupName,
-		OrgId:   orgID,
-		Uid:     backupUID,
-		Cluster: backupObj.Cluster,
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
 }
 
 // DeleteBackupWithClusterUID deletes the backup using the given cluster uid
-func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
+func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	backupDeleteRequest := &api.BackupDeleteRequest{
-		Name:    backupName,
-		Uid:     backupUID,
-		OrgId:   orgID,
-		Cluster: clusterUid,
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
 	}
 	backupDeleteResponse, err := Inst().Backup.DeleteBackup(ctx, backupDeleteRequest)
 	if err != nil {
@@ -3578,7 +3581,14 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 		DeleteRestores: cleanupBackupsRestores,
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
-	return err
+	if err != nil {
+		return err
+	}
+	err = backupDriver.WaitForClusterDeletion(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteBackupLocation deletes backup location
@@ -4141,7 +4151,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
-		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider", credName, orgID, provider)
+		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
 	return nil
