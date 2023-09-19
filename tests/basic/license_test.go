@@ -78,7 +78,8 @@ const (
 	essentialsFaFbSKU = "Portworx CSI for FA/FB"
 	ibmTestLicenseSKU = "PX-Enterprise IBM Cloud (test)"
 	ibmTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
-	
+	ibmProdLicenseSKU = "PX-Enterprise IBM Cloud"
+	ibmProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
@@ -754,45 +755,43 @@ var _ = Describe("{LicenseValidation}", func() {
 		StartTorpedoTest("LicenseValidation", "Validate PX License Activated using catalog", nil, 0)
 	})
 
-	stepLog := "Get SKU and compare with IBM cloud test license"
+	stepLog := "Get SKU and compare with IBM cloud license activated using catalog"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-
+		validSKUs := map[string]bool{
+		ibmTestLicenseSKU:     true,
+    	ibmTestLicenseDRSKU:   true,
+    	ibmProdLicenseSKU:     true,
+    	ibmProdLicenseDRSKU:   true,
+		}
 		summary, err := Inst().V.GetLicenseSummary()
 		log.FailOnError(err, "Failed to get license SKU")
 		log.InfoD("%v", summary)
 
-		// Get SKU and compare with IBM cloud test license
-		stepLog = "Get SKU and compare with IBM cloud license type"
+		// Get SKU and compare with IBM cloud license
+		stepLog = "Verify PX-IBM cloud license type and its features"
 		Step(stepLog, func() {
 			log.InfoD("validate IBM cloud license type")
-			verifyLicenseBool := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU 
-			dash.VerifyFatal( verifyLicenseBool, true, fmt.Sprintf("License type is valid: %v", summary.SKU))
+        isValidLicense := validSKUs[summary.SKU]
+        dash.VerifyFatal(isValidLicense, true, fmt.Sprintf("License type is valid?: %v", summary.SKU))
 
-			Step("Compare PX-IBM License features vs activated license", func() {
-				log.InfoD("Compare with PX IBM cloud licensed features")
-				if summary.SKU == ibmTestLicenseSKU {
-					for _, feature := range summary.Features {
-						if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-							dash.VerifyFatal(feature.Quantity != limit, true,
-								fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
-						}
-					}
-			    } else {
-					for _, feature := range summary.Features {
-						if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-							log.InfoD("Limit : [%v] an type [%T]", limit, limit)
-							log.InfoD("Name : [%v] an type [%T]", feature.Name,feature.Name )
-							if Label(feature.Name) == LabDisasterRecovery {
-								limit =  &pxapi.LicensedFeature_Enabled{Enabled: true}
-							}
-							if feature.Quantity != limit {
-								dash.Errorf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit)
-							}
-						}
-					}
-				}
-			})
+    		Step("Compare PX-IBM License features vs activated license", func() {
+            	log.InfoD("Compare with PX IBM cloud licensed features")
+				isTestOrProdSKU := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmProdLicenseSKU
+            	for _, feature := range summary.Features {
+                	if limit, ok := ibmLicense[Label(feature.Name)]; ok {
+                    
+                    	// Special handling for DisasterRecovery feature and certain SKUs
+                    	if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
+                        	limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+                    	}	
+
+                    	if feature.Quantity != limit {
+                        	dash.Errorf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit)
+                    	}
+                	}
+            	}
+        	})
 		})
 	})
 
