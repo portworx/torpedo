@@ -917,7 +917,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 				}
 				log.Infof("Spec - %v", s)
 				log.Infof("Debug Spec - %v", debugStruct)
-				StructToString(debugStruct)
+				log.Infof(StructToString(debugStruct))
 			}
 			apps = append(apps, appSpec)
 		}
