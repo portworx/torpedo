@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	baseErrors "errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -129,6 +130,8 @@ const (
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
 	PxLabelValue = "portworx"
+	// SpecDirCliFlag is the path of the specs
+	SpecDirCliFlag = "spec-dir"
 )
 
 const (
@@ -1264,6 +1267,24 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createCustomResourceObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		log.Infof("Trying to create VMs")
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVirtualMachineObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -5122,6 +5143,36 @@ func (k *K8s) createAdmissionRegistrationObjects(
 		}
 		log.Infof("[%v] Created ValidatingWebhookConfiguration: %v", app.Key, vbc.Name)
 		return vbc, nil
+	}
+
+	return nil, nil
+}
+
+func (k *K8s) createVirtualMachineObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	var specDir string
+	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		log.Warn("applying spec for kubevirt VirtualMachine")
+		pwdArgs := "pwd"
+		stdout, stderr, err := osutils.ExecShell(pwdArgs)
+		if err != nil {
+			return nil, fmt.Errorf("Error getting pwd, [%s], [%s], [%s]", stdout, stderr, err)
+		}
+		flag.StringVar(&specDir, SpecDirCliFlag, "defaultSpecsRoot", "Root directory containing the application spec files")
+		specPath := filepath.Join(specDir, app.Key, "*")
+		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("Cannot find yaml in path %s", specPath)
+		}
+		cmdArgs := []string{"apply", "-f", specPath, "-n", ns.Name}
+		err := osutils.Kubectl(cmdArgs)
+		if err != nil {
+			return nil, fmt.Errorf("Error applying spec [%s], Error: %s", specPath, err)
+		}
+		obj.Namespace = ns.Name
+		return obj, nil
 	}
 
 	return nil, nil
