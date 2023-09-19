@@ -838,6 +838,64 @@ func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
 	return false
 }
 
+// StructToString returns the string representation of the given struct
+func StructToString(s interface{}) string {
+	v := reflect.ValueOf(s)
+	if stringer, ok := s.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Sprintf("%v", s)
+	}
+	t := v.Type()
+	var fields []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.IsExported() {
+			fieldVal := v.Field(i)
+			var fieldString string
+			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
+				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
+			} else {
+				switch fieldVal.Kind() {
+				case reflect.Ptr:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else if fieldVal.Type().Elem().Kind() == reflect.Struct {
+						fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Elem().Interface()))
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Elem())
+					}
+				case reflect.Slice:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Map:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Struct:
+					fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Interface()))
+				case reflect.String:
+					if fieldVal.Len() == 0 {
+						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				default:
+					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+				}
+			}
+			fields = append(fields, fieldString)
+		}
+	}
+	return fmt.Sprintf("%s: {%s}", t.Name(), strings.Join(fields, ", "))
+}
+
 // Schedule Schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	log.InfoD("Start scheduling")
@@ -854,7 +912,14 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			log.Infof("Appspec key - %s", appSpec.Key)
 			specLists := appSpec.SpecList
 			for _, s := range specLists {
+				debugStruct := struct {
+					Spec interface{}
+				}{
+					Spec: s,
+				}
 				log.Infof("Spec - %v", s)
+				log.Infof("Debug Spec - %v", debugStruct)
+				StructToString(debugStruct)
 			}
 			apps = append(apps, appSpec)
 		}
