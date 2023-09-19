@@ -684,6 +684,8 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 	})
 
 	It("Deploy Dataservices", func() {
+		log.Infof("==========Sleeping for 3 days============")
+		time.Sleep(72 * time.Hour)
 		var generateWorkloads = make(map[string]string)
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var dsVersions = make(map[string]map[string][]string)
