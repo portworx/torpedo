@@ -60,6 +60,7 @@ type portworx struct {
 	ruleManager             api.RulesClient
 	versionManager          api.VersionClient
 	activityTimeLineManager api.ActivityTimeLineClient
+	RoleManager             api.RoleClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -183,6 +184,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.ruleManager = api.NewRulesClient(conn)
 	p.versionManager = api.NewVersionClient(conn)
 	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
+	p.RoleManager = api.NewRoleClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -1539,6 +1541,10 @@ func (p *portworx) DeleteBackupSchedulePolicy(orgID string, policyList []string)
 
 func (p *portworx) EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error) {
 	return p.activityTimeLineManager.Enumerate(ctx, req)
+}
+
+func (p *portworx) EnumerateRole(ctx context.Context, req *api.RoleEnumerateRequest) (*api.RoleEnumerateResponse, error) {
+	return p.RoleManager.Enumerate(ctx, req)
 }
 
 func init() {

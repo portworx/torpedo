@@ -76,6 +76,9 @@ type Driver interface {
 	//ActivityTimeLine interface
 	ActivityTimeLine
 
+	// Roles
+	Role
+
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
 
@@ -390,6 +393,12 @@ type ActivityTimeLine interface {
 
 	// EnumerateActivityTimeLine enumerates ActivityData
 	EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error)
+}
+
+type Role interface {
+
+	// EnumerateRole fetches roles for a given object
+	EnumerateRole(ctx context.Context, req *api.RoleEnumerateRequest)
 }
 
 var backupDrivers = make(map[string]Driver)
