@@ -5169,7 +5169,7 @@ func (k *K8s) createVirtualMachineObjects(
 			return nil, fmt.Errorf("Error getting list of files, [%s], [%s], [%s]", stdout, stderr, err)
 		}
 
-		specPath := filepath.Join(specDir, app.Key, "*")
+		specPath := filepath.Join(specDir, app.Key)
 		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("Cannot find yaml in path %s", specPath)
 		}
