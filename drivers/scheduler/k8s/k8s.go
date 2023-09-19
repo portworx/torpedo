@@ -5167,7 +5167,7 @@ func (k *K8s) createVirtualMachineObjects(
 			return nil, fmt.Errorf("Cannot find yaml in path %s", specPath)
 		}
 		cmdArgs := []string{"apply", "-f", specPath, "-n", ns.Name}
-		err := osutils.Kubectl(cmdArgs)
+		err = osutils.Kubectl(cmdArgs)
 		if err != nil {
 			return nil, fmt.Errorf("Error applying spec [%s], Error: %s", specPath, err)
 		}
