@@ -2402,6 +2402,9 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 	} else if specObj, ok := spec.(*storkapi.ResourceTransformation); ok {
 		clone := *specObj
 		return &clone, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
 	} else if specObj, ok := spec.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
 		clone := *specObj
 		webhooks := make([]admissionregistrationv1.ValidatingWebhook, 0)
