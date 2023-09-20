@@ -5063,6 +5063,7 @@ func (k *K8s) createVirtualMachineObjects(
 	var specDir string
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
 		log.Warnf("Applying VirtualMachine spec for app [%s]", app.Key)
+		time.Sleep(60 * time.Second)
 		specDir = flag.Lookup(SpecDirCliFlag).Value.(flag.Getter).Get().(string)
 		specPath := filepath.Join(specDir, app.Key)
 		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
