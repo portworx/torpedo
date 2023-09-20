@@ -5075,7 +5075,7 @@ func (k *K8s) createVirtualMachineObjects(
 		cmdArgs := []string{"apply", "-f", specPath, "-n", ns.Name}
 		err := osutils.Kubectl(cmdArgs)
 		if err != nil {
-			return nil, fmt.Errorf("error applying spec fromt path [%s], Error: %s", specPath, err)
+			return nil, fmt.Errorf("error applying spec from path [%s], Error: %s", specPath, err)
 		}
 		obj.Namespace = ns.Name
 		return obj, nil
