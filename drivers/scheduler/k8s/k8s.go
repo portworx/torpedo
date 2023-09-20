@@ -5054,6 +5054,7 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	return nil, nil
 }
 
+// createVirtualMachineObjects creates the kubevirt VirtualMachines using kubectl apply
 func (k *K8s) createVirtualMachineObjects(
 	spec interface{},
 	ns *corev1.Namespace,
