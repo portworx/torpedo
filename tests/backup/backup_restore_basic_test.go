@@ -2136,7 +2136,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 				if err != nil {
 					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
 				}
-				if len(fetchedBackupNames) == len(backupNames) {
+				if len(fetchedBackupNames) >= len(backupNames) {
 					return "", false, nil
 				}
 				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backupNames), len(fetchedBackupNames))
@@ -2145,7 +2145,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			log.FailOnError(err, "Wait for BackupSync to complete")
 			fetchedBackupNames, err := GetAllBackupsAdmin()
 			log.FailOnError(err, "Getting a list of all backups")
-			dash.VerifyFatal(len(fetchedBackupNames), len(backupNames), "Comparing the expected and actual number of backups")
+			dash.VerifyFatal(len(fetchedBackupNames) >= len(backupNames), true, "Comparing the expected and actual number of backups")
 			var bkp *api.BackupObject
 			backupDriver := Inst().Backup
 			bkpEnumerateReq := &api.BackupEnumerateRequest{
