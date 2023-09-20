@@ -638,7 +638,6 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
-			log.Infof("Error occurred after adding kubevirt scheme")
 			return nil, err
 		}
 	}
@@ -5063,7 +5062,10 @@ func (k *K8s) createVirtualMachineObjects(
 	var specDir string
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
 		log.Warnf("Applying VirtualMachine spec for app [%s]", app.Key)
-		time.Sleep(60 * time.Second)
+		// This sleep is added in order to wait for the PVC to get bound.
+		// If this is not provided we are seeing errors like this when VM is starting:
+		// preparing host-disks failed: unable to create /var/run/kubevirt-private/vmi-disks/disk0/disk.img, not enough space
+		time.Sleep(30 * time.Second)
 		specDir = flag.Lookup(SpecDirCliFlag).Value.(flag.Getter).Get().(string)
 		specPath := filepath.Join(specDir, app.Key)
 		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
