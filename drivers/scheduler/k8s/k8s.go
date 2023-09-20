@@ -600,10 +600,8 @@ func isValidProvider(specPath, storageProvisioner string) bool {
 }
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {
-	log.Infof("Inside decodeSpec")
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 	if err != nil {
-		log.Infof("Inside decodeSpec error is not nil")
 		schemeObj := runtime.NewScheme()
 		if err := snapv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
@@ -5064,30 +5062,16 @@ func (k *K8s) createVirtualMachineObjects(
 ) (interface{}, error) {
 	var specDir string
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		log.Warn("applying spec for kubevirt VirtualMachine")
-		pwdArgs := "pwd"
-		stdout, stderr, err := osutils.ExecShell(pwdArgs)
-		if err != nil {
-			return nil, fmt.Errorf("Error getting pwd, [%s], [%s], [%s]", stdout, stderr, err)
-		}
-		//flag.StringVar(&specDir, SpecDirCliFlag, "defaultSpecsRoot", "Root directory containing the application spec files")
+		log.Warnf("Applying VirtualMachine spec for app [%s]", app.Key)
 		specDir = flag.Lookup(SpecDirCliFlag).Value.(flag.Getter).Get().(string)
-		//specDir = filepath.Join("/go", "src", "github.com", "portworx", "torpedo", "drivers", "scheduler", "k8s", "specs")
-
-		lsArgs := fmt.Sprintf("ls -ltr %s", specDir)
-		stdout, stderr, err = osutils.ExecShell(lsArgs)
-		if err != nil {
-			return nil, fmt.Errorf("Error getting list of files, [%s], [%s], [%s]", stdout, stderr, err)
-		}
-
 		specPath := filepath.Join(specDir, app.Key)
 		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("Cannot find yaml in path %s", specPath)
+			return nil, fmt.Errorf("cannot find yaml in path %s", specPath)
 		}
 		cmdArgs := []string{"apply", "-f", specPath, "-n", ns.Name}
-		err = osutils.Kubectl(cmdArgs)
+		err := osutils.Kubectl(cmdArgs)
 		if err != nil {
-			return nil, fmt.Errorf("Error applying spec [%s], Error: %s", specPath, err)
+			return nil, fmt.Errorf("error applying spec fromt path [%s], Error: %s", specPath, err)
 		}
 		obj.Namespace = ns.Name
 		return obj, nil

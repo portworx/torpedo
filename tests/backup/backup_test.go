@@ -141,8 +141,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		}()
 
 		Step("Validating applications", func() {
-			log.Infof("Waiting for 90 seconds")
-			time.Sleep(90 * time.Second)
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
