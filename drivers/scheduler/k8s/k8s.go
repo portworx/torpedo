@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	baseErrors "errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -840,67 +841,8 @@ func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
 	return false
 }
 
-// StructToString returns the string representation of the given struct
-func StructToString(s interface{}) string {
-	v := reflect.ValueOf(s)
-	if stringer, ok := s.(fmt.Stringer); ok {
-		return stringer.String()
-	}
-	if v.Kind() != reflect.Struct {
-		return fmt.Sprintf("%v", s)
-	}
-	t := v.Type()
-	var fields []string
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.IsExported() {
-			fieldVal := v.Field(i)
-			var fieldString string
-			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
-				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
-			} else {
-				switch fieldVal.Kind() {
-				case reflect.Ptr:
-					if fieldVal.IsNil() {
-						fieldString = fmt.Sprintf("%s: nil", field.Name)
-					} else if fieldVal.Type().Elem().Kind() == reflect.Struct {
-						fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Elem().Interface()))
-					} else {
-						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Elem())
-					}
-				case reflect.Slice:
-					if fieldVal.IsNil() {
-						fieldString = fmt.Sprintf("%s: nil", field.Name)
-					} else {
-						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-					}
-				case reflect.Map:
-					if fieldVal.IsNil() {
-						fieldString = fmt.Sprintf("%s: nil", field.Name)
-					} else {
-						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-					}
-				case reflect.Struct:
-					fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Interface()))
-				case reflect.String:
-					if fieldVal.Len() == 0 {
-						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
-					} else {
-						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-					}
-				default:
-					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-				}
-			}
-			fields = append(fields, fieldString)
-		}
-	}
-	return fmt.Sprintf("%s: {%s}", t.Name(), strings.Join(fields, ", "))
-}
-
 // Schedule Schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
-	log.InfoD("Start scheduling")
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
@@ -910,18 +852,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			}
 			if isCsiApp(options, key) {
 				appSpec.IsCSI = true
-			}
-			log.Infof("Appspec key - %s", appSpec.Key)
-			specLists := appSpec.SpecList
-			for _, s := range specLists {
-				debugStruct := struct {
-					Spec interface{}
-				}{
-					Spec: s,
-				}
-				log.Infof("Spec - %v", s)
-				log.Infof("Debug Spec - %v", debugStruct)
-				log.Infof(StructToString(debugStruct))
 			}
 			apps = append(apps, appSpec)
 		}
@@ -933,7 +863,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
 		appNamespace := app.GetID(instanceID)
-		log.Infof("appNamespace will be %s", appNamespace)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
 		} else {
@@ -1023,7 +952,6 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Namespace created")
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
@@ -1244,23 +1172,6 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		}
 	}
 
-	for _, appSpec := range app.SpecList {
-		t := func() (interface{}, bool, error) {
-			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
-			if err != nil {
-				return nil, true, err
-			}
-			return obj, false, nil
-		}
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
-		if err != nil {
-			return nil, err
-		}
-		if obj != nil {
-			specObjects = append(specObjects, obj)
-		}
-	}
-
 	// creation of CustomResourceObjects must most likely be done *last*,
 	// as it may have resources that depend on other resources, which should be create *before* this
 	for _, appSpec := range app.SpecList {
@@ -1281,7 +1192,6 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	}
 
 	for _, appSpec := range app.SpecList {
-		log.Infof("Trying to create VMs")
 		t := func() (interface{}, bool, error) {
 			obj, err := k.createVirtualMachineObjects(appSpec, ns, app)
 			if err != nil {
@@ -5161,7 +5071,8 @@ func (k *K8s) createVirtualMachineObjects(
 			return nil, fmt.Errorf("Error getting pwd, [%s], [%s], [%s]", stdout, stderr, err)
 		}
 		//flag.StringVar(&specDir, SpecDirCliFlag, "defaultSpecsRoot", "Root directory containing the application spec files")
-		specDir = filepath.Join("/go", "src", "github.com", "portworx", "torpedo", "drivers", "scheduler", "k8s", "specs")
+		specDir = flag.Lookup(SpecDirCliFlag).Value.(flag.Getter).Get().(string)
+		//specDir = filepath.Join("/go", "src", "github.com", "portworx", "torpedo", "drivers", "scheduler", "k8s", "specs")
 
 		lsArgs := fmt.Sprintf("ls -ltr %s", specDir)
 		stdout, stderr, err = osutils.ExecShell(lsArgs)
