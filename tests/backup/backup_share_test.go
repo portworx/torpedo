@@ -406,7 +406,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctxNonAdmin)
 			log.FailOnError(err, "Backup [%s] could not be deleted by user [%s] with delete response %s", backupName, userNames, backupDeleteResponse)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying backup %s deletion", backupName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s deletion", backupName))
 		})
 	})
 

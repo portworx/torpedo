@@ -3528,11 +3528,15 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	if backupObj == nil {
 		return nil, fmt.Errorf("unable to find backup [%s] with uid [%s]", backupName, backupUID)
 	}
-
 	bkpDeleteRequest := &api.BackupDeleteRequest{
-		Name:  backupName,
-		OrgId: orgID,
-		Uid:   backupUID,
+		Name:    backupName,
+		OrgId:   orgID,
+		Uid:     backupUID,
+		Cluster: backupObj.Cluster,
+		ClusterRef: &api.ObjectRef{
+			Name: backupObj.ClusterRef.Name,
+			Uid:  backupObj.ClusterRef.Uid,
+		},
 	}
 	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
