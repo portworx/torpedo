@@ -398,7 +398,7 @@ type ActivityTimeLine interface {
 type Role interface {
 
 	// EnumerateRole fetches roles for a given object
-	EnumerateRole(ctx context.Context, req *api.RoleEnumerateRequest)
+	EnumerateRole(ctx context.Context, req *api.RoleEnumerateRequest) (*api.RoleEnumerateResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
