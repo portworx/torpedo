@@ -485,6 +485,8 @@ const (
 	AddStoragelessNode = "addStoragelessNode"
 	//OCPStorageNodeRecycle recycle Storageless to Storagenode
 	OCPStorageNodeRecycle = "ocpNodeStorageRecycle"
+	//UpgradePortworx to latest build
+	UpgradePortwox = "upgradePortworx"
 )
 
 // TriggerCoreChecker checks if any cores got generated
