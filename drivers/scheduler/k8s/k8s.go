@@ -5066,7 +5066,7 @@ func (k *K8s) createVirtualMachineObjects(
 		// This sleep is added in order to wait for the PVC to get bound.
 		// If this is not provided we are seeing errors like this when VM is starting:
 		// preparing host-disks failed: unable to create /var/run/kubevirt-private/vmi-disks/disk0/disk.img, not enough space
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 		specDir = flag.Lookup(SpecDirCliFlag).Value.(flag.Getter).Get().(string)
 		specPath := filepath.Join(specDir, app.Key)
 		if _, err := os.Stat(specPath); baseErrors.Is(err, os.ErrNotExist) {
