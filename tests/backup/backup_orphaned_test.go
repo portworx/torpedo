@@ -374,9 +374,10 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87569
 
 	var (
-		scheduledAppContexts                       = make([]*scheduler.Context, 0)
-		appNamespaces                              = make([]string, 0)
-		infraAdminUsers                            = make([]string, 0)
+		scheduledAppContexts   = make([]*scheduler.Context, 0)
+		appNamespaces          = make([]string, 0)
+		infraAdminUsers        = make([]string, 0)
+		adminClusterUID        string
 		providers                                  = getProviders()
 		userCloudCredentialMap                     = make(map[string]map[string]string)
 		userBackupLocationMap                      = make(map[string]map[string]string)
@@ -420,6 +421,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 				}
 			})
 			createObjectsFromUser := func(user string) {
+				defer GinkgoRecover()
 				Step(fmt.Sprintf("Create cloud credential and backup location from the user %s", user), func() {
 					log.InfoD(fmt.Sprintf("Creating cloud credential and backup location from the user %s", user))
 					nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
@@ -591,6 +593,19 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					})
 				}
 			}
+			Step(fmt.Sprintf("Register a cluster from admin for backuo delete "), func() {
+				log.InfoD(fmt.Sprintf("Register a cluster from admin for backuo delete "))
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				err = CreateApplicationClusters(orgID, "", "", ctx)
+				log.FailOnError(err, "failed create source and destination cluster from the admin ")
+				clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+				adminClusterUID, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			})
+
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			cleanupUserObjectsFromAdmin := func(user string) {
@@ -600,7 +615,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 					for backupName := range userBackupMap[user] {
 						backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 						log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-						_, err = DeleteBackup(backupName, backupUid, orgID, ctx)
+						_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, adminClusterUID, orgID, ctx)
 						log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
 						err = DeleteBackupAndWait(backupName, ctx)
 						log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
@@ -639,6 +654,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 		cleanupUserObjects := func(user string) {
+			defer GinkgoRecover()
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user)
 			for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
