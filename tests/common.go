@@ -3505,7 +3505,7 @@ func DeleteRestoreWithUID(restoreName string, restoreUID string, orgID string, c
 	return err
 }
 
-// DeleteBackup deletes backup
+// DeleteBackup deletes a backup with the given backup reference without checking the cluster reference, suitable for normal backup deletion where the cluster reference is not needed.
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
 	var backupObj *api.BackupObject
@@ -3538,7 +3538,7 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 	return backupDeleteResponse, err
 }
 
-// DeleteBackupWithClusterUID deletes the backup using the given cluster uid
+// DeleteBackupWithClusterUID deletes a backup using the specified cluster name and UID, ensuring the cluster reference is checked before deletion, suitable for cases where the cluster reference is necessary (e.g., for same-name or deleted clusters).
 func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	backupDeleteRequest := &api.BackupDeleteRequest{
 		Name:  backupName,
