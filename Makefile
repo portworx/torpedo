@@ -164,7 +164,7 @@ container-pds:
 container-backup: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
 container-backup:
 	@echo "Building backup.test container "$(TORPEDO_IMG)
-	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-backup -f Dockerfile .
+	DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-backup -f Dockerfile .
 
 deploy: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 deploy: container
@@ -176,7 +176,7 @@ deploy-pds: container-pds
 
 deploy-backup: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
 deploy-backup: container-backup
-	sudo docker push $(TORPEDO_IMG)
+	docker push $(TORPEDO_IMG)
 
 clean:
 	-sudo rm -rf bin

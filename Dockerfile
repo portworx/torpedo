@@ -1,4 +1,4 @@
-FROM golang:1.19.5-alpine AS build
+FROM --platform=linux/amd64 golang:1.19.5-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 ARG MAKE_TARGET
 
@@ -43,7 +43,7 @@ COPY tests tests
 RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 
 # Build a fresh container with just the binaries
-FROM alpine
+FROM --platform=linux/amd64 alpine
 
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
 
