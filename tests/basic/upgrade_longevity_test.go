@@ -20,7 +20,7 @@ var _ = Describe("{PxUpgradeTest}", func() {
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		UpgradePortwox: TriggerUpgradeVolumeDriver,
 	}
-	Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.0/version"
+	Inst().UpgradeStorageDriverEndpointList = "https://edge-install.portworx.com/3.0.2/"
 	It("upgrade portworx", func() {
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
