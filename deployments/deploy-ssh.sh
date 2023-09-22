@@ -469,7 +469,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: [ "sleep 900"  ]
+    command: ["sh", "-c", "sleep 900"]
 
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
