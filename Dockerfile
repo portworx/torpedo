@@ -71,15 +71,12 @@ RUN apk add --update --no-cache docker
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
 COPY --from=build /usr/local/go/ /usr/local/go/
-ENV PATH="/usr/local/go/bin:${PATH}"
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
 COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 COPY apiServer apiServer
-
-RUN GOFLAGS= GO111MODULE=on go install github.com/gin-gonic/gin@v1.9.1
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
