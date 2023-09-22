@@ -71,6 +71,7 @@ RUN apk add --update --no-cache docker
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
 COPY --from=build /usr/local/go/ /usr/local/go/
+ENV PATH="/usr/local/go/bin:${PATH}"
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
 COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
