@@ -469,7 +469,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: [ "go run apiServer/pxone/apiserver.go" ]
+    command: [ "sleep 900"  ]
 
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
