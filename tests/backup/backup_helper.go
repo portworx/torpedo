@@ -117,6 +117,7 @@ const (
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
+	rancherProjectDescription                 = "new project"
 )
 
 var (

@@ -43,8 +43,8 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 		scheduledAppContexts        []*scheduler.Context
 	)
 	backupLocationMap := make(map[string]string)
-	var listOfMapInSourceCluster []map[string]string
-	var listOfMapInDestinationCluster []map[string]string
+	projectLabel := make(map[string]string)
+	projectAnnotation := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject",
@@ -62,6 +62,8 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
+		projectLabel[RandomString(10)] = RandomString(10)
+		projectAnnotation[RandomString(10)] = RandomString(10)
 	})
 
 	It("Take backup of single namespace and restore to namespace in same and different project", func() {
@@ -102,7 +104,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			log.InfoD("Creating source and destination rancher project in source cluster")
 			for i := 0; i < 2; i++ {
 				project := fmt.Sprintf("rke-project-%v", RandomString(10))
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, "new project", rancherActiveCluster)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", project))
@@ -141,7 +143,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 				restoreNamespacesAll = append(restoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
 			}
-			listOfMapInSourceCluster = append(listOfMapInSourceCluster, namespaceMapping)
 			projectNameMapping[sourceClusterProjectList[0]] = sourceClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = sourceClusterProjectUIDList[0]
 			restoreName := fmt.Sprintf("%s-same-project-%v", restoreNamePrefix, RandomString(10))
@@ -165,7 +166,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 				restoreNamespacesAll = append(restoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
 			}
-			listOfMapInSourceCluster = append(listOfMapInSourceCluster, namespaceMapping)
 			projectNameMapping[sourceClusterProjectList[0]] = sourceClusterProjectList[1]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = sourceClusterProjectUIDList[1]
 			restoreName := fmt.Sprintf("%s-diff-project-%v", restoreNamePrefix, RandomString(10))
@@ -179,7 +179,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			project := fmt.Sprintf("dest-rke-project-%v", RandomString(10))
-			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, "new project", rancherActiveCluster)
+			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 			projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project ID for destination cluster %s", project))
@@ -204,7 +204,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 				destRestoreNamespacesAll = append(destRestoreNamespacesAll, namespace)
 				restoredNamespaceList = append(restoredNamespaceList, namespace)
 			}
-			listOfMapInDestinationCluster = append(listOfMapInDestinationCluster, namespaceMapping)
 			projectNameMapping[sourceClusterProjectList[0]] = destClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = destClusterProjectUIDList[0]
 			restoreName := fmt.Sprintf("%s-diff-proj-same-ns-diff-cluster%v", restoreNamePrefix, RandomString(5))
@@ -228,7 +227,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 				destRestoreNamespacesAll = append(destRestoreNamespacesAll, restoredNamespace)
 				restoredNamespaceList = append(restoredNamespaceList, restoredNamespace)
 			}
-			listOfMapInDestinationCluster = append(listOfMapInDestinationCluster, namespaceMapping)
 			projectNameMapping[sourceClusterProjectList[0]] = destClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = destClusterProjectUIDList[0]
 			restoreName := fmt.Sprintf("%s-diff-proj-diff-ns-diff-cluster%v", restoreNamePrefix, RandomString(5))
@@ -251,31 +249,10 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Destroying restored apps on source clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-
-		for _, mapInSourceCluster := range listOfMapInSourceCluster {
-			log.Infof(" The value of mapInSourceCluster ", mapInSourceCluster)
-			for _, scheduledAppContext := range scheduledAppContexts {
-				nsMap := make(map[string]string)
-				log.Infof(" The value is ", scheduledAppContext.App.NameSpace)
-				mappedNameSpace := mapInSourceCluster[scheduledAppContext.App.NameSpace]
-				nsMap[scheduledAppContext.App.NameSpace] = mappedNameSpace
-				restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, nsMap, make(map[string]string), true)
-				if err != nil {
-					log.Errorf("TransformAppContextWithMappings: %v", err)
-					continue
-				}
-				restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-			}
+		for _, ns := range restoreNamespacesAll {
+			err = core.Instance().DeleteNamespace(ns)
+			log.FailOnError(err, "Deletion of namespace %s failed", ns)
 		}
-		DestroyApps(restoredAppContexts, opts)
-		/*
-			for _, ns := range restoreNamespacesAll {
-				err = core.Instance().DeleteNamespace(ns)
-				log.FailOnError(err, "Deletion of namespace %s failed", ns)
-			}
-		*/
 		for _, restoreName := range restoreList {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
@@ -293,22 +270,6 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(destClusterProjectUIDList[i])
 			log.FailOnError(err, "Deletion of project %s from destination cluster failed", project)
 		}
-
-		for _, mapInDestinationCluster := range listOfMapInDestinationCluster {
-			for _, scheduledAppContext := range scheduledAppContexts {
-				nsMap := make(map[string]string)
-				mappedNameSpace := mapInDestinationCluster[scheduledAppContext.App.NameSpace]
-				nsMap[scheduledAppContext.App.NameSpace] = mappedNameSpace
-				restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, nsMap, make(map[string]string), true)
-				if err != nil {
-					log.Errorf("TransformAppContextWithMappings: %v", err)
-					continue
-				}
-				restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-			}
-		}
-		DestroyApps(restoredAppContexts, opts)
-
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
@@ -341,6 +302,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 	projectUIDMapping := make(map[string]string)
 	namespaceMapping := make(map[string]string)
 	backupLocationMap := make(map[string]string)
+	projectLabel := make(map[string]string)
+	projectAnnotation := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("NamespaceMoveFromProjectToProjectToNoProjectWhileRestore",
@@ -358,6 +321,8 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
+		projectLabel[RandomString(10)] = RandomString(10)
+		projectAnnotation[RandomString(10)] = RandomString(10)
 	})
 
 	It("Take backup of single namespace and move the namespace from project to project to no project while restore", func() {
@@ -397,7 +362,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		Step("Creating a rancher project in source cluster", func() {
 			log.InfoD("Creating a rancher project in source cluster")
 			sourceProject = fmt.Sprintf("source-project-%v", RandomString(10))
-			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, "new project", rancherActiveCluster)
+			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in source cluster", sourceProject))
 			sourceProjectID, err = Inst().S.(*rke.Rancher).GetProjectID(sourceProject)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", sourceProject))
@@ -422,7 +387,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := 0; i < 2; i++ {
 				destProject := fmt.Sprintf("dest-rke-project-%v-%v", RandomString(5), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, "new project", rancherActiveCluster)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in destination cluster", destProject))
 				destProjectList = append(destProjectList, destProject)
 				destProjectID, err := Inst().S.(*rke.Rancher).GetProjectID(destProject)
@@ -500,13 +465,11 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 		// Switch context to destination cluster
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
-		/*
-			log.Infof("Deleting restored namespace from destination cluster")
-			for _, ns := range restoreNamespaceList {
-				err = core.Instance().DeleteNamespace(ns)
-				log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
-			}
-		*/
+		log.Infof("Deleting restored namespace from destination cluster")
+		for _, ns := range restoreNamespaceList {
+			err = core.Instance().DeleteNamespace(ns)
+			log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
+		}
 		log.Infof("Deleting projects from destination cluster")
 		for i, project := range destProjectList {
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(destProjectIDList[i])
@@ -545,6 +508,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		restoreName                       string
 		sourceProjectID                   string
 		scName                            string
+		noProjectBackup                   string
 		destProjectIDList                 []string
 		appNamespaces                     []string
 		destProjectList                   []string
@@ -569,6 +533,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 	params := make(map[string]string)
 	storageClassMapping := make(map[string]string)
 	labelSelectors := make(map[string]string)
+	projectLabel := make(map[string]string)
+	projectAnnotation := make(map[string]string)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("MultipleProjectsAndNamespacesBackupAndRestore",
@@ -587,6 +553,8 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			}
 			log.Infof("The list of namespaces deployed are", appNamespaces)
 		}
+		projectLabel[RandomString(10)] = RandomString(10)
+		projectAnnotation[RandomString(10)] = RandomString(10)
 	})
 
 	It("Take backup of multiple namespaces belonging to multiple projects and restore them", func() {
@@ -627,7 +595,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			log.InfoD("Creating 2 rancher projects in source cluster")
 			for i := 0; i < 2; i++ {
 				sourceProject = fmt.Sprintf("source-project-%v-%v", RandomString(10), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, "new project", rancherActiveCluster)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(sourceProject, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in source cluster", sourceProject))
 				sourceProjectID, err = Inst().S.(*rke.Rancher).GetProjectID(sourceProject)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", sourceProject))
@@ -702,7 +670,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for i := 0; i < 2; i++ {
 				destProject := fmt.Sprintf("dest-rke-project-%v-%v", RandomString(5), i)
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, "new project", rancherActiveCluster)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(destProject, "new project", rancherActiveCluster, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s in destination cluster", destProject))
 				destProjectList = append(destProjectList, destProject)
 				destProjectID, err := Inst().S.(*rke.Rancher).GetProjectID(destProject)
@@ -799,6 +767,27 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			err = CreateRestoreWithProjectMapping(restoreName, backupList[0], namespaceMapping, destinationClusterName, orgID, ctx, storageClassMapping, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s in different project and different namespace with storage class mapping from backup %s in destination cluster", restoreName, backupList[0]))
 		})
+
+		Step("Remove the source cluster namespaces from the project", func() {
+			log.Infof("Remove the source cluster namespaces from the project")
+			err = Inst().S.(*rke.Rancher).RemoveNamespaceFromProject(appNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Removing the source cluster namespaces %s from the project", appNamespaces))
+		})
+
+		Step("Taking backup of namespaces after moving them to no project", func() {
+			log.InfoD("Taking backup of namespaces %s after moving them to no project", appNamespaces)
+			noProjectBackup = fmt.Sprintf("%s-%v-no-project", BackupNamePrefix, RandomString(10))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, noProjectBackup, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and validation of backup [%s] with the namespaces %s after removing the namespaces from project", noProjectBackup, appNamespaces))
+		})
+		Step("Restore the backup taken after all the namespaces are removed from the project", func() {
+			log.InfoD("Restore the backup taken after all the namespaces are removed from the project")
+			restoreName := fmt.Sprintf("%s-%v-no-project", restoreNamePrefix, RandomString(10))
+			err = CreateRestoreWithValidation(ctx, restoreName, noProjectBackup, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, noProjectBackup))
+			restoreList = append(restoreList, restoreName)
+		})
 	})
 
 	JustAfterEach(func() {
@@ -809,14 +798,12 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 		}()
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
-		/*
-			log.Infof("Deleting restored namespace from destination cluster")
-			destClusterRestoreNamespaceList = append(destClusterRestoreNamespaceList, appNamespaces...)
-			for _, ns := range destClusterRestoreNamespaceList {
-				err = core.Instance().DeleteNamespace(ns)
-				log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
-			}
-		*/
+		log.Infof("Deleting restored namespace from destination cluster")
+		destClusterRestoreNamespaceList = append(destClusterRestoreNamespaceList, appNamespaces...)
+		for _, ns := range destClusterRestoreNamespaceList {
+			err = core.Instance().DeleteNamespace(ns)
+			log.FailOnError(err, "Deletion of namespace %s from destination cluster failed", ns)
+		}
 		log.Infof("Deleting projects from destination cluster")
 		for i, project := range destProjectList {
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(destProjectIDList[i])
@@ -838,19 +825,16 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
-		/*
-			log.Infof("Deleting restored namespace from source cluster")
-			for _, ns := range sourceClusterRestoreNamespaceList {
-				err = core.Instance().DeleteNamespace(ns)
-				log.FailOnError(err, "Deletion of namespace %s from source cluster failed", ns)
-			}
-		*/
+		log.Infof("Deleting restored namespace from source cluster")
+		for _, ns := range sourceClusterRestoreNamespaceList {
+			err = core.Instance().DeleteNamespace(ns)
+			log.FailOnError(err, "Deletion of namespace %s from source cluster failed", ns)
+		}
 		log.Infof("Deleting projects from source cluster")
 		for _, projectId := range sourceProjectIDList {
 			err = Inst().S.(*rke.Rancher).DeleteRancherProject(projectId)
 			log.FailOnError(err, "Deletion of project %s from source cluster failed", sourceProject)
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, credUid, ctx)
-
 	})
 })
