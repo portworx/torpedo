@@ -77,6 +77,7 @@ COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 COPY apiServer apiServer
+COPY go.mod go.mod
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
