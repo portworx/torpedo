@@ -49,7 +49,7 @@ FROM alpine
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
 
  # Install Azure Cli
-RUN apk add --no-cache --update python3 py3-pip
+RUN apk add --no-cache --update python3 py3-pip go git && git clone https://github.com/portworx/torpedo.git /torpedo-gin
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
 
 # Install kubectl from Docker Hub.
@@ -70,13 +70,12 @@ RUN apk add --update --no-cache docker
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
-COPY --from=build /usr/local/go/ /usr/local/go/
 COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
 COPY --from=build /go/src/github.com/portworx/torpedo/bin/aws-iam-authenticator /bin/aws-iam-authenticator
 COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
-COPY apiServer apiServer
+
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
