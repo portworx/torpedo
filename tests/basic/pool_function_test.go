@@ -9,14 +9,14 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-var _ = Describe("{StoragePoolExpandSmoky}", func() {
+var _ = Describe("{PoolExpandSmoky}", func() {
 	BeforeEach(func() {
-		StartTorpedoTest(testName, testDescription, nil, 0)
 		contexts = scheduleApps()
 	})
 
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToBeResized = getStoragePool(poolIDToResize)
 	})
 
@@ -29,9 +29,9 @@ var _ = Describe("{StoragePoolExpandSmoky}", func() {
 		EndTorpedoTest()
 	})
 
-	testName = "StoragePoolExpandDiskAdd"
-	testDescription = "Validate storage pool expansion using add-disk option"
-	It("select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+	It("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskAdd",
+			"Validate storage pool expansion with type=add-disk", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB := targetSizeInBytes / units.GiB
@@ -44,9 +44,9 @@ var _ = Describe("{StoragePoolExpandSmoky}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
-	testName = "StoragePoolExpandDiskResize"
-	testDescription = "Validate storage pool expansion using resize-disk option"
-	It("select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+	It("Select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskResize",
+			"Validate storage pool expansion with type=resize-disk", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB := targetSizeInBytes / units.GiB
@@ -59,9 +59,9 @@ var _ = Describe("{StoragePoolExpandSmoky}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
-	testName = "StoragePoolExpandDiskAuto"
-	testDescription = "Validate storage pool expansion using auto option"
-	It("select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
+	It("Select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
+		StartTorpedoTest("PoolExpandDiskAuto",
+			"Validate storage pool expansion with type=auto ", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB := targetSizeInBytes / units.GiB
