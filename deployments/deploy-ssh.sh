@@ -290,7 +290,7 @@ if [ -n "${ORACLE_API_KEY}" ]; then
     ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
 fi
 
-TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"persistentVolumeClaim\": {\"claimName\": \"testresults\"}}"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
@@ -421,6 +421,17 @@ rules:
     verbs: ["*"]
   - nonResourceURLs: ["*"]
     verbs: ["*"]
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: testresults
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
