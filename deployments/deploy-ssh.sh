@@ -470,8 +470,7 @@ spec:
     securityContext:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c"]
-    args: ["cd torpedo-gin",
-    "go run apiServer/pxone/apiserver.go",
+    args: [
     "sleep 1800"
     ]
     tty: true
