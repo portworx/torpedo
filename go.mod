@@ -17,7 +17,7 @@ require (
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gofrs/flock v0.8.1
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.3
 	github.com/google/gnostic v0.6.9
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-version v1.6.0
