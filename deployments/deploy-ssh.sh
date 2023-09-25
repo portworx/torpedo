@@ -469,7 +469,11 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["-c", "sleep 1800"]
+    command: ["sh", "-c"]
+    args:
+    - cd torpedo-gin;
+    go run apiServer/pxone/apiserver.go;
+    sleep 1800;
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
