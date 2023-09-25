@@ -116,6 +116,7 @@ var (
 // imports based on functionalities
 var (
 	dsTest        *dataservices.DataserviceType
+	dsWithRbac    *dataservices.DsWithRBAC
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
