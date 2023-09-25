@@ -472,7 +472,7 @@ spec:
     command: ["sh", "-c"]
     args: ["cd /torpedo-gin",
         "go run apiServer/pxone/apiserver.go &",
-        "sleep 3600"
+        "sleep 3600",
         ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
