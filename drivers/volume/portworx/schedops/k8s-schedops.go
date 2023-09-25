@@ -389,6 +389,20 @@ PodLoop:
 				return validatedMountPods, err
 			}
 			mounts := strings.Split(output, "\n")
+
+			// In some cases the container path is sym linked to a local directory in the pod
+			// "/proc/mounts" contains this sym link path instead of the actual container path fetched
+			// To make sure it doesn't fail in validation, we will be appending the sym link path to "paths"
+			for _, path := range paths {
+				symlinkPath, err := k8sCore.RunCommandInPod([]string{"readfile", "-f", path}, pod.Name, containerName, pod.Namespace)
+				if err != nil {
+					return validatedMountPods, err
+				}
+				if symlinkPath != "" && symlinkPath != path {
+					paths = append(paths, symlinkPath)
+				}
+			}
+			log.Infof("container [%s] and paths [%v] after checking sym links", containerName, paths)
 			for _, path := range paths {
 				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", pureMapperRegex, path))
 				pxMountFound := false
