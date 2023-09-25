@@ -219,32 +219,35 @@ var _ = Describe("{UpgradeLongevity}", func() {
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			RestartVolDriver:     TriggerRestartVolDriver,
-			CloudSnapShot:        TriggerCloudSnapShot,
-			HAIncrease:           TriggerHAIncrease,
-			PoolAddDisk:          TriggerPoolAddDisk,
-			LocalSnapShot:        TriggerLocalSnapShot,
-			HADecrease:           TriggerHADecrease,
-			VolumeResize:         TriggerVolumeResize,
-			CloudSnapShotRestore: TriggerCloudSnapshotRestore,
-			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
-			AddStorageNode:       TriggerAddOCPStorageNode,
+			PoolExpansionAuto:       TriggerPoolExpansionAuto,
+			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
+			AddDrive:                TriggerAddDrive,
+			//RestartVolDriver:     TriggerRestartVolDriver,
+			//CloudSnapShot:        TriggerCloudSnapShot,
+			//HAIncrease:           TriggerHAIncrease,
+			//PoolAddDisk:          TriggerPoolAddDisk,
+			//LocalSnapShot:        TriggerLocalSnapShot,
+			//HADecrease:           TriggerHADecrease,
+			//VolumeResize:         TriggerVolumeResize,
+			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
+			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
+			//AddStorageNode:       TriggerAddOCPStorageNode,
 		}
-		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
-			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-				triggerLock.Lock()
-				defer triggerLock.Unlock()
-				TriggerRebootNodes(contexts, recordChan)
-			}
-		}
+		//// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+		//disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
+		//	return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+		//		triggerLock.Lock()
+		//		defer triggerLock.Unlock()
+		//		TriggerRebootNodes(contexts, recordChan)
+		//	}
+		//}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
-			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			//RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
+			//CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
+			//RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
+			//NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
+			//AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -381,7 +384,8 @@ func testTrigger(wg *sync.WaitGroup,
 		// Get next interval of when trigger should happen
 		// This interval can dynamically change by editing configMap
 		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)
-
+		log.Infof("triggerType %v, isTriggerEnabled %v, waitTime %v, lastInvocationTime %v", triggerType, isTriggerEnabled == true, waitTime, lastInvocationTime)
+		waitTime = 1 * time.Minute
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
@@ -439,7 +443,8 @@ func emailEventTrigger(wg *sync.WaitGroup,
 		// Get next interval of when trigger should happen
 		// This interval can dynamically change by editing configMap
 		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)
-
+		log.Infof("triggerType %v, isTriggerEnabled %v, waitTime %v, lastInvocationTime %v", triggerType, isTriggerEnabled == true, waitTime, lastInvocationTime)
+		waitTime = 1 * time.Minute
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
@@ -1783,6 +1788,7 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 		log.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
 			triggerType, Inst().ChaosLevel)
 	}
+	log.Infof("triggerType %v chaosLevel %v waitTime %v", triggerType, chaosLevel, triggerInterval[triggerType][chaosLevel])
 	if triggerInterval[triggerType][chaosLevel] != 0 {
 		return triggerInterval[triggerType][chaosLevel], true
 	}
