@@ -290,7 +290,7 @@ if [ -n "${ORACLE_API_KEY}" ]; then
     ORACLE_API_KEY_MOUNT="{ \"name\": \"oracle-api-key-volume\", \"mountPath\": \"/home/oci/\" }"
 fi
 
-TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"persistentVolumeClaim\": {\"claimName\": \"testresults\"}}"
+TESTRESULTS_VOLUME="{ \"name\": \"testresults\", \"hostPath\": { \"path\": \"/mnt/testresults/\", \"type\": \"DirectoryOrCreate\" } }"
 TESTRESULTS_MOUNT="{ \"name\": \"testresults\", \"mountPath\": \"/testresults/\" }"
 
 AWS_VOLUME="{ \"name\": \"aws-volume\", \"configMap\": { \"name\": \"aws-cm\", \"items\": [{\"key\": \"credentials\", \"path\": \"credentials\"}, {\"key\": \"config\", \"path\": \"config\"}]} }"
@@ -346,7 +346,6 @@ if [ -n "${INTERNAL_DOCKER_REGISTRY}" ]; then
 fi
 
 kubectl create configmap cloud-config --from-file=/config/cloud-json
-kubectl create configmap cloud-source-config --from-file=/cluster/cloud-source-config
 
 # List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
 FROM_FILE=""
@@ -382,7 +381,27 @@ if [ -n "${K8S_VENDOR}" ]; then
     esac
 fi
 
-cat > torpedo.yaml <<EOF
+echo '' > torpedo.yaml
+
+if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
+  echo "Adding Docker registry secret ..."
+  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
+  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
+  cat >> torpedo.yaml <<EOF
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: torpedo
+type: docker-registry
+data:
+  .dockerconfigjson: $secret
+
+EOF
+  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
+fi
+
+cat >> torpedo.yaml <<EOF
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -415,17 +434,6 @@ roleRef:
   kind: ClusterRole
   name: torpedo-role
   apiGroup: rbac.authorization.k8s.io
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-  name: testresults
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
 ---
 apiVersion: v1
 kind: Pod
@@ -713,24 +721,6 @@ spec:
 
 
 EOF
-
-if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
-  echo "Adding Docker registry secret ..."
-  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
-  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
-  cat >> torpedo.yaml <<EOF
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: torpedo
-type: docker-registry
-data:
-  .dockerconfigjson: $secret
-
-EOF
-  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
-fi
 
 cat torpedo.yaml
 
