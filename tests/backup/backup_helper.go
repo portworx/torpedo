@@ -3449,13 +3449,12 @@ func DeleteAppNamespace(namespace string) error {
 	_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
 	if err != nil {
 		ns, err = k8sCore.GetNamespace(namespace)
+		if err != nil {
+			return err
+		}
 		if ns.Status.Phase == "Terminating" {
 			log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
 			err = DeleteTerminatingNamespace(namespace)
-			if err != nil {
-				return err
-			}
-		} else {
 			return err
 		}
 	}
@@ -3495,8 +3494,9 @@ func DeleteTerminatingNamespace(namespace string) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		return fmt.Errorf("Namespace [%s] expected to be in Terminating phase but is in %s phase ", namespace, ns.Status.Phase)
 	}
-	log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
 	return nil
 }
 
