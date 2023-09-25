@@ -170,6 +170,7 @@ const (
 var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
+	GloabalGkeSecretString string
 )
 
 type OwnershipAccessType int32
@@ -398,6 +399,7 @@ var (
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
+	clusterProvider                      = "aws"
 )
 
 var (
@@ -2806,6 +2808,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	// an empty string indicates the default kubeconfig.
 	// This variable is used to clearly indicate that in logs
 	var clusterConfigPathForLog string
+	var err error
 	if clusterConfigPath == "" {
 		clusterConfigPathForLog = "default"
 	} else {
@@ -2817,7 +2820,26 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	err := Inst().S.SetConfig(clusterConfigPath)
+	provider := getClusterProvider()
+	if clusterConfigPath != "" {
+		switch provider {
+		case drivers.ProviderGke:
+			err = Inst().S.SetGkeConfig(clusterConfigPath, GloabalGkeSecretString)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		default:
+			err = Inst().S.SetConfig(clusterConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		}
+	} else {
+		err = Inst().S.SetConfig(clusterConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
@@ -2830,11 +2852,18 @@ func SetClusterContext(clusterConfigPath string) error {
 		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
 
+	// Check if the Node driver is of type SSH
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
+		// If it is an SSH driver, refresh the driver
 		err = ssh.RefreshDriver(sshNodeDriver)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
+	} else {
+		// If the Node driver is not of type SSH, initialize it to create Daemon set to spin up debug pods
+		err = Inst().N.Init(node.InitOptions{
+			SpecDir: Inst().SpecDir,
+		})
 	}
 
 	CurrentClusterConfigPath = clusterConfigPath
@@ -9123,4 +9152,19 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 		}
 	}
 	return poolDetails, nil
+}
+
+// Set default provider as aws
+func getClusterProvider() string {
+	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
+	return clusterProvider
+}
+
+// Get Gke Secret
+func GetGkeSecret() (string, error) {
+	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	if err != nil {
+		return "", err
+	}
+	return cm.Data["cloud-json"], nil
 }

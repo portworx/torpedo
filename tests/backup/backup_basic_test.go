@@ -6,6 +6,7 @@ import (
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -123,6 +124,7 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
+	GloabalGkeSecretString, err = GetGkeSecret()
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
 		err = SetDestinationKubeConfig()

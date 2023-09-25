@@ -347,6 +347,9 @@ type Driver interface {
 	// SetConfig sets connnection config (e.g. kubeconfig in case of k8s) for scheduler driver
 	SetConfig(configPath string) error
 
+	// SetGkeConfig sets connnection config (e.g. kubeconfig in case of GKE cluster) for scheduler driver
+	SetGkeConfig(configPath string, gkeCredString string) error
+
 	// UpgradeScheduler upgrades the scheduler on the cluster to the specified version
 	UpgradeScheduler(version string) error
 
