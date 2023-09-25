@@ -398,6 +398,7 @@ PodLoop:
 				if err != nil {
 					return validatedMountPods, err
 				}
+				symlinkPath = strings.TrimSpace(symlinkPath)
 				if symlinkPath != "" && symlinkPath != path {
 					paths = append(paths[:i], paths[i+1:]...)
 					paths = append(paths, symlinkPath)
