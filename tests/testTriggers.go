@@ -20,7 +20,6 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 
-	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
@@ -67,15 +66,14 @@ const (
 	// EmailRecipientsConfigMapField is field in config map whose value is comma
 	// seperated list of email IDs which will receive email notifications about longevity
 	EmailRecipientsConfigMapField = "emailRecipients"
-	// DefaultEmailRecipient is list of email IDs that will recei
-	// ve email
+	// DefaultEmailRecipient is list of email IDs that will receive email
 	// notifications when no EmailRecipientsConfigMapField field present in configMap
 	DefaultEmailRecipient = "test@portworx.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
 	// EmailHostServerField is field in configmap which stores the server address
 	EmailHostServerField = "emailHostServer"
-	// EmailSubjectFiled is field in configmap which stores the subject(optional)
+	// EmailSubjectField is field in configmap which stores the subject(optional)
 	EmailSubjectField = "emailSubject"
 	// CreatedBeforeTimeForNsField is field which stores number of hours from now, used for deletion of old NS
 	CreatedBeforeTimeForNsField = "createdbeforetimefornsfield"
@@ -124,7 +122,7 @@ const (
 	pxVersionError = "ERROR GETTING PX VERSION"
 )
 
-// TODO Need to add for AutoJornal
+// TODO Need to add for AutoJournal
 //var IOProfileChange = [4]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO_JOURNAL, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
 
 var IOProfileChange = [3]apios.IoProfile{apios.IoProfile_IO_PROFILE_NONE, apios.IoProfile_IO_PROFILE_AUTO, apios.IoProfile_IO_PROFILE_DB_REMOTE}
@@ -136,7 +134,7 @@ var longevityLogger *lumberjack.Logger
 // EmailRecipients list of email IDs to send email to
 var EmailRecipients []string
 
-// EmailHostServer to use for sending email
+// EmailServer to use for sending email
 var EmailServer string
 
 // EmailSubject to use for sending email
@@ -164,7 +162,7 @@ var coresMap map[string]string
 // with SendGrid Email APIs
 var SendGridEmailAPIKey string
 
-// backupCounter holds the iteration of TriggerBacku
+// backupCounter holds the iteration of TriggerBackup
 var backupCounter = 0
 
 // restoreCounter holds the iteration of TriggerRestore
@@ -176,7 +174,7 @@ var newNamespaceCounter = 0
 // jiraEvents to store raised jira events data
 var jiraEvents = make(map[string][]string)
 
-// isAutoFsTrimEnabled to store if auto fs trim enalbed
+// isAutoFsTrimEnabled to store if auto fs trim enabled
 var isAutoFsTrimEnabled = false
 
 // setIoPriority to set IOPriority
@@ -188,10 +186,10 @@ var isCsiVolumeSnapshotClassExist = false
 // isCsiRestoreStorageClassExist to store if restore storage class exist
 var isCsiRestoreStorageClassExist = false
 
-// isRelaxedReclaimEnabled to store if relaxed reclaim enalbed
+// isRelaxedReclaimEnabled to store if relaxed reclaim enabled
 var isRelaxedReclaimEnabled = false
 
-// isTrashcanEnabled to store if trashcan enalbed
+// isTrashcanEnabled to store if trashcan enabled
 var isTrashcanEnabled = false
 
 // volSnapshotClass is snapshot class for FA volumes
@@ -206,7 +204,7 @@ var DefaultSnapshotRetainCount = 10
 // TotalTriggerCount is counter metric for test trigger
 var TotalTriggerCount = prometheus.TorpedoTestTotalTriggerCount
 
-// TestRunningState is gauage metric for test method running
+// TestRunningState is gauge metric for test method running
 var TestRunningState = prometheus.TorpedoTestRunning
 
 // TestFailedCount is counter metric for test failed
@@ -242,6 +240,7 @@ var decommissionedNode = node.Node{}
 
 // node with autopilot rule enabled
 var autoPilotLabelNode node.Node
+var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
@@ -341,7 +340,7 @@ const (
 	RestartVolDriver = "restartVolDriver"
 	// RestartManyVolDriver restarts one or more volume drivers at time
 	RestartManyVolDriver = "restartManyVolDriver"
-	// RestartKvdbVolDriver restarat kvdb volume driver
+	// RestartKvdbVolDriver restarts kvdb volume driver
 	RestartKvdbVolDriver = "restartKvdbVolDriver"
 	// CrashVolDriver crashes volume driver
 	CrashVolDriver = "crashVolDriver"
@@ -355,7 +354,7 @@ const (
 	VolumeClone = "volumeClone"
 	// VolumeResize increases volume size
 	VolumeResize = "volumeResize"
-	// VolumesDelete deletes the columes of the context
+	// VolumesDelete deletes the columns of the context
 	VolumesDelete = "volumesDelete"
 	// CloudSnapShot takes cloud snapshot of the volumes
 	CloudSnapShot = "cloudSnapShot"
@@ -802,7 +801,7 @@ func TriggerHAIncreaseAndReboot(contexts *[]*scheduler.Context, recordChan *chan
 						UpdateOutcome(event, err)
 					}
 					if isPureVol {
-						log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+						log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
 						continue
 					}
 
@@ -890,7 +889,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 				if isPureVol {
-					log.Warnf("Repl increase on Pure DA Volume [%s] not supported.Skiping this operation", v.Name)
+					log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
 					continue
 				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
@@ -912,7 +911,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 						storageNodes, err := GetStorageNodes()
 						UpdateOutcome(event, err)
 
-						//Calulating Max Replication Factor allowed
+						//Calculating Max Replication Factor allowed
 						MaxRF = int64(len(storageNodes)) / currAggr
 
 						if MaxRF > 3 {
@@ -1811,7 +1810,7 @@ func TriggerCrashNodes(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	})
 }
 
-// TriggerVolumeClone clones all volumes, validates and destorys the clone
+// TriggerVolumeClone clones all volumes, validates and destroys the clone
 func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -2600,14 +2599,14 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 	}
 
 	provider, ok := os.LookupEnv("OBJECT_STORE_PROVIDER")
-	log.Infof("Provider for credentail secret is %s", provider)
+	log.Infof("Provider for credential secret is %s", provider)
 	if !ok {
 		return nil, &errors.ErrNotFound{
 			ID:   "OBJECT_STORE_PROVIDER",
 			Type: "Environment Variable",
 		}
 	}
-	log.Infof("Provider for credentail secret is %s", provider)
+	log.Infof("Provider for credential secret is %s", provider)
 
 	switch provider {
 	case "aws":
@@ -2969,7 +2968,7 @@ func TriggerScheduledBackupAll(contexts *[]*scheduler.Context, recordChan *chan 
 }
 
 // TriggerBackupSpecificResource backs up a specific resource in a namespace
-// Creates config maps in the the specified namespaces and backups up only these config maps
+// Creates config maps in the specified namespaces and backups up only these config maps
 func TriggerBackupSpecificResource(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	event := &EventRecord{
@@ -4387,7 +4386,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	}
 }
 
-// TriggerMetadataPoolResizeDisk peforms resize-disk on the storage pools for the given contexts
+// TriggerMetadataPoolResizeDisk performs resize-disk on the storage pools for the given contexts
 func TriggerMetadataPoolResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -4621,51 +4620,18 @@ func TriggerAutopilotPoolRebalance(contexts *[]*scheduler.Context, recordChan *c
 		event.End = time.Now().Format(time.RFC1123)
 		*recordChan <- event
 	}()
-	poolLabel := map[string]string{"autopilot": "rebalance"}
+
 	apRule := aututils.PoolRuleRebalanceAbsolute(120, 70, false)
 	apRule.Spec.ActionsCoolDownPeriod = int64(getReblanceCoolOffPeriod(AutopilotRebalance))
-	apRule.Spec.Selector = apapi.RuleObjectSelector{
-		LabelSelector: meta_v1.LabelSelector{
-			MatchLabels: poolLabel,
-		},
-	}
 
-	if autoPilotLabelNode.Name == "" {
-
-		Step("Create autopilot rule", func() {
-			log.InfoD("Creating autopilot rule ; %+v", apRule)
-
-			storageNodes := node.GetStorageDriverNodes()
-			maxUsed := uint64(0)
-			for _, sNode := range storageNodes {
-				totalSize := uint64(0)
-				for _, p := range sNode.StoragePools {
-					totalSize += p.StoragePool.Used
-				}
-				if totalSize > maxUsed {
-					autoPilotLabelNode = sNode
-					maxUsed = totalSize
-				}
-			}
-
-			log.InfoD("Adding label %s to the node %s", poolLabel, autoPilotLabelNode.Name)
-			err := AddLabelsOnNode(autoPilotLabelNode, poolLabel)
+	if !autoPilotRuleCreated {
+		log.InfoD("Creating autopilot rule ; %+v", apRule)
+		_, err := Inst().S.CreateAutopilotRule(apRule)
+		if err != nil {
 			UpdateOutcome(event, err)
-			if err == nil {
-				_, err = Inst().S.CreateAutopilotRule(apRule)
-				UpdateOutcome(event, err)
-				//Removing the label if autopilot rule creation is failed
-				if err != nil {
-					for k := range poolLabel {
-						Inst().S.RemoveLabelOnNode(autoPilotLabelNode, k)
-						autoPilotLabelNode = node.Node{}
-					}
-				}
-			} else {
-				log.Warn("Skipping autopilot rule creation as node is not labelled")
-			}
-
-		})
+			return
+		}
+		autoPilotRuleCreated = true
 	} else {
 
 		Step("validate the  autopilot events", func() {
@@ -4747,7 +4713,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 	updateMetrics(*event)
 }
 
-// TriggerUpgradeStork peforms upgrade of the stork
+// TriggerUpgradeStork performs upgrade of the stork
 func TriggerUpgradeStork(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -5012,7 +4978,7 @@ func getIOProfileOnVolumes(contexts *[]*scheduler.Context) (map[string]VolumeIOP
 		}
 		for _, v := range appVolumes {
 			if v.ID == "" {
-				log.InfoD("Volume info not avialbale %v", v)
+				log.InfoD("Volume info not available %v", v)
 				continue
 			}
 			appVol, err := Inst().V.InspectVolume(v.ID)
@@ -5549,7 +5515,20 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			stepLog = fmt.Sprintf("Rejoin node %s", decommissionedNode.Name)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().V.RejoinNode(&decommissionedNode)
+				//reboot required to remove encrypted dm devices if any
+				err := Inst().N.RebootNode(decommissionedNode, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultTimeout,
+						TimeBeforeRetry: defaultRetryInterval,
+					},
+				})
+
+				if err != nil {
+					log.Errorf("Error while rebooting node %s the node. error: %v", decommissionedNode.Name, err)
+					UpdateOutcome(event, err)
+				}
+				err = Inst().V.RejoinNode(&decommissionedNode)
 
 				if err != nil {
 					log.InfoD("Error while rejoining the node. error: %v", err)
@@ -6570,7 +6549,7 @@ func TriggerStorkApplicationBackup(contexts *[]*scheduler.Context, recordChan *c
 	defer endLongevityTest()
 	startLongevityTest(StorkApplicationBackup)
 	defer ginkgo.GinkgoRecover()
-	log.InfoD("Stork Appplication Backup triggered at: %v", time.Now())
+	log.InfoD("Stork Application Backup triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -6647,7 +6626,7 @@ func TriggerStorkAppBkpVolResize(contexts *[]*scheduler.Context, recordChan *cha
 	defer endLongevityTest()
 	startLongevityTest(StorkAppBkpVolResize)
 	defer ginkgo.GinkgoRecover()
-	log.InfoD("Stork Appplication Backup with volume resize triggered at: %v", time.Now())
+	log.InfoD("Stork Application Backup with volume resize triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -6747,7 +6726,7 @@ func TriggerStorkAppBkpHaUpdate(contexts *[]*scheduler.Context, recordChan *chan
 	defer endLongevityTest()
 	startLongevityTest(StorkAppBkpHaUpdate)
 	defer ginkgo.GinkgoRecover()
-	log.InfoD("Stork Appplication Backup with HA update triggered at: %v", time.Now())
+	log.InfoD("Stork Application Backup with HA update triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -6887,7 +6866,7 @@ func TriggerStorkAppBkpPxRestart(contexts *[]*scheduler.Context, recordChan *cha
 	defer endLongevityTest()
 	startLongevityTest(StorkAppBkpPxRestart)
 	defer ginkgo.GinkgoRecover()
-	log.InfoD("Stork Appplication Backup with PX restart triggered at: %v", time.Now())
+	log.InfoD("Stork Application Backup with PX restart triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -6978,7 +6957,7 @@ func TriggerStorkAppBkpPoolResize(contexts *[]*scheduler.Context, recordChan *ch
 	defer endLongevityTest()
 	startLongevityTest(StorkAppBkpPoolResize)
 	defer ginkgo.GinkgoRecover()
-	log.InfoD("Stork Appplication Backup with Pool resize triggered at: %v", time.Now())
+	log.InfoD("Stork Application Backup with Pool resize triggered at: %v", time.Now())
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
@@ -8018,7 +7997,7 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 			return nil
 		}
 
-		// Resize volume created with contextx
+		// Resize volume created with contexts
 		for _, eachVol := range allVolsCreated {
 			log.Infof("Resizing Volumes created [%v]", eachVol.Name)
 			err := volumeResize(eachVol)
@@ -8568,7 +8547,7 @@ tbody tr:last-child {
 <h3>Running Event Details</h3>
 <table border=1 width: 50%>
 <tr>
-   <td align="center"><h4>Trigget Name </h4></td>
+   <td align="center"><h4>Trigger Name </h4></td>
    <td align="center"><h4>Interval </h4></td>
  </tr>
 {{range .TriggersInfo}}<tr>
