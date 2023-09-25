@@ -378,6 +378,10 @@ const (
 	MetadataPoolResizeDisk = "metadatapoolResizeDisk"
 	// PoolAddDisk resize storage pool using add-disk
 	PoolAddDisk = "poolAddDisk"
+	// PoolExpansionAuto resize storage pool using auto
+	PoolExpansionAuto = "poolExpansionAuto"
+	// PoolExpansionResizeDisk resize storage pool using resize-disk
+	PoolExpansionResizeDisk = "poolExpansionResizeDisk"
 	// BackupAllApps Perform backups of all deployed apps
 	BackupAllApps = "backupAllApps"
 	// BackupScheduleAll Creates and deletes namespaces and checks a scheduled backup for inclusion
@@ -4499,7 +4503,7 @@ func TriggerPoolResizeDiskAndReboot(contexts *[]*scheduler.Context, recordChan *
 	updateMetrics(*event)
 }
 
-// TriggerPoolAddDisk peforms add-disk on the storage pools for the given contexts
+// TriggerPoolAddDisk performs add-disk on the storage pools for the given contexts
 func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -4545,6 +4549,92 @@ func TriggerPoolAddDisk(contexts *[]*scheduler.Context, recordChan *chan *EventR
 		}
 		wg.Wait()
 
+	})
+	validateContexts(event, contexts)
+	updateMetrics(*event)
+}
+
+// TriggerPoolExpansionAuto performs auto on the storage pools for the given contexts
+func TriggerPoolExpansionAuto(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolExpansionAuto)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolExpansionAuto,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := getPoolExpandPercentage(PoolExpansionAuto)
+	stepLog := fmt.Sprintf("get storage pools and perform auto by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		poolsToBeResized, err := getStoragePoolsToExpand()
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Pools to auto [%v]", poolsToBeResized)
+		var wg sync.WaitGroup
+		for _, pool := range poolsToBeResized {
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by auto
+				wg.Add(1)
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 0, false)
+			}
+		}
+		wg.Wait()
+	})
+	validateContexts(event, contexts)
+	updateMetrics(*event)
+}
+
+// TriggerPoolExpansionResizeDisk performs resize-disk on the storage pools for the given contexts
+func TriggerPoolExpansionResizeDisk(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(PoolExpansionResizeDisk)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: PoolExpansionResizeDisk,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	chaosLevel := getPoolExpandPercentage(PoolExpansionResizeDisk)
+	stepLog := fmt.Sprintf("get storage pools and perform resize-disk by %v percentage on it ", chaosLevel)
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		poolsToBeResized, err := getStoragePoolsToExpand()
+		if err != nil {
+			log.Error(err.Error())
+			UpdateOutcome(event, err)
+		}
+		log.InfoD("Pools to resize-disk [%v]", poolsToBeResized)
+		var wg sync.WaitGroup
+		for _, pool := range poolsToBeResized {
+			//Skipping pool resize if pool rebalance is enabled for the pool
+			if !isPoolRebalanceEnabled(pool.Uuid) {
+				//Initiating multiple pool expansions by resize-disk
+				wg.Add(1)
+				go initiatePoolExpansion(event, &wg, pool, chaosLevel, 2, false)
+			}
+		}
+		wg.Wait()
 	})
 	validateContexts(event, contexts)
 	updateMetrics(*event)

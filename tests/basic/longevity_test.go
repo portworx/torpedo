@@ -642,6 +642,8 @@ func populateIntervals() {
 	triggerInterval[VolumeResize] = make(map[int]time.Duration)
 	triggerInterval[MetadataPoolResizeDisk] = make(map[int]time.Duration)
 	triggerInterval[PoolAddDisk] = make(map[int]time.Duration)
+	triggerInterval[PoolExpansionAuto] = make(map[int]time.Duration)
+	triggerInterval[PoolExpansionResizeDisk] = make(map[int]time.Duration)
 	triggerInterval[BackupAllApps] = map[int]time.Duration{}
 	triggerInterval[BackupScheduleAll] = map[int]time.Duration{}
 	triggerInterval[BackupScheduleScale] = map[int]time.Duration{}
@@ -1244,6 +1246,28 @@ func populateIntervals() {
 	triggerInterval[PoolAddDisk][2] = 24 * baseInterval
 	triggerInterval[PoolAddDisk][1] = 30 * baseInterval
 
+	triggerInterval[PoolExpansionResizeDisk][10] = 1 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][9] = 3 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][8] = 6 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][7] = 9 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][6] = 12 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][5] = 15 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][4] = 18 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][3] = 21 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][2] = 24 * baseInterval
+	triggerInterval[PoolExpansionResizeDisk][1] = 30 * baseInterval
+
+	triggerInterval[PoolExpansionAuto][10] = 1 * baseInterval
+	triggerInterval[PoolExpansionAuto][9] = 3 * baseInterval
+	triggerInterval[PoolExpansionAuto][8] = 6 * baseInterval
+	triggerInterval[PoolExpansionAuto][7] = 9 * baseInterval
+	triggerInterval[PoolExpansionAuto][6] = 12 * baseInterval
+	triggerInterval[PoolExpansionAuto][5] = 15 * baseInterval
+	triggerInterval[PoolExpansionAuto][4] = 18 * baseInterval
+	triggerInterval[PoolExpansionAuto][3] = 21 * baseInterval
+	triggerInterval[PoolExpansionAuto][2] = 24 * baseInterval
+	triggerInterval[PoolExpansionAuto][1] = 30 * baseInterval
+
 	triggerInterval[MetadataPoolResizeDisk][10] = 1 * baseInterval
 	triggerInterval[MetadataPoolResizeDisk][9] = 3 * baseInterval
 	triggerInterval[MetadataPoolResizeDisk][8] = 6 * baseInterval
@@ -1530,6 +1554,8 @@ func populateIntervals() {
 	triggerInterval[VolumeResize][0] = 0
 	triggerInterval[MetadataPoolResizeDisk][0] = 0
 	triggerInterval[PoolAddDisk][0] = 0
+	triggerInterval[PoolExpansionResizeDisk][0] = 0
+	triggerInterval[PoolExpansionAuto][0] = 0
 	triggerInterval[BackupAllApps][0] = 0
 	triggerInterval[BackupScheduleAll][0] = 0
 	triggerInterval[BackupSpecificResource][0] = 0
