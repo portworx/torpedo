@@ -470,10 +470,10 @@ spec:
     securityContext:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c"]
-    args:
-    - cd torpedo-gin;
-    go run apiServer/pxone/apiserver.go;
-    sleep 1800;
+    args: ["cd torpedo-gin",
+    "go run apiServer/pxone/apiserver.go",
+    "sleep 1800"
+    ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
