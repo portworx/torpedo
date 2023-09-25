@@ -3470,6 +3470,7 @@ func DeleteTerminatingNamespace(namespace string) error {
 	}
 	if ns.Status.Phase == "Terminating" {
 		log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
+		log.Infof("Finalizers to be set to nil - %v", ns.Spec.Finalizers)
 		ns.Spec.Finalizers = nil
 		ns, err = k8sCore.UpdateNamespace(ns)
 		if err != nil {
