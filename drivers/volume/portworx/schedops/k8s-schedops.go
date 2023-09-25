@@ -394,7 +394,7 @@ PodLoop:
 			// "/proc/mounts" contains this sym link path instead of the actual container path fetched
 			// To make sure it doesn't fail in validation, we will be appending the sym link path to "paths"
 			for _, path := range paths {
-				symlinkPath, err := k8sCore.RunCommandInPod([]string{"readfile", "-f", path}, pod.Name, containerName, pod.Namespace)
+				symlinkPath, err := k8sCore.RunCommandInPod([]string{"readlink", "-f", path}, pod.Name, containerName, pod.Namespace)
 				if err != nil {
 					return validatedMountPods, err
 				}
