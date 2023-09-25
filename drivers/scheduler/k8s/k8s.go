@@ -375,7 +375,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 }
 
 // SetGkeConfig sets kubeconfig for cloud provider GKE
-func (k *K8s) SetGkeConfig(kubeconfigPath string, gkeCredString string) error {
+func (k *K8s) SetGkeConfig(kubeconfigPath string, jsonKey string) error {
 
 	var clientConfig *rest.Config
 	var err error
@@ -389,29 +389,7 @@ func (k *K8s) SetGkeConfig(kubeconfigPath string, gkeCredString string) error {
 		}
 	}
 
-	config, err := os.ReadFile(kubeconfigPath)
-	if err != nil {
-		return err
-	}
-
-	// First parse the config
-	client, err := clientcmd.NewClientConfigFromBytes(config)
-	if err != nil {
-		return err
-	}
-
-	rawConfig, err := client.RawConfig()
-	if err != nil {
-		return err
-	}
-
-	// Then create a default client config with the default loading rules
-	client = clientcmd.NewDefaultClientConfig(rawConfig, &clientcmd.ConfigOverrides{})
-	if err != nil {
-		return err
-	}
-
-	clientConfig.AuthProvider.Config["cred-json"] = gkeCredString
+	clientConfig.AuthProvider.Config["cred-json"] = jsonKey
 	if err != nil {
 		return err
 	}

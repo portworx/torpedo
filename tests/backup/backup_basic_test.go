@@ -23,7 +23,7 @@ import (
 
 func getBucketNameSuffix() string {
 	bucketNameSuffix, present := os.LookupEnv("BUCKET_NAME")
-	if present {
+	if present && bucketNameSuffix != "" {
 		return bucketNameSuffix
 	} else {
 		return "default-suffix"
@@ -124,7 +124,7 @@ func BackupInitInstance() {
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
 	DumpKubeconfigs(kubeconfigList)
-	GloabalGkeSecretString, err = GetGkeSecret()
+	GlobalGkeSecretString, err = GetGkeSecret()
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
 		// Switch context to destination cluster to update RancherMap with destination cluster details
 		err = SetDestinationKubeConfig()
