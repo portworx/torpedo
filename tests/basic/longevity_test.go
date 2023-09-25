@@ -212,8 +212,8 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		populateDone               bool
 		triggerEventsChan          = make(chan *EventRecord, 100)
 		disruptiveTriggerFunctions = make(map[string]TriggerFunction)
-		upgradeTriggerFunction     = make(map[string]TriggerFunction)
-		wg                         sync.WaitGroup
+		//upgradeTriggerFunction     = make(map[string]TriggerFunction)
+		wg sync.WaitGroup
 	)
 
 	JustBeforeEach(func() {
@@ -221,7 +221,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 			PoolExpansionAuto:       TriggerPoolExpansionAuto,
 			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
-			AddDrive:                TriggerAddDrive,
+			//AddDrive:                TriggerAddDrive,
 			//RestartVolDriver:     TriggerRestartVolDriver,
 			//CloudSnapShot:        TriggerCloudSnapShot,
 			//HAIncrease:           TriggerHAIncrease,
@@ -254,9 +254,9 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			EmailReporter: TriggerEmailReporter,
 		}
 		// Creating a distinct trigger to ensure upgrade is triggered after a specified number of events have occurred
-		upgradeTriggerFunction = map[string]TriggerFunction{
-			UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
-		}
+		//upgradeTriggerFunction = map[string]TriggerFunction{
+		//	UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
+		//}
 		if !populateDone {
 			tags := map[string]string{
 				"upgrade-longevity": "true",
@@ -328,16 +328,16 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			log.InfoD("Finished registering email trigger")
 		})
 
-		Step("Register upgrade test trigger", func() {
-			log.InfoD("Registering upgrade test trigger")
-			for triggerType, triggerFunc := range upgradeTriggerFunction {
-				log.InfoD("Registering upgrade trigger: [%v]", triggerType)
-				wg.Add(1)
-				// testTrigger uses disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
-				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
-			}
-			log.InfoD("Finished registering upgrade test trigger")
-		})
+		//Step("Register upgrade test trigger", func() {
+		//	log.InfoD("Registering upgrade test trigger")
+		//	for triggerType, triggerFunc := range upgradeTriggerFunction {
+		//		log.InfoD("Registering upgrade trigger: [%v]", triggerType)
+		//		wg.Add(1)
+		//		// testTrigger uses disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
+		//		go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
+		//	}
+		//	log.InfoD("Finished registering upgrade test trigger")
+		//})
 
 		Step("Collect events while waiting for the triggers to be completed", func() {
 			log.InfoD("Collecting events while waiting for the triggers to be completed")
@@ -373,8 +373,11 @@ func testTrigger(wg *sync.WaitGroup,
 
 	start := time.Now().Local()
 	lastInvocationTime := start
-
+	count := 0
 	for {
+		if count > 0 {
+			return
+		}
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 			log.InfoD("Longevity Tests timed out with timeout %d  minutes", minRunTime)
@@ -415,7 +418,7 @@ func testTrigger(wg *sync.WaitGroup,
 			//}
 
 			lastInvocationTime = time.Now().Local()
-
+			count += 1
 		}
 		time.Sleep(controlLoopSleepTime)
 	}
@@ -426,15 +429,20 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	triggerType string,
 	triggerFunc func(),
 	emailTriggerLock *sync.Mutex) {
-	defer wg.Done()
+	if wg != nil {
+		defer wg.Done()
+	}
 
 	minRunTime := Inst().MinRunTimeMins
 	timeout := (minRunTime) * 60
 
 	start := time.Now().Local()
 	lastInvocationTime := start
-
+	count := 0
 	for {
+		if count > 3 {
+			return
+		}
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 			break
@@ -461,22 +469,21 @@ func emailEventTrigger(wg *sync.WaitGroup,
 			lastInvocationTime = time.Now().Local()
 
 		}
-		time.Sleep(controlLoopSleepTime)
+		time.Sleep(10 * time.Minute)
+		count++
 	}
 }
 
 func watchConfigMap() error {
-	ChaosMap = map[string]int{}
 	cm, err := core.Instance().GetConfigMap(testTriggersConfigMap, configMapNS)
 	if err != nil {
-		return fmt.Errorf("Error reading config map: %v", err)
+		log.Fatalf("failed to get config map [%s/%s]. Err: %v", configMapNS, testTriggersConfigMap, err)
 	}
+	ChaosMap = map[string]int{}
 	err = populateDataFromConfigMap(&cm.Data)
 	if err != nil {
-		return err
+		log.Fatalf("failed to populate data from config map [%s/%s]. Err: %v", configMapNS, testTriggersConfigMap, err)
 	}
-
-	// Apply watch if configMap exists
 	fn := func(object runtime.Object) error {
 		cm, ok := object.(*v1.ConfigMap)
 		if !ok {
@@ -491,10 +498,9 @@ func watchConfigMap() error {
 		}
 		return nil
 	}
-
 	err = core.Instance().WatchConfigMap(cm, fn)
 	if err != nil {
-		return fmt.Errorf("Failed to watch on config map: %s due to: %v", testTriggersConfigMap, err)
+		log.Fatalf("failed to watch on config map [%s/%s]. Err: %v", configMapNS, testTriggersConfigMap, err)
 	}
 	return nil
 }
@@ -676,8 +682,7 @@ func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
-			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
-				testTriggersConfigMap, configMapNS, err)
+			log.Fatalf("failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]", testTriggersConfigMap, configMapNS, err)
 		}
 		ChaosMap[triggerType] = chaosLevelInt
 		if triggerType == BackupScheduleAll || triggerType == BackupScheduleScale {

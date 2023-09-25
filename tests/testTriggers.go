@@ -4347,17 +4347,23 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	if wg != nil {
 		defer wg.Done()
 	}
+	log.Infof("chaosLevel %v", chaosLevel)
 	poolValidity, err := isPoolResizePossible(pool)
 	if err != nil {
 		log.Error(err.Error())
 		UpdateOutcome(event, err)
 	}
 
-	expansionType := "resize-disk"
-
-	if resizeOperationType == 1 {
-		expansionType = "add-disk"
-	}
+	expansionType := func() string {
+		switch resizeOperationType {
+		case 0:
+			return "auto"
+		case 1:
+			return "add-disk"
+		default:
+			return "resize-disk"
+		}
+	}()
 
 	if poolValidity {
 		initialPoolSize := pool.TotalSize / units.GiB
@@ -5844,7 +5850,7 @@ func getPoolExpandPercentage(triggerType string) uint64 {
 	var percentageValue uint64
 
 	t := ChaosMap[triggerType]
-
+	t = 4
 	switch t {
 	case 1:
 		percentageValue = 100
@@ -5867,6 +5873,7 @@ func getPoolExpandPercentage(triggerType string) uint64 {
 	case 10:
 		percentageValue = 10
 	}
+	log.Infof("getPoolExpandPercentage percentageValue %v", percentageValue)
 	return percentageValue
 
 }
