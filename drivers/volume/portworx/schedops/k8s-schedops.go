@@ -379,8 +379,7 @@ PodLoop:
 		containerPaths := getContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
-			log.Infof("containerName - %s", containerName)
-			log.Infof("paths - %v", paths)
+			log.Infof("container [%s] and paths [%v]", containerName, paths)
 			output, err := k8sCore.RunCommandInPod([]string{"cat", "/proc/mounts"}, pod.Name, containerName, pod.Namespace)
 			if err != nil && (err == k8serrors.ErrPodsNotFound || strings.Contains(err.Error(), "container not found")) {
 				// if pod is not found or in completed state so delay the check and move to next pod
@@ -391,19 +390,13 @@ PodLoop:
 			}
 			mounts := strings.Split(output, "\n")
 			for _, path := range paths {
-				log.Infof("path - %s", path)
-				path = strings.ReplaceAll(path, "/var", "")
-				log.Infof("path after - %s", path)
 				pxMountCheckRegex := regexp.MustCompile(fmt.Sprintf("^(/dev/pxd.+|pxfs.+|/dev/mapper/pxd-enc.+|%s.+|/dev/loop.+|\\d+\\.\\d+\\.\\d+\\.\\d+:/var/lib/osd/pxns.+|(.[A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4}]:/var/lib/osd/pxns.+|\\d+.\\d+.\\d+.\\d+:/px_[0-9A-Za-z]{8}-pvc.+) %s", pureMapperRegex, path))
 				pxMountFound := false
 				for _, line := range mounts {
-					log.Infof("For line - %s", line)
 					pxMounts := pxMountCheckRegex.FindStringSubmatch(line)
-					log.Infof("pxMounts - %s", pxMounts)
 
 					if len(pxMounts) > 0 {
 						log.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
-						log.Infof("pxMountFound")
 						pxMountFound = true
 
 						// If we encounter a Pure volume, we should skip the host mount check as we can't get the
