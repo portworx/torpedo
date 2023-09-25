@@ -471,9 +471,9 @@ spec:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c"]
     args: ["cd /torpedo-gin",
-        "go run apiServer/pxone/apiserver.go &",
-        "sleep 3600",
+        "go run apiServer/pxone/apiserver.go &"
         ]
+    command: ["sh", "-c", "sleep 3600]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
