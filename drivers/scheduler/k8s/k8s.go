@@ -46,6 +46,7 @@ import (
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/policy"
@@ -90,6 +91,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -211,6 +213,7 @@ var (
 	k8sAdmissionRegistration = admissionregistration.Instance()
 	k8sApiExtensions         = apiextensions.Instance()
 	k8sOperator              = operator.Instance()
+	k8sKubevirt              = kubevirt.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -370,6 +373,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sExternalsnap.SetConfig(config)
 	k8sApiExtensions.SetConfig(config)
 	k8sOperator.SetConfig(config)
+	k8sKubevirt.SetConfig(config)
 
 	return nil
 }
@@ -596,8 +600,10 @@ func isValidProvider(specPath, storageProvisioner string) bool {
 }
 
 func decodeSpec(specContents []byte) (runtime.Object, error) {
+	log.Infof("Inside decodeSpec")
 	obj, _, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 	if err != nil {
+		log.Infof("Inside decodeSpec error is not nil")
 		schemeObj := runtime.NewScheme()
 		if err := snapv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
@@ -627,9 +633,14 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 			return nil, err
 		}
 
+		if err := kubevirtv1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
+			log.Infof("Error occurred after adding kubevirt scheme")
 			return nil, err
 		}
 	}
@@ -722,6 +733,8 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfigurationList); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
 		return specObj, nil
 	}
 
@@ -826,8 +839,67 @@ func isCsiApp(options scheduler.ScheduleOptions, appName string) bool {
 	return false
 }
 
+// StructToString returns the string representation of the given struct
+func StructToString(s interface{}) string {
+	v := reflect.ValueOf(s)
+	if stringer, ok := s.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Sprintf("%v", s)
+	}
+	t := v.Type()
+	var fields []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.IsExported() {
+			fieldVal := v.Field(i)
+			var fieldString string
+			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
+				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
+			} else {
+				switch fieldVal.Kind() {
+				case reflect.Ptr:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else if fieldVal.Type().Elem().Kind() == reflect.Struct {
+						fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Elem().Interface()))
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Elem())
+					}
+				case reflect.Slice:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Map:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Struct:
+					fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Interface()))
+				case reflect.String:
+					if fieldVal.Len() == 0 {
+						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				default:
+					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+				}
+			}
+			fields = append(fields, fieldString)
+		}
+	}
+	return fmt.Sprintf("%s: {%s}", t.Name(), strings.Join(fields, ", "))
+}
+
 // Schedule Schedules the application
 func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
+	log.InfoD("Start scheduling")
 	var apps []*spec.AppSpec
 	if len(options.AppKeys) > 0 {
 		for _, key := range options.AppKeys {
@@ -837,6 +909,18 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 			}
 			if isCsiApp(options, key) {
 				appSpec.IsCSI = true
+			}
+			log.Infof("Appspec key - %s", appSpec.Key)
+			specLists := appSpec.SpecList
+			for _, s := range specLists {
+				debugStruct := struct {
+					Spec interface{}
+				}{
+					Spec: s,
+				}
+				log.Infof("Spec - %v", s)
+				log.Infof("Debug Spec - %v", debugStruct)
+				log.Infof(StructToString(debugStruct))
 			}
 			apps = append(apps, appSpec)
 		}
@@ -848,6 +932,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
 		appNamespace := app.GetID(instanceID)
+		log.Infof("appNamespace will be %s", appNamespace)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
 		} else {
@@ -937,6 +1022,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Namespace created")
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
@@ -1135,6 +1221,23 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 			return nil, err
 		}
 
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createAdmissionRegistrationObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
@@ -2400,6 +2503,27 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 		log.Infof("[%v] Created Rule: %v", app.Key, rule.GetName())
 		return rule, nil
+	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+				return vm, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Virtualachine: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
+		return vm, nil
 	} else if obj, ok := spec.(*corev1.Pod); ok {
 		obj.Namespace = ns.Name
 		if options.Scheduler != "" {
@@ -2617,6 +2741,16 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		log.Infof("[%v] Destroyed AutopilotRule: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -2984,6 +3118,16 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			log.Infof("[%v] Validated ResourceTransformation: %v", ctx.App.Key, obj.Name)
+
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			if err := k8sKubevirt.IsVirtualMachineRunning(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate VirtualMachineRunning State: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			log.Infof("[%v] Validated VirtualMachine running state: %v", ctx.App.Key, obj.Name)
 
 		}
 	}
