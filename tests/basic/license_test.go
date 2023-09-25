@@ -7,10 +7,10 @@ import (
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"golang.org/x/net/context"
-	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -75,15 +75,15 @@ const (
 	// LabFastPath - FastPath extension [PX-FAST]
 	LabFastPath Label = "FastPath"
 
-	essentialsFaFbSKU = "Portworx CSI for FA/FB"
-	ibmTestLicenseSKU = "PX-Enterprise IBM Cloud (test)"
+	essentialsFaFbSKU   = "Portworx CSI for FA/FB"
+	ibmTestLicenseSKU   = "PX-Enterprise IBM Cloud (test)"
 	ibmTestLicenseDRSKU = "PX-Enterprise IBM Cloud DR (test)"
-	ibmProdLicenseSKU = "PX-Enterprise IBM Cloud"
+	ibmProdLicenseSKU   = "PX-Enterprise IBM Cloud"
 	ibmProdLicenseDRSKU = "PX-Enterprise IBM Cloud DR"
 	// UnlimitedNumber represents the unlimited number of licensed resource.
 	// note - the max # Flex counts handle, is actually 999999999999999990
 	UnlimitedNumber = int64(0x7FFFFFFF) // C.FLX_FEATURE_UNCOUNTED_VALUE = 0x7FFFFFFF  (=2147483647)
-	Unlimited = int64(0x7FFFFFFFFFFFFFFF)
+	Unlimited       = int64(0x7FFFFFFFFFFFFFFF)
 
 	// -- Testing maximums below
 
@@ -157,6 +157,7 @@ var (
 		LabFastPath:           &pxapi.LicensedFeature_Enabled{Enabled: false},
 	}
 )
+
 // This test performs basic test of starting an application and destroying it (along with storage)
 var _ = Describe("{BasicEssentialsFaFbTest}", func() {
 	var testrailID = 56354
@@ -759,10 +760,10 @@ var _ = Describe("{LicenseValidation}", func() {
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		validSKUs := map[string]bool{
-		ibmTestLicenseSKU:     true,
-    	ibmTestLicenseDRSKU:   true,
-    	ibmProdLicenseSKU:     true,
-    	ibmProdLicenseDRSKU:   true,
+			ibmTestLicenseSKU:   true,
+			ibmTestLicenseDRSKU: true,
+			ibmProdLicenseSKU:   true,
+			ibmProdLicenseDRSKU: true,
 		}
 		summary, err := Inst().V.GetLicenseSummary()
 		log.FailOnError(err, "Failed to get license SKU")
@@ -772,26 +773,26 @@ var _ = Describe("{LicenseValidation}", func() {
 		stepLog = "Verify PX-IBM cloud license type and its features"
 		Step(stepLog, func() {
 			log.InfoD("validate IBM cloud license type")
-        isValidLicense := validSKUs[summary.SKU]
-        dash.VerifyFatal(isValidLicense, true, fmt.Sprintf("License type is valid?: %v", summary.SKU))
+			isValidLicense := validSKUs[summary.SKU]
+			dash.VerifyFatal(isValidLicense, true, fmt.Sprintf("License type is valid?: %v", summary.SKU))
 
-    		Step("Compare PX-IBM License features vs activated license", func() {
-            	log.InfoD("Compare with PX IBM cloud licensed features")
+			Step("Compare PX-IBM License features vs activated license", func() {
+				log.InfoD("Compare with PX IBM cloud licensed features")
 				isTestOrProdSKU := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmProdLicenseSKU
-            	for _, feature := range summary.Features {
-                	if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-                    
-                    	// Special handling for DisasterRecovery feature and certain SKUs
-                    	if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
-                        	limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
-                    	}	
+				for _, feature := range summary.Features {
+					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
 
-                    	if feature.Quantity != limit {
-                        	dash.Errorf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit)
-                    	}
-                	}
-            	}
-        	})
+						// Special handling for DisasterRecovery feature and certain SKUs
+						if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
+							limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
+						}
+
+						if feature.Quantity != limit {
+							dash.Errorf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit)
+						}
+					}
+				}
+			})
 		})
 	})
 
