@@ -206,9 +206,9 @@ var _ = Describe("{Longevity}", func() {
 
 var _ = Describe("{UpgradeLongevity}", func() {
 	var (
-		triggerLock                sync.Mutex
-		disruptiveTriggerLock      sync.Mutex
-		emailTriggerLock           sync.Mutex
+		triggerLock           sync.Mutex
+		disruptiveTriggerLock sync.Mutex
+		//emailTriggerLock           sync.Mutex
 		populateDone               bool
 		triggerEventsChan          = make(chan *EventRecord, 100)
 		disruptiveTriggerFunctions = make(map[string]TriggerFunction)
@@ -219,9 +219,9 @@ var _ = Describe("{UpgradeLongevity}", func() {
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			PoolExpansionAuto:       TriggerPoolExpansionAuto,
-			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
-			//AddDrive:                TriggerAddDrive,
+			//PoolExpansionAuto:       TriggerPoolExpansionAuto,
+			//PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
+			AddDrive: TriggerAddDrive,
 			//RestartVolDriver:     TriggerRestartVolDriver,
 			//CloudSnapShot:        TriggerCloudSnapShot,
 			//HAIncrease:           TriggerHAIncrease,
@@ -319,14 +319,14 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			log.InfoD("Finished registering disruptive test triggers")
 		})
 
-		Step("Register email trigger", func() {
-			for triggerType, triggerFunc := range emailTriggerFunction {
-				log.InfoD("Registering email trigger: [%v]", triggerType)
-				wg.Add(1)
-				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
-			}
-			log.InfoD("Finished registering email trigger")
-		})
+		//Step("Register email trigger", func() {
+		//	for triggerType, triggerFunc := range emailTriggerFunction {
+		//		log.InfoD("Registering email trigger: [%v]", triggerType)
+		//		wg.Add(1)
+		//		go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
+		//	}
+		//	log.InfoD("Finished registering email trigger")
+		//})
 
 		//Step("Register upgrade test trigger", func() {
 		//	log.InfoD("Registering upgrade test trigger")
