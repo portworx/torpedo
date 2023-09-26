@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -58,7 +59,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume"
+	vcluster "github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
@@ -1794,7 +1795,14 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				log.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
 			}
 		}
-
+		// Change Context only in case of vCluster tests
+		if vcluster.ContextChange {
+			log.Infof("Context Change is set to %v ", vcluster.ContextChange)
+			err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
+			}
+		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if sc, err = k8sStorage.GetStorageClass(obj.Name); err == nil {
@@ -1819,6 +1827,14 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
+		if vcluster.ContextChange {
+			log.Infof("Changing context back to vcluster: %v", vcluster.CurrentClusterContext)
+			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
+			if err != nil {
+				log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
+			}
+			vcluster.ContextChange = false
+		}
 		return sc, nil
 
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
