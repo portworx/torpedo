@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"net/http"
 	"strings"
 	"time"
@@ -37,6 +38,16 @@ type PDSDataService struct {
 	ScaleReplicas int    "json:\"ScaleReplicas\""
 	OldVersion    string "json:\"OldVersion\""
 	OldImage      string "json:\"OldImage\""
+}
+
+type TestParams struct {
+	DeploymentTargetId string
+	DnsZone            string
+	StorageTemplateId  string
+	NamespaceId        string
+	TenantId           string
+	ProjectId          string
+	ServiceType        string
 }
 
 const (
@@ -115,6 +126,7 @@ var (
 // imports based on functionalities
 var (
 	dsTest        *dataservices.DataserviceType
+	dsWithRbac    *dataservices.DsWithRBAC
 	customParams  *parameters.Customparams
 	targetCluster *targetcluster.TargetCluster
 	controlPlane  *controlplane.ControlPlane
@@ -124,6 +136,21 @@ var (
 
 var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
 var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
+
+func DeployandValidateDataServicesWithSiAndTls(ds PDSDataService, namespaceName string, namespaceid, projectID string, resourceTemplateID string, appConfigID string, dsVersion string, dsImage string, dsID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+
+	log.InfoD("Data Service Deployment Triggered")
+	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespaceName, serviceType)
+
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsWithRbac.TriggerDeployDSWithSiAndTls(dataservices.PDSDataService(ds), namespaceName, projectID, true, resourceTemplateID, appConfigID, namespaceid, dsVersion, dsImage, dsID, dataservices.TestParams(TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType}))
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
+
+	Step("Validate Data Service Deployments", func() {
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespaceName)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
 
 func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, deployment *pds.ModelsDeployment, namespace string) (*corev1.Pod, *v1.Deployment, error) {
 	params.DataServiceName = ds.Name
@@ -221,6 +248,13 @@ func CheckPVCtoFullCondition(context []*scheduler.Context) error {
 	return err
 }
 
+func CleanMapEntries(deleteMapEntries map[string]string) {
+	for hash := range deleteMapEntries {
+		delete(deleteMapEntries, hash)
+	}
+	log.Debugf("size of map post deletion %d", len(deleteMapEntries))
+}
+
 // CleanupWorkloadDeployments will clean up the wldeployment based on the kubeconfigs
 func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
 	if isSrc {
@@ -285,6 +319,22 @@ func GetVolumeCapacityInGB(context []*scheduler.Context) (uint64, error) {
 	return pvcCapacity, err
 }
 
+func CleanUpBackUpTargets(projectID, prefix string) error {
+	bkpClient, err := pdsbkp.InitializePdsBackup()
+	if err != nil {
+		return err
+	}
+	bkpTargets, err := bkpClient.GetAllBackUpTargets(projectID, prefix)
+	for _, bkpTarget := range bkpTargets {
+		log.Debugf("Deleting bkptarget %s", bkpTarget.GetName())
+		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 	if len(dsInstances) < 1 {
 		log.Info("No DS left for deletion as part of this test run.")
@@ -294,8 +344,7 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
 		dsId := *dsInstance.Id
 		components.DataServiceDeployment.GetDeployment(dsId)
-		log.Infof("Delete Deployment %v ", dsInstance)
-		log.Infof("Delete Deployment %v ", dsInstance.GetClusterResourceName())
+		log.Infof("Deleting Deployment %v ", dsInstance.GetClusterResourceName())
 		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
 		if err != nil {
 			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())
@@ -311,6 +360,25 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		log.InfoD("Getting all PV and associated PVCs and deleting them")
 		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
 		log.FailOnError(err, "Error while deleting PV and PVCs")
+	}
+}
+
+func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
+	log.InfoD("Starting to delete the Iam Roles first...")
+	for _, iam := range iamRolesToBeCleaned {
+		resp, err := components.IamRoleBindings.DeleteIamRoleBinding(iam, actorID)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting IamRoles")
+		}
+		log.InfoD("Successfully deleted IAMRoles- %v", resp.StatusCode)
+	}
+	log.InfoD("Starting to delete the Service Identities...")
+	for _, si := range siToBeCleaned {
+		resp, err := components.ServiceIdentity.DeleteServiceIdentity(si)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting ServiceIdentities")
+		}
+		log.InfoD("Successfully deleted ServiceIdentities- %v", resp.StatusCode)
 	}
 }
 
