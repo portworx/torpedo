@@ -227,3 +227,265 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 		})
 	})
 })
+
+var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ServiceIdentityTargetClusterLevel", "Create and Update Service Identity with N namespaces with different roles and perform cross-cluster restore", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		awsBkpTargets = append(awsBkpTargets, bkpTarget)
+
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
+	})
+
+	It("Deploy Dataservices", func() {
+		var deploymentsToBeCleaned []*pds.ModelsDeployment
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var depList []*pds.ModelsDeployment
+		var deps []*pds.ModelsDeployment
+		var dsVersions = make(map[string]map[string][]string)
+		var nsRoles1 []pds.ModelsBinding
+		var nsRoles2 []pds.ModelsBinding
+		var iamRolesToBeCleanedinSrc []string
+		var siToBeCleanedinSrc []string
+		var iamRolesToBeCleanedinDest []string
+		var siToBeCleanedinDest []string
+		var binding1 pds.ModelsBinding
+		var binding2 pds.ModelsBinding
+		var nsID1 []string
+		var nsID2 []string
+
+		Step("Deploy Data Services", func() {
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				log.InfoD("Create namespace ns1 and assign admin role to it on targetCluster 1")
+				log.InfoD("setting source kubeconfig")
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "failed while setting set cluster path")
+
+				ns1, err := pdslib.CreatePdsLabeledNamespaces()
+				log.FailOnError(err, "Error while creating namespace")
+				log.InfoD("Successfully created namespace with PDS Label %v ", ns1)
+				ns1Id1, err := targetCluster.GetnameSpaceID(ns1, deploymentTargetID)
+				nsID1 = append(nsID1, ns1Id1)
+				log.FailOnError(err, "Error while fetching namespaceID")
+				log.InfoD("NamespaceID1 fetched is %v ", nsID1)
+				ns1RoleName := "namespace-admin"
+
+				binding1.ResourceIds = nsID1
+				binding1.RoleName = &ns1RoleName
+
+				nsRoles1 = append(nsRoles1, binding1)
+
+				actorId1, iamId1, err := pdslib.CreateSiAndIamRoleBindings(accountID, nsRoles1)
+				log.FailOnError(err, "Error while creating and fetching IAM Roles")
+				log.InfoD("Successfully created ServiceIdentity- %v and IAM Roles- %v ", actorId1, iamId1)
+
+				siToBeCleanedinSrc = append(siToBeCleanedinSrc, actorId1)
+				iamRolesToBeCleanedinSrc = append(iamRolesToBeCleanedinSrc, iamId1)
+
+				log.InfoD("Create namespace ns2 and assign admin role to it on targetCluster 2")
+				log.InfoD("setting source kubeconfig")
+				err = SetDestinationKubeConfig()
+				log.FailOnError(err, "failed while setting set cluster path")
+
+				ns2, err := pdslib.CreatePdsLabeledNamespaces()
+				log.FailOnError(err, "Error while creating namespace")
+				log.InfoD("Successfully created namespace with PDS Label %v ", ns2)
+				ns2Id2, err := targetCluster.GetnameSpaceID(ns2, deploymentTargetID)
+				nsID2 = append(nsID2, ns2Id2)
+				log.FailOnError(err, "Error while fetching namespaceID")
+				log.InfoD("NamespaceID1 fetched is %v ", nsID2)
+				ns2RoleName := "namespace-admin"
+
+				binding2.ResourceIds = nsID2
+				binding2.RoleName = &ns2RoleName
+
+				nsRoles2 = append(nsRoles2, binding2)
+
+				actorId2, iamId2, err := pdslib.CreateSiAndIamRoleBindings(accountID, nsRoles2)
+				log.FailOnError(err, "Error while creating and fetching IAM Roles")
+				log.InfoD("Successfully created ServiceIdentity- %v and IAM Roles- %v ", actorId2, iamId2)
+
+				siToBeCleanedinDest = append(siToBeCleanedinDest, actorId2)
+				iamRolesToBeCleanedinDest = append(iamRolesToBeCleanedinDest, iamId2)
+
+				log.InfoD("setting source kubeconfig")
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "failed while setting set cluster path")
+				resTempId, appConfigId, err := dsWithRbac.GetDataServiceDeploymentTemplateIDS(tenantID, ds)
+				log.FailOnError(err, "Error while fetching template and app-config ids")
+
+				log.FailOnError(err, "Error while fetching template and app-config ids")
+				dsId, err := dsTest.GetDataServiceID(ds.Name)
+				versionId, imageID, err := dsWithRbac.GetDSImageVersionToBeDeployed(false, ds, dsId)
+
+				customParams.SetParamsForServiceIdentityTest(params, true)
+				log.InfoD("Successfully updated Infra params for Si test")
+
+				isDeploymentsDeleted = false
+				deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesWithSiAndTls(ds, ns1, ns1Id1, projectID, resTempId, appConfigId, versionId, imageID, dsId)
+				log.FailOnError(err, "Error while deploying data services")
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				log.FailOnError(err, "Error while deploying data services")
+				deployments[ds] = deployment
+				deps = append(deps, deployment)
+				depList = append(depList, deployment)
+
+				dsEntity = restoreBkp.DSEntity{
+					Deployment: deployment,
+				}
+				dsVersions[ds.Name] = dataServiceVersionBuildMap
+
+				//ToDo : Add workload generation for deps with RBAC roles on ns1
+
+				Step("Perform adhoc backup and validate them", func() {
+
+					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+					log.FailOnError(err, "Failed while performing adhoc backup")
+				})
+
+				Step("Perform cross restore for the backup jobs to diff cluster using ServiceIdentity1 token", func() {
+					dest_ctx, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed while getting dest cluster path")
+					restoreTarget := tc.NewTargetCluster(dest_ctx)
+					restoreClient := restoreBkp.RestoreClient{
+						TenantId:             tenantID,
+						ProjectId:            projectID,
+						Components:           components,
+						Deployment:           deployment,
+						RestoreTargetCluster: restoreTarget,
+					}
+					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					log.InfoD("setting destination kubeconfig")
+					err = SetDestinationKubeConfig()
+					log.FailOnError(err, "failed while setting dest cluster path")
+					for _, backupJob := range backupJobs {
+						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+						restoredModel, _ := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), ns2, dsEntity, true, false)
+						log.InfoD("Failed to trigger restore for - %v", restoredModel.Name)
+						log.InfoD("Restore is failed as expected.")
+						deploymentsToBeCleaned = append(deploymentsToBeCleaned)
+					}
+				})
+				Step("Perform cross restore for the backup jobs to diff cluster using ServiceIdentity2 token", func() {
+					dest_ctx, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed while getting dest cluster path")
+					restoreTarget := tc.NewTargetCluster(dest_ctx)
+					restoreClient := restoreBkp.RestoreClient{
+						TenantId:             tenantID,
+						ProjectId:            projectID,
+						Components:           components,
+						Deployment:           deployment,
+						RestoreTargetCluster: restoreTarget,
+					}
+					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					log.InfoD("setting destination kubeconfig")
+					err = SetDestinationKubeConfig()
+					log.FailOnError(err, "failed while setting dest cluster path")
+					newSiToken, err := components.ServiceIdentity.RegenerateServiceTokenAndSetAuthContext(actorId2)
+					log.FailOnError(err, "failed to regenerate new siToken")
+					log.InfoD("New SiToken Successfully created- %v", newSiToken)
+					for _, backupJob := range backupJobs {
+						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+						log.FailOnError(err, "Failed during restore.")
+						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+					}
+				})
+				//ToDo: Testing is blocked from here because of bug-
+
+				Step("Update IAM1 with ns2 of cluster2 as admin role", func() {
+					binding1.ResourceIds = nsID1
+					binding1.RoleName = &ns1RoleName
+
+					binding2.ResourceIds = nsID2
+					binding2.RoleName = &ns2RoleName
+
+					nsRoles1 = append(nsRoles1, binding1, binding2)
+					log.InfoD("Starting to update the IAM Roles for ns2")
+					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, actorId1, nsRoles1)
+					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
+				})
+
+				Step("Restore ds on ns1 of cluster1 to ns2 of cluster2 using ServiceIdentity1 token", func() {
+					dest_ctx, err := GetDestinationClusterConfigPath()
+					log.FailOnError(err, "failed while getting dest cluster path")
+					restoreTarget := tc.NewTargetCluster(dest_ctx)
+					restoreClient := restoreBkp.RestoreClient{
+						TenantId:             tenantID,
+						ProjectId:            projectID,
+						Components:           components,
+						Deployment:           deployment,
+						RestoreTargetCluster: restoreTarget,
+					}
+					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					log.InfoD("setting destination kubeconfig")
+					err = SetDestinationKubeConfig()
+					log.FailOnError(err, "failed while setting dest cluster path")
+					newSiToken, err := components.ServiceIdentity.RegenerateServiceTokenAndSetAuthContext(actorId1)
+					log.FailOnError(err, "failed to regenerate new siToken")
+					log.InfoD("New SiToken Successfully created- %v", newSiToken)
+					for _, backupJob := range backupJobs {
+						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+						log.FailOnError(err, "Failed during restore.")
+						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+					}
+				})
+
+				//ToDo : Add workload generation for restored-deps with RBAC roles on ns2 of cluster2
+
+				Step("Delete Deployments", func() {
+					log.InfoD("setting source kubeconfig")
+					err = SetSourceKubeConfig()
+					log.FailOnError(err, "failed while setting set cluster path")
+					CleanupDeployments(deploymentsToBeCleaned)
+					CleanupServiceIdentitiesAndIamRoles(siToBeCleanedinSrc, iamRolesToBeCleanedinSrc, actorId1)
+					customParams.SetParamsForServiceIdentityTest(params, false)
+					log.InfoD("setting source kubeconfig")
+					err = SetDestinationKubeConfig()
+					log.FailOnError(err, "failed while setting set cluster path")
+					CleanupDeployments(deploymentsToBeCleaned)
+					CleanupServiceIdentitiesAndIamRoles(siToBeCleanedinDest, iamRolesToBeCleanedinDest, actorId2)
+					customParams.SetParamsForServiceIdentityTest(params, false)
+				})
+
+			}
+
+		})
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
+		})
+	})
+})
