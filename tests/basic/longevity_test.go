@@ -206,9 +206,9 @@ var _ = Describe("{Longevity}", func() {
 
 var _ = Describe("{UpgradeLongevity}", func() {
 	var (
-		triggerLock           sync.Mutex
-		disruptiveTriggerLock sync.Mutex
-		//emailTriggerLock           sync.Mutex
+		triggerLock                sync.Mutex
+		disruptiveTriggerLock      sync.Mutex
+		emailTriggerLock           sync.Mutex
 		populateDone               bool
 		triggerEventsChan          = make(chan *EventRecord, 100)
 		disruptiveTriggerFunctions = make(map[string]TriggerFunction)
@@ -219,31 +219,31 @@ var _ = Describe("{UpgradeLongevity}", func() {
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			//PoolExpansionAuto:       TriggerPoolExpansionAuto,
-			//PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
-			AddDrive: TriggerAddDrive,
+			PoolExpansionAuto:       TriggerPoolExpansionAuto,
+			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
+			AddDrive:                TriggerAddDrive,
 			//RestartVolDriver:     TriggerRestartVolDriver,
 			//CloudSnapShot:        TriggerCloudSnapShot,
-			//HAIncrease:           TriggerHAIncrease,
-			//PoolAddDisk:          TriggerPoolAddDisk,
-			//LocalSnapShot:        TriggerLocalSnapShot,
-			//HADecrease:           TriggerHADecrease,
+			HAIncrease:    TriggerHAIncrease,
+			PoolAddDisk:   TriggerPoolAddDisk,
+			LocalSnapShot: TriggerLocalSnapShot,
+			HADecrease:    TriggerHADecrease,
 			//VolumeResize:         TriggerVolumeResize,
 			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
 			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
 			//AddStorageNode:       TriggerAddOCPStorageNode,
 		}
 		//// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		//disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
-		//	return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-		//		triggerLock.Lock()
-		//		defer triggerLock.Unlock()
-		//		TriggerRebootNodes(contexts, recordChan)
-		//	}
-		//}
+		disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
+			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+				triggerLock.Lock()
+				defer triggerLock.Unlock()
+				TriggerRebootNodes(contexts, recordChan)
+			}
+		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			//RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
+			RebootNode: disruptiveTriggerWrapper(TriggerRebootNodes),
 			//CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
 			//RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
 			//NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
@@ -319,14 +319,14 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			log.InfoD("Finished registering disruptive test triggers")
 		})
 
-		//Step("Register email trigger", func() {
-		//	for triggerType, triggerFunc := range emailTriggerFunction {
-		//		log.InfoD("Registering email trigger: [%v]", triggerType)
-		//		wg.Add(1)
-		//		go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
-		//	}
-		//	log.InfoD("Finished registering email trigger")
-		//})
+		Step("Register email trigger", func() {
+			for triggerType, triggerFunc := range emailTriggerFunction {
+				log.InfoD("Registering email trigger: [%v]", triggerType)
+				wg.Add(1)
+				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
+			}
+			log.InfoD("Finished registering email trigger")
+		})
 
 		//Step("Register upgrade test trigger", func() {
 		//	log.InfoD("Registering upgrade test trigger")
@@ -375,7 +375,7 @@ func testTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 	count := 0
 	for {
-		if count > 0 {
+		if count > 1 {
 			return
 		}
 		// if timeout is 0, run indefinitely
@@ -440,7 +440,7 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 	count := 0
 	for {
-		if count > 3 {
+		if count > 5 {
 			return
 		}
 		// if timeout is 0, run indefinitely

@@ -216,6 +216,9 @@ var TestPassedCount = prometheus.TorpedoTestPassCount
 // FailedTestAlert is a flag to alert test failed
 var FailedTestAlert = prometheus.TorpedoAlertTestFailed
 
+// TestExecutionCountMap holds the count of executions for each test
+var TestExecutionCountMap = make(map[string]int)
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -2715,6 +2718,8 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
+		TestExecutionCountMap[eventRecord.Event.Type] += 1
+		log.Infof("TestExecutionCountMap %v", TestExecutionCountMap)
 		eventRing = eventRing.Next()
 	}
 }
