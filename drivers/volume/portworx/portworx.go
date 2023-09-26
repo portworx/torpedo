@@ -2972,7 +2972,7 @@ func (d *portworx) UpgradeDriver(endpointVersion string) error {
 
 		// Upgrade PX operator, if not skipped
 		log.Debugf("Env var SKIP_PX_OPERATOR_UPGRADE is set to [%v]", d.skipPxOperatorUpgrade)
-		if d.skipPxOperatorUpgrade {
+		if !d.skipPxOperatorUpgrade {
 			log.InfoD("Will upgrade PX Operator, if new version is availabe for given PX endpoint [%s]", specGenUrl)
 			if err := d.upgradePortworxOperator(specGenUrl); err != nil {
 				return fmt.Errorf("failed to upgrade PX Operator, Err: %v", err)
