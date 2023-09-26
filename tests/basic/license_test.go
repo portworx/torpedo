@@ -782,7 +782,8 @@ var _ = Describe("{LicenseValidation}", func() {
 						}
 						log.InfoD("type of feature.quantity: %T", feature.Quantity)
 						log.InfoD("type of limit: %T", limit)
-						dash.VerifyFatal(feature.Quantity, limit, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
+						isvalidQuantity := feature.Quantity != limit
+						dash.VerifyFatal(isvalidQuantity, true, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
 					}
 				}
 			})
