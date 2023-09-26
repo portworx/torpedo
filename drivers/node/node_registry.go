@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/pborman/uuid"
+	"github.com/portworx/torpedo/pkg/log"
 	"sync"
 )
 
@@ -90,10 +91,15 @@ func IsMasterNode(n Node) bool {
 // driver is installed
 func GetStorageDriverNodes() []Node {
 	var nodeList []Node
+	log.Info("Getting storage nodes..")
 	for _, n := range nodeRegistry {
 		if n.Type == TypeWorker && n.IsStorageDriverInstalled {
 			nodeList = append(nodeList, n)
 		}
+	}
+	log.Infof("returning %d nodes", len(nodeList))
+	if len(nodeList) == 0 {
+		log.Infof("node reg %v", nodeRegistry)
 	}
 	return nodeList
 }
