@@ -9254,4 +9254,3 @@ func GetGkeSecret() (string, error) {
 	}
 	return cm.Data["cloud-json"], nil
 }
-
