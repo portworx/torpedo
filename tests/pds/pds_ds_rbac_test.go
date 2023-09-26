@@ -5,7 +5,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
@@ -228,18 +227,3 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 		})
 	})
 })
-
-func DeployandValidateDataServicesWithSiAndTls(ds dataservice.PDSDataService, namespaceName string, namespaceid, projectID string, resourceTemplateID string, appConfigID string, dsVersion string, dsImage string, dsID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
-
-	log.InfoD("Data Service Deployment Triggered")
-	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespaceName, serviceType)
-
-	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsWithRbac.TriggerDeployDSWithSiAndTls(ds, namespaceName, projectID, true, resourceTemplateID, appConfigID, namespaceid, dsVersion, dsImage, dsID, dataservice.TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType})
-	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
-
-	Step("Validate Data Service Deployments", func() {
-		err = dsTest.ValidateDataServiceDeployment(deployment, namespaceName)
-		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
-	})
-	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
-}
