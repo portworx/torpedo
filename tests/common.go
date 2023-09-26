@@ -2852,18 +2852,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		return fmt.Errorf("failed to switch to context. RefreshDriverEndpoints Error: [%v]", err)
 	}
 
-	// Check if the Node driver is of type SSH
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
-		// If it is an SSH driver, refresh the driver
 		err = ssh.RefreshDriver(sshNodeDriver)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
-	} else {
-		// If the Node driver is not of type SSH, initialize it to create Daemon set to spin up debug pods
-		err = Inst().N.Init(node.InitOptions{
-			SpecDir: Inst().SpecDir,
-		})
 	}
 
 	CurrentClusterConfigPath = clusterConfigPath
