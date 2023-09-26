@@ -759,12 +759,6 @@ var _ = Describe("{LicenseValidation}", func() {
 	stepLog := "Get SKU and compare with IBM cloud license activated using catalog"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
-		validSKUs := map[string]bool{
-			ibmTestLicenseSKU:   true,
-			ibmTestLicenseDRSKU: true,
-			ibmProdLicenseSKU:   true,
-			ibmProdLicenseDRSKU: true,
-		}
 		summary, err := Inst().V.GetLicenseSummary()
 		log.FailOnError(err, "Failed to get license SKU")
 		log.InfoD("%v", summary)
@@ -773,7 +767,7 @@ var _ = Describe("{LicenseValidation}", func() {
 		stepLog = "Verify PX-IBM cloud license type and its features"
 		Step(stepLog, func() {
 			log.InfoD("validate IBM cloud license type")
-			isValidLicense := validSKUs[summary.SKU]
+			isValidLicense := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmTestLicenseDRSKU || summary.SKU == ibmProdLicenseSKU || summary.SKU == ibmProdLicenseDRSKU
 			dash.VerifyFatal(isValidLicense, true, fmt.Sprintf("License type is valid?: %v", summary.SKU))
 
 			Step("Compare PX-IBM License features vs activated license", func() {
@@ -788,7 +782,7 @@ var _ = Describe("{LicenseValidation}", func() {
 						}
 
 						if feature.Quantity != limit {
-							dash.Errorf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit)
+							dash.VerifyFatal(false, true, fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
 						}
 					}
 				}
