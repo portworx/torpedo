@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume"
 	"net/http"
 	"strings"
 	"time"
@@ -312,6 +313,21 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
 		log.FailOnError(err, "Error while deleting PV and PVCs")
 	}
+}
+
+func GetReplicaNodes(appVolume *volume.Volume) ([]string, error) {
+	replicaSets, err := Inst().V.GetReplicaSets(appVolume)
+	if err != nil {
+		return nil, err
+	}
+	log.FailOnError(err, "error while getting replicasets")
+	replicaNodes := replicaSets[0].Nodes
+	for _, nodes := range replicaNodes {
+		log.Infof("node info %s", nodes)
+	}
+	replPools := replicaSets[0].PoolUuids
+
+	return replPools, nil
 }
 
 func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {

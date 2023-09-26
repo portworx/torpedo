@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
+	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo"
@@ -241,6 +243,163 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+				})
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
+
+var _ = Describe("{BringDownPXReplicaNodes}", func() {
+	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
+	JustBeforeEach(func() {
+		StartTorpedoTest("BringDownPXReplicaNodes", "Bring down one of the PX replica node and perform restore", pdsLabels, 0)
+		bkpClient, err = pdsbkp.InitializePdsBackup()
+		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		log.FailOnError(err, "Failed to create S3 backup target.")
+		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
+		ctx, err := GetSourceClusterConfigPath()
+		sourceTarget = tc.NewTargetCluster(ctx)
+		log.FailOnError(err, "failed while getting src cluster path")
+	})
+
+	It("Bring Down Replica Node and perform backup and restore", func() {
+		var (
+			deploymentsToBeCleaned []*pds.ModelsDeployment
+			nsName                 = params.InfraToTest.Namespace
+		)
+		stepLog := "Deploy data service and take adhoc backup."
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+			log.FailOnError(err, "Error while fetching the backup supported ds.")
+
+			for _, ds := range params.DataServiceToTest {
+				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+				if !supported {
+					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+					continue
+				}
+				stepLog = "Deploy and validate data service"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
+
+					deploymentsToBeCleaned := append(deploymentsToBeCleaned, deployment)
+					log.FailOnError(err, "Error while deploying data services")
+
+					// TODO: Add workload generation
+
+					stepLog = "Create Context, Get the replica node, Stop Vol Driver and Take backup and restore"
+					Step(stepLog, func() {
+						log.InfoD("Create Context for the deployments")
+						ctxs, err := Inst().Pds.CreateSchedulerContextForPDSApps(deploymentsToBeCleaned)
+						log.FailOnError(err, "Failed while creating scheduler contexts")
+
+						for _, ctx := range ctxs {
+							appVolumes, err := Inst().S.GetVolumes(ctx)
+							log.FailOnError(err, "error while getting volumes")
+							log.Debugf("len of volumes %d", len(appVolumes))
+							for _, v := range appVolumes {
+								if !strings.Contains(v.Name, "sharedbackupsdir") {
+									replPools, err := GetReplicaNodes(v)
+									log.FailOnError(err, "error while getting replica nodes")
+									selectedPool := replPools[0]
+									storageNode1, err := GetNodeWithGivenPoolID(selectedPool)
+									log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", replPools[0]))
+
+									err = Inst().V.StopDriver([]node.Node{*storageNode1}, false, nil)
+									log.FailOnError(err, "error stopping vol driver on node [%s]", storageNode1.Name)
+
+									// Take Backup
+									stepLog = "Perform adhoc backup and validate them"
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+										err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+										log.FailOnError(err, "Failed while performing adhoc backup")
+									})
+
+									// Take Restore
+									stepLog = "Perform restore for the backup jobs."
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										ctx, err := GetSourceClusterConfigPath()
+										log.FailOnError(err, "failed while getting src cluster path")
+										restoreTarget := tc.NewTargetCluster(ctx)
+										restoreClient := restoreBkp.RestoreClient{
+											TenantId:             tenantID,
+											ProjectId:            projectID,
+											Components:           components,
+											Deployment:           deployment,
+											RestoreTargetCluster: restoreTarget,
+										}
+										backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+										log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+										for _, backupJob := range backupJobs {
+											log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+											restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+											log.FailOnError(err, "Failed during restore.")
+											restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+											log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+											deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+											log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+										}
+									})
+
+									// Bring up the replica node
+									err = Inst().V.StartDriver(*storageNode1)
+									log.FailOnError(err, "error starting vol driver on node [%s]", storageNode1.Name)
+
+									// Take backup
+									stepLog = "Perform adhoc backup and validate them"
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+										err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+										log.FailOnError(err, "Failed while performing adhoc backup")
+									})
+
+									// Take Restore
+									stepLog = "Perform restore for the backup jobs."
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										ctx, err := GetSourceClusterConfigPath()
+										log.FailOnError(err, "failed while getting src cluster path")
+										restoreTarget := tc.NewTargetCluster(ctx)
+										restoreClient := restoreBkp.RestoreClient{
+											TenantId:             tenantID,
+											ProjectId:            projectID,
+											Components:           components,
+											Deployment:           deployment,
+											RestoreTargetCluster: restoreTarget,
+										}
+										backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+										log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+										for _, backupJob := range backupJobs {
+											log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+											restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+											log.FailOnError(err, "Failed during restore.")
+											restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+											log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+											deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+											log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+										}
+									})
+								}
+							}
+						}
+					})
+				})
+
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				})
 			}
 		})
