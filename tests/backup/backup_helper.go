@@ -106,7 +106,7 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
-	podReadyTimeout                           = 30 * time.Minute
+	podReadyTimeout                           = 10 * time.Minute
 	storkPodReadyTimeout                      = 20 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
@@ -117,6 +117,7 @@ const (
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
+	rancherProjectDescription                 = "new project"
 )
 
 var (
@@ -2597,7 +2598,7 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		}
 		for _, pod := range allPods.Items {
 			log.Infof("Checking status for pod - %s", pod.GetName())
-			err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+			err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
 			if err != nil {
 				// Collect mongoDB logs right after the command
 				ginkgoTest := CurrentGinkgoTestDescription()
@@ -4426,4 +4427,51 @@ func UpdateCluster(clusterName string, clusterUid string, kubeConfigPath string,
 		return nil, err
 	}
 	return status, err
+}
+
+// DeleteAllBackups deletes all backup from the given context and org
+func DeleteAllBackups(ctx context.Context, orgId string) error {
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	semaphore := make(chan int, 4)
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		wg.Add(1)
+		go func(bkp *api.BackupObject) {
+			semaphore <- 0
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			bkpDeleteRequest := &api.BackupDeleteRequest{
+				Name:  bkp.GetName(),
+				OrgId: bkp.GetOrgId(),
+				Uid:   bkp.GetUid(),
+			}
+			_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), backupDeleteTimeout, backupDeleteRetryTime)
+			if err != nil {
+				errChan <- err
+			}
+		}(bkp)
+	}
+	wg.Wait()
+	close(errChan)
+	close(semaphore)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	return nil
 }
