@@ -11,12 +11,14 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-var stepLog string
-var runID int
-var testrailID int
-var targetSizeGiB uint64
-var storageNode *node.Node
-var err error
+var (
+	stepLog       string
+	runID         int
+	testrailID    int
+	targetSizeGiB uint64
+	storageNode   *node.Node
+	err           error
+)
 
 var _ = Describe("{PoolExpandSmoky}", func() {
 	BeforeEach(func() {
@@ -38,7 +40,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		EndTorpedoTest()
 	})
 
-	It("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+	It("Select a pool and expand it by 100 GiB with add-disk type. ", func() {
 		StartTorpedoTest("PoolExpandDiskAdd",
 			"Validate storage pool expansion with type=add-disk", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
@@ -53,7 +55,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
-	It("Select a pool that has I/O and expand it by 100 GiB with resize-disk type. ", func() {
+	It("Select a pool and expand it by 100 GiB with resize-disk type. ", func() {
 		StartTorpedoTest("PoolExpandDiskResize",
 			"Validate storage pool expansion with type=resize-disk", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
@@ -68,7 +70,7 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	})
 
-	It("Select a pool that has I/O and expand it by 100 GiB with auto type. ", func() {
+	It("Select a pool and expand it by 100 GiB with auto type. ", func() {
 		StartTorpedoTest("PoolExpandDiskAuto",
 			"Validate storage pool expansion with type=auto ", nil, 0)
 		originalSizeInBytes = poolToBeResized.TotalSize
