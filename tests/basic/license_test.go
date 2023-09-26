@@ -775,13 +775,10 @@ var _ = Describe("{LicenseValidation}", func() {
 				isTestOrProdSKU := summary.SKU == ibmTestLicenseSKU || summary.SKU == ibmProdLicenseSKU
 				for _, feature := range summary.Features {
 					if limit, ok := ibmLicense[Label(feature.Name)]; ok {
-
 						// Special handling for DisasterRecovery feature and certain SKUs
 						if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
 							limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
 						}
-						log.InfoD("type of feature.quantity: %T", feature.Quantity)
-						log.InfoD("type of limit: %T", limit)
 						isvalidQuantity := feature.Quantity != limit
 						dash.VerifyFatal(isvalidQuantity, true, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
 					}
