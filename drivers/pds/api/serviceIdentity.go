@@ -45,7 +45,7 @@ func (si *ServiceIdentity) CreateServiceIdentity(accountID string, name string) 
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiAccountsIdServiceIdentityPost`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.InfoD("Successfully created ServiceIdentity with Name- 5v", name)
+	log.InfoD("Successfully created ServiceIdentity with Name- %v", name)
 	return siModels, nil
 }
 
