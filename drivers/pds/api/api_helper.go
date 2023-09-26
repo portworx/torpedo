@@ -49,7 +49,6 @@ func GetContext() (context.Context, error) {
 	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
 	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
 	serviceIdFlag := customParams.ReturnServiceIdentityFlag()
-	log.InfoD("params.InfraToTest.ServiceIdentityToken is - %v", serviceIdFlag)
 	PDSControlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
 	endpointURL, err := url.Parse(PDSControlPlaneURL)
 	if err != nil {
@@ -65,7 +64,7 @@ func GetContext() (context.Context, error) {
 			token, err = getBearerToken()
 		} else {
 			token = serviceIdToken
-			log.InfoD("***** Token with ServiceIdentity is %v-", serviceIdToken)
+			log.InfoD("***** ServiceIdentity Token is used-  %v", serviceIdToken)
 		}
 
 	} else {

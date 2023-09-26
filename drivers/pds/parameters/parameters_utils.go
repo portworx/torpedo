@@ -142,6 +142,6 @@ func (Customparams *Customparams) SetParamsForServiceIdentityTest(params *Parame
 	json.Marshal(params)
 	ServiceIdFlag = true
 	log.InfoD("Successfully updated Infra params for Si test")
-	log.InfoD("ServiceIdentity flag is set to-%v", ServiceIdFlag)
+	log.InfoD("ServiceIdentity flag is set to- %v", ServiceIdFlag)
 	return true, nil
 }
