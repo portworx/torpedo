@@ -780,10 +780,9 @@ var _ = Describe("{LicenseValidation}", func() {
 						if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
 							limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
 						}
-
-						if feature.Quantity != limit {
-							dash.VerifyFatal(false, true, fmt.Sprintf("%v: %v did not match: [%v]", feature.Name, feature.Quantity, limit))
-						}
+						log.InfoD("type of feature.quantity: %T", feature.Quantity)
+						log.InfoD("type of limit: %T", limit)
+						dash.VerifyFatal(feature.Quantity, limit, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
 					}
 				}
 			})
