@@ -2718,7 +2718,8 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
-		TestExecutionCountMap[eventRecord.Event.Type] += 1
+		actualEvent := strings.Split(eventRecord.Event.Type, "<br>")[0]
+		TestExecutionCountMap[actualEvent] += 1
 		log.Infof("TestExecutionCountMap %v", TestExecutionCountMap)
 		eventRing = eventRing.Next()
 	}
