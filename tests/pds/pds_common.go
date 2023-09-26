@@ -338,6 +338,25 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 	}
 }
 
+func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
+	log.InfoD("Starting to delete the Iam Roles first...")
+	for _, iam := range iamRolesToBeCleaned {
+		resp, err := components.IamRoleBindings.DeleteIamRoleBinding(iam, actorID)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting IamRoles")
+		}
+		log.InfoD("Successfully deleted IAMRoles- %v", resp.StatusCode)
+	}
+	log.InfoD("Starting to delete the Service Identities...")
+	for _, si := range siToBeCleaned {
+		resp, err := components.ServiceIdentity.DeleteServiceIdentity(si)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting ServiceIdentities")
+		}
+		log.InfoD("Successfully deleted ServiceIdentities- %v", resp.StatusCode)
+	}
+}
+
 func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 	log.Infof("Fetch backups associated to the deployment %v ",
 		dsInstance.GetClusterResourceName())

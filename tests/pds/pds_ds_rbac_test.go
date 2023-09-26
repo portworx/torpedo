@@ -46,6 +46,8 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 		var deps []*pds.ModelsDeployment
 		var dsVersions = make(map[string]map[string][]string)
 		var nsRoles []pds.ModelsBinding
+		var iamRolesToBeCleaned []string
+		var siToBeCleaned []string
 		var binding1 pds.ModelsBinding
 		var binding2 pds.ModelsBinding
 		var nsID1 []string
@@ -211,8 +213,9 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				//ToDo : Add workload generation for restored-deps with RBAC roles on ns2
 
 				Step("Delete Deployments", func() {
-					customParams.SetParamsForServiceIdentityTest(params, false)
 					CleanupDeployments(deploymentsToBeCleaned)
+					CleanupServiceIdentitiesAndIamRoles(siToBeCleaned, iamRolesToBeCleaned, actorId)
+					customParams.SetParamsForServiceIdentityTest(params, false)
 				})
 
 			}
