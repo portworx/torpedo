@@ -121,10 +121,6 @@ func (customparams *Customparams) UpdatePdsParams(params *Parameter) {
 	return
 }
 
-func (customparams *Customparams) SetServiceIdentityFlag() {
-	ServiceIdFlag = true
-
-}
 func (customparams *Customparams) ReturnServiceIdentityFlag() bool {
 	return ServiceIdFlag
 }
@@ -141,7 +137,7 @@ func (Customparams *Customparams) SetParamsForServiceIdentityTest(params *Parame
 	params.InfraToTest.ServiceIdentityToken = value
 	json.Marshal(params)
 	ServiceIdFlag = true
-	log.InfoD("Successfully updated Infra params for Si test")
+	log.InfoD("Successfully updated Infra params for ServiceIdentity and RBAC test")
 	log.InfoD("ServiceIdentity flag is set to- %v", ServiceIdFlag)
 	return true, nil
 }

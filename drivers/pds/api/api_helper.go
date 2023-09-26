@@ -52,7 +52,7 @@ func GetContext() (context.Context, error) {
 	PDSControlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
 	endpointURL, err := url.Parse(PDSControlPlaneURL)
 	if err != nil {
-		log.Errorf("Unable to access the URL: %s", PDSControlPlaneURL)
+		log.FailOnError(err, "Unable to connect to the URL- %v", PDSControlPlaneURL)
 		return nil, err
 	}
 	apiConf := pds.NewConfiguration()
@@ -64,7 +64,7 @@ func GetContext() (context.Context, error) {
 			token, err = getBearerToken()
 		} else {
 			token = serviceIdToken
-			log.InfoD("***** ServiceIdentity Token is used-  %v", serviceIdToken)
+			log.InfoD("ServiceIdentity Token being used is-  %v", serviceIdToken)
 		}
 
 	} else {

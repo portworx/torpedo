@@ -39,20 +39,22 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 	})
 
 	It("Deploy Dataservices", func() {
-		var deploymentsToBeCleaned []*pds.ModelsDeployment
-		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		var resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		var depList []*pds.ModelsDeployment
-		var deps []*pds.ModelsDeployment
-		var dsVersions = make(map[string]map[string][]string)
-		var nsRoles []pds.ModelsBinding
-		var iamRolesToBeCleaned []string
-		var siToBeCleaned []string
-		var binding1 pds.ModelsBinding
-		var binding2 pds.ModelsBinding
-		var nsID1 []string
-		var nsID2 []string
-		var serviceIdentityID string
+		var (
+			deploymentsToBeCleaned []*pds.ModelsDeployment
+			deployments            = make(map[PDSDataService]*pds.ModelsDeployment)
+			resDeployments         = make(map[PDSDataService]*pds.ModelsDeployment)
+			depList                []*pds.ModelsDeployment
+			deps                   []*pds.ModelsDeployment
+			dsVersions             = make(map[string]map[string][]string)
+			nsRoles                []pds.ModelsBinding
+			iamRolesToBeCleaned    []string
+			siToBeCleaned          []string
+			binding1               pds.ModelsBinding
+			binding2               pds.ModelsBinding
+			nsID1                  []string
+			nsID2                  []string
+			serviceIdentityID      string
+		)
 
 		Step("Deploy Data Services", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
