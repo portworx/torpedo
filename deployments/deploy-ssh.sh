@@ -469,6 +469,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
+    command: ["sh", "-c", "rungin.sh"]
     command: ["sh", "-c", "sleep 3600"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
