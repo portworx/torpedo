@@ -469,9 +469,9 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "rungin.sh"]
-    command: ["sh", "-c", "ps"]
-    command: ["sh", "-c", "curl -X POST http://localhost:8080/pxone/createns"]
+    command: ["sh", "rungin.sh"]
+    command: ["sh", "-c", "sleep 60"]
+    command: ["sh", "curl -X POST http://localhost:8080/pxone/createns"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
