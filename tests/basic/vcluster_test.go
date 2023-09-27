@@ -93,27 +93,6 @@ func ConnectVClusterAndExecute(vclusterName string, testFunc func([]interface{})
 		killChan <- true
 		return err
 	}
-	//
-	//for i := 0; i < 60; i++ {
-	//	cmd := exec.Command("kubectl", "config", "current-context")
-	//	out, err := cmd.Output()
-	//	if err != nil {
-	//		return fmt.Errorf("Failed to get current context: %v", err)
-	//	}
-	//	prefix := fmt.Sprintf("vcluster_%s_", vclusterName)
-	//	curContext := strings.TrimSpace(string(out))
-	//	log.Infof("current context is: %v", curContext)
-	//	log.Infof("prefix is: %v", prefix)
-	//	if !strings.Contains(curContext, prefix) {
-	//		log.Infof("Context not yet switched to %v. Retrying.", strings.TrimSpace(string(out)))
-	//		time.Sleep(1 * time.Second)
-	//		continue
-	//	} else {
-	//		log.Infof("Successfully switched to context: %v", strings.TrimSpace(string(out)))
-	//		isConnected = true
-	//		break
-	//	}
-	//}
 
 	results := testFunc(args)
 	killChan <- true
