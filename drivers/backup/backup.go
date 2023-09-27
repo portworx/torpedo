@@ -75,6 +75,8 @@ type Driver interface {
 	Version
 	//ActivityTimeLine interface
 	ActivityTimeLine
+	//Metrics interface
+	Metrics
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -443,6 +445,12 @@ type ActivityTimeLine interface {
 
 	// EnumerateActivityTimeLine enumerates ActivityData
 	EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error)
+}
+
+// Metrics object interface
+type Metrics interface {
+	// InspectMetrics inspects metricsData
+	InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)
