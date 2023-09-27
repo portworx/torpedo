@@ -62,6 +62,7 @@ type portworx struct {
 	ruleManager             api.RulesClient
 	versionManager          api.VersionClient
 	activityTimeLineManager api.ActivityTimeLineClient
+	metricsManager          api.MetricsClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -185,6 +186,7 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.ruleManager = api.NewRulesClient(conn)
 	p.versionManager = api.NewVersionClient(conn)
 	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
+	p.metricsManager = api.NewMetricsClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -427,6 +429,43 @@ func (p *portworx) ClusterUpdateBackupShare(ctx context.Context, req *api.Cluste
 // WaitForClusterDeletion waits for cluster to be deleted successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForClusterDeletion(
+	ctx context.Context,
+	clusterName,
+	orgID string,
+	timeout time.Duration,
+	timeBeforeRetry time.Duration,
+) error {
+	req := &api.ClusterInspectRequest{
+		Name:  clusterName,
+		OrgId: orgID,
+	}
+	f := func() (interface{}, bool, error) {
+		inspectClusterResp, err := p.clusterManager.Inspect(ctx, req)
+		if err == nil {
+			// Object still exists, just retry
+			currentStatus := inspectClusterResp.GetCluster().GetStatus().GetStatus()
+			return nil, true, fmt.Errorf("cluster [%v] is in [%s] state. Waiting to become complete",
+				req.GetName(), currentStatus)
+		}
+		code := status.Code(err)
+		// If error has code.NotFound, the cluster object is deleted.
+		if code == codes.NotFound {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("Fetching cluster[%v] failed with err: %v", req.GetName(), err.Error())
+	}
+
+	_, err := task.DoRetryWithTimeout(f, timeout, timeBeforeRetry)
+	if err != nil {
+		return fmt.Errorf("failed to wait for cluster deletion. Error:[%v]", err)
+	}
+
+	return nil
+}
+
+// WaitForClusterDeletionWithUID waits for cluster to be deleted successfully
+// or till timeout is reached. API should poll every `timeBeforeRetry` duration using cluster uid
+func (p *portworx) WaitForClusterDeletionWithUID(
 	ctx context.Context,
 	clusterName,
 	clusterUid,
@@ -2464,6 +2503,11 @@ func (p *portworx) GetAllRules(ctx context.Context, orgID string) ([]string, err
 		ruleNames = append(ruleNames, rule.Name)
 	}
 	return ruleNames, nil
+}
+
+// InspectMetrics gets the metrics data for the given org
+func (p *portworx) InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error) {
+	return p.metricsManager.Inspect(ctx, req)
 }
 
 func init() {
