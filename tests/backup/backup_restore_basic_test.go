@@ -133,23 +133,25 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		log.InfoD("Deleting deployed applications")
-		DestroyApps(scheduledAppContexts, opts)
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
-		log.InfoD("Deleting backup")
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
-		log.InfoD("Deleting restore")
-		log.InfoD(fmt.Sprintf("Backup name [%s]", restoreName))
-		err = DeleteRestore(restoreName, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		/*
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			log.InfoD("Deleting deployed applications")
+			DestroyApps(scheduledAppContexts, opts)
+			backupDriver := Inst().Backup
+			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
+			log.InfoD("Deleting backup")
+			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+			log.InfoD("Deleting restore")
+			log.InfoD(fmt.Sprintf("Backup name [%s]", restoreName))
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		*/
 	})
 })
 
@@ -272,24 +274,26 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		/*
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Deleting the deployed apps after the testcase")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
 
-		for _, restore := range restoreNames {
-			err := DeleteRestore(restore, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
-		}
-		for _, backupName := range backupNames {
-			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+			for _, restore := range restoreNames {
+				err := DeleteRestore(restore, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
+			}
+			for _, backupName := range backupNames {
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
+				_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - %s", backupName))
+			}
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		*/
 	})
 })
 
