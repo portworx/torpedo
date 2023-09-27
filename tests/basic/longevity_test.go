@@ -272,7 +272,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
-		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.0/version,https://install.portworx.com/3.0.1/version"
+		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.0,https://install.portworx.com/3.0.1"
 	})
 
 	It("has to schedule app and register test triggers", func() {

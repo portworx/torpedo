@@ -3257,11 +3257,12 @@ func (d *portworx) upgradePortworxStorageCluster(specGenUrl string) error {
 // upgradePortworxOperator will upgrade PX Operator version
 func (d *portworx) upgradePortworxOperator(specGenUrl string) error {
 	log.InfoD("Upgrading Portworx Operator")
-
+	log.Infof("specGenUrl: %s", specGenUrl)
 	pxOperatorSpecGenUrl, err := d.constructPxOperatorSpecGenUrl(specGenUrl)
 	if err != nil {
 		return fmt.Errorf("Failed to construct PX Operator spec gen URL, Err: %v", err)
 	}
+	log.Infof("pxOperatorSpecGenUrl: %s", pxOperatorSpecGenUrl)
 
 	resp, err := http.Get(pxOperatorSpecGenUrl)
 	if err != nil {
