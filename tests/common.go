@@ -4866,15 +4866,15 @@ func DeleteNfsSubPath(subPath string) {
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
-	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	// Mount the NFS share to the worker node.
+	workerNode := node.GetWorkerNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
 	}
 	for _, cmd := range mountCmds {
-		err := runCmd(cmd, masterNode)
-		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		err := runCmd(cmd, workerNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
 	}
 
 	defer func() {
@@ -4884,16 +4884,16 @@ func DeleteNfsSubPath(subPath string) {
 			fmt.Sprintf("rm -rf %s", mountDir),
 		}
 		for _, cmd := range umountCmds {
-			err := runCmd(cmd, masterNode)
-			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+			err := runCmd(cmd, workerNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
 		}
 	}()
 
 	// Remove subpath from NFS share path.
 	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
 	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, subPath)
-	err := runCmd(rmCmd, masterNode)
-	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, masterNode, err))
+	err := runCmd(rmCmd, workerNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
