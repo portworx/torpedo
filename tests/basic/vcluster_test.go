@@ -3,40 +3,44 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-var _ = Describe("VCluster", func() {
+var _ = Describe("CreateNginxAppOnVcluster", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("VclusterOperations", "Create, Connect and execute a method on Vcluster", nil, 0)
 	})
-	//var vclusterNames = []string{"my-vcluster1", "my-vcluster2", "my-vcluster3"}
 	var vclusterNames = []string{"my-vcluster1"}
 	It("Create and connect to vclusters and run a sample method", func() {
 		Step("Create vClusters", func() {
 			for _, name := range vclusterNames {
-				err := vcluster.CreateVCluster(name)
-				Expect(err).NotTo(HaveOccurred())
+				currentDir, err := os.Getwd()
+				log.FailOnError(err, "Could not get absolute path to current Dir")
+				vClusterPath := filepath.Join(currentDir, "..", "deployments", "customconfigs", "vcluster.yaml")
+				absPath, err := filepath.Abs(vClusterPath)
+				log.FailOnError(err, "Could not get absolute path to vcluster.yaml")
+				err = vcluster.CreateVCluster(name, absPath)
+				log.FailOnError(err, "Failed to create vCluster")
 			}
 		})
 		Step("Wait for all vClusters to come up in Running State", func() {
 			for _, name := range vclusterNames {
 				err := vcluster.WaitForVClusterRunning(name, 10*time.Minute)
-				Expect(err).NotTo(HaveOccurred())
+				log.FailOnError(err, "Vcluster did not come up in time")
 			}
 		})
 		Step("Connect to each vCluster and execute a method", func() {
 			for _, name := range vclusterNames {
 				log.Infof("Trying to connect to %v", name)
-				err := ConnectVClusterAndExecute(name, SampleMethod, name)
+				err := ConnectVClusterAndExecute(name, RunNginxAppOnVcluster, name, vcluster.NginxApp)
 				if err != nil {
 					log.FailOnError(err, fmt.Sprintf("Failed to connect and execute method on cluster %v", name))
 				}
@@ -46,10 +50,7 @@ var _ = Describe("VCluster", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		for _, name := range vclusterNames {
-			err := vcluster.DeleteVCluster(name)
-			if err != nil {
-				log.Errorf("Error deleting Vcluster with name %v", name)
-			}
+			vcluster.DeleteVCluster(name)
 		}
 	})
 })
@@ -100,29 +101,16 @@ func ConnectVClusterAndExecute(vclusterName string, testFunc func([]interface{})
 }
 
 // This method tries to run nginx app within a vcluster
-func SampleMethod(args []interface{}) []interface{} {
+func RunNginxAppOnVcluster(args []interface{}) []interface{} {
 	clusterName, ok := args[0].(string)
 	if !ok {
-		log.Errorf("Expected the first argument type to be string")
 		return []interface{}{fmt.Errorf("Expected the first argument type to be string")}
 	}
-	log.Infof("Within the vCluster: %v", clusterName)
-	cmd := exec.Command("vcluster", "list")
-	out, err := cmd.Output()
-	if err != nil {
-		return []interface{}{err}
-	} else {
-		log.Infof("Output is: %v", string(out))
+	appToRun, ok := args[1].(string)
+	if !ok {
+		return []interface{}{fmt.Errorf("Expected the second argument type to be string")}
 	}
-	cmd = exec.Command("kubectl", "config", "get-contexts")
-	out, err = cmd.Output()
-	if err != nil {
-		return []interface{}{err}
-	} else {
-		log.Infof("Output is: %v", string(out))
-	}
-
-	appToRun := "nginx"
+	log.Infof("Trying to Run App %v within the vCluster: %v", appToRun, clusterName)
 	tests.Inst().AppList = []string{appToRun}
 	vcluster.ContextChange = true
 	vcluster.CurrentClusterContext = clusterName

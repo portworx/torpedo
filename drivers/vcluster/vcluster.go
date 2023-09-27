@@ -2,6 +2,7 @@ package vcluster
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 	"os/exec"
 	"strings"
@@ -12,14 +13,20 @@ var (
 	UpdatedClusterContext string
 	CurrentClusterContext string
 	ContextChange         = false
+	NginxApp              = "nginx"
 )
 
-// This method switches kube context between host and any vcluster
+const (
+	VclusterCreationTimeout = 5 * time.Minute
+	VclusterGenericTimeout  = 5 * time.Second
+)
+
+// SwitchKubeContext This method switches kube context between host and any vcluster
 func SwitchKubeContext(target string) error {
 	cmd := exec.Command("kubectl", "config", "get-contexts", "-o", "name")
 	out, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("Failed to fetch kube contexts: %v", err)
+		return err
 	}
 	contexts := strings.Split(string(out), "\n")
 	var desiredContext string
@@ -46,12 +53,12 @@ func SwitchKubeContext(target string) error {
 	cmd = exec.Command("kubectl", "config", "use-context", desiredContext)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to switch to context %s: %v", desiredContext, err)
+		return err
 	}
 	cmd = exec.Command("kubectl", "config", "current-context")
 	out, err = cmd.Output()
 	if err != nil {
-		return fmt.Errorf("Failed to get current context: %v", err)
+		return err
 	}
 	if strings.TrimSpace(string(out)) != desiredContext {
 		return fmt.Errorf("Failed to switch to the desired context: %s", desiredContext)
@@ -59,39 +66,39 @@ func SwitchKubeContext(target string) error {
 	return nil
 }
 
-// This method deletes a vcluster
+// DeleteVCluster This method deletes a vcluster
 func DeleteVCluster(vclusterName string) error {
 	cmd := exec.Command("vcluster", "delete", vclusterName)
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("Failed to delete vcluster %v", vclusterName)
+		return err
 	}
 	return nil
 }
 
-// This method creates a vcluster. This requires vcluster.yaml saved in a specific location.
-func CreateVCluster(vclusterName string) error {
-	cmd := exec.Command("vcluster", "create", vclusterName, "-f", "/Users/dbhatnagar/PxOne/vcluster/torpedo/vcluster.yaml", "--connect=false")
+// CreateVCluster This method creates a vcluster. This requires vcluster.yaml saved in a specific location.
+func CreateVCluster(vclusterName string, absPath string) error {
+	cmd := exec.Command("vcluster", "create", vclusterName, "-f", absPath, "--connect=false")
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to create vcluster %s: %v", vclusterName, err)
+		return err
 	}
 	return nil
 }
 
-// This method waits for vcluster to come up in Running state and waits for a specific timeout to throw an error
+// WaitForVClusterRunning This method waits for vcluster to come up in Running state and waits for a specific timeout to throw an error
 func WaitForVClusterRunning(vclusterName string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
+	f := func() (interface{}, bool, error) {
 		cmd := exec.Command("vcluster", "list")
 		output, err := cmd.Output()
 		if err != nil {
-			return err
+			return nil, true, err
 		}
 		if strings.Contains(string(output), vclusterName) && strings.Contains(string(output), "Running") {
-			return nil
+			return nil, false, nil
 		}
-		time.Sleep(10 * time.Second)
+		return nil, true, fmt.Errorf("Vcluster is not yet in running state")
 	}
-	return fmt.Errorf("vcluster %s did not reach Running status within the timeout", vclusterName)
+	_, err := task.DoRetryWithTimeout(f, VclusterCreationTimeout, VclusterGenericTimeout)
+	return err
 }

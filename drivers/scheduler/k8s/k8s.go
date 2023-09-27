@@ -1797,11 +1797,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 		// Change Context only in case of vCluster tests
 		if vcluster.ContextChange {
-			log.Infof("Context Change is set to %v ", vcluster.ContextChange)
+			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
 			err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
-			}
+			log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
@@ -1830,9 +1828,8 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if vcluster.ContextChange {
 			log.Infof("Changing context back to vcluster: %v", vcluster.CurrentClusterContext)
 			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
-			if err != nil {
-				log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
-			}
+			log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
+			// Changing ContextChange flag to false to not trigger unnecessary context change further
 			vcluster.ContextChange = false
 		}
 		return sc, nil
