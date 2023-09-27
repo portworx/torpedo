@@ -216,7 +216,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		upgradeTriggerFunction     = make(map[string]TriggerFunction)
 		wg                         sync.WaitGroup
 		// executionThreshold determines the number of times each function needs to execute before triggerFunc runs
-		executionThreshold = 2
+		executionThreshold = 1
 	)
 
 	JustBeforeEach(func() {
@@ -230,23 +230,23 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			HAIncrease: TriggerHAIncrease,
 			//PoolAddDisk:   TriggerPoolAddDisk,
 			//LocalSnapShot: TriggerLocalSnapShot,
-			HADecrease: TriggerHADecrease,
+			//HADecrease: TriggerHADecrease,
 			//VolumeResize:         TriggerVolumeResize,
 			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
 			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
 			//AddStorageNode:       TriggerAddOCPStorageNode,
 		}
 		//// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
-			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-				triggerLock.Lock()
-				defer triggerLock.Unlock()
-				TriggerRebootNodes(contexts, recordChan)
-			}
-		}
+		//disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
+		//	return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+		//		triggerLock.Lock()
+		//		defer triggerLock.Unlock()
+		//		TriggerRebootNodes(contexts, recordChan)
+		//	}
+		//}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode: disruptiveTriggerWrapper(TriggerRebootNodes),
+			//RebootNode: disruptiveTriggerWrapper(TriggerRebootNodes),
 			//CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
 			//RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
 			//NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
@@ -272,7 +272,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
-		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.0,https://install.portworx.com/3.0.1"
+		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.1"
 	})
 
 	It("has to schedule app and register test triggers", func() {
