@@ -3,9 +3,9 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests"
 	"os"
 	"os/exec"
@@ -20,7 +20,9 @@ var _ = Describe("CreateNginxAppOnVcluster", func() {
 	})
 	var vclusterNames = []string{"my-vcluster1"}
 	It("Create and connect to vclusters and run a sample method", func() {
-		Step("Create vClusters", func() {
+		steplog := "Create vClusters"
+		log.InfoD(steplog)
+		Step(steplog, func() {
 			for _, name := range vclusterNames {
 				currentDir, err := os.Getwd()
 				log.FailOnError(err, "Could not get absolute path to current Dir")
@@ -31,19 +33,21 @@ var _ = Describe("CreateNginxAppOnVcluster", func() {
 				log.FailOnError(err, "Failed to create vCluster")
 			}
 		})
-		Step("Wait for all vClusters to come up in Running State", func() {
+		steplog = "Wait for all vClusters to come up in Running State"
+		log.InfoD(steplog)
+		Step(steplog, func() {
 			for _, name := range vclusterNames {
 				err := vcluster.WaitForVClusterRunning(name, 10*time.Minute)
 				log.FailOnError(err, "Vcluster did not come up in time")
 			}
 		})
-		Step("Connect to each vCluster and execute a method", func() {
+		steplog = "Connect to each vCluster and execute a method"
+		log.InfoD(steplog)
+		Step(steplog, func() {
 			for _, name := range vclusterNames {
 				log.Infof("Trying to connect to %v", name)
 				err := ConnectVClusterAndExecute(name, RunNginxAppOnVcluster, name, vcluster.NginxApp)
-				if err != nil {
-					log.FailOnError(err, fmt.Sprintf("Failed to connect and execute method on cluster %v", name))
-				}
+				log.FailOnError(err, fmt.Sprintf("Failed to connect and execute method on cluster %v", name))
 			}
 		})
 	})
@@ -66,35 +70,54 @@ func ConnectVClusterAndExecute(vclusterName string, testFunc func([]interface{})
 		cmd.Process.Signal(os.Interrupt)
 		cmd.Wait()
 	}()
-	isConnected := false
-	for i := 0; i < 60; i++ {
+	f := func() (interface{}, bool, error) {
 		cmd := exec.Command("kubectl", "config", "current-context")
 		out, err := cmd.Output()
 		if err != nil {
-			return fmt.Errorf("Failed to get current context: %v", err)
+			return nil, true, fmt.Errorf("Failed to get current context: %v", err)
 		}
 		prefix := fmt.Sprintf("vcluster_%s_", vclusterName)
 		curContext := strings.TrimSpace(string(out))
 		log.Infof("current context is: %v", curContext)
 		log.Infof("prefix is: %v", prefix)
 		if !strings.Contains(curContext, prefix) {
-			log.Infof("Context not yet switched to %v. Retrying.", strings.TrimSpace(string(out)))
-			time.Sleep(1 * time.Second)
-			continue
+			return nil, true, fmt.Errorf("Context not yet switched to %v. Retrying", curContext)
 		} else {
 			log.Infof("Successfully switched to context: %v", strings.TrimSpace(string(out)))
-			isConnected = true
-			break
+			return nil, false, nil
 		}
+		return nil, true, fmt.Errorf("Context not yet switched")
 	}
-	if !isConnected {
+	_, err := task.DoRetryWithTimeout(f, vcluster.VclusterConnectTimeout, vcluster.VclusterSimpleInterval)
+	if err != nil {
 		killChan <- true
-		return fmt.Errorf("Failed to connect to vCluster: %v", vclusterName)
+		return err
 	}
+	//
+	//for i := 0; i < 60; i++ {
+	//	cmd := exec.Command("kubectl", "config", "current-context")
+	//	out, err := cmd.Output()
+	//	if err != nil {
+	//		return fmt.Errorf("Failed to get current context: %v", err)
+	//	}
+	//	prefix := fmt.Sprintf("vcluster_%s_", vclusterName)
+	//	curContext := strings.TrimSpace(string(out))
+	//	log.Infof("current context is: %v", curContext)
+	//	log.Infof("prefix is: %v", prefix)
+	//	if !strings.Contains(curContext, prefix) {
+	//		log.Infof("Context not yet switched to %v. Retrying.", strings.TrimSpace(string(out)))
+	//		time.Sleep(1 * time.Second)
+	//		continue
+	//	} else {
+	//		log.Infof("Successfully switched to context: %v", strings.TrimSpace(string(out)))
+	//		isConnected = true
+	//		break
+	//	}
+	//}
+
 	results := testFunc(args)
 	killChan <- true
 	if resError, ok := results[0].(error); ok && resError != nil {
-		log.Errorf("Error in Sample test method for vcluster %s: %v", vclusterName, resError)
 		return resError
 	}
 	return nil
@@ -111,14 +134,14 @@ func RunNginxAppOnVcluster(args []interface{}) []interface{} {
 		return []interface{}{fmt.Errorf("Expected the second argument type to be string")}
 	}
 	log.Infof("Trying to Run App %v within the vCluster: %v", appToRun, clusterName)
-	tests.Inst().AppList = []string{appToRun}
+	Inst().AppList = []string{appToRun}
 	vcluster.ContextChange = true
 	vcluster.CurrentClusterContext = clusterName
 	vcluster.UpdatedClusterContext = "host"
-	context := tests.ScheduleApplications("vcluster-test-app")
+	context := ScheduleApplications("vcluster-test-app")
 	errChan := make(chan error, 100)
 	for _, ctx := range context {
-		tests.ValidateContext(ctx, &errChan)
+		ValidateContext(ctx, &errChan)
 	}
 	var errors []error
 	for err := range errChan {

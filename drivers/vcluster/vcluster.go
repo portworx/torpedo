@@ -19,6 +19,8 @@ var (
 const (
 	VclusterCreationTimeout = 5 * time.Minute
 	VclusterGenericTimeout  = 5 * time.Second
+	VclusterConnectTimeout  = 60 * time.Second
+	VclusterSimpleInterval  = 1 * time.Second
 )
 
 // SwitchKubeContext This method switches kube context between host and any vcluster
@@ -51,8 +53,7 @@ func SwitchKubeContext(target string) error {
 	}
 	log.Infof("Desired Context is : %v", desiredContext)
 	cmd = exec.Command("kubectl", "config", "use-context", desiredContext)
-	_, err = cmd.CombinedOutput()
-	if err != nil {
+	if _, err = cmd.CombinedOutput(); err != nil {
 		return err
 	}
 	cmd = exec.Command("kubectl", "config", "current-context")
@@ -69,8 +70,7 @@ func SwitchKubeContext(target string) error {
 // DeleteVCluster This method deletes a vcluster
 func DeleteVCluster(vclusterName string) error {
 	cmd := exec.Command("vcluster", "delete", vclusterName)
-	err := cmd.Run()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		return err
 	}
 	return nil
@@ -83,6 +83,7 @@ func CreateVCluster(vclusterName string, absPath string) error {
 	if err != nil {
 		return err
 	}
+	log.Infof("vCluster with the name %v created successfully", vclusterName)
 	return nil
 }
 
