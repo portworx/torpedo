@@ -469,7 +469,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["cd /torpedo-gin && go run apiServer/pxone/apiserver.go"]
+    command: ["ls -ltr /torpedo-gin"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
