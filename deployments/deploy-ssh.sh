@@ -469,7 +469,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["ls -ltr /torpedo-gin"]
+    command: ["sh", "-c", "ls -ltr /torpedo-gin"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
