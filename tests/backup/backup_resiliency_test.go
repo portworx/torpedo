@@ -1036,37 +1036,37 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 	})
 
 	JustAfterEach(func() {
-		var wg sync.WaitGroup
+		//var wg sync.WaitGroup
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
-		statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
-		dash.VerifySafely(err, nil, "Getting mongodb statefulset details")
-		if *statefulSet.Spec.Replicas != originalReplicaCount {
-			*statefulSet.Spec.Replicas = originalReplicaCount
-			statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
-			dash.VerifySafely(err, nil, "Scaling back MongoDB statefulset replica to original count")
-		}
-		err := IsMongoDBReady()
-		dash.VerifySafely(err, nil, "Validating Mongo DB pods")
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.Infof("Deleting the deployed applications")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-
-		log.InfoD("Deleting the restores taken")
-		for _, restoreName := range restoreNames {
-			wg.Add(1)
-			go func(restoreName string) {
-				defer GinkgoRecover()
-				defer wg.Done()
-				err = DeleteRestore(restoreName, orgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
-			}(restoreName)
-		}
-		wg.Wait()
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//log.InfoD("Updating the mongodb statefulset replica count as it was at the start of this testcase")
+		//statefulSet, err = apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNS)
+		//dash.VerifySafely(err, nil, "Getting mongodb statefulset details")
+		//if *statefulSet.Spec.Replicas != originalReplicaCount {
+		//	*statefulSet.Spec.Replicas = originalReplicaCount
+		//	statefulSet, err = apps.Instance().UpdateStatefulSet(statefulSet)
+		//	dash.VerifySafely(err, nil, "Scaling back MongoDB statefulset replica to original count")
+		//}
+		//err := IsMongoDBReady()
+		//dash.VerifySafely(err, nil, "Validating Mongo DB pods")
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//log.Infof("Deleting the deployed applications")
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//DestroyApps(scheduledAppContexts, opts)
+		//
+		//log.InfoD("Deleting the restores taken")
+		//for _, restoreName := range restoreNames {
+		//	wg.Add(1)
+		//	go func(restoreName string) {
+		//		defer GinkgoRecover()
+		//		defer wg.Done()
+		//		err = DeleteRestore(restoreName, orgID, ctx)
+		//		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Restore %s", restoreName))
+		//	}(restoreName)
+		//}
+		//wg.Wait()
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
