@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -779,8 +780,7 @@ var _ = Describe("{LicenseValidation}", func() {
 						if !isTestOrProdSKU && Label(feature.Name) == LabDisasterRecovery {
 							limit = &pxapi.LicensedFeature_Enabled{Enabled: true}
 						}
-						isvalidQuantity := feature.Quantity != limit
-						dash.VerifyFatal(isvalidQuantity, true, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
+						dash.VerifyFatal(reflect.DeepEqual(feature.Quantity, limit), true, fmt.Sprintf("Verifying quantity for %v: actual %v, expected %v", feature.Name, feature.Quantity, limit))
 					}
 				}
 			})
