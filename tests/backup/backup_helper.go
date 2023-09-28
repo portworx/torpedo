@@ -2357,7 +2357,7 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 		}
 		for _, backupObject := range currentBackups.GetBackups() {
 			if backupObject.Name == backupName {
-				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Name)
+				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted . status:[%s] ", backupObject.Name, backupObject.Status)
 			}
 		}
 		return "", false, nil
@@ -4427,4 +4427,164 @@ func UpdateCluster(clusterName string, clusterUid string, kubeConfigPath string,
 		return nil, err
 	}
 	return status, err
+}
+
+// DeleteAllBackups deletes all backup from the given context and org
+func DeleteAllBackups(ctx context.Context, orgId string) error {
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	semaphore := make(chan int, 4)
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		wg.Add(1)
+		go func(bkp *api.BackupObject) {
+			semaphore <- 0
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			bkpDeleteRequest := &api.BackupDeleteRequest{
+				Name:  bkp.GetName(),
+				OrgId: bkp.GetOrgId(),
+				Uid:   bkp.GetUid(),
+			}
+			_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), backupDeleteTimeout, backupDeleteRetryTime)
+			if err != nil {
+				errChan <- err
+			}
+		}(bkp)
+	}
+	wg.Wait()
+	close(errChan)
+	close(semaphore)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	return nil
+}
+
+type RoleServices string
+
+const (
+	SchedulePolicy  RoleServices = "schedulepolicy"
+	Rules                        = "rules"
+	Cloudcredential              = "cloudcredential"
+	BackupLocation               = "backuplocation"
+	Role                         = "role"
+)
+
+type RoleApis string
+
+const (
+	All       RoleApis = "*"
+	Create             = "create*"
+	Inspect            = "inspect*"
+	Update             = "update*"
+	Enumerate          = "enumerate*"
+	Validate           = "validate*"
+	Delete             = "delete*"
+)
+
+// CreateRole creates role with given services and apis in px-backup datastore and also add role to keycloak.
+func CreateRole(roleName backup.PxBackupRole, svcs []RoleServices, apis []RoleApis, ctx context.Context) error {
+	err := backup.CreateRole(roleName, "custom-role")
+	if err != nil {
+		return err
+	}
+	roleId, err := backup.GetRoleID(roleName)
+	if err != nil {
+		return err
+	}
+	backupDriver := Inst().Backup
+
+	serviceList := make([]string, len(svcs))
+	for i, svc := range svcs {
+		serviceList[i] = string(svc)
+	}
+	apiList := make([]string, len(apis))
+	for i, api := range apis {
+		apiList[i] = string(api)
+	}
+	rule := &api.RoleConfig{
+		Services: serviceList,
+		Apis:     apiList,
+	}
+	roleCreateRequest := &api.RoleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  string(roleName),
+			OrgId: orgID,
+		},
+		Rules:  []*api.RoleConfig{rule},
+		RoleId: roleId,
+	}
+	_, err = backupDriver.CreateRole(ctx, roleCreateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteRole delete role with given services and apis from datastore and also from keycloak.
+func DeleteRole(roleName backup.PxBackupRole, orgId string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	roleId, err := backup.GetRoleID(roleName)
+	if err != nil {
+		return err
+	}
+	roleDeleteRequest := &api.RoleDeleteRequest{
+		OrgId: orgId,
+		Name:  string(roleName),
+		Uid:   roleId,
+	}
+	_, err = backupDriver.DeleteRole(ctx, roleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	err = backup.DeleteRole(roleName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteBackupSchedulePolicyWithContext delete schedule policy with given context.
+func DeleteBackupSchedulePolicyWithContext(orgID string, policyList []string, ctx context.Context) error {
+	schedPolicyMap := make(map[string]string)
+	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schedulePolicyList, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
+	if err != nil {
+		err = fmt.Errorf("Failed to get list of schedule policies with error: [%v]", err)
+		return err
+	}
+	for i := 0; i < len(schedulePolicyList.SchedulePolicies); i++ {
+		schedPolicyMap[schedulePolicyList.SchedulePolicies[i].Metadata.Name] = schedulePolicyList.SchedulePolicies[i].Metadata.Uid
+	}
+	for i := 0; i < len(policyList); i++ {
+		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
+			OrgId: orgID,
+			Name:  policyList[i],
+			Uid:   schedPolicyMap[policyList[i]],
+		}
+		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
+		if err != nil {
+			err = fmt.Errorf("Failed to delete schedule policy %s with error [%v]", policyList[i], err)
+			return err
+		}
+	}
+	return nil
 }

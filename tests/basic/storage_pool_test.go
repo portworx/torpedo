@@ -673,7 +673,7 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 
 		stNodes := node.GetStorageNodes()
 
-		volSelected, err = getVolumeWithMinimumSize(contexts, 10)
+		volSelected, err = GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		log.Infof("%+v", volSelected)
 		rs, err := Inst().V.GetReplicaSets(volSelected)
@@ -1190,7 +1190,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
@@ -1436,7 +1436,7 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 	})
 })
 
-func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volume.Volume, error) {
+func GetVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volume.Volume, error) {
 	var volSelected *volume.Volume
 	//waiting till one of the volume has enough IO and selecting pool and node  using the volume to run the test
 	f := func() (interface{}, bool, error) {
@@ -1446,12 +1446,15 @@ func getVolumeWithMinimumSize(contexts []*scheduler.Context, size uint64) (*volu
 				return nil, true, err
 			}
 			for _, vol := range vols {
+				log.Infof("checking vol %s", vol.ID)
 				appVol, err := Inst().V.InspectVolume(vol.ID)
 				if err != nil {
 					return nil, true, err
 				}
 				usedBytes := appVol.GetUsage()
+				log.Infof("usedBytes %d", usedBytes)
 				usedGiB := usedBytes / units.GiB
+				log.Infof("usedGiB %d", usedGiB)
 				if usedGiB > size {
 					volSelected = vol
 					return nil, false, nil
@@ -2065,7 +2068,7 @@ var _ = Describe("{ResizeDiskVolUpdate}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
@@ -2168,7 +2171,7 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
@@ -2297,7 +2300,7 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("error inspecting vol : %s", volSelected.ID))
@@ -2406,7 +2409,7 @@ var _ = Describe("{VolUpdateAddDrive}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		volSelected, err := getVolumeWithMinimumSize(contexts, 10)
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
@@ -5731,7 +5734,7 @@ var _ = Describe("{VolDeletePoolExpand}", func() {
 		ValidateApplications(contexts)
 
 		log.Infof("Need to check if volume is close to 200G occupied")
-		vol, err := getVolumeWithMinimumSize(contexts, 90)
+		vol, err := GetVolumeWithMinimumSize(contexts, 90)
 
 		// We will change the size, after modifying/deploying a vdbench/fio to write ~200G. Current vdbench is writing 98G
 		dash.VerifyFatal(err, nil, "Checking if the desired volume is obtained")
@@ -6248,16 +6251,10 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		}
 
-		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
-		compileText := fmt.Sprintf("%soperation is not supported", commonText)
-		compileTextMaintenanceError := fmt.Sprintf("%sRequires pool maintenance mode", commonText)
-
 		err = nil
-		for _, each := range []string{compileText, compileTextMaintenanceError} {
-			re := regexp.MustCompile(each)
-			if re.MatchString(fmt.Sprintf("%v", err)) == false {
-				err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
-			}
+		re := regexp.MustCompile("Requires pool maintenance mode")
+		if re.MatchString(fmt.Sprintf("%v", err)) == false {
+			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
 		}
 		log.FailOnError(err, "pool delete successful?")
 
@@ -6753,7 +6750,6 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
 
 		// Resize the cloud drive added on the Node
-		//poolList, err := GetPoolsDetailsOnNode(pickNode)
 		poolList, err := GetAllPoolsOnNode(pickNode.Id)
 		log.FailOnError(err, "failed to get pool details from Node [%v]", pickNode)
 
@@ -9553,7 +9549,7 @@ func pickPoolToResize() string {
 	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
-	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Found no pool used by persistent volumes. ")
 	poolIDToResize := poolIDsInUseByTestingApp[0]
 	return poolIDToResize
 }

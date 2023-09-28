@@ -909,6 +909,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	var customBackupLocationName string
 	var credName string
 	var chosenUser string
+	backupLocationMapNew := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
@@ -1009,6 +1010,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 				log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
+				backupLocationMapNew[backupLocationUID] = customBackupLocationName
 			}
 		})
 
@@ -1221,38 +1223,13 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-
-		log.Infof("Deleting registered clusters for admin context")
-		err = DeleteCluster(SourceClusterName, orgID, ctx, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-		err = DeleteCluster(destinationClusterName, orgID, ctx, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+		CleanupCloudSettingsAndClusters(backupLocationMapNew, credName, cloudCredUID, ctx)
 
 		log.Infof("Deleting registered clusters for non-admin context")
 		for _, ctxNonAdmin := range userContexts {
-			err = DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
-			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+			CleanupCloudSettingsAndClusters(make(map[string]string), "", "", ctxNonAdmin)
 		}
 
-		backupDriver := Inst().Backup
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			log.Infof("About to delete backup - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup - [%s]", backupName))
-		}
-
-		log.Infof("Cleaning up backup location - %s", customBackupLocationName)
-		err = DeleteBackupLocation(customBackupLocationName, backupLocationUID, orgID, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", customBackupLocationName))
-		log.Infof("Cleaning cloud credential")
-		//TODO: Eliminate time.Sleep
-		time.Sleep(time.Minute * 3)
-		err = DeleteCloudCredential(credName, orgID, cloudCredUID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 	})
 })
 
@@ -2905,8 +2882,12 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		for _, ctxNonAdmin := range userContexts {
 			err := DeleteCluster(SourceClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", SourceClusterName))
+			err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, SourceClusterName, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", SourceClusterName))
 			err = DeleteCluster(destinationClusterName, orgID, ctxNonAdmin, true)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", destinationClusterName))
+			err = Inst().Backup.WaitForClusterDeletion(ctxNonAdmin, destinationClusterName, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Waiting for cluster %s deletion", destinationClusterName))
 		}
 
 		err := backup.DeleteUser(userName)
@@ -3049,7 +3030,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 				}
 				return "", false, nil
 			}
-			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		})
 
@@ -4108,6 +4089,13 @@ var _ = Describe("{SwapShareBackup}", func() {
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 
+		Step("Delete all synced backups from the admin", func() {
+			log.InfoD("Delete all synced backups from the admin")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = DeleteAllBackups(ctx, orgID)
+			log.FailOnError(err, "Delete all synced backups from the admin")
+		})
 		log.InfoD("Deleting all restores")
 		for _, userName := range users {
 			ctx, err := backup.GetNonAdminCtx(userName, commonPassword)
