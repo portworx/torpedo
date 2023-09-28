@@ -281,6 +281,7 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 			log.InfoD(stepLog)
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
+			//flag variable is to run test for only one volume of sts replica
 			flag = false
 
 			for _, ds := range params.DataServiceToTest {
