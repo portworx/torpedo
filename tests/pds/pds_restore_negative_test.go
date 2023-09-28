@@ -291,9 +291,11 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
-
-					deploymentsToBeCleaned := append(deploymentsToBeCleaned, deployment)
 					log.FailOnError(err, "Error while deploying data services")
+					deploymentsToBeCleaned := append(deploymentsToBeCleaned, deployment)
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: deployment,
+					}
 
 					// TODO: Add workload generation
 
@@ -309,6 +311,7 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 							log.Debugf("len of volumes %d", len(appVolumes))
 							for _, v := range appVolumes {
 								if !strings.Contains(v.Name, "sharedbackupsdir") {
+									log.Debugf("volume name:[%s]", v.Name)
 									replPools, err := GetReplicaNodes(v)
 									log.FailOnError(err, "error while getting replica nodes")
 									selectedPool := replPools[0]
@@ -341,17 +344,19 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 											Deployment:           deployment,
 											RestoreTargetCluster: restoreTarget,
 										}
-										backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-										log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-										for _, backupJob := range backupJobs {
-											log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-											restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
-											log.FailOnError(err, "Failed during restore.")
-											restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-											log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-											deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-											log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-										}
+										restoredDeployments := PerformRestore(restoreClient, dsEntity, projectID, deployment)
+										deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployments...)
+										//backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+										//log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+										//for _, backupJob := range backupJobs {
+										//	log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+										//	restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+										//	log.FailOnError(err, "Failed during restore.")
+										//	restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+										//	log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+										//	deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+										//	log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+										//}
 									})
 
 									// Bring up the replica node
@@ -381,17 +386,19 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 											Deployment:           deployment,
 											RestoreTargetCluster: restoreTarget,
 										}
-										backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-										log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-										for _, backupJob := range backupJobs {
-											log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-											restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
-											log.FailOnError(err, "Failed during restore.")
-											restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-											log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-											deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-											log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-										}
+										restoredDeployments := PerformRestore(restoreClient, dsEntity, projectID, deployment)
+										deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployments...)
+										//backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+										//log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+										//for _, backupJob := range backupJobs {
+										//	log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+										//	restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+										//	log.FailOnError(err, "Failed during restore.")
+										//	restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+										//	log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+										//	deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+										//	log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+										//}
 									})
 								}
 							}

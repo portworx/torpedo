@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
+	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	"github.com/portworx/torpedo/drivers/volume"
 	"net/http"
 	"strings"
@@ -334,6 +335,22 @@ func CleanUpBackUpTargets(projectID, prefix string) error {
 		}
 	}
 	return nil
+}
+
+func PerformRestore(restoreClient restoreBkp.RestoreClient, dsEntity restoreBkp.DSEntity, projectID string, deployment *pds.ModelsDeployment) []*pds.ModelsDeployment {
+	var restoredDeployments []*pds.ModelsDeployment
+	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+	for _, backupJob := range backupJobs {
+		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+		restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+		log.FailOnError(err, "Failed during restore.")
+		restoredDeployment, err := restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+		restoredDeployments = append(restoredDeployments, restoredDeployment)
+		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+	}
+	return restoredDeployments
 }
 
 func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
