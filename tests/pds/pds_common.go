@@ -337,6 +337,27 @@ func CleanUpBackUpTargets(projectID, prefix string) error {
 	return nil
 }
 
+// ValidateDataIntegrityPostRestore validates the md5hash for the given deployments and returns the workload pods
+func ValidateDataIntegrityPostRestore(dataServiceDeployments []*pds.ModelsDeployment,
+	pdsdeploymentsmd5Hash map[string]string) []*v1.Deployment {
+	var (
+		wlDeploymentsToBeCleanedinDest []*v1.Deployment
+		restoredDeploymentsmd5Hash     map[string]string
+	)
+	for _, pdsDeployment := range dataServiceDeployments {
+		ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
+		wlDeploymentsToBeCleanedinDest = append(wlDeploymentsToBeCleanedinDest, wlDep)
+		log.FailOnError(err, "Error while Running workloads")
+		log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+		restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
+	}
+
+	dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
+		true, "Validate md5 hash after restore")
+
+	return wlDeploymentsToBeCleanedinDest
+}
+
 func PerformRestore(restoreClient restoreBkp.RestoreClient, dsEntity restoreBkp.DSEntity, projectID string, deployment *pds.ModelsDeployment) []*pds.ModelsDeployment {
 	var restoredDeployments []*pds.ModelsDeployment
 	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
@@ -381,19 +402,20 @@ func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
 	}
 }
 
-func GetReplicaNodes(appVolume *volume.Volume) ([]string, error) {
+// GetReplicaNodes return the volume replicated nodes and its pool id's
+func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
 	replicaSets, err := Inst().V.GetReplicaSets(appVolume)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	log.FailOnError(err, "error while getting replicasets")
 	replicaNodes := replicaSets[0].Nodes
-	for _, nodes := range replicaNodes {
-		log.Infof("node info %s", nodes)
+	for _, node := range replicaNodes {
+		log.Debugf("replica node [%s] of volume [%s]", node, appVolume.Name)
 	}
 	replPools := replicaSets[0].PoolUuids
 
-	return replPools, nil
+	return replPools, replicaNodes, nil
 }
 
 func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {

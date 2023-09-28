@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
+	v1 "k8s.io/api/apps/v1"
 	"strings"
 	"sync"
 
@@ -272,9 +273,15 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 
 	It("Bring Down Replica Node and perform backup and restore", func() {
 		var (
-			deploymentsToClean []*pds.ModelsDeployment
-			nsName             = params.InfraToTest.Namespace
-			flag               bool
+			deploymentsToClean             []*pds.ModelsDeployment
+			nsName                         = params.InfraToTest.Namespace
+			flag                           bool
+			wlDeploymentsToBeCleanedinSrc  []*v1.Deployment
+			wlDeploymentsToBeCleanedinDest []*v1.Deployment
+			pdsdeploymentsmd5Hash          = make(map[string]string)
+			restoredDepsPostDriverStop     []*pds.ModelsDeployment
+			restoredDepsPostDriverStart    []*pds.ModelsDeployment
+			restoreClient                  restoreBkp.RestoreClient
 		)
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
@@ -285,7 +292,10 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 			flag = false
 
 			for _, ds := range params.DataServiceToTest {
+				//clearing up the previous entries
 				deploymentsToClean = []*pds.ModelsDeployment{}
+				CleanMapEntries(pdsdeploymentsmd5Hash)
+
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -301,9 +311,21 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 						Deployment: deployment,
 					}
 
-					// TODO: Add workload generation
+					stepLog = "Running Workloads before taking backups"
+					Step(stepLog, func() {
+						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
+						log.FailOnError(err, "Error while Running workloads")
+						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+					})
 
-					stepLog = "Create Context, Get the replica node, Stop Vol Driver and Take backup and restore"
+					defer func() {
+						err := CleanupWorkloadDeployments(wlDeploymentsToBeCleanedinSrc, true)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}()
+
+					stepLog = "Get the replica node and stop volume driver on the replica node"
 					Step(stepLog, func() {
 						log.InfoD("Create Context for the deployments")
 						ctxs, err := Inst().Pds.CreateSchedulerContextForPDSApps(deploymentsToClean)
@@ -314,8 +336,8 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 						log.Debugf("len of volumes %d", len(appVolumes))
 						for _, v := range appVolumes {
 							if !strings.Contains(v.Name, "sharedbackupsdir") && !flag {
-								log.Debugf("volume name:[%s]", v.Name)
-								replPools, err := GetReplicaNodes(v)
+								log.Debugf("Getting replica node for volume:[%s]", v.Name)
+								replPools, _, err := GetReplicaNodes(v)
 								log.FailOnError(err, "error while getting replica nodes")
 								selectedPool := replPools[0]
 								storageNode1, err := GetNodeWithGivenPoolID(selectedPool)
@@ -340,15 +362,27 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 									ctx, err := GetSourceClusterConfigPath()
 									log.FailOnError(err, "failed while getting src cluster path")
 									restoreTarget := tc.NewTargetCluster(ctx)
-									restoreClient := restoreBkp.RestoreClient{
+									restoreClient = restoreBkp.RestoreClient{
 										TenantId:             tenantID,
 										ProjectId:            projectID,
 										Components:           components,
 										Deployment:           deployment,
 										RestoreTargetCluster: restoreTarget,
 									}
-									restoredDeployments := PerformRestore(restoreClient, dsEntity, projectID, deployment)
-									deploymentsToClean = append(deploymentsToClean, restoredDeployments...)
+									restoredDepsPostDriverStop = PerformRestore(restoreClient, dsEntity, projectID, deployment)
+									deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStop...)
+								})
+
+								stepLog = "Validate md5hash for the restored deployments"
+								Step(stepLog, func() {
+									log.InfoD(stepLog)
+									wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
+
+									log.InfoD("Cleaning up workload deployments")
+									for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+										err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+										log.FailOnError(err, "Failed while deleting the workload deployment")
+									}
 								})
 
 								// Bring up the replica node
@@ -368,26 +402,25 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 								stepLog = "Perform restore for the backup jobs."
 								Step(stepLog, func() {
 									log.InfoD(stepLog)
-									ctx, err := GetSourceClusterConfigPath()
-									log.FailOnError(err, "failed while getting src cluster path")
-									restoreTarget := tc.NewTargetCluster(ctx)
-									restoreClient := restoreBkp.RestoreClient{
-										TenantId:             tenantID,
-										ProjectId:            projectID,
-										Components:           components,
-										Deployment:           deployment,
-										RestoreTargetCluster: restoreTarget,
+									restoredDepsPostDriverStart = PerformRestore(restoreClient, dsEntity, projectID, deployment)
+									deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStart...)
+								})
+								stepLog = "Validate md5hash for the restored deployments"
+								Step(stepLog, func() {
+									log.InfoD(stepLog)
+									wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+
+									log.InfoD("Cleaning up workload deployments")
+									for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+										err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+										log.FailOnError(err, "Failed while deleting the workload deployment")
 									}
-									restoredDeployments := PerformRestore(restoreClient, dsEntity, projectID, deployment)
-									deploymentsToClean = append(deploymentsToClean, restoredDeployments...)
 								})
 								flag = true
 							}
 						}
-
 					})
 				})
-
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToClean)
 				})
