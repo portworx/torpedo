@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	v1 "k8s.io/api/apps/v1"
 	"strings"
 	"sync"
@@ -269,6 +270,18 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 		ctx, err := GetSourceClusterConfigPath()
 		sourceTarget = tc.NewTargetCluster(ctx)
 		log.FailOnError(err, "failed while getting src cluster path")
+
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
 	})
 
 	It("Bring Down Replica Node and perform backup and restore", func() {
