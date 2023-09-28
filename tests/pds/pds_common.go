@@ -342,7 +342,7 @@ func ValidateDataIntegrityPostRestore(dataServiceDeployments []*pds.ModelsDeploy
 	pdsdeploymentsmd5Hash map[string]string) []*v1.Deployment {
 	var (
 		wlDeploymentsToBeCleanedinDest []*v1.Deployment
-		restoredDeploymentsmd5Hash     map[string]string
+		restoredDeploymentsmd5Hash     = make(map[string]string)
 	)
 	for _, pdsDeployment := range dataServiceDeployments {
 		ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
