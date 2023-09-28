@@ -71,10 +71,14 @@ type Driver interface {
 	License
 	// Rule
 	Rule
+	// Role
+	Role
 	// Version
 	Version
 	//ActivityTimeLine interface
 	ActivityTimeLine
+	//Metrics interface
+	Metrics
 
 	// Init initializes the backup driver under a given scheduler
 	Init(schedulerDriverName string, nodeDriverName string, volumeDriverName string, token string) error
@@ -157,6 +161,16 @@ type Cluster interface {
 	// WaitForClusterDeletion waits for cluster to be deleted successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
 	WaitForClusterDeletion(
+		ctx context.Context,
+		clusterName,
+		orgID string,
+		timeout time.Duration,
+		timeBeforeRetry time.Duration,
+	) error
+
+	// WaitForClusterDeletionWithUID waits for cluster to be deleted successfully
+	// or till timeout is reached. API should poll every `timeBeforeRetry` duration using cluster uid
+	WaitForClusterDeletionWithUID(
 		ctx context.Context,
 		clusterName,
 		clusterUid,
@@ -428,11 +442,35 @@ type Rule interface {
 	GetAllRules(ctx context.Context, orgID string) ([]string, error)
 }
 
+// Role interface
+type Role interface {
+	// CreateRole creates role object
+	CreateRole(ctx context.Context, req *api.RoleCreateRequest) (*api.RoleCreateResponse, error)
+
+	// InspectRole inspects a rple object
+	InspectRole(ctx context.Context, req *api.RoleInspectRequest) (*api.RoleInspectResponse, error)
+
+	// EnumerateRole enumerates all role objects
+	EnumerateRole(ctx context.Context, req *api.RoleEnumerateRequest) (*api.RoleEnumerateResponse, error)
+
+	// DeleteRole deletes a role object
+	DeleteRole(ctx context.Context, req *api.RoleDeleteRequest) (*api.RoleDeleteResponse, error)
+
+	// UpdateRole updates a role object
+	UpdateRole(ctx context.Context, req *api.RoleUpdateRequest) (*api.RoleUpdateResponse, error)
+}
+
 // ActivityTimeLine object interface
 type ActivityTimeLine interface {
 
 	// EnumerateActivityTimeLine enumerates ActivityData
 	EnumerateActivityTimeLine(ctx context.Context, req *api.ActivityEnumerateRequest) (*api.ActivityEnumerateResponse, error)
+}
+
+// Metrics object interface
+type Metrics interface {
+	// InspectMetrics inspects metricsData
+	InspectMetrics(ctx context.Context, req *api.MetricsInspectRequest) (*api.MetricsInspectResponse, error)
 }
 
 var backupDrivers = make(map[string]Driver)

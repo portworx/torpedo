@@ -6251,16 +6251,10 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		}
 
-		commonText := "service mode delete pool.*unable to delete pool with ID.*[0-9]+.*cause.*"
-		compileText := fmt.Sprintf("%soperation is not supported", commonText)
-		compileTextMaintenanceError := fmt.Sprintf("%sRequires pool maintenance mode", commonText)
-
 		err = nil
-		for _, each := range []string{compileText, compileTextMaintenanceError} {
-			re := regexp.MustCompile(each)
-			if re.MatchString(fmt.Sprintf("%v", err)) == false {
-				err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
-			}
+		re := regexp.MustCompile("Requires pool maintenance mode")
+		if re.MatchString(fmt.Sprintf("%v", err)) == false {
+			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
 		}
 		log.FailOnError(err, "pool delete successful?")
 
@@ -6756,7 +6750,6 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 		log.FailOnError(Inst().V.RefreshDriverEndpoints(), "Failed to refresh end points")
 
 		// Resize the cloud drive added on the Node
-		//poolList, err := GetPoolsDetailsOnNode(pickNode)
 		poolList, err := GetAllPoolsOnNode(pickNode.Id)
 		log.FailOnError(err, "failed to get pool details from Node [%v]", pickNode)
 
@@ -9556,7 +9549,7 @@ func pickPoolToResize() string {
 	}
 	poolIDsInUseByTestingApp, err := GetPoolsInUse()
 	failOnError(err, "Error identifying pool to run test")
-	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Expected poolIDToResize to not be empty, pool id to resize %s")
+	verifyArrayNotEmpty(poolIDsInUseByTestingApp, "Found no pool used by persistent volumes. ")
 	poolIDToResize := poolIDsInUseByTestingApp[0]
 	return poolIDToResize
 }
