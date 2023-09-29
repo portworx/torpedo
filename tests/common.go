@@ -9120,10 +9120,10 @@ func IsPxRunningOnNode(pxNode *node.Node) (bool, error) {
 type ProvisionStatus struct {
 	NodeUUID      string
 	IpAddress     string
-	HostName      string
 	NodeStatus    string
 	PoolID        string
 	PoolUUID      string
+	PoolStatus    string
 	IoPriority    string
 	TotalSize     float64
 	AvailableSize float64
@@ -9150,7 +9150,6 @@ func convertToGiB(size string) float64 {
 
 func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	clusterProvision := []ProvisionStatus{}
-	pattern := `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
 	cmd := "pxctl cluster provision-status list"
 
 	// Using Node which is up and running
@@ -9168,25 +9167,32 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	if len(selectedNode) == 0 {
 		return nil, fmt.Errorf("No Valid node exists")
 	}
-	output, err := runCmdGetOutput(cmd, selectedNode[0])
+	output, err := runCmdOnce(cmd, selectedNode[0])
 	if err != nil {
 		return nil, err
+	}
+	log.InfoD("Output of CMD Output [%v]", output)
+
+	lines := strings.Split(output, "\n")
+	pattern := `(\S+)\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	if !strings.Contains(lines[0], "HOSTNAME") {
+		// This is needed as in 2.x.y output don't print HOSTNAME
+		pattern = `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s(\S+)\s\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
 	}
 	// Compile the regex pattern
 	r := regexp.MustCompile(pattern)
 
-	lines := strings.Split(output, "\n")
 	for _, eachLine := range lines {
 		var provisionStatus ProvisionStatus
-		if !strings.Contains(eachLine, "NODE ID") {
+		if !strings.Contains(eachLine, "NODE") {
 			matches := r.FindStringSubmatch(eachLine)
 			if len(matches) > 0 {
 				provisionStatus.NodeUUID = matches[1]
 				provisionStatus.IpAddress = matches[2]
-				provisionStatus.HostName = matches[3]
-				provisionStatus.NodeStatus = matches[4]
-				provisionStatus.PoolID = matches[5]
-				provisionStatus.PoolUUID = matches[6]
+				provisionStatus.NodeStatus = matches[3]
+				provisionStatus.PoolID = matches[4]
+				provisionStatus.PoolUUID = matches[5]
+				provisionStatus.PoolStatus = matches[6]
 				provisionStatus.IoPriority = matches[7]
 				provisionStatus.TotalSize = convertToGiB(matches[8])
 				provisionStatus.AvailableSize = convertToGiB(matches[9])
@@ -9206,6 +9212,7 @@ func GetPoolTotalSize(poolUUID string) (float64, error) {
 	}
 	for _, eachProvision := range provision {
 		if eachProvision.PoolUUID == poolUUID {
+			log.Infof("total size [%v]", eachProvision.TotalSize)
 			return eachProvision.TotalSize, nil
 		}
 	}
@@ -9240,6 +9247,18 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 	return poolDetails, nil
 }
 
+func GetAllPoolsPresent() ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		poolDetails = append(poolDetails, eachProvision.PoolUUID)
+	}
+	return poolDetails, nil
+}
+
 // Set default provider as aws
 func getClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
@@ -9253,4 +9272,23 @@ func GetGkeSecret() (string, error) {
 		return "", err
 	}
 	return cm.Data["cloud-json"], nil
+}
+
+func WaitTillPoolExpanded(poolUUID string, poolCurrSize uint64) error {
+	log.InfoD("Wait for Pool [%v] to be expanded ", poolUUID)
+	t := func() (interface{}, bool, error) {
+		poolSize, err := GetPoolTotalSize(poolUUID)
+		if err != nil {
+			return "", true, fmt.Errorf("Current pool size is [%v] and previous pool size [%v]", poolCurrSize, poolSize)
+		}
+		if uint64(poolSize) > poolCurrSize {
+			return "", false, nil
+		}
+		return "", true, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 5*time.Minute)
+	if err != nil {
+		return err
+	}
+	return nil
 }

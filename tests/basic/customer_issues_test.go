@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -14,6 +16,7 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -752,4 +755,257 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+
+var _ = Describe("{HSBCScaleScenario}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("HSBCScaleScenario",
+			"HSBC Scale test scenario to find data checksum error",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "has to schedule cloud snap  and delete cloudsnaps"
+	It(stepLog, func() {
+		var wg sync.WaitGroup
+		var terminate bool = false
+
+		var errors = []error{}
+		totalSnapshotsPerVol := 60
+		snapshotList := []string{}
+
+		// Have 3 Wait group to run the test
+		wg.Add(3)
+
+		// Check if the cluster consists of 10 nodes
+		log.InfoD("Get all nodes present in the cluster")
+		allNodes := []node.Node{}
+		// create an array with storage and storage less nodes added
+		for _, each := range node.GetStorageDriverNodes() {
+			allNodes = append(allNodes, each)
+		}
+		log.Infof("List of all nodes present in the cluster [%v]", allNodes)
+		// Verify total nodes available is minimum of 9
+		//dash.VerifyFatal(len(allNodes) < 6, true, "test need minimum of 6 Nodes run the test")
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("scalevolhasnap-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Continuously Expand all the pools one after the other
+		allVolsPresent := []*volume.Volume{}
+		for _, eachContext := range contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			log.FailOnError(err, fmt.Sprintf("failed to get list of all volumes present in the cluster "))
+			for _, eachVol := range vols {
+				allVolsPresent = append(allVolsPresent, eachVol)
+			}
+		}
+
+		stopRoutine := func() {
+			if !terminate {
+				terminate = true
+				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
+				for _, each := range snapshotList {
+					if IsVolumeExits(each) {
+						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+					}
+				}
+			}
+		}
+
+		defer stopRoutine()
+
+		log.Infof("List of all volumes present in the context [%v]", allVolsPresent)
+		doPoolExpandContinuously := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			for {
+				if terminate {
+					break
+				}
+				allPoolsPresent, err := GetAllPoolsPresent()
+				log.FailOnError(err, fmt.Sprintf("failed to get list of pools present in the cluster"))
+
+				for _, eachPool := range allPoolsPresent {
+					poolCurrSize, err := GetPoolTotalSize(eachPool)
+					if err != nil {
+						errors = append(errors, err)
+						log.Infof(fmt.Sprintf("failed to get list of pools current size with error [%v]", err))
+					}
+					log.Infof("Current pool [%v] size is [%v]", eachPool, poolCurrSize)
+					if poolCurrSize != -1 {
+						expectedSize := uint64(poolCurrSize) + 100
+						err = Inst().V.ExpandPool(eachPool, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+						if err != nil {
+							errors = append(errors, fmt.Errorf("Failed to Initiate pool expand with Error [%v]", err))
+						}
+						err = WaitTillPoolExpanded(eachPool, uint64(poolCurrSize))
+						if err != nil {
+							errors = append(errors, fmt.Errorf("Failed to expand pool with Error [%v]", err))
+						}
+					}
+				}
+				time.Sleep(600 * time.Second)
+			}
+		}
+
+		// Do ha update on all the volume at ones , and wait for ha update to complete before next iterations
+		haUpdateOnVolumes := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+				replStatus := map[string]int64{}
+				for _, eachVol := range allVolsPresent {
+					log.Infof("HA update on the Volume [%v]", eachVol.ID)
+					currRep, err := Inst().V.GetReplicationFactor(eachVol)
+					if err != nil {
+						errors = append(errors, err)
+					}
+
+					opts := volume.Options{
+						ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+					}
+					newRep := currRep
+					if currRep == 3 {
+						newRep = currRep - 1
+						err = Inst().V.SetReplicationFactor(eachVol, newRep, nil, nil, false, opts)
+						if err != nil {
+							errors = append(errors, err)
+						}
+						replStatus[eachVol.ID] = newRep
+					}
+					log.InfoD(fmt.Sprintf("setting repl factor  to %d for  vol : %s", newRep+1, eachVol.Name))
+					err = Inst().V.SetReplicationFactor(eachVol, newRep+1, nil, nil, false, opts)
+					if err != nil {
+						errors = append(errors, err)
+					}
+					replStatus[eachVol.ID] = newRep + 1
+					//reverting the replication to volume validation to pass
+					if currRep < 3 {
+						err = Inst().V.SetReplicationFactor(eachVol, currRep, nil, nil, false, opts)
+						if err != nil {
+							errors = append(errors, err)
+						}
+						replStatus[eachVol.ID] = currRep
+					}
+				}
+				// Wait for all HA Update to complete
+				for _, eachVol := range allVolsPresent {
+					replFactor := int64(2)
+					for vol, repl := range replStatus {
+						if eachVol.ID == vol {
+							replFactor = repl
+						}
+					}
+					err := Inst().V.WaitForReplicationToComplete(eachVol, replFactor, replicationUpdateTimeout)
+					if err != nil {
+						log.Infof("Waiting for Replication timedout with error [%v]", err)
+						errors = append(errors, err)
+					}
+				}
+
+				// Verify DataIntegrity on the volumes created
+				log.Infof("Verifying Data integrity of all the volumes created")
+				err = ValidateDataIntegrity(&contexts)
+				if err != nil {
+					log.Infof("Data Integrity failed for volume", err)
+					errors = append(errors, err)
+				}
+			}
+		}
+
+		deleteElementFromArr := func(value string, snaplist []string) []string {
+			indexToDelete := -1
+			for i, v := range snaplist {
+				if v == value {
+					indexToDelete = i
+					break
+				}
+			}
+
+			// If the value is not found, do nothing
+			if indexToDelete == -1 {
+				fmt.Println("Value not found in the array.")
+				return nil
+			}
+			// Delete the value by shifting elements
+			copy(snaplist[indexToDelete:], snaplist[indexToDelete+1:])
+			snaplist = snaplist[:len(snaplist)-1]
+
+			return snaplist
+		}
+
+		createDeleteSnapshot := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+				for _, eachVol := range allVolsPresent {
+					for snap := 0; snap < totalSnapshotsPerVol; snap++ {
+						uuidCreated := uuid.New()
+						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol.ID, uuidCreated.String())
+						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol.ID, snapshotName)
+						if err != nil {
+							errors = append(errors, err)
+						}
+						snapshotList = append(snapshotList, snapshotName)
+						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+					}
+				}
+				for _, eachSnap := range snapshotList {
+					err := Inst().V.DeleteVolume(eachSnap)
+					if err != nil {
+						errors = append(errors, err)
+					}
+					snapshotList = deleteElementFromArr(eachSnap, snapshotList)
+				}
+			}
+		}
+
+		// Run Go Routines for HA Update, PoolExpand, createDeleteSnapshot
+		go haUpdateOnVolumes()
+		go doPoolExpandContinuously()
+		go createDeleteSnapshot()
+
+		duration := 5 * time.Hour             // 2 days
+		ticker := time.NewTicker(time.Minute) // Run the function every minute
+		defer ticker.Stop()
+		quit := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					log.Infof("waiting till duration [%v] reached", duration)
+					time.Sleep(5 * time.Minute)
+				case <-time.After(duration):
+					terminate = true
+					close(quit)
+					return
+				}
+			}
+		}()
+		<-quit
+
+		wg.Wait()
+
+		if len(errors) > 0 {
+			log.FailOnError(fmt.Errorf("failed as error seen"),
+				fmt.Sprintf("test returned error?"))
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
 })
