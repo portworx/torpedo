@@ -286,10 +286,10 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 
 	It("Bring Down Replica Node and perform backup and restore", func() {
 		var (
-			deploymentsToClean []*pds.ModelsDeployment
-			nsName             = params.InfraToTest.Namespace
-			flag               bool
-			//wlDeploymentsToBeCleanedinSrc  []*v1.Deployment
+			deploymentsToClean             []*pds.ModelsDeployment
+			nsName                         = params.InfraToTest.Namespace
+			flag                           bool
+			wlDeploymentsToBeCleanedinSrc  []*v1.Deployment
 			wlDeploymentsToBeCleanedinDest []*v1.Deployment
 			pdsdeploymentsmd5Hash          = make(map[string]string)
 			restoredDepsPostDriverStop     []*pds.ModelsDeployment
@@ -324,19 +324,19 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 						Deployment: deployment,
 					}
 
-					//stepLog = "Running Workloads before taking backups"
-					//Step(stepLog, func() {
-					//	ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-					//	wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
-					//	log.FailOnError(err, "Error while Running workloads")
-					//	log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
-					//	pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
-					//})
+					stepLog = "Running Workloads before taking backups"
+					Step(stepLog, func() {
+						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
+						log.FailOnError(err, "Error while Running workloads")
+						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+					})
 
-					//defer func() {
-					//	err := CleanupWorkloadDeployments(wlDeploymentsToBeCleanedinSrc, true)
-					//	log.FailOnError(err, "Failed while deleting the workload deployment")
-					//}()
+					defer func() {
+						err := CleanupWorkloadDeployments(wlDeploymentsToBeCleanedinSrc, true)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}()
 
 					stepLog = "Get the replica node and stop volume driver on the replica node"
 					Step(stepLog, func() {
@@ -420,16 +420,16 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 										deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStart...)
 									})
 									//stepLog = "Validate md5hash for the restored deployments"
-									//Step(stepLog, func() {
-									//	log.InfoD(stepLog)
-									//	wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
-									//
-									//	log.InfoD("Cleaning up workload deployments")
-									//	for _, wlDep := range wlDeploymentsToBeCleanedinDest {
-									//		err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-									//		log.FailOnError(err, "Failed while deleting the workload deployment")
-									//	}
-									//})
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+
+										log.InfoD("Cleaning up workload deployments")
+										for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+											err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+											log.FailOnError(err, "Failed while deleting the workload deployment")
+										}
+									})
 									flag = true
 								}
 							}
