@@ -246,12 +246,3 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
-
-			}
-
-		})
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-		})
-	})
-})
