@@ -286,10 +286,10 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 
 	It("Bring Down Replica Node and perform backup and restore", func() {
 		var (
-			deploymentsToClean             []*pds.ModelsDeployment
-			nsName                         = params.InfraToTest.Namespace
-			flag                           bool
-			wlDeploymentsToBeCleanedinSrc  []*v1.Deployment
+			deploymentsToClean []*pds.ModelsDeployment
+			nsName             = params.InfraToTest.Namespace
+			flag               bool
+			//wlDeploymentsToBeCleanedinSrc  []*v1.Deployment
 			wlDeploymentsToBeCleanedinDest []*v1.Deployment
 			pdsdeploymentsmd5Hash          = make(map[string]string)
 			restoredDepsPostDriverStop     []*pds.ModelsDeployment
