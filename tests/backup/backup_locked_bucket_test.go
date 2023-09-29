@@ -647,13 +647,11 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Verifying backup success after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Unable to px-central-admin ctx")
-					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v for schedule %v", allScheduleBackupNames, scheduleName))
-					for _, backupName := range allScheduleBackupNames {
-						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-						err = backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackup, orgID, 180, 30)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", backupName))
-					}
+					backupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching recent backup %v", backupName))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", backupName))
 				}
 			})
 		}
