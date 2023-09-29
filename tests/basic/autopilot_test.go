@@ -117,6 +117,83 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasic}", testSuiteName), func() {
 	})
 })
 
+// This testsuite is used for performing basic scenarios with Autopilot rule where it
+// schedules apps and wait until workload is completed on the volumes and then validates
+// PVC sizes of the volumes, the difference from PvcBasic is that the same resize will
+// happen in large scale (100+ volumes)
+var _ = Describe(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), func() {
+	var testrailID = 85442
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/85442
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), "Perform basic scenarios with Autopilot but in scale", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+	var contexts []*scheduler.Context
+	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
+		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
+
+		Step("schedule applications", func() {
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				// for id, apRule := range autopilotruleBasicTestCases {
+				id := 0
+				apRule := autopilotruleBasicTestCases[0]
+				taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
+				apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
+				labels := map[string]string{
+					"autopilot": apRule.Name,
+				}
+				apRule.Spec.ActionsCoolDownPeriod = int64(60)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Inst().Provisioner,
+					AutopilotRule:      apRule,
+					Labels:             labels,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(context).NotTo(BeEmpty())
+				contexts = append(contexts, context...)
+			}
+			// }
+		})
+
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
+			time.Sleep(unscheduledResizeTimeout)
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
 // This testsuite is used for performing basic scenarios with Autopilot rules where it
 // schedules apps and wait until workload is completed on the volumes. Restarts volume
 // driver and validates PVC sizes of the volumes
