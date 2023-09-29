@@ -344,92 +344,94 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 						ctxs, err := Inst().Pds.CreateSchedulerContextForPDSApps(deploymentsToClean)
 						log.FailOnError(err, "Failed while creating scheduler contexts")
 
-						appVolumes, err := Inst().S.GetVolumes(ctxs[0])
-						log.FailOnError(err, "error while getting volumes")
-						log.Debugf("len of volumes %d", len(appVolumes))
-						for _, v := range appVolumes {
-							if !strings.Contains(v.Name, "sharedbackupsdir") && !flag {
-								log.Debugf("Getting replica node for volume:[%s]", v.Name)
-								replPools, _, err := GetReplicaNodes(v)
-								log.FailOnError(err, "error while getting replica nodes")
-								selectedPool := replPools[0]
-								storageNode1, err := GetNodeWithGivenPoolID(selectedPool)
-								log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", replPools[0]))
+						for _, ctx := range ctxs {
+							appVolumes, err := Inst().S.GetVolumes(ctx)
+							log.FailOnError(err, "error while getting volumes")
+							log.Debugf("len of volumes %d", len(appVolumes))
+							for _, v := range appVolumes {
+								if !strings.Contains(v.Name, "sharedbackupsdir") && !flag {
+									log.Debugf("Getting replica node for volume:[%s]", v.Name)
+									replPools, _, err := GetReplicaNodes(v)
+									log.FailOnError(err, "error while getting replica nodes")
+									selectedPool := replPools[0]
+									storageNode1, err := GetNodeWithGivenPoolID(selectedPool)
+									log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", replPools[0]))
 
-								err = Inst().V.StopDriver([]node.Node{*storageNode1}, false, nil)
-								log.FailOnError(err, "error stopping vol driver on node [%s]", storageNode1.Name)
+									err = Inst().V.StopDriver([]node.Node{*storageNode1}, false, nil)
+									log.FailOnError(err, "error stopping vol driver on node [%s]", storageNode1.Name)
 
-								// Take Backup
-								stepLog = "Perform adhoc backup and validate them"
-								Step(stepLog, func() {
-									log.InfoD(stepLog)
-									log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-									err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
-									log.FailOnError(err, "Failed while performing adhoc backup")
-								})
+									// Take Backup
+									stepLog = "Perform adhoc backup and validate them"
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+										err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+										log.FailOnError(err, "Failed while performing adhoc backup")
+									})
 
-								// Take Restore
-								stepLog = "Perform restore for the backup jobs."
-								Step(stepLog, func() {
-									log.InfoD(stepLog)
-									ctx, err := GetSourceClusterConfigPath()
-									log.FailOnError(err, "failed while getting src cluster path")
-									restoreTarget := tc.NewTargetCluster(ctx)
-									restoreClient = restoreBkp.RestoreClient{
-										TenantId:             tenantID,
-										ProjectId:            projectID,
-										Components:           components,
-										Deployment:           deployment,
-										RestoreTargetCluster: restoreTarget,
-									}
-									restoredDepsPostDriverStop = PerformRestore(restoreClient, dsEntity, projectID, deployment)
-									deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStop...)
-								})
+									// Take Restore
+									stepLog = "Perform restore for the backup jobs."
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										ctx, err := GetSourceClusterConfigPath()
+										log.FailOnError(err, "failed while getting src cluster path")
+										restoreTarget := tc.NewTargetCluster(ctx)
+										restoreClient = restoreBkp.RestoreClient{
+											TenantId:             tenantID,
+											ProjectId:            projectID,
+											Components:           components,
+											Deployment:           deployment,
+											RestoreTargetCluster: restoreTarget,
+										}
+										restoredDepsPostDriverStop = PerformRestore(restoreClient, dsEntity, projectID, deployment)
+										deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStop...)
+									})
 
-								stepLog = "Validate md5hash for the restored deployments"
-								Step(stepLog, func() {
-									log.InfoD(stepLog)
-									wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
+									stepLog = "Validate md5hash for the restored deployments"
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
 
-									log.InfoD("Cleaning up workload deployments")
-									for _, wlDep := range wlDeploymentsToBeCleanedinDest {
-										err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-										log.FailOnError(err, "Failed while deleting the workload deployment")
-									}
-								})
+										log.InfoD("Cleaning up workload deployments")
+										for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+											err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+											log.FailOnError(err, "Failed while deleting the workload deployment")
+										}
+									})
 
-								// Bring up the replica node
-								err = Inst().V.StartDriver(*storageNode1)
-								log.FailOnError(err, "error starting vol driver on node [%s]", storageNode1.Name)
+									// Bring up the replica node
+									err = Inst().V.StartDriver(*storageNode1)
+									log.FailOnError(err, "error starting vol driver on node [%s]", storageNode1.Name)
 
-								// Take backup
-								stepLog = "Perform adhoc backup and validate them"
-								Step(stepLog, func() {
-									log.InfoD(stepLog)
-									log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-									err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
-									log.FailOnError(err, "Failed while performing adhoc backup")
-								})
+									// Take backup
+									stepLog = "Perform adhoc backup and validate them"
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+										err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+										log.FailOnError(err, "Failed while performing adhoc backup")
+									})
 
-								// Take Restore
-								stepLog = "Perform restore for the backup jobs."
-								Step(stepLog, func() {
-									log.InfoD(stepLog)
-									restoredDepsPostDriverStart = PerformRestore(restoreClient, dsEntity, projectID, deployment)
-									deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStart...)
-								})
-								stepLog = "Validate md5hash for the restored deployments"
-								Step(stepLog, func() {
-									log.InfoD(stepLog)
-									wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+									// Take Restore
+									stepLog = "Perform restore for the backup jobs."
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										restoredDepsPostDriverStart = PerformRestore(restoreClient, dsEntity, projectID, deployment)
+										deploymentsToClean = append(deploymentsToClean, restoredDepsPostDriverStart...)
+									})
+									stepLog = "Validate md5hash for the restored deployments"
+									Step(stepLog, func() {
+										log.InfoD(stepLog)
+										wlDeploymentsToBeCleanedinDest = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
 
-									log.InfoD("Cleaning up workload deployments")
-									for _, wlDep := range wlDeploymentsToBeCleanedinDest {
-										err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-										log.FailOnError(err, "Failed while deleting the workload deployment")
-									}
-								})
-								flag = true
+										log.InfoD("Cleaning up workload deployments")
+										for _, wlDep := range wlDeploymentsToBeCleanedinDest {
+											err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+											log.FailOnError(err, "Failed while deleting the workload deployment")
+										}
+									})
+									flag = true
+								}
 							}
 						}
 					})
