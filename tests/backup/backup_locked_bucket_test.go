@@ -619,6 +619,10 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				for _, volumeMount := range volumeMounts {
 					dash.VerifyFatal(volListAfterSizeMap[volumeMount] > volListBeforeSizeMap[volumeMount], true, fmt.Sprintf("Verifying volume size has increased for pod %s", volumeMount))
 				}
+
+			})
+			Step("Validate applications before taking backup", func() {
+				ValidateApplications(scheduledAppContexts)
 			})
 			Step("Create schedule backup after initializing volume resize", func() {
 				for backupLocationUID, backupLocationName := range backupLocationMap {
@@ -631,24 +635,26 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					log.FailOnError(err, "Unable to fetch post rule Uid")
 					scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-					_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					_, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, preRuleNameList[i], preRuleUid, postRuleNameList[i], postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 					scheduleNames = append(scheduleNames, scheduleName)
 				}
 			})
 			Step("Verifying backup success after initializing volume resize", func() {
-				log.InfoD("Verifying backup success after initializing volume resize")
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Unable to px-central-admin ctx")
-				allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v", allScheduleBackupNames))
 				log.InfoD("Waiting for 15 minutes for the next schedule backup to be triggered")
 				time.Sleep(15 * time.Minute)
-				secondScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, 2, orgID)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching recent backup %v", secondScheduleBackupName))
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = backupSuccessCheckWithValidation(ctx, secondScheduleBackupName, appContextsToBackup, orgID, 5, 30)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", secondScheduleBackupName))
+				for _, scheduleName := range scheduleNames {
+					log.InfoD("Verifying backup success after initializing volume resize")
+					ctx, err := backup.GetAdminCtxFromSecret()
+					log.FailOnError(err, "Unable to px-central-admin ctx")
+					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching all schedule backups %v for schedule %v", allScheduleBackupNames, scheduleName))
+					for _, backupName := range allScheduleBackupNames {
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+						err = backupSuccessCheckWithValidation(ctx, backupName, appContextsToBackup, orgID, 180, 30)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the success of recent backup named [%s]", backupName))
+					}
+				}
 			})
 		}
 	})
