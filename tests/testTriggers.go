@@ -595,6 +595,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		for _, ctx := range *contexts {
 			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
+			errorChan = make(chan error, errorChannelSize)
 			ValidateContext(ctx, &errorChan)
 			// BUG: Execution doesn't resume here after ValidateContext called
 			// Below code is never executed
