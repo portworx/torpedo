@@ -7,6 +7,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -1722,7 +1723,7 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 		Inst().AppList = []string{"fio-pod"}
 
 		contexts = make([]*scheduler.Context, 0)
-		actRepls := make(map[string]int64)
+		actRepls := make(map[*volume.Volume]int64)
 
 		log.InfoD("scheduling apps ")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1937,7 +1938,7 @@ var _ = Describe("{TrashcanRecoveryWithCloudsnap}", func() {
 	})
 })
 
-func replAdjust(appVolumes []*volume.Volume, actRepls map[string]int64) error {
+func replAdjust(appVolumes []*volume.Volume, actRepls map[*volume.Volume]int64) error {
 	setRepls := make(map[*volume.Volume]int64)
 
 	for _, v := range appVolumes {
@@ -1945,7 +1946,7 @@ func replAdjust(appVolumes []*volume.Volume, actRepls map[string]int64) error {
 		if err != nil {
 			return err
 		}
-		actRepls[v.ID] = currRep
+		actRepls[v] = currRep
 		if currRep == 3 {
 			setRepls[v] = currRep - 1
 		}
@@ -2100,3 +2101,278 @@ func deletePXVolume(volName string) error {
 	_, err := task.DoRetryWithTimeout(delVol, time.Duration(60)*defaultCommandTimeout, 2*time.Minute)
 	return err
 }
+
+var _ = Describe("{CloudSnapWithPXEvents}", func() {
+	var testrailID = 0
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35271
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("CloudSnapWithPXEvents", "Validate cloudsnap during PX events", nil, 0)
+		runID = testrailuttils.AddRunsToMilestone(0)
+
+	})
+	var contexts []*scheduler.Context
+
+	stepLog := "has to schedule apps with cloudsnaps and perform PX events"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		contexts = make([]*scheduler.Context, 0)
+
+		stepLog = "validate cloud cred and create schedule policy"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			n := node.GetStorageDriverNodes()[0]
+			uuidCmd := "pxctl cred list -j | grep uuid"
+			output, err := runCmd(uuidCmd, n)
+			log.FailOnError(err, "error getting uuid for cloudsnap credential")
+			if output == "" {
+				log.FailOnError(fmt.Errorf("cloud cred is not created"), "Check for cloud cred exists?")
+			}
+
+			credUUID := strings.Split(strings.TrimSpace(output), " ")[1]
+			credUUID = strings.ReplaceAll(credUUID, "\"", "")
+			log.Infof("Got Cred UUID: %s", credUUID)
+			contexts = make([]*scheduler.Context, 0)
+			policyName := "intervalpolicy"
+
+			stepLog = fmt.Sprintf("create schedule policy %s", policyName)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				schedPolicy, err := storkops.Instance().GetSchedulePolicy(policyName)
+				if err != nil {
+					retain := 5
+					interval := 1
+					log.InfoD("Creating a interval schedule policy %v with interval %v minutes", policyName, interval)
+					schedPolicy = &storkv1.SchedulePolicy{
+						ObjectMeta: meta_v1.ObjectMeta{
+							Name: policyName,
+						},
+						Policy: storkv1.SchedulePolicyItem{
+							Interval: &storkv1.IntervalPolicy{
+								Retain:          storkv1.Retain(retain),
+								IntervalMinutes: interval,
+							},
+						}}
+
+					_, err = storkops.Instance().CreateSchedulePolicy(schedPolicy)
+					log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
+				}
+			})
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cspxevents-%d", i))...)
+			}
+
+			areCloudsnapEnabledAppsDeployed := false
+
+			for _, ctx := range contexts {
+				if strings.Contains(ctx.App.Key, "cloudsnap") {
+					areCloudsnapEnabledAppsDeployed = true
+					break
+				}
+			}
+
+			if !areCloudsnapEnabledAppsDeployed {
+				log.FailOnError(fmt.Errorf("no cloudsnap enabled apps deployed"), "error validating apps for cloudsnaps events test")
+			}
+
+			ValidateApplications(contexts)
+			nsList, err := core.Instance().ListNamespaces(nil)
+			log.FailOnError(err, "error getting all namespaces")
+			appNamespaces := make([]string, 0)
+			for _, ns := range nsList.Items {
+				if strings.Contains(ns.Name, "cspxevents") {
+					appNamespaces = append(appNamespaces, ns.Namespace)
+				}
+			}
+
+			if len(appNamespaces) == 0 {
+				log.FailOnError(fmt.Errorf("no namespaces found to validate cloudsnaps"), "error getting cloudsnap namespaces")
+			}
+
+			stepLog = "validate cloudsnaps"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				for _, ns := range appNamespaces {
+					_, err = validateCloudSnaps(ns)
+					log.FailOnError(err, fmt.Sprintf("error validating cloudsnaps in namespace [%s]", ns))
+				}
+			})
+			var csAppVolumes []*volume.Volume
+			for _, ctx := range contexts {
+				if strings.Contains(ctx.App.Key, "cloudsnap") {
+					appVolumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %s", ctx.App.Key)
+					csAppVolumes = append(csAppVolumes, appVolumes...)
+				}
+			}
+
+			stepLog = "trigger px restart event during cloudsnaps and validate cloudsnaps"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+
+				for _, csAppVol := range csAppVolumes {
+					attachedNode, err := Inst().V.GetNodeForVolume(csAppVol, defaultCommandTimeout, defaultCommandRetry)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verify Get nodes for vol %s", csAppVol.Name))
+					stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+						Inst().V.String(), attachedNode.Name)
+					Step(stepLog,
+						func() {
+							StopVolDriverAndWait([]node.Node{*attachedNode})
+						})
+
+					log.Infof("wait for 10 mins for volumes to reallocate")
+
+					stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+						Inst().V.String(), attachedNode.Name)
+					Step(stepLog,
+						func() {
+							StartVolDriverAndWait([]node.Node{*attachedNode})
+						})
+
+					stepLog = "Giving few seconds for volume driver to stabilize"
+					Step(stepLog, func() {
+						log.InfoD("Giving few seconds for volume driver to stabilize")
+						time.Sleep(20 * time.Second)
+					})
+
+				}
+				for _, ctx := range contexts {
+					ValidateContext(ctx)
+				}
+				stepLog = "validate cloudsnaps"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+
+					for _, ns := range appNamespaces {
+						_, err = validateCloudSnaps(ns)
+						log.FailOnError(err, fmt.Sprintf("error validating cloudsnaps in namespace [%s]", ns))
+					}
+				})
+			})
+
+			stepLog = "validate repl update during cloudsnaps"
+
+			Step(stepLog, func() {
+				stopValidation := make(chan bool)
+
+				log.InfoD(stepLog)
+
+				actRepls := make(map[*volume.Volume]int64)
+				//Reducing the repl factor if volume as max replication factor enabled
+				stepLog = fmt.Sprintf("Adjusting the volume replications before increasing the repls for cloudsnap volumes")
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					err = replAdjust(csAppVolumes, actRepls)
+					log.FailOnError(err, "Failed to adjust the repls for cloudsnap volumes")
+				})
+
+				stepLog = fmt.Sprintf("Increasing the repls for cloudsnap volumes")
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					newRepls := make(map[*volume.Volume]int64)
+					for _, v := range csAppVolumes {
+						currRep, err := Inst().V.GetReplicationFactor(v)
+						log.FailOnError(err, "Failed to get volume  %s repl factor", v.Name)
+						currAggr, err := Inst().V.GetAggregationLevel(v)
+						log.FailOnError(err, "Failed to get volume  %s aggregate level", v.Name)
+						numStorageNodes := len(node.GetStorageNodes())
+						numStorageNodesRequired := int(currAggr * (currRep + 1))
+
+						if numStorageNodes < numStorageNodesRequired {
+							log.Warnf("skipping volume %s repl increase as numStorageNodesRequired is %d where as numStorageNodes is %d", v.Name, numStorageNodesRequired, numStorageNodes)
+							continue
+						}
+						newRepls[v] = currRep + 1
+					}
+					// Create a channel to signal an error.
+					errorChan := make(chan error, 1)
+
+					// Create a WaitGroup to wait for both functions to finish.
+					var wg sync.WaitGroup
+					wg.Add(1)
+					//Go routine for repl increase
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						for v, r := range newRepls {
+							log.InfoD("setting repl for volume %s to %d", v.Name, r)
+							if err := Inst().V.SetReplicationFactor(v, r, nil, nil, false); err != nil {
+								errorChan <- err
+								stopValidation <- true
+							}
+						}
+
+					}()
+
+					//Go routine for cloudsnap validate
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						for {
+							select {
+							case <-errorChan:
+								return
+							case <-stopValidation:
+								return
+							default:
+								for _, ns := range appNamespaces {
+									if _, err := validateCloudSnaps(ns); err != nil {
+										errorChan <- err
+									}
+								}
+								time.Sleep(10 * time.Minute)
+							}
+						}
+
+					}()
+
+					//Go routine for repl update validation
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						defer GinkgoRecover()
+						for v, r := range newRepls {
+							if err = ValidateReplFactorUpdate(v, r); err != nil {
+								errorChan <- err
+								stopValidation <- true
+							}
+						}
+
+					}()
+					wg.Wait()
+
+					select {
+					case err := <-errorChan:
+						dash.VerifyFatal(err, nil, "validate cloudsnaps while repl increase")
+					}
+					for v, r := range actRepls {
+						log.InfoD("setting repl for volume %s to %d", v.Name, r)
+						if err := Inst().V.SetReplicationFactor(v, r, nil, nil, true); err != nil {
+
+						}
+					}
+
+				})
+
+			})
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
