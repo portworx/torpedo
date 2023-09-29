@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
 
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -65,8 +66,9 @@ func (iam *IamRoleBindings) UpdateIamRoleBindings(accountId string, actorId stri
 	}
 	iamModels, res, err := iamClient.ApiAccountsIdIamPut(ctx, accountId).Body(updateRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiAccountsIdIamPost`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `ApiAccountsIdIamPut`: %v\n.Full HTTP response: %v", err, res)
 	}
+	log.InfoD("Successfully updated the IAM Roles")
 	return iamModels, nil
 }
 

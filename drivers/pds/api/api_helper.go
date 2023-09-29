@@ -71,6 +71,7 @@ func GetContext() (context.Context, error) {
 		if err != nil {
 			return nil, err
 		}
+		log.InfoD("Non-ServiceIdentity Token being used is-  %v", token)
 	}
 	ctx := context.WithValue(context.Background(), pds.ContextAPIKeys, map[string]pds.APIKey{"ApiKeyAuth": {Key: token, Prefix: "Bearer"}})
 	return ctx, nil

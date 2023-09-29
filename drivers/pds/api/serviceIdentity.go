@@ -87,7 +87,6 @@ func (si *ServiceIdentity) GenerateServiceIdentityToken(clientId string, clientT
 		return "", fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	siModel, res, err := siClient.ServiceIdentityGenerateTokenPost(ctx).Body(createRequest).Execute()
-	log.InfoD("resp status is - %v and resp body is- %v", res.StatusCode, res.Body)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return "", fmt.Errorf("Error when calling `ServiceIdentityGenerateTokenPost`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -141,4 +140,19 @@ func (si *ServiceIdentity) CreateAndGetServiceIdentityToken(accountID string) (s
 
 func (si *ServiceIdentity) ReturnServiceIdToken() string {
 	return SiToken
+}
+func (si *ServiceIdentity) RegenerateServiceTokenAndSetAuthContext(actorId string) (string, error) {
+	tokenModel, err := si.GetServiceIdentityToken(actorId)
+	if err != nil {
+		return "", fmt.Errorf("error while regenarting and fetching clientid and client token %v", actorId)
+	}
+	newClient := tokenModel.GetClientId()
+	newClientToken := tokenModel.GetClientToken()
+	regeneratedToken, err := si.GenerateServiceIdentityToken(newClient, newClientToken)
+	if err != nil {
+		return "", fmt.Errorf("error while regenarting and fetching new Si token %v", actorId)
+	}
+	SiToken = regeneratedToken
+	log.InfoD("Successfully Regenerated the SiToken- %v", SiToken)
+	return regeneratedToken, nil
 }
