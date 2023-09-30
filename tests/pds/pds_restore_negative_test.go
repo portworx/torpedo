@@ -383,7 +383,8 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 								stepLog = "Validate md5hash for the restored deployments"
 								Step(stepLog, func() {
 									log.InfoD(stepLog)
-									wlDeploymentsToBeCleanedinSrc = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepsPostDriverStop, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 								})
 
 								// Bring up the replica node
@@ -409,7 +410,8 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 								stepLog = "Validate md5hash for the restored deployments and delete wkload deployments"
 								Step(stepLog, func() {
 									log.InfoD(stepLog)
-									wlDeploymentsToBeCleanedinSrc = ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepsPostDriverStart, pdsdeploymentsmd5Hash)
+									wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 
 									log.InfoD("Cleaning up workload deployments")
 									for _, wlDep := range wlDeploymentsToBeCleanedinSrc {
