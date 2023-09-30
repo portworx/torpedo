@@ -979,25 +979,16 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		}
 
 		// Run Go Routines for HA Update, PoolExpand, createDeleteSnapshot
-		stepLog := "Initiate HA update on all Volumes present in the cluster continuously"
-		It(stepLog, func() {
-			log.InfoD(stepLog)
-			go haUpdateOnVolumes()
-		})
+		log.InfoD("Initiate HA update on all Volumes present in the cluster continuously")
+		go haUpdateOnVolumes()
 		time.Sleep(5 * time.Minute)
 
-		stepLog = "Initiate pool expansion continuously on all the pools present"
-		It(stepLog, func() {
-			log.InfoD(stepLog)
-			go doPoolExpandContinuously()
-		})
+		log.InfoD("Initiate pool expansion continuously on all the pools present")
+		go doPoolExpandContinuously()
 		time.Sleep(5 * time.Minute)
 
-		stepLog = "Create and Delete snapshots continuously from the volume"
-		It(stepLog, func() {
-			log.InfoD(stepLog)
-			go createDeleteSnapshot()
-		})
+		log.InfoD("Create and Delete snapshots continuously from the volume")
+		go createDeleteSnapshot()
 		time.Sleep(5 * time.Minute)
 
 		duration := 5 * time.Hour             // 2 days
