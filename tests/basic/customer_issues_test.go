@@ -823,6 +823,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 
+			log.InfoD("Initiating expand on all the pools one after the other")
 			for {
 				if terminate {
 					break
@@ -831,6 +832,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 				log.FailOnError(err, fmt.Sprintf("failed to get list of pools present in the cluster"))
 
 				for _, eachPool := range allPoolsPresent {
+					log.InfoD("Expanding pool [%v]", eachPool)
 					poolCurrSize, err := GetPoolTotalSize(eachPool)
 					if err != nil {
 						errors = append(errors, err)
@@ -946,11 +948,11 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 			for {
-				if terminate {
-					break
-				}
 				for _, eachVol := range allVolsPresent {
 					for snap := 0; snap < totalSnapshotsPerVol; snap++ {
+						if terminate {
+							break
+						}
 						uuidCreated := uuid.New()
 						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol.ID, uuidCreated.String())
 						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol.ID, snapshotName)
@@ -961,20 +963,42 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
 					}
 				}
-				for _, eachSnap := range snapshotList {
-					err := Inst().V.DeleteVolume(eachSnap)
-					if err != nil {
-						errors = append(errors, err)
+				if len(snapshotList) > 0 {
+					for _, eachSnap := range snapshotList {
+						err := Inst().V.DeleteVolume(eachSnap)
+						if err != nil {
+							errors = append(errors, err)
+						}
+						snapshotList = deleteElementFromArr(eachSnap, snapshotList)
+						if terminate {
+							break
+						}
 					}
-					snapshotList = deleteElementFromArr(eachSnap, snapshotList)
 				}
 			}
 		}
 
 		// Run Go Routines for HA Update, PoolExpand, createDeleteSnapshot
-		go haUpdateOnVolumes()
-		go doPoolExpandContinuously()
-		go createDeleteSnapshot()
+		stepLog := "Initiate HA update on all Volumes present in the cluster continuously"
+		It(stepLog, func() {
+			log.InfoD(stepLog)
+			go haUpdateOnVolumes()
+		})
+		time.Sleep(5 * time.Minute)
+
+		stepLog = "Initiate pool expansion continuously on all the pools present"
+		It(stepLog, func() {
+			log.InfoD(stepLog)
+			go doPoolExpandContinuously()
+		})
+		time.Sleep(5 * time.Minute)
+
+		stepLog = "Create and Delete snapshots continuously from the volume"
+		It(stepLog, func() {
+			log.InfoD(stepLog)
+			go createDeleteSnapshot()
+		})
+		time.Sleep(5 * time.Minute)
 
 		duration := 5 * time.Hour             // 2 days
 		ticker := time.NewTicker(time.Minute) // Run the function every minute
