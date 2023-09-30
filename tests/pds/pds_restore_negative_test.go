@@ -304,6 +304,7 @@ var _ = Describe("{BringDownPXReplicaNodes}", func() {
 			for _, ds := range params.DataServiceToTest {
 				//clearing up the previous entries
 				deploymentsToClean = []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleanedinSrc = []*v1.Deployment{}
 				CleanMapEntries(pdsdeploymentsmd5Hash)
 				//flag variable is to run test for only one volume of sts replica
 				flag = false
