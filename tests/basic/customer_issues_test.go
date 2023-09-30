@@ -829,7 +829,11 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 					break
 				}
 				allPoolsPresent, err := GetAllPoolsPresent()
-				log.FailOnError(err, fmt.Sprintf("failed to get list of pools present in the cluster"))
+				if err != nil {
+					errors = append(errors, err)
+					log.Infof(fmt.Sprintf("failed to get list of pools present in the cluster"))
+					continue
+				}
 
 				for _, eachPool := range allPoolsPresent {
 					log.InfoD("Expanding pool [%v]", eachPool)
