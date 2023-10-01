@@ -67,6 +67,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	It("Backup alternating between locked and unlocked buckets", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
+			log.InfoD("Validating apps")
 			ValidateApplications(scheduledAppContexts)
 		})
 
@@ -133,6 +134,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
+			log.InfoD("Register cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
@@ -145,6 +147,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		})
 
 		Step("Taking backup of application to locked and unlocked bucket", func() {
+			log.InfoD("Taking backup of application to locked and unlocked bucket")
 			for _, namespace := range bkpNamespaces {
 				for backupLocationUID, backupLocationName := range BackupLocationMap {
 					ctx, err := backup.GetAdminCtxFromSecret()
@@ -160,6 +163,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			}
 		})
 		Step("Restoring the backups application", func() {
+			log.InfoD("Restoring the backups application")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for range bkpNamespaces {
@@ -260,6 +264,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	It("Resize after the volume is restored from a backup", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
 		})
 
@@ -313,6 +318,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		})
 
 		Step("Register cluster for backup", func() {
+			log.InfoD("Register cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
@@ -326,6 +332,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 
 		for _, namespace := range bkpNamespaces {
 			Step("Taking backup of application to locked bucket", func() {
+				log.InfoD("Taking backup of application to locked bucket")
 				for backupLocationUID, backupLocationName := range BackupLocationMap {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -339,6 +346,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				}
 			})
 			Step("Restoring the backups application", func() {
+				log.InfoD("Restoring the backups application")
 				for _, backupName = range backupList {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -489,6 +497,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 	It("Schedule backup while resizing the volume", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Creating pre and post rule for deployed apps", func() {
@@ -622,9 +631,11 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 
 			})
 			Step("Validate applications before taking backup", func() {
+				log.InfoD("Validate applications")
 				ValidateApplications(scheduledAppContexts)
 			})
 			Step("Create schedule backup after initializing volume resize", func() {
+				log.InfoD("Create schedule backup after initializing volume resize")
 				for backupLocationUID, backupLocationName := range backupLocationMap {
 					log.InfoD("Create schedule backup after initializing volume resize")
 					ctx, err := backup.GetAdminCtxFromSecret()
@@ -842,7 +853,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 				createRestore := func(backupName string, restoreName string, namespace string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					customNamespace := fmt.Sprintf("custom-%s-%v", namespace, time.Now().Unix())
+					customNamespace := fmt.Sprintf("custom-%s", namespace)
 					namespaceMapping := map[string]string{namespace: customNamespace}
 					err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupName, namespaceMapping, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
