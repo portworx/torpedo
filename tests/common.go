@@ -9157,7 +9157,8 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	for _, eachNode := range node.GetNodes() {
 		status, err := IsPxRunningOnNode(&eachNode)
 		if err != nil {
-			return nil, err
+			log.InfoD("Px is not running on the Node.. searching for other node")
+			continue
 		}
 		if status {
 			selectedNode = append(selectedNode, eachNode)
@@ -9201,6 +9202,7 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 			}
 		}
 	}
+	log.Infof("Cluster provision status [%v]", clusterProvision)
 	return clusterProvision, nil
 }
 

@@ -953,6 +953,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			return snaplist
 		}
 
+		// Create Delete all snapshots continuously
 		createDeleteSnapshot := func() {
 			defer wg.Done()
 			defer GinkgoRecover()
