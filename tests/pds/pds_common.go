@@ -211,7 +211,7 @@ func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, dep
 		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
 	}
 	if ds.Name == mysql {
-		sleepTime := time.Duration(35)
+		sleepTime := time.Duration(45)
 		log.Debugf("sleeping for %d minutes", sleepTime)
 		time.Sleep(sleepTime * time.Minute)
 		params.DeploymentName = *deployment.ClusterResourceName
