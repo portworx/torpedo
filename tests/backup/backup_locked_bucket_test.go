@@ -994,16 +994,6 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 						break
 					}
 				}()
-				for backupName := range userBackupMap[user] {
-					wg.Add(1)
-					go func(backupName string) {
-						defer GinkgoRecover()
-						defer wg.Done()
-						err = Inst().Backup.WaitForBackupDeletion(nonAdminCtx, backupName, orgID, backupDeleteTimeout, backupDeleteRetryTime)
-						log.FailOnError(err, "failed while waiting for backup %s to be deleted", backupName)
-					}(backupName)
-				}
-				wg.Wait()
 			})
 			Step(fmt.Sprintf("Delete user %s source and destination cluster from the admin", user), func() {
 				log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster from the admin", user))
