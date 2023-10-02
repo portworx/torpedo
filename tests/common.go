@@ -9155,14 +9155,16 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	// Using Node which is up and running
 	var selectedNode []node.Node
 	for _, eachNode := range node.GetNodes() {
-		status, err := IsPxRunningOnNode(&eachNode)
-		if err != nil {
-			log.InfoD("Px is not running on the Node.. searching for other node")
-			continue
-		}
-		if status {
-			selectedNode = append(selectedNode, eachNode)
-			break
+		if !node.IsMasterNode(eachNode) {
+			status, err := IsPxRunningOnNode(&eachNode)
+			if err != nil {
+				log.InfoD("Px is not running on the Node.. searching for other node")
+				continue
+			}
+			if status {
+				selectedNode = append(selectedNode, eachNode)
+				break
+			}
 		}
 	}
 	if len(selectedNode) == 0 {
