@@ -791,8 +791,18 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("scalevolhasnap-%d", i))...)
 		}
-		//ValidateApplications(contexts)
+		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+
+		// Get list of all pools present in the cluster
+		allPoolsPresent, err := GetAllPoolsPresent()
+		if err != nil {
+			errors = append(errors, err)
+			log.Infof(fmt.Sprintf("failed to get list of pools present in the cluster"))
+		}
+		if len(allPoolsPresent) == 0 {
+			log.FailOnError(fmt.Errorf("No valid pools present in the cluster"), "is pool present?")
+		}
 
 		// Get list of Volumes present in the cluster
 		allVolsPresent := []*volume.Volume{}
@@ -802,16 +812,6 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			for _, eachVol := range vols {
 				allVolsPresent = append(allVolsPresent, eachVol)
 			}
-		}
-
-		// Get list of all pools present in the cluster
-		allPoolsPresent, err := GetAllPoolsPresent()
-		if err != nil {
-			errors = append(errors, err)
-			log.Infof(fmt.Sprintf("failed to get list of pools present in the cluster"))
-		}
-		if len(allPoolsPresent) == 0 {
-			log.FailOnError(fmt.Errorf("No valid pools present in the cluster"), "is pool present ?")
 		}
 
 		stopRoutine := func() {
