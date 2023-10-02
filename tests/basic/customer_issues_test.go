@@ -783,17 +783,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		for _, each := range node.GetStorageDriverNodes() {
 			allNodes = append(allNodes, each)
 		}
-		log.Infof("List of all nodes present in the cluster [%v]", allNodes)
-		// Verify total nodes available is minimum of 9
-		//dash.VerifyFatal(len(allNodes) < 6, true, "test need minimum of 6 Nodes run the test")
-
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("scalevolhasnap-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-
+		
 		// Get list of all pools present in the cluster
 		allPoolsPresent, err := GetAllPoolsPresent()
 		if err != nil {
@@ -803,6 +793,13 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		if len(allPoolsPresent) == 0 {
 			log.FailOnError(fmt.Errorf("No valid pools present in the cluster"), "is pool present?")
 		}
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("scalevolhasnap-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
 
 		// Get list of Volumes present in the cluster
 		allVolsPresent := []*volume.Volume{}
