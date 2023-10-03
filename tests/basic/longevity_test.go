@@ -272,7 +272,9 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
-		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.1"
+		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.1,https://edge-install.portworx.com/3.0.2"
+		Inst().AppList = []string{"vdbench-sharedv4", "elasticsearch"}
+		Inst().CsiAppList = []string{"fio", "nginx"}
 	})
 
 	It("has to schedule app and register test triggers", func() {
