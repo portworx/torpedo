@@ -1799,7 +1799,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if vcluster.ContextChange {
 			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
 			err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext)
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
@@ -1830,7 +1832,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
 			// Changing ContextChange flag to false to not trigger unnecessary context change further
 			vcluster.ContextChange = false
-			return nil, err
+			if err != nil {
+				return nil, err
+			}
 		}
 		return sc, nil
 
