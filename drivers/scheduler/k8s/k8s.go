@@ -1798,8 +1798,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		// Change Context only in case of vCluster tests
 		if vcluster.ContextChange {
 			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
-			err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext)
-			if err != nil {
+			if err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext); err != nil {
 				return nil, err
 			}
 		}
