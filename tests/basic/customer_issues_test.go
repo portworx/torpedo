@@ -764,7 +764,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			nil, 0)
 	})
 	var contexts []*scheduler.Context
-	stepLog := "has to schedule cloud snap  and delete cloudsnaps"
+	stepLog := "trigger test with HAUPdate, PoolExpand and Snapshot Create Delete in Parallel"
 	It(stepLog, func() {
 		var wg sync.WaitGroup
 		var terminate bool = false
