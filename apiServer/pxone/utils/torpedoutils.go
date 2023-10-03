@@ -41,6 +41,9 @@ func InitializeDrivers(c *gin.Context) {
 // GetNodes : This API will return list of all worker nodes in the Cluster
 func GetNodes(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetWorkerNodes()
@@ -56,6 +59,9 @@ func GetNodes(c *gin.Context) {
 // pxone/rebootnode/<nodename> - Reboots a node with specific node name
 func RebootNode(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetWorkerNodes()
@@ -115,6 +121,9 @@ func RebootNode(c *gin.Context) {
 // GetStorageNodes : Returns all Storage Node objects in the cluster
 func GetStorageNodes(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes, err := tests.GetStorageNodes()
@@ -132,6 +141,9 @@ func GetStorageNodes(c *gin.Context) {
 // GetStorageLessNodes : Returns all Storage less node objects in the cluster
 func GetStorageLessNodes(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetStorageLessNodes()
@@ -141,6 +153,9 @@ func GetStorageLessNodes(c *gin.Context) {
 // CollectSupport : This API collects the support bundle
 func CollectSupport(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	tests.CollectSupport()
@@ -151,6 +166,9 @@ func CollectSupport(c *gin.Context) {
 // context is created as a global context to be accessed later in further tests
 func ScheduleAppsAndValidate(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	appToRun := c.Param("appName")
@@ -182,6 +200,9 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 // GetPxVersion This function returns the current Px Version in the Target Cluster
 func GetPxVersion(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	version, err := tests.Inst().V.GetDriverVersion()
@@ -199,6 +220,9 @@ func GetPxVersion(c *gin.Context) {
 // IsPxInstalled This funtion returns true if Px is Installed
 func IsPxInstalled(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	nodes := node.GetWorkerNodes()
@@ -227,6 +251,9 @@ func IsPxInstalled(c *gin.Context) {
 // GetPxctlStatusOutput This function is used to return all elements in pxctl status output
 func GetPxctlStatusOutput(c *gin.Context) {
 	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("Error happened while doing InitInstance()"),
+		})
 		return
 	}
 	cmd := "status"
