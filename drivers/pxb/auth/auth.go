@@ -26,14 +26,22 @@ const (
 )
 
 const (
-	GlobalPxCentralAdminUsername       = "px-central-admin"
-	GlobalPxCentralAdminSecretName     = "px-central-admin"
-	GlobalPxBackupAuthTokenType        = "bearer"
-	GlobalPxBackupServiceName          = "px-backup"
-	GlobalPxBackupOrgToken             = "PX_BACKUP_ORG_TOKEN"
+	// GlobalPxCentralAdminUsername is the username for px-central-admin
+	GlobalPxCentralAdminUsername = "px-central-admin"
+	// GlobalPxCentralAdminSecretName is the secret name for px-central-admin
+	GlobalPxCentralAdminSecretName = "px-central-admin"
+	// GlobalPxBackupAuthTokenType is the authentication token type for px-backup
+	GlobalPxBackupAuthTokenType = "bearer"
+	// GlobalPxBackupServiceName is the service name for px-backup
+	GlobalPxBackupServiceName = "px-backup"
+	// GlobalPxBackupOrgToken is the organization token for px-backup
+	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
+	// GlobalPxBackupAdminTokenSecretName is the secret name for px-backup admin token
 	GlobalPxBackupAdminTokenSecretName = "px-backup-admin-secret"
-	GlobalPxBackupAuthHeader           = "authorization"
-	GlobalPxBackupKeycloakServiceName  = "pxcentral-keycloak-http"
+	// GlobalPxBackupAuthHeader is the header name for px-backup authentication
+	GlobalPxBackupAuthHeader = "authorization"
+	// GlobalPxBackupKeycloakServiceName is the service name for pxcentral-keycloak-http
+	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 )
 
 var (
