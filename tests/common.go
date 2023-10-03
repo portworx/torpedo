@@ -9163,14 +9163,18 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 			}
 			if status {
 				selectedNode = append(selectedNode, eachNode)
-				break
 			}
 		}
 	}
 	if len(selectedNode) == 0 {
 		return nil, fmt.Errorf("No Valid node exists")
 	}
-	output, err := runCmdGetOutput(cmd, selectedNode[0])
+
+	// Select Random Volumes for pool Expand
+	randomIndex := rand.Intn(len(selectedNode))
+	randomPool := selectedNode[randomIndex]
+
+	output, err := runCmdGetOutput(cmd, randomPool)
 	if err != nil {
 		log.Infof("running command [%v] failed on Node [%v]", cmd, selectedNode[0].Name)
 		return nil, err
