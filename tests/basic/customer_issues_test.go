@@ -867,26 +867,6 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			}
 		}
 
-		// Function to verify data integrity on all the volumes created during the test once in every 10 min
-		verifyDataIntegrity := func() {
-			defer wg.Done()
-			defer GinkgoRecover()
-			for {
-				if terminate {
-					break
-				}
-				// Verify DataIntegrity on the volumes created
-				log.Infof("Verifying Data integrity of all the volumes created")
-				err = ValidateDataIntegrity(&contexts)
-				if err != nil {
-					log.Infof("Data Integrity failed for volume", err)
-					errors = append(errors, err)
-					failureDetails = append(failureDetails, "DATA INTEGRITY VALIDATION FAILED")
-				}
-				time.Sleep(10 * time.Minute)
-			}
-		}
-
 		// Do ha update on all the volume at ones , and wait for ha update to complete before next iterations
 		haUpdateOnVolumes := func() {
 			defer wg.Done()
@@ -943,6 +923,14 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 						errors = append(errors, err)
 						failureDetails = append(failureDetails, fmt.Sprintf("WaitForReplicationToComplete of repl [%v] on Volume [%v]", setReplFactor[eachVol.Name], eachVol))
 					}
+				}
+				// Verify DataIntegrity on the volumes created
+				log.Infof("Verifying Data integrity of all the volumes created")
+				err = ValidateDataIntegrity(&contexts)
+				if err != nil {
+					log.Infof("Data Integrity failed for volume", err)
+					errors = append(errors, err)
+					failureDetails = append(failureDetails, "DATA INTEGRITY VALIDATION FAILED")
 				}
 			}
 		}
@@ -1004,11 +992,6 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 				}
 			}
 		}
-
-		// Run GO routine to verify dataintegrity on the volumes created
-		log.InfoD("Start threads to Verify Data Integrity on all the volumes created")
-		go verifyDataIntegrity()
-		time.Sleep(2 * time.Minute)
 
 		// Run Go Routines for HA Update, PoolExpand, createDeleteSnapshot
 		log.InfoD("Initiate HA update on all Volumes present in the cluster continuously")
