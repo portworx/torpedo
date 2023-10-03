@@ -773,8 +773,10 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		totalSnapshotsPerVol := 60
 		snapshotList := []string{}
 
-		// Have 3 Wait group to run the test
-		wg.Add(3)
+		failureDetails := []string{}
+
+		// Have 4 Wait group to run the test each for HA Update, Pool Expand, Verify Data Integrity and Snapshot operations
+		wg.Add(4)
 
 		// Check if the cluster consists of 10 nodes
 		log.InfoD("Get all nodes present in the cluster")
@@ -817,12 +819,14 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
 				for _, each := range snapshotList {
 					if IsVolumeExits(each) {
-						log.FailOnError(Inst().V.DeleteVolume(each), "volume deletion failed on the cluster with volume ID [%s]", each)
+						err := Inst().V.DeleteVolume(each)
+						errors = append(errors, err)
+						log.InfoD("volume deletion failed on the cluster with volume ID [%s]", each)
+						failureDetails = append(failureDetails, fmt.Sprintf("VOLUME DELETE FAILED, VOLNAME [%v]", each))
 					}
 				}
 			}
 		}
-
 		defer stopRoutine()
 
 		// Continuously Expand all the pools one after the other
@@ -841,7 +845,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 					log.InfoD("Expanding pool [%v]", eachPool)
 					poolCurrSize, err := GetPoolTotalSize(eachPool)
 					if err != nil {
-						errors = append(errors, err)
+
 						log.Infof(fmt.Sprintf("failed to get list of pools current size with error [%v]", err))
 					}
 					log.Infof("Current pool [%v] size is [%v]", eachPool, poolCurrSize)
@@ -861,10 +865,31 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			}
 		}
 
+		// Function to verify data integrity on all the volumes created during the test
+		verifyDataIntegrity := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				if terminate {
+					break
+				}
+				// Verify DataIntegrity on the volumes created
+				log.Infof("Verifying Data integrity of all the volumes created")
+				err = ValidateDataIntegrity(&contexts)
+				if err != nil {
+					log.Infof("Data Integrity failed for volume", err)
+					errors = append(errors, err)
+					failureDetails = append(failureDetails, "DATA INTEGRITY VALIDATION FAILED")
+				}
+			}
+		}
+
 		// Do ha update on all the volume at ones , and wait for ha update to complete before next iterations
 		haUpdateOnVolumes := func() {
 			defer wg.Done()
 			defer GinkgoRecover()
+
+			previousReplFactor := int64(1)
 			for {
 				if terminate {
 					break
@@ -872,37 +897,32 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 				replStatus := map[string]int64{}
 				for _, eachVol := range allVolsPresent {
 					log.Infof("HA update on the Volume [%v]", eachVol.ID)
+					setReplFactor := int64(1)
 					currRep, err := Inst().V.GetReplicationFactor(eachVol)
 					if err != nil {
 						errors = append(errors, err)
+						failureDetails = append(failureDetails, fmt.Sprintf("GetReplicationFactor FAILED for VOLUME [%v]", eachVol))
 					}
 
 					opts := volume.Options{
 						ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 					}
-					newRep := currRep
 					if currRep == 3 {
-						newRep = currRep - 1
-						err = Inst().V.SetReplicationFactor(eachVol, newRep, nil, nil, false, opts)
-						if err != nil {
-							errors = append(errors, err)
-						}
-						replStatus[eachVol.ID] = newRep
+						setReplFactor = currRep - 1
+					} else if currRep == 2 || previousReplFactor == 3 {
+						setReplFactor = setReplFactor
+					} else {
+						setReplFactor = currRep + 1
 					}
-					log.InfoD(fmt.Sprintf("setting repl factor  to %d for  vol : %s", newRep+1, eachVol.Name))
-					err = Inst().V.SetReplicationFactor(eachVol, newRep+1, nil, nil, false, opts)
+					previousReplFactor = currRep
+
+					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", eachVol.Name, currRep, setReplFactor)
+					err = Inst().V.SetReplicationFactor(eachVol, setReplFactor, nil, nil, false, opts)
 					if err != nil {
 						errors = append(errors, err)
+						failureDetails = append(failureDetails, fmt.Sprintf("SetReplicationFactor to [%v] FAILED for VOLUME [%v]", setReplFactor, eachVol))
 					}
-					replStatus[eachVol.ID] = newRep + 1
-					//reverting the replication to volume validation to pass
-					if currRep < 3 {
-						err = Inst().V.SetReplicationFactor(eachVol, currRep, nil, nil, false, opts)
-						if err != nil {
-							errors = append(errors, err)
-						}
-						replStatus[eachVol.ID] = currRep
-					}
+					replStatus[eachVol.ID] = setReplFactor
 				}
 				// Wait for all HA Update to complete
 				for _, eachVol := range allVolsPresent {
@@ -914,17 +934,9 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 					}
 					err := Inst().V.WaitForReplicationToComplete(eachVol, replFactor, replicationUpdateTimeout)
 					if err != nil {
-						log.Infof("Waiting for Replication timedout with error [%v]", err)
+						log.Infof("Waiting for Replication timed out with error [%v]", err)
 						errors = append(errors, err)
 					}
-				}
-
-				// Verify DataIntegrity on the volumes created
-				log.Infof("Verifying Data integrity of all the volumes created")
-				err = ValidateDataIntegrity(&contexts)
-				if err != nil {
-					log.Infof("Data Integrity failed for volume", err)
-					errors = append(errors, err)
 				}
 			}
 		}
@@ -985,6 +997,11 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			}
 		}
 
+		// Run GO routine to verify dataintegrity on the volumes created
+		log.InfoD("Start threads to Verify Data Integrity on all the volumes created")
+		go verifyDataIntegrity()
+		time.Sleep(2 * time.Minute)
+
 		// Run Go Routines for HA Update, PoolExpand, createDeleteSnapshot
 		log.InfoD("Initiate HA update on all Volumes present in the cluster continuously")
 		go haUpdateOnVolumes()
@@ -998,7 +1015,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		go createDeleteSnapshot()
 		time.Sleep(5 * time.Minute)
 
-		duration := 5 * time.Hour             // 2 days
+		duration := 3 * 24 * time.Hour        // 3 days
 		ticker := time.NewTicker(time.Minute) // Run the function every minute
 		defer ticker.Stop()
 		quit := make(chan struct{})
@@ -1016,7 +1033,6 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			}
 		}()
 		<-quit
-
 		wg.Wait()
 
 		if len(errors) > 0 {
