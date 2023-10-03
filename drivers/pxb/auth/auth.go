@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
-	k8s "github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/drivers/pxb/pxbutils"
+	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
+	"google.golang.org/grpc/metadata"
 	"io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
@@ -26,10 +26,14 @@ const (
 )
 
 const (
-	GlobalPxCentralAdminUsername      = "px-central-admin"
-	GlobalPxCentralAdminSecretName    = "px-central-admin"
-	GlobalPxBackupServiceName         = "px-backup"
-	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
+	GlobalPxCentralAdminUsername       = "px-central-admin"
+	GlobalPxCentralAdminSecretName     = "px-central-admin"
+	GlobalPxBackupAuthTokenType        = "bearer"
+	GlobalPxBackupServiceName          = "px-backup"
+	GlobalPxBackupOrgToken             = "PX_BACKUP_ORG_TOKEN"
+	GlobalPxBackupAdminTokenSecretName = "px-backup-admin-secret"
+	GlobalPxBackupAuthHeader           = "authorization"
+	GlobalPxBackupKeycloakServiceName  = "pxcentral-keycloak-http"
 )
 
 var (
@@ -48,8 +52,6 @@ const (
 	PxBackupOIDCEndpoint = "OIDC_ENDPOINT"
 	// PxBackupOIDCSecretName is the env var for the OIDC secret name within Px-Backup namespace, defaulting to DefaultOIDCSecretName
 	PxBackupOIDCSecretName = "SECRET_NAME"
-	// PxBackupKeycloakServiceName is the env var for the Keycloak service name within Px-Backup namespace, defaulting to GlobalPxBackupKeycloakServiceName
-	PxBackupKeycloakServiceName = "KEYCLOAK_SERVICE_NAME"
 )
 
 type TokenResponse struct {
@@ -62,9 +64,9 @@ type CredentialRepresentation struct {
 	Temporary bool   `json:"temporary"`
 }
 
-func NewPasswordCredential(value string, temporary bool) *CredentialRepresentation {
+func NewCredentialRepresentation(credType string, value string, temporary bool) *CredentialRepresentation {
 	return &CredentialRepresentation{
-		Type:      "password",
+		Type:      credType,
 		Value:     value,
 		Temporary: temporary,
 	}
@@ -84,23 +86,23 @@ type UserRepresentation struct {
 func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, headers http.Header, body io.Reader) (responseBody []byte, err error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, string(method), url, body)
 	if err != nil {
-		return nil, pxbutils.ProcessError(err, pxbutils.StructToString(httpRequest))
+		return nil, ProcessError(err, StructToString(httpRequest))
 	}
 	httpRequest.Header = headers
 	client := &http.Client{}
 	httpResponse, err := client.Do(httpRequest)
 	if err != nil {
-		return nil, pxbutils.ProcessError(err, pxbutils.StructToString(httpRequest))
+		return nil, ProcessError(err, StructToString(httpRequest))
 	}
 	defer func() {
 		err := httpResponse.Body.Close()
 		if err != nil {
-			log.Errorf("error closing HTTP response body: %v", pxbutils.ProcessError(err, pxbutils.StructToString(httpResponse)))
+			log.Errorf("error closing HTTP response body: %v", ProcessError(err, StructToString(httpResponse)))
 		}
 	}()
 	responseBody, err = io.ReadAll(httpResponse.Body)
 	if err != nil {
-		return nil, pxbutils.ProcessError(err, pxbutils.StructToString(httpResponse))
+		return nil, ProcessError(err, StructToString(httpResponse))
 	}
 	return responseBody, nil
 }
@@ -122,24 +124,24 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	values.Set("token-duration", "365d")
 	keycloakEndPoint, err := GetKeycloakEndPoint(false)
 	if err != nil {
-		return "", err
+		return "", ProcessError(err)
 	}
 	reqURL := fmt.Sprintf("%s/protocol/openid-connect/token", keycloakEndPoint)
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	response, err := ProcessHTTPRequest(ctx, POST, reqURL, headers, strings.NewReader(values.Encode()))
 	if err != nil {
-		return "", err
+		return "", ProcessError(err)
 	}
 	token := &TokenResponse{}
 	err = json.Unmarshal(response, &token)
 	if err != nil {
-		return "", err
+		return "", ProcessError(err)
 	}
 	return token.AccessToken, nil
 }
 
-func GetCommonHTTPHeaders(ctx context.Context, username string, password string) (http.Header, error) {
+func GetUserAuthHeaders(ctx context.Context, username string, password string) (http.Header, error) {
 	token, err := GetToken(ctx, username, password)
 	if err != nil {
 		debugStruct := struct {
@@ -149,7 +151,7 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 			username: username,
 			password: "", // password left blank on purpose
 		}
-		return nil, pxbutils.ProcessError(err, pxbutils.StructToString(debugStruct))
+		return nil, ProcessError(err, StructToString(debugStruct))
 	}
 	headers := make(http.Header)
 	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
@@ -157,15 +159,15 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 	return headers, nil
 }
 
-func AddUserByPassword(ctx context.Context, username string, firstName string, lastName string, email string, enabled bool, password string, temporary bool) error {
+func AddUser(ctx context.Context, username string, firstName string, lastName string, email string, enabled bool, password string, temporary bool) error {
 	keycloakEndPoint, err := GetKeycloakEndPoint(true)
 	if err != nil {
-		return pxbutils.ProcessError(err)
+		return ProcessError(err)
 	}
 	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
-	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	headers, err := GetUserAuthHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
 	if err != nil {
-		return pxbutils.ProcessError(err)
+		return ProcessError(err)
 	}
 	userRepresentation := &UserRepresentation{
 		Name:      username,
@@ -174,12 +176,12 @@ func AddUserByPassword(ctx context.Context, username string, firstName string, l
 		Email:     email,
 		Enabled:   enabled,
 		Credentials: []CredentialRepresentation{
-			*NewPasswordCredential(password, temporary),
+			*NewCredentialRepresentation("password", password, temporary),
 		},
 	}
 	userBytes, err := json.Marshal(userRepresentation)
 	if err != nil {
-		return pxbutils.ProcessError(err)
+		return ProcessError(err)
 	}
 	response, err := ProcessHTTPRequest(ctx, POST, requestURL, headers, strings.NewReader(string(userBytes)))
 	log.Infof("response %v", response)
@@ -190,19 +192,73 @@ func AddUserByPassword(ctx context.Context, username string, firstName string, l
 	return nil
 }
 
-// GetPxBackupNamespace returns namespace of px-backup deployment.
+func GetUserID(ctx context.Context, username string) (string, error) {
+	headers, err := GetUserAuthHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	// TODO Need to increase the limit
+	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	response, err := ProcessHTTPRequest(ctx, GET, reqURL, headers, nil)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	var users []UserRepresentation
+	err = json.Unmarshal(response, &users)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	var clientID string
+	for _, user := range users {
+		if user.Name == username {
+			clientID = user.ID
+			break
+		}
+	}
+	log.Infof("Fetching ID of user %s - %s", username, clientID)
+	return clientID, nil
+}
+
+func DeleteUser(ctx context.Context, username string) error {
+	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	userID, err := GetUserID(ctx, username)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
+	headers, err := GetUserAuthHeaders(context.Background(), GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return err
+	}
+
+	response, err := ProcessHTTPRequest(context.Background(), DELETE, reqURL, headers, nil)
+	log.Infof("Response for user [%s] deletion - %s", username, string(response))
+	if err != nil {
+		return err
+	}
+	log.Infof("Deleted User - %s", username)
+	return nil
+}
+
 func GetPxBackupNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return "", pxbutils.ProcessError(err)
+		return "", ProcessError(err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == GlobalPxBackupServiceName {
 			return svc.Namespace, nil
 		}
 	}
-	err = fmt.Errorf("cannot find Px-Backup service [%s] from list of services", GlobalPxBackupServiceName)
-	return "", pxbutils.ProcessError(err)
+	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", GlobalPxBackupServiceName)
+	return "", ProcessError(err)
 }
 
 func GetKeycloakEndPoint(admin bool) (string, error) {
@@ -226,7 +282,7 @@ func GetKeycloakEndPoint(admin bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	secret, err := k8s.Instance().GetSecret(name, ns)
+	secret, err := core.Instance().GetSecret(name, ns)
 	if err != nil {
 		return "", err
 	}
@@ -248,30 +304,91 @@ func GetKeycloakEndPoint(admin bool) (string, error) {
 func GetPxCentralAdminPassword() (string, error) {
 	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
-		return "", pxbutils.ProcessError(err)
+		return "", ProcessError(err)
 	}
-	secret, err := k8s.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
+	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
 	if err != nil {
 		debugStruct := struct {
 			PxbNamespace string
 		}{
 			PxbNamespace: pxbNamespace,
 		}
-		return "", pxbutils.ProcessError(err, pxbutils.StructToString(debugStruct))
+		return "", ProcessError(err, StructToString(debugStruct))
 	}
 	PxCentralAdminPwd := string(secret.Data["credential"])
 	if PxCentralAdminPwd == "" {
 		err = fmt.Errorf("%s secret is empty", GlobalPxCentralAdminSecretName)
-		return "", pxbutils.ProcessError(err)
+		return "", ProcessError(err)
 	}
 	return PxCentralAdminPwd, nil
+}
+
+func GetPxCentralAdminToken(ctx context.Context) (string, error) {
+	token, err := GetToken(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func UpdatePxBackupAdminSecret(ctx context.Context) error {
+	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
+	if err != nil {
+		return ProcessError(err)
+	}
+	pxbNamespace, err := GetPxBackupNamespace()
+	if err != nil {
+		return ProcessError(err)
+	}
+	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminTokenSecretName, pxbNamespace)
+	if err != nil {
+		return ProcessError(err)
+	}
+	secret.Data[GlobalPxBackupOrgToken] = []byte(pxCentralAdminToken)
+	_, err = core.Instance().UpdateSecret(secret)
+	if err != nil {
+		return ProcessError(err)
+	}
+	return nil
+}
+
+func GetCtxWithToken(token string) context.Context {
+	return metadata.NewOutgoingContext(
+		context.Background(),
+		metadata.New(
+			map[string]string{
+				GlobalPxBackupAuthHeader: GlobalPxBackupAuthTokenType + " " + token,
+			},
+		),
+	)
+}
+
+func GetAdminCtxFromSecret(ctx context.Context) (context.Context, error) {
+	err := UpdatePxBackupAdminSecret(ctx)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	pxbNamespace, err := GetPxBackupNamespace()
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminTokenSecretName, pxbNamespace)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	token := string(secret.Data[GlobalPxBackupOrgToken])
+	if token == "" {
+		err = fmt.Errorf("[%s] token in secret [%s] is empty", GlobalPxBackupAdminTokenSecretName, GlobalPxBackupOrgToken)
+		return nil, ProcessError(err)
+	}
+	return GetCtxWithToken(token), nil
 }
 
 func init() {
 	str, err := GetPxCentralAdminPassword()
 	if err != nil {
-		log.Errorf("Error fetching password from secret: %v", err)
+		err = fmt.Errorf("error fetching [%s] password from secret: [%v]", err)
+		log.Errorf(ProcessError(err).Error())
 	}
 	GlobalPxCentralAdminPassword = str
-	log.Infof("GlobalPxCentralAdminPassword %s", GlobalPxCentralAdminPassword)
 }
