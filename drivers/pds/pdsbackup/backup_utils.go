@@ -283,6 +283,38 @@ func (backupClient *BackupClient) GetAllBackupSupportedDataServices() (map[strin
 }
 
 // TriggerAndValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
+func (backupClient *BackupClient) NewTriggerAndValidateAdhocBackup(deploymentID string, backupTargetID string, backupType string) ([]pds.ModelsBackupJobStatusResponse, *pds.ModelsBackup, error) {
+	var bkpJobs []pds.ModelsBackupJobStatusResponse
+	bkpObj, err := backupClient.Components.Backup.CreateBackup(deploymentID, backupTargetID, true)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed while creating adhoc backup. Err: %v", err)
+	}
+	log.Infof("Created adhoc backup. Details: deployment- %v,backup type - %v, backup resource name: %v", bkpObj.GetDeploymentName(), bkpObj.GetBackupType(), bkpObj.GetClusterResourceName())
+
+	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
+		bkpJobs, err = backupClient.Components.BackupJob.ListBackupJobs(bkpObj.GetId())
+		if err != nil {
+			return false, err
+		}
+		log.Infof("[Backup job: %v] Status: %v", bkpJobs[0].GetName(), bkpJobs[0].GetStatus())
+		if bkpJobs[0].GetStatus() == "Succeeded" {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	if waitErr != nil {
+		return nil, nil, fmt.Errorf("error occured while polling the status of backup job object. Err:%v", waitErr)
+	}
+
+	log.Infof("Created adhoc backup successfully for %v,"+
+		" backup job: %v, backup job creation time: %v, backup job completion time: %v",
+		bkpObj.GetClusterResourceName(), bkpJobs[0].GetName(), bkpJobs[0].GetStartTime(), bkpJobs[0].GetCompletionTime())
+
+	return bkpJobs, bkpObj, nil
+}
+
+// TriggerAndValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func (backupClient *BackupClient) TriggerAndValidateAdhocBackup(deploymentID string, backupTargetID string, backupType string) error {
 	var bkpJobs []pds.ModelsBackupJobStatusResponse
 	bkpObj, err := backupClient.Components.Backup.CreateBackup(deploymentID, backupTargetID, true)
