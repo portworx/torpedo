@@ -21,7 +21,7 @@ import (
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var (
-		appList  = Inst().AppList
+		appList = Inst().AppList
 		credName string
 	)
 	var preRuleNameList []string
