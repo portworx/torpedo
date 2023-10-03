@@ -12,7 +12,6 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
-	"golang.org/x/sync/errgroup"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"math/rand"
@@ -1956,17 +1955,17 @@ func replAdjust(appVolumes []*volume.Volume, actRepls map[*volume.Volume]int64) 
 }
 
 func setVolumeRepl(setRepls map[*volume.Volume]int64, waitToFinish bool) error {
-	eg := errgroup.Group{}
 
 	for v, r := range setRepls {
-		log.InfoD("setting repl for volume %s to %d", v.Name, r)
-		eg.Go(func() error {
-			err := Inst().V.SetReplicationFactor(v, r, nil, nil, waitToFinish)
+		log.InfoD("setting repl for volume %s to %d", v.ID, r)
+		err := Inst().V.SetReplicationFactor(v, r, nil, nil, waitToFinish)
+		if err != nil {
 			return err
-		})
+		}
+
 	}
-	err := eg.Wait()
-	return err
+
+	return nil
 }
 
 func validateCloudSnaps(appNamespace string) (map[string]string, error) {
@@ -1975,101 +1974,107 @@ func validateCloudSnaps(appNamespace string) (map[string]string, error) {
 	snapsMap := make(map[string]string, 0)
 
 	for _, ctx := range contexts {
-		var appVolumes []*volume.Volume
-		var err error
+		if strings.Contains(ctx.App.Key, "cloudsnap") {
 
-		appVolumes, err = Inst().S.GetVolumes(ctx)
-		log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
-		if err != nil {
-			return snapsMap, err
-		}
+			var appVolumes []*volume.Volume
+			var err error
 
-		if len(appVolumes) == 0 {
-			return snapsMap, fmt.Errorf("no volumes found for [%s]", ctx.App.Key)
-		}
-
-		log.Infof("Got volume count : %v", len(appVolumes))
-
-		err = Inst().S.ValidateVolumes(ctx, 4*time.Minute, defaultRetryInterval, nil)
-		log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
-		if err != nil {
-			return snapsMap, err
-		}
-
-		for _, v := range appVolumes {
-
-			isPureVol, err := Inst().V.IsPureVolume(v)
+			appVolumes, err = Inst().S.GetVolumes(ctx)
+			log.FailOnError(err, "error getting volumes for [%s]", ctx.App.Key)
 			if err != nil {
 				return snapsMap, err
 			}
 
-			if isPureVol {
-				log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
-				continue
-			}
-			snapshotScheduleName := ""
-			if v.Name == "fio-pvc" {
-				snapshotScheduleName = fioPVScheduleName
-			} else {
-				snapshotScheduleName = fioOutputPVScheduleName
+			if len(appVolumes) == 0 {
+				return snapsMap, fmt.Errorf("no volumes found for [%s]", ctx.App.Key)
 			}
 
-			log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
-			resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+			log.Infof("Got volume count : %v", len(appVolumes))
+
+			err = Inst().S.ValidateVolumes(ctx, 4*time.Minute, defaultRetryInterval, nil)
+			log.FailOnError(err, "error validating volumes for [%s]", ctx.App.Key)
 			if err != nil {
-
 				return snapsMap, err
 			}
 
-			dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
-			for _, snapshotStatuses := range resp.Status.Items {
-				if len(snapshotStatuses) > 0 {
-					status := snapshotStatuses[len(snapshotStatuses)-1]
-					if status == nil {
-
-						return snapsMap, fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status")
-
-					}
-					log.Infof("Snapshot %s has status %v", status.Name, status.Status)
-
-					if status.Status == snapv1.VolumeSnapshotConditionError {
-
-						return snapsMap, fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status)
-					}
-					if status.Status != snapv1.VolumeSnapshotConditionPending {
-						snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
-
-						if err != nil {
-							return snapsMap, err
-						}
-
-						snapType := snapData.Spec.PortworxSnapshot.SnapshotType
-						log.Infof("Snapshot Type: %v", snapType)
-						if snapType != "cloud" {
-							err = &scheduler.ErrFailedToGetVolumeParameters{
-								App:   ctx.App,
-								Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
-							}
-							return snapsMap, err
-						}
-
-						snapID := snapData.Spec.PortworxSnapshot.SnapshotID
-						log.Infof("Snapshot ID: %v", snapID)
-						if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
-							len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
-							err = &scheduler.ErrFailedToGetVolumeParameters{
-								App:   ctx.App,
-								Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
-							}
-							return snapsMap, err
-						}
-
-					}
-					snapsMap[snapshotScheduleName] = status.Name
-
+			for _, v := range appVolumes {
+				isPureVol, err := Inst().V.IsPureVolume(v)
+				if err != nil {
+					return snapsMap, err
 				}
-			}
 
+				if isPureVol {
+					log.Warnf("Cloud snapshot is not supported for Pure DA volumes: [%s],Skipping cloud snapshot trigger for pure volume.", v.Name)
+					continue
+				}
+				snapshotScheduleName := ""
+				if v.Name == "fio-pvc" {
+					snapshotScheduleName = fioPVScheduleName
+				} else if v.Name == "fio-output-pvc" {
+					snapshotScheduleName = fioOutputPVScheduleName
+				} else {
+					snapshotScheduleName = v.Name + "-interval-schedule"
+				}
+
+				log.InfoD("snapshotScheduleName : %v for volume: %s", snapshotScheduleName, v.Name)
+				resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+				if err != nil {
+					return snapsMap, err
+				}
+
+				dash.VerifyFatal(len(resp.Status.Items) > 0, true, fmt.Sprintf("verify snapshots exists for %s", snapshotScheduleName))
+				for _, snapshotStatuses := range resp.Status.Items {
+					if len(snapshotStatuses) > 0 {
+						status := snapshotStatuses[len(snapshotStatuses)-1]
+						if status == nil {
+							return snapsMap, fmt.Errorf("snapshotSchedule has an empty migration in it's most recent status,Err: %v", err)
+						}
+						status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
+						log.Infof("Snapshot %s has status %v", status.Name, status.Status)
+
+						if status.Status == snapv1.VolumeSnapshotConditionError {
+							return snapsMap, fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status)
+						}
+
+						if status.Status == snapv1.VolumeSnapshotConditionPending {
+							return snapsMap, fmt.Errorf("snapshot: %s not completed. status: %v", status.Name, status.Status)
+						}
+
+						if status.Status == snapv1.VolumeSnapshotConditionReady {
+							snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
+
+							if err != nil {
+								return snapsMap, err
+							}
+
+							snapType := snapData.Spec.PortworxSnapshot.SnapshotType
+							log.Infof("Snapshot Type: %v", snapType)
+							if snapType != "cloud" {
+								err = &scheduler.ErrFailedToGetVolumeParameters{
+									App:   ctx.App,
+									Cause: fmt.Sprintf("Snapshot Type: %s does not match", snapType),
+								}
+								return snapsMap, err
+							}
+
+							snapID := snapData.Spec.PortworxSnapshot.SnapshotID
+							log.Infof("Snapshot ID: %v", snapID)
+							if snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot == nil ||
+								len(snapData.Spec.VolumeSnapshotDataSource.PortworxSnapshot.SnapshotID) == 0 {
+								err = &scheduler.ErrFailedToGetVolumeParameters{
+									App:   ctx.App,
+									Cause: fmt.Sprintf("volumesnapshotdata: %s does not have portworx volume source set", snapData.Metadata.Name),
+								}
+								return snapsMap, err
+							}
+
+						}
+						snapsMap[snapshotScheduleName] = status.Name
+
+					}
+				}
+
+			}
 		}
 	}
 	return snapsMap, nil
@@ -2104,14 +2109,12 @@ func deletePXVolume(volName string) error {
 
 var _ = Describe("{CloudSnapWithPXEvents}", func() {
 	var testrailID = 0
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35271
 	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("CloudSnapWithPXEvents", "Validate cloudsnap during PX events", nil, 0)
 		runID = testrailuttils.AddRunsToMilestone(0)
 
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "has to schedule apps with cloudsnaps and perform PX events"
 	It(stepLog, func() {
@@ -2179,12 +2182,13 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 			}
 
 			ValidateApplications(contexts)
-			nsList, err := core.Instance().ListNamespaces(nil)
+			nsList, err := core.Instance().ListNamespaces(map[string]string{"creator": "torpedo"})
 			log.FailOnError(err, "error getting all namespaces")
+			log.Infof("%v", nsList)
 			appNamespaces := make([]string, 0)
 			for _, ns := range nsList.Items {
 				if strings.Contains(ns.Name, "cspxevents") {
-					appNamespaces = append(appNamespaces, ns.Namespace)
+					appNamespaces = append(appNamespaces, ns.Name)
 				}
 			}
 
@@ -2195,7 +2199,6 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 			stepLog = "validate cloudsnaps"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-
 				for _, ns := range appNamespaces {
 					_, err = validateCloudSnaps(ns)
 					log.FailOnError(err, fmt.Sprintf("error validating cloudsnaps in namespace [%s]", ns))
@@ -2225,6 +2228,7 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 						})
 
 					log.Infof("wait for 10 mins for volumes to reallocate")
+					time.Sleep(10 * time.Minute)
 
 					stepLog = fmt.Sprintf("starting volume %s driver on node %s",
 						Inst().V.String(), attachedNode.Name)
@@ -2257,7 +2261,7 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 			stepLog = "validate repl update during cloudsnaps"
 
 			Step(stepLog, func() {
-				stopValidation := make(chan bool)
+				stopValidation := make(chan bool, 1)
 
 				log.InfoD(stepLog)
 
@@ -2289,75 +2293,174 @@ var _ = Describe("{CloudSnapWithPXEvents}", func() {
 						newRepls[v] = currRep + 1
 					}
 					// Create a channel to signal an error.
-					errorChan := make(chan error, 1)
-
+					errorChan := make(chan error, 2)
 					// Create a WaitGroup to wait for both functions to finish.
 					var wg sync.WaitGroup
-					wg.Add(1)
-					//Go routine for repl increase
-					go func() {
-						defer wg.Done()
-						defer GinkgoRecover()
-						for v, r := range newRepls {
-							log.InfoD("setting repl for volume %s to %d", v.Name, r)
-							if err := Inst().V.SetReplicationFactor(v, r, nil, nil, false); err != nil {
-								errorChan <- err
-								stopValidation <- true
-							}
-						}
+					for v, r := range newRepls {
+						log.InfoD("setting repl for volume %s to %d", v.Name, r)
+						if err := Inst().V.SetReplicationFactor(v, r, nil, nil, false); err != nil {
+							log.Errorf(fmt.Sprintf("got error while repl increase %v", err))
 
-					}()
+						}
+					}
 
 					//Go routine for cloudsnap validate
 					wg.Add(1)
 					go func() {
-						defer wg.Done()
 						defer GinkgoRecover()
+						defer wg.Done()
+
 						for {
 							select {
 							case <-errorChan:
+								close(stopValidation)
+								close(errorChan)
 								return
 							case <-stopValidation:
+								close(stopValidation)
+								close(errorChan)
 								return
 							default:
 								for _, ns := range appNamespaces {
 									if _, err := validateCloudSnaps(ns); err != nil {
 										errorChan <- err
+										break
 									}
 								}
-								time.Sleep(10 * time.Minute)
+								log.Infof("waiting for 3 mins for next validation")
+								time.Sleep(3 * time.Minute)
 							}
 						}
 
 					}()
 
-					//Go routine for repl update validation
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						defer GinkgoRecover()
-						for v, r := range newRepls {
-							if err = ValidateReplFactorUpdate(v, r); err != nil {
-								errorChan <- err
-								stopValidation <- true
-							}
+					for v, r := range newRepls {
+						log.InfoD(fmt.Sprintf("validating repl for %s shoulbe be %d", v.ID, r))
+						if err = ValidateReplFactorUpdate(v, r); err != nil {
+							errorChan <- err
+							break
 						}
-
-					}()
-					wg.Wait()
-
-					select {
-					case err := <-errorChan:
-						dash.VerifyFatal(err, nil, "validate cloudsnaps while repl increase")
 					}
-					for v, r := range actRepls {
-						log.InfoD("setting repl for volume %s to %d", v.Name, r)
-						if err := Inst().V.SetReplicationFactor(v, r, nil, nil, true); err != nil {
+					stopValidation <- true
 
+					wg.Wait()
+					for e := range errorChan {
+						dash.VerifySafely(e, nil, "validate cloudsnaps while repl increase")
+					}
+
+					for v, r := range actRepls {
+						if newRepls[v] != r {
+							log.InfoD("setting repl for volume %s to %d", v.Name, r)
+							err = Inst().V.SetReplicationFactor(v, r, nil, nil, true)
+							log.FailOnError(err, fmt.Sprintf("error setting repl for volume %s with value %d", v.ID, r))
 						}
+
 					}
 
 				})
+
+			})
+
+			stepLog = "node de-comm and rejoin while cloudsnap in progress"
+			Step(stepLog, func() {
+				attachedNodes := make(map[string]bool, 0)
+				for _, v := range csAppVolumes {
+					attachedNode, err := Inst().V.GetNodeForVolume(v, 1*time.Minute, 5*time.Second)
+					log.FailOnError(err, fmt.Sprintf("error getting attahced node for volume %s", v.Name))
+					if attachedNode != nil {
+						if _, ok := attachedNodes[attachedNode.Name]; !ok {
+							attachedNodes[attachedNode.Name] = true
+						}
+					}
+				}
+
+				for attachedNode := range attachedNodes {
+					nodeToDecommission, err := node.GetNodeByName(attachedNode)
+					stepLog = fmt.Sprintf("decommission node %s", nodeToDecommission.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						err := Inst().S.PrepareNodeToDecommission(nodeToDecommission, Inst().Provisioner)
+						dash.VerifyFatal(err, nil, "Validate node decommission preparation")
+						err = Inst().V.DecommissionNode(&nodeToDecommission)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate node [%s] decommission init", nodeToDecommission.Name))
+						stepLog = fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name)
+						Step(stepLog, func() {
+							log.InfoD(stepLog)
+							t := func() (interface{}, bool, error) {
+								status, err := Inst().V.GetNodeStatus(nodeToDecommission)
+								if err != nil {
+									return false, true, err
+								}
+								if *status == api.Status_STATUS_NONE {
+									return true, false, nil
+								}
+								return false, true, fmt.Errorf("node %s not decomissioned yet", nodeToDecommission.Name)
+							}
+							decommissioned, err := task.DoRetryWithTimeout(t, 15*time.Minute, defaultRetryInterval)
+							log.FailOnError(err, "Failed to get decommissioned node status")
+							dash.VerifyFatal(decommissioned.(bool), true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
+						})
+					})
+					stepLog = "validate cloudsnaps after node decomm"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						for _, ns := range appNamespaces {
+							_, err = validateCloudSnaps(ns)
+							dash.VerifySafely(err, nil, fmt.Sprintf("validating cloudsnaps in namespace [%s]", ns))
+						}
+					})
+					stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						//reboot required to remove encrypted dm devices if any
+						err := Inst().N.RebootNode(nodeToDecommission, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultRetryInterval,
+							},
+						})
+						log.FailOnError(err, fmt.Sprintf("error rebooting node %s", nodeToDecommission.Name))
+						err = Inst().V.RejoinNode(&nodeToDecommission)
+						dash.VerifyFatal(err, nil, "Validate node rejoin init")
+						var rejoinedNode *api.StorageNode
+						t := func() (interface{}, bool, error) {
+							drvNodes, err := Inst().V.GetDriverNodes()
+							if err != nil {
+								return false, true, err
+							}
+
+							for _, n := range drvNodes {
+								if n.Hostname == nodeToDecommission.Hostname {
+									rejoinedNode = n
+									return true, false, nil
+								}
+							}
+
+							return false, true, fmt.Errorf("node %s not joined yet", nodeToDecommission.Name)
+						}
+						_, err = task.DoRetryWithTimeout(t, 15*time.Minute, defaultRetryInterval)
+						log.FailOnError(err, fmt.Sprintf("error joining the node [%s]", nodeToDecommission.Name))
+						dash.VerifyFatal(rejoinedNode != nil, true, fmt.Sprintf("verify node [%s] rejoined PX cluster", nodeToDecommission.Name))
+						err = Inst().S.RefreshNodeRegistry()
+						log.FailOnError(err, "error refreshing node registry")
+						err = Inst().V.RefreshDriverEndpoints()
+						log.FailOnError(err, "error refreshing storage drive endpoints")
+						decommissionedNode := node.Node{}
+						for _, n := range node.GetStorageDriverNodes() {
+							if n.Name == rejoinedNode.Hostname {
+								decommissionedNode = n
+								break
+							}
+						}
+						if decommissionedNode.Name == "" {
+							log.FailOnError(fmt.Errorf("rejoined node not found"), fmt.Sprintf("node [%s] not found in the node registry", rejoinedNode.Hostname))
+						}
+						err = Inst().V.WaitDriverUpOnNode(decommissionedNode, Inst().DriverStartTimeout)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Validate driver up on rejoined node [%s] after rejoining", decommissionedNode.Name))
+					})
+
+				}
 
 			})
 		})
