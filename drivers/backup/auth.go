@@ -1216,6 +1216,7 @@ func processHTTPRequest(
 			log.Debugf("Error closing http response body: %v", err)
 		}
 	}()
+	log.Infof("ProcessHTTPRequest Response: %v", httpResponse)
 	responseBody, err := ioutil.ReadAll(httpResponse.Body)
 	return responseBody, err
 }
