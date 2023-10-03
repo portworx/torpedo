@@ -11,6 +11,8 @@ import (
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
+	"strconv"
 )
 
 var _ = Describe("{ServiceIdentityNsLevel}", func() {
@@ -64,19 +66,19 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
 					continue
 				}
-				ns1, err := pdslib.CreatePdsLabeledNamespaces()
+				ns1, _, err := targetCluster.CreatePDSNamespace("ns1-" + strconv.Itoa(rand.Int()))
 				log.FailOnError(err, "Error while creating namespace")
 				log.InfoD("Successfully created namespace with PDS Label %v ", ns1)
-				ns1Id1, err := targetCluster.GetnameSpaceID(ns1, deploymentTargetID)
+				ns1Id1, err := targetCluster.GetnameSpaceID(ns1.Name, deploymentTargetID)
 				nsID1 = append(nsID1, ns1Id1)
 				log.FailOnError(err, "Error while fetching namespaceID")
 				log.InfoD("NamespaceID1 fetched is %v ", nsID1)
 				ns1RoleName := "namespace-admin"
 
-				ns2, err := pdslib.CreatePdsLabeledNamespaces()
+				ns2, _, err := targetCluster.CreatePDSNamespace("ns2-" + strconv.Itoa(rand.Int()))
 				log.FailOnError(err, "Error while creating namespace")
 				log.InfoD("Successfully created namespace with PDS Label %v ", ns2)
-				ns2Id2, err := targetCluster.GetnameSpaceID(ns2, deploymentTargetID)
+				ns2Id2, err := targetCluster.GetnameSpaceID(ns2.Name, deploymentTargetID)
 				nsID2 = append(nsID2, ns2Id2)
 				log.FailOnError(err, "Error while fetching namespaceID")
 				log.InfoD("NamespaceID2 fetched is %v ", nsID2)
@@ -105,7 +107,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				log.InfoD("Successfully updated Infra params for Si test")
 
 				isDeploymentsDeleted = false
-				deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesWithSiAndTls(ds, ns1, ns1Id1, projectID, resTempId, appConfigId, versionId, imageID, dsId)
+				deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServicesWithSiAndTls(ds, ns1.Name, ns1Id1, projectID, resTempId, appConfigId, versionId, imageID, dsId, false)
 				log.FailOnError(err, "Error while deploying data services")
 				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 				log.FailOnError(err, "Error while deploying data services")
@@ -139,21 +141,30 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						Deployment:           deployment,
 						RestoreTargetCluster: restoreTarget,
 					}
+					// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
+					customParams.SetParamsForServiceIdentityTest(params, false)
 					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					pdsRestoreTargetClusterID, err := targetCluster.GetDeploymentTargetID(clusterID, tenantID)
+
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, _ := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), ns2, dsEntity, false, false)
-						log.InfoD("Failed to trigger restore for - %v", restoredModel.Name)
-						log.InfoD("Restore is failed as expected.")
-						deploymentsToBeCleaned = append(deploymentsToBeCleaned)
+						pdsRestoreNsName, pdsRestoreNsId, err := restoreClient.GetNameSpaceIdToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
+						log.FailOnError(err, "unable to fetch namespace id to restore")
+						customParams.SetParamsForServiceIdentityTest(params, true)
+						_, err = restoreClient.RestoreDataServiceWithRbac(pdsRestoreTargetClusterID, backupJob.GetId(), pdsRestoreNsName, dsEntity, pdsRestoreNsId, false)
+						dash.VerifyFatal(err != nil, true, "Restore is failed as expected")
+
 					}
 				})
-				//ToDo: Testing is blocked from here because of bug-
+
 				Step("Update IAM Role with ns2 as namespace-admin role", func() {
-					ns2RoleName = "namespace-admin"
-					binding2.RoleName = &ns2RoleName
-					nsRoles = append(nsRoles, binding1, binding2)
+					nsRoles = nil
+					customParams.SetParamsForServiceIdentityTest(params, false)
+					newns2RoleName := "namespace-admin"
+					binding2.ResourceIds = nsID2
+					binding2.RoleName = &newns2RoleName
+					nsRoles := append(nsRoles, binding1, binding2)
 					log.InfoD("Starting to update the IAM Roles for ns2")
 					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityID, nsRoles)
 					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
@@ -173,9 +184,14 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 					}
 					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+					pdsRestoreTargetClusterID, err := targetCluster.GetDeploymentTargetID(clusterID, tenantID)
+
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, _ := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), ns2, dsEntity, false, true)
+						pdsRestoreNsName, pdsRestoreNsId, err := restoreClient.GetNameSpaceIdToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
+						log.FailOnError(err, "unable to fetch namespace id to restore")
+						customParams.SetParamsForServiceIdentityTest(params, true)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(pdsRestoreTargetClusterID, backupJob.GetId(), pdsRestoreNsName, dsEntity, pdsRestoreNsId, true)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
 						resDeployments[ds] = restoredDeployment
@@ -188,8 +204,8 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				Step("Scale up the restored deployments on ns2", func() {
 					log.InfoD("Starting to scale up the restore deployment")
 					for ds, resDep := range resDeployments {
-						log.InfoD("Scaling up DataService %v ", ds.Name)
-
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						log.InfoD("Scaling up DataService %v ", &resDep.Name)
 						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
 						log.FailOnError(err, "Error while getting app configuration template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
@@ -198,15 +214,18 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+						customParams.SetParamsForServiceIdentityTest(params, true)
+
+						updatedDeployment, err := pdslib.UpdateDataServices(resDep.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2)
+							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
-						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2)
+						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
 						log.FailOnError(err, "Error while validating data service deployment")
 
-						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2)
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 					}
@@ -218,12 +237,12 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 					CleanupServiceIdentitiesAndIamRoles(siToBeCleaned, iamRolesToBeCleaned, actorId)
 					customParams.SetParamsForServiceIdentityTest(params, false)
 				})
-
 			}
-
 		})
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
