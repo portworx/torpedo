@@ -2,16 +2,17 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/vcluster"
-	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	. "github.com/onsi/ginkgo"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/vcluster"
+	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/portworx/torpedo/tests"
 )
 
 var _ = Describe("CreateNginxAppOnVcluster", func() {
@@ -88,7 +89,7 @@ func ConnectVClusterAndExecute(vclusterName string, testFunc func([]interface{})
 		}
 		return nil, true, fmt.Errorf("Context not yet switched")
 	}
-	_, err := task.DoRetryWithTimeout(f, vcluster.VclusterConnectTimeout, vcluster.VclusterSimpleInterval)
+	_, err := task.DoRetryWithTimeout(f, vcluster.VclusterConnectionTimeout, vcluster.VClusterRetryInterval)
 	if err != nil {
 		killChan <- true
 		return err

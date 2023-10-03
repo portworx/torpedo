@@ -2,11 +2,12 @@ package vcluster
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 var (
@@ -17,10 +18,9 @@ var (
 )
 
 const (
-	VclusterCreationTimeout = 5 * time.Minute
-	VclusterGenericTimeout  = 5 * time.Second
-	VclusterConnectTimeout  = 60 * time.Second
-	VclusterSimpleInterval  = 1 * time.Second
+	vClusterCreationTimeout   = 5 * time.Minute
+	VClusterRetryInterval     = 2 * time.Second
+	VclusterConnectionTimeout = 60 * time.Second
 )
 
 // SwitchKubeContext This method switches kube context between host and any vcluster
@@ -100,6 +100,6 @@ func WaitForVClusterRunning(vclusterName string, timeout time.Duration) error {
 		}
 		return nil, true, fmt.Errorf("Vcluster is not yet in running state")
 	}
-	_, err := task.DoRetryWithTimeout(f, VclusterCreationTimeout, VclusterGenericTimeout)
+	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
 	return err
 }

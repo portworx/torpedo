@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	baseErrors "errors"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume"
 	"io"
 	"io/ioutil"
 	random "math/rand"
@@ -60,6 +59,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	vcluster "github.com/portworx/torpedo/drivers/vcluster"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
@@ -1799,7 +1799,7 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if vcluster.ContextChange {
 			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
 			err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext)
-			log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
+			return nil, err
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
 		if k8serrors.IsAlreadyExists(err) {
@@ -1828,9 +1828,9 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		if vcluster.ContextChange {
 			log.Infof("Changing context back to vcluster: %v", vcluster.CurrentClusterContext)
 			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
-			log.FailOnError(err, fmt.Sprintf("Could not change context to %v", vcluster.UpdatedClusterContext))
 			// Changing ContextChange flag to false to not trigger unnecessary context change further
 			vcluster.ContextChange = false
+			return nil, err
 		}
 		return sc, nil
 
