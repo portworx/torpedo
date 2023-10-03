@@ -867,7 +867,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			}
 		}
 
-		// Function to verify data integrity on all the volumes created during the test
+		// Function to verify data integrity on all the volumes created during the test once in every 10 min
 		verifyDataIntegrity := func() {
 			defer wg.Done()
 			defer GinkgoRecover()
@@ -883,6 +883,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 					errors = append(errors, err)
 					failureDetails = append(failureDetails, "DATA INTEGRITY VALIDATION FAILED")
 				}
+				time.Sleep(10 * time.Minute)
 			}
 		}
 
