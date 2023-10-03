@@ -9170,8 +9170,9 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	if len(selectedNode) == 0 {
 		return nil, fmt.Errorf("No Valid node exists")
 	}
-	output, err := runCmdOnce(cmd, selectedNode[0])
+	output, err := runCmdGetOutput(cmd, selectedNode[0])
 	if err != nil {
+		log.Infof("running command [%v] failed on Node [%v]", cmd, selectedNode[0].Name)
 		return nil, err
 	}
 	log.InfoD("Output of CMD Output [%v]", output)
