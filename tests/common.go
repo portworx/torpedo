@@ -170,6 +170,7 @@ const (
 var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
+	GlobalGkeSecretString  string
 )
 
 type OwnershipAccessType int32
@@ -284,6 +285,7 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
+	clusterDeleteTimeout              = 10 * time.Minute
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -359,8 +361,8 @@ var (
 
 var (
 	errPureFileSnapshotNotSupported    = errors.New("snapshot feature is not supported for pure_file volumes")
-	errPureCloudsnapNotSupported       = errors.New("cloudsnap feature is not supported for pure volumes")
-	errPureGroupsnapNotSupported       = errors.New("groupsnap feature is not supported for pure volumes")
+	errPureCloudsnapNotSupported       = errors.New("not supported")
+	errPureGroupsnapNotSupported       = errors.New("not supported")
 	errUnexpectedSizeChangeAfterPureIO = errors.New("the size change in bytes is not expected after write to Pure volume")
 )
 
@@ -397,6 +399,7 @@ var (
 	ScheduledBackupScaleInterval         time.Duration
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
+	clusterProvider                      = "aws"
 )
 
 var (
@@ -2743,6 +2746,18 @@ func DeleteCloudCredential(name string, orgID string, cloudCredUID string) error
 	return err
 }
 
+// DeleteCloudCredentialWithContext deletes the cloud credential with the given context
+func DeleteCloudCredentialWithContext(cloudCredName string, orgID string, cloudCredUID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	credDeleteRequest := &api.CloudCredentialDeleteRequest{
+		Name:  cloudCredName,
+		OrgId: orgID,
+		Uid:   cloudCredUID,
+	}
+	_, err := backupDriver.DeleteCloudCredential(ctx, credDeleteRequest)
+	return err
+}
+
 // ValidateVolumeParametersGetErr validates volume parameters using volume driver and returns err instead of failing
 func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error {
 	var err error
@@ -2793,6 +2808,7 @@ func SetClusterContext(clusterConfigPath string) error {
 	// an empty string indicates the default kubeconfig.
 	// This variable is used to clearly indicate that in logs
 	var clusterConfigPathForLog string
+	var err error
 	if clusterConfigPath == "" {
 		clusterConfigPathForLog = "default"
 	} else {
@@ -2804,7 +2820,26 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	err := Inst().S.SetConfig(clusterConfigPath)
+	provider := getClusterProvider()
+	if clusterConfigPath != "" {
+		switch provider {
+		case drivers.ProviderGke:
+			err = Inst().S.SetGkeConfig(clusterConfigPath, GlobalGkeSecretString)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		default:
+			err = Inst().S.SetConfig(clusterConfigPath)
+			if err != nil {
+				return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+			}
+		}
+	} else {
+		err = Inst().S.SetConfig(clusterConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to switch to context. Set Config Error: [%v]", err)
 	}
@@ -3468,7 +3503,7 @@ func DeleteBackupAndDependencies(backupName string, backupUID string, orgID stri
 	return nil
 }
 
-// DeleteRestore creates restore
+// DeleteRestore deletes restore
 func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	dash.VerifyFatal(backupDriver != nil, true, "Getting the backup driver")
@@ -3481,7 +3516,18 @@ func DeleteRestore(restoreName string, orgID string, ctx context1.Context) error
 	// TODO: validate createClusterResponse also
 }
 
-// DeleteBackup deletes backup
+// DeleteRestoreWithUID deletes restore with the given restore name and uid
+func DeleteRestoreWithUID(restoreName string, restoreUID string, orgID string, ctx context1.Context) error {
+	deleteRestoreReq := &api.RestoreDeleteRequest{
+		Name:  restoreName,
+		Uid:   restoreUID,
+		OrgId: orgID,
+	}
+	_, err := Inst().Backup.DeleteRestore(ctx, deleteRestoreReq)
+	return err
+}
+
+// DeleteBackup deletes a backup with the given backup reference without checking the cluster reference, suitable for normal backup deletion where the cluster reference is not needed.
 func DeleteBackup(backupName string, backupUID string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
 	var err error
 	var backupObj *api.BackupObject
@@ -3501,15 +3547,35 @@ func DeleteBackup(backupName string, backupUID string, orgID string, ctx context
 			break
 		}
 	}
+	if backupObj == nil {
+		return nil, fmt.Errorf("unable to find backup [%s] with uid [%s]", backupName, backupUID)
+	}
 
 	bkpDeleteRequest := &api.BackupDeleteRequest{
-		Name:    backupName,
-		OrgId:   orgID,
-		Uid:     backupUID,
-		Cluster: backupObj.Cluster,
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
 	}
 	backupDeleteResponse, err = backupDriver.DeleteBackup(ctx, bkpDeleteRequest)
 	return backupDeleteResponse, err
+}
+
+// DeleteBackupWithClusterUID deletes a backup using the specified cluster name and UID, ensuring the cluster reference is checked before deletion, suitable for cases where the cluster reference is necessary (e.g., for same-name or deleted clusters).
+func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName string, clusterUid string, orgID string, ctx context1.Context) (*api.BackupDeleteResponse, error) {
+	backupDeleteRequest := &api.BackupDeleteRequest{
+		Name:  backupName,
+		OrgId: orgID,
+		Uid:   backupUID,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  clusterUid,
+		},
+	}
+	backupDeleteResponse, err := Inst().Backup.DeleteBackup(ctx, backupDeleteRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupDeleteResponse, nil
 }
 
 // DeleteCluster deletes/de-registers cluster from px-backup
@@ -3524,6 +3590,27 @@ func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBacku
 	}
 	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
+}
+
+// DeleteClusterWithUID deletes cluster with the given cluster name and uid
+func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
+	backupDriver := Inst().Backup
+	clusterDeleteReq := &api.ClusterDeleteRequest{
+		OrgId:          orgID,
+		Name:           name,
+		Uid:            uid,
+		DeleteBackups:  cleanupBackupsRestores,
+		DeleteRestores: cleanupBackupsRestores,
+	}
+	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	if err != nil {
+		return err
+	}
+	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteBackupLocation deletes backup location
@@ -3547,6 +3634,22 @@ func DeleteBackupLocation(name string, backupLocationUID string, orgID string, D
 	// TODO: validate createBackupLocationResponse also
 	return nil
 
+}
+
+// DeleteBackupLocationWithContext deletes backup location with the given context
+func DeleteBackupLocationWithContext(name string, backupLocationUID string, orgID string, DeleteExistingBackups bool, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bLocationDeleteReq := &api.BackupLocationDeleteRequest{
+		Name:          name,
+		Uid:           backupLocationUID,
+		OrgId:         orgID,
+		DeleteBackups: DeleteExistingBackups,
+	}
+	_, err := backupDriver.DeleteBackupLocation(ctx, bLocationDeleteReq)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteSchedule deletes backup schedule
@@ -3585,6 +3688,59 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 		clusterObj,
 		backupLocationDeleteTimeoutMin*time.Minute,
 		RetrySeconds*time.Second)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteScheduleWithUID deletes backup schedule with the given backup schedule name and uid
+func DeleteScheduleWithUID(backupScheduleName string, backupScheduleUid string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteScheduleWithUIDAndWait deletes backup schedule with the given backup schedule name and uid and waits for its deletion
+func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid string, clusterName string, clusterUid string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: true,
+		Uid:           backupScheduleUid,
+	}
+	_, err := backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	clusterReq := &api.ClusterInspectRequest{
+		OrgId:          orgID,
+		Name:           clusterName,
+		Uid:            clusterUid,
+		IncludeSecrets: true,
+	}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(
+		ctx, backupScheduleName, namespace, orgID, clusterObj,
+		backupLocationDeleteTimeoutMin*time.Minute,
+		RetrySeconds*time.Second,
+	)
 	if err != nil {
 		return err
 	}
@@ -3832,6 +3988,8 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+	case drivers.ProviderGke:
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
 	case drivers.ProviderNfs:
 		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
 	}
@@ -3846,6 +4004,8 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
 	case drivers.ProviderAzure:
 		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+	case drivers.ProviderGke:
+		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
 	case drivers.ProviderNfs:
 		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
 	}
@@ -3874,6 +4034,18 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 					},
 					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
 					PlatformCredentialRef: &api.ObjectRef{
+						Name: cloud_name,
+						Uid:  uid,
+					},
+				}
+			case drivers.ProviderGke:
+				clusterCreateReq = &api.ClusterCreateRequest{
+					CreateMetadata: &api.CreateMetadata{
+						Name:  name,
+						OrgId: orgID,
+					},
+					Kubeconfig: base64.StdEncoding.EncodeToString(kubeconfigRaw),
+					CloudCredentialRef: &api.ObjectRef{
 						Name: cloud_name,
 						Uid:  uid,
 					},
@@ -4008,7 +4180,22 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 				},
 			},
 		}
-
+	case drivers.ProviderGke:
+		credCreateRequest = &api.CloudCredentialCreateRequest{
+			CreateMetadata: &api.CreateMetadata{
+				Name:  credName,
+				Uid:   uid,
+				OrgId: orgID,
+			},
+			CloudCredential: &api.CloudCredentialInfo{
+				Type: api.CloudCredentialInfo_Google,
+				Config: &api.CloudCredentialInfo_GoogleConfig{
+					GoogleConfig: &api.GoogleConfig{
+						JsonKey: GlobalGkeSecretString,
+					},
+				},
+			},
+		}
 	default:
 		return fmt.Errorf("provider [%s] not supported for creating cloud credential", provider)
 	}
@@ -4017,7 +4204,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		if strings.Contains(err.Error(), "already exists") {
 			return nil
 		}
-		log.Errorf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider", credName, orgID, provider)
+		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
 	return nil
@@ -4150,6 +4337,68 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 		},
 	}
 	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateGCPBackupLocation creates backup location for Google cloud
+func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Google,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location Error: %v", err)
+	}
+	return nil
+}
+
+// CreateGCPBackupLocationWithContext creates backup location for Google cloud
+func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context) error {
+	backupDriver := Inst().Backup
+	encryptionKey := "torpedo"
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_Google,
+		},
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -4617,15 +4866,15 @@ func DeleteNfsSubPath(subPath string) {
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
-	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	// Mount the NFS share to the worker node.
+	workerNode := node.GetWorkerNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
 	}
 	for _, cmd := range mountCmds {
-		err := runCmd(cmd, masterNode)
-		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+		err := runCmd(cmd, workerNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
 	}
 
 	defer func() {
@@ -4635,16 +4884,16 @@ func DeleteNfsSubPath(subPath string) {
 			fmt.Sprintf("rm -rf %s", mountDir),
 		}
 		for _, cmd := range umountCmds {
-			err := runCmd(cmd, masterNode)
-			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, masterNode, err))
+			err := runCmd(cmd, workerNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
 		}
 	}()
 
 	// Remove subpath from NFS share path.
 	log.Infof("Deleting NFS share subpath: [%s] from path: [%s] on server: [%s]", subPath, creds.NfsPath, creds.NfsServerAddress)
 	rmCmd := fmt.Sprintf("rm -rf %s/%s", mountDir, subPath)
-	err := runCmd(rmCmd, masterNode)
-	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, masterNode, err))
+	err := runCmd(rmCmd, workerNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
@@ -6019,7 +6268,7 @@ func WaitForExpansionToStart(poolID string) error {
 		return nil, true, fmt.Errorf("pool %s resize not triggered ", poolID)
 	}
 
-	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 10*time.Second)
+	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 5*time.Second)
 	return err
 }
 
@@ -8282,10 +8531,17 @@ outer:
 			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 
-			poolID, err := GetPoolIDFromPoolUUID(poolUuid)
+			pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			if err != nil {
 				errCh <- err
 				return
+			}
+			var poolID int32
+			for _, pool := range pools {
+				if pool.Uuid == poolUuid {
+					poolID = pool.ID
+					break
+				}
 			}
 
 			inspectVolume, err := Inst().V.InspectVolume(v.ID)
@@ -8852,4 +9108,156 @@ func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
 	SetSourceKubeConfig()
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
 	return nil
+}
+
+// IsPXRunningOnNode returns true if px is running on the node
+func IsPxRunningOnNode(pxNode *node.Node) (bool, error) {
+	isPxInstalled, err := Inst().V.IsDriverInstalled(*pxNode)
+	if err != nil {
+		log.Debugf("Could not get PX status on %s", pxNode.Name)
+		return false, err
+	}
+	if !isPxInstalled {
+		return false, nil
+	}
+	status := Inst().V.IsPxReadyOnNode(*pxNode)
+	return status, nil
+}
+
+type ProvisionStatus struct {
+	NodeUUID      string
+	IpAddress     string
+	HostName      string
+	NodeStatus    string
+	PoolID        string
+	PoolUUID      string
+	IoPriority    string
+	TotalSize     float64
+	AvailableSize float64
+	UsedSize      float64
+}
+
+func tibToGib(tib float64) float64 {
+	return tib * 1024
+}
+
+func convertToGiB(size string) float64 {
+	output := strings.Split(size, " ")
+	number, err := strconv.ParseFloat(output[0], 64)
+	if err != nil {
+		return -1
+	}
+	if strings.Contains(size, "GiB") {
+		return number
+	} else if strings.Contains(size, "TiB") {
+		return tibToGib(number)
+	}
+	return -1
+}
+
+func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
+	clusterProvision := []ProvisionStatus{}
+	pattern := `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	cmd := "pxctl cluster provision-status list"
+
+	// Using Node which is up and running
+	var selectedNode []node.Node
+	for _, eachNode := range node.GetNodes() {
+		status, err := IsPxRunningOnNode(&eachNode)
+		if err != nil {
+			return nil, err
+		}
+		if status {
+			selectedNode = append(selectedNode, eachNode)
+			break
+		}
+	}
+	if len(selectedNode) == 0 {
+		return nil, fmt.Errorf("No Valid node exists")
+	}
+	output, err := runCmdGetOutput(cmd, selectedNode[0])
+	if err != nil {
+		return nil, err
+	}
+	// Compile the regex pattern
+	r := regexp.MustCompile(pattern)
+
+	lines := strings.Split(output, "\n")
+	for _, eachLine := range lines {
+		var provisionStatus ProvisionStatus
+		if !strings.Contains(eachLine, "NODE ID") {
+			matches := r.FindStringSubmatch(eachLine)
+			if len(matches) > 0 {
+				provisionStatus.NodeUUID = matches[1]
+				provisionStatus.IpAddress = matches[2]
+				provisionStatus.HostName = matches[3]
+				provisionStatus.NodeStatus = matches[4]
+				provisionStatus.PoolID = matches[5]
+				provisionStatus.PoolUUID = matches[6]
+				provisionStatus.IoPriority = matches[7]
+				provisionStatus.TotalSize = convertToGiB(matches[8])
+				provisionStatus.AvailableSize = convertToGiB(matches[9])
+				provisionStatus.UsedSize = convertToGiB(matches[10])
+				clusterProvision = append(clusterProvision, provisionStatus)
+			}
+		}
+	}
+	return clusterProvision, nil
+}
+
+// GetPoolTotalSize Return total Pool size
+func GetPoolTotalSize(poolUUID string) (float64, error) {
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return -1, err
+	}
+	for _, eachProvision := range provision {
+		if eachProvision.PoolUUID == poolUUID {
+			return eachProvision.TotalSize, nil
+		}
+	}
+	return -1, err
+}
+
+// GetPoolAvailableSize Returns available pool Size
+func GetPoolAvailableSize(poolUUID string) (float64, error) {
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return -1, err
+	}
+	for _, eachProvision := range provision {
+		if eachProvision.PoolUUID == poolUUID {
+			return eachProvision.AvailableSize, nil
+		}
+	}
+	return -1, err
+}
+
+func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		if eachProvision.NodeUUID == nodeUuid {
+			poolDetails = append(poolDetails, eachProvision.PoolUUID)
+		}
+	}
+	return poolDetails, nil
+}
+
+// Set default provider as aws
+func getClusterProvider() string {
+	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
+	return clusterProvider
+}
+
+// Get Gke Secret
+func GetGkeSecret() (string, error) {
+	cm, err := core.Instance().GetConfigMap("cloud-config", "default")
+	if err != nil {
+		return "", err
+	}
+	return cm.Data["cloud-json"], nil
 }
