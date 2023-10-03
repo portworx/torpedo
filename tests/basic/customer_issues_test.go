@@ -854,10 +854,12 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 						err = Inst().V.ExpandPool(eachPool, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 						if err != nil {
 							errors = append(errors, fmt.Errorf("Failed to Initiate pool expand with Error [%v]", err))
+							failureDetails = append(failureDetails, fmt.Sprintf("ExpandPool Failed for Pool [%v]", eachPool))
 						}
 						err = WaitTillPoolExpanded(eachPool, uint64(poolCurrSize))
 						if err != nil {
 							errors = append(errors, fmt.Errorf("Failed to expand pool with Error [%v]", err))
+							failureDetails = append(failureDetails, fmt.Sprintf("WaitTillPoolExpanded Failed for Pool [%v]", eachPool))
 						}
 					}
 				}
@@ -889,7 +891,8 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 			defer wg.Done()
 			defer GinkgoRecover()
 
-			previousReplFactor := int64(1)
+			setReplFactor := map[string]int64{}
+			previousReplFactor := map[string]int64{}
 			for {
 				if terminate {
 					break
@@ -897,7 +900,8 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 				replStatus := map[string]int64{}
 				for _, eachVol := range allVolsPresent {
 					log.Infof("HA update on the Volume [%v]", eachVol.ID)
-					setReplFactor := int64(1)
+					setReplFactor[eachVol.Name] = int64(1)
+					previousReplFactor[eachVol.Name] = int64(1)
 					currRep, err := Inst().V.GetReplicationFactor(eachVol)
 					if err != nil {
 						errors = append(errors, err)
@@ -908,21 +912,21 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 						ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 					}
 					if currRep == 3 {
-						setReplFactor = currRep - 1
-					} else if currRep == 2 || previousReplFactor == 3 {
-						setReplFactor = setReplFactor
+						setReplFactor[eachVol.Name] = currRep - 1
+					} else if currRep == 2 || previousReplFactor[eachVol.Name] == 3 {
+						setReplFactor[eachVol.Name] = setReplFactor[eachVol.Name]
 					} else {
-						setReplFactor = currRep + 1
+						setReplFactor[eachVol.Name] = currRep + 1
 					}
-					previousReplFactor = currRep
+					previousReplFactor[eachVol.Name] = currRep
 
-					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", eachVol.Name, currRep, setReplFactor)
-					err = Inst().V.SetReplicationFactor(eachVol, setReplFactor, nil, nil, false, opts)
+					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", eachVol.Name, currRep, setReplFactor[eachVol.Name])
+					err = Inst().V.SetReplicationFactor(eachVol, setReplFactor[eachVol.Name], nil, nil, false, opts)
 					if err != nil {
 						errors = append(errors, err)
-						failureDetails = append(failureDetails, fmt.Sprintf("SetReplicationFactor to [%v] FAILED for VOLUME [%v]", setReplFactor, eachVol))
+						failureDetails = append(failureDetails, fmt.Sprintf("SetReplicationFactor to [%v] FAILED for VOLUME [%v]", setReplFactor[eachVol.Name], eachVol))
 					}
-					replStatus[eachVol.ID] = setReplFactor
+					replStatus[eachVol.ID] = setReplFactor[eachVol.Name]
 				}
 				// Wait for all HA Update to complete
 				for _, eachVol := range allVolsPresent {
@@ -936,6 +940,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 					if err != nil {
 						log.Infof("Waiting for Replication timed out with error [%v]", err)
 						errors = append(errors, err)
+						failureDetails = append(failureDetails, fmt.Sprintf("WaitForReplicationToComplete of repl [%v] on Volume [%v]", setReplFactor[eachVol.Name], eachVol))
 					}
 				}
 			}
@@ -977,6 +982,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol.ID, snapshotName)
 						if err != nil {
 							errors = append(errors, err)
+							failureDetails = append(failureDetails, fmt.Sprintf("Create snapshot Failed [%v]", snapshotName))
 						}
 						snapshotList = append(snapshotList, snapshotName)
 						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
@@ -987,6 +993,7 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 						err := Inst().V.DeleteVolume(eachSnap)
 						if err != nil {
 							errors = append(errors, err)
+							failureDetails = append(failureDetails, fmt.Sprintf("DeleteVolume of Volume [%v]", eachSnap))
 						}
 						snapshotList = deleteElementFromArr(eachSnap, snapshotList)
 						if terminate {
@@ -1035,6 +1042,13 @@ var _ = Describe("{HSBCScaleScenario}", func() {
 		<-quit
 		wg.Wait()
 
+		// For logging purpose only, test runs continuously for 3 days , and it might be difficult to see where test failed
+		// printing the list of failures only for debugging purpose
+		for _, eachFailure := range failureDetails {
+			log.InfoD(eachFailure)
+		}
+
+		// Fail the test when length of errors > 0
 		if len(errors) > 0 {
 			log.FailOnError(fmt.Errorf("failed as error seen"),
 				fmt.Sprintf("test returned error?"))
