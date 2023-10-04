@@ -1085,7 +1085,6 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 			originalDsEntity                  restoreBkp.DSEntity
 			resourceTempUpdatedDsEntity       restoreBkp.DSEntity
 			scaledUpDsEntity                  restoreBkp.DSEntity
-			nsName                            = params.InfraToTest.Namespace
 			wlDeploymentsToBeCleanedinSrc     []*v1.Deployment
 			pdsdeploymentsmd5Hash             = make(map[string]string)
 			restoreClient                     restoreBkp.RestoreClient
@@ -1093,6 +1092,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			namespace = params.InfraToTest.Namespace
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 
@@ -1110,7 +1110,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 				stepLog = "Deploy and validate data service"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
+					deployment, _, _, err = DeployandValidateDataServices(ds, namespace, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					deploymentsToClean = append(deploymentsToClean, deployment)
 					originalDsEntity = restoreBkp.DSEntity{
