@@ -6250,13 +6250,10 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 			dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
 
 		}
-
-		err = nil
 		re := regexp.MustCompile("Requires pool maintenance mode")
 		if re.MatchString(fmt.Sprintf("%v", err)) == false {
 			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
 		}
-		log.FailOnError(err, "pool delete successful?")
 
 		// invalidPoolID is total Pools present on the node + 1
 		invalidPoolID := fmt.Sprintf("%d", len(PoolDetail)+1)
@@ -7631,9 +7628,7 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
 				}
 				dash.VerifyFatal(expectedErr, true, fmt.Sprintf("verify pool expansion failed with expected error. Error. %v", err))
 			})
-
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
