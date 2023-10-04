@@ -10,7 +10,6 @@ import (
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"os"
 	"strings"
 )
 
@@ -71,7 +70,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	log.Infof("The master node here is %v", masterNodeName)
 	endpoint := "https://" + masterNodeName + "/v3"
 	rkeParameters.Endpoint = endpoint
-	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+	rkeToken = "token-rsgf9:5klvchhtmbrdv7vwm5xzt78hc9hprs968qqbfzw48w77psjpsjg2gd"
 	if rkeToken == "" {
 		return nil, fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 	}
@@ -89,12 +88,12 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	masterNodeName := node.GetMasterNodes()[0].Name
 	endpoint := "https://" + masterNodeName + "/v3"
 	if clusterName == "destination-config" {
-		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
+		rkeToken = "token-wvpcv:2xg7lpm2zpxd46d85qzlvljlrq6pvnm7l8h9tgqqtfkjgm8vl8dzq9"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
-		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+		rkeToken = "token-rsgf9:5klvchhtmbrdv7vwm5xzt78hc9hprs968qqbfzw48w77psjpsjg2gd"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 		}
