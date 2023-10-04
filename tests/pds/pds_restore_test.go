@@ -1130,7 +1130,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-						backupJobs, bkp, err := bkpClient.NewTriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+						_, _, err := bkpClient.NewTriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 						ctx, err := GetSourceClusterConfigPath()
 						log.FailOnError(err, "failed while getting src cluster path")
@@ -1142,8 +1142,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							Deployment:           deployment,
 							RestoreTargetCluster: restoreTarget,
 						}
-						restoredOriginalDep = NewPerformRestore(backupJobs, bkp, restoreClient, originalDsEntity)
+						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+						restoredOriginalDep = NewPerformRestore(backupJobs, restoreClient, originalDsEntity)
 						deploymentsToClean = append(deploymentsToClean, restoredOriginalDep...)
+						//Delete the backupJob
+						//restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
@@ -1187,7 +1191,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
-						backupJobs, bkp, err := bkpClient.NewTriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
+						_, _, err := bkpClient.NewTriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 						ctx, err := GetSourceClusterConfigPath()
 						log.FailOnError(err, "failed while getting src cluster path")
@@ -1199,8 +1203,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							Deployment:           updatedDeployment,
 							RestoreTargetCluster: restoreTarget,
 						}
-						restoredDepPostResourceTempUpdate = NewPerformRestore(backupJobs, bkp, restoreClient, resourceTempUpdatedDsEntity)
+						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, updatedDeployment.GetId())
+						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", updatedDeployment.GetClusterResourceName())
+						restoredDepPostResourceTempUpdate = NewPerformRestore(backupJobs, restoreClient, resourceTempUpdatedDsEntity)
 						deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
+						//Delete the backupJob
+						//restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
@@ -1240,7 +1248,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
-						backupJobs, bkp, err := bkpClient.NewTriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
+						_, _, err := bkpClient.NewTriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 						ctx, err := GetSourceClusterConfigPath()
 						log.FailOnError(err, "failed while getting src cluster path")
@@ -1252,7 +1260,9 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							Deployment:           updatedDeployment,
 							RestoreTargetCluster: restoreTarget,
 						}
-						restoredDepPostScalingOfDS = NewPerformRestore(backupJobs, bkp, restoreClient, scaledUpDsEntity)
+						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, updatedDeployment.GetId())
+						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", updatedDeployment.GetClusterResourceName())
+						restoredDepPostScalingOfDS = NewPerformRestore(backupJobs, restoreClient, scaledUpDsEntity)
 						deploymentsToClean = append(deploymentsToClean, restoredDepPostScalingOfDS...)
 					})
 					stepLog = "Validate md5hash for the restored deployments and clean up the workload deployments"

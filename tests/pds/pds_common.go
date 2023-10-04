@@ -358,12 +358,12 @@ func ValidateDataIntegrityPostRestore(dataServiceDeployments []*pds.ModelsDeploy
 	return wlDeploymentsToBeCleanedinDest
 }
 
-func NewPerformRestore(backupJobs []pds.ModelsBackupJobStatusResponse, bkp *pds.ModelsBackup,
+func NewPerformRestore(backupJobs []pds.ModelsBackupJob,
 	restoreClient restoreBkp.RestoreClient, dsEntity restoreBkp.DSEntity) []*pds.ModelsDeployment {
 	var restoredDeployments []*pds.ModelsDeployment
 	for _, backupJob := range backupJobs {
-		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), bkp.GetId())
-		restoredModel, err := restoreClient.TriggerAndValidateRestore(bkp.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+		restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
 		log.FailOnError(err, "Failed during restore.")
 		restoredDeployment, err := restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
 		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
