@@ -3,7 +3,7 @@ package generics
 import "sync"
 
 // DataStore represents a generic thread-safe DataStore
-type DataStore[E interface{}] struct {
+type DataStore[E any] struct {
 	sync.RWMutex
 	PresentMap map[string]E
 	RemovedMap map[string][]E
@@ -99,7 +99,7 @@ func (d *DataStore[E]) IsRecorded(entityUID string) bool {
 }
 
 // NewDataStore creates and initializes a new instance of the DataStore
-func NewDataStore[E interface{}]() *DataStore[E] {
+func NewDataStore[E any]() *DataStore[E] {
 	dataStore := &DataStore[E]{}
 	dataStore.SetPresentMap(make(map[string]E))
 	dataStore.SetRemovedMap(make(map[string][]E))

@@ -17,13 +17,22 @@ import (
 	"time"
 )
 
+// HTTPMethod represents an HTTP request method
 type HTTPMethod string
 
 const (
-	GET    HTTPMethod = "GET"
-	POST              = "POST"
-	DELETE            = "DELETE"
+	// GET represents the HTTP GET method
+	GET HTTPMethod = "GET"
+	// POST represents the HTTP POST method
+	POST = "POST"
+	// DELETE represents the HTTP DELETE method
+	DELETE = "DELETE"
 )
+
+// String returns the string representation of the HTTPMethod
+func (m HTTPMethod) String() string {
+	return string(m)
+}
 
 const (
 	// GlobalPxCentralAdminUsername is the username for px-central-admin user
@@ -72,14 +81,6 @@ type CredentialRepresentation struct {
 	Temporary bool   `json:"temporary"`
 }
 
-func NewCredentialRepresentation(credType string, value string, temporary bool) *CredentialRepresentation {
-	return &CredentialRepresentation{
-		Type:      credType,
-		Value:     value,
-		Temporary: temporary,
-	}
-}
-
 type UserRepresentation struct {
 	ID            string                     `json:"id"`
 	Username      string                     `json:"username"`
@@ -95,16 +96,21 @@ type TokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, headers http.Header, body io.Reader) (*http.Response, error) {
-	httpRequest, err := http.NewRequestWithContext(ctx, string(method), url, body)
+func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body io.Reader, headers http.Header) (*http.Response, error) {
+	httpRequest, err := http.NewRequestWithContext(ctx, method.String(), url, body)
 	if err != nil {
 		debugStruct := struct {
-			Method  HTTPMethod
-			Url     string
-			Headers http.Header
-			Body    io.Reader
-		}{}
-		return nil, ProcessError(err, StructToString(httpRequest))
+			Ctx    context.Context
+			Method string
+			Url    string
+			Body   io.Reader
+		}{
+			Ctx:    ctx,
+			Method: method.String(),
+			Url:    url,
+			Body:   body,
+		}
+		return nil, ProcessError(err, StructToString(debugStruct))
 	}
 	httpRequest.Header = headers
 	httpResponse, err := HTTPClient.Do(httpRequest)
@@ -112,6 +118,28 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, head
 		return nil, ProcessError(err, StructToString(httpRequest))
 	}
 	return httpResponse, nil
+}
+
+func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Errorf("failed to close response body. Err: %v", ProcessError(err, StructToString(response)))
+		}
+	}()
+	responseBody, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, ProcessError(err, StructToString(response))
+	}
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return responseBody, nil
+	} else if response.StatusCode >= 400 && response.StatusCode < 500 {
+		err = fmt.Errorf("client error (%d): %s", response.StatusCode, responseBody)
+		return nil, ProcessError(err)
+	} else if response.StatusCode >= 500 {
+		return nil, fmt.Errorf("server error (%d): %s", response.StatusCode, responseBody)
+	}
+	return nil, fmt.Errorf("unexpected status code (%d): %s", response.StatusCode, responseBody)
 }
 
 func GetOIDCSecretName() string {
@@ -168,47 +196,30 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 }
 
 type AddUserRequest struct {
-	Username  string
-	FirstName string
-	LastName  string
-	Email     string
-	Enabled   bool
-	Password  string
-	Temporary bool
+	UserRepresentation *UserRepresentation
 }
 
-type AddUserResponse struct {
-}
+type AddUserResponse struct{}
 
-func AddUser(ctx context.Context, req *AddUserRequest) error {
+func AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
 	keycloakEndPoint, err := GetKeycloakEndPoint(true)
 	if err != nil {
-		return ProcessError(err)
+		return nil, ProcessError(err)
 	}
 	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
 	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
 	if err != nil {
-		return ProcessError(err)
+		return nil, ProcessError(err)
 	}
-	userRepresentation := &UserRepresentation{
-		Username:  req.Username,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Email:     req.Email,
-		Enabled:   req.Enabled,
-		Credentials: []CredentialRepresentation{
-			*NewCredentialRepresentation("password", req.Password, req.Temporary),
-		},
-	}
-	userBytes, err := json.Marshal(userRepresentation)
+	userBytes, err := json.Marshal(req.UserRepresentation)
 	if err != nil {
-		return ProcessError(err, StructToString(userRepresentation))
+		return nil, ProcessError(err, StructToString(req.UserRepresentation))
 	}
 	response, err := ProcessHTTPRequest(ctx, POST, requestURL, headers, strings.NewReader(string(userBytes)))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return nil, nil
 }
 
 func GetUserID(ctx context.Context, username string) (string, error) {
@@ -287,35 +298,35 @@ func GetKeycloakEndPoint(admin bool) (string, error) {
 	// The condition checks whether an env var is set.
 	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
 		if admin {
-			// http://pxcentral-keycloak-http:80/auth/admin/realms/master
+			// adminURL: http://pxcentral-keycloak-http:80/auth/admin/realms/master
 			adminURL := fmt.Sprintf("%s/auth/admin/realms/master", pxCentralUIURL)
 			return adminURL, nil
 		} else {
-			// http://pxcentral-keycloak-http:80/auth/realms/master
+			// nonAdminURL: http://pxcentral-keycloak-http:80/auth/realms/master
 			nonAdminURL := fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
 			return nonAdminURL, nil
 		}
 	}
-	name := GetOIDCSecretName()
-	ns, err := GetPxBackupNamespace()
+	oidcSecretName := GetOIDCSecretName()
+	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
 		return "", err
 	}
-	secret, err := core.Instance().GetSecret(name, ns)
+	oidcSecret, err := core.Instance().GetSecret(oidcSecretName, pxbNamespace)
 	if err != nil {
 		return "", err
 	}
-	url := string(secret.Data[PxBackupOIDCEndpoint])
+	oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpoint])
 	// Expand the service name for K8S DNS resolution, for keycloak requests from different ns
-	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, ns)
-	newURL := strings.Replace(url, GlobalPxBackupKeycloakServiceName, replacement, 1)
+	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, pxbNamespace)
+	newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
 	if admin {
 		split := strings.Split(newURL, "auth")
-		// http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
+		// adminURL: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
 		adminURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
 		return adminURL, nil
 	} else {
-		// http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
+		// nonAdminURL: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
 		nonAdminURL := newURL
 		return nonAdminURL, nil
 	}
