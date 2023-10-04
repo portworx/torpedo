@@ -1130,7 +1130,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-						_, _, err := bkpClient.NewTriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+						err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 						ctx, err := GetSourceClusterConfigPath()
 						log.FailOnError(err, "failed while getting src cluster path")
@@ -1143,11 +1143,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							RestoreTargetCluster: restoreTarget,
 						}
 						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-						restoredOriginalDep = NewPerformRestore(backupJobs, restoreClient, originalDsEntity)
+						restoredOriginalDep = PerformRestore(restoreClient, originalDsEntity, projectID, deployment)
 						deploymentsToClean = append(deploymentsToClean, restoredOriginalDep...)
 						//Delete the backupJob
-						//restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
+						_, err = restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
+						log.FailOnError(err, "Error while deleting backup job")
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
@@ -1172,7 +1172,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 
 						updatedDeployment, err = pdslib.UpdateDataServices(deployment.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
+							int32(ds.Replicas), dataServiceDefaultResourceTemplateID, namespace)
 						log.FailOnError(err, "Error while updating data services")
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
@@ -1191,7 +1191,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
-						_, _, err := bkpClient.NewTriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
+						err := bkpClient.TriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 						ctx, err := GetSourceClusterConfigPath()
 						log.FailOnError(err, "failed while getting src cluster path")
@@ -1205,10 +1205,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						}
 						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, updatedDeployment.GetId())
 						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", updatedDeployment.GetClusterResourceName())
-						restoredDepPostResourceTempUpdate = NewPerformRestore(backupJobs, restoreClient, resourceTempUpdatedDsEntity)
+						restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, resourceTempUpdatedDsEntity, projectID, updatedDeployment)
 						deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
 						//Delete the backupJob
-						//restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
+						_, err = restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
+						log.FailOnError(err, "Error while deleting backup job")
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
@@ -1248,7 +1249,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
-						_, _, err := bkpClient.NewTriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
+						err := bkpClient.TriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 						ctx, err := GetSourceClusterConfigPath()
 						log.FailOnError(err, "failed while getting src cluster path")
@@ -1262,8 +1263,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						}
 						backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, updatedDeployment.GetId())
 						log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", updatedDeployment.GetClusterResourceName())
-						restoredDepPostScalingOfDS = NewPerformRestore(backupJobs, restoreClient, scaledUpDsEntity)
+						restoredDepPostScalingOfDS = PerformRestore(restoreClient, scaledUpDsEntity, projectID, updatedDeployment)
 						deploymentsToClean = append(deploymentsToClean, restoredDepPostScalingOfDS...)
+						//Delete the backupJob
+						_, err = restoreClient.Components.BackupJob.DeleteBackupJob(backupJobs[0].GetId())
+						log.FailOnError(err, "Error while deleting backup job")
 					})
 					stepLog = "Validate md5hash for the restored deployments and clean up the workload deployments"
 					Step(stepLog, func() {
