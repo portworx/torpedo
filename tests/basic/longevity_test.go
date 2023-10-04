@@ -216,41 +216,41 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		upgradeTriggerFunction     = make(map[string]TriggerFunction)
 		wg                         sync.WaitGroup
 		// executionThreshold determines the number of times each function needs to execute before triggerFunc runs
-		executionThreshold = 1
+		executionThreshold = 4
 	)
 
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			//PoolExpansionAuto:       TriggerPoolExpansionAuto,
-			//PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
-			//AddDrive:                TriggerAddDrive,
-			//RestartVolDriver:     TriggerRestartVolDriver,
-			//CloudSnapShot:        TriggerCloudSnapShot,
-			HAIncrease: TriggerHAIncrease,
-			//PoolAddDisk:   TriggerPoolAddDisk,
-			//LocalSnapShot: TriggerLocalSnapShot,
-			//HADecrease: TriggerHADecrease,
-			//VolumeResize:         TriggerVolumeResize,
-			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
-			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
-			//AddStorageNode:       TriggerAddOCPStorageNode,
+			PoolExpansionAuto:       TriggerPoolExpansionAuto,
+			PoolExpansionResizeDisk: TriggerPoolExpansionResizeDisk,
+			AddDrive:                TriggerAddDrive,
+			RestartVolDriver:        TriggerRestartVolDriver,
+			CloudSnapShot:           TriggerCloudSnapShot,
+			HAIncrease:              TriggerHAIncrease,
+			PoolAddDisk:             TriggerPoolAddDisk,
+			LocalSnapShot:           TriggerLocalSnapShot,
+			HADecrease:              TriggerHADecrease,
+			VolumeResize:            TriggerVolumeResize,
+			CloudSnapShotRestore:    TriggerCloudSnapshotRestore,
+			LocalSnapShotRestore:    TriggerLocalSnapshotRestore,
+			AddStorageNode:          TriggerAddOCPStorageNode,
 		}
-		//// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		//disruptiveTriggerWrapper := func(TriggerFunction) TriggerFunction {
-		//	return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-		//		triggerLock.Lock()
-		//		defer triggerLock.Unlock()
-		//		TriggerRebootNodes(contexts, recordChan)
-		//	}
-		//}
+		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
+			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+				triggerLock.Lock()
+				defer triggerLock.Unlock()
+				fn(contexts, recordChan)
+			}
+		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			//RebootNode: disruptiveTriggerWrapper(TriggerRebootNodes),
-			//CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			//RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			//NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			//AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
+			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
+			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
+			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
+			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -272,7 +272,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
-		Inst().UpgradeStorageDriverEndpointList = "https://install.portworx.com/3.0.1,https://edge-install.portworx.com/3.0.2"
+		Inst().UpgradeStorageDriverEndpointList = "https://edge-install.portworx.com/2.13.11,https://install.portworx.com/3.0.0,https://edge-install.portworx.com/3.0.2"
 		Inst().AppList = []string{"vdbench-sharedv4", "elasticsearch", "fio", "nginx"}
 		Inst().CsiAppList = []string{"fio", "nginx"}
 	})
