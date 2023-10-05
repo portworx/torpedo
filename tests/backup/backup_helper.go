@@ -2702,6 +2702,13 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 			return err
 		}
 		storageSpec.Spec.Stork.Image = finalImageToUpgrade
+
+		// Check to reset customImageRegistry to blank as in case of ibm it'll be icr.io/ext/ and not
+		// docker.io/ which causes issues when we try to install stork which is not pushed to icr.io/ext
+		if os.Getenv("CLUSTER_PROVIDER") == "ibm" {
+			storageSpec.Spec.CustomImageRegistry = ""
+		}
+
 		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
 		if err != nil {
 			return err
