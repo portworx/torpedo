@@ -56,7 +56,8 @@ const (
 var (
 	// GlobalPxCentralAdminPassword is the password for px-central-admin user
 	GlobalPxCentralAdminPassword string
-	HTTPClient                   = &http.Client{
+	// GlobalHTTPClient is an HTTP client with a predefined timeout
+	GlobalHTTPClient = &http.Client{
 		Timeout: 1 * time.Minute,
 	}
 )
@@ -75,12 +76,14 @@ const (
 	PxBackupOIDCSecretName = "SECRET_NAME"
 )
 
+// CredentialRepresentation defines the scheme for representing user credentials in keycloak
 type CredentialRepresentation struct {
 	Type      string `json:"type"`
 	Value     string `json:"value"`
 	Temporary bool   `json:"temporary"`
 }
 
+// UserRepresentation defines the scheme for representing a user in keycloak
 type UserRepresentation struct {
 	ID            string                     `json:"id"`
 	Username      string                     `json:"username"`
@@ -92,28 +95,18 @@ type UserRepresentation struct {
 	Credentials   []CredentialRepresentation `json:"credentials"`
 }
 
-type TokenResponse struct {
+// TokenRepresentation defines the scheme for representing the keycloak access token
+type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
 func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body io.Reader, headers http.Header) (*http.Response, error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, method.String(), url, body)
 	if err != nil {
-		debugStruct := struct {
-			Ctx    context.Context
-			Method string
-			Url    string
-			Body   io.Reader
-		}{
-			Ctx:    ctx,
-			Method: method.String(),
-			Url:    url,
-			Body:   body,
-		}
-		return nil, ProcessError(err, StructToString(debugStruct))
+		return nil, ProcessError(err)
 	}
 	httpRequest.Header = headers
-	httpResponse, err := HTTPClient.Do(httpRequest)
+	httpResponse, err := GlobalHTTPClient.Do(httpRequest)
 	if err != nil {
 		return nil, ProcessError(err, StructToString(httpRequest))
 	}
@@ -121,25 +114,34 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 }
 
 func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
+	if response == nil {
+		err := fmt.Errorf("response is nil")
+		return nil, ProcessError(err)
+	}
 	defer func() {
 		err := response.Body.Close()
 		if err != nil {
-			log.Errorf("failed to close response body. Err: %v", ProcessError(err, StructToString(response)))
+			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
 		}
 	}()
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, ProcessError(err, StructToString(response))
 	}
-	if response.StatusCode >= 200 && response.StatusCode < 300 {
+	statusCode, requestURL := response.StatusCode, response.Request.URL
+	switch {
+	case statusCode >= 200 && statusCode < 300:
 		return responseBody, nil
-	} else if response.StatusCode >= 400 && response.StatusCode < 500 {
-		err = fmt.Errorf("client error (%d): %s", response.StatusCode, responseBody)
+	case statusCode >= 400 && statusCode < 500:
+		err = fmt.Errorf("client-side error for URL [%s]. Status code: [%d], Response: [%s]", requestURL, statusCode, responseBody)
 		return nil, ProcessError(err)
-	} else if response.StatusCode >= 500 {
-		return nil, fmt.Errorf("server error (%d): %s", response.StatusCode, responseBody)
+	case statusCode >= 500:
+		err = fmt.Errorf("server-side error for URL [%s]. Status code: [%d], Response: [%s]", requestURL, statusCode, responseBody)
+		return nil, ProcessError(err)
+	default:
+		err = fmt.Errorf("unexpected status code %d for URL %s. Response: %s", statusCode, requestURL, responseBody)
+		return nil, ProcessError(err)
 	}
-	return nil, fmt.Errorf("unexpected status code (%d): %s", response.StatusCode, responseBody)
 }
 
 func GetOIDCSecretName() string {
@@ -165,12 +167,16 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	requestURL := fmt.Sprintf("%s/protocol/openid-connect/token", keycloakEndPoint)
 	headers := make(http.Header)
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
-	response, err := ProcessHTTPRequest(ctx, POST, requestURL, headers, strings.NewReader(values.Encode()))
+	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(values.Encode()), headers)
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	token := &TokenResponse{}
-	err = json.Unmarshal(response, &token)
+	body, err := ProcessHTTPResponse(httpResponse)
+	if err != nil {
+		return "", ProcessError(err, StructToString(httpResponse))
+	}
+	token := &TokenRepresentation{}
+	err = json.Unmarshal(body, &token)
 	if err != nil {
 		return "", ProcessError(err)
 	}
@@ -193,88 +199,6 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
 	headers.Add("Content-Type", "application/json")
 	return headers, nil
-}
-
-type AddUserRequest struct {
-	UserRepresentation *UserRepresentation
-}
-
-type AddUserResponse struct{}
-
-func AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
-	keycloakEndPoint, err := GetKeycloakEndPoint(true)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
-	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	userBytes, err := json.Marshal(req.UserRepresentation)
-	if err != nil {
-		return nil, ProcessError(err, StructToString(req.UserRepresentation))
-	}
-	response, err := ProcessHTTPRequest(ctx, POST, requestURL, headers, strings.NewReader(string(userBytes)))
-	if err != nil {
-		return nil, err
-	}
-	return nil, nil
-}
-
-func GetUserID(ctx context.Context, username string) (string, error) {
-	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	keycloakEndPoint, err := GetKeycloakEndPoint(true)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	// TODO Need to increase the limit
-	reqURL := fmt.Sprintf("%s/users", keycloakEndPoint)
-	response, err := ProcessHTTPRequest(ctx, GET, reqURL, headers, nil)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	var users []UserRepresentation
-	err = json.Unmarshal(response, &users)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	var clientID string
-	for _, user := range users {
-		if user.Name == username {
-			clientID = user.ID
-			break
-		}
-	}
-	log.Infof("Fetching ID of user %s - %s", username, clientID)
-	return clientID, nil
-}
-
-func DeleteUser(ctx context.Context, username string) error {
-	keycloakEndPoint, err := GetKeycloakEndPoint(true)
-	if err != nil {
-		return err
-	}
-	userID, err := GetUserID(ctx, username)
-	if err != nil {
-		return err
-	}
-	reqURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
-	headers, err := GetCommonHTTPHeaders(context.Background(), GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return err
-	}
-
-	response, err := ProcessHTTPRequest(context.Background(), DELETE, reqURL, headers, nil)
-	log.Infof("Response for user [%s] deletion - %s", username, string(response))
-	if err != nil {
-		return err
-	}
-	log.Infof("Deleted User - %s", username)
-	return nil
 }
 
 func GetPxBackupNamespace() (string, error) {
@@ -363,11 +287,11 @@ func GetPxCentralAdminToken(ctx context.Context) (string, error) {
 }
 
 func UpdatePxBackupAdminSecret(ctx context.Context) error {
-	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
+	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
 		return ProcessError(err)
 	}
-	pxbNamespace, err := GetPxBackupNamespace()
+	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
 	if err != nil {
 		return ProcessError(err)
 	}
@@ -395,11 +319,11 @@ func GetCtxWithToken(token string) context.Context {
 }
 
 func GetAdminCtxFromSecret(ctx context.Context) (context.Context, error) {
-	err := UpdatePxBackupAdminSecret(ctx)
+	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	pxbNamespace, err := GetPxBackupNamespace()
+	err = UpdatePxBackupAdminSecret(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
@@ -415,10 +339,124 @@ func GetAdminCtxFromSecret(ctx context.Context) (context.Context, error) {
 	return GetCtxWithToken(token), nil
 }
 
+type AddUserRequest struct {
+	User *UserRepresentation `json:"user"`
+}
+
+type AddUserResponse struct{}
+
+func AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
+	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	userBytes, err := json.Marshal(req.User)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(string(userBytes)), headers)
+	if err != nil {
+		return nil, err
+	}
+	_, err = ProcessHTTPResponse(httpResponse)
+	if err != nil {
+		return nil, err
+	}
+	return &AddUserResponse{}, nil
+}
+
+type EnumerateUserRequest struct{}
+
+type EnumerateUserResponse struct {
+	Users []*UserRepresentation
+}
+
+func EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUserResponse, error) {
+	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	httpResponse, err := ProcessHTTPRequest(ctx, GET, requestURL, nil, headers)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	body, err := ProcessHTTPResponse(httpResponse)
+	if err != nil {
+		return nil, err
+	}
+	resp := &EnumerateUserResponse{}
+	err = json.Unmarshal(body, resp)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	return resp, nil
+}
+
+type DeleteUserRequest struct {
+	Username string `json:"username"`
+}
+
+type DeleteUserResponse struct{}
+
+func DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
+	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	userID, err := GetUserID(ctx, req.Username)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	requestURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
+	httpResponse, err := ProcessHTTPRequest(ctx, DELETE, requestURL, nil, headers)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	_, err = ProcessHTTPResponse(httpResponse)
+	if err != nil {
+		return nil, err
+	}
+	return &DeleteUserResponse{}, nil
+}
+
+func GetUserID(ctx context.Context, username string) (string, error) {
+	enumerateUserReq := &EnumerateUserRequest{}
+	enumerateUserResp, err := EnumerateUser(ctx, enumerateUserReq)
+	if err != nil {
+		return "", ProcessError(err, StructToString(enumerateUserReq))
+	}
+	var userID string
+	for _, user := range enumerateUserResp.Users {
+		if user.Username == username {
+			userID = user.ID
+			break
+		}
+	}
+	if userID == "" {
+		err = fmt.Errorf("no user found with the username: [%s]", username)
+		return "", ProcessError(err)
+	}
+	return userID, nil
+}
+
 func init() {
 	str, err := GetPxCentralAdminPassword()
 	if err != nil {
-		err = fmt.Errorf("error fetching [%s] password from secret: [%v]", err)
+		err = fmt.Errorf("error fetching [%s] password from secret: [%v]", GlobalPxCentralAdminUsername, err)
 		log.Errorf(ProcessError(err).Error())
 	}
 	GlobalPxCentralAdminPassword = str

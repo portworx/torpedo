@@ -5,7 +5,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/pxb/auth"
 	"github.com/portworx/torpedo/drivers/pxb/generics"
-	"github.com/portworx/torpedo/pkg/log"
+	"time"
 )
 
 type User struct {
@@ -32,10 +32,10 @@ type PxBackup struct {
 }
 
 func (b *PxBackup) AddTestUser() error {
-	user := fmt.Sprintf("pxb-user-%v", time.Now().Unix())
-	log.Infof("Creating user %s", user)
-	err := auth.AddUser(context.Background(), user, "firstName", "lastName", "fl@cnbu.com", true, "admin", true)
-	log.Errorf("Creating user caused error: %v", err)
-	log.Infof("Created user %s", user)
-	return err
+	username := fmt.Sprintf("pxb-user-%v", time.Now().Unix())
+	//log.Infof("Creating user %s", user)
+	//err := auth.AddUser(context.Background(), user, "firstName", "lastName", "fl@cnbu.com", true, "admin", true)
+	//log.Errorf("Creating user caused error: %v", err)
+	//log.Infof("Created user %s", user)
+	//return err
 }
