@@ -23,16 +23,15 @@ var (
 	isavailable                bool
 	isTemplateavailable        bool
 	isStorageTemplateAvailable bool
-
-	resourceTemplateID    string
-	appConfigTemplateID   string
-	storageTemplateID     string
-	resourceTemplateName  = "Small"
-	appConfigTemplateName = "QaDefault"
+	resourceTemplateID         string
+	appConfigTemplateID        string
+	storageTemplateID          string
+	resourceTemplateName       = "Small"
 )
 
 const (
-	storageTemplateName = "QaDefault"
+	storageTemplateName   = "QaDefault"
+	appConfigTemplateName = "QaDefault"
 )
 
 var (
@@ -275,12 +274,6 @@ func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
 	log.Infof("Updating the resource template name with : %v", TemplateName)
 	resourceTemplateName = TemplateName
 	return resourceTemplateName
-}
-
-func (cp *ControlPlane) UpdateAppConfigTemplateName(TemplateName string) string {
-	log.Infof("Updating the resource template name with : %v", TemplateName)
-	appConfigTemplateName = TemplateName
-	return appConfigTemplateName
 }
 
 // GetResourceTemplate get the resource template id
