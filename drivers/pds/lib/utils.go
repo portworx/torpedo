@@ -730,6 +730,14 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 				log.Infof("consul dns end point: %s", dnsEndpoint)
 				isfound = true
 			}
+		} else if dsName == mysql {
+			for _, node := range deploymentNodes {
+				if strings.Contains(node, "vip") {
+					dnsEndpoint = node
+					isfound = true
+					break
+				}
+			}
 		} else {
 			if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
 				dnsEndpoint = fmt.Sprint(value)
