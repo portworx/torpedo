@@ -118,7 +118,6 @@ const (
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
 	rancherProjectDescription                 = "new project"
-	multiAppNfsPodDeploymentNamespace         = "kube-system"
 )
 
 var (
@@ -142,9 +141,7 @@ var (
 		{"app.kubernetes.io/component": "keycloak"},
 		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
 		{"app.kubernetes.io/component": "pxcentral-mysql"}}
-	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
-	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
-	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+	cloudPlatformList = []string{"rke", "aws", "azure", "gke"}
 )
 
 type userRoleAccess struct {
@@ -353,8 +350,8 @@ func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred s
 	return status, err
 }
 
-// CreateBackupWithCustomResourceTypeWithoutValidation creates backup with custom resources without validation
-func CreateBackupWithCustomResourceTypeWithoutValidation(backupName string, clusterName string, bLocation string, bLocationUID string,
+// CreateBackupWithCustomResourceType creates backup with custom resources
+func CreateBackupWithCustomResourceType(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, resourceTypes []string, ctx context.Context) error {
 
@@ -394,6 +391,10 @@ func CreateBackupWithCustomResourceTypeWithoutValidation(backupName string, clus
 	if err != nil {
 		return err
 	}
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
 }
@@ -407,7 +408,7 @@ func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backu
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	err := CreateBackupWithCustomResourceTypeWithoutValidation(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypesFilter, ctx)
+	err := CreateBackupWithCustomResourceType(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypesFilter, ctx)
 	if err != nil {
 		return err
 	}
@@ -1437,29 +1438,12 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 
 // DeletePodWithLabelInNamespace kills pod with the given label in the given namespace
 func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
-	var pods *corev1.PodList
-	var err error
-	podList := func() (interface{}, bool, error) {
-		pods, err = core.Instance().GetPods(namespace, label)
-		if err != nil {
-			if strings.Contains(err.Error(), "no pod found with the label") {
-				return "", true, fmt.Errorf("waiting for pod with the given label %v to come up in namespace %s", label, namespace)
-			} else {
-				return "", false, err
-			}
-		}
-		if len(pods.Items) < 1 {
-			return "", true, fmt.Errorf("waiting for atleast one pod with the given label %v to come up in namespace %s", label, namespace)
-		}
-		return "", false, nil
-	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(podList, 5*time.Minute, 30*time.Second)
+	pods, err := core.Instance().GetPods(namespace, label)
 	if err != nil {
 		return err
 	}
 	for _, pod := range pods.Items {
-		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
-		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
+		err := core.Instance().DeletePod(pod.GetName(), namespace, false)
 		if err != nil {
 			return err
 		}
@@ -1518,18 +1502,18 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 }
 
 // backupSuccessCheckWithValidation checks if backup is Success and then validates the backup
-func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...[]string) error {
+func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration) error {
 	err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 	if err != nil {
 		return err
 	}
-	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypeFilter[0])
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
 // ValidateBackup validates a backup's spec's objects (resources) and volumes. resourceTypesFilter can be used to select specific types to validate (nil means all types). This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
 func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string) error {
-	var backupInspectResponse *api.BackupInspectResponse
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
+
 	log.Infof("Obtaining backup info for backup [%s]", backupName)
 	backupDriver := Inst().Backup
 	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -1541,28 +1525,23 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		Uid:   backupUid,
 		OrgId: orgID,
 	}
-	backupStatusCheck := func() (interface{}, bool, error) {
-		backupInspectResponse, err = backupDriver.InspectBackup(ctx, backupInspectRequest)
-		if err != nil {
-			return "", false, fmt.Errorf("InspectBackup Err: %v", err)
-		}
-		backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
-		if backupStatus == api.BackupInfo_StatusInfo_Success ||
-			backupStatus == api.BackupInfo_StatusInfo_PartialSuccess {
-			return "", false, nil
-		}
-		return "", true, fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess,got -%v", backupName, backupStatus)
-	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupStatusCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	backupInspectResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
-		return err
+		return fmt.Errorf("InspectBackup Err: %v", err)
+	}
+
+	backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
+	if backupStatus != api.BackupInfo_StatusInfo_Success &&
+		backupStatus != api.BackupInfo_StatusInfo_PartialSuccess {
+		return fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess", backupName)
 	}
 
 	var errors []error
+
 	theBackup := backupInspectResponse.GetBackup()
 	backupName = theBackup.GetName()
 	resourceInfos := theBackup.GetResources()
-	backedUpVolumes := theBackup.GetVolumes()
+	backedupVolumes := theBackup.GetVolumes()
 	backupNamespaces := theBackup.GetNamespaces()
 
 	for _, scheduledAppContext := range scheduledAppContexts {
@@ -1630,7 +1609,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 		// collect the backup resources whose VOLUMES should be present in this scheduledAppContext (namespace)
 		namespacedBackedUpVolumes := make([]*api.BackupInfo_Volume, 0)
-		for _, vol := range backedUpVolumes {
+		for _, vol := range backedupVolumes {
 			if vol.GetNamespace() == scheduledAppContextNamespace {
 				if vol.Status.Status != api.BackupInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
 					err := fmt.Errorf("the status of the backedup volume [%s] was not Success. It was [%s] with reason [%s]", vol.Name, vol.Status.Status, vol.Status.Reason)
@@ -2290,21 +2269,12 @@ func GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordi
 
 // GetFirstScheduleBackupName returns the name of the first schedule backup for the given schedule
 func GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
-	var allScheduleBackupNames []string
-	var err error
-	getFirstScheduleBackup := func() (interface{}, bool, error) {
-		allScheduleBackupNames, err = Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
-		if err != nil {
-			return "", false, err
-		}
-		if len(allScheduleBackupNames) == 0 {
-			return "", true, fmt.Errorf("no backups found for schedule %s yet", scheduleName)
-		}
-		return "", false, nil
-	}
-	_, err = task.DoRetryWithTimeout(getFirstScheduleBackup, 20*time.Second, 5*time.Second)
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
 	if err != nil {
 		return "", err
+	}
+	if len(allScheduleBackupNames) == 0 {
+		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
 	}
 	return allScheduleBackupNames[0], nil
 }
@@ -4615,103 +4585,6 @@ func DeleteBackupSchedulePolicyWithContext(orgID string, policyList []string, ct
 			err = fmt.Errorf("Failed to delete schedule policy %s with error [%v]", policyList[i], err)
 			return err
 		}
-	}
-	return nil
-}
-
-// DeletePodWhileBackupInProgress deletes pod with given label and in given namespace when backup is in progress
-func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupName string, namespace string, label map[string]string, clusterName string) error {
-	log.InfoD("Deleting pod while backup is in progress")
-	backupInProgressStatus := api.BackupInfo_StatusInfo_InProgress
-	backupPendingStatus := api.BackupInfo_StatusInfo_Pending
-	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgId)
-	if err != nil {
-		return err
-	}
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   backupUID,
-		OrgId: orgId,
-	}
-	backupProgressCheckFunc := func() (interface{}, bool, error) {
-		backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-		if err != nil {
-			return "", false, err
-		}
-		actual := backupResponse.GetBackup().GetStatus().Status
-		if actual == backupInProgressStatus {
-			return "", false, nil
-		}
-		if actual == backupPendingStatus {
-			return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
-		} else {
-			return "", false, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
-		}
-	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
-	if err != nil {
-		return err
-	}
-	if clusterName == SourceClusterName {
-		err = SetSourceKubeConfig()
-		if err != nil {
-			return err
-		}
-	} else if clusterName == destinationClusterName {
-		err = SetDestinationKubeConfig()
-		if err != nil {
-			return err
-		}
-	}
-	err = DeletePodWithLabelInNamespace(namespace, label)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// DeletePodWhileRestoreInProgress deletes pod with given label and in given namespace when restore is in progress
-func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreName string, namespace string, label map[string]string, clusterName string) error {
-	log.InfoD("Deleting pod while restore is in progress")
-	restoreInspectRequest := &api.RestoreInspectRequest{
-		Name:  restoreName,
-		OrgId: orgId,
-	}
-	restoreInProgressStatus := api.RestoreInfo_StatusInfo_InProgress
-	restorePendingStatus := api.RestoreInfo_StatusInfo_Pending
-	restoreProgressCheckFunc := func() (interface{}, bool, error) {
-		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
-		if err != nil {
-			return "", false, err
-		}
-		actual := resp.GetRestore().GetStatus().Status
-		if actual == restoreInProgressStatus {
-			return "", false, nil
-		}
-		if actual == restorePendingStatus {
-			return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
-		} else {
-			return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
-		}
-	}
-	_, err := DoRetryWithTimeoutWithGinkgoRecover(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
-	if err != nil {
-		return err
-	}
-	if clusterName == SourceClusterName {
-		err = SetSourceKubeConfig()
-		if err != nil {
-			return err
-		}
-	} else if clusterName == destinationClusterName {
-		err = SetDestinationKubeConfig()
-		if err != nil {
-			return err
-		}
-	}
-	err = DeletePodWithLabelInNamespace(namespace, label)
-	if err != nil {
-		return err
 	}
 	return nil
 }
