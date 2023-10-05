@@ -5395,6 +5395,8 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		Bucket: aws.String(bucketName),
 		Policy: aws.String(policy),
 	})
+	print("sleep to check bucket policy")
+	time.Sleep(300 * time.Second)
 	return err
 }
 
