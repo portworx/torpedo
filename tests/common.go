@@ -11,6 +11,7 @@ import (
 	"fmt"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"go.uber.org/multierr"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -2391,6 +2392,9 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
@@ -2726,6 +2730,8 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	}
 

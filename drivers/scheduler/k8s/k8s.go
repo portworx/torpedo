@@ -1229,6 +1229,22 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		}
 	}
 
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createVirtualMachineObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
 	return specObjects, nil
 }
 
@@ -2485,27 +2501,6 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 		log.Infof("[%v] Created Rule: %v", app.Key, rule.GetName())
 		return rule, nil
-	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		// Create VirtualMachine Spec
-		if obj.Namespace != "kube-system" {
-			obj.Namespace = ns.Name
-		}
-		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
-		if k8serrors.IsAlreadyExists(err) {
-			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
-				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
-				return vm, nil
-			}
-		}
-
-		if err != nil {
-			return nil, &scheduler.ErrFailedToScheduleApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to create Virtualachine: %v, Err: %v", obj.Name, err),
-			}
-		}
-		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
-		return vm, nil
 	} else if obj, ok := spec.(*corev1.Pod); ok {
 		obj.Namespace = ns.Name
 		if options.Scheduler != "" {
@@ -5129,6 +5124,38 @@ func (k *K8s) createAdmissionRegistrationObjects(
 		}
 		log.Infof("[%v] Created ValidatingWebhookConfiguration: %v", app.Key, vbc.Name)
 		return vbc, nil
+	}
+
+	return nil, nil
+}
+
+// createVirtualMachineObjects creates the kubevirt VirtualMachines using kubectl apply
+func (k *K8s) createVirtualMachineObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+				return vm, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Virtualachine: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
+		return vm, nil
 	}
 
 	return nil, nil
