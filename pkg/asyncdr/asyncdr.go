@@ -9,12 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/sirupsen/logrus"
-	storageapi "k8s.io/api/storage/v1"
-
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -22,10 +16,15 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
 )
 
 var dash *aetosutil.Dashboard
@@ -297,7 +296,8 @@ func CreateSchedulePolicy(policyName string, interval int) (pol *storkapi.Schedu
 // WaitForNumOfMigration waits for a certain number of migrations to complete.
 func WaitForNumOfMigration(schedName string, schedNamespace string, count int, miginterval int) (map[string]string, error) {
 	migInterval := time.Minute * time.Duration(miginterval)
-	migTimeout := time.Minute * time.Duration(count*miginterval)
+	// migTimeout := time.Minute * time.Duration(count*miginterval)
+	migTimeout := time.Minute * 30
 	expectedMigrations := make(map[string]string)
 	checkNumOfMigrations := func() (interface{}, bool, error) {
 		migSchedule, err := storkops.Instance().GetMigrationSchedule(schedName, schedNamespace)

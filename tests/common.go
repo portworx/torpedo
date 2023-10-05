@@ -13,24 +13,6 @@ import (
 	"net/http"
 	"regexp"
 	"runtime"
-
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"golang.org/x/sync/errgroup"
-
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -41,14 +23,39 @@ import (
 	"strings"
 	"sync"
 	"time"
+	// import aks driver to invoke it's init
+	// import backup driver to invoke it's init
+	// import aws driver to invoke it's init
+	// import gke driver to invoke it's init
+	// import vsphere driver to invoke it's init
+	// import ibm driver to invoke it's init
+	// import oracle driver to invoke it's init
+	// import ssh driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import portworx driver to invoke it's init
+	// import gce driver to invoke it's init
+	// import aws driver to invoke it's init
+	// import azure driver to invoke it's init
+	// import generic csi driver to invoke it's init
+	// import driver to invoke it's init
+	// import driver to invoke it's init
+	// import scheduler drivers to invoke it's init
+	// import pso driver to invoke it's init
+	// import ibm driver to invoke it's init
+	context1 "context"
 
-	"github.com/portworx/torpedo/pkg/s3utils"
-
+	"golang.org/x/sync/errgroup"
+	"github.com/pborman/uuid"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	storageapi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/Azure/azure-storage-blob-go/azblob"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -66,15 +73,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor"
-	"github.com/portworx/torpedo/drivers/node"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/portworx/torpedo/pkg/pureutils"
-	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
@@ -89,70 +87,52 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
-	"github.com/portworx/torpedo/drivers/node/ssh"
-
-	// import backup driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/backup/portworx"
-	// import aws driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import gke driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/gke"
-	// import vsphere driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/vsphere"
-	// import ibm driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/ibm"
-	// import oracle driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/oracle"
-
-	// import ssh driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/drivers/scheduler"
-
-	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-
-	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
-	"github.com/portworx/torpedo/drivers/volume"
-
-	// import portworx driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/portworx"
-	// import gce driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/gce"
-	// import aws driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/aws"
-	// import azure driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/azure"
-
-	// import generic csi driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
-
-	// import driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
-
-	// import driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
-
-	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
-
-	// import pso driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/pso"
-
-	// import ibm driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/volume/ibm"
-
-	context1 "context"
-
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"gopkg.in/natefinch/lumberjack.v2"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor"
+	"github.com/portworx/torpedo/drivers/node"
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
+	_ "github.com/portworx/torpedo/drivers/node/aks"
+	"github.com/portworx/torpedo/drivers/node/ssh"
+	_ "github.com/portworx/torpedo/drivers/backup/portworx"
+	_ "github.com/portworx/torpedo/drivers/node/aws"
+	_ "github.com/portworx/torpedo/drivers/node/gke"
+	_ "github.com/portworx/torpedo/drivers/node/vsphere"
+	_ "github.com/portworx/torpedo/drivers/node/ibm"
+	_ "github.com/portworx/torpedo/drivers/node/oracle"
+	_ "github.com/portworx/torpedo/drivers/node/ssh"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	_ "github.com/portworx/torpedo/drivers/scheduler/dcos"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
+	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
+	"github.com/portworx/torpedo/drivers/volume"
+	_ "github.com/portworx/torpedo/drivers/volume/portworx"
+	_ "github.com/portworx/torpedo/drivers/volume/gce"
+	_ "github.com/portworx/torpedo/drivers/volume/aws"
+	_ "github.com/portworx/torpedo/drivers/volume/azure"
+	_ "github.com/portworx/torpedo/drivers/volume/generic_csi"
+	_ "github.com/portworx/torpedo/drivers/monitor/prometheus"
+	_ "github.com/portworx/torpedo/drivers/pds/dataservice"
+	_ "github.com/portworx/torpedo/drivers/scheduler/anthos"
+	_ "github.com/portworx/torpedo/drivers/volume/pso"
+	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 )
 
 const (
@@ -9104,9 +9084,18 @@ func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 func DeleteCrAndRepo(appData *asyncdr.AppData, appPath string) error {
 	SetDestinationKubeConfig()
 	log.InfoD("Starting crd deletion")
+	namespaces := []string{appData.Ns}
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	err := asyncdr.WaitForNamespaceDeletion(namespaces)
+	if err != nil {
+		return err
+	}
 	SetSourceKubeConfig()
 	asyncdr.DeleteCRAndUninstallCRD(appData.OperatorName, appPath, appData.Ns)
+	err = asyncdr.WaitForNamespaceDeletion(namespaces)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

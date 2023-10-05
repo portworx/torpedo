@@ -2,10 +2,8 @@ package tests
 
 import (
 	"bytes"
+	"container/ring"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"math"
 	"math/rand"
 	"os"
@@ -18,46 +16,43 @@ import (
 	"text/template"
 	"time"
 
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-
-	"github.com/portworx/torpedo/pkg/applicationbackup"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"gopkg.in/natefinch/lumberjack.v2"
-
-	"container/ring"
-
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	"github.com/onsi/ginkgo"
-
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apios "github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
-
-	apios "github.com/libopenstorage/openstorage/api"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor/prometheus"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/sched-ops/task"
+	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor/prometheus"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 const (
@@ -7112,7 +7107,8 @@ func TriggerConfluentAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *E
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		appName := "confluent"
-		appPath := "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
+		appPath := "/torpedo/deployments/customconfigs/confluentkafkacr.yaml"
+		// appPath := "https://raw.githubusercontent.com/confluentinc/confluent-kubernetes-examples/master/quickstart-deploy/confluent-platform.yaml"
 		appData := asyncdr.GetAppData(appName)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			log.InfoD("Preparing apps now")
@@ -7238,7 +7234,7 @@ func TriggerMongoAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Event
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		appName := "mongo"
-		appPath := "/root/tornew/torpedo/deployments/customconfigs/mongocr.yaml"
+		appPath := "/torpedo/deployments/customconfigs/mongocr.yaml"
 		appData := asyncdr.GetAppData(appName)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			log.InfoD("Preparing apps now")
