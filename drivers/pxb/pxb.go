@@ -1,10 +1,12 @@
 package pxb
 
 import (
+	"context"
 	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/pxb/auth"
 	"github.com/portworx/torpedo/drivers/pxb/generics"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 )
 
@@ -33,9 +35,54 @@ type PxBackup struct {
 
 func (b *PxBackup) AddTestUser() error {
 	username := fmt.Sprintf("pxb-user-%v", time.Now().Unix())
-	//log.Infof("Creating user %s", user)
+	log.Infof("Creating user %s", username)
 	//err := auth.AddUser(context.Background(), user, "firstName", "lastName", "fl@cnbu.com", true, "admin", true)
 	//log.Errorf("Creating user caused error: %v", err)
 	//log.Infof("Created user %s", user)
 	//return err
+
+	ctx := context.Background()
+
+	// Test AddUser
+	fmt.Println("Testing AddUser...")
+
+	addUserReq := &auth.AddUserRequest{
+		User: &auth.UserRepresentation{
+			Username:      username,
+			FirstName:     "Test",
+			LastName:      "User",
+			EmailVerified: true,
+			Enabled:       true,
+			Email:         "testuser@example.com",
+			Credentials: []auth.CredentialRepresentation{
+				{
+					Type:      "password",
+					Value:     "admin",
+					Temporary: false,
+				},
+			},
+		},
+	}
+
+	addUserResp, err := auth.AddUser(ctx, addUserReq)
+	if err != nil {
+		fmt.Println("Failed to add user:", err)
+	} else {
+		fmt.Println("Successfully added user:", addUserResp)
+	}
+
+	//// Test DeleteUser
+	//fmt.Println("Testing DeleteUser...")
+	//
+	//deleteUserReq := &auth.DeleteUserRequest{
+	//	Username: username,
+	//}
+	//
+	//deleteUserResp, err := auth.DeleteUser(ctx, deleteUserReq)
+	//if err != nil {
+	//	fmt.Println("Failed to delete user:", err)
+	//} else {
+	//	fmt.Println("Successfully deleted user:", deleteUserResp)
+	//}
+	return err
 }
