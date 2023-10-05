@@ -1169,14 +1169,10 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						log.Debugf("Deployment ID before update %s", deployment.GetId())
-
 						updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 						log.FailOnError(err, "Error while updating data services")
-
-						log.Debugf("Deployment ID post update %s", updatedDeployment.GetId())
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 						log.FailOnError(err, "Error while validating data service deployment")
@@ -1189,6 +1185,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
 							log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
+
+							// validate the health status of the deployment before taking backup
+							err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
+							log.FailOnError(err, "Error while validating data service deployment")
+
 							err := bkpClient.TriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
 							log.FailOnError(err, "Failed while performing adhoc backup")
 							ctx, err := GetSourceClusterConfigPath()
