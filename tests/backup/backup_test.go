@@ -291,7 +291,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
+		//DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
@@ -307,7 +307,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			}
 			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 		}
-		DestroyApps(restoredAppContexts, opts)
+		//DestroyApps(restoredAppContexts, opts)
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
