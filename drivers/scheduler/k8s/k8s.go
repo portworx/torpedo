@@ -46,6 +46,7 @@ import (
 	schederrors "github.com/portworx/sched-ops/k8s/errors"
 	csisnapshot "github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/networking"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/policy"
@@ -91,6 +92,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -212,6 +214,7 @@ var (
 	k8sAdmissionRegistration = admissionregistration.Instance()
 	k8sApiExtensions         = apiextensions.Instance()
 	k8sOperator              = operator.Instance()
+	k8sKubevirt              = kubevirt.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -371,6 +374,47 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sExternalsnap.SetConfig(config)
 	k8sApiExtensions.SetConfig(config)
 	k8sOperator.SetConfig(config)
+	k8sKubevirt.SetConfig(config)
+
+	return nil
+}
+
+// SetGkeConfig sets kubeconfig for cloud provider GKE
+func (k *K8s) SetGkeConfig(kubeconfigPath string, jsonKey string) error {
+
+	var clientConfig *rest.Config
+	var err error
+
+	if kubeconfigPath == "" {
+		clientConfig = nil
+	} else {
+		clientConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	clientConfig.AuthProvider.Config["cred-json"] = jsonKey
+	if err != nil {
+		return err
+	}
+
+	k8sCore.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sApps.SetConfig(clientConfig)
+	k8sStork.SetConfig(clientConfig)
+	k8sStorage.SetConfig(clientConfig)
+	k8sExternalStorage.SetConfig(clientConfig)
+	k8sAutopilot.SetConfig(clientConfig)
+	k8sRbac.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sPolicy.SetConfig(clientConfig)
+	k8sBatch.SetConfig(clientConfig)
+	k8sMonitoring.SetConfig(clientConfig)
+	k8sAdmissionRegistration.SetConfig(clientConfig)
+	k8sExternalsnap.SetConfig(clientConfig)
+	k8sApiExtensions.SetConfig(clientConfig)
+	k8sOperator.SetConfig(clientConfig)
 
 	return nil
 }
@@ -628,6 +672,10 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 			return nil, err
 		}
 
+		if err := kubevirtv1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
+
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
 		if err != nil {
@@ -723,6 +771,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*admissionregistrationv1.ValidatingWebhookConfigurationList); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*corev1.PersistentVolume); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
 		return specObj, nil
 	}
 
@@ -1968,6 +2020,23 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		log.Infof("[%v] Created Group snapshot: %v", app.Key, snap.Name)
 		return snap, nil
 
+	} else if obj, ok := spec.(*corev1.PersistentVolume); ok {
+		obj.Spec.ClaimRef.Namespace = ns.Name
+		pv, err := k8sCore.CreatePersistentVolume(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if pv, err = k8sCore.GetPersistentVolume(obj.Name); err == nil {
+				log.Infof("[%v] Found existing PersistentVolume: %v", app.Key, pv.Name)
+			}
+		}
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create PersistentVolume: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created PersistentVolume: %v", app.Key, pv.Name)
+		return pv, nil
+
 	}
 	return nil, nil
 }
@@ -2416,6 +2485,27 @@ func (k *K8s) createCoreObject(spec interface{}, ns *corev1.Namespace, app *spec
 		}
 		log.Infof("[%v] Created Rule: %v", app.Key, rule.GetName())
 		return rule, nil
+	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
+		if k8serrors.IsAlreadyExists(err) {
+			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
+				log.Infof("[%v] Found existing VirtualMachine: %v", app.Key, obj.Name)
+				return vm, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create Virtualachine: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
+		return vm, nil
 	} else if obj, ok := spec.(*corev1.Pod); ok {
 		obj.Namespace = ns.Name
 		if options.Scheduler != "" {
@@ -2633,6 +2723,16 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		log.Infof("[%v] Destroyed AutopilotRule: %v", app.Key, obj.Name)
+	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
+		if err != nil {
+			return pods, &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
+			}
+		}
+
+		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -3000,6 +3100,16 @@ func (k *K8s) WaitForRunning(ctx *scheduler.Context, timeout, retryInterval time
 				}
 			}
 			log.Infof("[%v] Validated ResourceTransformation: %v", ctx.App.Key, obj.Name)
+
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			if err := k8sKubevirt.ValidateVirtualMachineRunning(obj.Name, obj.Namespace, timeout, retryInterval); err != nil {
+				return &scheduler.ErrFailedToValidateCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to validate VirtualMachineRunning State: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}
+			}
+			log.Infof("[%v] Validated VirtualMachine running state: %v", ctx.App.Key, obj.Name)
 
 		}
 	}
@@ -3973,6 +4083,31 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 			}
 
 			log.Infof("[%v] Destroyed PVCs for StatefulSet: %v", ctx.App.Key, obj.Name)
+		} else if obj, ok := specObj.(*corev1.PersistentVolume); ok {
+			pvcObj, err := k8sCore.GetPersistentVolume(obj.Name)
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					log.Infof("[%v] PV is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to get PV: %v. Err: %v", ctx.App.Key, obj.Name, err),
+				}
+			}
+
+			if err := k8sCore.DeletePersistentVolume(pvcObj.Name); err != nil {
+				if k8serrors.IsNotFound(err) {
+					log.Infof("[%v] PV is not found: %v, skipping deletion", ctx.App.Key, obj.Name)
+					continue
+				}
+				return nil, &scheduler.ErrFailedToDestroyStorage{
+					App:   ctx.App,
+					Cause: fmt.Sprintf("[%s] Failed to destroy PV: %v. Err: %v", ctx.App.Key, obj.Name, err),
+				}
+			}
+
+			log.Infof("[%v] Destroyed PV: %v", ctx.App.Key, obj.Name)
 		}
 	}
 

@@ -1159,6 +1159,13 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
 		})
+		Step("Deleting all admin backups at the start of the testcase", func() {
+			log.InfoD("Deleting all admin backups at the start of the testcase")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = DeleteAllBackups(ctx, orgID)
+			log.FailOnError(err, "Deleting all admin backups at the start of the testcase")
+		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
 			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
@@ -1406,7 +1413,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
-			appClusterName := destinationClusterName
+			appClusterName := SourceClusterName
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, appClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", appClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", appClusterName))
@@ -1704,7 +1711,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, destinationClusterName))
-			appClusterName := destinationClusterName
+			appClusterName := SourceClusterName
 			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, appClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", appClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", appClusterName))
@@ -2001,6 +2008,14 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			ValidateApplications(scheduledAppContexts)
 		})
 
+		Step("Deleting all admin backups at the start of the testcase", func() {
+			log.InfoD("Deleting all admin backups at the start of the testcase")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = DeleteAllBackups(ctx, orgID)
+			log.FailOnError(err, "Deleting all admin backups at the start of the testcase")
+		})
+
 		Step("Adding Credentials and Registering Backup Location", func() {
 			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -2136,7 +2151,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 				if err != nil {
 					return "", true, fmt.Errorf("unable to fetch backups. Error: %s", err.Error())
 				}
-				if len(fetchedBackupNames) == len(backupNames) {
+				if len(fetchedBackupNames) >= len(backupNames) {
 					return "", false, nil
 				}
 				return "", true, fmt.Errorf("expected: %d and actual: %d", len(backupNames), len(fetchedBackupNames))
@@ -2145,6 +2160,8 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 			log.FailOnError(err, "Wait for BackupSync to complete")
 			fetchedBackupNames, err := GetAllBackupsAdmin()
 			log.FailOnError(err, "Getting a list of all backups")
+			log.InfoD(fmt.Sprintf("Expected backups %v", backupNames))
+			log.InfoD(fmt.Sprintf("Fetched backups %v", fetchedBackupNames))
 			dash.VerifyFatal(len(fetchedBackupNames), len(backupNames), "Comparing the expected and actual number of backups")
 			var bkp *api.BackupObject
 			backupDriver := Inst().Backup

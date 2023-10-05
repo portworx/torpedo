@@ -53,14 +53,15 @@ type Parameter struct {
 		OldImage      string `json:"OldImage"`
 	} `json:"DataServiceToTest"`
 	InfraToTest struct {
-		ControlPlaneURL string `json:"ControlPlaneURL"`
-		AccountName     string `json:"AccountName"`
-		TenantName      string `json:"TenantName"`
-		ProjectName     string `json:"ProjectName"`
-		ClusterType     string `json:"ClusterType"`
-		Namespace       string `json:"Namespace"`
-		PxNamespace     string `json:"PxNamespace"`
-		PDSNamespace    string `json:"PDSNamespace"`
+		ControlPlaneURL      string `json:"ControlPlaneURL"`
+		AccountName          string `json:"AccountName"`
+		TenantName           string `json:"TenantName"`
+		ProjectName          string `json:"ProjectName"`
+		ClusterType          string `json:"ClusterType"`
+		Namespace            string `json:"Namespace"`
+		PxNamespace          string `json:"PxNamespace"`
+		PDSNamespace         string `json:"PDSNamespace"`
+		ServiceIdentityToken bool   `json:"ServiceIdentityToken"`
 	} `json:"InfraToTest"`
 	PDSHelmVersions struct {
 		LatestHelmVersion   string `json:"LatestHelmVersion"`
@@ -728,6 +729,14 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 				dnsEndpoint = fmt.Sprint(value)
 				log.Infof("consul dns end point: %s", dnsEndpoint)
 				isfound = true
+			}
+		} else if dsName == mysql {
+			for _, node := range deploymentNodes {
+				if strings.Contains(node, "vip") {
+					dnsEndpoint = node
+					isfound = true
+					break
+				}
 			}
 		} else {
 			if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
@@ -2618,4 +2627,29 @@ func WaitForPoolToBeResized(expectedSize uint64, poolIDToResize string, isJourna
 	}
 	_, err := task.DoRetryWithTimeout(f, poolResizeTimeout, retryTimeout)
 	return err
+}
+
+func CreatePdsLabeledNamespaces() (string, error) {
+	nname := "nsi" + strconv.Itoa(rand.Int())
+	_, err := CreateK8sPDSNamespace(nname)
+	log.FailOnError(err, "error while creating pds namespace")
+	log.InfoD("Created namespace: %v", nname)
+	log.InfoD("Waiting for created namespaces to be available in PDS")
+	time.Sleep(10 * time.Second)
+	return nname, nil
+}
+
+func CreateSiAndIamRoleBindings(accountID string, nsRoles []pds.ModelsBinding) (string, string, error) {
+	actorId, siToken, err := components.ServiceIdentity.CreateAndGetServiceIdentityToken(accountID)
+	if err != nil {
+		return "", "", fmt.Errorf("error while creating and fetching service identity token for actorID %v", actorId)
+	}
+	log.InfoD("Successfully created serviceIdentity- %v", actorId)
+	iamModels, err := components.ServiceIdentity.CreateIAMRoleBindingsWithSi(actorId, accountID, nsRoles, siToken)
+	if err != nil {
+		return "", "", fmt.Errorf("error generating service identity token for serviceId- %v", iamModels.Id)
+	}
+	iamId := *iamModels.Id
+	log.InfoD("Successfully created for IAM Roles- %v", iamId)
+	return actorId, iamId, nil
 }
