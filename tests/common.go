@@ -5372,6 +5372,29 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
 		}
 	}
+
+	policy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "DenyNonAES256Uploads",
+				"Effect": "Deny",
+				"Principal": "*",
+				"Action": "s3:PutObject",
+				"Resource": "arn:aws:s3:::` + bucketName + `/*",
+				"Condition": {
+					"StringNotEquals": {
+						"s3:x-amz-server-side-encryption": "AES256"
+					}
+				}
+			}
+		]
+	}`
+	// Apply the bucket policy to deny non-AES-256 uploads.
+	_, err = S3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+		Policy: aws.String(policy),
+	})
 	return err
 }
 

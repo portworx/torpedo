@@ -155,6 +155,9 @@ var _ = BeforeSuite(func() {
 		case drivers.ProviderAws:
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
+			if err != nil {
+				log.Fatalf("failed to apply bucket policy: %v", err)
+			}
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
 		case drivers.ProviderAzure:
 			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
