@@ -11,6 +11,7 @@ import (
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/pxb"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -183,6 +184,10 @@ var _ = BeforeSuite(func() {
 	} else {
 		log.Infof("Locked bucket name not provided")
 	}
+
+	pxBackup := pxb.PxBackup{}
+	err = pxBackup.AddTestUser()
+	dash.VerifyFatal(err, nil, "verifying to add test user")
 })
 
 var _ = AfterSuite(func() {

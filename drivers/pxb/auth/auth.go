@@ -115,7 +115,7 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 
 func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 	if response == nil {
-		err := fmt.Errorf("response is nil")
+		err := fmt.Errorf("response == nil")
 		return nil, ProcessError(err)
 	}
 	defer func() {

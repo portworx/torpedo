@@ -36,6 +36,9 @@ func StructToString(s interface{}) string {
 	if v.Kind() != reflect.Struct {
 		return fmt.Sprintf("%v", s)
 	}
+	if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
+		return StructToString(v.Elem().Interface())
+	}
 	t := v.Type()
 	var fields []string
 	for i := 0; i < t.NumField(); i++ {

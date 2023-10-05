@@ -6,6 +6,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/pxb/auth"
 	"github.com/portworx/torpedo/drivers/pxb/generics"
+	"github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
 	"time"
 )
@@ -44,7 +45,7 @@ func (b *PxBackup) AddTestUser() error {
 	ctx := context.Background()
 
 	// Test AddUser
-	fmt.Println("Testing AddUser...")
+	log.Infof("Testing AddUser...")
 
 	addUserReq := &auth.AddUserRequest{
 		User: &auth.UserRepresentation{
@@ -66,9 +67,10 @@ func (b *PxBackup) AddTestUser() error {
 
 	addUserResp, err := auth.AddUser(ctx, addUserReq)
 	if err != nil {
-		fmt.Println("Failed to add user:", err)
+		log.Infof("Failed to add user: %v", err)
 	} else {
-		fmt.Println("Successfully added user:", addUserResp)
+		log.Infof("Successfully added user: %v", addUserResp)
+		log.Infof("Successfully added user: %v -- string version %s", addUserResp, pxbutils.StructToString(addUserReq))
 	}
 
 	//// Test DeleteUser
