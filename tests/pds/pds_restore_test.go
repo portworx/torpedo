@@ -1078,13 +1078,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 			deploymentsToClean                []*pds.ModelsDeployment
 			restoredOriginalDep               []*pds.ModelsDeployment
 			restoredDepPostResourceTempUpdate []*pds.ModelsDeployment
-			//restoredDepPostScalingOfDS        []*pds.ModelsDeployment
-			originalDsEntity            restoreBkp.DSEntity
-			resourceTempUpdatedDsEntity restoreBkp.DSEntity
-			//scaledUpDsEntity              restoreBkp.DSEntity
-			wlDeploymentsToBeCleanedinSrc []*v1.Deployment
-			pdsdeploymentsmd5Hash         = make(map[string]string)
-			restoreClient                 restoreBkp.RestoreClient
+			originalDsEntity                  restoreBkp.DSEntity
+			resourceTempUpdatedDsEntity       restoreBkp.DSEntity
+			wlDeploymentsToBeCleanedinSrc     []*v1.Deployment
+			pdsdeploymentsmd5Hash             = make(map[string]string)
+			restoreClient                     restoreBkp.RestoreClient
 		)
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
