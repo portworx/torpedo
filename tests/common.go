@@ -6046,6 +6046,13 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 
 // CollectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
 func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+
+	// Check to handle cloud based deployment with 0 master nodes
+	if len(node.GetMasterNodes()) == 0 {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		return
+	}
+
 	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
 	podList, err := core.Instance().GetPods(namespace, podLabel)
 	if err != nil {
