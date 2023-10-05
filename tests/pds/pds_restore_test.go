@@ -1115,10 +1115,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					stepLog = "Running Workloads before taking backups"
 					Step(stepLog, func() {
 						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDep)
+						wlDeploymentsToBeCleaned := append(wlDeploymentsToBeCleanedinSrc, wlDep)
 						log.FailOnError(err, "Error while Running workloads")
 						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
 						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
 					stepLog = "Perform backup and restore of the original deployment"
