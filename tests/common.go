@@ -2640,6 +2640,11 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			}
 		}
 		return nil
+	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
