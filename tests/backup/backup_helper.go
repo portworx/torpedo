@@ -3260,7 +3260,7 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
-		log.InfoD("schedule name %s, Next schedule backup name: %s", scheduleName, nextScheduleBackupOrdinal)
+		log.InfoD("schedule name %s, Next schedule backup name: %s", scheduleName, ordinalScheduleBackupName)
 		if err != nil {
 			return "", true, err
 		}
