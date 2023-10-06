@@ -3260,9 +3260,19 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		log.InfoD("schedule name %s, Next schedule backup name: %s", scheduleName, nextScheduleBackupOrdinal)
 		if err != nil {
 			return "", true, err
 		}
+		backupDriver := Inst().Backup
+		backupUid, err := backupDriver.GetBackupUID(ctx, ordinalScheduleBackupName, orgID)
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  ordinalScheduleBackupName,
+			Uid:   backupUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		log.InfoD("Inspect obj %s", resp)
 		return ordinalScheduleBackupName, false, nil
 	}
 	log.InfoD("Waiting for [%d] minutes for the next schedule backup to be triggered", scheduleInterval)
