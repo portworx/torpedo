@@ -290,7 +290,7 @@ func (targetCluster *TargetCluster) ValidatePDSComponents() error {
 	}
 	log.Infof("There are %d deployments present in the namespace %s", len(deploymentList.Items), PDSNamespace)
 	for _, deployment := range deploymentList.Items {
-		err = apps.Instance().ValidateDeployment(&deployment, DefaultTimeout, DefaultRetryInterval)
+		err = apps.Instance().ValidateDeployment(&deployment, MaxTimeout, DefaultRetryInterval)
 		if err != nil {
 			return err
 		}
