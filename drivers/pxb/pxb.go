@@ -70,7 +70,7 @@ func (b *PxBackup) AddTestUser() error {
 		log.Infof("Failed to add user: %v", err)
 	} else {
 		log.Infof("Successfully added user: %v", addUserResp)
-		log.Infof("Successfully added user: %v -- string version %s", addUserResp, pxbutils.StructToString(addUserReq))
+		log.Infof("Successfully added user: %v -- string version %s", addUserResp, pxbutils.ToString(addUserReq))
 	}
 
 	//// Test DeleteUser

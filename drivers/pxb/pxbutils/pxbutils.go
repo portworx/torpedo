@@ -27,17 +27,18 @@ func ProcessError(err error, debugMessage ...string) error {
 	return fmt.Errorf("%s\n  at %s <-> %s", err.Error(), callerInfo, debugInfo)
 }
 
-// StructToString returns the string representation of the given struct
-func StructToString(s interface{}) string {
-	v := reflect.ValueOf(s)
-	if stringer, ok := s.(fmt.Stringer); ok {
+// ToString provides a string representation of the given value.
+// If the value is empty, it returns an empty string (""); for nil, it returns "nil"
+func ToString(value interface{}) string {
+	v := reflect.ValueOf(value)
+	if stringer, ok := value.(fmt.Stringer); ok {
 		return stringer.String()
 	}
 	if v.Kind() != reflect.Struct {
-		return fmt.Sprintf("%v", s)
+		return fmt.Sprintf("%v", value)
 	}
 	if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
-		return StructToString(v.Elem().Interface())
+		return ToString(v.Elem().Interface())
 	}
 	t := v.Type()
 	var fields []string
@@ -54,7 +55,7 @@ func StructToString(s interface{}) string {
 					if fieldVal.IsNil() {
 						fieldString = fmt.Sprintf("%s: nil", field.Name)
 					} else if fieldVal.Type().Elem().Kind() == reflect.Struct {
-						fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Elem().Interface()))
+						fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Elem().Interface()))
 					} else {
 						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Elem())
 					}
@@ -74,7 +75,7 @@ func StructToString(s interface{}) string {
 						var mapStrings []string
 						for _, key := range mapKeys {
 							value := fieldVal.MapIndex(key)
-							mapStrings = append(mapStrings, fmt.Sprintf("%s: %s", StructToString(key.Interface()), StructToString(value.Interface())))
+							mapStrings = append(mapStrings, fmt.Sprintf("%s: %s", ToString(key.Interface()), ToString(value.Interface())))
 						}
 						fieldString = fmt.Sprintf("%s: {%s}", field.Name, strings.Join(mapStrings, ", "))
 					}
@@ -82,10 +83,10 @@ func StructToString(s interface{}) string {
 					if fieldVal.IsNil() {
 						fieldString = fmt.Sprintf("%s: nil", field.Name)
 					} else {
-						fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Elem().Interface()))
+						fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Elem().Interface()))
 					}
 				case reflect.Struct:
-					fieldString = fmt.Sprintf("%s: %s", field.Name, StructToString(fieldVal.Interface()))
+					fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Interface()))
 				case reflect.String:
 					if fieldVal.Len() == 0 {
 						fieldString = fmt.Sprintf("%s: \"\"", field.Name)

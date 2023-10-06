@@ -108,7 +108,7 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 	httpRequest.Header = headers
 	httpResponse, err := GlobalHTTPClient.Do(httpRequest)
 	if err != nil {
-		return nil, ProcessError(err, StructToString(httpRequest))
+		return nil, ProcessError(err, ToString(httpRequest))
 	}
 	return httpResponse, nil
 }
@@ -126,7 +126,7 @@ func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 	}()
 	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, ProcessError(err, StructToString(response))
+		return nil, ProcessError(err, ToString(response))
 	}
 	statusCode, requestURL := response.StatusCode, response.Request.URL
 	switch {
@@ -173,7 +173,7 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	}
 	body, err := ProcessHTTPResponse(httpResponse)
 	if err != nil {
-		return "", ProcessError(err, StructToString(httpResponse))
+		return "", ProcessError(err, ToString(httpResponse))
 	}
 	token := &TokenRepresentation{}
 	err = json.Unmarshal(body, &token)
@@ -193,7 +193,7 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 			username: username,
 			password: "", // password left blank on purpose
 		}
-		return nil, ProcessError(err, StructToString(debugStruct))
+		return nil, ProcessError(err, ToString(debugStruct))
 	}
 	headers := make(http.Header)
 	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
@@ -268,7 +268,7 @@ func GetPxCentralAdminPassword() (string, error) {
 		}{
 			PxbNamespace: pxbNamespace,
 		}
-		return "", ProcessError(err, StructToString(debugStruct))
+		return "", ProcessError(err, ToString(debugStruct))
 	}
 	PxCentralAdminPwd := string(secret.Data["credential"])
 	if PxCentralAdminPwd == "" {
@@ -437,7 +437,7 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 	enumerateUserReq := &EnumerateUserRequest{}
 	enumerateUserResp, err := EnumerateUser(ctx, enumerateUserReq)
 	if err != nil {
-		return "", ProcessError(err, StructToString(enumerateUserReq))
+		return "", ProcessError(err, ToString(enumerateUserReq))
 	}
 	var userID string
 	for _, user := range enumerateUserResp.Users {
@@ -451,6 +451,28 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 		return "", ProcessError(err)
 	}
 	return userID, nil
+}
+
+func KeycloakHTTPRequest(ctx context.Context, method HTTPMethod, path string, body io.Reader) ([]byte, error) {
+	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+	if err != nil {
+		return nil, err
+	}
+	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+	if err != nil {
+		return nil, err
+	}
+
+	requestURL := fmt.Sprintf("%s/%s", keycloakEndPoint, path)
+
+	// Executing the HTTP request
+	httpResponse, err := ProcessHTTPRequest(ctx, method, requestURL, body, headers)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+
+	// Always processing the response
+	return ProcessHTTPResponse(httpResponse)
 }
 
 func init() {
