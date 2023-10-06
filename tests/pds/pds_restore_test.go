@@ -1079,7 +1079,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 		var (
 			deploymentsToClean                []*pds.ModelsDeployment
 			restoredDepPostResourceTempUpdate []*pds.ModelsDeployment
-			resourceTempUpdatedDsEntity       restoreBkp.DSEntity
+			versionUpdatedDsEntity            restoreBkp.DSEntity
 			wlDeploymentsToBeCleanedinSrc     []*v1.Deployment
 			pdsdeploymentsmd5Hash             = make(map[string]string)
 			restoreClient                     restoreBkp.RestoreClient
@@ -1130,6 +1130,10 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						delete(dataServiceVersionBuildMap, version)
 					}
 
+					dsEntity = restoreBkp.DSEntity{
+						Deployment: deployment,
+					}
+
 					stepLog = "Running Workloads before taking backups"
 					Step(stepLog, func() {
 						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
@@ -1137,6 +1141,44 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						log.FailOnError(err, "Error while Running workloads")
 						log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
 						pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
+					})
+
+					// Take Backup
+					stepLog = "Perform adhoc backup and validate them"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+						err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+						log.FailOnError(err, "Failed while performing adhoc backup")
+					})
+
+					stepLog = "Perform backup and restore before updating data service version"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+
+						err := bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+						log.FailOnError(err, "Failed while performing adhoc backup")
+						ctx, err := GetSourceClusterConfigPath()
+						log.FailOnError(err, "failed while getting src cluster path")
+						restoreTarget := tc.NewTargetCluster(ctx)
+						restoreClient = restoreBkp.RestoreClient{
+							TenantId:             tenantID,
+							ProjectId:            projectID,
+							Components:           components,
+							Deployment:           deployment,
+							RestoreTargetCluster: restoreTarget,
+						}
+
+						restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, dsEntity, projectID, deployment)
+						deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
+
+					})
+					stepLog = "Validate md5hash for the restored deployments"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostResourceTempUpdate, pdsdeploymentsmd5Hash)
 						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
@@ -1166,7 +1208,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dsVersionBuildMap)
 						dash.VerifyFatal(config.Spec.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
 
-						resourceTempUpdatedDsEntity = restoreBkp.DSEntity{
+						versionUpdatedDsEntity = restoreBkp.DSEntity{
 							Deployment: updatedDeployment,
 						}
 
@@ -1192,7 +1234,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 								RestoreTargetCluster: restoreTarget,
 							}
 
-							restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, resourceTempUpdatedDsEntity, projectID, updatedDeployment)
+							restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, versionUpdatedDsEntity, projectID, updatedDeployment)
 							deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
 
 						})
