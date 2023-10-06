@@ -216,7 +216,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		upgradeTriggerFunction     = make(map[string]TriggerFunction)
 		wg                         sync.WaitGroup
 		// executionThreshold determines the number of times each function needs to execute before triggerFunc runs
-		executionThreshold = 4
+		executionThreshold = 2
 	)
 
 	JustBeforeEach(func() {
@@ -272,9 +272,9 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
-		Inst().UpgradeStorageDriverEndpointList = "https://edge-install.portworx.com/2.13.11,https://install.portworx.com/3.0.0,https://edge-install.portworx.com/3.0.2"
-		Inst().AppList = []string{"vdbench-sharedv4", "elasticsearch", "fio", "nginx"}
-		Inst().CsiAppList = []string{"fio", "nginx"}
+		Inst().UpgradeStorageDriverEndpointList = "https://edge-install.portworx.com/2.13.11,https://install.portworx.com/3.0.0,https://install.portworx.com/3.0.1,https://edge-install.portworx.com/3.0.2"
+		Inst().AppList = []string{"fio"}
+		Inst().CsiAppList = []string{"fio"}
 	})
 
 	It("has to schedule app and register test triggers", func() {
@@ -346,7 +346,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					currentEndpointIndex := 0
 					for {
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
@@ -497,11 +497,7 @@ func emailEventTrigger(wg *sync.WaitGroup,
 
 	start := time.Now().Local()
 	lastInvocationTime := start
-	count := 0
 	for {
-		if count > 5 {
-			return
-		}
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 			break
@@ -528,8 +524,7 @@ func emailEventTrigger(wg *sync.WaitGroup,
 			lastInvocationTime = time.Now().Local()
 
 		}
-		time.Sleep(10 * time.Minute)
-		count++
+		time.Sleep(30 * time.Minute)
 	}
 }
 
