@@ -1077,12 +1077,12 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 	})
 	It("Update DataService and perform backup and restore", func() {
 		var (
-			deploymentsToClean                []*pds.ModelsDeployment
-			restoredDepPostResourceTempUpdate []*pds.ModelsDeployment
-			versionUpdatedDsEntity            restoreBkp.DSEntity
-			wlDeploymentsToBeCleanedinSrc     []*v1.Deployment
-			pdsdeploymentsmd5Hash             = make(map[string]string)
-			restoreClient                     restoreBkp.RestoreClient
+			deploymentsToClean            []*pds.ModelsDeployment
+			restoredDep                   []*pds.ModelsDeployment
+			versionUpdatedDsEntity        restoreBkp.DSEntity
+			wlDeploymentsToBeCleanedinSrc []*v1.Deployment
+			pdsdeploymentsmd5Hash         = make(map[string]string)
+			restoreClient                 restoreBkp.RestoreClient
 		)
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
@@ -1144,15 +1144,6 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
-					// Take Backup
-					stepLog = "Perform adhoc backup and validate them"
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-						err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
-						log.FailOnError(err, "Failed while performing adhoc backup")
-					})
-
 					stepLog = "Perform backup and restore before updating data service version"
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
@@ -1171,14 +1162,14 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 							RestoreTargetCluster: restoreTarget,
 						}
 
-						restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, dsEntity, projectID, deployment)
-						deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
+						restoredDep = PerformRestore(restoreClient, dsEntity, projectID, deployment)
+						deploymentsToClean = append(deploymentsToClean, restoredDep...)
 
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
-						wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostResourceTempUpdate, pdsdeploymentsmd5Hash)
+						wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDep, pdsdeploymentsmd5Hash)
 						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
@@ -1234,14 +1225,14 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 								RestoreTargetCluster: restoreTarget,
 							}
 
-							restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, versionUpdatedDsEntity, projectID, updatedDeployment)
-							deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
+							restoredDep = PerformRestore(restoreClient, versionUpdatedDsEntity, projectID, updatedDeployment)
+							deploymentsToClean = append(deploymentsToClean, restoredDep...)
 
 						})
 						stepLog = "Validate md5hash for the restored deployments"
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
-							wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostResourceTempUpdate, pdsdeploymentsmd5Hash)
+							wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDep, pdsdeploymentsmd5Hash)
 							wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 						})
 					})
