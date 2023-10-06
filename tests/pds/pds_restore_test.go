@@ -1113,10 +1113,18 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 					err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 					log.FailOnError(err, "Error while validating data service deployment")
 
+					dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting resource template")
+					dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
+
+					dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+					log.FailOnError(err, "Error while getting app configuration template")
+					dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
+
 					resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 
-					ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dataServiceVersionBuildMap)
+					ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 
 					for version := range dataServiceVersionBuildMap {
 						delete(dataServiceVersionBuildMap, version)
@@ -1132,19 +1140,13 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
-					stepLog = "Update the dataservice version and perform backup and restore"
+					stepLog = "Update the data service version and perform backup and restore"
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
-						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
-						log.FailOnError(err, "Error while getting app configuration template")
-						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
-
-						dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
-						log.FailOnError(err, "Error while getting resource setting template")
-						dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 						updatedDeployment, err := pdslib.UpdateDataServiceVerison(deployment.GetDataServiceId(), deployment.GetId(),
-							dataServiceDefaultAppConfigID, replicas, dataServiceDefaultResourceTemplateID, ds.Image, ds.Version)
+							dataServiceDefaultAppConfigID, int32(ds.Replicas), dataServiceDefaultResourceTemplateID, ds.Image, ds.Version)
+						log.FailOnError(err, "Error occured while updating data service version")
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 						log.FailOnError(err, "Error while validating data service deployment")
@@ -1161,7 +1163,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 							log.Debugf("New version :%s   build:%s", version, build)
 						}
 
-						ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dsVersionBuildMap)
+						ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dsVersionBuildMap)
 						dash.VerifyFatal(config.Spec.Version, ds.Version+"-"+ds.Image, "validating ds build and version")
 
 						resourceTempUpdatedDsEntity = restoreBkp.DSEntity{
