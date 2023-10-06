@@ -34,11 +34,11 @@ func ToString(value interface{}) string {
 	if stringer, ok := value.(fmt.Stringer); ok {
 		return stringer.String()
 	}
-	if v.Kind() != reflect.Struct {
-		return fmt.Sprintf("%v", value)
-	}
 	if v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Struct {
 		return ToString(v.Elem().Interface())
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Sprintf("%v", value)
 	}
 	t := v.Type()
 	var fields []string

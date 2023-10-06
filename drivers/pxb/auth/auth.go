@@ -124,22 +124,22 @@ func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
 		}
 	}()
-	responseBody, err := io.ReadAll(response.Body)
+	respBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, ProcessError(err, ToString(response))
 	}
 	statusCode, requestURL := response.StatusCode, response.Request.URL
 	switch {
 	case statusCode >= 200 && statusCode < 300:
-		return responseBody, nil
+		return respBody, nil
 	case statusCode >= 400 && statusCode < 500:
-		err = fmt.Errorf("client-side error for URL [%s]. Status code: [%d], Response: [%s]", requestURL, statusCode, responseBody)
+		err = fmt.Errorf("client-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
 		return nil, ProcessError(err)
 	case statusCode >= 500:
-		err = fmt.Errorf("server-side error for URL [%s]. Status code: [%d], Response: [%s]", requestURL, statusCode, responseBody)
+		err = fmt.Errorf("server-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
 		return nil, ProcessError(err)
 	default:
-		err = fmt.Errorf("unexpected status code %d for URL %s. Response: %s", statusCode, requestURL, responseBody)
+		err = fmt.Errorf("unexpected status code %d for URL %s. Response Body: %s", statusCode, requestURL, respBody)
 		return nil, ProcessError(err)
 	}
 }
@@ -346,24 +346,12 @@ type AddUserRequest struct {
 type AddUserResponse struct{}
 
 func AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
-	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	keycloakEndPoint, err := GetKeycloakEndPoint(true)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
+	path := "users"
 	userBytes, err := json.Marshal(req.User)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(string(userBytes)), headers)
-	if err != nil {
-		return nil, err
-	}
-	_, err = ProcessHTTPResponse(httpResponse)
+	_, err = ProcessKeycloakRequest(ctx, POST, path, strings.NewReader(string(userBytes)))
 	if err != nil {
 		return nil, err
 	}
@@ -377,29 +365,17 @@ type EnumerateUserResponse struct {
 }
 
 func EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUserResponse, error) {
-	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	keycloakEndPoint, err := GetKeycloakEndPoint(true)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	requestURL := fmt.Sprintf("%s/users", keycloakEndPoint)
-	httpResponse, err := ProcessHTTPRequest(ctx, GET, requestURL, nil, headers)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	body, err := ProcessHTTPResponse(httpResponse)
+	path := "users"
+	respBody, err := ProcessKeycloakRequest(ctx, GET, path, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp := &EnumerateUserResponse{}
-	err = json.Unmarshal(body, resp)
+	enumerateResp := &EnumerateUserResponse{}
+	err = json.Unmarshal(respBody, enumerateResp)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	return resp, nil
+	return enumerateResp, nil
 }
 
 type DeleteUserRequest struct {
@@ -409,24 +385,12 @@ type DeleteUserRequest struct {
 type DeleteUserResponse struct{}
 
 func DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
-	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	keycloakEndPoint, err := GetKeycloakEndPoint(true)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
 	userID, err := GetUserID(ctx, req.Username)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	requestURL := fmt.Sprintf("%s/users/%s", keycloakEndPoint, userID)
-	httpResponse, err := ProcessHTTPRequest(ctx, DELETE, requestURL, nil, headers)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	_, err = ProcessHTTPResponse(httpResponse)
+	path := fmt.Sprintf("users/%s", userID)
+	_, err = ProcessKeycloakRequest(ctx, DELETE, path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +417,7 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 	return userID, nil
 }
 
-func KeycloakHTTPRequest(ctx context.Context, method HTTPMethod, path string, body io.Reader) ([]byte, error) {
+func ProcessKeycloakRequest(ctx context.Context, method HTTPMethod, path string, body io.Reader) ([]byte, error) {
 	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
 	if err != nil {
 		return nil, err
@@ -462,17 +426,23 @@ func KeycloakHTTPRequest(ctx context.Context, method HTTPMethod, path string, bo
 	if err != nil {
 		return nil, err
 	}
-
-	requestURL := fmt.Sprintf("%s/%s", keycloakEndPoint, path)
-
-	// Executing the HTTP request
+	requestURL := keycloakEndPoint
+	if path != "" {
+		if strings.HasPrefix(path, "/") {
+			requestURL += path
+		} else {
+			requestURL += fmt.Sprintf("/%s", path)
+		}
+	}
 	httpResponse, err := ProcessHTTPRequest(ctx, method, requestURL, body, headers)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-
-	// Always processing the response
-	return ProcessHTTPResponse(httpResponse)
+	respBody, err := ProcessHTTPResponse(httpResponse)
+	if err != nil {
+		return nil, ProcessError(err, ToString(httpResponse))
+	}
+	return respBody, nil
 }
 
 func init() {
