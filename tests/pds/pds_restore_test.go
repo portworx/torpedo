@@ -1144,7 +1144,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
-					stepLog = "Perform backup and restore before updating data service version"
+					stepLog = "Perform backup before updating data service version"
 					Step(stepLog, func() {
 						log.InfoD(stepLog)
 						log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
@@ -1152,6 +1152,11 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 						err := bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
 
+						// TODO: Restore for older versions are not supported,
+						// once newer versions are released add restore for the same
+
+						err = DeleteAllDsBackupEntities(deployment)
+						log.FailOnError(err, "error while deleting backup job")
 					})
 
 					stepLog = "Update the data service version and perform backup and restore"
@@ -1184,7 +1189,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 							Deployment: updatedDeployment,
 						}
 
-						stepLog = "Perform backup and restore of the resource template updated deployment "
+						stepLog = "Perform backup and restore after ds version update"
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
 							log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
