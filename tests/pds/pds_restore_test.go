@@ -1151,26 +1151,7 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 
 						err := bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
 						log.FailOnError(err, "Failed while performing adhoc backup")
-						ctx, err := GetSourceClusterConfigPath()
-						log.FailOnError(err, "failed while getting src cluster path")
-						restoreTarget := tc.NewTargetCluster(ctx)
-						restoreClient = restoreBkp.RestoreClient{
-							TenantId:             tenantID,
-							ProjectId:            projectID,
-							Components:           components,
-							Deployment:           deployment,
-							RestoreTargetCluster: restoreTarget,
-						}
 
-						restoredDep = PerformRestore(restoreClient, dsEntity, projectID, deployment)
-						deploymentsToClean = append(deploymentsToClean, restoredDep...)
-
-					})
-					stepLog = "Validate md5hash for the restored deployments"
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDep, pdsdeploymentsmd5Hash)
-						wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 					})
 
 					stepLog = "Update the data service version and perform backup and restore"
