@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	. "github.com/onsi/ginkgo"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
@@ -14,6 +16,7 @@ import (
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -752,4 +755,293 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
+})
+
+var _ = Describe("{HSBCScaleScenario}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("HSBCScaleScenario",
+			"HSBC Scale test scenario to find data checksum error",
+			nil, 0)
+	})
+	var contexts []*scheduler.Context
+	stepLog := "trigger test with HAUPdate, PoolExpand and Snapshot Create Delete in Parallel"
+	It(stepLog, func() {
+		var wg sync.WaitGroup
+		var terminate bool = false
+
+		var errors = []error{}
+		totalSnapshotsPerVol := 60
+		snapshotList := []string{}
+
+		failureDetails := []string{}
+
+		// Have 4 Wait group to run the test each for HA Update, Pool Expand, Verify Data Integrity and Snapshot operations
+		wg.Add(4)
+
+		// Check if the cluster consists of 10 nodes
+		log.InfoD("Get all nodes present in the cluster")
+		allNodes := []node.Node{}
+		// create an array with storage and storage less nodes added
+		for _, each := range node.GetStorageDriverNodes() {
+			allNodes = append(allNodes, each)
+		}
+
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("scalevolhasnap-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		// Get list of all pools present in the cluster
+		allPoolsPresent, err := GetAllPoolsPresent()
+		if err != nil {
+			errors = append(errors, err)
+			log.Infof(fmt.Sprintf("failed to get list of pools present in the cluster"))
+		}
+		if len(allPoolsPresent) == 0 {
+			log.FailOnError(fmt.Errorf("No valid pools present in the cluster"), "is pool present?")
+		}
+
+		// Get list of Volumes present in the cluster
+		allVolsPresent := []*volume.Volume{}
+		for _, eachContext := range contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			log.FailOnError(err, fmt.Sprintf("failed to get list of all volumes present in the cluster "))
+			for _, eachVol := range vols {
+				allVolsPresent = append(allVolsPresent, eachVol)
+			}
+		}
+
+		stopRoutine := func() {
+			if !terminate {
+				terminate = true
+				time.Sleep(1 * time.Minute) // Wait for 1 min to settle down all other go routines to terminate
+				for _, each := range snapshotList {
+					if IsVolumeExits(each) {
+						err := Inst().V.DeleteVolume(each)
+						errors = append(errors, err)
+						log.InfoD("volume deletion failed on the cluster with volume ID [%s]", each)
+						failureDetails = append(failureDetails, fmt.Sprintf("VOLUME DELETE FAILED, VOLNAME [%v]", each))
+					}
+				}
+			}
+		}
+		defer stopRoutine()
+
+		// Continuously Expand all the pools one after the other
+		log.Infof("List of all volumes present in the context [%v]", allVolsPresent)
+		doPoolExpandContinuously := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			log.InfoD("Initiating expand on all the pools one after the other")
+			for {
+				if terminate {
+					break
+				}
+
+				for _, eachPool := range allPoolsPresent {
+					log.InfoD("Expanding pool [%v]", eachPool)
+					poolCurrSize, err := GetPoolTotalSize(eachPool)
+					if err != nil {
+
+						log.Infof(fmt.Sprintf("failed to get list of pools current size with error [%v]", err))
+					}
+					log.Infof("Current pool [%v] size is [%v]", eachPool, poolCurrSize)
+					if poolCurrSize != -1 {
+						expectedSize := uint64(poolCurrSize) + 100
+						err = Inst().V.ExpandPool(eachPool, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+						if err != nil {
+							errors = append(errors, fmt.Errorf("Failed to Initiate pool expand with Error [%v]", err))
+							failureDetails = append(failureDetails, fmt.Sprintf("ExpandPool Failed for Pool [%v]", eachPool))
+						}
+						err = WaitTillPoolExpanded(eachPool, uint64(poolCurrSize))
+						if err != nil {
+							errors = append(errors, fmt.Errorf("Failed to expand pool with Error [%v]", err))
+							failureDetails = append(failureDetails, fmt.Sprintf("WaitTillPoolExpanded Failed for Pool [%v]", eachPool))
+						}
+					}
+				}
+				time.Sleep(600 * time.Second)
+			}
+		}
+
+		// Do ha update on all the volume at ones , and wait for ha update to complete before next iterations
+		haUpdateOnVolumes := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+
+			setReplFactor := map[string]int64{}
+			previousReplFactor := map[string]int64{}
+			for {
+				if terminate {
+					break
+				}
+				replStatus := map[string]int64{}
+				for _, eachVol := range allVolsPresent {
+					log.Infof("HA update on the Volume [%v]", eachVol.ID)
+					setReplFactor[eachVol.Name] = int64(1)
+					previousReplFactor[eachVol.Name] = int64(1)
+					currRep, err := Inst().V.GetReplicationFactor(eachVol)
+					if err != nil {
+						errors = append(errors, err)
+						failureDetails = append(failureDetails, fmt.Sprintf("GetReplicationFactor FAILED for VOLUME [%v]", eachVol))
+					}
+
+					opts := volume.Options{
+						ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+					}
+					if currRep == 3 {
+						setReplFactor[eachVol.Name] = currRep - 1
+					} else if currRep == 2 || previousReplFactor[eachVol.Name] == 3 {
+						setReplFactor[eachVol.Name] = setReplFactor[eachVol.Name]
+					} else {
+						setReplFactor[eachVol.Name] = currRep + 1
+					}
+					previousReplFactor[eachVol.Name] = currRep
+
+					log.Infof("Setting replication factor on volume [%v] from [%v] to [%v]", eachVol.Name, currRep, setReplFactor[eachVol.Name])
+					err = Inst().V.SetReplicationFactor(eachVol, setReplFactor[eachVol.Name], nil, nil, false, opts)
+					if err != nil {
+						errors = append(errors, err)
+						failureDetails = append(failureDetails, fmt.Sprintf("SetReplicationFactor to [%v] FAILED for VOLUME [%v]", setReplFactor[eachVol.Name], eachVol))
+					}
+					replStatus[eachVol.ID] = setReplFactor[eachVol.Name]
+				}
+				// Wait for all HA Update to complete
+				for _, eachVol := range allVolsPresent {
+					replFactor := int64(2)
+					for vol, repl := range replStatus {
+						if eachVol.ID == vol {
+							replFactor = repl
+						}
+					}
+					err := Inst().V.WaitForReplicationToComplete(eachVol, replFactor, replicationUpdateTimeout)
+					if err != nil {
+						log.Infof("Waiting for Replication timed out with error [%v]", err)
+						errors = append(errors, err)
+						failureDetails = append(failureDetails, fmt.Sprintf("WaitForReplicationToComplete of repl [%v] on Volume [%v]", setReplFactor[eachVol.Name], eachVol))
+					}
+				}
+				// Verify DataIntegrity on the volumes created
+				log.Infof("Verifying Data integrity of all the volumes created")
+				err = ValidateDataIntegrity(&contexts)
+				if err != nil {
+					log.Infof("Data Integrity failed for volume", err)
+					errors = append(errors, err)
+					failureDetails = append(failureDetails, "DATA INTEGRITY VALIDATION FAILED")
+				}
+			}
+		}
+
+		deleteElementFromArr := func(value string, snaplist []string) []string {
+			indexToDelete := -1
+			for i, v := range snaplist {
+				if v == value {
+					indexToDelete = i
+					break
+				}
+			}
+
+			// If the value is not found, do nothing
+			if indexToDelete == -1 {
+				fmt.Println("Value not found in the array.")
+				return nil
+			}
+			// Delete the value by shifting elements
+			copy(snaplist[indexToDelete:], snaplist[indexToDelete+1:])
+			snaplist = snaplist[:len(snaplist)-1]
+
+			return snaplist
+		}
+
+		// Create Delete all snapshots continuously
+		createDeleteSnapshot := func() {
+			defer wg.Done()
+			defer GinkgoRecover()
+			for {
+				for _, eachVol := range allVolsPresent {
+					for snap := 0; snap < totalSnapshotsPerVol; snap++ {
+						if terminate {
+							break
+						}
+						uuidCreated := uuid.New()
+						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol.ID, uuidCreated.String())
+						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol.ID, snapshotName)
+						if err != nil {
+							errors = append(errors, err)
+							failureDetails = append(failureDetails, fmt.Sprintf("Create snapshot Failed [%v]", snapshotName))
+						}
+						snapshotList = append(snapshotList, snapshotName)
+						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+					}
+				}
+				if len(snapshotList) > 0 {
+					for _, eachSnap := range snapshotList {
+						err := Inst().V.DeleteVolume(eachSnap)
+						if err != nil {
+							errors = append(errors, err)
+							failureDetails = append(failureDetails, fmt.Sprintf("DeleteVolume of Volume [%v]", eachSnap))
+						}
+						snapshotList = deleteElementFromArr(eachSnap, snapshotList)
+						if terminate {
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// Run Go Routines for HA Update, PoolExpand, createDeleteSnapshot
+		log.InfoD("Initiate HA update on all Volumes present in the cluster continuously")
+		go haUpdateOnVolumes()
+		time.Sleep(5 * time.Minute)
+
+		log.InfoD("Initiate pool expansion continuously on all the pools present")
+		go doPoolExpandContinuously()
+		time.Sleep(5 * time.Minute)
+
+		log.InfoD("Create and Delete snapshots continuously from the volume")
+		go createDeleteSnapshot()
+		time.Sleep(5 * time.Minute)
+
+		duration := 3 * 24 * time.Hour        // 3 days
+		ticker := time.NewTicker(time.Minute) // Run the function every minute
+		defer ticker.Stop()
+		quit := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					log.Infof("waiting till duration [%v] reached", duration)
+					time.Sleep(5 * time.Minute)
+				case <-time.After(duration):
+					terminate = true
+					close(quit)
+					return
+				}
+			}
+		}()
+		<-quit
+		wg.Wait()
+
+		// For logging purpose only, test runs continuously for 3 days , and it might be difficult to see where test failed
+		// printing the list of failures only for debugging purpose
+		for _, eachFailure := range failureDetails {
+			log.InfoD(eachFailure)
+		}
+
+		// Fail the test when length of errors > 0
+		if len(errors) > 0 {
+			log.FailOnError(fmt.Errorf("failed as error seen"),
+				fmt.Sprintf("test returned error?"))
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
 })
