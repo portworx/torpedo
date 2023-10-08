@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
-	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
+	"github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
 	"io"
@@ -32,6 +32,19 @@ const (
 // String returns the string representation of the HTTPMethod
 func (m HTTPMethod) String() string {
 	return string(m)
+}
+
+// CredentialType represents the type of user credentials in keycloak
+type CredentialType string
+
+const (
+	// Password represents the password type of user credentials in keycloak
+	Password CredentialType = "password"
+)
+
+// String returns the string representation of the CredentialType
+func (t CredentialType) String() string {
+	return string(t)
 }
 
 const (
@@ -89,9 +102,9 @@ type UserRepresentation struct {
 	Username      string                     `json:"username"`
 	FirstName     string                     `json:"firstName"`
 	LastName      string                     `json:"lastName"`
+	Email         string                     `json:"email"`
 	EmailVerified bool                       `json:"emailVerified"`
 	Enabled       bool                       `json:"enabled"`
-	Email         string                     `json:"email"`
 	Credentials   []CredentialRepresentation `json:"credentials"`
 }
 
@@ -103,12 +116,12 @@ type TokenRepresentation struct {
 func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body io.Reader, headers http.Header) (*http.Response, error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, method.String(), url, body)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	httpRequest.Header = headers
 	httpResponse, err := GlobalHTTPClient.Do(httpRequest)
 	if err != nil {
-		return nil, ProcessError(err, ToString(httpRequest))
+		return nil, pxbutils.ProcessError(err, pxbutils.ToString(httpRequest))
 	}
 	return httpResponse, nil
 }
@@ -116,17 +129,17 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 	if response == nil {
 		err := fmt.Errorf("response == nil")
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	defer func() {
 		err := response.Body.Close()
 		if err != nil {
-			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
+			log.Errorf("failed to close response body. Err: [%v]", pxbutils.ProcessError(err))
 		}
 	}()
 	respBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, ProcessError(err, ToString(response))
+		return nil, pxbutils.ProcessError(err, pxbutils.ToString(response))
 	}
 	statusCode, requestURL := response.StatusCode, response.Request.URL
 	switch {
@@ -134,13 +147,13 @@ func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 		return respBody, nil
 	case statusCode >= 400 && statusCode < 500:
 		err = fmt.Errorf("client-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	case statusCode >= 500:
 		err = fmt.Errorf("server-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	default:
 		err = fmt.Errorf("unexpected status code %d for URL %s. Response Body: %s", statusCode, requestURL, respBody)
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 }
 
@@ -161,7 +174,7 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	values.Set("token-duration", "365d")
 	keycloakEndPoint, err := GetKeycloakEndPoint(false)
 	if err != nil {
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	// This token endpoint is used to retrieve tokens, as detailed in: https://www.keycloak.org/docs/latest/securing_apps/#token-endpoint
 	requestURL := fmt.Sprintf("%s/protocol/openid-connect/token", keycloakEndPoint)
@@ -169,16 +182,16 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(values.Encode()), headers)
 	if err != nil {
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	body, err := ProcessHTTPResponse(httpResponse)
 	if err != nil {
-		return "", ProcessError(err, ToString(httpResponse))
+		return "", pxbutils.ProcessError(err, pxbutils.ToString(httpResponse))
 	}
 	token := &TokenRepresentation{}
 	err = json.Unmarshal(body, &token)
 	if err != nil {
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	return token.AccessToken, nil
 }
@@ -193,7 +206,7 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 			username: username,
 			password: "", // password left blank on purpose
 		}
-		return nil, ProcessError(err, ToString(debugStruct))
+		return nil, pxbutils.ProcessError(err, pxbutils.ToString(debugStruct))
 	}
 	headers := make(http.Header)
 	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
@@ -204,7 +217,7 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 func GetPxBackupNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	for _, svc := range allServices.Items {
 		if svc.Name == GlobalPxBackupServiceName {
@@ -212,7 +225,7 @@ func GetPxBackupNamespace() (string, error) {
 		}
 	}
 	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", GlobalPxBackupServiceName)
-	return "", ProcessError(err)
+	return "", pxbutils.ProcessError(err)
 }
 
 func GetKeycloakEndPoint(admin bool) (string, error) {
@@ -259,7 +272,7 @@ func GetKeycloakEndPoint(admin bool) (string, error) {
 func GetPxCentralAdminPassword() (string, error) {
 	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
 	if err != nil {
@@ -268,12 +281,12 @@ func GetPxCentralAdminPassword() (string, error) {
 		}{
 			PxbNamespace: pxbNamespace,
 		}
-		return "", ProcessError(err, ToString(debugStruct))
+		return "", pxbutils.ProcessError(err, pxbutils.ToString(debugStruct))
 	}
 	PxCentralAdminPwd := string(secret.Data["credential"])
 	if PxCentralAdminPwd == "" {
 		err = fmt.Errorf("%s secret is empty", GlobalPxCentralAdminSecretName)
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	return PxCentralAdminPwd, nil
 }
@@ -289,27 +302,27 @@ func GetPxCentralAdminToken(ctx context.Context) (string, error) {
 func UpdatePxBackupAdminSecret(ctx context.Context) error {
 	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
-		return ProcessError(err)
+		return pxbutils.ProcessError(err)
 	}
 	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
 	if err != nil {
-		return ProcessError(err)
+		return pxbutils.ProcessError(err)
 	}
 	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminTokenSecretName, pxbNamespace)
 	if err != nil {
-		return ProcessError(err)
+		return pxbutils.ProcessError(err)
 	}
 	secret.Data[GlobalPxBackupOrgToken] = []byte(pxCentralAdminToken)
 	_, err = core.Instance().UpdateSecret(secret)
 	if err != nil {
-		return ProcessError(err)
+		return pxbutils.ProcessError(err)
 	}
 	return nil
 }
 
-func GetCtxWithToken(token string) context.Context {
+func GetCtxWithToken(ctx context.Context, token string) context.Context {
 	return metadata.NewOutgoingContext(
-		context.Background(),
+		ctx,
 		metadata.New(
 			map[string]string{
 				GlobalPxBackupAuthHeader: GlobalPxBackupAuthTokenType + " " + token,
@@ -321,35 +334,35 @@ func GetCtxWithToken(token string) context.Context {
 func GetAdminCtxFromSecret(ctx context.Context) (context.Context, error) {
 	pxbNamespace, err := GetPxBackupNamespace()
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	err = UpdatePxBackupAdminSecret(ctx)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminTokenSecretName, pxbNamespace)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	token := string(secret.Data[GlobalPxBackupOrgToken])
 	if token == "" {
 		err = fmt.Errorf("[%s] token in secret [%s] is empty", GlobalPxBackupAdminTokenSecretName, GlobalPxBackupOrgToken)
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
-	return GetCtxWithToken(token), nil
+	return GetCtxWithToken(ctx, token), nil
 }
 
 type AddUserRequest struct {
-	User *UserRepresentation `json:"user"`
+	UserRepresentation *UserRepresentation `json:"userRepresentation"`
 }
 
 type AddUserResponse struct{}
 
 func AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
 	path := "users"
-	userBytes, err := json.Marshal(req.User)
+	userBytes, err := json.Marshal(req.UserRepresentation)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	_, err = ProcessKeycloakRequest(ctx, POST, path, strings.NewReader(string(userBytes)))
 	if err != nil {
@@ -373,7 +386,7 @@ func EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUser
 	enumerateResp := &EnumerateUserResponse{}
 	err = json.Unmarshal(respBody, enumerateResp)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	return enumerateResp, nil
 }
@@ -387,7 +400,7 @@ type DeleteUserResponse struct{}
 func DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
 	userID, err := GetUserID(ctx, req.Username)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	path := fmt.Sprintf("users/%s", userID)
 	_, err = ProcessKeycloakRequest(ctx, DELETE, path, nil)
@@ -401,7 +414,7 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 	enumerateUserReq := &EnumerateUserRequest{}
 	enumerateUserResp, err := EnumerateUser(ctx, enumerateUserReq)
 	if err != nil {
-		return "", ProcessError(err, ToString(enumerateUserReq))
+		return "", pxbutils.ProcessError(err, pxbutils.ToString(enumerateUserReq))
 	}
 	var userID string
 	for _, user := range enumerateUserResp.Users {
@@ -412,7 +425,7 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 	}
 	if userID == "" {
 		err = fmt.Errorf("no user found with the username: [%s]", username)
-		return "", ProcessError(err)
+		return "", pxbutils.ProcessError(err)
 	}
 	return userID, nil
 }
@@ -436,11 +449,11 @@ func ProcessKeycloakRequest(ctx context.Context, method HTTPMethod, path string,
 	}
 	httpResponse, err := ProcessHTTPRequest(ctx, method, requestURL, body, headers)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, pxbutils.ProcessError(err)
 	}
 	respBody, err := ProcessHTTPResponse(httpResponse)
 	if err != nil {
-		return nil, ProcessError(err, ToString(httpResponse))
+		return nil, pxbutils.ProcessError(err, pxbutils.ToString(httpResponse))
 	}
 	return respBody, nil
 }
@@ -449,7 +462,7 @@ func init() {
 	str, err := GetPxCentralAdminPassword()
 	if err != nil {
 		err = fmt.Errorf("error fetching [%s] password from secret: [%v]", GlobalPxCentralAdminUsername, err)
-		log.Errorf(ProcessError(err).Error())
+		log.Errorf(pxbutils.ProcessError(err).Error())
 	}
 	GlobalPxCentralAdminPassword = str
 }

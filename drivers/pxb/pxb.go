@@ -2,13 +2,10 @@ package pxb
 
 import (
 	"context"
-	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/pxb/auth"
 	"github.com/portworx/torpedo/drivers/pxb/generics"
-	"github.com/portworx/torpedo/drivers/pxb/pxbutils"
-	"github.com/portworx/torpedo/pkg/log"
-	"time"
+	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 )
 
 type User struct {
@@ -34,57 +31,56 @@ type PxBackup struct {
 	UserDataStore *generics.DataStore[*User]
 }
 
-func (b *PxBackup) AddTestUser() error {
-	username := fmt.Sprintf("pxb-user-%v", time.Now().Unix())
-	log.Infof("Creating user %s", username)
-	//err := auth.AddUser(context.Background(), user, "firstName", "lastName", "fl@cnbu.com", true, "admin", true)
-	//log.Errorf("Creating user caused error: %v", err)
-	//log.Infof("Created user %s", user)
-	//return err
-
-	ctx := context.Background()
-
-	// Test AddUser
-	log.Infof("Testing AddUser...")
-
+func (b *PxBackup) AddUser(ctx context.Context, userRepresentation *auth.UserRepresentation) error {
 	addUserReq := &auth.AddUserRequest{
-		User: &auth.UserRepresentation{
-			Username:      username,
-			FirstName:     "Test",
-			LastName:      "User",
-			EmailVerified: true,
-			Enabled:       true,
-			Email:         "testuser@example.com",
-			Credentials: []auth.CredentialRepresentation{
-				{
-					Type:      "password",
-					Value:     "admin",
-					Temporary: false,
-				},
+		UserRepresentation: userRepresentation,
+	}
+	_, err := auth.AddUser(ctx, addUserReq)
+	if err != nil {
+		return ProcessError(err)
+	}
+	b.UserDataStore.Set(
+		userRepresentation.Username,
+		&User{
+			Spec:                  userRepresentation,
+			PxBackup:              b,
+			OrganizationDataStore: generics.NewDataStore[*Organization](),
+		},
+	)
+	return nil
+}
+
+func (b *PxBackup) AddTestUser(ctx context.Context, username string, password string) error {
+	user := &auth.UserRepresentation{
+		ID:            "",
+		Username:      username,
+		FirstName:     "first-" + username,
+		LastName:      username + "last",
+		Email:         username + "@cnbu.com",
+		EmailVerified: true,
+		Enabled:       true,
+		Credentials: []auth.CredentialRepresentation{
+			{
+				Type:      auth.Password.String(),
+				Value:     password,
+				Temporary: false,
 			},
 		},
 	}
-
-	addUserResp, err := auth.AddUser(ctx, addUserReq)
+	err := b.AddUser(ctx, user)
 	if err != nil {
-		log.Infof("Failed to add user: %v", err)
-	} else {
-		log.Infof("Successfully added user: %v", addUserResp)
-		log.Infof("Successfully added user: %v -- string version %s", addUserResp, pxbutils.ToString(addUserReq))
+		return ProcessError(err, ToString(user))
 	}
+	return nil
+}
 
-	//// Test DeleteUser
-	//fmt.Println("Testing DeleteUser...")
-	//
-	//deleteUserReq := &auth.DeleteUserRequest{
-	//	Username: username,
-	//}
-	//
-	//deleteUserResp, err := auth.DeleteUser(ctx, deleteUserReq)
-	//if err != nil {
-	//	fmt.Println("Failed to delete user:", err)
-	//} else {
-	//	fmt.Println("Successfully deleted user:", deleteUserResp)
-	//}
-	return err
+func (b *PxBackup) DeleteUser(ctx context.Context, username string) error {
+	deleteUserReq := &auth.DeleteUserRequest{
+		Username: username,
+	}
+	_, err := auth.DeleteUser(ctx, deleteUserReq)
+	if err != nil {
+		return ProcessError(err)
+	}
+	return nil
 }
