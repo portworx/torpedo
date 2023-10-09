@@ -80,6 +80,7 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
 
 	sseType = os.Getenv("SSE_TYPE")
+	fmt.Printf("")
 	expect(id).NotTo(equal(""),
 		"SSE_TYPE Environment variable should not be empty")
 
