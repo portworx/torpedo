@@ -24,9 +24,9 @@ const (
 	// GET represents the HTTP GET method
 	GET HTTPMethod = "GET"
 	// POST represents the HTTP POST method
-	POST = "POST"
+	POST HTTPMethod = "POST"
 	// DELETE represents the HTTP DELETE method
-	DELETE = "DELETE"
+	DELETE HTTPMethod = "DELETE"
 )
 
 // String returns the string representation of the HTTPMethod
@@ -92,7 +92,7 @@ const (
 	PxBackupOIDCSecretName = "SECRET_NAME"
 )
 
-// CredentialRepresentation defines the scheme for representing user credentials in Keycloak
+// CredentialRepresentation defines the scheme for representing user credential in Keycloak
 type CredentialRepresentation struct {
 	Type      string `json:"type"`
 	Value     string `json:"value"`
@@ -111,7 +111,7 @@ type UserRepresentation struct {
 	Credentials   []CredentialRepresentation `json:"credentials"`
 }
 
-// NewTestUserRepresentation initializes UserRepresentation for a test user with the given credentials
+// NewTestUserRepresentation initializes a UserRepresentation for a test user with the given credentials
 func NewTestUserRepresentation(username string, password string) *UserRepresentation {
 	return &UserRepresentation{
 		ID:            "",
@@ -136,6 +136,7 @@ type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
+// ProcessHTTPRequest sends an HTTP request with the given method, URL, body, and headers, and returns the response
 func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body io.Reader, headers http.Header) (*http.Response, error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, method.String(), url, body)
 	if err != nil {
@@ -149,6 +150,7 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 	return httpResponse, nil
 }
 
+// ProcessHTTPResponse processes the given HTTP response and returns its body as a byte slice
 func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 	if response == nil {
 		err := fmt.Errorf("response == nil")
@@ -162,7 +164,7 @@ func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 	}()
 	respBody, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, pxbutils.ProcessError(err, pxbutils.ToString(response))
+		return nil, pxbutils.ProcessError(err)
 	}
 	statusCode, requestURL := response.StatusCode, response.Request.URL
 	switch {
@@ -180,6 +182,7 @@ func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
 	}
 }
 
+// GetOIDCSecretName retrieves the name of the OIDC secret from the environment or returns the default name
 func GetOIDCSecretName() string {
 	oidcSecretName := os.Getenv(PxBackupOIDCSecretName)
 	if oidcSecretName == "" {
@@ -188,6 +191,7 @@ func GetOIDCSecretName() string {
 	return oidcSecretName
 }
 
+// GetToken fetches the authentication token for the given username and password
 func GetToken(ctx context.Context, username string, password string) (string, error) {
 	values := make(url.Values)
 	values.Set("client_id", "pxcentral")
@@ -205,7 +209,7 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(values.Encode()), headers)
 	if err != nil {
-		return "", pxbutils.ProcessError(err)
+		return "", pxbutils.ProcessError(err, pxbutils.ToString(requestURL))
 	}
 	body, err := ProcessHTTPResponse(httpResponse)
 	if err != nil {
@@ -214,22 +218,16 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	token := &TokenRepresentation{}
 	err = json.Unmarshal(body, &token)
 	if err != nil {
-		return "", pxbutils.ProcessError(err)
+		return "", pxbutils.ProcessError(err, pxbutils.ToString(body))
 	}
 	return token.AccessToken, nil
 }
 
+// GetCommonHTTPHeaders generates common HTTP headers including the authentication token for the provided credentials
 func GetCommonHTTPHeaders(ctx context.Context, username string, password string) (http.Header, error) {
 	token, err := GetToken(ctx, username, password)
 	if err != nil {
-		debugStruct := struct {
-			username string
-			password string
-		}{
-			username: username,
-			password: "", // password left blank on purpose
-		}
-		return nil, pxbutils.ProcessError(err, pxbutils.ToString(debugStruct))
+		return nil, pxbutils.ProcessError(err)
 	}
 	headers := make(http.Header)
 	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
@@ -237,6 +235,7 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 	return headers, nil
 }
 
+// GetPxBackupNamespace retrieves the namespace where Px-Backup service is running
 func GetPxBackupNamespace() (string, error) {
 	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
@@ -251,6 +250,7 @@ func GetPxBackupNamespace() (string, error) {
 	return "", pxbutils.ProcessError(err)
 }
 
+// GetKeycloakEndPoint returns the Keycloak endpoint URL based on the provided admin flag
 func GetKeycloakEndPoint(admin bool) (string, error) {
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
 	// This condition is added to handle scenarios where Torpedo is not running as a pod in the cluster.
@@ -299,12 +299,7 @@ func GetPxCentralAdminPassword() (string, error) {
 	}
 	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
 	if err != nil {
-		debugStruct := struct {
-			PxbNamespace string
-		}{
-			PxbNamespace: pxbNamespace,
-		}
-		return "", pxbutils.ProcessError(err, pxbutils.ToString(debugStruct))
+		return "", pxbutils.ProcessError(err, pxbNamespace)
 	}
 	PxCentralAdminPwd := string(secret.Data["credential"])
 	if PxCentralAdminPwd == "" {
