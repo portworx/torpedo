@@ -4214,7 +4214,8 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
-	_, _, endpoint, region, disableSSLBool, enableSseS3 := s3utils.GetAWSDetailsFromEnv()
+	//_, _, endpoint, region, disableSSLBool, enableSseS3 := s3utils.GetAWSDetailsFromEnv()
+	_, _, endpoint, region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
