@@ -5176,7 +5176,7 @@ func (k *K8s) createVirtualMachineObjects(
 						}
 						return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, ns.Name, obj.Name)
 					}
-					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
+					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
 					if err != nil {
 						return nil, err
 					}
