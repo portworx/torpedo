@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	// GlobalTorpedoWorkDirectory is where the Torpedo is located
+	// GlobalTorpedoWorkDirectory is where the Torpedo is located inside Kubernetes pod
 	GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
 )
 

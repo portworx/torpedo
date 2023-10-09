@@ -31,6 +31,10 @@ type PxBackup struct {
 	UserDataStore *generics.DataStore[*User]
 }
 
+func (b *PxBackup) SelectUser(username string) *User {
+	return b.UserDataStore.Get(username)
+}
+
 func (b *PxBackup) AddUser(ctx context.Context, userRepresentation *auth.UserRepresentation) error {
 	addUserReq := &auth.AddUserRequest{
 		UserRepresentation: userRepresentation,

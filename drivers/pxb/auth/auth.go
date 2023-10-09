@@ -34,11 +34,11 @@ func (m HTTPMethod) String() string {
 	return string(m)
 }
 
-// CredentialType represents the type of user credentials in keycloak
+// CredentialType represents the type of user credentials in Keycloak
 type CredentialType string
 
 const (
-	// Password represents the password type of user credentials in keycloak
+	// Password represents the password type of user credentials in Keycloak
 	Password CredentialType = "password"
 )
 
@@ -52,17 +52,19 @@ const (
 	GlobalPxCentralAdminUsername = "px-central-admin"
 	// GlobalPxCentralAdminSecretName is the name of the Kubernetes secret that stores the credentials for the px-central-admin user
 	GlobalPxCentralAdminSecretName = "px-central-admin"
-	// GlobalPxBackupAuthTokenType defines the type of authentication token used by px-backup
+	// GlobalPxBackupAuthTokenType defines the type of authentication token used by Px-Backup
 	GlobalPxBackupAuthTokenType = "bearer"
-	// GlobalPxBackupServiceName is the name of the Kubernetes service associated with px-backup
+	// GlobalPxBackupServiceName is the name of the Kubernetes service associated with Px-Backup
 	GlobalPxBackupServiceName = "px-backup"
-	// GlobalPxBackupOrgToken is the key for the organization-specific token within a Kubernetes secret named by GlobalPxBackupAdminTokenSecretName for px-backup
+	// GlobalPxBackupOrgToken is the key for the organization-specific token within a
+	// Kubernetes secret named by GlobalPxBackupAdminTokenSecretName for Px-Backup
 	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
-	// GlobalPxBackupAdminTokenSecretName is the name of the Kubernetes secret that stores the admin token for px-backup
+	// GlobalPxBackupAdminTokenSecretName is the name of the Kubernetes secret that stores the admin token for Px-Backup
 	GlobalPxBackupAdminTokenSecretName = "px-backup-admin-secret"
-	// GlobalPxBackupAuthHeader is the HTTP header key used for authentication in px-backup requests
+	// GlobalPxBackupAuthHeader is the HTTP header key used for authentication in Px-Backup requests
 	GlobalPxBackupAuthHeader = "authorization"
-	// GlobalPxBackupKeycloakServiceName is the name of the Kubernetes service that facilitates user authentication through Keycloak in px-backup
+	// GlobalPxBackupKeycloakServiceName is the name of the Kubernetes service that
+	// facilitates user authentication through Keycloak in Px-Backup
 	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 )
 
@@ -76,27 +78,28 @@ var (
 )
 
 const (
-	// DefaultOIDCSecretName is the default name of the Kubernetes secret that stores OIDC credentials for px-backup
+	// DefaultOIDCSecretName is the default name of the Kubernetes secret that stores OIDC credentials for Px-Backup
 	DefaultOIDCSecretName = "pxc-backup-secret"
 )
 
 const (
-	// PxCentralUIURL is the env var for the px-central UI URL. Example: http://<IP>:<Port>
+	// PxCentralUIURL is the env var for the Px-Central UI URL. Example: http://<IP>:<Port>
 	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 	// PxBackupOIDCEndpoint is the env var for the OIDC endpoint
 	PxBackupOIDCEndpoint = "OIDC_ENDPOINT"
-	// PxBackupOIDCSecretName is the env var for the OIDC secret name within px-backup namespace, defaulting to DefaultOIDCSecretName
+	// PxBackupOIDCSecretName is the env var for the OIDC secret name within
+	// Px-Backup namespace, defaulting to DefaultOIDCSecretName
 	PxBackupOIDCSecretName = "SECRET_NAME"
 )
 
-// CredentialRepresentation defines the scheme for representing user credentials in keycloak
+// CredentialRepresentation defines the scheme for representing user credentials in Keycloak
 type CredentialRepresentation struct {
 	Type      string `json:"type"`
 	Value     string `json:"value"`
 	Temporary bool   `json:"temporary"`
 }
 
-// UserRepresentation defines the scheme for representing a user in keycloak
+// UserRepresentation defines the scheme for representing a user in Keycloak
 type UserRepresentation struct {
 	ID            string                     `json:"id"`
 	Username      string                     `json:"username"`
@@ -108,7 +111,7 @@ type UserRepresentation struct {
 	Credentials   []CredentialRepresentation `json:"credentials"`
 }
 
-// TokenRepresentation defines the scheme for representing the keycloak access token
+// TokenRepresentation defines the scheme for representing the Keycloak access token
 type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
@@ -254,7 +257,7 @@ func GetKeycloakEndPoint(admin bool) (string, error) {
 		return "", err
 	}
 	oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpoint])
-	// Expand the service name for K8S DNS resolution, for keycloak requests from different ns
+	// Expand the service name for K8S DNS resolution, for Keycloak requests from different ns
 	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, pxbNamespace)
 	newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
 	if admin {
