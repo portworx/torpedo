@@ -2,16 +2,34 @@ package pxb
 
 import (
 	"context"
+	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/pxb/auth"
 	"github.com/portworx/torpedo/drivers/pxb/generics"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 type User struct {
 	Spec                  *auth.UserRepresentation
 	PxBackup              *PxBackup
 	OrganizationDataStore *generics.DataStore[*Organization]
+}
+
+func (u *User) Delete() error {
+	if u == nil {
+		err := fmt.Errorf("user is nil")
+		return ProcessError(err)
+	}
+	deleteUserReq := &auth.DeleteUserRequest{
+		Username: u.Spec.Username,
+	}
+	_, err := auth.DeleteUser(context.Background(), deleteUserReq)
+	if err != nil {
+		return ProcessError(err)
+	}
+	u.PxBackup.UserDataStore.Remove(u.Spec.Username)
+	return nil
 }
 
 type Organization struct {
@@ -31,28 +49,28 @@ type PxBackup struct {
 	UserDataStore *generics.DataStore[*User]
 }
 
-func (b *PxBackup) SelectUser(username string) *User {
-	return b.UserDataStore.Get(username)
-}
-
-func (b *PxBackup) AddTestUser(ctx context.Context, username string, password string) error {
+func (b *PxBackup) AddTestUser(username string, password string) error {
 	addUserReq := &auth.AddUserRequest{
 		UserRepresentation: auth.NewTestUserRepresentation(username, password),
 	}
-	_, err := auth.AddUser(ctx, addUserReq)
+	_, err := auth.AddUser(context.Background(), addUserReq)
 	if err != nil {
 		return ProcessError(err)
 	}
+	user := &User{
+		Spec:                  addUserReq.UserRepresentation,
+		PxBackup:              b,
+		OrganizationDataStore: generics.NewDataStore[*Organization](),
+	}
+	b.UserDataStore.Set(username, user)
 	return nil
 }
 
-func (b *PxBackup) DeleteUser(ctx context.Context, username string) error {
-	deleteUserReq := &auth.DeleteUserRequest{
-		Username: username,
+func (b *PxBackup) SelectUser(username string) *User {
+	user := b.UserDataStore.Get(username)
+	if user == nil {
+		err := fmt.Errorf("user with username [%s] not found", username)
+		log.Errorf(ProcessError(err).Error())
 	}
-	_, err := auth.DeleteUser(ctx, deleteUserReq)
-	if err != nil {
-		return ProcessError(err)
-	}
-	return nil
+	return user
 }

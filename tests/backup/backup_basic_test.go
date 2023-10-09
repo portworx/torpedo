@@ -186,8 +186,11 @@ var _ = BeforeSuite(func() {
 	}
 
 	pxBackup := pxb.PxBackup{}
-	err = pxBackup.AddTestUser()
+	username := fmt.Sprintf("admin-test-user-%v", time.Now().Unix())
+	err = pxBackup.AddTestUser(username, "admin")
 	dash.VerifyFatal(err, nil, "verifying to add test user")
+	//err = pxBackup.SelectUser(username).Delete()
+	//dash.VerifyFatal(err, nil, "verifying to delete test user")
 })
 
 var _ = AfterSuite(func() {
