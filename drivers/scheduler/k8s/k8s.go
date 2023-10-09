@@ -5157,13 +5157,13 @@ func (k *K8s) createVirtualMachineObjects(
 				if pvcVolumeSource != nil {
 					pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
 					t := func() (interface{}, bool, error) {
-						events, err := k8sCore.ListEvents(obj.Namespace, metav1.ListOptions{
+						events, err := k8sCore.ListEvents(ns.Name, metav1.ListOptions{
 							FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
 						})
 						if err != nil {
 							return "", false, err
 						}
-						log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", pvcName, obj.Namespace, obj.Name, events)
+						log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", pvcName, ns.Name, obj.Name, events)
 						for _, event := range events.Items {
 							if strings.Contains(event.Message, "Import Successful") {
 								pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, obj.GetNamespace())
@@ -5174,7 +5174,7 @@ func (k *K8s) createVirtualMachineObjects(
 								return "", false, nil
 							}
 						}
-						return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, obj.Namespace, obj.Name)
+						return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, ns.Name, obj.Name)
 					}
 					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
 					if err != nil {
