@@ -402,7 +402,7 @@ func EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUser
 		return nil, err
 	}
 	enumerateResp := &EnumerateUserResponse{}
-	err = json.Unmarshal(respBody, enumerateResp)
+	err = json.Unmarshal(respBody, &enumerateResp.Users)
 	if err != nil {
 		return nil, ProcessError(err)
 	}

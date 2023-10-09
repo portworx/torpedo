@@ -12,6 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/pxb"
+	"github.com/portworx/torpedo/drivers/pxb/generics"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -185,12 +186,14 @@ var _ = BeforeSuite(func() {
 		log.Infof("Locked bucket name not provided")
 	}
 
-	pxBackup := pxb.PxBackup{}
+	pxBackup := pxb.PxBackup{
+		UserDataStore: generics.NewDataStore[*pxb.User](),
+	}
 	username := fmt.Sprintf("admin-test-user-%v", time.Now().Unix())
 	err = pxBackup.AddTestUser(username, "admin")
 	dash.VerifyFatal(err, nil, "verifying to add test user")
-	//err = pxBackup.SelectUser(username).Delete()
-	//dash.VerifyFatal(err, nil, "verifying to delete test user")
+	err = pxBackup.SelectUser(username).Delete()
+	dash.VerifyFatal(err, nil, "verifying to delete test user")
 })
 
 var _ = AfterSuite(func() {
