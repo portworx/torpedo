@@ -5152,24 +5152,27 @@ func (k *K8s) createVirtualMachineObjects(
 		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
 		if len(virtualMachineVolumes) > 0 {
 			for _, v := range virtualMachineVolumes {
-				t := func() (interface{}, bool, error) {
-					events, err := k8sCore.ListEvents(obj.Namespace, metav1.ListOptions{
-						FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", v.Name),
-					})
-					if err != nil {
-						return "", false, err
-					}
-					log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", v.Name, obj.Name, obj.Name, events)
-					for _, event := range events.Items {
-						if strings.Contains(event.Message, "Import Successful") {
-							return "", false, nil
+				if isPVCType(v.VolumeSource) {
+					pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
+					t := func() (interface{}, bool, error) {
+						events, err := k8sCore.ListEvents(obj.Namespace, metav1.ListOptions{
+							FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
+						})
+						if err != nil {
+							return "", false, err
 						}
+						log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", pvcName, obj.Name, obj.Name, events)
+						for _, event := range events.Items {
+							if strings.Contains(event.Message, "Import Successful") {
+								return "", false, nil
+							}
+						}
+						return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, obj.Name, obj.Name)
 					}
-					return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", v.Name, obj.Name, obj.Name)
-				}
-				_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
-				if err != nil {
-					return nil, err
+					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -5196,6 +5199,20 @@ func (k *K8s) createVirtualMachineObjects(
 	}
 
 	return nil, nil
+}
+
+func isPVCType(source kubevirtv1.VolumeSource) bool {
+	v := reflect.ValueOf(source)
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		fieldType := t.Field(i)
+
+		if fieldType.Type == reflect.TypeOf(kubevirtv1.PersistentVolumeClaimVolumeSource{}) {
+			return true
+		}
+	}
+	return false
 }
 
 // createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library
