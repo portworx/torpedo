@@ -16,15 +16,15 @@ type User struct {
 
 type Organization struct {
 	Spec                     *api.OrganizationObject
-	SchedulePolicyDataStore  *generics.DataStore[*api.SchedulePolicyObject]
+	BackupDataStore          *generics.DataStore[*api.BackupObject]
+	BackupLocationDataStore  *generics.DataStore[*api.BackupLocationObject]
 	BackupScheduleDataStore  *generics.DataStore[*api.BackupScheduleObject]
 	ClusterDataStore         *generics.DataStore[*api.ClusterObject]
 	CloudCredentialDataStore *generics.DataStore[*api.CloudCredentialObject]
-	BackupLocationDataStore  *generics.DataStore[*api.BackupLocationObject]
-	BackupDataStore          *generics.DataStore[*api.BackupObject]
+	RoleDataStore            *generics.DataStore[*api.RoleObject]
 	RestoreDataStore         *generics.DataStore[*api.RestoreObject]
 	RuleDataStore            *generics.DataStore[*api.RuleObject]
-	RoleDataStore            *generics.DataStore[*api.RoleObject]
+	SchedulePolicyDataStore  *generics.DataStore[*api.SchedulePolicyObject]
 }
 
 type PxBackup struct {
@@ -41,7 +41,7 @@ func (b *PxBackup) AddTestUser(ctx context.Context, username string, password st
 	}
 	_, err := auth.AddUser(ctx, addUserReq)
 	if err != nil {
-		return ProcessError(err, ToString(addUserReq))
+		return ProcessError(err)
 	}
 	return nil
 }

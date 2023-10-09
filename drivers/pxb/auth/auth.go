@@ -145,7 +145,7 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 	httpRequest.Header = headers
 	httpResponse, err := GlobalHTTPClient.Do(httpRequest)
 	if err != nil {
-		return nil, pxbutils.ProcessError(err, pxbutils.ToString(httpRequest))
+		return nil, pxbutils.ProcessError(err)
 	}
 	return httpResponse, nil
 }
@@ -209,16 +209,16 @@ func GetToken(ctx context.Context, username string, password string) (string, er
 	headers.Add("Content-Type", "application/x-www-form-urlencoded")
 	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(values.Encode()), headers)
 	if err != nil {
-		return "", pxbutils.ProcessError(err, pxbutils.ToString(requestURL))
+		return "", pxbutils.ProcessError(err)
 	}
 	body, err := ProcessHTTPResponse(httpResponse)
 	if err != nil {
-		return "", pxbutils.ProcessError(err, pxbutils.ToString(httpResponse))
+		return "", pxbutils.ProcessError(err)
 	}
 	token := &TokenRepresentation{}
 	err = json.Unmarshal(body, &token)
 	if err != nil {
-		return "", pxbutils.ProcessError(err, pxbutils.ToString(body))
+		return "", pxbutils.ProcessError(err)
 	}
 	return token.AccessToken, nil
 }
@@ -299,7 +299,7 @@ func GetPxCentralAdminPassword() (string, error) {
 	}
 	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
 	if err != nil {
-		return "", pxbutils.ProcessError(err, pxbNamespace)
+		return "", pxbutils.ProcessError(err)
 	}
 	PxCentralAdminPwd := string(secret.Data["credential"])
 	if PxCentralAdminPwd == "" {
@@ -432,7 +432,7 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 	enumerateUserReq := &EnumerateUserRequest{}
 	enumerateUserResp, err := EnumerateUser(ctx, enumerateUserReq)
 	if err != nil {
-		return "", pxbutils.ProcessError(err, pxbutils.ToString(enumerateUserReq))
+		return "", pxbutils.ProcessError(err)
 	}
 	var userID string
 	for _, user := range enumerateUserResp.Users {
@@ -451,11 +451,11 @@ func GetUserID(ctx context.Context, username string) (string, error) {
 func ProcessKeycloakRequest(ctx context.Context, method HTTPMethod, path string, body io.Reader) ([]byte, error) {
 	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
 	if err != nil {
-		return nil, err
+		return nil, pxbutils.ProcessError(err)
 	}
 	keycloakEndPoint, err := GetKeycloakEndPoint(true)
 	if err != nil {
-		return nil, err
+		return nil, pxbutils.ProcessError(err)
 	}
 	requestURL := keycloakEndPoint
 	if path != "" {
@@ -471,7 +471,7 @@ func ProcessKeycloakRequest(ctx context.Context, method HTTPMethod, path string,
 	}
 	respBody, err := ProcessHTTPResponse(httpResponse)
 	if err != nil {
-		return nil, pxbutils.ProcessError(err, pxbutils.ToString(httpResponse))
+		return nil, pxbutils.ProcessError(err)
 	}
 	return respBody, nil
 }
@@ -479,8 +479,9 @@ func ProcessKeycloakRequest(ctx context.Context, method HTTPMethod, path string,
 func init() {
 	str, err := GetPxCentralAdminPassword()
 	if err != nil {
-		err = fmt.Errorf("error fetching [%s] password from secret: [%v]", GlobalPxCentralAdminUsername, err)
+		err = fmt.Errorf("error fetching user [%s] password from secret: [%v]", GlobalPxCentralAdminUsername, err)
 		log.Errorf(pxbutils.ProcessError(err).Error())
+	} else {
+		GlobalPxCentralAdminPassword = str
 	}
-	GlobalPxCentralAdminPassword = str
 }
