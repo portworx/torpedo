@@ -5166,7 +5166,7 @@ func (k *K8s) createVirtualMachineObjects(
 						log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", pvcName, ns.Name, obj.Name, events)
 						for _, event := range events.Items {
 							if strings.Contains(event.Message, "Import Successful") {
-								pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, obj.GetNamespace())
+								pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, ns.Name)
 								if err != nil {
 									return "", false, err
 								}
