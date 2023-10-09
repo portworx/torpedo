@@ -221,7 +221,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
 						customParams.SetParamsForServiceIdentityTest(params, true)
 
-						updatedDeployment, err := pdslib.UpdateDataServices(resDep.GetId(),
+						updatedDeployment, err := dsTest.UpdateDataServices(resDep.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
@@ -717,7 +717,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+						updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns1.Name)
 						log.FailOnError(err, "Error while updating dataservices")
@@ -804,7 +804,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
 						customParams.SetParamsForServiceIdentityTest(params, true)
 
-						updatedDeployment, err := pdslib.UpdateDataServices(resDep.GetId(),
+						updatedDeployment, err := dsTest.UpdateDataServices(resDep.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "Error while updating dataservices")

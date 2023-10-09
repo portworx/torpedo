@@ -146,14 +146,14 @@ func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string,
 	return randomName, nsId, nil
 }
 func (restoreClient *RestoreClient) getNameSpaceIdCustomNs(pdsClusterId string, nsName string) (string, string, error) {
-	nsId, err := restoreClient.RestoreTargetCluster.GetnameSpaceID(nsName, pdsClusterId)
+	nsName, nsId, err := restoreClient.getNameSpaceId(pdsClusterId)
 	if err != nil {
 		return "", "", fmt.Errorf("unable to fetch  %v", nsName)
 	}
 	return nsName, nsId, nil
 }
 
-func (restoreClient *RestoreClient) GetNameSpaceNameToRestore(backupJobId string, pdsRestoreTargetClusterID string, namespace string, isRestoreInSameNS bool) (string, error) {
+func (restoreClient *RestoreClient) GetNameSpaceNameToRestore(backupJobId string, pdsRestoreTargetClusterID string, namespace string, isRestoreInSameNS bool) (string, string, error) {
 	var bkpJob *pds.ModelsBackupJob
 	var nsName string
 	var pdsNamespaceId string
@@ -162,17 +162,17 @@ func (restoreClient *RestoreClient) GetNameSpaceNameToRestore(backupJobId string
 		log.InfoD("I AM HERE")
 		nsName, pdsNamespaceId, err = restoreClient.getNameSpaceIdCustomNs(pdsRestoreTargetClusterID, namespace)
 		if err != nil {
-			return "", err
+			return "", "", nil
 		}
 	} else {
 		bkpJob, err = restoreClient.Components.BackupJob.GetBackupJob(backupJobId)
 		if err != nil {
-			return "", err
+			return "", "", nil
 		}
 		nsName, pdsNamespaceId = namespace, bkpJob.GetNamespaceId()
 	}
 	log.Infof("backup Job - %v,Restore Target Cluster Id - %v, NamespaceId - %v", backupJobId, pdsRestoreTargetClusterID, pdsNamespaceId)
-	return nsName, nil
+	return nsName, pdsNamespaceId, nil
 }
 
 func (restoreClient *RestoreClient) ValidateRestore(bkpDsEntity, restoreDsEntity DSEntity) error {
