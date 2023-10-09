@@ -2800,6 +2800,7 @@ func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
 	}
+	DescribeNamespace(contexts)
 	if len(ids) >= 1 {
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {

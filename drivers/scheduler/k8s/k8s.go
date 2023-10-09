@@ -4874,6 +4874,19 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			}
 			buf.WriteString(fmt.Sprintf("%+v\n", secret))
 			buf.WriteString(insertLineBreak("END Secret"))
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("VirtualMachine: [%s] %s", obj.Namespace, obj.Name)))
+			var virtualMachine *kubevirtv1.VirtualMachine
+			if virtualMachine, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get VirtualMachine: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%v\n", virtualMachine))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VirtualMachine", obj.Name)))
+			buf.WriteString(insertLineBreak("END VirtualMachine"))
 		} else {
 			log.Warnf("Object type unknown/not supported: %v", obj)
 		}
@@ -5136,6 +5149,30 @@ func (k *K8s) createVirtualMachineObjects(
 	app *spec.AppSpec,
 ) (interface{}, error) {
 	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
+		if len(virtualMachineVolumes) > 0 {
+			for _, v := range virtualMachineVolumes {
+				t := func() (interface{}, bool, error) {
+					events, err := k8sCore.ListEvents(obj.Namespace, metav1.ListOptions{
+						FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", v.Name),
+					})
+					if err != nil {
+						return "", false, err
+					}
+					log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", v.Name, obj.Name, obj.Name, events)
+					for _, event := range events.Items {
+						if strings.Contains(event.Message, "Import Successful") {
+							return "", false, nil
+						}
+					}
+					return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", v.Name, obj.Name, obj.Name)
+				}
+				_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 		// Create VirtualMachine Spec
 		if obj.Namespace != "kube-system" {
 			obj.Namespace = ns.Name
