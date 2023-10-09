@@ -5211,7 +5211,7 @@ func isPVCType(source kubevirtv1.VolumeSource) bool {
 		log.Infof("Field - %s", t.Field(i).Name)
 		fieldType := t.Field(i)
 
-		if fieldType.Type == reflect.TypeOf(kubevirtv1.PersistentVolumeClaimVolumeSource{}) {
+		if fieldType.Type == reflect.TypeOf(&kubevirtv1.PersistentVolumeClaimVolumeSource{}) {
 			log.Infof("returning true")
 			return true
 		}
