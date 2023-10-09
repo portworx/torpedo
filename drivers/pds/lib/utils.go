@@ -53,14 +53,14 @@ type Parameter struct {
 		OldImage      string `json:"OldImage"`
 	} `json:"DataServiceToTest"`
 	InfraToTest struct {
-		ControlPlaneURL string `json:"ControlPlaneURL"`
-		AccountName     string `json:"AccountName"`
-		TenantName      string `json:"TenantName"`
-		ProjectName     string `json:"ProjectName"`
-		ClusterType     string `json:"ClusterType"`
-		Namespace       string `json:"Namespace"`
-		PxNamespace     string `json:"PxNamespace"`
-		PDSNamespace    string `json:"PDSNamespace"`
+		ControlPlaneURL      string `json:"ControlPlaneURL"`
+		AccountName          string `json:"AccountName"`
+		TenantName           string `json:"TenantName"`
+		ProjectName          string `json:"ProjectName"`
+		ClusterType          string `json:"ClusterType"`
+		Namespace            string `json:"Namespace"`
+		PxNamespace          string `json:"PxNamespace"`
+		PDSNamespace         string `json:"PDSNamespace"`
 		ServiceIdentityToken bool   `json:"ServiceIdentityToken"`
 	} `json:"InfraToTest"`
 	PDSHelmVersions struct {
@@ -729,6 +729,14 @@ func GetDeploymentConnectionInfo(deploymentID, dsName string) (string, string, e
 				dnsEndpoint = fmt.Sprint(value)
 				log.Infof("consul dns end point: %s", dnsEndpoint)
 				isfound = true
+			}
+		} else if dsName == mysql {
+			for _, node := range deploymentNodes {
+				if strings.Contains(node, "vip") {
+					dnsEndpoint = node
+					isfound = true
+					break
+				}
 			}
 		} else {
 			if strings.Contains(key, "host") || strings.Contains(key, "nodes") {
@@ -2001,20 +2009,6 @@ func GetAllSupportedDataServices() map[string]string {
 		log.Infof("dsKey %v dsValue %v", key, value)
 	}
 	return dataServiceNameIDMap
-}
-
-// UpdateDataServices modifies the existing deployment
-func UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
-	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
-		deployment, err = components.DataServiceDeployment.UpdateDeployment(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
-	})
-
-	return deployment, nil
 }
 
 // ValidateDataServiceVolumes validates the volumes

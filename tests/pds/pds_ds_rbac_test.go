@@ -214,11 +214,13 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
+
 						customParams.SetParamsForServiceIdentityTest(params, true)
 
 						updatedDeployment, err := pdslib.UpdateDataServices(resDep.GetId(),
-							dataServiceDefaultAppConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
+
+						dataServiceDefaultAppConfigID, deployment.GetImageId(),
+						int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
