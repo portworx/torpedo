@@ -4236,7 +4236,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Region:     region,
 					DisableSsl: disableSSLBool,
 					//SseType:    api.S3Config_Sse(api.S3Config_Sse_value[enableSseS3]),
-					SseType: 1,
+					SseType: api.S3Config_SSE_S3,
 				},
 			},
 		},
