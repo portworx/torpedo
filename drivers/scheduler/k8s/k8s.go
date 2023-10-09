@@ -5152,6 +5152,7 @@ func (k *K8s) createVirtualMachineObjects(
 		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
 		if len(virtualMachineVolumes) > 0 {
 			for _, v := range virtualMachineVolumes {
+				log.Infof("Volume dump - \n%v", v)
 				if isPVCType(v.VolumeSource) {
 					pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
 					t := func() (interface{}, bool, error) {
@@ -5204,14 +5205,18 @@ func (k *K8s) createVirtualMachineObjects(
 func isPVCType(source kubevirtv1.VolumeSource) bool {
 	v := reflect.ValueOf(source)
 	t := v.Type()
+	log.Infof("Volume source - \n%v", source)
 
 	for i := 0; i < v.NumField(); i++ {
+		log.Infof("Field - %s", t.Field(i).Name)
 		fieldType := t.Field(i)
 
 		if fieldType.Type == reflect.TypeOf(kubevirtv1.PersistentVolumeClaimVolumeSource{}) {
+			log.Infof("returning true")
 			return true
 		}
 	}
+	log.Infof("returning false")
 	return false
 }
 
