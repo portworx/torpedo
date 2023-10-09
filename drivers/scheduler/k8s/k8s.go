@@ -5208,7 +5208,6 @@ func (k *K8s) createVirtualMachineObjects(
 		if obj.Namespace != "kube-system" {
 			obj.Namespace = ns.Name
 		}
-		time.Sleep(1 * time.Minute)
 		vm, err := k8sKubevirt.CreateVirtualMachine(obj)
 		if k8serrors.IsAlreadyExists(err) {
 			if vm, err = k8sKubevirt.GetVirtualMachine(obj.Name, obj.Namespace); err == nil {
