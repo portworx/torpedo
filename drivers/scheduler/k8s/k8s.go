@@ -5153,7 +5153,8 @@ func (k *K8s) createVirtualMachineObjects(
 		if len(virtualMachineVolumes) > 0 {
 			for _, v := range virtualMachineVolumes {
 				log.Infof("Volume dump - \n%v", v)
-				if isPVCType(v.VolumeSource) {
+				pvcVolumeSource := v.VolumeSource.PersistentVolumeClaim
+				if pvcVolumeSource != nil {
 					pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
 					t := func() (interface{}, bool, error) {
 						events, err := k8sCore.ListEvents(obj.Namespace, metav1.ListOptions{
@@ -5202,23 +5203,24 @@ func (k *K8s) createVirtualMachineObjects(
 	return nil, nil
 }
 
-func isPVCType(source kubevirtv1.VolumeSource) bool {
-	v := reflect.ValueOf(source)
-	t := v.Type()
-	log.Infof("Volume source - \n%v", source)
-
-	for i := 0; i < v.NumField(); i++ {
-		log.Infof("Field - %s", t.Field(i).Name)
-		fieldType := t.Field(i)
-
-		if fieldType.Type == reflect.TypeOf(&kubevirtv1.PersistentVolumeClaimVolumeSource{}) {
-			log.Infof("returning true")
-			return true
-		}
-	}
-	log.Infof("returning false")
-	return false
-}
+//func isPVCType(source kubevirtv1.VolumeSource) bool {
+//	return source.PersistentVolumeClaim.ClaimName != ""
+//	v := reflect.ValueOf(source)
+//	t := v.Type()
+//	log.Infof("Volume source - \n%v", source)
+//
+//	for i := 0; i < v.NumField(); i++ {
+//		log.Infof("Field - %s", t.Field(i).Name)
+//		fieldType := t.Field(i)
+//
+//		if fieldType.Type == reflect.TypeOf(&kubevirtv1.PersistentVolumeClaimVolumeSource{}) && !v.Field(i).IsNil() {
+//			log.Infof("returning true")
+//			return true
+//		}
+//	}
+//	log.Infof("returning false")
+//	return false
+//}
 
 // createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library
 func (k *K8s) createCustomResourceObjects(
