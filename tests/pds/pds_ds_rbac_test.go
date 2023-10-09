@@ -55,6 +55,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 			nsID1                  []string
 			nsID2                  []string
 			serviceIdentityID      string
+			pdsRestoreNsName       string
 		)
 
 		Step("Deploy Data Services", func() {
@@ -150,7 +151,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
+						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
 						customParams.SetParamsForServiceIdentityTest(params, true)
@@ -190,7 +191,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
+						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
 						customParams.SetParamsForServiceIdentityTest(params, true)
@@ -239,7 +240,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
 					CleanupServiceIdentitiesAndIamRoles(siToBeCleaned, iamRolesToBeCleaned, actorId)
-					customParams.SetParamsForServiceIdentityTest(params, false)
 				})
 			}
 		})
@@ -298,6 +298,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 			serviceIdentityIDSrc           string
 			serviceIdentityIDDesti         string
 			destinationTargetID            string
+			pdsRestoreNsName               string
 		)
 
 		Step("Deploy Data Services", func() {
@@ -421,7 +422,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 					err = SetDestinationKubeConfig()
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId1)
 						customParams.SetParamsForServiceIdentityTest(params, true)
@@ -462,7 +463,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 					err = SetDestinationKubeConfig()
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
 						customParams.SetParamsForServiceIdentityTest(params, true)
@@ -499,7 +500,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
 						customParams.SetParamsForServiceIdentityTest(params, true)
@@ -553,7 +554,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 					err = SetDestinationKubeConfig()
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
+						pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), destinationTargetID, namespaceName, true)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
 						customParams.SetParamsForServiceIdentityTest(params, true)
@@ -630,7 +631,8 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 			nsID1                  []string
 			nsID2                  []string
 			resDepNamespaceID      []string
-			resDepNamespaceName    string
+			pdsRestoreNsName       string
+			pdsRestoreNsId         string
 			serviceIdentityID2     string
 		)
 
@@ -665,7 +667,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 				actorId1, iamId1, err := pdslib.CreateSiAndIamRoleBindings(accountID, nsAdminRoles)
 				log.FailOnError(err, "Error while creating and fetching IAM Roles")
 				log.InfoD("Successfully created ServiceIdentity- %v and IAM Roles- %v ", actorId1, iamId1)
-				iamRolesToBeCleaned = append(iamRolesToBeCleaned, iamId1)
 
 				actorId2, iamId2, err := pdslib.CreateSiAndIamRoleBindings(accountID, nsReaderRoles)
 				log.FailOnError(err, "Error while creating and fetching IAM Roles")
@@ -740,7 +741,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 				Step("Perform restore for the backup jobs to diff namespace with general token", func() {
 					ctx, err := GetSourceClusterConfigPath()
-					log.FailOnError(err, "failed while getting src cluster path")
+					log.FailOnError(err, "failed while getting dest cluster path")
 					restoreTarget := tc.NewTargetCluster(ctx)
 					restoreClient := restoreBkp.RestoreClient{
 						TenantId:             tenantID,
@@ -749,17 +750,21 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 						Deployment:           deployment,
 						RestoreTargetCluster: restoreTarget,
 					}
+					// ListBackupJobsBelongToDeployment will be changed after BUG: DS-6679 will be fixed
+
 					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, false, true)
+						pdsRestoreNsName, pdsRestoreNsId, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), deploymentTargetID, ns1.Name, false)
+						log.FailOnError(err, "unable to fetch namespace id to restore")
+						resDepNamespaceID = append(resDepNamespaceID, pdsRestoreNsId)
+						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, pdsRestoreNsId, true)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						resDepNamespaceID = append(resDepNamespaceID, *restoredDeployment.NamespaceId)
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						resDeployments[ds] = restoredDeployment
-						restoredDeployments = append(restoredDeployments, restoredDeployment)
+						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
 						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
@@ -786,7 +791,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 				Step("Scale up the restored deployments with updated IAM2 Sitoken", func() {
 					log.InfoD("Starting to scale up the restore deployment")
 					for rds, resDep := range resDeployments {
-						resDepNamespaceName = *resDep.Namespace.Name
 						customParams.SetParamsForServiceIdentityTest(params, false)
 						log.InfoD("Scaling up DataService %v ", rds.Name)
 						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
@@ -802,13 +806,13 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 						updatedDeployment, err := pdslib.UpdateDataServices(resDep.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, resDepNamespaceName)
+							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "Error while updating dataservices")
 						customParams.SetParamsForServiceIdentityTest(params, false)
-						log.InfoD("PDS RESTORE NAMESPACE IS- %v", resDepNamespaceName)
-						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, resDepNamespaceName)
+						log.InfoD("PDS RESTORE NAMESPACE IS- %v", pdsRestoreNsName)
+						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, pdsRestoreNsName)
 						log.FailOnError(err, "Error while validating data service deployment")
-						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, resDepNamespaceName)
+						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
 					}
@@ -841,7 +845,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", restoredDeployment.GetClusterResourceName())
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						pdsRestoreNsName, err := restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), deploymentTargetID, resDepNamespaceName, true)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						customParams.SetParamsForServiceIdentityTest(params, true)
 						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, resDepNamespaceID[0], true)
