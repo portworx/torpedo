@@ -118,7 +118,6 @@ func (si *ServiceIdentity) CreateIAMRoleBindingsWithSi(actorID string, accountID
 	if err != nil {
 		return nil, fmt.Errorf("error generating service identity token for serviceId- %v", iamModels.Id)
 	}
-	//SiToken = siToken
 	return iamModels, nil
 }
 

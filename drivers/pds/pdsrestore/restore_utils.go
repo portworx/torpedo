@@ -159,7 +159,6 @@ func (restoreClient *RestoreClient) GetNameSpaceNameToRestore(backupJobId string
 	var pdsNamespaceId string
 	var err error
 	if !isRestoreInSameNS {
-		log.InfoD("I AM HERE")
 		nsName, pdsNamespaceId, err = restoreClient.getNameSpaceIdCustomNs(pdsRestoreTargetClusterID, namespace)
 		if err != nil {
 			return "", "", nil
