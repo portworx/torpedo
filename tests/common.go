@@ -4214,7 +4214,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
-	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	_, _, endpoint, region, disableSSLBool, enableSseS3 := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4234,6 +4234,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    api.S3Config_Sse(api.S3Config_Sse_value[enableSseS3]),
 				},
 			},
 		},
@@ -4254,7 +4255,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	_, _, endpoint, region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4809,7 +4810,7 @@ func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
 
 // DeleteS3Bucket deletes bucket in S3
 func DeleteS3Bucket(bucketName string) {
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -5291,7 +5292,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 // IsS3BucketEmpty returns true if bucket empty else false
 func IsS3BucketEmpty(bucketName string) (bool, error) {
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -5322,7 +5323,7 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 
 // CreateS3Bucket creates bucket in S3
 func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objectLockMode string) error {
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -5396,7 +5397,6 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		Policy: aws.String(policy),
 	})
 	print("sleep to check bucket policy")
-	time.Sleep(300 * time.Second)
 	return err
 }
 

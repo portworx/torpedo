@@ -5794,8 +5794,22 @@
         },
         "storage_class": {
           "type": "string"
+        },
+        "sse_type": {
+          "$ref": "#/definitions/S3ConfigSse",
+          "description": "Server side encryption type name\nCurrently supporting only SSE-S3 and SSE-KMS type alone."
         }
       }
+    },
+    "S3ConfigSse": {
+      "type": "string",
+      "enum": [
+        "Invalid",
+        "SSE_S3",
+        "SSE_KMS"
+      ],
+      "default": "Invalid",
+      "title": "- SSE_S3: Server-side encryption with AWS S3 managed keys\n - SSE_KMS: Server-side encryption with AWS Key Management Service"
     },
     "SchedulePolicyCreateRequest": {
       "type": "object",
