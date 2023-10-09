@@ -111,6 +111,26 @@ type UserRepresentation struct {
 	Credentials   []CredentialRepresentation `json:"credentials"`
 }
 
+// NewTestUserRepresentation initializes UserRepresentation for a test user with the given credentials
+func NewTestUserRepresentation(username string, password string) *UserRepresentation {
+	return &UserRepresentation{
+		ID:            "",
+		Username:      username,
+		FirstName:     "first-" + username,
+		LastName:      username + "last",
+		Email:         username + "@cnbu.com",
+		EmailVerified: true,
+		Enabled:       true,
+		Credentials: []CredentialRepresentation{
+			{
+				Type:      Password.String(),
+				Temporary: false,
+				Value:     password,
+			},
+		},
+	}
+}
+
 // TokenRepresentation defines the scheme for representing the Keycloak access token
 type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`

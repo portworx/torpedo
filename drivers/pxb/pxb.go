@@ -35,45 +35,13 @@ func (b *PxBackup) SelectUser(username string) *User {
 	return b.UserDataStore.Get(username)
 }
 
-func (b *PxBackup) AddUser(ctx context.Context, userRepresentation *auth.UserRepresentation) error {
+func (b *PxBackup) AddTestUser(ctx context.Context, username string, password string) error {
 	addUserReq := &auth.AddUserRequest{
-		UserRepresentation: userRepresentation,
+		UserRepresentation: auth.NewTestUserRepresentation(username, password),
 	}
 	_, err := auth.AddUser(ctx, addUserReq)
 	if err != nil {
-		return ProcessError(err)
-	}
-	b.UserDataStore.Set(
-		userRepresentation.Username,
-		&User{
-			Spec:                  userRepresentation,
-			PxBackup:              b,
-			OrganizationDataStore: generics.NewDataStore[*Organization](),
-		},
-	)
-	return nil
-}
-
-func (b *PxBackup) AddTestUser(ctx context.Context, username string, password string) error {
-	user := &auth.UserRepresentation{
-		ID:            "",
-		Username:      username,
-		FirstName:     "first-" + username,
-		LastName:      username + "last",
-		Email:         username + "@cnbu.com",
-		EmailVerified: true,
-		Enabled:       true,
-		Credentials: []auth.CredentialRepresentation{
-			{
-				Type:      auth.Password.String(),
-				Value:     password,
-				Temporary: false,
-			},
-		},
-	}
-	err := b.AddUser(ctx, user)
-	if err != nil {
-		return ProcessError(err, ToString(user))
+		return ProcessError(err, ToString(addUserReq))
 	}
 	return nil
 }
