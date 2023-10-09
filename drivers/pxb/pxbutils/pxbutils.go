@@ -7,10 +7,8 @@ import (
 	"strings"
 )
 
-const (
-	// GlobalTorpedoWorkDirectory is where the Torpedo is located inside Kubernetes pod
-	GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
-)
+// GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
+const GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
 
 // ProcessError formats the error message with caller information and an optional debug message
 func ProcessError(err error, debugMessage ...string) error {
