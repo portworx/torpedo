@@ -5166,36 +5166,41 @@ func (k *K8s) createVirtualMachineObjects(
 						log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n\n%v\n", pvcName, obj.Namespace, obj.Name, events)
 						for _, event := range events.Items {
 							if strings.Contains(event.Message, "Import Successful") {
+								pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, obj.GetNamespace())
+								if err != nil {
+									return "", false, err
+								}
+								log.Infof("cdi.kubevirt.io/storage.condition.running.message status - [%s]", pvc.Annotations["cdi.kubevirt.io/storage.condition.running.message"])
 								return "", false, nil
 							}
 						}
 						return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, obj.Namespace, obj.Name)
 					}
-					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
 					if err != nil {
 						return nil, err
 					}
 
-					importerPodCheck := func() (interface{}, bool, error) {
-						pods, err := k8sCore.GetPods(obj.Namespace, make(map[string]string, 0))
-						if err != nil {
-							return "", false, fmt.Errorf("error getting pods - %s", err.Error())
-						}
-						for _, p := range pods.Items {
-							log.Infof("Pods in ns [%s] is [%v]", obj.Namespace, p.Name)
-						}
-						for _, p := range pods.Items {
-							importerPodName := fmt.Sprintf("importer-%s", pvcName)
-							if strings.Contains(p.Name, importerPodName) {
-								return "", true, fmt.Errorf("importer pod [%s] is still running for pvc [%s] in namespace [%s] for virtual machine [%s]", p.Name, pvcName, obj.Namespace, obj.Name)
-							}
-						}
-						return "", false, nil
-					}
-					_, err = task.DoRetryWithTimeout(importerPodCheck, 5*time.Minute, 10*time.Second)
-					if err != nil {
-						return nil, err
-					}
+					//importerPodCheck := func() (interface{}, bool, error) {
+					//	pods, err := k8sCore.GetPods(obj.Namespace, make(map[string]string, 0))
+					//	if err != nil {
+					//		return "", false, fmt.Errorf("error getting pods - %s", err.Error())
+					//	}
+					//	for _, p := range pods.Items {
+					//		log.Infof("Pods in ns [%s] is [%v]", obj.Namespace, p.Name)
+					//	}
+					//	for _, p := range pods.Items {
+					//		importerPodName := fmt.Sprintf("importer-%s", pvcName)
+					//		if strings.Contains(p.Name, importerPodName) {
+					//			return "", true, fmt.Errorf("importer pod [%s] is still running for pvc [%s] in namespace [%s] for virtual machine [%s]", p.Name, pvcName, obj.Namespace, obj.Name)
+					//		}
+					//	}
+					//	return "", false, nil
+					//}
+					//_, err = task.DoRetryWithTimeout(importerPodCheck, 5*time.Minute, 10*time.Second)
+					//if err != nil {
+					//	return nil, err
+					//}
 				}
 			}
 		}
