@@ -10,6 +10,72 @@ import (
 // GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
 const GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
 
+//// GlobalHTTPClient is an HTTP client with a predefined timeout
+//var GlobalHTTPClient = &http.Client{
+//	Timeout: 1 * time.Minute,
+//}
+//
+//// HTTPMethod represents an HTTP request method
+//type HTTPMethod string
+//
+//const (
+//	GET    HTTPMethod = "GET"    // GET represents the HTTP GET method
+//	POST   HTTPMethod = "POST"   // POST represents the HTTP POST method
+//	PUT    HTTPMethod = "PUT"    // PUT represents the HTTP PUT method
+//	DELETE HTTPMethod = "DELETE" // DELETE represents the HTTP DELETE method
+//)
+//
+//// String returns the string representation of the HTTPMethod
+//func (m HTTPMethod) String() string {
+//	return string(m)
+//}
+//
+//// ProcessHTTPRequest sends an HTTP request with the given method, URL, body, and headers, and returns the response
+//func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body io.Reader, headers http.Header) (*http.Response, error) {
+//	httpRequest, err := http.NewRequestWithContext(ctx, method.String(), url, body)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	httpRequest.Header = headers
+//	httpResponse, err := GlobalHTTPClient.Do(httpRequest)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	return httpResponse, nil
+//}
+//
+//// ProcessHTTPResponse processes the given HTTP response and returns its body as a byte slice
+//func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
+//	if response == nil {
+//		err := fmt.Errorf("response is nil")
+//		return nil, ProcessError(err)
+//	}
+//	defer func() {
+//		err := response.Body.Close()
+//		if err != nil {
+//			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
+//		}
+//	}()
+//	respBody, err := io.ReadAll(response.Body)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	statusCode, requestURL := response.StatusCode, response.Request.URL
+//	switch {
+//	case statusCode >= 200 && statusCode < 300:
+//		return respBody, nil
+//	case statusCode >= 400 && statusCode < 500:
+//		err = fmt.Errorf("client-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
+//		return nil, ProcessError(err)
+//	case statusCode >= 500:
+//		err = fmt.Errorf("server-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
+//		return nil, ProcessError(err)
+//	default:
+//		err = fmt.Errorf("unexpected status code %d for URL %s. Response Body: %s", statusCode, requestURL, respBody)
+//		return nil, ProcessError(err)
+//	}
+//}
+
 // ProcessError formats the error message with caller information and an optional debug message
 func ProcessError(err error, debugMessage ...string) error {
 	if err == nil {
