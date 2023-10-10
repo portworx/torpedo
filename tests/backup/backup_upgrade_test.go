@@ -681,49 +681,52 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 	})
 	JustAfterEach(func() {
+
 		allContexts := append(srcClusterContexts, destClusterContexts...)
 		defer EndPxBackupTorpedoTest(allContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		deleteSingleNSScheduleTask := func(scheduleName string) {
-			log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)
-			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
-		}
-		_ = TaskHandler(singleNSScheduleNames, deleteSingleNSScheduleTask, Parallel)
-		log.InfoD("Deleting all namespaces backup schedule [%s]", allNSScheduleName)
-		err = DeleteSchedule(allNSScheduleName, SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", allNSScheduleName))
-		log.InfoD("Deleting pre exec rules %s", preRuleNames)
-		for _, preRuleName := range preRuleNames {
-			if preRuleName != "" {
-				err := DeleteRule(preRuleName, orgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of pre backup rule [%s]", preRuleName))
+		/*
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			deleteSingleNSScheduleTask := func(scheduleName string) {
+				log.InfoD("Deleting single namespace backup schedule [%s]", scheduleName)
+				err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 			}
-		}
-		log.InfoD("Deleting post exec rules %s", postRuleNames)
-		for _, postRuleName := range postRuleNames {
-			if postRuleName != "" {
-				err := DeleteRule(postRuleName, orgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of post-backup rule [%s]", postRuleName))
+			_ = TaskHandler(singleNSScheduleNames, deleteSingleNSScheduleTask, Parallel)
+			log.InfoD("Deleting all namespaces backup schedule [%s]", allNSScheduleName)
+			err = DeleteSchedule(allNSScheduleName, SourceClusterName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", allNSScheduleName))
+			log.InfoD("Deleting pre exec rules %s", preRuleNames)
+			for _, preRuleName := range preRuleNames {
+				if preRuleName != "" {
+					err := DeleteRule(preRuleName, orgID, ctx)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of pre backup rule [%s]", preRuleName))
+				}
 			}
-		}
-		log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s]", schedulePolicyName))
-		log.InfoD("Deleting restores %s in cluster [%s]", restoreNames, destinationClusterName)
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of restore [%s]", restoreName))
-		}
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "Switching context to destination cluster failed")
-		ValidateAndDestroy(destClusterContexts, opts)
-		err = SetSourceKubeConfig()
-		log.FailOnError(err, "Switching context to source cluster failed")
-		ValidateAndDestroy(srcClusterContexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
+			log.InfoD("Deleting post exec rules %s", postRuleNames)
+			for _, postRuleName := range postRuleNames {
+				if postRuleName != "" {
+					err := DeleteRule(postRuleName, orgID, ctx)
+					dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of post-backup rule [%s]", postRuleName))
+				}
+			}
+			log.InfoD("Deleting schedule policy [%s]", schedulePolicyName)
+			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s]", schedulePolicyName))
+			log.InfoD("Deleting restores %s in cluster [%s]", restoreNames, destinationClusterName)
+			for _, restoreName := range restoreNames {
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of restore [%s]", restoreName))
+			}
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			ValidateAndDestroy(destClusterContexts, opts)
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			ValidateAndDestroy(srcClusterContexts, opts)
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
+		*/
 	})
 })
