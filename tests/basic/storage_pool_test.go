@@ -9899,20 +9899,6 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 
 })
 
-func GetNumOfDrivesInNode(stNode node.Node) int {
-	numofDrivesInNode := 0
-	poolListForOps, err := GetPoolsDetailsOnNode(stNode)
-	log.FailOnError(err, "failed while getting updated node pool list")
-	for i := 0; i < len(poolListForOps); i++ {
-		drvMap, err := Inst().V.GetPoolDrives(&stNode)
-		log.FailOnError(err, "error in getting pool with IO with error")
-		if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
-			numofDrivesInNode = numofDrivesInNode + len(drvs)
-		}
-	}
-	return numofDrivesInNode
-}
-
 var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 
 	/*
