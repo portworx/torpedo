@@ -4886,7 +4886,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 					Type:  obj,
 				}))
 			}
-			buf.WriteString(fmt.Sprintf("%v\n", virtualMachine))
+			buf.WriteString(fmt.Sprintf("%+v\n", virtualMachine))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VirtualMachine", obj.Name)))
 			buf.WriteString(insertLineBreak("END VirtualMachine"))
 		} else {
@@ -5155,35 +5155,10 @@ func (k *K8s) createVirtualMachineObjects(
 		virtualMachineVolumes := obj.Spec.Template.Spec.Volumes
 		if len(virtualMachineVolumes) > 0 {
 			for _, v := range virtualMachineVolumes {
-				// Validating Volume Source of type PersistentVolumeClaim is ready to be used by Kubevirt VM
-				if v.VolumeSource.PersistentVolumeClaim != nil {
-					pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
-					t := func() (interface{}, bool, error) {
-						events, err := k8sCore.ListEvents(ns.Name, metav1.ListOptions{
-							FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
-						})
-						if err != nil {
-							return "", false, err
-						}
-						log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, ns.Name, obj.Name, events)
-						for _, event := range events.Items {
-							if strings.Contains(event.Message, cdiImportSuccessEvent) {
-								pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, ns.Name)
-								if err != nil {
-									return "", false, err
-								}
-								log.Infof("cdi.kubevirt.io/storage.condition.running.message status - [%s]", pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
-								return "", false, nil
-							}
-						}
-						return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, ns.Name, obj.Name)
-					}
-					_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
-					if err != nil {
-						return nil, err
-					}
+				err := k.WaitForImageImportForVM(obj.Name, ns.Name, v)
+				if err != nil {
+					return nil, err
 				}
-				// TODO: For other Volume Source types like Data Volumes, validation logic should come here
 			}
 		}
 		// Create VirtualMachine Spec
@@ -5209,6 +5184,39 @@ func (k *K8s) createVirtualMachineObjects(
 	}
 
 	return nil, nil
+}
+
+func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevirtv1.Volume) error {
+	// Validating Volume Source of type PersistentVolumeClaim is ready to be used by Kubevirt VM
+	if v.VolumeSource.PersistentVolumeClaim != nil {
+		pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
+		t := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{
+				FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
+			})
+			if err != nil {
+				return "", false, err
+			}
+			log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, namespace, vmName, events)
+			for _, event := range events.Items {
+				if strings.Contains(event.Message, cdiImportSuccessEvent) {
+					pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+					if err != nil {
+						return "", false, err
+					}
+					log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+					return "", false, nil
+				}
+			}
+			return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, namespace, vmName)
+		}
+		_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		if err != nil {
+			return err
+		}
+	}
+	// TODO: For other Volume Source types like Data Volumes, validation logic should come here
+	return nil
 }
 
 // createCustomResourceObjects is used to create objects whose resource `kind` is defined by a CRD. NOTE: this is done using the `kubectl apply -f` command instead of the conventional method of using an api library
