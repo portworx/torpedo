@@ -160,6 +160,7 @@ const (
 	specObjAppWorkloadSizeEnvVar      = "SIZE"
 	cdiImportSuccessEvent             = "Import Successful"
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
+	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 )
 
 const (
@@ -5190,29 +5191,36 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 	// Validating Volume Source of type PersistentVolumeClaim is ready to be used by Kubevirt VM
 	if v.VolumeSource.PersistentVolumeClaim != nil {
 		pvcName := v.VolumeSource.PersistentVolumeClaim.ClaimName
-		t := func() (interface{}, bool, error) {
-			events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{
-				FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
-			})
-			if err != nil {
-				return "", false, err
-			}
-			log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, namespace, vmName, events)
-			for _, event := range events.Items {
-				if strings.Contains(event.Message, cdiImportSuccessEvent) {
-					pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
-					if err != nil {
-						return "", false, err
-					}
-					log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
-					return "", false, nil
-				}
-			}
-			return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, namespace, vmName)
-		}
-		_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+		pvc, err := k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
 		if err != nil {
 			return err
+		}
+		endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
+		if ok && endpointAnnotation != "" {
+			t := func() (interface{}, bool, error) {
+				events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{
+					FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
+				})
+				if err != nil {
+					return "", false, err
+				}
+				log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, namespace, vmName, events)
+				for _, event := range events.Items {
+					if strings.Contains(event.Message, cdiImportSuccessEvent) {
+						pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+						if err != nil {
+							return "", false, err
+						}
+						log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+						return "", false, nil
+					}
+				}
+				return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, namespace, vmName)
+			}
+			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	// TODO: For other Volume Source types like Data Volumes, validation logic should come here
