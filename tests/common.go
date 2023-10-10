@@ -1713,6 +1713,24 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 	}
 }
 
+func GetNumOfDrivesInNode(stNode node.Node) (int, error) {
+	numofDrivesInNode := 0
+	poolListForOps, err := GetPoolsDetailsOnNode(stNode)
+	if err != nil {
+		return 0, err
+	}
+	for i := 0; i < len(poolListForOps); i++ {
+		drvMap, err := Inst().V.GetPoolDrives(&stNode)
+		if err != nil {
+			return 0, err
+		}
+		if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
+			numofDrivesInNode = numofDrivesInNode + len(drvs)
+		}
+	}
+	return numofDrivesInNode, nil
+}
+
 // ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
 func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
