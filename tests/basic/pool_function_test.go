@@ -40,7 +40,7 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 	})
 
 	It("Select a pool and expand it by 100 GiB 3 time with add-disk type. ", func() {
-		StartTorpedoTest("PoolExpandDiskAdd",
+		StartTorpedoTest("PoolExpandDiskAdd3Times",
 			"Validate storage pool expansion 3 times with type=add-disk", nil, 0)
 		for i := 0; i < 3; i++ {
 			poolToBeResized = getStoragePool(poolIDToResize)
@@ -58,7 +58,7 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 	})
 
 	It("Select a pool and expand it by 100 GiB 3 times with resize-disk type. ", func() {
-		StartTorpedoTest("PoolExpandDiskResize",
+		StartTorpedoTest("PoolExpandDiskResize3Times",
 			"Validate storage pool expansion with type=resize-disk", nil, 0)
 		for i := 0; i < 3; i++ {
 			originalSizeInBytes = poolToBeResized.TotalSize
