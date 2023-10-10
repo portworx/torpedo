@@ -7007,7 +7007,29 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
-	log.Info("Validation complete")
+
+	log.Info("Validation complete, deleting restored pods")
+	err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), restoredPod.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("error deleting restored pod: %s", err)
+	}
+
+	// Wait for the pod to be actually gone
+	t := func() (interface{}, bool, error) {
+		var err error
+		if _, err = clientset.CoreV1().Pods(namespace).Get(context.TODO(), restoredPod.Name, metav1.GetOptions{}); err != nil {
+			if k8serrors.IsNotFound(err) {
+				return nil, false, nil // Pod is now successfully gone
+			}
+			return nil, true, fmt.Errorf("failed to check that pod %s in ns %s is gone. Err: %v", restoredPod.Name, restoredPod.Namespace, err)
+		}
+		return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -7067,7 +7089,29 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
-	log.Info("Validation complete")
+
+	log.Info("Validation complete, deleting restored pods")
+	err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), restoredPod.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("error deleting restored pod: %s", err)
+	}
+
+	// Wait for the pod to be actually gone
+	t := func() (interface{}, bool, error) {
+		var err error
+		if _, err = clientset.CoreV1().Pods(namespace).Get(context.TODO(), restoredPod.Name, metav1.GetOptions{}); err != nil {
+			if k8serrors.IsNotFound(err) {
+				return nil, false, nil // Pod is now successfully gone
+			}
+			return nil, true, fmt.Errorf("failed to check that pod %s in ns %s is gone. Err: %v", restoredPod.Name, restoredPod.Namespace, err)
+		}
+		return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
