@@ -2023,7 +2023,7 @@ func (d *portworx) GetNodeForBackup(backupID string) (node.Node, error) {
 
 // check all the possible attachment options (node ID or node IP)
 func (d *portworx) IsVolumeAttachedOnNode(volume *api.Volume, node node.Node) (bool, error) {
-	log.Debugf("Volume [%s]attached on [%s]", volume.Id, volume.AttachedOn)
+	log.Debugf("Volume [%s] attached on [%s] checking for node [%s]", volume.Id, volume.AttachedOn, node.VolDriverNodeID)
 	if node.VolDriverNodeID == volume.AttachedOn {
 		return true, nil
 	}
@@ -2126,7 +2126,7 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 				return nil, true, err
 			}
 			if nodeResponse.Node.MgmtIp == "" {
-				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest")
+				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest, response: %v", nodeResponse)
 			}
 			return nodeResponse, false, nil
 		}
@@ -3599,7 +3599,7 @@ func (d *portworx) DecommissionNode(n *node.Node) error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 1*time.Minute)
 
 	if err != nil {
 		return &ErrFailedToDecommissionNode{
@@ -5675,4 +5675,8 @@ func (d *portworx) GetAlertsUsingResourceTypeByTime(resourceType api.ResourceTyp
 	}
 
 	return alertsResp, nil
+}
+
+func (d *portworx) IsPxReadyOnNode(n node.Node) bool {
+	return d.schedOps.IsPXReadyOnNode(n)
 }

@@ -69,7 +69,7 @@ var _ = Describe("{RestartPXDuringAppScaleUp}", func() {
 				log.FailOnError(err, "Error while getting resource setting template")
 				dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultResourceTemplateID")
 
-				updatedDeployment, err := pdslib.UpdateDataServices(deployment.GetId(),
+				updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
 					dataServiceDefaultAppConfigID, deployment.GetImageId(),
 					int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
 				log.FailOnError(err, "Error while updating dataservices")
@@ -1068,7 +1068,8 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 		pdslib.MarkResiliencyTC(true)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -1209,7 +1210,8 @@ var _ = Describe("{RestoreDSDuringKVDBFailOver}", func() {
 		pdslib.MarkResiliencyTC(true)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+		credName := targetName + pdsbkp.RandString(8)
+		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
 		log.FailOnError(err, "Failed to create S3 backup target.")
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)

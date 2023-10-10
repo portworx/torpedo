@@ -626,14 +626,6 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 				log.FailOnError(err, fmt.Sprintf("error creating a SchedulePolicy [%s]", policyName))
 			}
 
-			appList := Inst().AppList
-			defer func() {
-				Inst().AppList = appList
-
-			}()
-
-			Inst().AppList = []string{"fio-cloudsnap"}
-
 			for i := 0; i < appScale; i++ {
 				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("cloudsnap-%d", i))...)
 			}
@@ -685,14 +677,18 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 								status := snapshotStatuses[len(snapshotStatuses)-1]
 								if status == nil {
 									log.FailOnError(fmt.Errorf("SnapshotSchedule has an empty migration in it's most recent status"), fmt.Sprintf("error getting latest snapshot status for %s", snapshotScheduleName))
-
 								}
+								status, err = WaitForSnapShotToReady(snapshotScheduleName, status.Name, appNamespace)
 								log.Infof("Snapshot %s has status %v", status.Name, status.Status)
 
 								if status.Status == snapv1.VolumeSnapshotConditionError {
 									log.FailOnError(fmt.Errorf("snapshot: %s failed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s failed", snapshotScheduleName))
 								}
 								if status.Status != snapv1.VolumeSnapshotConditionPending {
+									log.FailOnError(fmt.Errorf("snapshot: %s not completed. status: %v", status.Name, status.Status), fmt.Sprintf("cloud snapshot for %s stuck in pending state", snapshotScheduleName))
+								}
+
+								if status.Status == snapv1.VolumeSnapshotConditionReady {
 									snapData, err := Inst().S.GetSnapShotData(ctx, status.Name, appNamespace)
 									log.FailOnError(err, fmt.Sprintf("error getting snapshot data for [%s/%s]", appNamespace, status.Name))
 

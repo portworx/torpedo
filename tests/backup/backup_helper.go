@@ -3,6 +3,8 @@ package tests
 import (
 	"context"
 	"fmt"
+
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -13,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	"github.com/portworx/torpedo/drivers"
 	appsapi "k8s.io/api/apps/v1"
@@ -42,7 +46,9 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"encoding/base64"
 	"encoding/json"
+
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,7 +106,7 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
-	podReadyTimeout                           = 30 * time.Minute
+	podReadyTimeout                           = 10 * time.Minute
 	storkPodReadyTimeout                      = 20 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
@@ -111,6 +117,8 @@ const (
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
+	rancherProjectDescription                 = "new project"
+	multiAppNfsPodDeploymentNamespace         = "kube-system"
 )
 
 var (
@@ -134,7 +142,9 @@ var (
 		{"app.kubernetes.io/component": "keycloak"},
 		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
 		{"app.kubernetes.io/component": "pxcentral-mysql"}}
-	cloudPlatformList = []string{"rke", "aws", "azure", "gke"}
+	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
+	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
+	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 )
 
 type userRoleAccess struct {
@@ -343,8 +353,8 @@ func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred s
 	return status, err
 }
 
-// CreateBackupWithCustomResourceType creates backup with custom resources
-func CreateBackupWithCustomResourceType(backupName string, clusterName string, bLocation string, bLocationUID string,
+// CreateBackupWithCustomResourceTypeWithoutValidation creates backup with custom resources without validation
+func CreateBackupWithCustomResourceTypeWithoutValidation(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, resourceTypes []string, ctx context.Context) error {
 
@@ -384,10 +394,6 @@ func CreateBackupWithCustomResourceType(backupName string, clusterName string, b
 	if err != nil {
 		return err
 	}
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-	if err != nil {
-		return err
-	}
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
 }
@@ -401,7 +407,7 @@ func CreateBackupWithCustomResourceTypeWithValidation(ctx context.Context, backu
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	err := CreateBackupWithCustomResourceType(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypesFilter, ctx)
+	err := CreateBackupWithCustomResourceTypeWithoutValidation(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, resourceTypesFilter, ctx)
 	if err != nil {
 		return err
 	}
@@ -1026,12 +1032,10 @@ func createUsers(numberOfUsers int) []string {
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
 	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
-	var clusterCredName string
-	var clusterCredUID string
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			// Delete the backup location object
-			err := DeleteBackupLocation(bkpLocationName, backupLocationUID, orgID, true)
+			err := DeleteBackupLocationWithContext(bkpLocationName, backupLocationUID, orgID, true, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
 				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
@@ -1059,7 +1063,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		status, err := IsCloudCredPresent(credName, ctx, orgID)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cloud cred [%s] is present", credName))
 		if status {
-			err = DeleteCloudCredential(credName, orgID, cloudCredUID)
+			err = DeleteCloudCredentialWithContext(credName, orgID, cloudCredUID, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
 			cloudCredDeleteStatus := func() (interface{}, bool, error) {
 				status, err = IsCloudCredPresent(credName, ctx, orgID)
@@ -1076,64 +1080,37 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		}
 	}
 
-	log.Infof("Deleting the application cluster and their respective cloud credentials if present")
-	kubeconfigs := os.Getenv("KUBECONFIGS")
-	Inst().Dash.VerifyFatal(len(strings.Split(kubeconfigs, ",")) >= 2, true, "Getting KUBECONFIGS Environment variable")
-	kubeconfigList := strings.Split(kubeconfigs, ",")
-	for _, kubeconfig := range kubeconfigList {
-		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName}
-		clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-		if err == nil {
-			clusterObj := clusterResp.GetCluster()
-			clusterProvider := GetClusterProviders()
-			for _, provider := range clusterProvider {
-				switch provider {
-				case drivers.ProviderRke:
+	// Deleting clusters and the corresponding cloud cred
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying enumerate cluster in organization %s", orgID))
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		clusterProvider := GetClusterProviders()
+		for _, provider := range clusterProvider {
+			var clusterCredName, clusterCredUID string
+			switch provider {
+			case drivers.ProviderRke:
+				if clusterObj.PlatformCredentialRef != nil {
 					clusterCredName = clusterObj.PlatformCredentialRef.Name
 					clusterCredUID = clusterObj.PlatformCredentialRef.Uid
-
-				default:
+				} else {
+					log.Warnf("the platform credential ref of the cluster [%s] is nil", clusterObj.GetName())
+				}
+			default:
+				if clusterObj.CloudCredentialRef != nil {
 					clusterCredName = clusterObj.CloudCredentialRef.Name
 					clusterCredUID = clusterObj.CloudCredentialRef.Uid
-				}
-				err = DeleteCluster(clusterName, orgID, ctx, true)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-				clusterDeleteStatus := func() (interface{}, bool, error) {
-					status, err := IsClusterPresent(clusterName, ctx, orgID)
-					if err != nil {
-						return "", true, fmt.Errorf("cluster %s still present with error %v", clusterName, err)
-					}
-					if status {
-						return "", true, fmt.Errorf("cluster %s is not deleted yet", clusterName)
-					}
-					return "", false, nil
-				}
-				_, err = task.DoRetryWithTimeout(clusterDeleteStatus, clusterDeleteTimeout, clusterDeleteRetryTime)
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
-
-				if clusterCredName != "" {
-					err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
-					cloudCredDeleteStatus := func() (interface{}, bool, error) {
-						status, err := IsCloudCredPresent(clusterCredName, ctx, orgID)
-						if err != nil {
-							return "", true, fmt.Errorf("cloud cred %s still present with error %v", clusterCredName, err)
-						}
-						if status {
-							return "", true, fmt.Errorf("cloud cred %s is not deleted yet", clusterCredName)
-						}
-						return "", false, nil
-					}
-					_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
-					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s for cluster", clusterCredName))
+				} else {
+					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-		} else {
-			if strings.Contains(err.Error(), "object not found") {
-				log.Infof("Cluster %s is not created for the user", clusterName)
-			} else {
-				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Inspecting cluster %s", clusterName))
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, true)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
+			if clusterCredName != "" {
+				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
 			}
 		}
 	}
@@ -1460,12 +1437,29 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 
 // DeletePodWithLabelInNamespace kills pod with the given label in the given namespace
 func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
-	pods, err := core.Instance().GetPods(namespace, label)
+	var pods *corev1.PodList
+	var err error
+	podList := func() (interface{}, bool, error) {
+		pods, err = core.Instance().GetPods(namespace, label)
+		if err != nil {
+			if strings.Contains(err.Error(), "no pod found with the label") {
+				return "", true, fmt.Errorf("waiting for pod with the given label %v to come up in namespace %s", label, namespace)
+			} else {
+				return "", false, err
+			}
+		}
+		if len(pods.Items) < 1 {
+			return "", true, fmt.Errorf("waiting for atleast one pod with the given label %v to come up in namespace %s", label, namespace)
+		}
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(podList, 5*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
 	}
 	for _, pod := range pods.Items {
-		err := core.Instance().DeletePod(pod.GetName(), namespace, false)
+		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
+		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
 		if err != nil {
 			return err
 		}
@@ -1524,18 +1518,18 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 }
 
 // backupSuccessCheckWithValidation checks if backup is Success and then validates the backup
-func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration) error {
+func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...string) error {
 	err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 	if err != nil {
 		return err
 	}
-	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, resourceTypeFilter)
 }
 
 // ValidateBackup validates a backup's spec's objects (resources) and volumes. resourceTypesFilter can be used to select specific types to validate (nil means all types). This function must be called after switching to the context on which `scheduledAppContexts` exists. Cluster level resources aren't validated.
 func ValidateBackup(ctx context.Context, backupName string, orgID string, scheduledAppContexts []*scheduler.Context, resourceTypesFilter []string) error {
+	var backupInspectResponse *api.BackupInspectResponse
 	log.InfoD("Validating backup [%s] in org [%s]", backupName, orgID)
-
 	log.Infof("Obtaining backup info for backup [%s]", backupName)
 	backupDriver := Inst().Backup
 	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
@@ -1547,23 +1541,28 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		Uid:   backupUid,
 		OrgId: orgID,
 	}
-	backupInspectResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
-	if err != nil {
-		return fmt.Errorf("InspectBackup Err: %v", err)
+	backupStatusCheck := func() (interface{}, bool, error) {
+		backupInspectResponse, err = backupDriver.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, fmt.Errorf("InspectBackup Err: %v", err)
+		}
+		backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
+		if backupStatus == api.BackupInfo_StatusInfo_Success ||
+			backupStatus == api.BackupInfo_StatusInfo_PartialSuccess {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess,got -%v", backupName, backupStatus)
 	}
-
-	backupStatus := backupInspectResponse.GetBackup().GetStatus().Status
-	if backupStatus != api.BackupInfo_StatusInfo_Success &&
-		backupStatus != api.BackupInfo_StatusInfo_PartialSuccess {
-		return fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess", backupName)
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupStatusCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
 	}
 
 	var errors []error
-
 	theBackup := backupInspectResponse.GetBackup()
 	backupName = theBackup.GetName()
 	resourceInfos := theBackup.GetResources()
-	backedupVolumes := theBackup.GetVolumes()
+	backedUpVolumes := theBackup.GetVolumes()
 	backupNamespaces := theBackup.GetNamespaces()
 
 	for _, scheduledAppContext := range scheduledAppContexts {
@@ -1631,7 +1630,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 		// collect the backup resources whose VOLUMES should be present in this scheduledAppContext (namespace)
 		namespacedBackedUpVolumes := make([]*api.BackupInfo_Volume, 0)
-		for _, vol := range backedupVolumes {
+		for _, vol := range backedUpVolumes {
 			if vol.GetNamespace() == scheduledAppContextNamespace {
 				if vol.Status.Status != api.BackupInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
 					err := fmt.Errorf("the status of the backedup volume [%s] was not Success. It was [%s] with reason [%s]", vol.Name, vol.Status.Status, vol.Status.Reason)
@@ -2291,12 +2290,21 @@ func GetOrdinalScheduleBackupName(ctx context.Context, scheduleName string, ordi
 
 // GetFirstScheduleBackupName returns the name of the first schedule backup for the given schedule
 func GetFirstScheduleBackupName(ctx context.Context, scheduleName string, orgID string) (string, error) {
-	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	var allScheduleBackupNames []string
+	var err error
+	getFirstScheduleBackup := func() (interface{}, bool, error) {
+		allScheduleBackupNames, err = Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+		if err != nil {
+			return "", false, err
+		}
+		if len(allScheduleBackupNames) == 0 {
+			return "", true, fmt.Errorf("no backups found for schedule %s yet", scheduleName)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(getFirstScheduleBackup, 20*time.Second, 5*time.Second)
 	if err != nil {
 		return "", err
-	}
-	if len(allScheduleBackupNames) == 0 {
-		return "", fmt.Errorf("no backups found for schedule %s", scheduleName)
 	}
 	return allScheduleBackupNames[0], nil
 }
@@ -2379,7 +2387,7 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 		}
 		for _, backupObject := range currentBackups.GetBackups() {
 			if backupObject.Name == backupName {
-				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted", backupObject.Name)
+				return "", true, fmt.Errorf("backupObject [%s] is not yet deleted . status:[%s] ", backupObject.Name, backupObject.Status)
 			}
 		}
 		return "", false, nil
@@ -2620,7 +2628,7 @@ func ValidateAllPodsInPxBackupNamespace() error {
 		}
 		for _, pod := range allPods.Items {
 			log.Infof("Checking status for pod - %s", pod.GetName())
-			err = core.Instance().ValidatePod(&pod, 5*time.Minute, 30*time.Second)
+			err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
 			if err != nil {
 				// Collect mongoDB logs right after the command
 				ginkgoTest := CurrentGinkgoTestDescription()
@@ -2694,6 +2702,13 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 			return err
 		}
 		storageSpec.Spec.Stork.Image = finalImageToUpgrade
+
+		// Check to reset customImageRegistry to blank as in case of ibm it'll be icr.io/ext/ and not
+		// docker.io/ which causes issues when we try to install stork which is not pushed to icr.io/ext
+		if GetClusterProviders()[0] == "ibm" {
+			storageSpec.Spec.CustomImageRegistry = ""
+		}
+
 		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
 		if err != nil {
 			return err
@@ -3165,6 +3180,7 @@ func TaskHandler(taskInputs interface{}, task interface{}, executionMode Executi
 		for i := 0; i < length; i++ {
 			wg.Add(1)
 			go func(i int) {
+				defer GinkgoRecover()
 				defer wg.Done()
 				if isMap {
 					callTask(keys[i], v.MapIndex(keys[i]))
@@ -3244,9 +3260,19 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		log.InfoD("schedule name %s, Next schedule backup name: %s", scheduleName, ordinalScheduleBackupName)
 		if err != nil {
 			return "", true, err
 		}
+		backupDriver := Inst().Backup
+		backupUid, err := backupDriver.GetBackupUID(ctx, ordinalScheduleBackupName, orgID)
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  ordinalScheduleBackupName,
+			Uid:   backupUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		log.InfoD("Inspect obj %s", resp)
 		return ordinalScheduleBackupName, false, nil
 	}
 	log.InfoD("Waiting for [%d] minutes for the next schedule backup to be triggered", scheduleInterval)
@@ -3447,6 +3473,7 @@ func IsMongoDBReady() error {
 
 // DeleteAppNamespace deletes the given namespace and wait for termination
 func DeleteAppNamespace(namespace string) error {
+	var ns *corev1.Namespace
 	k8sCore := core.Instance()
 	err := k8sCore.DeleteNamespace(namespace)
 	if err != nil {
@@ -3456,6 +3483,7 @@ func DeleteAppNamespace(namespace string) error {
 		nsObj, err := core.Instance().GetNamespace(namespace)
 		if err != nil {
 			if strings.Contains(err.Error(), "not found") {
+				log.Infof("Namespace - %s is not found and hence deleted", namespace)
 				return "", false, nil
 			} else {
 				return "", false, err
@@ -3468,7 +3496,55 @@ func DeleteAppNamespace(namespace string) error {
 	}
 	_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
 	if err != nil {
+		ns, err = k8sCore.GetNamespace(namespace)
+		if err != nil {
+			return err
+		}
+		if ns.Status.Phase == "Terminating" {
+			log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
+			err = DeleteTerminatingNamespace(namespace)
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteTerminatingNamespace deletes the given namespace which has been in terminating state
+func DeleteTerminatingNamespace(namespace string) error {
+	k8sCore := core.Instance()
+	ns, err := k8sCore.GetNamespace(namespace)
+	if err != nil {
 		return err
+	}
+	if ns.Status.Phase == "Terminating" {
+		log.Infof("Namespace - %s is in %s phase ", namespace, ns.Status.Phase)
+		log.Infof("Finalizers to be set to nil - %v", ns.Spec.Finalizers)
+		ns.Spec.Finalizers = nil
+		ns, err = k8sCore.UpdateNamespace(ns)
+		if err != nil {
+			return err
+		}
+		namespaceDeleteCheck := func() (interface{}, bool, error) {
+			nsObj, err := core.Instance().GetNamespace(namespace)
+			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					log.Infof("Namespace - %s is not found and hence deleted", namespace)
+					return "", false, nil
+				} else {
+					return "", false, err
+				}
+			}
+			if nsObj.Status.Phase == "Terminating" {
+				return "", true, fmt.Errorf("namespace - %s is in %s phase ", namespace, nsObj.Status.Phase)
+			}
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(namespaceDeleteCheck, namespaceDeleteTimeout, jobDeleteRetryTime)
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("Namespace [%s] expected to be in Terminating phase but is in %s phase ", namespace, ns.Status.Phase)
 	}
 	return nil
 }
@@ -4147,27 +4223,490 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 			postUid = ruleList.Rules[i].Metadata.Uid
 		}
 	}
-	log.Infof("Validate pre-rules for backup")
-	preRuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  preRuleName,
-		Uid:   preUid,
+	if totalPreRules != 0 {
+		log.Infof("Validate pre-rules for backup")
+		preRuleInspectReq := &api.RuleInspectRequest{
+			OrgId: orgID,
+			Name:  preRuleName,
+			Uid:   preUid,
+		}
+		_, err = Inst().Backup.InspectRule(ctx, preRuleInspectReq)
+		if err != nil {
+			err = fmt.Errorf("failed to validate the created pre-rule with Error: [%v]", err)
+			return "", "", err
+		}
 	}
-	_, err = Inst().Backup.InspectRule(ctx, preRuleInspectReq)
-	if err != nil {
-		err = fmt.Errorf("failed to validate the created pre-rule with Error: [%v]", err)
-		return "", "", err
-	}
-	log.Infof("Validate post-rules for backup")
-	postRuleInspectReq := &api.RuleInspectRequest{
-		OrgId: orgID,
-		Name:  postRuleName,
-		Uid:   postUid,
-	}
-	_, err = Inst().Backup.InspectRule(ctx, postRuleInspectReq)
-	if err != nil {
-		err = fmt.Errorf("failed to validate the created post-rule with Error: [%v]", err)
-		return "", "", err
+	if totalPostRules != 0 {
+		log.Infof("Validate post-rules for backup")
+		postRuleInspectReq := &api.RuleInspectRequest{
+			OrgId: orgID,
+			Name:  postRuleName,
+			Uid:   postUid,
+		}
+		_, err = Inst().Backup.InspectRule(ctx, postRuleInspectReq)
+		if err != nil {
+			err = fmt.Errorf("failed to validate the created post-rule with Error: [%v]", err)
+			return "", "", err
+		}
 	}
 	return preRuleName, postRuleName, nil
+}
+
+// GetAllBackupNamesByOwnerID gets all backup names associated with the given ownerID
+func GetAllBackupNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	backupEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				if isAdminCtx {
+					return []string{ownerID}
+				}
+				return nil
+			}(),
+		},
+	}
+	backupEnumerateResp, err := Inst().Backup.EnumerateBackup(ctx, backupEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupNames := make([]string, 0)
+	for _, backupObj := range backupEnumerateResp.GetBackups() {
+		if isAdminCtx {
+			backupNames = append(backupNames, backupObj.GetName())
+		} else {
+			if backupObj.GetOwnership().GetOwner() == ownerID {
+				backupNames = append(backupNames, backupObj.GetName())
+			}
+		}
+	}
+	return backupNames, nil
+}
+
+// GetAllBackupScheduleNamesByOwnerID gets all backup schedule names associated with the given ownerID
+func GetAllBackupScheduleNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				//if isAdminCtx { // PB-4199
+				//	return []string{ownerID}
+				//}
+				return nil
+			}(),
+		},
+	}
+	backupScheduleEnumerateResp, err := Inst().Backup.EnumerateBackupSchedule(ctx, backupScheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleNames := make([]string, 0)
+	for _, backupScheduleObj := range backupScheduleEnumerateResp.GetBackupSchedules() {
+		if isAdminCtx {
+			backupScheduleNames = append(backupScheduleNames, backupScheduleObj.GetName())
+		} else {
+			if backupScheduleObj.GetOwnership().GetOwner() == ownerID {
+				backupScheduleNames = append(backupScheduleNames, backupScheduleObj.GetName())
+			}
+		}
+	}
+	return backupScheduleNames, nil
+}
+
+// GetAllRestoreNamesByOwnerID gets all restore names associated with the given ownerID
+func GetAllRestoreNamesByOwnerID(ownerID string, orgID string, ctx context.Context) ([]string, error) {
+	isAdminCtx, err := portworx.IsAdminCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	restoreEnumerateReq := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+		EnumerateOptions: &api.EnumerateOptions{
+			Owners: func() []string {
+				//if isAdminCtx {  // PB-4199
+				//	return []string{ownerID}
+				//}
+				return nil
+			}(),
+		},
+	}
+	restoreEnumerateResp, err := Inst().Backup.EnumerateRestore(ctx, restoreEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	restoreNames := make([]string, 0)
+	for _, restoreObj := range restoreEnumerateResp.GetRestores() {
+		if isAdminCtx {
+			restoreNames = append(restoreNames, restoreObj.GetName())
+		} else {
+			if restoreObj.GetOwnership().GetOwner() == ownerID {
+				restoreNames = append(restoreNames, restoreObj.GetName())
+			}
+		}
+	}
+	return restoreNames, nil
+}
+
+// GetAllBackupSchedulesForUser returns all current BackupSchedules for user.
+func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
+	scheduleNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+		OrgId: orgID,
+	}
+	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
+	if err != nil {
+		return nil, err
+	}
+	for _, schedule := range currentSchedules.GetBackupSchedules() {
+		scheduleNames = append(scheduleNames, schedule.GetName())
+	}
+	return scheduleNames, nil
+}
+
+// GetAllRestoresForUser returns all the current restores for the user.
+func GetAllRestoresForUser(username string, password string) ([]string, error) {
+	restoreNames := make([]string, 0)
+	backupDriver := Inst().Backup
+	ctx, err := backup.GetNonAdminCtx(username, password)
+	if err != nil {
+		return nil, err
+	}
+
+	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
+		OrgId: orgID,
+	}
+	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
+	if err != nil {
+		return restoreNames, err
+	}
+	for _, restore := range restoreResponse.GetRestores() {
+		restoreNames = append(restoreNames, restore.Name)
+	}
+	return restoreNames, nil
+}
+
+// CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+	backupDriver := Inst().Backup
+	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  periodicSchedulePolicyName,
+			Uid:   periodicSchedulePolicyUid,
+			OrgId: OrgID,
+		},
+
+		SchedulePolicy: &api.SchedulePolicyInfo{
+			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
+			ForObjectLock: false,
+			AutoDelete:    false,
+		},
+	}
+
+	_, err = backupDriver.CreateSchedulePolicy(ctx, schedulePolicyCreateRequest)
+	if err != nil {
+		return
+	}
+	return
+}
+
+// CreateInvalidAWSCloudCredential creates cloud credentials with invalid paramaters.
+func createInvalidAWSCloudCredential(credName string, uid, orgID string, ctx context.Context) error {
+	log.Infof("Create cloud credential with name [%s] for org [%s] ", credName, orgID)
+	var credCreateRequest *api.CloudCredentialCreateRequest
+	credCreateRequest = &api.CloudCredentialCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  credName,
+			Uid:   uid,
+			OrgId: orgID,
+		},
+		CloudCredential: &api.CloudCredentialInfo{
+			Type: api.CloudCredentialInfo_AWS,
+			Config: &api.CloudCredentialInfo_AwsConfig{
+				AwsConfig: &api.AWSConfig{
+					AccessKey: "admin",
+					SecretKey: backup.PxCentralAdminPwd + RandomString(10),
+				},
+			},
+		},
+	}
+	_, err := Inst().Backup.CreateCloudCredential(ctx, credCreateRequest)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return nil
+		}
+		log.Errorf("failed to create invalid cloud credential with name [%s] in org [%s] with [AWS/S3] as provider", credName, orgID)
+		return err
+	}
+	return nil
+}
+
+// UpdateCluster updates cluster with given credentials.
+func UpdateCluster(clusterName string, clusterUid string, kubeConfigPath string, orgId string, cloudCred string, cloudCredUID string, ctx context.Context) (*api.ClusterUpdateResponse, error) {
+	backupDriver := Inst().Backup
+	kubeconfigRaw, err := ioutil.ReadFile(kubeConfigPath)
+	if err != nil {
+		return nil, err
+	}
+
+	clusterUpdateRequest := &api.ClusterUpdateRequest{
+		CreateMetadata:        &api.CreateMetadata{Name: clusterName, OrgId: orgId, Uid: clusterUid},
+		PxConfig:              &api.PXConfig{},
+		Kubeconfig:            base64.StdEncoding.EncodeToString(kubeconfigRaw),
+		CloudCredential:       cloudCred,
+		CloudCredentialRef:    &api.ObjectRef{Name: cloudCred, Uid: cloudCredUID},
+		PlatformCredentialRef: &api.ObjectRef{},
+	}
+	status, err := backupDriver.UpdateCluster(ctx, clusterUpdateRequest)
+	if err != nil {
+		return nil, err
+	}
+	return status, err
+}
+
+// DeleteAllBackups deletes all backup from the given context and org
+func DeleteAllBackups(ctx context.Context, orgId string) error {
+	bkpEnumerateReq := &api.BackupEnumerateRequest{
+		OrgId: orgId,
+	}
+	curBackups, err := Inst().Backup.EnumerateBackup(ctx, bkpEnumerateReq)
+	if err != nil {
+		return err
+	}
+	errChan := make(chan error, len(curBackups.GetBackups()))
+	semaphore := make(chan int, 4)
+	var wg sync.WaitGroup
+	for _, bkp := range curBackups.GetBackups() {
+		wg.Add(1)
+		go func(bkp *api.BackupObject) {
+			semaphore <- 0
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			bkpDeleteRequest := &api.BackupDeleteRequest{
+				Name:  bkp.GetName(),
+				OrgId: bkp.GetOrgId(),
+				Uid:   bkp.GetUid(),
+			}
+			_, err := Inst().Backup.DeleteBackup(ctx, bkpDeleteRequest)
+			if err != nil {
+				errChan <- err
+				return
+			}
+			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), backupDeleteTimeout, backupDeleteRetryTime)
+			if err != nil {
+				errChan <- err
+			}
+		}(bkp)
+	}
+	wg.Wait()
+	close(errChan)
+	close(semaphore)
+	var errList []string
+	for err := range errChan {
+		errList = append(errList, err.Error())
+	}
+	if len(errList) > 0 {
+		return fmt.Errorf(strings.Join(errList, "; "))
+	}
+	return nil
+}
+
+type RoleServices string
+
+const (
+	SchedulePolicy  RoleServices = "schedulepolicy"
+	Rules                        = "rules"
+	Cloudcredential              = "cloudcredential"
+	BackupLocation               = "backuplocation"
+	Role                         = "role"
+)
+
+type RoleApis string
+
+const (
+	All       RoleApis = "*"
+	Create             = "create*"
+	Inspect            = "inspect*"
+	Update             = "update*"
+	Enumerate          = "enumerate*"
+	Validate           = "validate*"
+	Delete             = "delete*"
+)
+
+// CreateRole creates role with given services and apis in px-backup datastore and also add role to keycloak.
+func CreateRole(roleName backup.PxBackupRole, svcs []RoleServices, apis []RoleApis, ctx context.Context) error {
+	err := backup.CreateRole(roleName, "custom-role")
+	if err != nil {
+		return err
+	}
+	roleId, err := backup.GetRoleID(roleName)
+	if err != nil {
+		return err
+	}
+	backupDriver := Inst().Backup
+
+	serviceList := make([]string, len(svcs))
+	for i, svc := range svcs {
+		serviceList[i] = string(svc)
+	}
+	apiList := make([]string, len(apis))
+	for i, api := range apis {
+		apiList[i] = string(api)
+	}
+	rule := &api.RoleConfig{
+		Services: serviceList,
+		Apis:     apiList,
+	}
+	roleCreateRequest := &api.RoleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  string(roleName),
+			OrgId: orgID,
+		},
+		Rules:  []*api.RoleConfig{rule},
+		RoleId: roleId,
+	}
+	_, err = backupDriver.CreateRole(ctx, roleCreateRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteRole delete role with given services and apis from datastore and also from keycloak.
+func DeleteRole(roleName backup.PxBackupRole, orgId string, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	roleId, err := backup.GetRoleID(roleName)
+	if err != nil {
+		return err
+	}
+	roleDeleteRequest := &api.RoleDeleteRequest{
+		OrgId: orgId,
+		Name:  string(roleName),
+		Uid:   roleId,
+	}
+	_, err = backupDriver.DeleteRole(ctx, roleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	err = backup.DeleteRole(roleName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteBackupSchedulePolicyWithContext delete schedule policy with given context.
+func DeleteBackupSchedulePolicyWithContext(orgID string, policyList []string, ctx context.Context) error {
+	schedPolicyMap := make(map[string]string)
+	schedPolicyEnumerateReq := &api.SchedulePolicyEnumerateRequest{
+		OrgId: orgID,
+	}
+	schedulePolicyList, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
+	if err != nil {
+		err = fmt.Errorf("Failed to get list of schedule policies with error: [%v]", err)
+		return err
+	}
+	for i := 0; i < len(schedulePolicyList.SchedulePolicies); i++ {
+		schedPolicyMap[schedulePolicyList.SchedulePolicies[i].Metadata.Name] = schedulePolicyList.SchedulePolicies[i].Metadata.Uid
+	}
+	for i := 0; i < len(policyList); i++ {
+		schedPolicydeleteReq := &api.SchedulePolicyDeleteRequest{
+			OrgId: orgID,
+			Name:  policyList[i],
+			Uid:   schedPolicyMap[policyList[i]],
+		}
+		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
+		if err != nil {
+			err = fmt.Errorf("Failed to delete schedule policy %s with error [%v]", policyList[i], err)
+			return err
+		}
+	}
+	return nil
+}
+
+// DeletePodWhileBackupInProgress deletes pod with given label and in given namespace when backup is in progress
+func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupName string, namespace string, label map[string]string) error {
+	log.InfoD("Deleting pod while backup is in progress")
+	backupInProgressStatus := api.BackupInfo_StatusInfo_InProgress
+	backupPendingStatus := api.BackupInfo_StatusInfo_Pending
+	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgId)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: orgId,
+	}
+	backupProgressCheckFunc := func() (interface{}, bool, error) {
+		backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := backupResponse.GetBackup().GetStatus().Status
+		if actual == backupInProgressStatus {
+			return "", false, nil
+		}
+		if actual == backupPendingStatus {
+			return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
+		} else {
+			return "", false, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
+		}
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+	if err != nil {
+		return err
+	}
+	err = DeletePodWithLabelInNamespace(namespace, label)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeletePodWhileRestoreInProgress deletes pod with given label and in given namespace when restore is in progress
+func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreName string, namespace string, label map[string]string) error {
+	log.InfoD("Deleting pod while restore is in progress")
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgId,
+	}
+	restoreInProgressStatus := api.RestoreInfo_StatusInfo_InProgress
+	restorePendingStatus := api.RestoreInfo_StatusInfo_Pending
+	restoreProgressCheckFunc := func() (interface{}, bool, error) {
+		resp, err := Inst().Backup.InspectRestore(ctx, restoreInspectRequest)
+		if err != nil {
+			return "", false, err
+		}
+		actual := resp.GetRestore().GetStatus().Status
+		if actual == restoreInProgressStatus {
+			return "", false, nil
+		}
+		if actual == restorePendingStatus {
+			return "", true, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
+		} else {
+			return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
+		}
+	}
+	_, err := DoRetryWithTimeoutWithGinkgoRecover(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
+	if err != nil {
+		return err
+	}
+	err = DeletePodWithLabelInNamespace(namespace, label)
+	if err != nil {
+		return err
+	}
+	return nil
 }
