@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onsi/ginkgo"
+
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
@@ -174,6 +176,13 @@ type KeycloakGroupToUser struct {
 	UserID  string `json:"userId"`
 	GroupID string `json:"groupId"`
 	Realm   string `json:"realm"`
+}
+
+// KeycloakRole representation for creating role
+type KeycloakRole struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Attributes  []string `json:"attributes"`
 }
 
 // getOidcSecretName returns OIDC secret name
@@ -761,7 +770,7 @@ func GetPxCentralAdminToken() (string, error) {
 	return token, nil
 }
 
-// GetCtxWithToken getx ctx with passed token
+// GetCtxWithToken gets ctx with passed token
 func GetCtxWithToken(token string) context.Context {
 	ctx := context.Background()
 	md := metadata.New(map[string]string{
@@ -1010,41 +1019,59 @@ func DeleteGroup(group string) error {
 	return nil
 }
 
-// Deletes Multiple groups
+// DeleteMultipleGroups deletes multiple groups concurrently and returns concatenated errors if any
 func DeleteMultipleGroups(groups []string) error {
-
 	var wg sync.WaitGroup
+	errCh := make(chan string, len(groups))
 	for _, group := range groups {
 		wg.Add(1)
 		go func(group string) {
+			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 			err := DeleteGroup(group)
-			log.FailOnError(err, "Failed to create group - %v", group)
-
+			if err != nil {
+				errCh <- fmt.Sprintf("failed to delete group - %v: %v", group, err)
+			}
+			log.Infof("Deleted Group - %s", group)
 		}(group)
-		log.Infof("Deleted Group - %s", group)
 	}
 	wg.Wait()
-
+	close(errCh)
+	var errSlice []string
+	for err := range errCh {
+		errSlice = append(errSlice, err)
+	}
+	if len(errSlice) > 0 {
+		return fmt.Errorf(strings.Join(errSlice, "; "))
+	}
 	return nil
 }
 
-// Deletes Multiple users
+// DeleteMultipleUsers deletes multiple users concurrently and returns concatenated errors if any
 func DeleteMultipleUsers(users []string) error {
-
 	var wg sync.WaitGroup
+	errCh := make(chan string, len(users))
 	for _, user := range users {
 		wg.Add(1)
 		go func(user string) {
+			defer ginkgo.GinkgoRecover()
 			defer wg.Done()
 			err := DeleteUser(user)
-			log.FailOnError(err, "Failed to create group - %v", user)
-
+			if err != nil {
+				errCh <- fmt.Sprintf("failed to delete user - %v: %v", user, err)
+			}
+			log.Infof("Deleted User - %s", user)
 		}(user)
-		log.Infof("Deleted User - %s", user)
 	}
 	wg.Wait()
-
+	close(errCh)
+	var errSlice []string
+	for err := range errCh {
+		errSlice = append(errSlice, err)
+	}
+	if len(errSlice) > 0 {
+		return fmt.Errorf(strings.Join(errSlice, "; "))
+	}
 	return nil
 }
 
@@ -1159,7 +1186,7 @@ func FetchUserDetailsFromID(userID string) (string, string, error) {
 
 	_, err = task.DoRetryWithTimeout(f, defaultWaitTimeout, defaultWaitInterval)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to fetch user name/email: [%v]", err)
+		return "", "", fmt.Errorf("failed to fetch user name/email with user id [%v]: [%v]", userID, err)
 	}
 
 	return userName, email, nil
@@ -1212,4 +1239,54 @@ func GetRandomUserFromGroup(groupName string) (string, error) {
 	rand.Seed(time.Now().Unix())
 	userName := users[rand.Intn(len(users))]
 	return userName, nil
+}
+
+// CreateRole create new role to keycloak
+func CreateRole(role PxBackupRole, description string) error {
+	kRole := KeycloakRole{
+		Name:        string(role),
+		Description: description,
+	}
+	roleBytes, err := json.Marshal(&kRole)
+	if err != nil {
+		return err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/roles", keycloakEndPoint)
+	method := "POST"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, strings.NewReader(string(roleBytes)))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeleteRole deletes role from keycloak
+func DeleteRole(role PxBackupRole) error {
+	roleId, err := GetRoleID(role)
+	if err != nil {
+		return err
+	}
+	keycloakEndPoint, err := getKeycloakEndPoint(true)
+	if err != nil {
+		return err
+	}
+	reqURL := fmt.Sprintf("%s/roles-by-id/%s", keycloakEndPoint, roleId)
+	method := "DELETE"
+	headers, err := GetCommonHTTPHeaders(PxCentralAdminUser, PxCentralAdminPwd)
+	if err != nil {
+		return err
+	}
+	_, err = processHTTPRequest(method, reqURL, headers, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
