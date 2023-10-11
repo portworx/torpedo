@@ -471,7 +471,7 @@ spec:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c", "cd /torpedo-gin && go run apiServer/pxone/apiserver.go"]
     tty: true
-    volumeMounts: [${VOLUME_MOUNTS}]:
+    volumeMounts: [${VOLUME_MOUNTS}]
     env:
     - name: NODE_NAME
       valueFrom:

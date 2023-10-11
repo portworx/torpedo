@@ -1,0 +1,242 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: torpedo-account
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: torpedo-role
+rules:
+  -
+    apiGroups:
+      # have access to everything except Secrets
+      - "*"
+    resources: ["*"]
+    verbs: ["*"]
+  - nonResourceURLs: ["*"]
+    verbs: ["*"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: torpedo-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: torpedo-account
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: torpedo-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: torpedo
+  labels:
+    app: torpedo
+spec:
+  tolerations:
+    - key: node-role.kubernetes.io/master
+      operator: Equal
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/controlplane
+      operator: Equal
+      value: "true"
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+    - key: node-role.kubernetes.io/etcd
+      operator: Equal
+      value: "true"
+    - key: apps
+      operator: Equal
+      value: "false"
+      effect: "NoSchedule"
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: "Exists"
+          - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: "Exists"
+          - matchExpressions:
+              - key: node-role.kubernetes.io/controlplane
+                operator: "In"
+                values: ["true"]
+          - matchExpressions:
+              - key: px/enabled
+                operator: "In"
+                values: ["false"]
+  initContainers:
+    - name: init-sysctl
+      image: ${BUSYBOX_IMG}
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        privileged: true
+      command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
+  containers:
+    - name: torpedo
+      image: ${TORPEDO_IMG}
+      imagePullPolicy: Always
+      securityContext:
+        privileged: ${SECURITY_CONTEXT}
+      command: ["sh", "-c", "cd /torpedo-gin && go run apiServer/pxone/apiserver.go"]
+      tty: true
+      volumeMounts: [${VOLUME_MOUNTS}]:
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: K8S_VENDOR
+          value: "${K8S_VENDOR}"
+        - name: TORPEDO_SSH_USER
+          value: "${TORPEDO_SSH_USER}"
+        - name: TORPEDO_SSH_PASSWORD
+          value: "${TORPEDO_SSH_PASSWORD}"
+        - name: TORPEDO_SSH_KEY
+          value: "${TORPEDO_SSH_KEY}"
+        - name: AZURE_TENANT_ID
+          value: "${AZURE_TENANTID}"
+        - name: VOLUME_PROVIDER
+          value: "${VOLUME_PROVIDER}"
+        - name: OBJECT_STORE_PROVIDER
+          value: "${OBJECT_STORE_PROVIDER}"
+        - name: AZURE_CLIENT_ID
+          value: "${AZURE_CLIENTID}"
+        - name: AZURE_CLIENT_SECRET
+          value: "${AZURE_CLIENTSECRET}"
+        - name: AZURE_ACCOUNT_NAME
+          value: "${AZURE_ACCOUNT_NAME}"
+        - name: SOURCE_RKE_TOKEN
+          value: "${SOURCE_RKE_TOKEN}"
+        - name: DESTINATION_RKE_TOKEN
+          value: "${DESTINATION_RKE_TOKEN}"
+        - name: AZURE_ACCOUNT_KEY
+          value: "${AZURE_ACCOUNT_KEY}"
+        - name: AZURE_SUBSCRIPTION_ID
+          value: "${AZURE_SUBSCRIPTION_ID}"
+        - name: AZURE_CLUSTER_NAME
+          value: "${AZURE_CLUSTER_NAME}"
+        - name: AWS_ACCESS_KEY_ID
+          value: "${AWS_ACCESS_KEY_ID}"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "${AWS_SECRET_ACCESS_KEY}"
+        - name: AWS_REGION
+          value: "${AWS_REGION}"
+        - name: KUBECONFIGS
+          value: "${CLUSTER_CONFIGS}"
+        - name: S3_ENDPOINT
+          value: "${S3_ENDPOINT}"
+        - name: S3_AWS_ACCESS_KEY_ID
+          value: "${S3_AWS_ACCESS_KEY_ID}"
+        - name: S3_AWS_SECRET_ACCESS_KEY
+          value: "${S3_AWS_SECRET_ACCESS_KEY}"
+        - name: S3_REGION
+          value: "${S3_REGION}"
+        - name: BUCKET_NAME
+          value: "${BUCKET_NAME}"
+        - name: LOCKED_BUCKET_NAME
+          value: "${LOCKED_BUCKET_NAME}"
+        - name: S3_DISABLE_SSL
+          value: "${S3_DISABLE_SSL}"
+        - name: DIAGS_BUCKET
+          value: "${DIAGS_BUCKET}"
+        - name: PROVIDERS
+          value: "${PROVIDERS}"
+        - name: CLUSTER_PROVIDER
+          value: "${CLUSTER_PROVIDER}"
+        - name: INTERNAL_DOCKER_REGISTRY
+          value: "$INTERNAL_DOCKER_REGISTRY"
+        - name: IMAGE_PULL_SERVER
+          value: "$IMAGE_PULL_SERVER"
+        - name: IMAGE_PULL_USERNAME
+          value: "$IMAGE_PULL_USERNAME"
+        - name: IMAGE_PULL_PASSWORD
+          value: "$IMAGE_PULL_PASSWORD"
+        - name: VSPHERE_USER
+          value: "${VSPHERE_USER}"
+        - name: VSPHERE_PWD
+          value: "${VSPHERE_PWD}"
+        - name: VSPHERE_HOST_IP
+          value: "${VSPHERE_HOST_IP}"
+        - name: IBMCLOUD_API_KEY
+          value: "${IBMCLOUD_API_KEY}"
+        - name: CONTROL_PLANE_URL
+          value: "${CONTROL_PLANE_URL}"
+        - name: DS_VERSION
+          value: "${DS_VERSION}"
+        - name: DS_BUILD
+          value: "${DS_BUILD}"
+        - name: NAMESPACE
+          value: "${NAMESPACE}"
+        - name: NO_OF_NODES
+          value: "${NO_OF_NODES}"
+        - name: DATA_SERVICE
+          value: "${DATA_SERVICE}"
+        - name: DEPLOY_ALL_VERSIONS
+          value: "${DEPLOY_ALL_VERSIONS}"
+        - name: DEPLOY_ALL_IMAGES
+          value: "${DEPLOY_ALL_IMAGES}"
+        - name: DEPLOY_ALL_DATASERVICE
+          value: "${DEPLOY_ALL_DATASERVICE}"
+        - name: GCP_PROJECT_ID
+          value: "${GCP_PROJECT_ID}"
+        - name: PDS_USERNAME
+          value: "${PDS_USERNAME}"
+        - name: PDS_PASSWORD
+          value: "${PDS_PASSWORD}"
+        - name: PDS_CLIENT_SECRET
+          value: "${PDS_CLIENT_SECRET}"
+        - name: PDS_CLIENT_ID
+          value: "${PDS_CLIENT_ID}"
+        - name: PDS_PARAM_CM
+          value: "${PDS_PARAM_CM}"
+        - name: PDS_ISSUER_URL
+          value: "${PDS_ISSUER_URL}"
+        - name: CLUSTER_TYPE
+          value: "${CLUSTER_TYPE}"
+        - name: TARGET_KUBECONFIG
+          value: "${TARGET_KUBECONFIG}"
+        - name: TARGET_CLUSTER_NAME
+          value: "${TARGET_CLUSTER_NAME}"
+        - name: PX_ORACLE_user_ocid
+          value: "${PX_ORACLE_user_ocid}"
+        - name: PX_ORACLE_fingerprint
+          value: "${PX_ORACLE_fingerprint}"
+        - name: PX_ORACLE_private_key_path
+          value: "${ORACLE_API_KEY}"
+        - name: INSTANCE_GROUP
+          value: "${INSTANCE_GROUP}"
+        - name: LOGGLY_API_TOKEN
+          value: "${LOGGLY_API_TOKEN}"
+        - name: PODMETRIC_METERING_INTERVAL_MINUTES
+          value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
+        - name: TARGET_PXBACKUP_VERSION
+          value: "${TARGET_PXBACKUP_VERSION}"
+        - name: TARGET_STORK_VERSION
+          value: "${TARGET_STORK_VERSION}"
+        - name: PX_BACKUP_HELM_REPO_BRANCH
+          value: "${PX_BACKUP_HELM_REPO_BRANCH}"
+        - name: BACKUP_TYPE
+          value: "${BACKUP_TYPE}"
+        - name: NFS_SERVER_ADDR
+          value: "${NFS_SERVER_ADDR}"
+        - name: NFS_SUB_PATH
+          value: "${NFS_SUB_PATH}"
+        - name: NFS_MOUNT_OPTION
+          value: "${NFS_MOUNT_OPTION}"
+        - name: NFS_PATH
+          value: "${NFS_PATH}"
+        - name: SKIP_PX_OPERATOR_UPGRADE
+          value: "${SKIP_PX_OPERATOR_UPGRADE}"
+        - name: VOLUME_SNAPSHOT_CLASS
+          value: "${VOLUME_SNAPSHOT_CLASS}"
+  volumes: [${VOLUMES}]
+  restartPolicy: Never
+  serviceAccountName: torpedo-account
