@@ -624,20 +624,6 @@ spec:
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: gin-serv
-spec:
-  selector:
-    app: torpedo
-  ports:
-    - name: http
-      port: 8080
-      targetPort: 8080
-      protocol: TCP
-  type: NodePort
 EOF
 
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
@@ -662,6 +648,27 @@ cat torpedo.yaml
 
 echo "Deploying torpedo pod..."
 kubectl apply -f torpedo.yaml
+
+cat >> gin-service.yaml <<EOF
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gin-serv
+spec:
+  selector:
+    app: torpedo
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: NodePort
+EOF
+
+kubectl apply -f gin-service.yaml
+
+echo "gin service created"
 
 echo "Waiting for torpedo to start running"
 
