@@ -335,3 +335,22 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+// This test clones FACD, FBCD and FADA volumes and validates it
+/*
+https://portworx.testrail.net/index.php?/tests/view/72639348
+https://portworx.testrail.net/index.php?/tests/view/72657575
+
+*/
+var _ = Describe("{ClonePureVolumesAndValidate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ClonePureVolumesAndValidate", "Test clone of pure volumes and validate the volumes", nil, 0)
+	})
+	It("installs with cloud drive volumes on the correct FlashArrays", func() {
+		err := ValidatePureCloudDriveTopologies()
+		Expect(err).NotTo(HaveOccurred(), "unexpected error validating Pure cloud drive topologies")
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
