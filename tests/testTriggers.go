@@ -81,6 +81,8 @@ const (
 	MigrationIntervalField = "migrationinterval"
 	// MigrationsCountField is a field in configmap which stores no. of migrations to be run(optional)
 	MigrationsCountField = "migrationscount"
+	// UpgradeEndpoints is a field in the configmap that contains a comma-separated list of upgrade endpoints
+	UpgradeEndpoints = "upgradeEndpoints"
 )
 
 const (

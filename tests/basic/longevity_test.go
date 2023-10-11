@@ -338,16 +338,15 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					defer wg.Done()
 					start := time.Now().Local()
 					timeout := Inst().MinRunTimeMins * 60
-					upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 					currentEndpointIndex := 0
 					for {
+						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
-							log.Infof("All endpoints have been processed, exiting the trigger function for [%s]\n", triggerType)
-							break // break if all upgrade endpoints are processed
+							continue
 						}
 						testExecSum := 0 // total test execution count
 						minTestExecCount := math.MaxInt32
@@ -377,6 +376,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						}
 						if shouldTrigger {
 							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
+							currentEndpointIndex++
 							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
 							disruptiveTriggerLock.Lock()
@@ -385,7 +385,6 @@ var _ = Describe("{UpgradeLongevity}", func() {
 							log.Infof("Trigger Function completed for [%s]\n", triggerType)
 							disruptiveTriggerLock.Unlock()
 							log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
-							currentEndpointIndex++
 						}
 						time.Sleep(controlLoopSleepTime)
 					}
@@ -607,6 +606,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
+	setUpgradeStorageDriverEndpointList(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -725,12 +725,38 @@ func setSendGridEmailAPIKey(configData *map[string]string) error {
 		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
 }
 
+func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
+	// Get upgrade endpoints from configMap
+	if upgradeEndpoints, ok := (*configData)[UpgradeEndpoints]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.", UpgradeEndpoints, testTriggersConfigMap, configMapNS)
+	} else if upgradeEndpoints != "" {
+		uniqueEndpointsMap := make(map[string]bool)
+		for _, endpoint := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
+			if endpoint != "" {
+				uniqueEndpointsMap[endpoint] = true
+			}
+		}
+		for _, endpoint := range strings.Split(upgradeEndpoints, ",") {
+			if endpoint != "" {
+				uniqueEndpointsMap[endpoint] = true
+			}
+		}
+		mergedEndpoints := make([]string, 0)
+		for endpoint := range uniqueEndpointsMap {
+			mergedEndpoints = append(mergedEndpoints, endpoint)
+		}
+		Inst().UpgradeStorageDriverEndpointList = strings.Join(mergedEndpoints, ",")
+		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
+	}
+	delete(*configData, UpgradeEndpoints)
+}
+
 func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
-			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
-				testTriggersConfigMap, configMapNS, err)
+			return fmt.Errorf("failed to get chaos levels for [%s] from configMap [%s] in [%s] namespace. Error: [%v]",
+				triggerType, testTriggersConfigMap, configMapNS, err)
 		}
 		ChaosMap[triggerType] = chaosLevelInt
 		if triggerType == BackupScheduleAll || triggerType == BackupScheduleScale {
