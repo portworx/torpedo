@@ -471,7 +471,7 @@ spec:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c", "cd /torpedo-gin && go run apiServer/pxone/apiserver.go"]
     tty: true
-    volumeMounts: [${VOLUME_MOUNTS}]
+    volumeMounts: [${VOLUME_MOUNTS}]:
     env:
     - name: NODE_NAME
       valueFrom:
@@ -624,8 +624,20 @@ spec:
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
-
-
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gin-serv
+spec:
+  selector:
+    app: torpedo
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: NodePort
 EOF
 
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
