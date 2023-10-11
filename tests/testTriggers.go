@@ -6,6 +6,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"math"
 	"math/rand"
 	"os"
@@ -259,6 +260,7 @@ type emailRecords struct {
 
 type emailData struct {
 	MasterIP     []string
+	DashboardURL string
 	NodeInfo     []nodeInfo
 	EmailRecords emailRecords
 	TriggersInfo []triggerInfo
@@ -2740,6 +2742,7 @@ func TriggerEmailReporter() {
 		masterNodeList = append(masterNodeList, n.Addresses...)
 	}
 	emailData.MasterIP = masterNodeList
+	emailData.DashboardURL = fmt.Sprintf("%s/resultSet/testSetID/%s", aetosutil.AetosBaseURL, os.Getenv("DASH_UID"))
 
 	for _, n := range node.GetStorageDriverNodes() {
 		k8sNode, err := core.Instance().GetNodeByName(n.Name)
@@ -8523,6 +8526,7 @@ tbody tr:last-child {
 <hr/>
 <h3>SetUp Details</h3>
 <p><b>Master IP:</b> {{.MasterIP}}</p>
+<p><b>Dashboard URL:</b> {{.DashboardURL}}</p>
 <table id="pxtable" border=1 width: 50% >
 <tr>
    <td align="center"><h4>PX Node IP </h4></td>
