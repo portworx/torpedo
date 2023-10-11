@@ -220,6 +220,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		wg                         sync.WaitGroup
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
 		upgradeExecutionThreshold int
+		totalFunctionCount        int
 	)
 
 	JustBeforeEach(func() {
@@ -276,6 +277,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
 			upgradeExecutionThreshold = val
 		}
+		totalFunctionCount = len(triggerFunctions) + len(disruptiveTriggerFunctions)
 	})
 
 	It("has to schedule app and register test triggers", func() {
@@ -345,7 +347,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					for {
 						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
@@ -355,7 +357,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						minTestExecCount := math.MaxInt32
 						// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
 						for trigger := range triggerFunctions {
-							count := TestExecutionCountMap[trigger]
+							count := TestExecutionCounter.GetCount(trigger)
 							testExecSum += count
 							if count < minTestExecCount {
 								minTestExecCount = count
@@ -363,7 +365,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						}
 						// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
 						for trigger := range disruptiveTriggerFunctions {
-							count := TestExecutionCountMap[trigger]
+							count := TestExecutionCounter.GetCount(trigger)
 							testExecSum += count
 							if count < minTestExecCount {
 								minTestExecCount = count
@@ -372,10 +374,10 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						// Determining whether to trigger based on minimum execution count
 						shouldTrigger := minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold
 						// Proceeding with upgrade if testExecSum is much higher than expected
-						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*(upgradeExecutionThreshold+1) {
+						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*totalFunctionCount*upgradeExecutionThreshold {
 							shouldTrigger = true
-							// Logging a warning as TestExecutionCountMap might not be accurate
-							log.Warnf("Triggering %s based on testExecSum %v. The tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
+							// Logging a warning as TestExecutionCounter might not be accurate
+							log.Warnf("The longevity tests might not be executing in order. Triggering function %s based on testExecSum %v. TextExecutionCountMap: %+v", triggerType, testExecSum, TestExecutionCounter.String())
 						}
 						if shouldTrigger {
 							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
@@ -384,6 +386,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
 							disruptiveTriggerLock.Lock()
 							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+							log.Warnf("Triggering function %s based on testExecSum %v. TextExecutionCountMap: %+v", triggerType, testExecSum, TestExecutionCounter)
 							triggerFunc(&contexts, &triggerEventsChan)
 							log.Infof("Trigger Function completed for [%s]\n", triggerType)
 							disruptiveTriggerLock.Unlock()
