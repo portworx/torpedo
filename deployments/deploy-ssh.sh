@@ -649,6 +649,7 @@ cat torpedo.yaml
 echo "Deploying torpedo pod..."
 kubectl apply -f torpedo.yaml
 
+
 cat >> gin-service.yaml <<EOF
 ---
 apiVersion: v1
@@ -667,8 +668,8 @@ spec:
 EOF
 
 kubectl apply -f gin-service.yaml
-
-echo "gin service created"
+sleep 180
+echo "Gin service created"
 
 echo "Waiting for torpedo to start running"
 
