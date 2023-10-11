@@ -220,6 +220,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		wg                         sync.WaitGroup
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
 		upgradeExecutionThreshold int
+		totalFunctionCount        int
 	)
 
 	JustBeforeEach(func() {
@@ -276,6 +277,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
 			upgradeExecutionThreshold = val
 		}
+		totalFunctionCount = len(triggerFunctions) + len(disruptiveTriggerFunctions)
 	})
 
 	It("has to schedule app and register test triggers", func() {
@@ -345,7 +347,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					for {
 						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
@@ -372,10 +374,10 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						// Determining whether to trigger based on minimum execution count
 						shouldTrigger := minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold
 						// Proceeding with upgrade if testExecSum is much higher than expected
-						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*(upgradeExecutionThreshold+1) {
+						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*totalFunctionCount*upgradeExecutionThreshold {
 							shouldTrigger = true
 							// Logging a warning as TestExecutionCountMap might not be accurate
-							log.Warnf("Triggering %s based on testExecSum %v. The tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
+							log.Warnf("Triggering %s based on testExecSum %v. The longevity tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
 						}
 						if shouldTrigger {
 							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
