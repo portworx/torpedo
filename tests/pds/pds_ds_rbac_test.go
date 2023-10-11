@@ -4,7 +4,6 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
@@ -27,17 +26,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
-		//Initializing the parameters required for workload generation
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      params.LoadGen.TableName,
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
-		}
 	})
 
 	It("Deploy Dataservices", func() {
@@ -63,6 +51,11 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+				log.InfoD("Cleaning up previous entries in the list")
+				nsRoles = nil
+				nsID2, nsID2, iamRolesToBeCleaned, siToBeCleaned = nil, nil, nil, nil
+				deps, depList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -192,13 +185,15 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 					for _, backupJob := range backupJobs {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						//pdsRestoreNsName, _, err = restoreClient.GetNameSpaceNameToRestore(backupJob.GetId(), pdsRestoreTargetClusterID, ns2.Name, false)
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
 						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(pdsRestoreTargetClusterID, backupJob.GetId(), ns2.Name, dsEntity, ns2Id2, true)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(pdsRestoreTargetClusterID, backupJob.GetId(), ns2.Name, dsEntity, ns2Id2, false)
 						log.FailOnError(err, "Failed during restore.")
+
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						dsTest.ValidateDataServiceDeployment(restoredDeployment, ns2.Name)
 						resDeployments[ds] = restoredDeployment
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
@@ -223,7 +218,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						customParams.SetParamsForServiceIdentityTest(params, true)
 
 						updatedDeployment, err := dsTest.UpdateDataServices(resDep.GetId(),
-							dataServiceDefaultAppConfigID, deployment.GetImageId(),
+							dataServiceDefaultAppConfigID, resDep.GetImageId(),
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
@@ -264,17 +259,6 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 		log.InfoD("AWS S3 target1 - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
-		//Initializing the parameters required for workload generation
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      params.LoadGen.TableName,
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
-		}
 	})
 
 	It("Deploy Dataservices", func() {
@@ -307,6 +291,11 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			log.FailOnError(err, "Failed to fetch destination Target cluster ID")
 			for _, ds := range params.DataServiceToTest {
+				log.InfoD("Cleaning up previous entries to the lists")
+				nsRolesSrc, nsRolesDesti = nil, nil
+				nsID2, nsID2, iamRolesToBeCleanedinSrc, iamRolesToBeCleanedinDest, siToBeCleanedinDest, siToBeCleanedinSrc = nil, nil, nil, nil, nil, nil
+				deps, depList, deploymentsToBeCleaned, restoredDeploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -505,9 +494,11 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
 						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, true)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
 						resDeployments[ds] = restoredDeployment
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						restoredDeploymentsToBeCleaned = append(restoredDeploymentsToBeCleaned, restoredDeployment)
@@ -527,7 +518,6 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 					err = SetSourceKubeConfig()
 					nsRolesSrc = nil
 					var newBinding1 pds.ModelsBinding
-					customParams.SetParamsForServiceIdentityTest(params, false)
 					newns1RoleName := "namespace-admin"
 
 					newBinding1.ResourceIds = nsID2
@@ -559,9 +549,11 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
 						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, true)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(destinationTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, ns2Id2, false)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
 						resDeployments[ds] = restoredDeployment
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						restoredDeploymentsToBeCleaned = append(restoredDeploymentsToBeCleaned, restoredDeployment)
@@ -570,13 +562,11 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				})
 
 				Step("Delete Deployments", func() {
-					customParams.SetParamsForServiceIdentityTest(params, false)
 					CleanupDeployments(restoredDeploymentsToBeCleaned)
 					CleanupServiceIdentitiesAndIamRoles(siToBeCleanedinDest, iamRolesToBeCleanedinDest, actorId2)
 					err = SetSourceKubeConfig()
 					CleanupDeployments(deploymentsToBeCleaned)
 					CleanupServiceIdentitiesAndIamRoles(siToBeCleanedinSrc, iamRolesToBeCleanedinSrc, actorId1)
-
 				})
 
 			}
@@ -603,17 +593,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 
-		//Initializing the parameters required for workload generation
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      params.LoadGen.TableName,
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
-		}
 	})
 
 	It("Deploy Dataservices", func() {
@@ -642,6 +621,12 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
 			for _, ds := range params.DataServiceToTest {
+
+				log.InfoD("Cleaning up previous entries to the lists")
+				nsAdminRoles, nsReaderRoles = nil, nil
+				nsID2, nsID2, iamRolesToBeCleaned, siToBeCleaned, resDepNamespaceID = nil, nil, nil, nil, nil
+				deps, depList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
 					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
@@ -762,9 +747,11 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						resDepNamespaceID = append(resDepNamespaceID, pdsRestoreNsId)
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId2)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, pdsRestoreNsId, true)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, pdsRestoreNsId, false)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						dsTest.ValidateDataServiceDeployment(restoredDeployment, pdsRestoreNsName)
 						resDeployments[ds] = restoredDeployment
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
@@ -793,7 +780,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 				Step("Scale up the restored deployments with updated IAM2 Sitoken", func() {
 					log.InfoD("Starting to scale up the restore deployment")
 					for rds, resDep := range resDeployments {
-						customParams.SetParamsForServiceIdentityTest(params, false)
 						log.InfoD("Scaling up DataService %v ", rds.Name)
 						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
 						log.FailOnError(err, "Error while getting app configuration template")
@@ -849,9 +835,11 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
 						log.FailOnError(err, "unable to fetch namespace id to restore")
 						customParams.SetParamsForServiceIdentityTest(params, true)
-						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, resDepNamespaceID[0], true)
+						restoredModel, _ := restoreClient.RestoreDataServiceWithRbac(deploymentTargetID, backupJob.GetId(), pdsRestoreNsName, dsEntity, resDepNamespaceID[0], false)
 						log.FailOnError(err, "Failed during restore.")
 						restoredDeployment2, err := restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						customParams.SetParamsForServiceIdentityTest(params, false)
+						dsTest.ValidateDataServiceDeployment(restoredDeployment2, pdsRestoreNsName)
 						resDeployments[ds] = restoredDeployment2
 						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment2)
@@ -859,7 +847,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 					}
 				})
 				Step("Delete Deployments", func() {
-					customParams.SetParamsForServiceIdentityTest(params, false)
 					CleanupDeployments(deploymentsToBeCleaned)
 					CleanupServiceIdentitiesAndIamRoles(siToBeCleaned, iamRolesToBeCleaned, actorId2)
 				})
