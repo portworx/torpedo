@@ -155,10 +155,16 @@ var _ = BeforeSuite(func() {
 		case drivers.ProviderAws:
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
+			log.Infof("Bucket created with name - %s", globalAWSBucketName)
+			sid := "DenyNonAES256Uploads"
+			effect := "Deny"
+			encryptionPolicy := "s3:x-amz-server-side-encryption=AES256"
+			policy := GenerateS3BucketPolicy(sid, effect, encryptionPolicy, globalAWSBucketName)
+			err := PutS3BucketPolicy(globalAWSBucketName, policy)
 			if err != nil {
 				log.Fatalf("failed to apply bucket policy: %v", err)
 			}
-			log.Infof("Bucket created with name - %s", globalAWSBucketName)
+			log.Infof("Updated S3 backup policy - %s", globalAWSBucketName)
 		case drivers.ProviderAzure:
 			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAzureBucketName)

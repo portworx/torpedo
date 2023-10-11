@@ -5375,31 +5375,62 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
 		}
 	}
+	return err
+}
 
-	policy := `{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Sid": "DenyNonAES256Uploads",
-				"Effect": "Deny",
-				"Principal": "*",
-				"Action": "s3:PutObject",
-				"Resource": "arn:aws:s3:::` + bucketName + `/*",
-				"Condition": {
-					"StringNotEquals": {
-						"s3:x-amz-server-side-encryption": "AES256"
-					}
-				}
-			}
-		]
-	}`
-	// Apply the bucket policy to deny non-AES-256 uploads.
+// PutBucketPolicy applies the given policy to the given bucket.
+func PutS3BucketPolicy(bucketName string, policy string) error {
+
+	id, secret, endpoint, s3Region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
 	_, err = S3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
 		Bucket: aws.String(bucketName),
 		Policy: aws.String(policy),
 	})
-	print("sleep to check bucket policy")
-	return err
+	if err != nil {
+		return fmt.Errorf("Failed to update bucket policy with Policy [%v]. Error: [%v]", policy, err)
+	}
+	return nil
+}
+
+func RemoveS3BucketPolicy(bucketName string) error {
+	// Create a new S3 client.
+	id, secret, endpoint, s3Region, disableSSLBool, _ := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	// Create a new DeleteBucketPolicyInput object.
+	input := &s3.DeleteBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	// Delete the bucket policy.
+	_, err = S3Client.DeleteBucketPolicy(input)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateAzureBucket creates bucket in Azure
@@ -9287,4 +9318,30 @@ func GetGkeSecret() (string, error) {
 		return "", err
 	}
 	return cm.Data["cloud-json"], nil
+}
+
+func GenerateS3BucketPolicy(sid string, effect string, encryptionPolicy string, bucketName string) string {
+
+	policy := `{
+	   "Version": "2012-10-17",
+	   "Statement": [
+		  {
+			 "Sid": "%s",
+			 "Effect": "%s",
+			 "Principal": "*",
+			 "Action": ["s3:PutObject"],
+			 "Resource": "arn:aws:s3:::%s/*",
+			 "Condition": {
+				"StringNotEquals": {
+				   "%s"
+				}
+			 }
+		  }
+	   ]
+	}`
+
+	// Replace the placeholders in the policy with the values passed to the function.
+	policy = fmt.Sprintf(policy, sid, effect, bucketName, encryptionPolicy)
+
+	return policy
 }
