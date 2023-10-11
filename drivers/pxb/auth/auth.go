@@ -136,7 +136,134 @@ type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
-// ProcessHTTPRequest sends an HTTP request with the given method, URL, body, and headers, and returns the response
+type Keycloak struct {
+	*http.Client
+	Username string
+	Password string
+}
+
+func (k *Keycloak) GetEndpoint(admin bool) (string, error) {
+	pxCentralUIURL := os.Getenv(PxCentralUIURL)
+	// This condition is added to handle scenarios where Torpedo is not running as a pod in the cluster.
+	// In such cases, gRPC calls to pxcentral-keycloak-http:80 would fail when executed from a VM or local machine using the Ginkgo CLI.
+	// The condition checks whether an env var is set.
+	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
+		if admin {
+			// adminURL: http://pxcentral-keycloak-http:80/auth/admin/realms/master
+			adminURL := fmt.Sprintf("%s/auth/admin/realms/master", pxCentralUIURL)
+			return adminURL, nil
+		} else {
+			// nonAdminURL: http://pxcentral-keycloak-http:80/auth/realms/master
+			nonAdminURL := fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
+			return nonAdminURL, nil
+		}
+	}
+	pxbNamespace, err := GetPxBackupNamespace()
+	if err != nil {
+		return "", err
+	}
+	oidcSecret, err := core.Instance().GetSecret(GetOIDCSecretName(), pxbNamespace)
+	if err != nil {
+		return "", err
+	}
+	oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpoint])
+	// Construct the fully qualified domain name (FQDN) for the Keycloak service to
+	// ensure DNS resolution within Kubernetes, especially for requests originating
+	// from different namespace
+	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, pxbNamespace)
+	newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
+	if admin {
+		split := strings.Split(newURL, "auth")
+		// adminURL: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
+		adminURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
+		return adminURL, nil
+	} else {
+		// nonAdminURL: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
+		nonAdminURL := newURL
+		return nonAdminURL, nil
+	}
+}
+
+// GetPxBackupNamespace retrieves the namespace where Px-Backup service is running
+func GetPxBackupNamespace() (string, error) {
+	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == GlobalPxBackupServiceName {
+			return svc.Namespace, nil
+		}
+	}
+	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", GlobalPxBackupServiceName)
+	return "", ProcessError(err)
+}
+
+//func (k *Keycloak) GetToken() (string, error) {
+//	values := make(url.Values)
+//	values.Set("client_id", "pxcentral")
+//	values.Set("username", k.Username)
+//	values.Set("password", k.Password)
+//	values.Set("grant_type", "password")
+//	values.Set("token-duration", "365d")
+//
+//	keycloakEndPoint, err := k.GetEndpoint(false)
+//	if err != nil {
+//		return "", ProcessError(err)
+//	}
+//	// This token endpoint is used to retrieve tokens, as detailed in: https://www.keycloak.org/docs/latest/securing_apps/#token-endpoint
+//	requestURL := fmt.Sprintf("%s/protocol/openid-connect/token", keycloakEndPoint)
+//	headers := make(http.Header)
+//	headers.Add("Content-Type", "application/x-www-form-urlencoded")
+//	httpResponse, err := ProcessHTTPRequest(ctx, POST, requestURL, strings.NewReader(values.Encode()), headers)
+//	if err != nil {
+//		return "", ProcessError(err)
+//	}
+//	body, err := ProcessHTTPResponse(httpResponse)
+//	if err != nil {
+//		return "", ProcessError(err)
+//	}
+//	token := &TokenRepresentation{}
+//	err = json.Unmarshal(body, &token)
+//	if err != nil {
+//		return "", ProcessError(err)
+//	}
+//	return token.AccessToken, nil
+//}
+
+//func (k *Keycloak) Process(req interface{}) (resp interface{}, err error) {
+//
+//	//req := &http.Request{}
+//	//req.
+//
+//	headers, err := GetCommonHTTPHeaders(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	keycloakEndPoint, err := GetKeycloakEndPoint(true)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	requestURL := keycloakEndPoint
+//	if path != "" {
+//		if strings.HasPrefix(path, "/") {
+//			requestURL += path
+//		} else {
+//			requestURL += fmt.Sprintf("/%s", path)
+//		}
+//	}
+//	httpResponse, err := ProcessHTTPRequest(ctx, method, requestURL, body, headers)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	respBody, err := ProcessHTTPResponse(httpResponse)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	return respBody, nil
+//
+//}
+
 func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body io.Reader, headers http.Header) (*http.Response, error) {
 	httpRequest, err := http.NewRequestWithContext(ctx, method.String(), url, body)
 	if err != nil {
@@ -149,6 +276,14 @@ func ProcessHTTPRequest(ctx context.Context, method HTTPMethod, url string, body
 	}
 	return httpResponse, nil
 }
+
+//func ProcessHTTPRequest(req *http.Request) (*http.Response, error) {
+//	resp, err := GlobalHTTPClient.Do(req)
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//	return resp, nil
+//}
 
 // ProcessHTTPResponse processes the given HTTP response and returns its body as a byte slice
 func ProcessHTTPResponse(response *http.Response) ([]byte, error) {
@@ -233,21 +368,6 @@ func GetCommonHTTPHeaders(ctx context.Context, username string, password string)
 	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
 	headers.Add("Content-Type", "application/json")
 	return headers, nil
-}
-
-// GetPxBackupNamespace retrieves the namespace where Px-Backup service is running
-func GetPxBackupNamespace() (string, error) {
-	allServices, err := core.Instance().ListServices("", metav1.ListOptions{})
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	for _, svc := range allServices.Items {
-		if svc.Name == GlobalPxBackupServiceName {
-			return svc.Namespace, nil
-		}
-	}
-	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", GlobalPxBackupServiceName)
-	return "", ProcessError(err)
 }
 
 // GetKeycloakEndPoint returns the Keycloak endpoint URL based on the provided admin flag
