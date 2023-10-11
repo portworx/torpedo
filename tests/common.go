@@ -11,6 +11,7 @@ import (
 	"fmt"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"go.uber.org/multierr"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -105,6 +106,7 @@ import (
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
 	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
@@ -2390,6 +2392,9 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 	} else if specObj, ok := spec.(*apiextensionsv1beta1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
@@ -2635,6 +2640,11 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			}
 		}
 		return nil
+	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
@@ -2725,6 +2735,8 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 	} else if obj, ok := specObj.(*storkapi.ResourceTransformation); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	}
 
@@ -2856,6 +2868,11 @@ func SetClusterContext(clusterConfigPath string) error {
 
 	if sshNodeDriver, ok := Inst().N.(*ssh.SSH); ok {
 		err = ssh.RefreshDriver(sshNodeDriver)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	} else if ibmNodeDriver, ok := Inst().N.(*ibm.Ibm); ok {
+		err = ssh.RefreshDriver(&ibmNodeDriver.SSH)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
@@ -6042,6 +6059,13 @@ func collectAndCopyDiagsOnWorkerNodes(issueKey string) {
 
 // CollectLogsFromPods collects logs from specified pods and stores them in a directory named after the test case
 func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namespace string, logLabel string) {
+
+	// Check to handle cloud based deployment with 0 master nodes
+	if len(node.GetMasterNodes()) == 0 {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		return
+	}
+
 	testCaseName = strings.ReplaceAll(testCaseName, " ", "")
 	podList, err := core.Instance().GetPods(namespace, podLabel)
 	if err != nil {
