@@ -220,12 +220,13 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		wg                         sync.WaitGroup
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
 		upgradeExecutionThreshold int
+		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+		disruptiveTriggerWrapper func(fn TriggerFunction) TriggerFunction
 	)
 
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			RestartVolDriver:     TriggerRestartVolDriver,
 			CloudSnapShot:        TriggerCloudSnapShot,
 			HAIncrease:           TriggerHAIncrease,
 			PoolAddDisk:          TriggerPoolAddDisk,
@@ -236,21 +237,14 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
 			AddStorageNode:       TriggerAddOCPStorageNode,
 		}
-		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
-			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-				triggerLock.Lock()
-				defer triggerLock.Unlock()
-				fn(contexts, recordChan)
-			}
-		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
-			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			RebootNode:           TriggerRebootNodes,
+			RestartVolDriver:     TriggerRestartVolDriver,
+			CrashNode:            TriggerCrashNodes,
+			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
+			NodeDecommission:     TriggerNodeDecommission,
+			AppTasksDown:         TriggerAppTasksDown,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -272,9 +266,16 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
 		}
-		upgradeExecutionThreshold = 4 // default value
+		upgradeExecutionThreshold = 1 // default value
 		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
 			upgradeExecutionThreshold = val
+		}
+		disruptiveTriggerWrapper = func(fn TriggerFunction) TriggerFunction {
+			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+				triggerLock.Lock()
+				defer triggerLock.Unlock()
+				fn(contexts, recordChan)
+			}
 		}
 	})
 
@@ -319,7 +320,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			for triggerType, triggerFunc := range disruptiveTriggerFunctions {
 				log.InfoD("Registering disruptive trigger: [%v]", triggerType)
 				wg.Add(1)
-				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
+				go testTrigger(&wg, &contexts, triggerType, disruptiveTriggerWrapper(triggerFunc), &disruptiveTriggerLock, &triggerEventsChan)
 			}
 			log.InfoD("Finished registering disruptive test triggers")
 		})
@@ -345,45 +346,35 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					for {
 						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
 							continue
 						}
-						testExecSum := 0 // total test execution count
 						minTestExecCount := math.MaxInt32
 						// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
 						for trigger := range triggerFunctions {
-							count := TestExecutionCountMap[trigger]
-							testExecSum += count
+							count := TestExecutionCounter.GetCount(trigger)
 							if count < minTestExecCount {
 								minTestExecCount = count
 							}
 						}
 						// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
 						for trigger := range disruptiveTriggerFunctions {
-							count := TestExecutionCountMap[trigger]
-							testExecSum += count
+							count := TestExecutionCounter.GetCount(trigger)
 							if count < minTestExecCount {
 								minTestExecCount = count
 							}
 						}
-						// Determining whether to trigger based on minimum execution count
-						shouldTrigger := minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold
-						// Proceeding with upgrade if testExecSum is much higher than expected
-						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*(upgradeExecutionThreshold+1) {
-							shouldTrigger = true
-							// Logging a warning as TestExecutionCountMap might not be accurate
-							log.Warnf("Triggering %s based on testExecSum %v. The tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
-						}
-						if shouldTrigger {
+						if minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold {
 							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
 							currentEndpointIndex++
 							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
 							disruptiveTriggerLock.Lock()
 							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+							log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
 							triggerFunc(&contexts, &triggerEventsChan)
 							log.Infof("Trigger Function completed for [%s]\n", triggerType)
 							disruptiveTriggerLock.Unlock()
@@ -736,8 +727,10 @@ func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 	} else if upgradeEndpoints != "" {
 		currentCount := len(strings.Split(Inst().UpgradeStorageDriverEndpointList, ","))
 		newCount := len(strings.Split(upgradeEndpoints, ","))
-		if newCount > currentCount {
+		if Inst().UpgradeStorageDriverEndpointList == "" || newCount >= currentCount {
 			Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints
+		} else {
+			log.Warnf("upgradeEndpoints reduced from [%s] to [%s], removal not supported.", Inst().UpgradeStorageDriverEndpointList, upgradeEndpoints)
 		}
 		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
 	}

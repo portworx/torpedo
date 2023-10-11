@@ -249,8 +249,40 @@ var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
-// TestExecutionCountMap holds the count of executions for each test
-var TestExecutionCountMap = make(map[string]int)
+// Counter is a thread-safe generic counter for keys of a comparable type
+type Counter[K comparable] struct {
+	sync.RWMutex
+	countMap map[K]int
+}
+
+// Increment increases the count for the specified key by 1
+func (c *Counter[K]) Increment(key K) {
+	c.Lock()
+	defer c.Unlock()
+	c.countMap[key]++
+}
+
+// GetCount retrieves the count for the specified key
+func (c *Counter[K]) GetCount(key K) int {
+	c.RLock()
+	defer c.RUnlock()
+	return c.countMap[key]
+}
+
+// String returns a string representation of the count map
+func (c *Counter[K]) String() string {
+	c.RLock()
+	defer c.RUnlock()
+	return fmt.Sprintf("%v", c.countMap)
+}
+
+// NewCounter creates a new Counter instance
+func NewCounter[K comparable]() *Counter[K] {
+	return &Counter[K]{countMap: make(map[K]int)}
+}
+
+// TestExecutionCounter holds the count of executions for each test
+var TestExecutionCounter = NewCounter[string]()
 
 // emailRecords stores events for rendering
 // email template
@@ -2714,15 +2746,15 @@ func getCreateCloudCredentialRequest(uid string) (*api.CloudCredentialCreateRequ
 	return req, nil
 }
 
-// CollectEventRecords collects eventRecords from channel
+// CollectEventRecords collects eventRecords from a channel
 // and stores in buffer for future email notifications
 func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
 		actualEvent := strings.Split(eventRecord.Event.Type, "<br>")[0]
-		TestExecutionCountMap[actualEvent] += 1
-		log.Infof("TestExecutionCountMap: %v", TestExecutionCountMap)
+		TestExecutionCounter.Increment(actualEvent)
+		log.Infof("TestExecutionCountMap: %v", TestExecutionCounter.String())
 		eventRing = eventRing.Next()
 	}
 }
