@@ -83,6 +83,8 @@ const (
 	MigrationsCountField = "migrationscount"
 	// UpgradeEndpoints is a field in the configmap that contains a comma-separated list of upgrade endpoints
 	UpgradeEndpoints = "upgradeEndpoints"
+	// BaseInterval is a field in the configmap that represents base interval in minutes
+	BaseInterval = "baseInterval"
 )
 
 const (
