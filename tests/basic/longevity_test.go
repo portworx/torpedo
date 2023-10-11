@@ -27,6 +27,9 @@ const (
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
 	podDestroyTimeout     = 5 * time.Minute
+	maximumChaosLevel     = 10
+	defaultChaosLevel     = 0
+	defaultBaseInterval   = 60 * time.Minute
 )
 
 var (
@@ -862,6 +865,17 @@ func deletePXPods(nameSpace string) error {
 		return err
 	}
 	return nil
+}
+
+func GetWaitTime(chaosLevel int, baseInterval time.Duration) time.Duration {
+	switch {
+	case chaosLevel <= 0:
+		return 0
+	case chaosLevel < maximumChaosLevel:
+		return 3 * baseInterval * time.Duration(maximumChaosLevel-chaosLevel+1)
+	default:
+		return baseInterval
+	}
 }
 
 func populateIntervals() {
@@ -1833,16 +1847,17 @@ func populateIntervals() {
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
-	var chaosLevel int
-	var ok bool
-	chaosLevel, ok = ChaosMap[triggerType]
+	chaosLevel, ok := ChaosMap[triggerType]
 	if !ok {
-		chaosLevel = Inst().ChaosLevel
-		log.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
-			triggerType, Inst().ChaosLevel)
+		chaosLevel = defaultChaosLevel
+		log.Warnf("Chaos level for trigger [%s] not found in chaos map. Setting chaos level to [%d]", triggerType, defaultChaosLevel)
 	}
-	if triggerInterval[triggerType][chaosLevel] != 0 {
-		return triggerInterval[triggerType][chaosLevel], true
+	if chaosLevel == 0 {
+		return 0, false
 	}
-	return triggerInterval[triggerType][chaosLevel], false
+	if baseInterval, ok := ChaosMap[BaseInterval]; ok {
+		return GetWaitTime(chaosLevel, time.Duration(baseInterval)*time.Minute), true
+	} else {
+		return GetWaitTime(chaosLevel, defaultBaseInterval), true
+	}
 }
