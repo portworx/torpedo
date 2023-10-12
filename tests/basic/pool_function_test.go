@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -323,24 +324,10 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
 			"Initiate pool expansion and verify from other node", nil, testrailID)
-		contexts = scheduleApps()
-	})
 
-	JustBeforeEach(func() {
-		poolIDToResize = pickPoolToResize()
-		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
-	})
-
-	JustAfterEach(func() {
-		AfterEachTest(contexts)
-	})
-
-	AfterEach(func() {
-		appsValidateAndDestroy(contexts)
-		EndTorpedoTest()
 	})
 
 	stepLog := "should get the existing pool and expand it by adding a disk and verify from other node"
@@ -533,5 +520,58 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 		})
 
 	})
+})
 
+var _ = Describe("{PoolExpandTestLimits}", func() {
+	BeforeEach(func() {
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("Initiate pool expansion (DMThin) to its limits (15 TiB) and beyond", func() {
+		StartTorpedoTest("PoolExpandTestLimits",
+			"Initiate pool expansion using add-drive to 20 TB target size", nil, testrailID)
+
+		It("Select a pool and expand it to 15 TiB (max supported capacity for DMThin) with resize-disk type. ", func() {
+			StartTorpedoTest("PoolExpandDiskResize",
+				"Validate storage pool expansion with type=resize-disk", nil, 0)
+			targetSizeInBytes = 15 * units.TiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		})
+
+		Step("Select a pool and expand it to 20 TiB with add-disk type. ", func() {
+			originalSizeInBytes = poolToResize.TotalSize
+			targetSizeInBytes = 20 * units.TiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			Expect(err).To(HaveOccurred())
+			if resizeErr == nil {
+				dash.Fatal("Pool expansion to 20 TB should result in error")
+			}
+		})
+	})
 })
