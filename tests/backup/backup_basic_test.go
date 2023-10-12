@@ -161,7 +161,7 @@ var _ = BeforeSuite(func() {
 			policy := GenerateS3BucketPolicy(sid, encryptionPolicy, globalAWSBucketName)
 			err := PutS3BucketPolicy(globalAWSBucketName, policy)
 			if err != nil {
-				log.FailOnError(err, "failed to apply bucket policy: %v")
+				log.FailOnError(err, "Failed to apply bucket policy")
 			}
 			log.Infof("Updated S3 backup policy - %s", globalAWSBucketName)
 		case drivers.ProviderAzure:
