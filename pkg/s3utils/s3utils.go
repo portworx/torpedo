@@ -46,7 +46,7 @@ type S3Client struct {
 
 // GetAWSDetailsFromEnv returns AWS details
 func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
-	s3Region string, disableSSLBool bool, sseType string, ssePolicySid string, sseEncryptionPolicy string) {
+	s3Region string, disableSSLBool bool) {
 
 	// TODO: add separate function to return cred object based on type
 	id = os.Getenv("S3_AWS_ACCESS_KEY_ID")
@@ -79,23 +79,28 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	expect(err).NotTo(haveOccurred(),
 		fmt.Sprintf("S3_DISABLE_SSL=%s is not a valid boolean value", disableSSL))
 
+	return id, secret, endpoint, s3Region, disableSSLBool
+}
+
+// GetAWSDetailsFromEnv returns AWS details
+func GetS3SSEDetailsFromEnv() (sseType string, ssePolicySid string, sseEncryptionPolicy string) {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
 	sseType = os.Getenv("S3_SSE_TYPE")
-	expect(id).NotTo(equal(""),
+	expect(sseType).NotTo(equal(""),
 		"SSE_TYPE Environment variable should not be empty")
 
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
 	ssePolicySid = os.Getenv("S3_POLICY_SID")
-	expect(id).NotTo(equal(""),
+	expect(ssePolicySid).NotTo(equal(""),
 		"S3_POLICY_SID Environment variable should not be empty")
 
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
 	sseEncryptionPolicy = os.Getenv("S3_ENCRYPTION_POLICY")
-	expect(id).NotTo(equal(""),
+	expect(sseEncryptionPolicy).NotTo(equal(""),
 		"S3_ENCRYPTION_POLICY Environment variable should not be empty")
 
-	return id, secret, endpoint, s3Region, disableSSLBool, sseType, ssePolicySid, sseEncryptionPolicy
+	return sseType, ssePolicySid, sseEncryptionPolicy
 }
 
 // GetTimeStamp date/time path
@@ -109,7 +114,7 @@ func GetTimeStamp(getPreviousFolder bool) string {
 
 // GetS3Objects lists the objects in S3
 func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]Object, error) {
-	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -146,7 +151,7 @@ func GetS3Objects(clusterID string, nodeName string, getPreviousFolder bool) ([]
 }
 
 func DeleteS3Objects(bucket string) error {
-	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool := GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),

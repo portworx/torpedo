@@ -157,7 +157,7 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			_, _, _, _, _, _, ssePolicySid, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
+			_, ssePolicySid, sseEncryptionPolicy := s3utils.GetS3SSEDetailsFromEnv()
 			if sseEncryptionPolicy != "" {
 				policy := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
 				err := UpdateS3BucketPolicy(globalAWSBucketName, policy)
@@ -204,7 +204,7 @@ var _ = AfterSuite(func() {
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	//Cleanup policy
-	_, _, _, _, _, _, _, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
+	_, _, sseEncryptionPolicy := s3utils.GetS3SSEDetailsFromEnv()
 	if sseEncryptionPolicy != "" {
 		err = RemoveS3BucketPolicy(globalAWSBucketName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
