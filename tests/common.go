@@ -9265,6 +9265,7 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 		}
 		if status {
 			selectedNode = append(selectedNode, eachNode)
+			break
 		}
 	}
 	if len(selectedNode) == 0 {
@@ -9378,26 +9379,6 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 
 	return schedVolumeSnapstatus, err
 
-}
-
-// WaitTillPoolExpanded waits till pool expansion gets completed
-func WaitTillPoolExpanded(poolUUID string, poolCurrSize uint64) error {
-	log.InfoD("Wait for Pool [%v] to be expanded ", poolUUID)
-	t := func() (interface{}, bool, error) {
-		poolSize, err := GetPoolTotalSize(poolUUID)
-		if err != nil {
-			return "", true, fmt.Errorf("Current pool size is [%v] and previous pool size [%v]", poolCurrSize, poolSize)
-		}
-		if uint64(poolSize) > poolCurrSize {
-			return "", false, nil
-		}
-		return "", true, nil
-	}
-	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 5*time.Minute)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // GetAllPoolsPresent returns list of all pools present in the cluster
