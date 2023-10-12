@@ -9338,7 +9338,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 "Resource": "arn:aws:s3:::%s/*",
 			 "Condition": {
 				"StringNotEquals": {
-				   "%s"="%s"
+				   "%s":"%s"
 				}
 			 }
 		  }
