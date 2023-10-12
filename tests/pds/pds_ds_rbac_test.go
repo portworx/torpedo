@@ -45,6 +45,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 			nsID2                  []string
 			serviceIdentityID      string
 			pdsRestoreNsName       string
+			//resDepId               string
 		)
 
 		Step("Deploy Data Services", func() {
@@ -55,6 +56,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				nsRoles = nil
 				nsID2, nsID2, iamRolesToBeCleaned, siToBeCleaned = nil, nil, nil, nil
 				deps, depList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+				resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
@@ -165,7 +167,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 					log.InfoD("Starting to update the IAM Roles for ns2")
 					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityID, nsRoles)
 					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
-
 				})
 
 				Step("Perform restore again for the backup jobs to ns2 with admin role", func() {
@@ -203,23 +204,26 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 				Step("Scale up the restored deployments on ns2", func() {
 					log.InfoD("Starting to scale up the restore deployment")
-					for ds, resDep := range resDeployments {
+					for rds, resDep := range resDeployments {
 						customParams.SetParamsForServiceIdentityTest(params, false)
-						log.InfoD("Scaling up DataService %v ", &resDep.Name)
-						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+						log.InfoD("Scaling up DataService %s ", *resDep.Name)
+						dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, rds.Name)
 						log.FailOnError(err, "Error while getting app configuration template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+						dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, rds.Name)
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
 						components.ServiceIdentity.GenerateServiceTokenAndSetAuthContext(actorId)
 						customParams.SetParamsForServiceIdentityTest(params, true)
 
-						updatedDeployment, err := dsTest.UpdateDataServices(resDep.GetId(),
+						log.InfoD("Update deploymnets params are- resDepId- %v, dataServiceDefaultAppConfigID- %v ,resDep.GetImageId()- %v ,int32(3)- %v ,dataServiceDefaultResourceTemplateID- %v", *resDep.Id,
 							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
+							int32(3), dataServiceDefaultResourceTemplateID)
+						updatedDeployment, err := dsTest.UpdateDataServices(*resDep.Id,
+							dataServiceDefaultAppConfigID, resDep.GetImageId(),
+							int32(3), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
@@ -295,6 +299,8 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				nsRolesSrc, nsRolesDesti = nil, nil
 				nsID2, nsID2, iamRolesToBeCleanedinSrc, iamRolesToBeCleanedinDest, siToBeCleanedinDest, siToBeCleanedinSrc = nil, nil, nil, nil, nil, nil
 				deps, depList, deploymentsToBeCleaned, restoredDeploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+				resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
+				deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
@@ -626,6 +632,8 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 				nsAdminRoles, nsReaderRoles = nil, nil
 				nsID2, nsID2, iamRolesToBeCleaned, siToBeCleaned, resDepNamespaceID = nil, nil, nil, nil, nil
 				deps, depList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+				resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
+				deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
 				if !supported {
