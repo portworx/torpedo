@@ -158,13 +158,14 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
 			_, _, _, _, _, _, ssePolicySid, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
+			log.Infof(sseEncryptionPolicy)
 			if sseEncryptionPolicy != "" {
 				policy := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
 				err := PutS3BucketPolicy(globalAWSBucketName, policy)
 				if err != nil {
 					log.FailOnError(err, "Failed to apply bucket policy")
 				}
-				log.Infof("Updated S3 backup policy - %s", globalAWSBucketName)
+				log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
 				time.Sleep(60 * time.Second)
 			}
 		case drivers.ProviderAzure:
