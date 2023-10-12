@@ -165,6 +165,7 @@ var _ = BeforeSuite(func() {
 					log.FailOnError(err, "Failed to apply bucket policy")
 				}
 				log.Infof("Updated S3 backup policy - %s", globalAWSBucketName)
+				time.Sleep(60 * time.Second)
 			}
 		case drivers.ProviderAzure:
 			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
