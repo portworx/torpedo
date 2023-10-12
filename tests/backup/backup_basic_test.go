@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
 	"os"
 	"strings"
@@ -156,13 +157,11 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			sid := "DenyNonAES256Uploads"
-			effect := "Deny"
-			encryptionPolicy := "s3:x-amz-server-side-encryption=AES256"
-			policy := GenerateS3BucketPolicy(sid, effect, encryptionPolicy, globalAWSBucketName)
+			_, _, _, _, _, sid, encryptionPolicy, _ := s3utils.GetAWSDetailsFromEnv()
+			policy := GenerateS3BucketPolicy(sid, encryptionPolicy, globalAWSBucketName)
 			err := PutS3BucketPolicy(globalAWSBucketName, policy)
 			if err != nil {
-				log.Fatalf("failed to apply bucket policy: %v", err)
+				log.FailOnError(err, "failed to apply bucket policy: %v")
 			}
 			log.Infof("Updated S3 backup policy - %s", globalAWSBucketName)
 		case drivers.ProviderAzure:
