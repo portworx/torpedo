@@ -81,20 +81,17 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
 	sseType = os.Getenv("S3_SSE_TYPE")
-	fmt.Printf("")
 	expect(id).NotTo(equal(""),
 		"SSE_TYPE Environment variable should not be empty")
 
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
 	ssePolicySid = os.Getenv("S3_POLICY_SID")
-	fmt.Printf("")
 	expect(id).NotTo(equal(""),
 		"S3_POLICY_SID Environment variable should not be empty")
 
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
 	sseEncryptionPolicy = os.Getenv("S3_ENCRYPTION_POLICY")
-	fmt.Printf("")
 	expect(id).NotTo(equal(""),
 		"S3_ENCRYPTION_POLICY Environment variable should not be empty")
 
