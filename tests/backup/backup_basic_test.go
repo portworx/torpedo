@@ -157,8 +157,8 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			_, _, _, _, _, sid, encryptionPolicy, _ := s3utils.GetAWSDetailsFromEnv()
-			policy := GenerateS3BucketPolicy(sid, encryptionPolicy, globalAWSBucketName)
+			_, _, _, _, _, _, ssePolicySid, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
+			policy := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
 			err := PutS3BucketPolicy(globalAWSBucketName, policy)
 			if err != nil {
 				log.FailOnError(err, "Failed to apply bucket policy")
