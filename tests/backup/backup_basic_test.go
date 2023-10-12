@@ -158,7 +158,6 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
 			_, _, _, _, _, _, ssePolicySid, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
-			log.Infof(sseEncryptionPolicy)
 			if sseEncryptionPolicy != "" {
 				policy := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
 				err := PutS3BucketPolicy(globalAWSBucketName, policy)
@@ -166,7 +165,6 @@ var _ = BeforeSuite(func() {
 					log.FailOnError(err, "Failed to apply bucket policy")
 				}
 				log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
-				time.Sleep(60 * time.Second)
 			}
 		case drivers.ProviderAzure:
 			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
@@ -206,8 +204,11 @@ var _ = AfterSuite(func() {
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	//Cleanup policy
-	err = RemoveS3BucketPolicy(globalAWSBucketName)
-	dash.VerifySafely(err, nil, fmt.Sprintf("Fail to remove S3 policy"))
+	_, _, _, _, _, _, _, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
+	if sseEncryptionPolicy != "" {
+		err = RemoveS3BucketPolicy(globalAWSBucketName)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
+	}
 
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
@@ -370,9 +371,3 @@ var _ = AfterSuite(func() {
 		}
 	}
 })
-
-func TestMain(m *testing.M) {
-	// call flag.Parse() here if TestMain uses flags
-	ParseFlags()
-	os.Exit(m.Run())
-}
