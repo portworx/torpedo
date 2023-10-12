@@ -5398,7 +5398,7 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 	return err
 }
 
-// PutBucketPolicy applies the given policy to the given bucket.
+// UpdateS3BucketPolicy applies the given policy to the given bucket.
 func UpdateS3BucketPolicy(bucketName string, policy string) error {
 
 	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
@@ -9426,6 +9426,7 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 	return nil
 }
 
+// GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
 func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) string {
 
 	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
