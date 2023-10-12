@@ -9323,7 +9323,7 @@ func GetGkeSecret() (string, error) {
 
 func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) string {
 
-	encryptionPolicyValues := strings.Split(encryptionPolicy, ",")
+	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
 	policy := `{
 	   "Version": "2012-10-17",
 	   "Statement": [
