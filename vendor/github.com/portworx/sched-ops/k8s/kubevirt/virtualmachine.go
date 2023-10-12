@@ -67,7 +67,6 @@ func (c *Client) DeleteVirtualMachine(name, namespace string) error {
 // ValidateVirtualMachineRunning check if VirtualMachine is running, if not
 // start VirtualMachine and wait for it get started.
 func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, retryInterval time.Duration) error {
-	fmt.Printf("name - [%s] in namespace - [%s]", name, namespace)
 	if err := c.initClient(); err != nil {
 		return err
 	}
@@ -75,7 +74,7 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 	if err != nil {
 		return fmt.Errorf("failed to get Virtual Machine")
 	}
-	fmt.Printf("VM spec - %v", &vm.Spec)
+	
 	// Start the VirtualMachine if its not Started yet
 	if !*vm.Spec.Running {
 		if err = instance.StartVirtualMachine(vm); err != nil {
