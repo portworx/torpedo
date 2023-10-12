@@ -28,6 +28,14 @@ type Object struct {
 	LastModified time.Time
 }
 
+type S3SSEEnv string
+
+const (
+	sseTypeEnv             S3SSEEnv = "S3_SSE_TYPE"
+	ssePolicySidEnv                 = "S3_POLICY_SID"
+	sseEncryptionPolicyEnv          = "S3_ENCRYPTION_POLICY"
+)
+
 // S3Client client information
 type S3Client struct {
 	mu               *sync.Mutex
@@ -83,22 +91,26 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 }
 
 // GetAWSDetailsFromEnv returns AWS details
-func GetS3SSEDetailsFromEnv() (sseType string, ssePolicySid string, sseEncryptionPolicy string) {
+func GetS3SSEDetailsFromEnv(sseTypeEnv, ssePolicySidEnv, sseEncryptionPolicyEnv S3SSEEnv) (sseType, ssePolicySid, sseEncryptionPolicy string) {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
-	sseType = os.Getenv("S3_SSE_TYPE")
-	expect(sseType).NotTo(equal(""),
-		"SSE_TYPE Environment variable should not be empty")
+	//sseType = os.Getenv("S3_SSE_TYPE")
+	sseType, present := os.LookupEnv(string(sseTypeEnv))
+	if !present {
+		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
+	}
 
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
-	ssePolicySid = os.Getenv("S3_POLICY_SID")
-	expect(ssePolicySid).NotTo(equal(""),
-		"S3_POLICY_SID Environment variable should not be empty")
+	ssePolicySid, present = os.LookupEnv(string(ssePolicySidEnv))
+	if !present {
+		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
+	}
 
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
-	sseEncryptionPolicy = os.Getenv("S3_ENCRYPTION_POLICY")
-	expect(sseEncryptionPolicy).NotTo(equal(""),
-		"S3_ENCRYPTION_POLICY Environment variable should not be empty")
+	sseEncryptionPolicy, present = os.LookupEnv(string(sseEncryptionPolicyEnv))
+	if !present {
+		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY Environment variable should not be empty"), "Error occurred when fetching env")
+	}
 
 	return sseType, ssePolicySid, sseEncryptionPolicy
 }
