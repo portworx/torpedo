@@ -4237,7 +4237,7 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
-	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	_, _, endpoint, region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4277,7 +4277,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
-	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	_, _, endpoint, region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4832,7 +4832,7 @@ func SetScheduledBackupInterval(interval time.Duration, triggerType string) {
 
 // DeleteS3Bucket deletes bucket in S3
 func DeleteS3Bucket(bucketName string) {
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -5314,7 +5314,7 @@ func IsNFSSubPathEmpty(subPath string) (bool, error) {
 
 // IsS3BucketEmpty returns true if bucket empty else false
 func IsS3BucketEmpty(bucketName string) (bool, error) {
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -5345,7 +5345,7 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 
 // CreateS3Bucket creates bucket in S3
 func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objectLockMode string) error {
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
@@ -5396,6 +5396,62 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		}
 	}
 	return err
+}
+
+// PutBucketPolicy applies the given policy to the given bucket.
+func PutS3BucketPolicy(bucketName string, policy string) error {
+
+	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+	_, err = S3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+		Policy: aws.String(policy),
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to update bucket policy with Policy [%v]. Error: [%v]", policy, err)
+	}
+	return nil
+}
+
+// RemoveS3BucketPolicy removes the given policy from the given bucket.
+func RemoveS3BucketPolicy(bucketName string) error {
+	// Create a new S3 client.
+	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	// Create a new DeleteBucketPolicyInput object.
+	input := &s3.DeleteBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	// Delete the bucket policy.
+	_, err = S3Client.DeleteBucketPolicy(input)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateAzureBucket creates bucket in Azure
@@ -9368,4 +9424,31 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
 	}
 	return nil
+}
+
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) string {
+
+	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
+	policy := `{
+	   "Version": "2012-10-17",
+	   "Statement": [
+		  {
+			 "Sid": "%s",
+			 "Effect": "Deny",
+			 "Principal": "*",
+			 "Action": ["s3:PutObject"],
+			 "Resource": "arn:aws:s3:::%s/*",
+			 "Condition": {
+				"StringNotEquals": {
+				   "%s":"%s"
+				}
+			 }
+		  }
+	   ]
+	}`
+
+	// Replace the placeholders in the policy with the values passed to the function.
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
+
+	return policy
 }
