@@ -74,7 +74,7 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 	if err != nil {
 		return fmt.Errorf("failed to get Virtual Machine")
 	}
-	
+
 	// Start the VirtualMachine if its not Started yet
 	if !*vm.Spec.Running {
 		if err = instance.StartVirtualMachine(vm); err != nil {
