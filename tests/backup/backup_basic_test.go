@@ -160,7 +160,7 @@ var _ = BeforeSuite(func() {
 			_, _, _, _, _, _, ssePolicySid, sseEncryptionPolicy := s3utils.GetAWSDetailsFromEnv()
 			if sseEncryptionPolicy != "" {
 				policy := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
-				err := PutS3BucketPolicy(globalAWSBucketName, policy)
+				err := UpdateS3BucketPolicy(globalAWSBucketName, policy)
 				if err != nil {
 					log.FailOnError(err, "Failed to apply bucket policy")
 				}

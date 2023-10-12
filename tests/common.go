@@ -5399,7 +5399,7 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 }
 
 // PutBucketPolicy applies the given policy to the given bucket.
-func PutS3BucketPolicy(bucketName string, policy string) error {
+func UpdateS3BucketPolicy(bucketName string, policy string) error {
 
 	id, secret, endpoint, s3Region, disableSSLBool, _, _, _ := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
@@ -5411,7 +5411,7 @@ func PutS3BucketPolicy(bucketName string, policy string) error {
 	},
 	)
 	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+		fmt.Sprintf("Failed to get S3 session to update bucket policy. Error: [%v]", err))
 
 	S3Client := s3.New(sess)
 	_, err = S3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
@@ -5437,7 +5437,7 @@ func RemoveS3BucketPolicy(bucketName string) error {
 	},
 	)
 	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+		fmt.Sprintf("Failed to get S3 session to remove S3 bucket policy. Error: [%v]", err))
 
 	S3Client := s3.New(sess)
 
