@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"regexp"
 	"runtime"
+	"strings"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"golang.org/x/sync/errgroup"
@@ -38,7 +39,6 @@ import (
 	"path"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -9323,6 +9323,7 @@ func GetGkeSecret() (string, error) {
 
 func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) string {
 
+	encryptionPolicyValues := strings.Split(encryptionPolicy, ",")
 	policy := `{
 	   "Version": "2012-10-17",
 	   "Statement": [
@@ -9334,7 +9335,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 "Resource": "arn:aws:s3:::%s/*",
 			 "Condition": {
 				"StringNotEquals": {
-				   "%s"
+				   "%s"="%s"
 				}
 			 }
 		  }
@@ -9342,7 +9343,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 	}`
 
 	// Replace the placeholders in the policy with the values passed to the function.
-	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicy)
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
 
 	return policy
 }
