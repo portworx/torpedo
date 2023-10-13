@@ -32,15 +32,15 @@ type Object struct {
 type SSE_TYPE string
 
 const (
-	SSE_S3  SSE_TYPE = "SSE-S3"
-	SSE_KMS SSE_TYPE = "SSE-KMS"
-	SSE_C   SSE_TYPE = "SSE-C"
+	sseS3  SSE_TYPE = "SSE-S3"
+	sseKms SSE_TYPE = "SSE-KMS"
+	sseC   SSE_TYPE = "SSE-C"
 )
 
 type SSE_ENCRYPTION_POLICY string
 
 const (
-	AES256 SSE_ENCRYPTION_POLICY = "s3:x-amz-server-side-encryption=AES256"
+	aes256 SSE_ENCRYPTION_POLICY = "s3:x-amz-server-side-encryption=AES256"
 )
 
 type S3SSEENV struct {
@@ -112,11 +112,11 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 
 	var expectedSSEType SSE_TYPE
 	switch strings.ToUpper(sseType) {
-	case string(SSE_S3):
+	case string(sseS3):
 		expectedSSEType = "SSE-S3"
-	case string(SSE_KMS):
+	case string(sseKms):
 		expectedSSEType = "SSE-KMS"
-	case string(SSE_C):
+	case string(sseC):
 		expectedSSEType = "SSE-C"
 	default:
 		log.FailOnError(fmt.Errorf("SSE_TYPE type invalid %v", sseType), "Expected SSE_TYPE not found")
@@ -137,10 +137,10 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 
 	var s3EncryptionPolicy SSE_ENCRYPTION_POLICY
 	switch sseEncryptionPolicy {
-	case string(AES256):
-		s3EncryptionPolicy = AES256
+	case string(aes256):
+		s3EncryptionPolicy = aes256
 	default:
-		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(AES256)), "Expected S3_ENCRYPTION_POLICY not found")
+		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(aes256)), "Expected S3_ENCRYPTION_POLICY not found")
 	}
 
 	ssePolicyEnv := &S3SSEENV{}
