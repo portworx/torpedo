@@ -99,15 +99,9 @@ type Keycloak struct {
 	AdminPassword string
 }
 
-func (k *Keycloak) GetCommonHeaders(token string) http.Header {
-	headers := make(http.Header)
-	headers.Add("Content-Type", "application/json")
-	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
-	return headers
-}
-
 func (k *Keycloak) GetEndpoint(admin bool, route string) (string, error) {
 	baseURL := ""
+	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
 	// The condition checks whether pxCentralUIURL is set. This condition is added to
 	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
@@ -122,9 +116,9 @@ func (k *Keycloak) GetEndpoint(admin bool, route string) (string, error) {
 			baseURL = fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
 		}
 	}
-	oidcSecret, err := core.Instance().GetSecret(GetOIDCSecretName(), k.Namespace)
+	oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.Namespace)
 	if err != nil {
-		return "", err
+		return "", ProcessError(err, oidcSecretName)
 	}
 	oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpoint])
 	// Construct the fully qualified domain name (FQDN) for the Keycloak service to
@@ -151,8 +145,15 @@ func (k *Keycloak) GetEndpoint(admin bool, route string) (string, error) {
 	return baseURL, nil
 }
 
-func (k *Keycloak) MakeRequest(ctx context.Context, method string, route string, body io.Reader, header http.Header) (*http.Request, error) {
-	keycloakEndpoint, err := k.GetEndpoint(true)
+func (k *Keycloak) GetCommonHeaders(token string) http.Header {
+	headers := make(http.Header)
+	headers.Add("Content-Type", "application/json")
+	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
+	return headers
+}
+
+func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body io.Reader, header http.Header) (*http.Request, error) {
+	keycloakEndpoint, err := k.GetEndpoint(admin, route)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
