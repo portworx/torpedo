@@ -121,14 +121,12 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 	default:
 		log.FailOnError(fmt.Errorf("SSE_TYPE type invalid %v", sseTypeEnv), "Expected SSE_TYPE not found")
 	}
-
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
 	ssePolicySidEnv, present := os.LookupEnv("S3_POLICY_SID")
 	if !present {
 		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
 	}
-
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
 	sseEncryptionPolicy, present := os.LookupEnv("S3_ENCRYPTION_POLICY")
 	if !present {
@@ -142,12 +140,11 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 	default:
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(aes256)), "Expected S3_ENCRYPTION_POLICY not found")
 	}
-
 	ssePolicyEnv := &s3SseEnv{}
 	ssePolicyEnv.SseType = expectedSseType
 	ssePolicyEnv.SsePolicySid = ssePolicySidEnv
 	ssePolicyEnv.SseEncryptionPolicy = s3EncryptionPolicy
-
+	
 	return ssePolicyEnv
 }
 
@@ -211,16 +208,12 @@ func DeleteS3Objects(bucket string) error {
 	if err != nil {
 		return err
 	}
-
 	S3Client := s3.New(sess)
-
 	// List all objects in the bucket
 	listInput := &s3.ListObjectsInput{
 		Bucket: aws.String(bucket),
 	}
-
 	var objectsToDelete []*s3.ObjectIdentifier
-
 	log.Infof("List of objects found in S3 bucket - [%s]", bucket)
 	err = S3Client.ListObjectsPages(listInput, func(page *s3.ListObjectsOutput, lastPage bool) bool {
 		for _, obj := range page.Contents {
@@ -234,7 +227,6 @@ func DeleteS3Objects(bucket string) error {
 	if err != nil {
 		return err
 	}
-
 	// Prepare the input parameters for the delete operation
 	deleteInput := &s3.DeleteObjectsInput{
 		Bucket: aws.String(bucket),
