@@ -5381,7 +5381,7 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
 
 	if retainCount > 0 && objectLock == true {
-		// Update ObjectLockConfigureation to bucket
+		// Update ObjectLockConfiguration to bucket
 		enabled := "Enabled"
 		_, err = S3Client.PutObjectLockConfiguration(&s3.PutObjectLockConfigurationInput{
 			Bucket: aws.String(bucketName),
@@ -5392,7 +5392,7 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 						Days: aws.Int64(retainCount),
 						Mode: aws.String(objectLockMode)}}}})
 		if err != nil {
-			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+			err = fmt.Errorf("failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
 		}
 	}
 	return err
@@ -5401,24 +5401,24 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 // UpdateS3BucketPolicy applies the given policy to the given bucket.
 func UpdateS3BucketPolicy(bucketName string, policy string) error {
 
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
 		Region:           aws.String(s3Region),
-		DisableSSL:       aws.Bool(disableSSLBool),
+		DisableSSL:       aws.Bool(disableSslBool),
 		S3ForcePathStyle: aws.Bool(true),
 	},
 	)
 	log.FailOnError(err, "Failed to get S3 session to update bucket policy")
 
-	S3Client := s3.New(sess)
-	_, err = S3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
+	s3Client := s3.New(sess)
+	_, err = s3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
 		Bucket: aws.String(bucketName),
 		Policy: aws.String(policy),
 	})
 	if err != nil {
-		return fmt.Errorf("Failed to update bucket policy with Policy [%v]. Error: [%v]", policy, err)
+		return fmt.Errorf("failed to update bucket policy with Policy [%v]. Error: [%v]", policy, err)
 	}
 	return nil
 }
@@ -5426,18 +5426,18 @@ func UpdateS3BucketPolicy(bucketName string, policy string) error {
 // RemoveS3BucketPolicy removes the given policy from the given bucket.
 func RemoveS3BucketPolicy(bucketName string) error {
 	// Create a new S3 client.
-	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
 	sess, err := session.NewSession(&aws.Config{
 		Endpoint:         aws.String(endpoint),
 		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
 		Region:           aws.String(s3Region),
-		DisableSSL:       aws.Bool(disableSSLBool),
+		DisableSSL:       aws.Bool(disableSslBool),
 		S3ForcePathStyle: aws.Bool(true),
 	},
 	)
 	log.FailOnError(err, "Failed to get S3 session to remove S3 bucket policy")
 
-	S3Client := s3.New(sess)
+	s3Client := s3.New(sess)
 
 	// Create a new DeleteBucketPolicyInput object.
 	input := &s3.DeleteBucketPolicyInput{
@@ -5445,7 +5445,7 @@ func RemoveS3BucketPolicy(bucketName string) error {
 	}
 
 	// Delete the bucket policy.
-	_, err = S3Client.DeleteBucketPolicy(input)
+	_, err = s3Client.DeleteBucketPolicy(input)
 	if err != nil {
 		return err
 	}
