@@ -43,7 +43,7 @@ const (
 	aes256 sseEncryptionPolicy = "s3:x-amz-server-side-encryption=AES256"
 )
 
-type s3SseEnv struct {
+type S3SseEnv struct {
 	SseType             sseType
 	SsePolicySid        string
 	SseEncryptionPolicy sseEncryptionPolicy
@@ -103,7 +103,7 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func GetS3SSEDetailsFromEnv() *s3SseEnv {
+func GetS3SSEDetailsFromEnv() *S3SseEnv {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
 	sseTypeEnv, present := os.LookupEnv("S3_SSE_TYPE")
 	if !present {
@@ -140,7 +140,7 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 	default:
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(aes256)), "Expected S3_ENCRYPTION_POLICY not found")
 	}
-	ssePolicyEnv := &s3SseEnv{}
+	ssePolicyEnv := &S3SseEnv{}
 	ssePolicyEnv.SseType = expectedSseType
 	ssePolicyEnv.SsePolicySid = ssePolicySidEnv
 	ssePolicyEnv.SseEncryptionPolicy = s3EncryptionPolicy
