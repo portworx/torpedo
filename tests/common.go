@@ -5410,8 +5410,9 @@ func UpdateS3BucketPolicy(bucketName string, policy string) error {
 		S3ForcePathStyle: aws.Bool(true),
 	},
 	)
-	log.FailOnError(err, "Failed to get S3 session to update bucket policy")
-
+	if err != nil {
+		return fmt.Errorf("failed to get S3 session to update bucket policy : [%v]", err)
+	}
 	s3Client := s3.New(sess)
 	_, err = s3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
 		Bucket: aws.String(bucketName),
@@ -5435,7 +5436,9 @@ func RemoveS3BucketPolicy(bucketName string) error {
 		S3ForcePathStyle: aws.Bool(true),
 	},
 	)
-	log.FailOnError(err, "Failed to get S3 session to remove S3 bucket policy")
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove S3 bucket policy : [%v]", err)
+	}
 
 	s3Client := s3.New(sess)
 
