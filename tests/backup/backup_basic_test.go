@@ -158,7 +158,6 @@ var _ = BeforeSuite(func() {
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
 			sseDetails := s3utils.GetS3SSEDetailsFromEnv()
-
 			if string(sseDetails.SseEncryptionPolicy) != "" {
 				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
 				if err != nil {
