@@ -9,12 +9,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
 	"math/rand"
 	"net/http"
 	"regexp"
 	"runtime"
+
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"golang.org/x/sync/errgroup"
@@ -107,6 +108,7 @@ import (
 	// import ibm driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
+
 	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
 
@@ -9174,6 +9176,7 @@ type ProvisionStatus struct {
 	NodeStatus    string
 	PoolID        string
 	PoolUUID      string
+	PoolStatus    string
 	IoPriority    string
 	TotalSize     float64
 	AvailableSize float64
@@ -9198,45 +9201,36 @@ func convertToGiB(size string) float64 {
 	return -1
 }
 
-func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
+func GetClusterProvisionStatusOnSpecificNode(n node.Node) ([]ProvisionStatus, error) {
 	clusterProvision := []ProvisionStatus{}
-	pattern := `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
 	cmd := "pxctl cluster provision-status list"
-
-	// Using Node which is up and running
-	var selectedNode []node.Node
-	for _, eachNode := range node.GetNodes() {
-		status, err := IsPxRunningOnNode(&eachNode)
-		if err != nil {
-			return nil, err
-		}
-		if status {
-			selectedNode = append(selectedNode, eachNode)
-			break
-		}
-	}
-	if len(selectedNode) == 0 {
-		return nil, fmt.Errorf("No Valid node exists")
-	}
-	output, err := runCmdGetOutput(cmd, selectedNode[0])
+	output, err := runCmdGetOutput(cmd, n)
 	if err != nil {
+		log.Infof("running command [%v] failed on Node [%v]", cmd, n.Name)
 		return nil, err
+	}
+	log.InfoD("Output of CMD Output [%v]", output)
+
+	lines := strings.Split(output, "\n")
+	pattern := `(\S+)\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	if !strings.Contains(lines[0], "HOSTNAME") {
+		// This is needed as in 2.x.y output don't print HOSTNAME
+		pattern = `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s(\S+)\s\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
 	}
 	// Compile the regex pattern
 	r := regexp.MustCompile(pattern)
 
-	lines := strings.Split(output, "\n")
 	for _, eachLine := range lines {
 		var provisionStatus ProvisionStatus
-		if !strings.Contains(eachLine, "NODE ID") {
+		if !strings.Contains(eachLine, "NODE") {
 			matches := r.FindStringSubmatch(eachLine)
 			if len(matches) > 0 {
 				provisionStatus.NodeUUID = matches[1]
 				provisionStatus.IpAddress = matches[2]
-				provisionStatus.HostName = matches[3]
-				provisionStatus.NodeStatus = matches[4]
-				provisionStatus.PoolID = matches[5]
-				provisionStatus.PoolUUID = matches[6]
+				provisionStatus.NodeStatus = matches[3]
+				provisionStatus.PoolID = matches[4]
+				provisionStatus.PoolUUID = matches[5]
+				provisionStatus.PoolStatus = matches[6]
 				provisionStatus.IoPriority = matches[7]
 				provisionStatus.TotalSize = convertToGiB(matches[8])
 				provisionStatus.AvailableSize = convertToGiB(matches[9])
@@ -9245,6 +9239,39 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 			}
 		}
 	}
+	log.Infof("Cluster provision status [%v]", clusterProvision)
+	return clusterProvision, nil
+}
+
+func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
+	// Using Node which is up and running
+	var selectedNode []node.Node
+	for _, eachNode := range node.GetNodes() {
+		if !node.IsMasterNode(eachNode) {
+			status, err := IsPxRunningOnNode(&eachNode)
+			if err != nil {
+				log.InfoD("Px is not running on the Node.. searching for other node")
+				continue
+			}
+			if status {
+				selectedNode = append(selectedNode, eachNode)
+			}
+		}
+	}
+	if len(selectedNode) == 0 {
+		return nil, fmt.Errorf("No Valid node exists")
+	}
+
+	// Select Random Volumes for pool Expand
+	randomIndex := rand.Intn(len(selectedNode))
+	randomNode := selectedNode[randomIndex]
+
+	clusterProvision, err := GetClusterProvisionStatusOnSpecificNode(randomNode)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Cluster provision status [%v]", clusterProvision)
 	return clusterProvision, nil
 }
 
@@ -9286,6 +9313,18 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 		if eachProvision.NodeUUID == nodeUuid {
 			poolDetails = append(poolDetails, eachProvision.PoolUUID)
 		}
+	}
+	return poolDetails, nil
+}
+
+func GetAllPoolsPresent() ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		poolDetails = append(poolDetails, eachProvision.PoolUUID)
 	}
 	return poolDetails, nil
 }

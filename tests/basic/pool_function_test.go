@@ -2,6 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"regexp"
+
+	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
@@ -185,4 +188,150 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		})
 	})
+})
+
+var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandResizeInvalidPoolID",
+			"Initiate pool expansion using invalid Id", nil, testrailID)
+	})
+
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	stepLog := "Resize with invalid pool ID"
+	It(stepLog, func() {
+		// pick node to resize
+		nodes := node.GetStorageNodes()
+		nodetoPick := nodes[0]
+
+		// invalidPoolUUID Generation
+		id := uuid.New()
+		invalidPoolUUID := id.String()
+
+		// Resize Pool with Invalid Pool ID
+		stepLog = fmt.Sprintf("Expanding pool on node [%s] using auto", nodetoPick.Name)
+		Step(stepLog, func() {
+			resizeErr := Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, 100, true)
+			dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool UUID")
+			// Verify error on pool expansion failure
+			var errMatch error
+			re := regexp.MustCompile(fmt.Sprintf(".*failed to find storage pool with UID.*%s.*",
+				invalidPoolUUID))
+			if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
+				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
+			}
+			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+		})
+	})
+
+})
+
+var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
+			"Initiate pool expansion and verify from other node", nil, testrailID)
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToBeResized = getStoragePool(poolIDToResize)
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	stepLog := "should get the existing pool and expand it by adding a disk and verify from other node"
+	It(stepLog, func() {
+
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		fmt.Printf("poolIDToResize=%v, storageNode=%v \n", poolIDToResize, storageNode)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+
+		// get original total size
+		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(*storageNode)
+		var orignalTotalSize float64
+		for _, pstatus := range provisionStatus {
+			fmt.Printf("pstatus.NodeUUID = %v, storageNode.Id = %v \n", pstatus.NodeUUID, storageNode.Id)
+			if pstatus.NodeUUID == storageNode.Id {
+				orignalTotalSize += pstatus.TotalSize
+			}
+		}
+
+		fmt.Println("***$ orignalTotalSize = ", orignalTotalSize)
+
+		originalSizeInBytes = poolToBeResized.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+
+		Step("Ensure pool has been expanded to the expected size", func() {
+			err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		})
+
+		stNodes, err := GetStorageNodes()
+		log.FailOnError(err, "Unable to get the storage nodes")
+		var verifyNode node.Node
+		for _, node := range stNodes {
+			status, _ := IsPxRunningOnNode(&node)
+			if node.Id != storageNode.Id && status {
+				verifyNode = node
+			}
+		}
+
+		// get final total size
+		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(verifyNode)
+		var finalTotalSize float64
+		for _, pstatus := range provisionStatus {
+			if pstatus.NodeUUID == storageNode.Id {
+				finalTotalSize += pstatus.TotalSize
+			}
+		}
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, uint64(orignalTotalSize))
+		dash.VerifyFatal(finalTotalSize > orignalTotalSize, true, "Pool expansion failed due to some error")
+
+	})
+
+})
+
+var _ = Describe("{PoolExpandDiskResizeResizeLimit}", func() {
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandDiskResizeResizeLimit",
+			"Initiate pool expansion using invalid expansion size", nil, testrailID)
+	})
+
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	stepLog := "select a pool and expand it by 30000000 GiB with resize-disk type"
+	It(stepLog, func() {
+
+		// pick pool to resize
+		pools, err := GetAllPoolsPresent()
+		log.FailOnError(err, "Unable to get the storage Pools")
+		pooltoPick := pools[0]
+
+		resizeErr := Inst().V.ExpandPool(pooltoPick, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 30000000, true)
+		dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool expansion size")
+
+	})
+
 })
