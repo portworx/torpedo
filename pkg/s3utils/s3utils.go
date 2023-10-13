@@ -43,10 +43,10 @@ const (
 	aes256 SSE_ENCRYPTION_POLICY = "s3:x-amz-server-side-encryption=AES256"
 )
 
-type S3SSEENV struct {
-	SSETYPE             SSE_TYPE
-	SSEPOLICYSID        string
-	SSEENCRYPTIONPOLICY SSE_ENCRYPTION_POLICY
+type s3SseEnv struct {
+	sseType             SSE_TYPE
+	ssPolicySid         string
+	ssEEncryptionPolicy SSE_ENCRYPTION_POLICY
 }
 
 // S3Client client information
@@ -103,28 +103,28 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func GetS3SSEDetailsFromEnv() *S3SSEENV {
+func GetS3SSEDetailsFromEnv() *s3SseEnv {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
-	sseType, present := os.LookupEnv("S3_SSE_TYPE")
+	sseTypeEnv, present := os.LookupEnv("S3_SSE_TYPE")
 	if !present {
 		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
-	var expectedSSEType SSE_TYPE
-	switch strings.ToUpper(sseType) {
+	var expectedSseType SSE_TYPE
+	switch strings.ToUpper(sseTypeEnv) {
 	case string(sseS3):
-		expectedSSEType = "SSE-S3"
+		expectedSseType = "SSE-S3"
 	case string(sseKms):
-		expectedSSEType = "SSE-KMS"
+		expectedSseType = "SSE-KMS"
 	case string(sseC):
-		expectedSSEType = "SSE-C"
+		expectedSseType = "SSE-C"
 	default:
-		log.FailOnError(fmt.Errorf("SSE_TYPE type invalid %v", sseType), "Expected SSE_TYPE not found")
+		log.FailOnError(fmt.Errorf("SSE_TYPE type invalid %v", sseTypeEnv), "Expected SSE_TYPE not found")
 	}
 
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
-	ssePolicySid, present := os.LookupEnv("S3_SSE_TYPE")
+	ssePolicySidEnv, present := os.LookupEnv("S3_POLICY_SID")
 	if !present {
 		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
 	}
@@ -143,10 +143,10 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(aes256)), "Expected S3_ENCRYPTION_POLICY not found")
 	}
 
-	ssePolicyEnv := &S3SSEENV{}
-	ssePolicyEnv.SSETYPE = expectedSSEType
-	ssePolicyEnv.SSEPOLICYSID = ssePolicySid
-	ssePolicyEnv.SSEENCRYPTIONPOLICY = s3EncryptionPolicy
+	ssePolicyEnv := &s3SseEnv{}
+	ssePolicyEnv.sseType = expectedSseType
+	ssePolicyEnv.ssPolicySid = ssePolicySidEnv
+	ssePolicyEnv.ssEEncryptionPolicy = s3EncryptionPolicy
 
 	return ssePolicyEnv
 }
