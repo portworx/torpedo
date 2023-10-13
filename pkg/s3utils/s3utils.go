@@ -5,6 +5,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,13 +29,31 @@ type Object struct {
 	LastModified time.Time
 }
 
-type S3SSEEnv string
+type SSE_TYPE string
 
 const (
-	sseTypeEnv             S3SSEEnv = "S3_SSE_TYPE"
-	ssePolicySidEnv                 = "S3_POLICY_SID"
-	sseEncryptionPolicyEnv          = "S3_ENCRYPTION_POLICY"
+	SSE_S3  SSE_TYPE = "SSE-S3"
+	SSE_KMS SSE_TYPE = "SSE-KMS"
+	SSE_C   SSE_TYPE = "SSE-C"
 )
+
+type SSE_ENCRYPTION_POLICY string
+
+const (
+	AES256 SSE_ENCRYPTION_POLICY = "s3:x-amz-server-side-encryption=AES256"
+)
+
+//type S3SSEEnv struct {
+//	sseTypeEnv             SSE_TYPE
+//	ssePolicySidEnv        string
+//	sseEncryptionPolicyEnv SSE_ENCRYPTION_POLICY
+//}
+
+type S3SSEEnv struct {
+	sseTypeEnv             string
+	ssePolicySidEnv        string
+	sseEncryptionPolicyEnv string
+}
 
 // S3Client client information
 type S3Client struct {
@@ -90,28 +109,51 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-// GetAWSDetailsFromEnv returns AWS details
-func GetS3SSEDetailsFromEnv() (sseType, ssePolicySid, sseEncryptionPolicy string) {
+func GetS3SSEDetailsFromEnv() S3SSEEnv {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
-	sseType, present := os.LookupEnv(string(sseTypeEnv))
+	sseType, present := os.LookupEnv("S3_SSE_TYPE")
 	if !present {
 		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
+	var expectedSSEType string
+	switch strings.ToUpper(sseType) {
+	case string(SSE_S3):
+		expectedSSEType = "SSE-S3"
+	case string(SSE_KMS):
+		expectedSSEType = "SSE-KMS"
+	case string(SSE_C):
+		expectedSSEType = "SSE-C"
+	default:
+		log.FailOnError(fmt.Errorf("SSE_TYPE type invalid %v", sseType), "Expected SSE_TYPE not found")
+	}
+
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
-	ssePolicySid, present = os.LookupEnv(string(ssePolicySidEnv))
+	ssePolicySid, present := os.LookupEnv(expectedSSEType)
 	if !present {
 		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
-	sseEncryptionPolicy, present = os.LookupEnv(string(sseEncryptionPolicyEnv))
+	sseEncryptionPolicy, present := os.LookupEnv("S3_ENCRYPTION_POLICY")
 	if !present {
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
-	return sseType, ssePolicySid, sseEncryptionPolicy
+	var s3EncryptionPolicy string
+	switch strings.ToUpper(sseEncryptionPolicy) {
+	case string(AES256):
+		s3EncryptionPolicy = string(AES256)
+	default:
+		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(AES256)), "Expected S3_ENCRYPTION_POLICY not found")
+	}
+
+	return S3SSEEnv{
+		sseTypeEnv:             sseType,
+		ssePolicySidEnv:        ssePolicySid,
+		sseEncryptionPolicyEnv: s3EncryptionPolicy,
+	}
 }
 
 // GetTimeStamp date/time path
