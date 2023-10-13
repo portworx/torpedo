@@ -144,7 +144,7 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 	ssePolicyEnv.SseType = expectedSseType
 	ssePolicyEnv.SsePolicySid = ssePolicySidEnv
 	ssePolicyEnv.SseEncryptionPolicy = s3EncryptionPolicy
-	
+
 	return ssePolicyEnv
 }
 
