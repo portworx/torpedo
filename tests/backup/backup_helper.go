@@ -5036,7 +5036,7 @@ func StartKubevirtVM(name, namespace string) error {
 			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
 		}
 		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
-			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, expecting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
 		}
 		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
 		return "", false, nil
@@ -5061,7 +5061,7 @@ func StopKubevirtVM(name, namespace string) error {
 			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
 		}
 		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
-			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, expecting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
 		}
 		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
 		return "", false, nil
@@ -5092,7 +5092,7 @@ func RestartKubevirtVM(name, namespace string) error {
 			return err
 		}
 	default:
-		return fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state. It should be eitehr be started or stopped", name, namespace, vm.Status.PrintableStatus)
+		return fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state. It should be in running or stopped state", name, namespace, vm.Status.PrintableStatus)
 	}
 	return nil
 }
