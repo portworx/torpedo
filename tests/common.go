@@ -5410,8 +5410,7 @@ func UpdateS3BucketPolicy(bucketName string, policy string) error {
 		S3ForcePathStyle: aws.Bool(true),
 	},
 	)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get S3 session to update bucket policy. Error: [%v]", err))
+	log.FailOnError(err, "Failed to get S3 session to update bucket policy")
 
 	S3Client := s3.New(sess)
 	_, err = S3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
@@ -5436,8 +5435,7 @@ func RemoveS3BucketPolicy(bucketName string) error {
 		S3ForcePathStyle: aws.Bool(true),
 	},
 	)
-	expect(err).NotTo(haveOccurred(),
-		fmt.Sprintf("Failed to get S3 session to remove S3 bucket policy. Error: [%v]", err))
+	log.FailOnError(err, "Failed to get S3 session to remove S3 bucket policy")
 
 	S3Client := s3.New(sess)
 
@@ -9431,7 +9429,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 
 	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
 	if len(encryptionPolicyValues) < 2 {
-		return "", fmt.Errorf("Failed to generate policy for s3 check for proper length of encryptionPolicy")
+		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
 	}
 	policy := `{
 	   "Version": "2012-10-17",
