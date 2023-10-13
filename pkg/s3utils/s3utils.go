@@ -44,9 +44,9 @@ const (
 )
 
 type s3SseEnv struct {
-	sseType             SSE_TYPE
-	ssPolicySid         string
-	ssEEncryptionPolicy SSE_ENCRYPTION_POLICY
+	SseType             SSE_TYPE
+	SsePolicySid        string
+	SseEncryptionPolicy SSE_ENCRYPTION_POLICY
 }
 
 // S3Client client information
@@ -144,9 +144,9 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 	}
 
 	ssePolicyEnv := &s3SseEnv{}
-	ssePolicyEnv.sseType = expectedSseType
-	ssePolicyEnv.ssPolicySid = ssePolicySidEnv
-	ssePolicyEnv.ssEEncryptionPolicy = s3EncryptionPolicy
+	ssePolicyEnv.SseType = expectedSseType
+	ssePolicyEnv.SsePolicySid = ssePolicySidEnv
+	ssePolicyEnv.SseEncryptionPolicy = s3EncryptionPolicy
 
 	return ssePolicyEnv
 }

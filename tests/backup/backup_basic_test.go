@@ -161,9 +161,9 @@ var _ = BeforeSuite(func() {
 
 			sseDetails := s3utils.GetS3SSEDetailsFromEnv()
 
-			if string(sseDetails.SSEENCRYPTIONPOLICY) != "" {
+			if string(sseDetails.SseEncryptionPolicy) != "" {
 				//policy, err := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
-				policy, err := GenerateS3BucketPolicy(string(sseDetails.SSETYPE), string(sseDetails.SSEENCRYPTIONPOLICY), globalAWSBucketName)
+				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
 				if err != nil {
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 				}
@@ -212,7 +212,7 @@ var _ = AfterSuite(func() {
 
 	//Cleanup policy
 	sseDetails := s3utils.GetS3SSEDetailsFromEnv()
-	if string(sseDetails.SSEENCRYPTIONPOLICY) != "" {
+	if string(sseDetails.SseEncryptionPolicy) != "" {
 		err = RemoveS3BucketPolicy(globalAWSBucketName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 	}
