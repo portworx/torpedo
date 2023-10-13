@@ -1317,11 +1317,15 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
 			for _, provider := range providers {
-				cloudCredUID = uuid.New()
-				backupLocationUID = uuid.New()
-				credName := fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
-				err = CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctxNonAdmin)
-				dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating cloud credentials for provider [%s]", appUser, provider))
+				if provider != drivers.ProviderNfs {
+					cloudCredUID = uuid.New()
+					backupLocationUID = uuid.New()
+					credName := fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
+					err = CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctxNonAdmin)
+					dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating cloud credentials for provider [%s]", appUser, provider))
+				} else {
+					log.InfoD("Provider NFS does not require creating cloud credential")
+				}
 				backupLocationName = fmt.Sprintf("backup-location-%s-%v", provider, RandomString(4))
 				err = CreateBackupLocationWithContext(provider, backupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "", ctxNonAdmin)
 				dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating backup location", appUser))
