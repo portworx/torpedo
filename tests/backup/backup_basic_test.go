@@ -157,9 +157,13 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			_, ssePolicySid, sseEncryptionPolicy := s3utils.GetS3SSEDetailsFromEnv()
-			if sseEncryptionPolicy != "" {
-				policy, err := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
+			//_, ssePolicySid, sseEncryptionPolicy := s3utils.GetS3SSEDetailsFromEnv()
+
+			sseDetails := s3utils.GetS3SSEDetailsFromEnv()
+
+			if sseDetails.SSEENCRYPTIONPOLICY != "" {
+				//policy, err := GenerateS3BucketPolicy(ssePolicySid, sseEncryptionPolicy, globalAWSBucketName)
+				policy, err := GenerateS3BucketPolicy(sseDetails.SSETYPE, sseDetails.SSEENCRYPTIONPOLICY, globalAWSBucketName)
 				if err != nil {
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 				}
@@ -207,8 +211,8 @@ var _ = AfterSuite(func() {
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	//Cleanup policy
-	_, _, sseEncryptionPolicy := s3utils.GetS3SSEDetailsFromEnv()
-	if sseEncryptionPolicy != "" {
+	sseDetails := s3utils.GetS3SSEDetailsFromEnv()
+	if sseDetails.SSEENCRYPTIONPOLICY != "" {
 		err = RemoveS3BucketPolicy(globalAWSBucketName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 	}
