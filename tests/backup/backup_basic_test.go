@@ -160,17 +160,11 @@ var _ = BeforeSuite(func() {
 			s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
 			if s3SseTypeEnv != "" {
 				sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
-				if err != nil {
-					log.FailOnError(err, "Failed to get sse details form environment")
-				}
+				log.FailOnError(err, "Failed to get sse details form environment")
 				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
-				if err != nil {
-					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-				}
+				log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 				err = UpdateS3BucketPolicy(globalAWSBucketName, policy)
-				if err != nil {
-					log.FailOnError(err, "Failed to apply bucket policy")
-				}
+				log.FailOnError(err, "Failed to apply bucket policy")
 				log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
 			}
 		case drivers.ProviderAzure:
