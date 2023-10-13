@@ -159,7 +159,10 @@ var _ = BeforeSuite(func() {
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
 			s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
 			if s3SseTypeEnv != "" {
-				sseDetails := s3utils.GetS3SSEDetailsFromEnv()
+				sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+				if err != nil {
+					log.FailOnError(err, "Failed to get sse details form environment")
+				}
 				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
 				if err != nil {
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
@@ -208,8 +211,8 @@ var _ = AfterSuite(func() {
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	//Cleanup policy
-	sseDetails := s3utils.GetS3SSEDetailsFromEnv()
-	if string(sseDetails.SseEncryptionPolicy) != "" {
+	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
+	if s3SseTypeEnv != "" {
 		err = RemoveS3BucketPolicy(globalAWSBucketName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 	}

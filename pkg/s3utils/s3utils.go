@@ -103,11 +103,11 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 	return id, secret, endpoint, s3Region, disableSSLBool
 }
 
-func GetS3SSEDetailsFromEnv() *S3SseEnv {
+func GetS3SSEDetailsFromEnv() (*S3SseEnv, error) {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
 	sseTypeEnv, present := os.LookupEnv("S3_SSE_TYPE")
 	if !present {
-		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
+		return nil, fmt.Errorf("SSE_TYPE Environment variable should not be empty")
 	}
 
 	var expectedSseType sseType
@@ -119,18 +119,18 @@ func GetS3SSEDetailsFromEnv() *S3SseEnv {
 	case string(sseC):
 		expectedSseType = "SSE-C"
 	default:
-		log.FailOnError(fmt.Errorf("SSE_TYPE type invalid %v", sseTypeEnv), "Expected SSE_TYPE not found")
+		return nil, fmt.Errorf("SSE_TYPE type invalid %v", sseTypeEnv)
 	}
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
 	ssePolicySidEnv, present := os.LookupEnv("S3_POLICY_SID")
 	if !present {
-		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
+		return nil, fmt.Errorf("S3_POLICY_SID Environment variable should not be empty")
 	}
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
 	sseEncryptionPolicyEnv, present := os.LookupEnv("S3_ENCRYPTION_POLICY")
 	if !present {
-		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY Environment variable should not be empty"), "Error occurred when fetching env")
+		return nil, fmt.Errorf("S3_ENCRYPTION_POLICY Environment variable should not be empty")
 	}
 
 	var s3EncryptionPolicy sseEncryptionPolicy
@@ -138,14 +138,14 @@ func GetS3SSEDetailsFromEnv() *S3SseEnv {
 	case string(aes256):
 		s3EncryptionPolicy = aes256
 	default:
-		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(aes256)), "Expected S3_ENCRYPTION_POLICY not found")
+		return nil, fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(aes256))
 	}
 	ssePolicyEnv := &S3SseEnv{}
 	ssePolicyEnv.SseType = expectedSseType
 	ssePolicyEnv.SsePolicySid = ssePolicySidEnv
 	ssePolicyEnv.SseEncryptionPolicy = s3EncryptionPolicy
 
-	return ssePolicyEnv
+	return ssePolicyEnv, nil
 }
 
 // GetTimeStamp date/time path
