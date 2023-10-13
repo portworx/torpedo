@@ -157,8 +157,6 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			//_, ssePolicySid, sseEncryptionPolicy := s3utils.GetS3SSEDetailsFromEnv()
-
 			sseDetails := s3utils.GetS3SSEDetailsFromEnv()
 
 			if string(sseDetails.SseEncryptionPolicy) != "" {
