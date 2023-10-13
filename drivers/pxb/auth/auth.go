@@ -16,33 +16,31 @@ import (
 )
 
 const (
-	// GlobalPxCentralAdminUsername is the username for px-central-admin user
-	GlobalPxCentralAdminUsername = "px-central-admin"
-	// GlobalPxCentralAdminSecretName is the name of the Kubernetes secret that stores the credentials for the px-central-admin user
-	GlobalPxCentralAdminSecretName = "px-central-admin"
 	// GlobalPxBackupAuthTokenType defines the type of authentication token used by Px-Backup
 	GlobalPxBackupAuthTokenType = "bearer"
+	// GlobalPxBackupAuthHeader is the HTTP header key used for authentication in Px-Backup requests
+	GlobalPxBackupAuthHeader = "authorization"
 	// GlobalPxBackupOrgToken is the key for the organization-specific token within a
 	// Kubernetes secret named by GlobalPxBackupAdminTokenSecretName for Px-Backup
 	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
-	// GlobalPxBackupAdminTokenSecretName is the name of the Kubernetes secret that stores the admin token for Px-Backup
-	GlobalPxBackupAdminTokenSecretName = "px-backup-admin-secret"
-	// GlobalPxBackupAuthHeader is the HTTP header key used for authentication in Px-Backup requests
-	GlobalPxBackupAuthHeader = "authorization"
-	// GlobalPxBackupKeycloakServiceName is the name of the Kubernetes service that
-	// facilitates user authentication through Keycloak in Px-Backup
+	// GlobalPxBackupKeycloakServiceName is the Kubernetes service that facilitates
+	// user authentication through Keycloak in Px-Backup
 	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
+	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
+	GlobalPxCentralAdminSecretName = "px-central-admin"
+	// GlobalPxBackupAdminTokenSecretName is the Kubernetes secret that stores the token for Px-Backup admin
+	GlobalPxBackupAdminTokenSecretName = "px-backup-admin-secret"
 )
 
 var (
+	// GlobalPxCentralAdminUsername is the username for px-central-admin user
+	GlobalPxCentralAdminUsername = "px-central-admin"
 	// GlobalPxCentralAdminPassword is the password for px-central-admin user
 	GlobalPxCentralAdminPassword string
 )
 
-const (
-	// DefaultOIDCSecretName is the default name of the Kubernetes secret that stores OIDC credentials for Px-Backup
-	DefaultOIDCSecretName = "pxc-backup-secret"
-)
+// DefaultOIDCSecretName is the default the Kubernetes secret that stores the OIDC credentials for Px-Backup
+const DefaultOIDCSecretName = "pxc-backup-secret"
 
 const (
 	// PxCentralUIURL is the env var for the Px-Central UI URL. Example: http://<IP>:<Port>
