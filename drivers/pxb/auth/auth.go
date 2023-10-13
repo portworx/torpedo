@@ -39,9 +39,6 @@ var (
 	GlobalPxCentralAdminPassword string
 )
 
-// DefaultOIDCSecretName is the default the Kubernetes secret that stores the OIDC credentials for Px-Backup
-const DefaultOIDCSecretName = "pxc-backup-secret"
-
 const (
 	// PxCentralUIURL is the env var for the Px-Central UI URL. Example: http://<IP>:<Port>
 	PxCentralUIURL = "PX_CENTRAL_UI_URL"
@@ -51,6 +48,9 @@ const (
 	// Px-Backup namespace, defaulting to DefaultOIDCSecretName
 	PxBackupOIDCSecretName = "SECRET_NAME"
 )
+
+// DefaultOIDCSecretName is the fallback Kubernetes secret in case PxBackupOIDCSecretName is not set
+const DefaultOIDCSecretName = "pxc-backup-secret"
 
 // CredentialRepresentation defines the scheme for representing the user credential in Keycloak
 type CredentialRepresentation struct {
