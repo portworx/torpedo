@@ -293,7 +293,8 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
-	clusterDeleteTimeout              = 10 * time.Minute
+	clusterDeleteTimeout              = 60 * time.Minute
+	clusterDeleteRetryTime            = 30 * time.Second
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -3629,7 +3630,7 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 	if err != nil {
 		return err
 	}
-	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
 	if err != nil {
 		return err
 	}
@@ -4020,7 +4021,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 }
 
 // CreateBackupLocationWithContext creates backup location using the given context
-func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, subPath string, ctx context1.Context) error {
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, ctx context1.Context) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
@@ -4030,7 +4031,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
+		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, true)
 	}
 	return err
 }
@@ -5269,12 +5270,13 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 }
 
 func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	//TODO enhance the method to work with NFS server on cloud
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
-	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	// Mount the NFS share to the worker node.
+	masterNode := node.GetWorkerNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
@@ -9184,6 +9186,7 @@ type ProvisionStatus struct {
 	NodeStatus    string
 	PoolID        string
 	PoolUUID      string
+	PoolStatus    string
 	IoPriority    string
 	TotalSize     float64
 	AvailableSize float64
@@ -9208,17 +9211,58 @@ func convertToGiB(size string) float64 {
 	return -1
 }
 
-func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
+// GetClusterProvisionStatusOnSpecificNode Returns provision status from the specific node
+func GetClusterProvisionStatusOnSpecificNode(n node.Node) ([]ProvisionStatus, error) {
 	clusterProvision := []ProvisionStatus{}
-	pattern := `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
 	cmd := "pxctl cluster provision-status list"
+	output, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		log.Infof("running command [%v] failed on Node [%v]", cmd, n.Name)
+		return nil, err
+	}
+	log.InfoD("Output of CMD Output [%v]", output)
 
+	lines := strings.Split(output, "\n")
+	pattern := `(\S+)\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	if !strings.Contains(lines[0], "HOSTNAME") {
+		// This is needed as in 2.x.y output don't print HOSTNAME
+		pattern = `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s(\S+)\s\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	}
+	// Compile the regex pattern
+	r := regexp.MustCompile(pattern)
+
+	for _, eachLine := range lines {
+		var provisionStatus ProvisionStatus
+		if !strings.Contains(eachLine, "NODE") {
+			matches := r.FindStringSubmatch(eachLine)
+			if len(matches) > 0 {
+				provisionStatus.NodeUUID = matches[1]
+				provisionStatus.IpAddress = matches[2]
+				provisionStatus.NodeStatus = matches[3]
+				provisionStatus.PoolID = matches[4]
+				provisionStatus.PoolUUID = matches[5]
+				provisionStatus.PoolStatus = matches[6]
+				provisionStatus.IoPriority = matches[7]
+				provisionStatus.TotalSize = convertToGiB(matches[8])
+				provisionStatus.AvailableSize = convertToGiB(matches[9])
+				provisionStatus.UsedSize = convertToGiB(matches[10])
+				clusterProvision = append(clusterProvision, provisionStatus)
+			}
+		}
+	}
+	log.Infof("Cluster provision status [%v]", clusterProvision)
+	return clusterProvision, nil
+}
+
+// GetClusterProvisionStatus  returns details of cluster provision status
+func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	// Using Node which is up and running
 	var selectedNode []node.Node
-	for _, eachNode := range node.GetNodes() {
+	for _, eachNode := range node.GetStorageDriverNodes() {
 		status, err := IsPxRunningOnNode(&eachNode)
 		if err != nil {
-			return nil, err
+			log.InfoD("Px is not running on the Node.. searching for other node")
+			continue
 		}
 		if status {
 			selectedNode = append(selectedNode, eachNode)
@@ -9228,33 +9272,17 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	if len(selectedNode) == 0 {
 		return nil, fmt.Errorf("No Valid node exists")
 	}
-	output, err := runCmdGetOutput(cmd, selectedNode[0])
+
+	// Select Random Volumes for pool Expand
+	randomIndex := rand.Intn(len(selectedNode))
+	randomNode := selectedNode[randomIndex]
+
+	clusterProvision, err := GetClusterProvisionStatusOnSpecificNode(randomNode)
 	if err != nil {
 		return nil, err
 	}
-	// Compile the regex pattern
-	r := regexp.MustCompile(pattern)
 
-	lines := strings.Split(output, "\n")
-	for _, eachLine := range lines {
-		var provisionStatus ProvisionStatus
-		if !strings.Contains(eachLine, "NODE ID") {
-			matches := r.FindStringSubmatch(eachLine)
-			if len(matches) > 0 {
-				provisionStatus.NodeUUID = matches[1]
-				provisionStatus.IpAddress = matches[2]
-				provisionStatus.HostName = matches[3]
-				provisionStatus.NodeStatus = matches[4]
-				provisionStatus.PoolID = matches[5]
-				provisionStatus.PoolUUID = matches[6]
-				provisionStatus.IoPriority = matches[7]
-				provisionStatus.TotalSize = convertToGiB(matches[8])
-				provisionStatus.AvailableSize = convertToGiB(matches[9])
-				provisionStatus.UsedSize = convertToGiB(matches[10])
-				clusterProvision = append(clusterProvision, provisionStatus)
-			}
-		}
-	}
+	log.Infof("Cluster provision status [%v]", clusterProvision)
 	return clusterProvision, nil
 }
 
@@ -9286,6 +9314,7 @@ func GetPoolAvailableSize(poolUUID string) (float64, error) {
 	return -1, err
 }
 
+// GetAllPoolsOnNode Returns list of all pool uuids present on specific Node
 func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 	var poolDetails []string
 	provision, err := GetClusterProvisionStatus()
@@ -9315,6 +9344,7 @@ func GetGkeSecret() (string, error) {
 	return cm.Data["cloud-json"], nil
 }
 
+// WaitForSnapShotToReady returns snapshot status after waiting till snapshot gets to Ready state
 func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace string) (*storkapi.ScheduledVolumeSnapshotStatus, error) {
 
 	var schedVolumeSnapstatus *storkapi.ScheduledVolumeSnapshotStatus
@@ -9350,6 +9380,19 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 
 	return schedVolumeSnapstatus, err
 
+}
+
+// GetAllPoolsPresent returns list of all pools present in the cluster
+func GetAllPoolsPresent() ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		poolDetails = append(poolDetails, eachProvision.PoolUUID)
+	}
+	return poolDetails, nil
 }
 
 // AddCloudCredentialOwnership adds new ownership to the existing CloudCredential object.
