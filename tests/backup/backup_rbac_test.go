@@ -551,7 +551,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			log.InfoD("Creating a new user and assigning the role of app-user")
 			appUser = createUsers(1)[0]
 			err := backup.AddRoleToUser(appUser, backup.ApplicationUser, fmt.Sprintf("Adding Application User role to %s", appUser))
-			log.FailOnError(err, "Failed to add role to user - %s", appUser)
+			log.FailOnError(err, "Failed to add role to user - [%s]", appUser)
 			userNames = append(userNames, appUser)
 		})
 
@@ -575,7 +575,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		Step(fmt.Sprintf("Verify if App-User doesn't have permission to create a schedule policy"), func() {
 			log.InfoD(fmt.Sprintf("Verify if App-User doesn't have permission to create a schedule policy"))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			periodicSchedulePolicyName := fmt.Sprintf("policy-%v", RandomString(4))
 			periodicSchedulePolicyUid := uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
@@ -586,7 +586,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		Step(fmt.Sprintf("Verify if the App-User doesn't have permission to create roles"), func() {
 			log.InfoD("Verify if the App-User doesn't have permission to create roles")
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			appUserRoleName := backup.PxBackupRole(fmt.Sprintf("app-user-role-%s", RandomString(4)))
 			services := []RoleServices{SchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
 			apis := []RoleApis{All}
@@ -597,7 +597,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		Step(fmt.Sprintf("Verfiy if App-User doesn't have permission to create pre and post exec rules for applications"), func() {
 			log.InfoD("Verify if App-User doesn't have permission to create pre and post exec rules for applications")
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			_, _, err = CreateRuleForBackupWithMultipleApplications(orgID, Inst().AppList, nonAdminCtx)
 			dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating rules", appUser))
 		})
@@ -651,8 +651,8 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			}
 		})
 
-		Step("Verify if the Px-Admin user has permission to share RBAC resources with the app-user users", func() {
-			log.InfoD("Verify if the Px-Admin user has permission to share RBAC resources with the app-user users")
+		Step("Verify if the Px-Admin user has permission to share RBAC resources with the app-user", func() {
+			log.InfoD("Verify if the Px-Admin user has permission to share RBAC resources with the app-user")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
@@ -700,10 +700,10 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			log.Infof("Cluster [%s] uid: [%s]", destinationClusterName, dstClusterUid)
 		})
 
-		Step(fmt.Sprintf("Validate taking a scheduled backup of applications from the App-User %s", appUser), func() {
-			log.InfoD(fmt.Sprintf("Validate taking a scheduled backup of applications from the App-User %s", appUser))
+		Step(fmt.Sprintf("Validate taking a scheduled backup of applications from the App-User [%s]", appUser), func() {
+			log.InfoD(fmt.Sprintf("Validate taking a scheduled backup of applications from the App-User [%s]", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			userScheduleName = fmt.Sprintf("backup-schedule-%v", RandomString(4))
 			scheduleBackupName, err = CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", userScheduleName))
@@ -711,18 +711,18 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", userScheduleName, appUser))
 		})
 
-		Step(fmt.Sprintf("Validate restoring backups on destination cluster for the App-User %s", appUser), func() {
-			log.InfoD(fmt.Sprintf("Validate restoring backups on destination cluster for the App-User %s", appUser))
+		Step(fmt.Sprintf("Validate restoring backups on destination cluster for the App-User [%s]", appUser), func() {
+			log.InfoD(fmt.Sprintf("Validate restoring backups on destination cluster for the App-User [%s]", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, scheduleBackupName)
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateRestoreWithValidation(nonAdminCtx, restoreName, scheduleBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, scheduleBackupName))
 		})
 
-		Step(fmt.Sprintf("Validate deleting of backup and restore for the context of App-User %s ", appUser), func() {
-			log.InfoD(fmt.Sprintf("Validate deleting of backup and restore for the context of App-User %s ", appUser))
+		Step(fmt.Sprintf("Validate deleting of backup and restore for the context of App-User [%s] ", appUser), func() {
+			log.InfoD(fmt.Sprintf("Validate deleting of backup and restore for the context of App-User [%s] ", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
 			log.InfoD("Deleting the backup")
@@ -737,17 +737,17 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		})
 
-		Step(fmt.Sprintf("Validate deleting of scheduled policy for the App-User %s", appUser), func() {
-			log.InfoD(fmt.Sprintf("VValidate deleting of scheduled policy for the App-User %s", appUser))
+		Step(fmt.Sprintf("Validate deleting of scheduled policy for the App-User [%s]", appUser), func() {
+			log.InfoD(fmt.Sprintf("Validate deleting of scheduled policy for the App-User [%s]", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
 			log.Infof("Verify deletion of schedule policy [%s] for user [%s] ", userScheduleName, appUser)
-			err = DeleteBackupSchedulePolicyWithContext(orgID, []string{userScheduleName}, nonAdminCtx)
+			err = DeleteBackupSchedulePolicyWithContext(orgID, []string{periodicSchedulePolicyName}, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s] of the user %s", userScheduleName, appUser))
 		})
 
-		Step(fmt.Sprintf("Delete user %s source and destination cluster from the user context", appUser), func() {
-			log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster from the user context", appUser))
+		Step(fmt.Sprintf("Delete [%s] source and destination cluster from the user context", appUser), func() {
+			log.InfoD(fmt.Sprintf("Deleting [%s] source and destination cluster from the user context", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
 			for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
