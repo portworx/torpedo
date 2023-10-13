@@ -5020,6 +5020,7 @@ func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	return nil
 }
 
+// StartKubevirtVM starts the kubevirt VM and waits till the status is Running
 func StartKubevirtVM(name, namespace string) error {
 	k8sKubevirt := kubevirt.Instance()
 	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
@@ -5045,6 +5046,7 @@ func StartKubevirtVM(name, namespace string) error {
 	return err
 }
 
+// StopKubevirtVM stops the kubevirt VM and waits till the status is Stopped
 func StopKubevirtVM(name, namespace string) error {
 	k8sKubevirt := kubevirt.Instance()
 	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
@@ -5070,6 +5072,9 @@ func StopKubevirtVM(name, namespace string) error {
 	return err
 }
 
+// RestartKubevirtVM restarts the kubevirt VM
+// If VM is in stopped state it starts the VM
+// If VM is in started state it restarts the VM
 func RestartKubevirtVM(name, namespace string) error {
 	k8sKubevirt := kubevirt.Instance()
 	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
