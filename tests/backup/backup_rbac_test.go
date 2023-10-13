@@ -737,13 +737,13 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		})
 
-		Step(fmt.Sprintf("Validate deleting of scheduled policy for the App-User [%s]", appUser), func() {
-			log.InfoD(fmt.Sprintf("Validate deleting of scheduled policy for the App-User [%s]", appUser))
-			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-			log.Infof("Verify deletion of schedule policy [%s] for user [%s] ", userScheduleName, appUser)
-			err = DeleteBackupSchedulePolicyWithContext(orgID, []string{periodicSchedulePolicyName}, nonAdminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s] of the user %s", userScheduleName, appUser))
+		Step(fmt.Sprintf("Validate deleting of scheduled policy for Px-Admin user"), func() {
+			log.InfoD(fmt.Sprintf("Validate deleting of scheduled policy for Px-Admin user"))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Verify deletion of schedule policy [%s] for Px-Admin user ", userScheduleName)
+			err = DeleteBackupSchedulePolicyWithContext(orgID, []string{periodicSchedulePolicyName}, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s] for the Px-Admin user", userScheduleName))
 		})
 
 		Step(fmt.Sprintf("Delete [%s] source and destination cluster from the user context", appUser), func() {
