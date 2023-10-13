@@ -4239,16 +4239,20 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
 	var expectedSseType api.S3Config_Sse
-	switch strings.ToUpper(string(sseDetails.SseType)) {
-	case string(s3utils.SseS3):
-		expectedSseType = api.S3Config_SSE_S3
-	default:
+	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
+	if s3SseTypeEnv != "" {
+		sseDetails, _ := s3utils.GetS3SSEDetailsFromEnv()
+		switch strings.ToUpper(string(sseDetails.SseType)) {
+		case string(s3utils.SseS3):
+			expectedSseType = api.S3Config_SSE_S3
+		default:
+			expectedSseType = api.S3Config_Invalid
+			log.Infof("No encryption type is set")
+		}
+	} else {
 		expectedSseType = api.S3Config_Invalid
-		log.Infof("No encryption type is set")
 	}
-
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4264,12 +4268,14 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			},
 			Type: api.BackupLocationInfo_S3,
 			Config: &api.BackupLocationInfo_S3Config{
-				S3Config: &api.S3Config{
-					Endpoint:   endpoint,
-					Region:     region,
-					DisableSsl: disableSSLBool,
-					SseType:    expectedSseType,
-				},
+				S3Config: func() *api.S3Config {
+					return &api.S3Config{
+						Endpoint:   endpoint,
+						Region:     region,
+						DisableSsl: disableSSLBool,
+						SseType:    expectedSseType,
+					}
+				}(),
 			},
 		},
 	}
