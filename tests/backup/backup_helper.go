@@ -3,7 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
-
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -52,6 +52,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -114,6 +115,8 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 10 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	vmStartStopTimeout                        = 10 * time.Minute
+	vmStartStopRetryTime                      = 30 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
@@ -5013,6 +5016,83 @@ func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	_, err = backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
+}
+
+func StartKubevirtVM(name, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.StartVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+		}
+		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, expecting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+		}
+		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+	return err
+}
+
+func StopKubevirtVM(name, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.StopVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+		}
+		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, expecting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
+		}
+		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+	return err
+}
+
+func RestartKubevirtVM(name, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	switch vm.Status.PrintableStatus {
+	case kubevirtv1.VirtualMachineStatusRunning:
+		err = StopKubevirtVM(name, namespace)
+		if err != nil {
+			return err
+		}
+		err = StartKubevirtVM(name, namespace)
+		if err != nil {
+			return err
+		}
+	case kubevirtv1.VirtualMachineStatusStopped:
+		err = StartKubevirtVM(name, namespace)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state. It should be eitehr be started or stopped", name, namespace, vm.Status.PrintableStatus)
 	}
 	return nil
 }

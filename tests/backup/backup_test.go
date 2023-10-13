@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"strings"
 	"time"
 
@@ -143,6 +144,22 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
+			for _, ctx := range scheduledAppContexts {
+				ns := ctx.App.NameSpace
+				for _, appSpec := range ctx.App.SpecList {
+					if obj, ok := appSpec.(*kubevirtv1.VirtualMachine); ok {
+						log.Infof("Stopping VM")
+						err := StopKubevirtVM(obj.Name, ns)
+						log.FailOnError(err, fmt.Sprintf("unable to stop vm %s in ns %s", obj.Name, ns))
+						log.Infof("Starting VM")
+						err = StartKubevirtVM(obj.Name, ns)
+						log.FailOnError(err, fmt.Sprintf("unable to stop vm %s in ns %s", obj.Name, ns))
+						log.Infof("Restarting VM")
+						err = RestartKubevirtVM(obj.Name, ns)
+						log.FailOnError(err, fmt.Sprintf("unable to stop vm %s in ns %s", obj.Name, ns))
+					}
+				}
+			}
 		})
 
 		Step("Creating rules for backup", func() {
