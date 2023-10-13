@@ -93,7 +93,6 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 // GetAWSDetailsFromEnv returns AWS details
 func GetS3SSEDetailsFromEnv() (sseType, ssePolicySid, sseEncryptionPolicy string) {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
-	//sseType = os.Getenv("S3_SSE_TYPE")
 	sseType, present := os.LookupEnv(string(sseTypeEnv))
 	if !present {
 		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
