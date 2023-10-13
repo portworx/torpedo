@@ -52,14 +52,14 @@ const (
 	PxBackupOIDCSecretName = "SECRET_NAME"
 )
 
-// CredentialRepresentation defines the scheme for representing user credential in Keycloak
+// CredentialRepresentation defines the scheme for representing the user credential in Keycloak
 type CredentialRepresentation struct {
 	Type      string `json:"type"`
 	Value     string `json:"value"`
 	Temporary bool   `json:"temporary"`
 }
 
-// UserRepresentation defines the scheme for representing a user in Keycloak
+// UserRepresentation defines the scheme for representing the user in Keycloak
 type UserRepresentation struct {
 	ID            string                     `json:"id"`
 	Username      string                     `json:"username"`
@@ -71,7 +71,7 @@ type UserRepresentation struct {
 	Credentials   []CredentialRepresentation `json:"credentials"`
 }
 
-// NewTestUserRepresentation initializes a UserRepresentation for a test user with the given credentials
+// NewTestUserRepresentation initializes the UserRepresentation for a test user with the given credentials
 func NewTestUserRepresentation(username string, password string) *UserRepresentation {
 	return &UserRepresentation{
 		ID:            "",
