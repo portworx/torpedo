@@ -44,9 +44,9 @@ const (
 )
 
 type S3SSEENV struct {
-	SSETYPE             string
+	SSETYPE             SSE_TYPE
 	SSEPOLICYSID        string
-	SSEENCRYPTIONPOLICY string
+	SSEENCRYPTIONPOLICY SSE_ENCRYPTION_POLICY
 }
 
 // S3Client client information
@@ -110,7 +110,7 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
-	var expectedSSEType string
+	var expectedSSEType SSE_TYPE
 	switch strings.ToUpper(sseType) {
 	case string(SSE_S3):
 		expectedSSEType = "SSE-S3"
@@ -124,7 +124,7 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 
 	//Sid element of an S3 policy statement is a unique identifier for the statement
 	//to identify and manage your policy statements
-	ssePolicySid, present := os.LookupEnv(expectedSSEType)
+	ssePolicySid, present := os.LookupEnv("S3_SSE_TYPE")
 	if !present {
 		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
 	}
@@ -135,10 +135,10 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
-	var s3EncryptionPolicy string
+	var s3EncryptionPolicy SSE_ENCRYPTION_POLICY
 	switch strings.ToUpper(sseEncryptionPolicy) {
 	case string(AES256):
-		s3EncryptionPolicy = string(AES256)
+		s3EncryptionPolicy = AES256
 	default:
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY invalid %v", string(AES256)), "Expected S3_ENCRYPTION_POLICY not found")
 	}
