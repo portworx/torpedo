@@ -521,6 +521,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		postRuleUid                string
 		srcClusterUid              string
 		scheduleBackupName         string
+		userScheduleName           string
 		restoreName                string
 	)
 
@@ -677,6 +678,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule of application"))
 			}
 		})
+
 		Step("Validate adding source and destination clusters with App-User ctx", func() {
 			log.InfoD("Validate adding source and destination clusters with App-User ctx")
 			ctxNonAdmin, err := backup.GetNonAdminCtx(appUser, commonPassword)
@@ -702,7 +704,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			log.InfoD(fmt.Sprintf("Validate taking a scheduled backup of applications from the App-User %s", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-			userScheduleName := fmt.Sprintf("backup-schedule-%v", RandomString(4))
+			userScheduleName = fmt.Sprintf("backup-schedule-%v", RandomString(4))
 			scheduleBackupName, err = CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", userScheduleName))
 			err = suspendBackupSchedule(userScheduleName, periodicSchedulePolicyName, orgID, nonAdminCtx)
@@ -735,6 +737,15 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		})
 
+		Step(fmt.Sprintf("Validate deleting of scheduled policy for the App-User %s", appUser), func() {
+			log.InfoD(fmt.Sprintf("VValidate deleting of scheduled policy for the App-User %s", appUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+			log.Infof("Verify deletion of schedule policy [%s] for user [%s] ", userScheduleName, appUser)
+			err = DeleteBackupSchedulePolicyWithContext(orgID, []string{userScheduleName}, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s] of the user %s", userScheduleName, appUser))
+		})
+
 		Step(fmt.Sprintf("Delete user %s source and destination cluster from the user context", appUser), func() {
 			log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster from the user context", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
@@ -747,6 +758,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			}
 		})
 	})
+
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
