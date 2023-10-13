@@ -106,20 +106,20 @@ func (k *Keycloak) GetCommonHeaders(token string) http.Header {
 	return headers
 }
 
-func (k *Keycloak) GetEndpoint(admin bool) (string, error) {
+func (k *Keycloak) GetEndpoint(admin bool, route string) (string, error) {
+	baseURL := ""
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
-	// This condition is added to handle scenarios where Torpedo is not running as a pod in the cluster.
-	// In such cases, gRPC calls to pxcentral-keycloak-http:80 would fail when executed from a VM or local machine using the Ginkgo CLI.
-	// The condition checks whether an env var is set.
+	// The condition checks whether pxCentralUIURL is set. This condition is added to
+	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
+	// cases, gRPC calls to pxcentral-keycloak-http:80 would fail when run on a VM or
+	// local machine using the Ginkgo CLI.
 	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
 		if admin {
-			// adminURL: http://pxcentral-keycloak-http:80/auth/admin/realms/master
-			adminURL := fmt.Sprintf("%s/auth/admin/realms/master", pxCentralUIURL)
-			return adminURL, nil
+			// Example: http://pxcentral-keycloak-http:80/auth/admin/realms/master
+			baseURL = fmt.Sprintf("%s/auth/admin/realms/master", pxCentralUIURL)
 		} else {
-			// nonAdminURL: http://pxcentral-keycloak-http:80/auth/realms/master
-			nonAdminURL := fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
-			return nonAdminURL, nil
+			// Example: http://pxcentral-keycloak-http:80/auth/realms/master
+			baseURL = fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
 		}
 	}
 	oidcSecret, err := core.Instance().GetSecret(GetOIDCSecretName(), k.Namespace)
@@ -130,31 +130,38 @@ func (k *Keycloak) GetEndpoint(admin bool) (string, error) {
 	// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 	// ensure DNS resolution within Kubernetes, especially for requests originating
 	// from different namespace
-	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, k.Namespace)
-	newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
+	keycloakServiceName := GlobalPxBackupKeycloakServiceName
+	replacement := fmt.Sprintf("%s.%s.svc.cluster.local", keycloakServiceName, k.Namespace)
+	newURL := strings.Replace(oidcEndpoint, keycloakServiceName, replacement, 1)
 	if admin {
 		split := strings.Split(newURL, "auth")
-		// adminURL: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
-		adminURL := fmt.Sprintf("%sauth/admin%s", split[0], split[1])
-		return adminURL, nil
+		// Example: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/admin/realms/master
+		baseURL = fmt.Sprintf("%sauth/admin%s", split[0], split[1])
 	} else {
-		// nonAdminURL: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
-		nonAdminURL := newURL
-		return nonAdminURL, nil
+		// Example: http://pxcentral-keycloak-http.px-backup.svc.cluster.local/auth/realms/master
+		baseURL = newURL
 	}
+	if route != "" {
+		if strings.HasPrefix(route, "/") {
+			baseURL += route
+		} else {
+			baseURL += fmt.Sprintf("/%s", route)
+		}
+	}
+	return baseURL, nil
 }
 
-func (k *Keycloak) MakeRequest(ctx context.Context, method string, path string, body io.Reader, header http.Header) (*http.Request, error) {
+func (k *Keycloak) MakeRequest(ctx context.Context, method string, route string, body io.Reader, header http.Header) (*http.Request, error) {
 	keycloakEndpoint, err := k.GetEndpoint(true)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
 	reqURL := keycloakEndpoint
-	if path != "" {
-		if strings.HasPrefix(path, "/") {
-			reqURL += path
+	if route != "" {
+		if strings.HasPrefix(route, "/") {
+			reqURL += route
 		} else {
-			reqURL += fmt.Sprintf("/%s", path)
+			reqURL += fmt.Sprintf("/%s", route)
 		}
 	}
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
@@ -180,12 +187,12 @@ func (k *Keycloak) GetToken(ctx context.Context) (string, error) {
 	values.Set("password", k.AdminPassword)
 	values.Set("grant_type", "password")
 	values.Set("token-duration", "365d")
-	keycloakEndpoint, err := k.GetEndpoint(false)
+	keycloakEndpoint, err := k.GetEndpoint(false, "/protocol/openid-connect/token")
 	if err != nil {
 		return "", ProcessError(err)
 	}
 	// This token endpoint is used to retrieve tokens, as detailed in: https://www.keycloak.org/docs/latest/securing_apps/#token-endpoint
-	reqURL := fmt.Sprintf("%s/protocol/openid-connect/token", keycloakEndpoint)
+	reqURL := fmt.Sprintf("%s", keycloakEndpoint)
 
 	header := make(http.Header)
 	header.Add("Content-Type", "application/x-www-form-urlencoded")
