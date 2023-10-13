@@ -157,8 +157,9 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			sseDetails := s3utils.GetS3SSEDetailsFromEnv()
-			if string(sseDetails.SseEncryptionPolicy) != "" {
+			s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
+			if s3SseTypeEnv != "" {
+				sseDetails := s3utils.GetS3SSEDetailsFromEnv()
 				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
 				if err != nil {
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
