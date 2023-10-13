@@ -29,24 +29,24 @@ type Object struct {
 	LastModified time.Time
 }
 
-type SSE_TYPE string
+type sseType string
 
 const (
-	sseS3  SSE_TYPE = "SSE-S3"
-	sseKms SSE_TYPE = "SSE-KMS"
-	sseC   SSE_TYPE = "SSE-C"
+	sseS3  sseType = "SSE-S3"
+	sseKms sseType = "SSE-KMS"
+	sseC   sseType = "SSE-C"
 )
 
-type SSE_ENCRYPTION_POLICY string
+type sseEncryptionPolicy string
 
 const (
-	aes256 SSE_ENCRYPTION_POLICY = "s3:x-amz-server-side-encryption=AES256"
+	aes256 sseEncryptionPolicy = "s3:x-amz-server-side-encryption=AES256"
 )
 
 type s3SseEnv struct {
-	SseType             SSE_TYPE
+	SseType             sseType
 	SsePolicySid        string
-	SseEncryptionPolicy SSE_ENCRYPTION_POLICY
+	SseEncryptionPolicy sseEncryptionPolicy
 }
 
 // S3Client client information
@@ -110,7 +110,7 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 		log.FailOnError(fmt.Errorf("SSE_TYPE Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
-	var expectedSseType SSE_TYPE
+	var expectedSseType sseType
 	switch strings.ToUpper(sseTypeEnv) {
 	case string(sseS3):
 		expectedSseType = "SSE-S3"
@@ -128,13 +128,13 @@ func GetS3SSEDetailsFromEnv() *s3SseEnv {
 		log.FailOnError(fmt.Errorf("S3_POLICY_SID Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 	//Server-side encryption policy that you want Amazon S3 to use to encrypt your data
-	sseEncryptionPolicy, present := os.LookupEnv("S3_ENCRYPTION_POLICY")
+	sseEncryptionPolicyEnv, present := os.LookupEnv("S3_ENCRYPTION_POLICY")
 	if !present {
 		log.FailOnError(fmt.Errorf("S3_ENCRYPTION_POLICY Environment variable should not be empty"), "Error occurred when fetching env")
 	}
 
-	var s3EncryptionPolicy SSE_ENCRYPTION_POLICY
-	switch sseEncryptionPolicy {
+	var s3EncryptionPolicy sseEncryptionPolicy
+	switch sseEncryptionPolicyEnv {
 	case string(aes256):
 		s3EncryptionPolicy = aes256
 	default:
