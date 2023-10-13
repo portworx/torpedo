@@ -136,7 +136,7 @@ func GetS3SSEDetailsFromEnv() *S3SSEENV {
 	}
 
 	var s3EncryptionPolicy SSE_ENCRYPTION_POLICY
-	switch strings.ToUpper(sseEncryptionPolicy) {
+	switch sseEncryptionPolicy {
 	case string(AES256):
 		s3EncryptionPolicy = AES256
 	default:
