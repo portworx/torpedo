@@ -91,7 +91,7 @@ func GetAWSDetailsFromEnv() (id string, secret string, endpoint string,
 }
 
 // GetAWSDetailsFromEnv returns AWS details
-func GetS3SSEDetailsFromEnv(sseTypeEnv, ssePolicySidEnv, sseEncryptionPolicyEnv S3SSEEnv) (sseType, ssePolicySid, sseEncryptionPolicy string) {
+func GetS3SSEDetailsFromEnv() (sseType, ssePolicySid, sseEncryptionPolicy string) {
 	//Server side encryption type like SSE-S3,SSE-KMS,SSE-C
 	//sseType = os.Getenv("S3_SSE_TYPE")
 	sseType, present := os.LookupEnv(string(sseTypeEnv))
