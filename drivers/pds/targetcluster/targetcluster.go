@@ -30,10 +30,11 @@ const (
 	DefaultRetryInterval = 10 * time.Second
 
 	// DefaultTimeout default timeout
-	DefaultTimeout = 10 * time.Minute
-	MaxTimeout     = 30 * time.Minute
-	timeOut        = 30 * time.Minute
-	timeInterval   = 10 * time.Second
+	DefaultTimeout        = 10 * time.Minute
+	MaxTimeout            = 30 * time.Minute
+	timeOut               = 30 * time.Minute
+	DefaultPdsPodsTimeOut = 15 * time.Minute
+	timeInterval          = 10 * time.Second
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
@@ -290,7 +291,7 @@ func (targetCluster *TargetCluster) ValidatePDSComponents() error {
 	}
 	log.Infof("There are %d deployments present in the namespace %s", len(deploymentList.Items), PDSNamespace)
 	for _, deployment := range deploymentList.Items {
-		err = apps.Instance().ValidateDeployment(&deployment, DefaultTimeout, DefaultRetryInterval)
+		err = apps.Instance().ValidateDeployment(&deployment, DefaultPdsPodsTimeOut, DefaultRetryInterval)
 		if err != nil {
 			return err
 		}
@@ -329,6 +330,18 @@ func (targetCluster *TargetCluster) CreateNamespace(namespace string) (*corev1.N
 func (targetCluster *TargetCluster) GetClusterID() (string, error) {
 	log.Infof("Fetch Cluster id ")
 	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", targetCluster.kubeconfig)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		log.Error(err)
+		return "Unable to fetch the cluster ID.", err
+	}
+	return output, nil
+}
+
+// GetClusterID of target cluster.
+func (targetCluster *TargetCluster) GetClusterIDFromKubePath(kubePath string) (string, error) {
+	log.Infof("Fetch Cluster id ")
+	cmd := fmt.Sprintf("kubectl get ns kube-system -o jsonpath={.metadata.uid} --kubeconfig %s", kubePath)
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
 		log.Error(err)

@@ -244,6 +244,9 @@ var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
+// TestExecutionCountMap holds the count of executions for each test
+var TestExecutionCountMap = make(map[string]int)
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -309,7 +312,8 @@ func UpdateOutcome(event *EventRecord, err error) {
 
 	if err != nil && event != nil {
 		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
-		log.Errorf("Event [%s] failed with error: %v", event.Event.Type, err)
+		actualEvent := strings.Split(event.Event.Type, "<br>")[0]
+		log.Errorf("Event [%s] failed with error: %v", actualEvent, err)
 		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
 		er := fmt.Errorf(err.Error() + "<br>")
 		Inst().M.IncrementGaugeMetricsUsingAdditionalLabel(FailedTestAlert, event.Event.Type, err.Error())
@@ -595,9 +599,8 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		for _, ctx := range *contexts {
 			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
+			errorChan = make(chan error, errorChannelSize)
 			ValidateContext(ctx, &errorChan)
-			// BUG: Execution doesn't resume here after ValidateContext called
-			// Below code is never executed
 			for err := range errorChan {
 				log.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
@@ -1277,8 +1280,9 @@ func TriggerRestartVolDriver(contexts *[]*scheduler.Context, recordChan *chan *E
 }
 
 func validateContexts(event *EventRecord, contexts *[]*scheduler.Context) {
+	actualEvent := strings.Split(event.Event.Type, "<br>")[0]
 	for _, ctx := range *contexts {
-		stepLog := fmt.Sprintf("%s: validating app [%s]", event.Event.Type, ctx.App.Key)
+		stepLog := fmt.Sprintf("%s: validating app [%s]", actualEvent, ctx.App.Key)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			errorChan := make(chan error, errorChannelSize)
@@ -2710,6 +2714,9 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
+		actualEvent := strings.Split(eventRecord.Event.Type, "<br>")[0]
+		TestExecutionCountMap[actualEvent] += 1
+		log.Infof("TestExecutionCountMap: %v", TestExecutionCountMap)
 		eventRing = eventRing.Next()
 	}
 }
