@@ -153,21 +153,13 @@ func (k *Keycloak) GetCommonHeaders(token string) http.Header {
 }
 
 func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body io.Reader, header http.Header) (*http.Request, error) {
-	keycloakEndpoint, err := k.GetEndpoint(admin, route)
+	endpoint, err := k.GetEndpoint(admin, route)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	reqURL := keycloakEndpoint
-	if route != "" {
-		if strings.HasPrefix(route, "/") {
-			reqURL += route
-		} else {
-			reqURL += fmt.Sprintf("/%s", route)
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
-		return nil, ProcessError(err)
+		return nil, ProcessError(err, endpoint)
 	}
 	req.Header = header
 	return req, nil
