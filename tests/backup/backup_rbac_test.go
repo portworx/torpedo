@@ -1263,6 +1263,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		userNames                  = make([]string, 0)
 		cloudCredUID               string
 		backupLocationUID          string
+		credName                   string
 		cloudCredName              string
 		backupLocationName         string
 		bkpNamespaces              []string
@@ -1320,7 +1321,7 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 				if provider != drivers.ProviderNfs {
 					cloudCredUID = uuid.New()
 					backupLocationUID = uuid.New()
-					credName := fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
+					credName = fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
 					err = CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctxNonAdmin)
 					dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating cloud credentials for provider [%s]", appUser, provider))
 				} else {
