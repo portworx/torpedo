@@ -16,20 +16,19 @@ import (
 )
 
 const (
-	// GlobalPxBackupAuthTokenType defines the type of authentication token used by Px-Backup
-	GlobalPxBackupAuthTokenType = "bearer"
-	// GlobalPxBackupAuthHeader is the HTTP header key used for authentication in Px-Backup requests
+	// GlobalPxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
 	GlobalPxBackupAuthHeader = "authorization"
-	// GlobalPxBackupOrgToken is the key for the organization-specific token within a
-	// Kubernetes secret named by GlobalPxBackupAdminTokenSecretName for Px-Backup
+	// GlobalPxBackupAuthTokenType is the type of authentication token in Px-Backup requests
+	GlobalPxBackupAuthTokenType = "bearer"
+	// GlobalPxBackupOrgToken is the key for the organization-specific token within GlobalPxBackupAdminSecretName
 	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
+	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
+	GlobalPxCentralAdminSecretName = "px-central-admin"
+	// GlobalPxBackupAdminSecretName is the Kubernetes secret that stores the token for Px-Backup admin
+	GlobalPxBackupAdminSecretName = "px-backup-admin-secret"
 	// GlobalPxBackupKeycloakServiceName is the Kubernetes service that facilitates
 	// user authentication through Keycloak in Px-Backup
 	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
-	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
-	GlobalPxCentralAdminSecretName = "px-central-admin"
-	// GlobalPxBackupAdminTokenSecretName is the Kubernetes secret that stores the token for Px-Backup admin
-	GlobalPxBackupAdminTokenSecretName = "px-backup-admin-secret"
 )
 
 var (
@@ -252,7 +251,7 @@ func UpdatePxBackupAdminSecret(ctx context.Context) error {
 	if err != nil {
 		return ProcessError(err)
 	}
-	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminTokenSecretName, pxbNamespace)
+	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminSecretName, pxbNamespace)
 	if err != nil {
 		return ProcessError(err)
 	}
@@ -284,13 +283,13 @@ func GetAdminCtxFromSecret(ctx context.Context) (context.Context, error) {
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminTokenSecretName, pxbNamespace)
+	secret, err := core.Instance().GetSecret(GlobalPxBackupAdminSecretName, pxbNamespace)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
 	token := string(secret.Data[GlobalPxBackupOrgToken])
 	if token == "" {
-		err = fmt.Errorf("[%s] token in secret [%s] is empty", GlobalPxBackupAdminTokenSecretName, GlobalPxBackupOrgToken)
+		err = fmt.Errorf("[%s] token in secret [%s] is empty", GlobalPxBackupAdminSecretName, GlobalPxBackupOrgToken)
 		return nil, ProcessError(err)
 	}
 	return GetCtxWithToken(ctx, token), nil
