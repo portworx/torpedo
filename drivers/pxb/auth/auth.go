@@ -41,10 +41,10 @@ var (
 const (
 	// PxBackupOIDCEndpoint is the env var for the OIDC endpoint
 	PxBackupOIDCEndpoint = "OIDC_ENDPOINT"
-	// PxBackupOIDCSecretName is the env var for the OIDC secret name within
-	// Px-Backup namespace, defaulting to DefaultOIDCSecretName
+	// PxBackupOIDCSecretName is the env var for the OIDC secret
 	PxBackupOIDCSecretName = "SECRET_NAME"
-	// PxCentralUIURL is the env var for the Px-Central UI URL. Example: http://<IP>:<Port>
+	// PxCentralUIURL is the env var for the Px-Central UI URL.
+	// Example: http://pxcentral-keycloak-http:80
 	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
 
@@ -108,10 +108,8 @@ func (k *Keycloak) GetEndpoint(admin bool, route string) (string, error) {
 	// local machine using the Ginkgo CLI.
 	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
 		if admin {
-			// Example: http://pxcentral-keycloak-http:80/auth/admin/realms/master
 			baseURL = fmt.Sprintf("%s/auth/admin/realms/master", pxCentralUIURL)
 		} else {
-			// Example: http://pxcentral-keycloak-http:80/auth/realms/master
 			baseURL = fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
 		}
 	}
