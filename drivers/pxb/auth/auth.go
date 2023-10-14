@@ -39,13 +39,13 @@ var (
 )
 
 const (
+	// PxCentralUIURL is the env var for the Px-Central UI URL.
+	// Example: http://pxcentral-keycloak-http:80
+	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 	// PxBackupOIDCEndpoint is the env var for the OIDC endpoint
 	PxBackupOIDCEndpoint = "OIDC_ENDPOINT"
 	// PxBackupOIDCSecretName is the env var for the OIDC secret
 	PxBackupOIDCSecretName = "SECRET_NAME"
-	// PxCentralUIURL is the env var for the Px-Central UI URL.
-	// Example: http://pxcentral-keycloak-http:80
-	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
 
 // DefaultOIDCSecretName is the fallback Kubernetes secret in case PxBackupOIDCSecretName is not set
