@@ -20,15 +20,15 @@ const (
 	GlobalPxBackupAuthHeader = "authorization"
 	// GlobalPxBackupAuthTokenType is the type of authentication token in Px-Backup requests
 	GlobalPxBackupAuthTokenType = "bearer"
-	// GlobalPxBackupOrgToken is the key for the organization-specific token within GlobalPxBackupAdminSecretName
+	// GlobalPxBackupOrgToken is the organization token key within GlobalPxBackupAdminSecretName
 	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
+	// GlobalPxBackupKeycloakServiceName is the Kubernetes service that facilitates
+	// user authentication through Keycloak in Px-Backup
+	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
 	GlobalPxCentralAdminSecretName = "px-central-admin"
 	// GlobalPxBackupAdminSecretName is the Kubernetes secret that stores the token for Px-Backup admin
 	GlobalPxBackupAdminSecretName = "px-backup-admin-secret"
-	// GlobalPxBackupKeycloakServiceName is the Kubernetes service that facilitates
-	// user authentication through Keycloak in Px-Backup
-	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 )
 
 var (
