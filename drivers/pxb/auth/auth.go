@@ -104,7 +104,7 @@ func (k *Keycloak) GetEndpoint(admin bool, route string) (string, error) {
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
 	// The condition checks whether pxCentralUIURL is set. This condition is added to
 	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
-	// cases, gRPC calls to pxcentral-keycloak-http:80 would fail when run on a VM or
+	// cases, gRPC calls pxcentral-keycloak-http:80 would fail when made from a VM or
 	// local machine using the Ginkgo CLI.
 	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
 		if admin {
