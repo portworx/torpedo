@@ -22,9 +22,9 @@ const (
 	GlobalPxBackupAuthTokenType = "bearer"
 	// GlobalPxBackupOrgToken is the organization token key within GlobalPxBackupAdminSecretName
 	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
-	// GlobalPxBackupKeycloakServiceName is the Kubernetes service that facilitates
+	// GlobalKeycloakServiceName is the Kubernetes service that facilitates
 	// user authentication through Keycloak in Px-Backup
-	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
+	GlobalKeycloakServiceName = "pxcentral-keycloak-http"
 	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
 	GlobalPxCentralAdminSecretName = "px-central-admin"
 	// GlobalPxBackupAdminSecretName is the Kubernetes secret that stores the token for Px-Backup admin
@@ -106,6 +106,7 @@ func (k *Keycloak) GetCommonHeaders(token string) http.Header {
 
 func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 	baseURL := ""
+	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
 	// The condition checks whether pxCentralUIURL is set. This condition is added to
 	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
@@ -118,8 +119,6 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 			baseURL = fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
 		}
 	} else {
-		oidcSecretName := GetOIDCSecretName()
-		keycloakServiceName := GlobalPxBackupKeycloakServiceName
 		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.Namespace)
 		if err != nil {
 			return "", ProcessError(err, oidcSecretName)
@@ -128,8 +127,8 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", keycloakServiceName, k.Namespace)
-		newURL := strings.Replace(oidcEndpoint, keycloakServiceName, replacement, 1)
+		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalKeycloakServiceName, k.Namespace)
+		newURL := strings.Replace(oidcEndpoint, GlobalKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
 			baseURL = fmt.Sprintf("%sauth/admin%s", split[0], split[1])
