@@ -9,6 +9,7 @@ import (
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,12 +32,8 @@ const (
 	GlobalPxBackupAdminSecretName = "px-backup-admin-secret"
 )
 
-var (
-	// GlobalPxCentralAdminUsername is the username for px-central-admin user
-	GlobalPxCentralAdminUsername = "px-central-admin"
-	// GlobalPxCentralAdminPassword is the password for px-central-admin user
-	GlobalPxCentralAdminPassword string
-)
+// DefaultOIDCSecretName is the fallback Kubernetes secret in case PxBackupOIDCSecretName is not set
+const DefaultOIDCSecretName = "pxc-backup-secret"
 
 const (
 	// PxBackupOIDCEndpoint is the env var for the OIDC endpoint
@@ -46,9 +43,6 @@ const (
 	// PxCentralUIURL is the env var for the px-central UI URL. Example: http://pxcentral-keycloak-http:80
 	PxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
-
-// DefaultOIDCSecretName is the fallback Kubernetes secret in case PxBackupOIDCSecretName is not set
-const DefaultOIDCSecretName = "pxc-backup-secret"
 
 // CredentialRepresentation defines the scheme for representing the user credential in Keycloak
 type CredentialRepresentation struct {
@@ -187,77 +181,81 @@ func (k *Keycloak) GetResponse(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
+func (k *Keycloak) Execute(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
+	httpRequest, err := k.MakeRequest(ctx, method, admin, route, body, headerMap)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	httpResponse, err := k.GetResponse(httpRequest)
+	if err != nil {
+		return nil, ProcessError(err, ToString(httpRequest))
+	}
+	defer func() {
+		err := httpResponse.Body.Close()
+		if err != nil {
+			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
+		}
+	}()
+	responseBody, err := io.ReadAll(httpResponse.Body)
+	if err != nil {
+		return nil, ProcessError(err, ToString(httpResponse.Body))
+	}
+	statusCode := httpResponse.StatusCode
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		return responseBody, nil
+	default:
+		requestURL, statusText := httpResponse.Request.URL, http.StatusText(statusCode)
+		err = fmt.Errorf("%s %s returned status %d: %s", method, requestURL, statusCode, statusText)
+		return nil, ProcessError(err, ToString(httpResponse))
+	}
+}
+
 func (k *Keycloak) GetToken(ctx context.Context) (string, error) {
 	route := "/protocol/openid-connect/token"
 	values := make(url.Values)
-	values.Set("client_id", "pxcentral")
 	values.Set("username", k.AdminUsername)
 	values.Set("password", k.AdminPassword)
 	values.Set("grant_type", "password")
+	values.Set("client_id", "pxcentral")
 	values.Set("token-duration", "365d")
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
-	req, err := k.MakeRequest(ctx, "POST", false, route, values.Encode(), headerMap)
-
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	httpResponse, err := k.GetResponse(req)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	body, err := InspectResponse(httpResponse)
+	body, err := k.Execute(ctx, "POST", false, route, values.Encode(), headerMap)
 	if err != nil {
 		return "", ProcessError(err)
 	}
 	token := &TokenRepresentation{}
 	err = json.Unmarshal(body, &token)
 	if err != nil {
-		return "", ProcessError(err)
+		return "", ProcessError(err, ToString(body))
 	}
 	return token.AccessToken, nil
 }
 
-// GetOIDCSecretName retrieves the name of the OIDC secret from the environment or returns the default name
 func GetOIDCSecretName() string {
-	oidcSecretName := os.Getenv(PxBackupOIDCSecretName)
-	if oidcSecretName == "" {
+	oidcSecretName, ok := os.LookupEnv(PxBackupOIDCSecretName)
+	if !ok || oidcSecretName == "" {
 		oidcSecretName = DefaultOIDCSecretName
 	}
 	return oidcSecretName
 }
 
-func GetPxCentralAdminPassword() (string, error) {
-	pxbNamespace, err := GetPxBackupNamespace()
+func (k *Keycloak) LoginAsAdmin() error {
+	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, k.Namespace)
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	PxCentralAdminPwd := string(secret.Data["credential"])
-	if PxCentralAdminPwd == "" {
+	pxCentralAdminPwd := string(secret.Data["credential"])
+	if pxCentralAdminPwd == "" {
 		err = fmt.Errorf("%s secret is empty", GlobalPxCentralAdminSecretName)
 		return "", ProcessError(err)
 	}
-	return PxCentralAdminPwd, nil
+	return pxCentralAdminPwd, nil
 }
 
-func GetPxCentralAdminToken(ctx context.Context) (string, error) {
-	token, err := GetToken(ctx, GlobalPxCentralAdminUsername, GlobalPxCentralAdminPassword)
-	if err != nil {
-		return "", err
-	}
-	return token, nil
-}
-
-func UpdatePxBackupAdminSecret(ctx context.Context) error {
-	pxbNamespace, err := GetPxBackupNamespace()
-	if err != nil {
-		return ProcessError(err)
-	}
-	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
+func (k *Keycloak) UpdatePxBackupAdminSecret(ctx context.Context) error {
+	pxCentralAdminToken, err := k.GetToken(ctx)
 	if err != nil {
 		return ProcessError(err)
 	}
