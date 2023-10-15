@@ -202,6 +202,7 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 	})
 
 	stepLog := "Resize with invalid pool ID"
+	log.InfoD(stepLog)
 	It(stepLog, func() {
 		// pick node to resize
 		nodes := node.GetStorageNodes()
@@ -253,23 +254,19 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 	})
 
 	stepLog := "should get the existing pool and expand it by adding a disk and verify from other node"
+	log.InfoD(stepLog)
 	It(stepLog, func() {
-
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
-		fmt.Printf("poolIDToResize=%v, storageNode=%v \n", poolIDToResize, storageNode)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 
 		// get original total size
 		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(*storageNode)
 		var orignalTotalSize float64
 		for _, pstatus := range provisionStatus {
-			fmt.Printf("pstatus.NodeUUID = %v, storageNode.Id = %v \n", pstatus.NodeUUID, storageNode.Id)
 			if pstatus.NodeUUID == storageNode.Id {
 				orignalTotalSize += pstatus.TotalSize
 			}
 		}
-
-		fmt.Println("***$ orignalTotalSize = ", orignalTotalSize)
 
 		originalSizeInBytes = poolToBeResized.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
@@ -322,8 +319,8 @@ var _ = Describe("{PoolExpandDiskResizeResizeLimit}", func() {
 	})
 
 	stepLog := "select a pool and expand it by 30000000 GiB with resize-disk type"
+	log.InfoD(stepLog)
 	It(stepLog, func() {
-
 		// pick pool to resize
 		pools, err := GetAllPoolsPresent()
 		log.FailOnError(err, "Unable to get the storage Pools")
@@ -332,6 +329,13 @@ var _ = Describe("{PoolExpandDiskResizeResizeLimit}", func() {
 		resizeErr := Inst().V.ExpandPool(pooltoPick, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 30000000, true)
 		dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool expansion size")
 
+		// Verify error on pool expansion failure
+		var errMatch error
+		re := regexp.MustCompile(`.*cannot be expanded beyond maximum size.*`)
+		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
+			errMatch = fmt.Errorf("failed to verify failure using invalid Pool size")
+		}
+		dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
 	})
 
 })
