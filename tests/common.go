@@ -5270,12 +5270,13 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 }
 
 func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	//TODO enhance the method to work with NFS server on cloud
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
-	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	// Mount the NFS share to the worker node.
+	masterNode := node.GetWorkerNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
@@ -5382,7 +5383,7 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
 
 	if retainCount > 0 && objectLock == true {
-		// Update ObjectLockConfigureation to bucket
+		// Update ObjectLockConfiguration to bucket
 		enabled := "Enabled"
 		_, err = S3Client.PutObjectLockConfiguration(&s3.PutObjectLockConfigurationInput{
 			Bucket: aws.String(bucketName),
@@ -5393,10 +5394,67 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 						Days: aws.Int64(retainCount),
 						Mode: aws.String(objectLockMode)}}}})
 		if err != nil {
-			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+			err = fmt.Errorf("failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
 		}
 	}
 	return err
+}
+
+// UpdateS3BucketPolicy applies the given policy to the given bucket.
+func UpdateS3BucketPolicy(bucketName string, policy string) error {
+
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get S3 session to update bucket policy : [%v]", err)
+	}
+	s3Client := s3.New(sess)
+	_, err = s3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+		Policy: aws.String(policy),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update bucket policy with Policy [%v]. Error: [%v]", policy, err)
+	}
+	return nil
+}
+
+// RemoveS3BucketPolicy removes the given policy from the given bucket.
+func RemoveS3BucketPolicy(bucketName string) error {
+	// Create a new S3 client.
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove S3 bucket policy : [%v]", err)
+	}
+
+	s3Client := s3.New(sess)
+
+	// Create a new DeleteBucketPolicyInput object.
+	input := &s3.DeleteBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	// Delete the bucket policy.
+	_, err = s3Client.DeleteBucketPolicy(input)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateAzureBucket creates bucket in Azure
@@ -9153,6 +9211,7 @@ func convertToGiB(size string) float64 {
 	return -1
 }
 
+// GetClusterProvisionStatusOnSpecificNode Returns provision status from the specific node
 func GetClusterProvisionStatusOnSpecificNode(n node.Node) ([]ProvisionStatus, error) {
 	clusterProvision := []ProvisionStatus{}
 	cmd := "pxctl cluster provision-status list"
@@ -9195,19 +9254,19 @@ func GetClusterProvisionStatusOnSpecificNode(n node.Node) ([]ProvisionStatus, er
 	return clusterProvision, nil
 }
 
+// GetClusterProvisionStatus  returns details of cluster provision status
 func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	// Using Node which is up and running
 	var selectedNode []node.Node
-	for _, eachNode := range node.GetNodes() {
-		if !node.IsMasterNode(eachNode) {
-			status, err := IsPxRunningOnNode(&eachNode)
-			if err != nil {
-				log.InfoD("Px is not running on the Node.. searching for other node")
-				continue
-			}
-			if status {
-				selectedNode = append(selectedNode, eachNode)
-			}
+	for _, eachNode := range node.GetStorageDriverNodes() {
+		status, err := IsPxRunningOnNode(&eachNode)
+		if err != nil {
+			log.InfoD("Px is not running on the Node.. searching for other node")
+			continue
+		}
+		if status {
+			selectedNode = append(selectedNode, eachNode)
+			break
 		}
 	}
 	if len(selectedNode) == 0 {
@@ -9255,6 +9314,7 @@ func GetPoolAvailableSize(poolUUID string) (float64, error) {
 	return -1, err
 }
 
+// GetAllPoolsOnNode Returns list of all pool uuids present on specific Node
 func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 	var poolDetails []string
 	provision, err := GetClusterProvisionStatus()
@@ -9265,18 +9325,6 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 		if eachProvision.NodeUUID == nodeUuid {
 			poolDetails = append(poolDetails, eachProvision.PoolUUID)
 		}
-	}
-	return poolDetails, nil
-}
-
-func GetAllPoolsPresent() ([]string, error) {
-	var poolDetails []string
-	provision, err := GetClusterProvisionStatus()
-	if err != nil {
-		return nil, err
-	}
-	for _, eachProvision := range provision {
-		poolDetails = append(poolDetails, eachProvision.PoolUUID)
 	}
 	return poolDetails, nil
 }
@@ -9296,6 +9344,7 @@ func GetGkeSecret() (string, error) {
 	return cm.Data["cloud-json"], nil
 }
 
+// WaitForSnapShotToReady returns snapshot status after waiting till snapshot gets to Ready state
 func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace string) (*storkapi.ScheduledVolumeSnapshotStatus, error) {
 
 	var schedVolumeSnapstatus *storkapi.ScheduledVolumeSnapshotStatus
@@ -9331,6 +9380,19 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 
 	return schedVolumeSnapstatus, err
 
+}
+
+// GetAllPoolsPresent returns list of all pools present in the cluster
+func GetAllPoolsPresent() ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		poolDetails = append(poolDetails, eachProvision.PoolUUID)
+	}
+	return poolDetails, nil
 }
 
 // AddCloudCredentialOwnership adds new ownership to the existing CloudCredential object.
@@ -9406,4 +9468,35 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
 	}
 	return nil
+}
+
+// GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) (string, error) {
+
+	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
+	if len(encryptionPolicyValues) < 2 {
+		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
+	}
+	policy := `{
+	   "Version": "2012-10-17",
+	   "Statement": [
+		  {
+			 "Sid": "%s",
+			 "Effect": "Deny",
+			 "Principal": "*",
+			 "Action": ["s3:PutObject"],
+			 "Resource": "arn:aws:s3:::%s/*",
+			 "Condition": {
+				"StringNotEquals": {
+				   "%s":"%s"
+				}
+			 }
+		  }
+	   ]
+	}`
+
+	// Replace the placeholders in the policy with the values passed to the function.
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
+
+	return policy, nil
 }
