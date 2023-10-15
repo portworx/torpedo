@@ -3,10 +3,7 @@ package pxbutils
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/torpedo/pkg/log"
-	"io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
@@ -18,37 +15,6 @@ const (
 	// GlobalPxBackupServiceName is the name of the Kubernetes service associated with Px-Backup
 	GlobalPxBackupServiceName = "px-backup"
 )
-
-func InspectResponse(response *http.Response) ([]byte, error) {
-	if response == nil {
-		err := fmt.Errorf("response is nil")
-		return nil, ProcessError(err)
-	}
-	defer func() {
-		err := response.Body.Close()
-		if err != nil {
-			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
-		}
-	}()
-	respBody, err := io.ReadAll(response.Body)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	statusCode, requestURL := response.StatusCode, response.Request.URL
-	switch {
-	case statusCode >= 200 && statusCode < 300:
-		return respBody, nil
-	case statusCode >= 400 && statusCode < 500:
-		err = fmt.Errorf("client-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
-		return nil, ProcessError(err)
-	case statusCode >= 500:
-		err = fmt.Errorf("server-side error for URL [%s]. Status code: [%d], Response Body: [%s]", requestURL, statusCode, respBody)
-		return nil, ProcessError(err)
-	default:
-		err = fmt.Errorf("unexpected status code %d for URL %s. Response Body: %s", statusCode, requestURL, respBody)
-		return nil, ProcessError(err)
-	}
-}
 
 // ProcessError formats the error message with caller information and an optional debug message
 func ProcessError(err error, debugMessage ...string) error {
