@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -97,14 +97,13 @@ type Keycloak struct {
 	AdminPassword string
 }
 
-func (k *Keycloak) GetCommonHeaders(token string) http.Header {
-	headers := make(http.Header)
-	headers.Add("Content-Type", "application/json")
-	headers.Add("Authorization", fmt.Sprintf("Bearer %v", token))
-	return headers
+func (k *Keycloak) GetCommonHeaderMap(token string) map[string]string {
+	headerMap := make(map[string]string)
+	headerMap["Authorization"] = fmt.Sprint("Bearer ", token)
+	return headerMap
 }
 
-func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
+func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 	baseURL := ""
 	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
@@ -146,16 +145,37 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 	return baseURL, nil
 }
 
-func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body io.Reader, header http.Header) (*http.Request, error) {
-	reqURL, err := k.GetURL(admin, route)
+func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) (*http.Request, error) {
+	reqURL, err := k.BuildURL(admin, route)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	reqBody, err := func() (*bytes.Reader, error) {
+		switch v := body.(type) {
+		case nil:
+			return nil, nil
+		case string:
+			return bytes.NewReader([]byte(v)), nil
+		case []byte:
+			return bytes.NewReader(v), nil
+		default:
+			bodyBytes, err := json.Marshal(v)
+			if err != nil {
+				return nil, ProcessError(err)
+			}
+			return bytes.NewReader(bodyBytes), nil
+		}
+	}()
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, reqBody)
 	if err != nil {
 		return nil, ProcessError(err, reqURL)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
-	if err != nil {
-		return nil, ProcessError(err, reqURL)
+	for key, value := range headerMap {
+		req.Header.Set(key, value)
 	}
-	req.Header = header
 	return req, nil
 }
 
@@ -168,21 +188,21 @@ func (k *Keycloak) GetResponse(req *http.Request) (*http.Response, error) {
 }
 
 func (k *Keycloak) GetToken(ctx context.Context) (string, error) {
+	route := "/protocol/openid-connect/token"
 	values := make(url.Values)
 	values.Set("client_id", "pxcentral")
 	values.Set("username", k.AdminUsername)
 	values.Set("password", k.AdminPassword)
 	values.Set("grant_type", "password")
 	values.Set("token-duration", "365d")
-	route := "/protocol/openid-connect/token"
-	header := make(http.Header)
-	header.Add("Content-Type", "application/x-www-form-urlencoded")
+	headerMap := make(map[string]string)
+	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
+	req, err := k.MakeRequest(ctx, "POST", false, route, values.Encode(), headerMap)
 
-	httpRequest, err := k.MakeRequest(ctx, "POST", false, route, strings.NewReader(values.Encode()), header)
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	httpResponse, err := k.GetResponse(httpRequest)
+	httpResponse, err := k.GetResponse(req)
 	if err != nil {
 		return "", ProcessError(err)
 	}
