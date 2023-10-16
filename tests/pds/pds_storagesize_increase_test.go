@@ -44,9 +44,7 @@ var _ = Describe("{ResizeStorageAndValidateTemplate}", func() {
 			stConfigModelUpdated     *pds.ModelsStorageOptionsTemplate
 			newResourceTemplateID    string
 			newStorageTemplateID     string
-			//customResourceTemplateID string
-			//customStorageTemplateID  string
-			updatedPvcSize uint64
+			updatedPvcSize           uint64
 		)
 		restoredDeploymentsmd5Hash := make(map[string]string)
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
@@ -64,8 +62,6 @@ var _ = Describe("{ResizeStorageAndValidateTemplate}", func() {
 				Secure:         false,
 				VolGroups:      false,
 			})
-			//customResourceTemplateID = resConfigModel.GetId()
-			//customStorageTemplateID = stConfigModel.GetId()
 			for _, ds := range params.DataServiceToTest {
 				dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 				stepLog = "Check PVC for full condition based upto 90% full"
