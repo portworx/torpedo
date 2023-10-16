@@ -16,6 +16,16 @@ const (
 	GlobalPxBackupServiceName = "px-backup"
 )
 
+type DebugMap map[string]interface{}
+
+func (m *DebugMap) Add(key string, value interface{}) {
+	(*m)[key] = value
+}
+
+func (m *DebugMap) String() string {
+	return ToString(m)
+}
+
 // ProcessError formats the error message with caller information and an optional debug message
 func ProcessError(err error, debugMessage ...string) error {
 	if err == nil {
