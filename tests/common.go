@@ -9516,18 +9516,18 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 }
 
 func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
-	var expectedSseType api.S3Config_Sse
+	var sseType api.S3Config_Sse
 	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
 	if s3SseTypeEnv != "" {
 		sseDetails, _ := s3utils.GetS3SSEDetailsFromEnv()
 		switch strings.ToUpper(string(sseDetails.SseType)) {
 		case string(s3utils.SseS3):
-			expectedSseType = api.S3Config_SSE_S3
+			sseType = api.S3Config_SSE_S3
 		default:
-			return expectedSseType, fmt.Errorf("failed to sse s3 encryption type : [%v]", sseDetails.SseType)
+			return sseType, fmt.Errorf("failed to sse s3 encryption type : [%v]", sseDetails.SseType)
 		}
 	} else {
-		expectedSseType = api.S3Config_Invalid
+		sseType = api.S3Config_Invalid
 	}
-	return expectedSseType, nil
+	return sseType, nil
 }
