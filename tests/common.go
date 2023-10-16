@@ -853,18 +853,25 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step("validate mount options for pure volumes", func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			processError(err, errChan...)
+		}
+		log.InfoD("Validate current Version [%v]", driverVersion)
+		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+		if !re.MatchString(driverVersion) {
+			Step("validate mount options for pure volumes", func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
 
-		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
-
+			Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
+		}
 	})
 }
 
@@ -1406,30 +1413,23 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		}
 
-		driverVersion, err := Inst().V.GetDriverVersion()
+		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
 		if err != nil {
+			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
 			processError(err, errChan...)
 		}
-		log.InfoD("Validate current Version [%v]", driverVersion)
-		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
-		if !re.MatchString(driverVersion) {
-			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
-			if err != nil {
-				err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
-				processError(err, errChan...)
-			}
-			if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
-				FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
-				if ok {
-					err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
-					dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
-				} else {
-					log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
-				}
+		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+			if ok {
+				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
 			} else {
-				log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
 			}
+		} else {
+			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
 		}
+
 	}
 }
 
