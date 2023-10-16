@@ -1409,7 +1409,17 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
 		if err != nil {
 			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
-			processError(err, errChan...)
+			driverVersion, err := Inst().V.GetDriverVersion()
+			if err != nil {
+				processError(err, errChan...)
+			}
+			log.InfoD("Validating Driver version: [%v]", driverVersion)
+			if driverVersion > "3.0.0" {
+				processError(err, errChan...)
+			} else {
+				// Fix to skip attached drive check for build less than 3.0.0 (PWX-34000)
+				log.Infof("Failed to get details of attached Node PWX-34000")
+			}
 		}
 		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
 			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
