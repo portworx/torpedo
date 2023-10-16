@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	batchv1 "k8s.io/api/batch/v1"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -67,6 +67,7 @@ type FIOOptions struct {
 	EndFsync  int
 }
 
+// NewVCluster Creates instance of Vcluster
 func NewVCluster(name string) *VCluster {
 	namespace := "vcluster-" + name
 	return &VCluster{Namespace: namespace, Name: name}
@@ -125,6 +126,7 @@ func DeleteVCluster(vclusterName string) error {
 	return nil
 }
 
+// TerminateVCluster Terminates Vcluster and runs it in it's own context
 func (v *VCluster) TerminateVCluster() error {
 	cmd := exec.Command("vcluster", "delete", v.Name)
 	if err := cmd.Run(); err != nil {
