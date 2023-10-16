@@ -9515,6 +9515,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 	return policy, nil
 }
 
+// GetSseS3EncryptionType fetches SSE type for S3 bucket from the environment variable
 func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
 	var sseType api.S3Config_Sse
 	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
