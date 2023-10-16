@@ -1414,11 +1414,11 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 				processError(err, errChan...)
 			}
 			log.InfoD("Validating Driver version: [%v]", driverVersion)
-			if driverVersion > "3.0.0" {
-				processError(err, errChan...)
-			} else {
-				// Fix to skip attached drive check for build less than 3.0.0 (PWX-34000)
+			re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+			if re.MatchString(driverVersion) {
 				log.Infof("Failed to get details of attached Node PWX-34000")
+			} else {
+				processError(err, errChan...)
 			}
 		}
 		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
