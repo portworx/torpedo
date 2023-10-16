@@ -133,6 +133,7 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 
 func (k *Keycloak) GetCommonHeaderMap(token string) map[string]string {
 	headerMap := make(map[string]string)
+	headerMap["Content-Type"] = "application/json"
 	headerMap["Authorization"] = fmt.Sprint("Bearer ", token)
 	return headerMap
 }
