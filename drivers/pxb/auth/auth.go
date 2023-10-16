@@ -135,11 +135,15 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 	return baseURL, nil
 }
 
-func (k *Keycloak) GetCommonHeaderMap(token string) map[string]string {
+func (k *Keycloak) GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
+	pxCentralAdminToken, err := k.GetPxCentralAdminToken(ctx)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/json"
-	headerMap["Authorization"] = fmt.Sprint("Bearer ", token)
-	return headerMap
+	headerMap["Authorization"] = fmt.Sprint("Bearer ", pxCentralAdminToken)
+	return headerMap, nil
 }
 
 func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) (*http.Request, error) {
@@ -333,12 +337,15 @@ type AddUserResponse struct{}
 
 func (k *Keycloak) AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
 	route := "users"
-	userBytes, err := json.Marshal(req.UserRepresentation)
+	headerMap, err := k.GetCommonHeaderMap(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-
-	_, err = k.Do(ctx, "POST", true, route, string(userBytes), k.GetCommonHeaderMap(token))
+	userRepBytes, err := json.Marshal(req.UserRepresentation)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	_, err = k.Do(ctx, "POST", true, route, string(userRepBytes), headerMap)
 	if err != nil {
 		return nil, err
 	}
@@ -351,9 +358,13 @@ type EnumerateUserResponse struct {
 	Users []*UserRepresentation
 }
 
-func EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUserResponse, error) {
-	path := "users"
-	respBody, err := ProcessKeycloakRequest(ctx, GET, path, nil)
+func (k *Keycloak) EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUserResponse, error) {
+	route := "users"
+	headerMap, err := k.GetCommonHeaderMap(ctx)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	respBody, err := k.Do(ctx, "GET", true, route, nil, headerMap)
 	if err != nil {
 		return nil, err
 	}
@@ -371,22 +382,26 @@ type DeleteUserRequest struct {
 
 type DeleteUserResponse struct{}
 
-func DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
-	userID, err := GetUserID(ctx, req.Username)
+func (k *Keycloak) DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
+	headerMap, err := k.GetCommonHeaderMap(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	path := fmt.Sprintf("users/%s", userID)
-	_, err = ProcessKeycloakRequest(ctx, DELETE, path, nil)
+	userID, err := k.GetUserID(ctx, req.Username)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	route := fmt.Sprintf("users/%s", userID)
+	_, err = k.Do(ctx, "DELETE", true, route, nil, headerMap)
 	if err != nil {
 		return nil, err
 	}
 	return &DeleteUserResponse{}, nil
 }
 
-func GetUserID(ctx context.Context, username string) (string, error) {
+func (k *Keycloak) GetUserID(ctx context.Context, username string) (string, error) {
 	enumerateUserReq := &EnumerateUserRequest{}
-	enumerateUserResp, err := EnumerateUser(ctx, enumerateUserReq)
+	enumerateUserResp, err := k.EnumerateUser(ctx, enumerateUserReq)
 	if err != nil {
 		return "", ProcessError(err)
 	}

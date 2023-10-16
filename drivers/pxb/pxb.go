@@ -6,8 +6,10 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/pxb/auth"
 	"github.com/portworx/torpedo/drivers/pxb/generics"
-	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
+	"github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
+	"net/http"
+	"time"
 )
 
 type User struct {
@@ -16,21 +18,21 @@ type User struct {
 	OrganizationDataStore *generics.DataStore[*Organization]
 }
 
-func (u *User) Delete() error {
-	if u == nil {
-		err := fmt.Errorf("user is nil")
-		return ProcessError(err)
-	}
-	deleteUserReq := &auth.DeleteUserRequest{
-		Username: u.Spec.Username,
-	}
-	_, err := auth.DeleteUser(context.Background(), deleteUserReq)
-	if err != nil {
-		return ProcessError(err)
-	}
-	u.PxBackup.UserDataStore.Remove(u.Spec.Username)
-	return nil
-}
+//func (u *User) Delete() error {
+//	if u == nil {
+//		err := fmt.Errorf("user is nil")
+//		return ProcessError(err)
+//	}
+//	deleteUserReq := &auth.DeleteUserRequest{
+//		Username: u.Spec.Username,
+//	}
+//	_, err := auth.DeleteUser(context.Background(), deleteUserReq)
+//	if err != nil {
+//		return ProcessError(err)
+//	}
+//	u.PxBackup.UserDataStore.Remove(u.Spec.Username)
+//	return nil
+//}
 
 type Organization struct {
 	Spec                     *api.OrganizationObject
@@ -53,9 +55,17 @@ func (b *PxBackup) AddTestUser(username string, password string) error {
 	addUserReq := &auth.AddUserRequest{
 		UserRepresentation: auth.NewTestUserRepresentation(username, password),
 	}
-	_, err := auth.AddUser(context.Background(), addUserReq)
+	pxbNamespace, err := pxbutils.GetPxBackupNamespace()
 	if err != nil {
-		return ProcessError(err)
+		log.FailOnError(err, "failed to get px-backup namespace")
+	}
+	keycloak := &auth.Keycloak{
+		Client:    &http.Client{Timeout: 1 * time.Minute},
+		Namespace: pxbNamespace,
+	}
+	_, err = keycloak.AddUser(context.Background(), addUserReq)
+	if err != nil {
+		return pxbutils.ProcessError(err)
 	}
 	user := &User{
 		Spec:                  addUserReq.UserRepresentation,
@@ -70,7 +80,7 @@ func (b *PxBackup) SelectUser(username string) *User {
 	user := b.UserDataStore.Get(username)
 	if user == nil {
 		err := fmt.Errorf("user with username [%s] not found", username)
-		log.Errorf(ProcessError(err).Error())
+		log.Errorf(pxbutils.ProcessError(err).Error())
 	}
 	return user
 }
