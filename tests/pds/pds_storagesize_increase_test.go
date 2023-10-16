@@ -136,7 +136,7 @@ var _ = Describe("{ResizeStorageAndValidateTemplate}", func() {
 							_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
 							log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 							log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigModelUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
-							dash.VerifyFatal(*resConfigModelUpdated.StorageRequest, config.Spec.Resources.Requests.Storage, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+							dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigModelUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
 
 							if updatedPvcSize > initialCapacity {
 								flag := true
