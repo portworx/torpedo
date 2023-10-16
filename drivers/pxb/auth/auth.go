@@ -86,15 +86,7 @@ type TokenRepresentation struct {
 
 type Keycloak struct {
 	*http.Client
-	Namespace     string
-	AdminUsername string
-	AdminPassword string
-}
-
-func (k *Keycloak) GetCommonHeaderMap(token string) map[string]string {
-	headerMap := make(map[string]string)
-	headerMap["Authorization"] = fmt.Sprint("Bearer ", token)
-	return headerMap
+	Namespace string
 }
 
 func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
@@ -107,9 +99,9 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 	// local machine using the Ginkgo CLI.
 	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
 		if admin {
-			baseURL = fmt.Sprintf("%s/auth/admin/realms/master", pxCentralUIURL)
+			baseURL = fmt.Sprint(pxCentralUIURL, "/auth/admin/realms/master")
 		} else {
-			baseURL = fmt.Sprintf("%s/auth/realms/master", pxCentralUIURL)
+			baseURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
 		}
 	} else {
 		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.Namespace)
@@ -124,7 +116,7 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 		newURL := strings.Replace(oidcEndpoint, GlobalKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
-			baseURL = fmt.Sprintf("%sauth/admin%s", split[0], split[1])
+			baseURL = fmt.Sprint(split[0], "auth/admin", split[1])
 		} else {
 			baseURL = newURL
 		}
@@ -137,6 +129,12 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 		}
 	}
 	return baseURL, nil
+}
+
+func (k *Keycloak) GetCommonHeaderMap(token string) map[string]string {
+	headerMap := make(map[string]string)
+	headerMap["Authorization"] = fmt.Sprint("Bearer ", token)
+	return headerMap
 }
 
 func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) (*http.Request, error) {
@@ -211,11 +209,11 @@ func (k *Keycloak) Execute(ctx context.Context, method string, admin bool, route
 	}
 }
 
-func (k *Keycloak) GetToken(ctx context.Context) (string, error) {
+func (k *Keycloak) GetToken(ctx context.Context, username, password string) (string, error) {
 	route := "/protocol/openid-connect/token"
 	values := make(url.Values)
-	values.Set("username", k.AdminUsername)
-	values.Set("password", k.AdminPassword)
+	values.Set("username", username)
+	values.Set("password", password)
 	values.Set("grant_type", "password")
 	values.Set("client_id", "pxcentral")
 	values.Set("token-duration", "365d")
@@ -241,12 +239,12 @@ func GetOIDCSecretName() string {
 	return oidcSecretName
 }
 
-func (k *Keycloak) LoginAsAdmin() error {
-	secret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, k.Namespace)
+func GetPxCentralAdminPassword(pxbNamespace string) (string, error) {
+	pxCentralAdminSecret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, pxbNamespace)
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	pxCentralAdminPwd := string(secret.Data["credential"])
+	pxCentralAdminPwd := string(pxCentralAdminSecret.Data["credential"])
 	if pxCentralAdminPwd == "" {
 		err = fmt.Errorf("%s secret is empty", GlobalPxCentralAdminSecretName)
 		return "", ProcessError(err)
@@ -254,7 +252,11 @@ func (k *Keycloak) LoginAsAdmin() error {
 	return pxCentralAdminPwd, nil
 }
 
-func (k *Keycloak) UpdatePxBackupAdminSecret(ctx context.Context) error {
+func (k *Keycloak) LoginAsAdmin() error {
+
+}
+
+func (k *Keycloak) UpdatePxBackupAdminSecret(ctx context.Context, pxbNamespace string) error {
 	pxCentralAdminToken, err := k.GetToken(ctx)
 	if err != nil {
 		return ProcessError(err)
