@@ -17,12 +17,12 @@ import (
 )
 
 const (
+	// GlobalPxBackupOrgToken is the organization token key within GlobalPxBackupAdminSecretName
+	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
 	// GlobalPxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
 	GlobalPxBackupAuthHeader = "authorization"
 	// GlobalPxBackupAuthTokenType is the type of authentication token in Px-Backup requests
 	GlobalPxBackupAuthTokenType = "bearer"
-	// GlobalPxBackupOrgToken is the organization token key within GlobalPxBackupAdminSecretName
-	GlobalPxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
 	// GlobalKeycloakServiceName is the Kubernetes service that facilitates
 	// user authentication through Keycloak in Px-Backup
 	GlobalKeycloakServiceName = "pxcentral-keycloak-http"
