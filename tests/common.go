@@ -3777,6 +3777,9 @@ func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid s
 func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
 	var clusterCredName string
 	var clusterCredUid string
+	SourceClusterName := "260-source-cluster"
+	destinationClusterName := "260-dest-cluster"
+	var clusterList []string
 	kubeconfigs := os.Getenv("KUBECONFIGS")
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
@@ -3801,6 +3804,8 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 		return err
 	}
 	log.Infof("Save cluster %s kubeconfig to %s", destinationClusterName, dstClusterConfigPath)
+	clusterList = append(clusterList, SourceClusterName)
+	clusterList = append(clusterList, destinationClusterName)
 
 	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
 	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
@@ -3992,8 +3997,8 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		default:
-			for _, kubeconfig := range kubeconfigList {
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+			for _, kubeconfig := range clusterList {
+				clusterName := kubeconfig
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -9449,7 +9454,6 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 	groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, currentGroupsConfigs...)
 	currentUsersConfigs := cloudCredentialInspectResp.CloudCredential.GetOwnership().GetCollaborators()
 	userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, currentUsersConfigs...)
-
 	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
 		OrgId: orgID,
 		Name:  cloudCredentialName,

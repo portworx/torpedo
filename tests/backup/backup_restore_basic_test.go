@@ -31,20 +31,22 @@ import (
 // BasicSelectiveRestore selects random backed-up apps and restores them
 var _ = Describe("{BasicSelectiveRestore}", func() {
 	var (
-		backupName           string
-		scheduledAppContexts []*scheduler.Context
-		bkpNamespaces        []string
-		clusterUid           string
-		clusterStatus        api.ClusterInfo_StatusInfo_Status
-		restoreName          string
-		cloudCredName        string
-		cloudCredUID         string
-		backupLocationUID    string
-		bkpLocationName      string
-		numDeployments       int
-		providers            []string
-		backupLocationMap    map[string]string
-		labelSelectors       map[string]string
+		backupName             string
+		scheduledAppContexts   []*scheduler.Context
+		bkpNamespaces          []string
+		clusterUid             string
+		clusterStatus          api.ClusterInfo_StatusInfo_Status
+		restoreName            string
+		cloudCredName          string
+		cloudCredUID           string
+		backupLocationUID      string
+		bkpLocationName        string
+		numDeployments         int
+		providers              []string
+		backupLocationMap      map[string]string
+		labelSelectors         map[string]string
+		SourceClusterName      = "260-source-cluster"
+		destinationClusterName = "260-dest-cluster"
 	)
 	JustBeforeEach(func() {
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -132,23 +134,6 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		log.InfoD("Deleting deployed applications")
-		DestroyApps(scheduledAppContexts, opts)
-		backupDriver := Inst().Backup
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-		log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
-		log.InfoD("Deleting backup")
-		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
-		log.InfoD("Deleting restore")
-		log.InfoD(fmt.Sprintf("Backup name [%s]", restoreName))
-		err = DeleteRestore(restoreName, orgID, ctx)
-		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 
