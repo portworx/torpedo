@@ -1410,6 +1410,7 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 		if err != nil {
 			processError(err, errChan...)
 		}
+		log.InfoD("Validate current Version [%v]", driverVersion)
 		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
 		if !re.MatchString(driverVersion) {
 			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
