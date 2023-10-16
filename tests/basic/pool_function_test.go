@@ -307,10 +307,10 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 
 })
 
-var _ = Describe("{PoolExpandDiskResizeResizeLimit}", func() {
+var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 
 	BeforeEach(func() {
-		StartTorpedoTest("PoolExpandDiskResizeResizeLimit",
+		StartTorpedoTest("PoolExpansionDiskResizeInvalidSize",
 			"Initiate pool expansion using invalid expansion size", nil, testrailID)
 	})
 
