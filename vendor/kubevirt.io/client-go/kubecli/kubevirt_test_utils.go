@@ -28,9 +28,9 @@ import (
 var MockKubevirtClientInstance *MockKubevirtClient
 
 // GetMockKubevirtClientFromClientConfig is an entry point for testing, could be used to override GetKubevirtClientFromClientConfig
-func GetMockKubevirtClientFromClientConfig(cmdConfig clientcmd.ClientConfig) (KubevirtClient, error) {
-	return MockKubevirtClientInstance, nil
-}
+//func GetMockKubevirtClientFromClientConfig(cmdConfig clientcmd.ClientConfig) (KubevirtClient, error) {
+//	return MockKubevirtClientInstance, nil
+//}
 
 // GetInvalidKubevirtClientFromClientConfig is an entry point for testing case where client should be invalid
 func GetInvalidKubevirtClientFromClientConfig(cmdConfig clientcmd.ClientConfig) (KubevirtClient, error) {
