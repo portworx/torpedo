@@ -1406,31 +1406,28 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 			processError(err, errChan...)
 		}
 
-		attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
-			err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
-			driverVersion, err := Inst().V.GetDriverVersion()
-			if err != nil {
-				processError(err, errChan...)
-			}
-			log.InfoD("Validating Driver version: [%v]", driverVersion)
-			re := regexp.MustCompile(`2\.\d+\.\d+.*`)
-			if re.MatchString(driverVersion) {
-				log.Infof("Failed to get details of attached Node PWX-34000")
-			} else {
-				processError(err, errChan...)
-			}
+			processError(err, errChan...)
 		}
-		if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
-			FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
-			if ok {
-				err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
-				dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
-			} else {
-				log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+		if !re.MatchString(driverVersion) {
+			attachedNode, err := Inst().V.GetNodeForVolume(v, defaultCmdTimeout*3, defaultCmdRetryInterval)
+			if err != nil {
+				err = fmt.Errorf("Failed to get app %s's attachednode. Err: %v", ctx.App.Key, err)
+				processError(err, errChan...)
 			}
-		} else {
-			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+			if strings.Contains(fmt.Sprint(sc.Parameters), "-b ") {
+				FSType, ok := sc.Parameters["csi.storage.k8s.io/fstype"]
+				if ok {
+					err = Inst().V.ValidatePureFaCreateOptions(v.ID, FSType, attachedNode)
+					dash.VerifySafely(err, nil, "File system create options specified in the storage class are properly applied to the pure volumes")
+				} else {
+					log.Infof("Storage class doesn't have key 'csi.storage.k8s.io/fstype' in parameters")
+				}
+			} else {
+				log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
+			}
 		}
 	}
 }
