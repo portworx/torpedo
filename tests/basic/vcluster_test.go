@@ -174,6 +174,7 @@ func RunNginxAppOnVcluster(args []interface{}) []interface{} {
 	return []interface{}{nil}
 }
 
+// CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
 func CreateStorageClass(scName string) error {
 	params := make(map[string]string)
 	params["repl"] = "2"

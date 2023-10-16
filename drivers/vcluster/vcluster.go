@@ -201,6 +201,7 @@ func CreateAndWaitForVCluster(vclusterCount int) ([]string, error) {
 	return vclusterNames, nil
 }
 
+// GetControlNodeIP fetches the control node IP of host cluster to add it in vcluster config yaml file.
 func GetControlNodeIP() (string, error) {
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
@@ -220,6 +221,8 @@ func GetControlNodeIP() (string, error) {
 	return "", fmt.Errorf("control node IP not found")
 }
 
+// UpdateVClusterConfig creates a yaml file from original yaml file to suit the host cluster.
+// This yaml will be used to create a vcluster and connect to it later.
 func UpdateVClusterConfig(inputFile, outputFile, controlNodeIP string) error {
 	data, err := os.ReadFile(inputFile)
 	if err != nil {
@@ -245,6 +248,7 @@ func UpdateVClusterConfig(inputFile, outputFile, controlNodeIP string) error {
 	return nil
 }
 
+// CreateAndWaitVCluster method creates and waits for vcluster
 func (v *VCluster) CreateAndWaitVCluster() error {
 	currentDir, err := os.Getwd()
 	if err != nil {
@@ -296,6 +300,7 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 	return nil
 }
 
+// CreateNodePortService Creates a Node Port service for vcluster context
 func (v *VCluster) CreateNodePortService() error {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -326,6 +331,8 @@ func (v *VCluster) CreateNodePortService() error {
 	return nil
 }
 
+// SetClientSetForVCluster method calculates the clientset for vcluster. This also
+// takes care of setting any extra params like skip-tls-verify, etc for vcluster
 func (v *VCluster) SetClientSetForVCluster() error {
 	serverURL := fmt.Sprintf("--server=https://%s:%d", ControlNodeIP, v.NodePort)
 	cmd := exec.Command("vcluster", "connect", v.Name, "-n", v.Namespace, "--update-current=false", serverURL)
@@ -351,6 +358,7 @@ func (v *VCluster) SetClientSetForVCluster() error {
 	return nil
 }
 
+// CreatePVC creates a PVC in vcluster
 func (v *VCluster) CreatePVC(svcName, appNs string) (string, error) {
 	pvcName := v.Name + "-" + svcName + "-pvc"
 	createOpts := &corev1.PersistentVolumeClaim{
@@ -387,7 +395,7 @@ func (v *VCluster) CreatePVC(svcName, appNs string) (string, error) {
 // int32Ptr converts integre to pointer
 func int32Ptr(i int32) *int32 { return &i }
 
-// CreateFIODeployment creates a FIO deployment on given PVC
+// CreateFIODeployment creates a FIO Batch Job on given PVC
 func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions) error {
 	fioCmd := []string{
 		"fio",
@@ -400,7 +408,6 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 		"--filename=" + fioOpts.Filename,
 		"--end_fsync=" + strconv.Itoa(fioOpts.EndFsync),
 	}
-	//fioCmdString := strings.Join(fioCmd, " ") + " > /tmp/fio-output.txt"
 	if fioOpts.TimeBased {
 		fioCmd = append(fioCmd, "--time_based")
 	}
@@ -474,6 +481,7 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	return nil
 }
 
+// VClusterCleanup does all the cleanup related to vcluster tests
 func (v *VCluster) VClusterCleanup(scName string) error {
 	if err := v.TerminateVCluster(); err != nil {
 		return err
@@ -487,6 +495,7 @@ func (v *VCluster) VClusterCleanup(scName string) error {
 	return nil
 }
 
+// WaitForFIOCompletion checks for FIO pod completion in vcluster context
 func (v *VCluster) WaitForFIOCompletion(namespace string) error {
 	f := func() (interface{}, bool, error) {
 		log.Infof("Entering to see if FIO Job has completed")
@@ -506,6 +515,7 @@ func (v *VCluster) WaitForFIOCompletion(namespace string) error {
 	return nil
 }
 
+// FetchFIOLogs method streams and fetches FIO pod logs in vcluster
 func (v *VCluster) FetchFIOLogs(podName, namespace string) (string, error) {
 	podLogOpts := corev1.PodLogOptions{Container: "fio-container"}
 	request := v.Clientset.CoreV1().Pods(namespace).GetLogs(podName, &podLogOpts)
