@@ -161,6 +161,7 @@ const (
 	cdiImportSuccessEvent             = "Import Successful"
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
+	cdiImportComplete                 = "Import Complete"
 )
 
 const (
@@ -2721,16 +2722,6 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		log.Infof("[%v] Destroyed AutopilotRule: %v", app.Key, obj.Name)
-	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
-		if err != nil {
-			return pods, &scheduler.ErrFailedToDestroyApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
-			}
-		}
-
-		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -3295,6 +3286,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyPodDisruptionBudgetObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVirtualMachineObjects(appSpec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			}
@@ -5145,7 +5150,7 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	return nil, nil
 }
 
-// createVirtualMachineObjects creates the kubevirt VirtualMachines using kubectl apply
+// createVirtualMachineObjects creates the kubevirt VirtualMachines
 func (k *K8s) createVirtualMachineObjects(
 	spec interface{},
 	ns *corev1.Namespace,
@@ -5198,24 +5203,19 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 		endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
 		if ok && endpointAnnotation != "" {
 			t := func() (interface{}, bool, error) {
-				events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{
-					FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
-				})
-				if err != nil {
-					return "", false, err
-				}
-				log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, namespace, vmName, events)
-				for _, event := range events.Items {
-					if strings.Contains(event.Message, cdiImportSuccessEvent) {
-						pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
-						if err != nil {
-							return "", false, err
-						}
+				pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+				messageAnnotation, ok := pvc.Annotations[cdiPvcRunningMessageAnnotationKey]
+				if ok {
+					if messageAnnotation == cdiImportComplete {
 						log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
 						return "", false, nil
 					}
+					return "", true, fmt.Errorf("waiting for annotation [%s] in pvc [%s] in namespace [%s] for virtual machine [%s] to be %s, but got %s",
+						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName, cdiImportComplete, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+				} else {
+					return "", true, fmt.Errorf("annotation [%s] not found in pvc [%s] in namespace [%s] for virtual machine [%s]",
+						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName)
 				}
-				return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, namespace, vmName)
 			}
 			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
 			if err != nil {
@@ -5224,6 +5224,24 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 		}
 	}
 	// TODO: For other Volume Source types like Data Volumes, validation logic should come here
+	return nil
+}
+
+// destroyVirtualMachineObjects deletes the kubevirt VirtualMachines
+func (k *K8s) destroyVirtualMachineObjects(
+	spec interface{},
+	app *spec.AppSpec,
+) error {
+	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
+	}
 	return nil
 }
 
