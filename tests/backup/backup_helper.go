@@ -5331,6 +5331,7 @@ func StopAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	for _, vm := range vms.Items {
 		wg.Add(1)
 		go func(vm kubevirtv1.VirtualMachine) {
+			defer wg.Done()
 			err := StopKubevirtVM(vm.Name, namespace, waitForCompletion)
 			if err != nil {
 				mutex.Lock()

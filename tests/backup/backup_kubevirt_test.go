@@ -124,6 +124,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}(backupName, appCtx)
 			}
+			wg.Wait()
 		})
 
 		Step("Restoring the backed up namespaces", func() {
@@ -145,6 +146,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				}(restoreName, appCtx, i)
 			}
+			wg.Wait()
 		})
 	})
 
