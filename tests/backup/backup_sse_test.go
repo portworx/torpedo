@@ -7,6 +7,7 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/s3utils"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 
@@ -85,6 +86,7 @@ var _ = Describe("{sseS3encryption}", func() {
 	JustAfterEach(func() {
 		// Post test custom bucket delete
 		providers := getProviders()
+		time.Sleep(100 * time.Second)
 		for _, provider := range providers {
 			for _, customBucket := range bucketNames {
 				DeleteBucket(provider, customBucket)
@@ -93,5 +95,4 @@ var _ = Describe("{sseS3encryption}", func() {
 		}
 		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
 	})
-
 })
