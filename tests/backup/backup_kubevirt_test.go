@@ -136,7 +136,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			restoreNames = make([]string, 0)
 			for i, appCtx := range scheduledAppContexts {
 				restoreName := fmt.Sprintf("%s-%s-%v", "auto-restore", appCtx.ScheduleOptions.Namespace, RandomString(6))
-				restoreNames = append(backupNames, restoreName)
+				restoreNames = append(restoreNames, restoreName)
 				wg.Add(1)
 				go func(backupName string, appCtx *scheduler.Context, i int) {
 					defer GinkgoRecover()
