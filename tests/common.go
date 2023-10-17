@@ -857,6 +857,8 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 		if err != nil {
 			processError(err, errChan...)
 		}
+
+		// Ignore mount path check if current version is < 3.0.0 (https://portworx.atlassian.net/browse/PWX-34000)
 		log.InfoD("Validate current Version [%v]", driverVersion)
 		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
 		if !re.MatchString(driverVersion) {
