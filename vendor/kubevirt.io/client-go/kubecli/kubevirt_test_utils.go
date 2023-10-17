@@ -1,4 +1,5 @@
 // +build skipcompile
+
 package kubecli
 
 import (
