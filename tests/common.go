@@ -9532,8 +9532,8 @@ func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
 		if err != nil {
 			return sseType, err
 		}
-		switch strings.ToUpper(string(sseDetails.SseType)) {
-		case string(s3utils.SseS3):
+		switch sseDetails.SseType {
+		case s3utils.SseS3:
 			sseType = api.S3Config_SSE_S3
 		default:
 			return sseType, fmt.Errorf("failed to sse s3 encryption type not valid: [%v]", sseDetails.SseType)
