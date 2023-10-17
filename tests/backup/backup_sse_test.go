@@ -54,7 +54,7 @@ var _ = Describe("{sseS3encryption}", func() {
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 					policy, err := GenerateS3BucketPolicy(sseDetails.SsePolicySid, string(sseDetails.SseEncryptionPolicy), customBucket)
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-					err = UpdateS3BucketPolicy(globalAWSBucketName, policy)
+					err = UpdateS3BucketPolicy(customBucket, policy)
 					log.FailOnError(err, "Failed to apply bucket policy")
 					log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
 				}
