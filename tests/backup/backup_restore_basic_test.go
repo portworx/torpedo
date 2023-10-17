@@ -3848,15 +3848,11 @@ var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
 					scheduledAppContexts = append(scheduledAppContexts, ctx)
 				}
 			}
-			err = SetSourceKubeConfig()
-			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 
 		Step("Validate app namespaces in destination cluster", func() {
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Switching context to destination cluster failed")
 			ValidateApplications(scheduledAppContexts)
-			err = SetSourceKubeConfig()
+			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 
@@ -3924,15 +3920,16 @@ var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
 
 			namespaces := []string{"*"}
 			labelSelectors := make(map[string]string)
-			sourceClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
+			destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
 
-			err = CreateBackup(backupName, destinationClusterName, backupLocationName, backupLocationUID, namespaces, labelSelectors, orgID, sourceClusterUid, "", "", "", "", ctx)
+			err = CreateBackup(backupName, destinationClusterName, backupLocationName, backupLocationUID, namespaces, labelSelectors, orgID, destinationClusterUid, "", "", "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
+
 			err = backupSuccessCheckWithValidation(ctx, backupName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Validation of the manual backup [%s]", backupName))
 
