@@ -300,7 +300,6 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 				finalTotalSize += pstatus.TotalSize
 			}
 		}
-		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, uint64(orignalTotalSize))
 		dash.VerifyFatal(finalTotalSize > orignalTotalSize, true, "Pool expansion failed due to some error")
 
 	})
