@@ -34,7 +34,7 @@ var _ = Describe("CreateAndRunFioOnVcluster", func() {
 		NumJobs:   1,
 		Size:      "500m",
 		TimeBased: true,
-		Runtime:   "100s",
+		Runtime:   "600s",
 		Filename:  "/data/fiotest",
 		EndFsync:  1,
 	}

@@ -126,20 +126,25 @@ func DeleteVCluster(vclusterName string) error {
 	return nil
 }
 
-// TerminateVCluster Terminates Vcluster and runs it in it's own context
-func (v *VCluster) TerminateVCluster() error {
-	cmd := exec.Command("vcluster", "delete", v.Name)
-	if err := cmd.Run(); err != nil {
-		return err
+// ExecuteVClusterCommand executes any generic vCluster command
+func ExecuteVClusterCommand(args ...string) (string, error) {
+	cmd := exec.Command("vcluster", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed executing vcluster command with args %v: %w, Output: %s", args, err, output)
 	}
-	return nil
+	return string(output), nil
+}
+
+// TerminateVCluster Terminates Vcluster and runs it in its own context
+func (v *VCluster) TerminateVCluster() error {
+	_, err := ExecuteVClusterCommand("delete", v.Name)
+	return err
 }
 
 // CreateVCluster This method creates a vcluster. This requires vcluster.yaml saved in a specific location.
 func CreateVCluster(vclusterName string, absPath string) error {
-	cmd := exec.Command("vcluster", "create", vclusterName, "-f", absPath, "--connect=false")
-	//cmd := exec.Command("vcluster", "create", vclusterName, "--connect=false")
-	err := cmd.Run()
+	_, err := ExecuteVClusterCommand("create", vclusterName, "-f", absPath, "--connect=false")
 	if err != nil {
 		return err
 	}
@@ -150,12 +155,11 @@ func CreateVCluster(vclusterName string, absPath string) error {
 // WaitForVClusterRunning This method waits for vcluster to come up in Running state and waits for a specific timeout to throw an error
 func WaitForVClusterRunning(vclusterName string, timeout time.Duration) error {
 	f := func() (interface{}, bool, error) {
-		cmd := exec.Command("vcluster", "list")
-		output, err := cmd.Output()
+		output, err := ExecuteVClusterCommand("list")
 		if err != nil {
 			return nil, true, err
 		}
-		if strings.Contains(string(output), vclusterName) && strings.Contains(string(output), "Running") {
+		if strings.Contains(output, vclusterName) && strings.Contains(output, "Running") {
 			return nil, false, nil
 		}
 		return nil, true, fmt.Errorf("Vcluster is not yet in running state")
@@ -394,7 +398,7 @@ func (v *VCluster) CreatePVC(svcName, appNs string) (string, error) {
 	return pvcName, nil
 }
 
-// int32Ptr converts integre to pointer
+// int32Ptr converts integer to pointer
 func int32Ptr(i int32) *int32 { return &i }
 
 // CreateFIODeployment creates a FIO Batch Job on given PVC
