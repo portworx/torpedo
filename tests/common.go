@@ -4250,6 +4250,9 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sseS3EncryptionType, err := GetSseS3EncryptionType()
+	if err != nil {
+		return err
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4292,6 +4295,9 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	sseS3EncryptionType, err := GetSseS3EncryptionType()
+	if err != nil {
+		return err
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -9520,12 +9526,15 @@ func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
 	var sseType api.S3Config_Sse
 	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
 	if s3SseTypeEnv != "" {
-		sseDetails, _ := s3utils.GetS3SSEDetailsFromEnv()
+		sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+		if err != nil {
+			return sseType, err
+		}
 		switch strings.ToUpper(string(sseDetails.SseType)) {
 		case string(s3utils.SseS3):
 			sseType = api.S3Config_SSE_S3
 		default:
-			return sseType, fmt.Errorf("failed to sse s3 encryption type : [%v]", sseDetails.SseType)
+			return sseType, fmt.Errorf("failed to sse s3 encryption type not valid: [%v]", sseDetails.SseType)
 		}
 	} else {
 		sseType = api.S3Config_Invalid
