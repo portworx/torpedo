@@ -209,8 +209,7 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 		nodetoPick := nodes[0]
 
 		// invalidPoolUUID Generation
-		id := uuid.New()
-		invalidPoolUUID := id.String()
+		invalidPoolUUID := uuid.New().String()
 
 		// Resize Pool with Invalid Pool ID
 		stepLog = fmt.Sprintf("Expanding pool on node [%s] using auto", nodetoPick.Name)
@@ -289,6 +288,7 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 			status, _ := IsPxRunningOnNode(&node)
 			if node.Id != storageNode.Id && status {
 				verifyNode = node
+				break
 			}
 		}
 
@@ -300,7 +300,7 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 				finalTotalSize += pstatus.TotalSize
 			}
 		}
-		dash.VerifyFatal(finalTotalSize > orignalTotalSize, true, "Pool expansion failed due to some error")
+		dash.VerifyFatal(finalTotalSize > orignalTotalSize, true, "Pool expansion failed, pool size is not greater than pool size before expansion")
 
 	})
 
