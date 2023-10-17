@@ -26,7 +26,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // BasicSelectiveRestore selects random backed-up apps and restores them
@@ -3714,89 +3713,9 @@ var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
 	})
 })
 
-// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system and px namespace
-// is backed up or not
-func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) {
-
-	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
-
-	// Fetch a list of backups
-	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-	dash.VerifyFatal(err, nil, "Fetch backup UID")
-	backupInspectRequest := &api.BackupInspectRequest{
-		Name:  backupName,
-		Uid:   backupUID,
-		OrgId: orgID,
-	}
-	backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-	dash.VerifyFatal(err, nil, "Fetch backup inspect object")
-	backupNamespaces := backupResponse.GetBackup().Namespaces
-
-	err = SetDestinationKubeConfig()
-	dash.VerifyFatal(err, nil, "Switch cluster context")
-	k8sCore := core.Instance()
-	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
-	dash.VerifyFatal(err, nil, "Get list of services")
-	for _, svc := range allServices.Items {
-		if svc.Name == "portworx-service" {
-			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
-		}
-	}
-	for _, namespace := range backupNamespaces {
-		for _, namespacetoskip := range namespacesToSkip {
-			dash.VerifyFatal(namespacetoskip == namespace, false, fmt.Sprintf("Expected namespace %s shouldn't be present in backup", namespace))
-		}
-	}
-	err = SetSourceKubeConfig()
-	log.FailOnError(err, "Switching context to source cluster failed")
-}
-
-// getNamespaceAge gets the namespace age of all the namespaces on the cluster
-func getNamespaceAge() map[string]time.Time {
-	var namespaceAge = make(map[string]time.Time)
-	err := SetDestinationKubeConfig()
-	dash.VerifyFatal(err, nil, "Failed to switch cluster context")
-	k8sCore := core.Instance()
-	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
-	for _, namespace := range allNamespaces.Items {
-		namespaceAge[namespace.ObjectMeta.GetName()] = namespace.ObjectMeta.GetCreationTimestamp().Time
-	}
-	err = SetSourceKubeConfig()
-	log.FailOnError(err, "Switching context to source cluster failed")
-	return namespaceAge
-}
-
-// checkStatusOfNamespaces checks the status of namespaces on clusters where the restore was done
-func checkStatusOfNamespaces(oldNamespaceAge map[string]time.Time) {
-	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
-	err := SetDestinationKubeConfig()
-	dash.VerifyFatal(err, nil, "Failed to switch cluster context")
-
-	namespaceNamesAge := getNamespaceAge()
-	k8sCore := core.Instance()
-	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
-	dash.VerifyFatal(err, nil, "Failed to get list of services")
-	for _, svc := range allServices.Items {
-		if svc.Name == "portworx-service" {
-			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
-		}
-	}
-
-	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
-	for _, namespace := range allNamespaces.Items {
-		for _, skipcase := range namespacesToSkip {
-			if skipcase == namespace.GetName() {
-				dash.VerifyFatal(namespaceNamesAge[namespace.GetName()] == oldNamespaceAge[namespace.GetName()], false, fmt.Sprintf("Namespace [%s] was restored", skipcase))
-			} else {
-				dash.VerifyFatal(namespaceNamesAge[namespace.GetName()].After(oldNamespaceAge[namespace.GetName()]), true, fmt.Sprintf("Namespace[%s] not restored", namespace.GetName()))
-			}
-		}
-	}
-}
-
-// KubeSystemAndPxNamespaceSkipOnAllNSBackup check if namespaces like kube-system and px namespace
+// KubeAndPxNamespacesSkipOnAllNSBackup check if namespaces like kube-system and px namespace
 // are backed up while taking a backup
-var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
+var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		cloudCredUID         string
@@ -3814,11 +3733,10 @@ var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
 		intervalInMins       int
 		numDeployments       int
 		ctx                  context.Context
-		oldNamespaceAge      map[string]time.Time
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KubeSystemAndPxNamespaceSkipOnAllNSBackup", "Verify if Kube-system and Px Namespace is skipped on all namespace backup", nil, 92858)
+		StartTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858)
 
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
@@ -3830,7 +3748,7 @@ var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
 		}
 	})
 
-	It("Verify if Kube-system and Px Namespace is skipped on all namespace backup", func() {
+	It("Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", func() {
 
 		Step("Schedule applications in destination cluster", func() {
 			log.InfoD("Scheduling applications in destination cluster")
@@ -3938,25 +3856,29 @@ var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
 		})
 
 		Step("Check if kube-system and px namespace was backed up or not", func() {
-			checkBackupObjectForNonExpectedNS(ctx, backupNames[0])
+			err := checkBackupObjectForNonExpectedNS(ctx, backupNames[0])
+			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
 		})
 
-		Step("Restore manual backup", func() {
+		Step("Restore manual backup and validate status post restore", func() {
 			log.InfoD("Restoring new application namespaces from next schedule backup in source cluster")
-			oldNamespaceAge = getNamespaceAge()
+			oldNamespaceAge, err := getNamespaceAge()
+			dash.VerifyFatal(err, nil, "Getting namespace age")
 			restoreName = fmt.Sprintf("%s-%s", "test-restore-manual", RandomString(4))
-			err := CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			restoreNames = append(restoreNames, restoreName)
-		})
 
-		Step("Validate status post restore", func() {
-			err := SetDestinationKubeConfig()
+			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
+
 			ValidateApplications(scheduledAppContexts)
+
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
-			checkStatusOfNamespaces(oldNamespaceAge)
+
+			err = compareNamespaceAge(oldNamespaceAge)
+			dash.VerifyFatal(err, nil, "Comparing namespace age namespace age")
 		})
 
 		Step("Create schedule backup", func() {
@@ -3984,22 +3906,26 @@ var _ = Describe("{KubeSystemAndPxNamespaceSkipOnAllNSBackup}", func() {
 		Step("Check if kube-system and px namespace was backed up or not", func() {
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
-			checkBackupObjectForNonExpectedNS(ctx, firstScheduleBackupName)
+			err = checkBackupObjectForNonExpectedNS(ctx, firstScheduleBackupName)
+			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
 		})
 
-		Step("Restore schedule backup", func() {
-			log.InfoD("RRestore schedule backup")
-			oldNamespaceAge = getNamespaceAge()
+		Step("Restore schedule backup and validate post restpre", func() {
+			log.InfoD("Restore schedule backup")
+			oldNamespaceAge, err := getNamespaceAge()
+			dash.VerifyFatal(err, nil, "Getting namespace age")
+
 			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
+
 			err = CreateRestoreWithReplacePolicy(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			restoreNames = append(restoreNames, restoreName)
-		})
-		Step("Validate status post restore", func() {
+
 			ValidateApplications(scheduledAppContexts)
-			checkStatusOfNamespaces(oldNamespaceAge)
+			err = compareNamespaceAge(oldNamespaceAge)
+			dash.VerifyFatal(err, nil, "Comparing namespace age")
 		})
 	})
 
