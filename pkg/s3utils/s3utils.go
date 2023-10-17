@@ -32,9 +32,9 @@ type Object struct {
 type sseType string
 
 const (
-	SseS3  sseType = "SSE-S3"
-	SseKms sseType = "SSE-KMS"
-	SseC   sseType = "SSE-C"
+	SseS3        sseType = "SSE-S3"
+	SseKms       sseType = "SSE-KMS"
+	SseCustomKey sseType = "SSE-C"
 )
 
 type sseEncryptionPolicy string
@@ -116,7 +116,7 @@ func GetS3SSEDetailsFromEnv() (*S3SseEnv, error) {
 		expectedSseType = "SSE-S3"
 	case string(SseKms):
 		expectedSseType = "SSE-KMS"
-	case string(SseC):
+	case string(SseCustomKey):
 		expectedSseType = "SSE-C"
 	default:
 		return nil, fmt.Errorf("SSE_TYPE type invalid %v", sseTypeEnv)
