@@ -4249,6 +4249,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	time.Sleep(60 * time.Second)
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	//Get SSE S3 Encryption Type
 	sseS3EncryptionType, err := GetSseS3EncryptionType()
 	if err != nil {
 		return err
@@ -4294,6 +4295,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	//Get SSE S3 Encryption Type
 	sseS3EncryptionType, err := GetSseS3EncryptionType()
 	if err != nil {
 		return err
