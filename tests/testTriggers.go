@@ -244,6 +244,9 @@ var autoPilotRuleCreated bool
 
 var cloudsnapMap = make(map[string]map[*volume.Volume]*storkv1.ScheduledVolumeSnapshotStatus)
 
+// TestExecutionCountMap holds the count of executions for each test
+var TestExecutionCountMap = make(map[string]int)
+
 // emailRecords stores events for rendering
 // email template
 type emailRecords struct {
@@ -596,9 +599,8 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 		for _, ctx := range *contexts {
 			log.Infof("Validating context: %v", ctx.App.Key)
 			ctx.SkipVolumeValidation = false
+			errorChan = make(chan error, errorChannelSize)
 			ValidateContext(ctx, &errorChan)
-			// BUG: Execution doesn't resume here after ValidateContext called
-			// Below code is never executed
 			for err := range errorChan {
 				log.Infof("Error: %v", err)
 				UpdateOutcome(event, err)
@@ -2712,6 +2714,9 @@ func CollectEventRecords(recordChan *chan *EventRecord) {
 	eventRing = ring.New(100)
 	for eventRecord := range *recordChan {
 		eventRing.Value = eventRecord
+		actualEvent := strings.Split(eventRecord.Event.Type, "<br>")[0]
+		TestExecutionCountMap[actualEvent] += 1
+		log.Infof("TestExecutionCountMap: %v", TestExecutionCountMap)
 		eventRing = eventRing.Next()
 	}
 }

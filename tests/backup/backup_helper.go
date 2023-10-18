@@ -3,7 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
-
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -52,6 +52,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -114,6 +115,8 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 10 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	vmStartStopTimeout                        = 10 * time.Minute
+	vmStartStopRetryTime                      = 30 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
@@ -2702,6 +2705,13 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 			return err
 		}
 		storageSpec.Spec.Stork.Image = finalImageToUpgrade
+
+		// Check to reset customImageRegistry to blank as in case of ibm it'll be icr.io/ext/ and not
+		// docker.io/ which causes issues when we try to install stork which is not pushed to icr.io/ext
+		if GetClusterProviders()[0] == "ibm" {
+			storageSpec.Spec.CustomImageRegistry = ""
+		}
+
 		_, err = operator.Instance().UpdateStorageCluster(storageSpec)
 		if err != nil {
 			return err
@@ -3253,9 +3263,19 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
 		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		log.InfoD("schedule name %s, Next schedule backup name: %s", scheduleName, ordinalScheduleBackupName)
 		if err != nil {
 			return "", true, err
 		}
+		backupDriver := Inst().Backup
+		backupUid, err := backupDriver.GetBackupUID(ctx, ordinalScheduleBackupName, orgID)
+		backupInspectRequest := &api.BackupInspectRequest{
+			Name:  ordinalScheduleBackupName,
+			Uid:   backupUid,
+			OrgId: orgID,
+		}
+		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+		log.InfoD("Inspect obj %s", resp)
 		return ordinalScheduleBackupName, false, nil
 	}
 	log.InfoD("Waiting for [%d] minutes for the next schedule backup to be triggered", scheduleInterval)
@@ -3671,68 +3691,6 @@ func GetVolumeMounts(AppContextsMapping *scheduler.Context) ([]string, error) {
 	return nil, fmt.Errorf("unable to find the mount point for %s", AppContextsMapping.App.Key)
 }
 
-// UpdateBackupLocationOwnership Updates the backup location ownership
-func UpdateBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
-	log.Infof("UpdateBackupLocationOwnership for users %v", userNames)
-	backupDriver := Inst().Backup
-	userIDs := make([]string, 0)
-	groupIDs := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		userIDs = append(userIDs, userID)
-	}
-
-	for _, group := range groups {
-		groupID, err := backup.FetchIDOfGroup(group)
-		if err != nil {
-			return err
-		}
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	userBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, userID := range userIDs {
-		userBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     userID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, userBackupLocationOwnershipAccessConfig)
-	}
-
-	groupBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, groupID := range groupIDs {
-		groupBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     groupID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		groupBackupLocationOwnershipAccessConfigs = append(groupBackupLocationOwnershipAccessConfigs, groupBackupLocationOwnershipAccessConfig)
-	}
-
-	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
-		OrgId: orgID,
-		Name:  name,
-		Ownership: &api.Ownership{
-			Groups:        groupBackupLocationOwnershipAccessConfigs,
-			Collaborators: userBackupLocationOwnershipAccessConfigs,
-			Public: &api.Ownership_PublicAccessControl{
-				Type: api.Ownership_AccessType(publicAccess),
-			},
-		},
-		Uid: uid,
-	}
-
-	_, err := backupDriver.UpdateOwnershipBackupLocation(ctx, bLocationOwnershipUpdateReq)
-	if err != nil {
-		return fmt.Errorf("failed to create backup location: %v", err)
-	}
-	return nil
-}
-
 type BackupTypeForCSI string
 
 const (
@@ -3799,130 +3757,6 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
 	default:
 		log.Infof("Environment variable BACKUP_TYPE is not provided")
-	}
-	return nil
-}
-
-// UpdateSchedulePolicyOwnership Updates the schedulePolicy object ownership
-func UpdateSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
-	log.Infof("UpdateScheduleOwnership for users %v", userNames)
-	backupDriver := Inst().Backup
-	userIDs := make([]string, 0)
-	groupIDs := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		userIDs = append(userIDs, userID)
-	}
-
-	for _, group := range groups {
-		groupID, err := backup.FetchIDOfGroup(group)
-		if err != nil {
-			return err
-		}
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	userSchdeulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, userID := range userIDs {
-		userSchedulePolicyOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     userID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		userSchdeulePolicyOwnershipAccessConfigs = append(userSchdeulePolicyOwnershipAccessConfigs, userSchedulePolicyOwnershipAccessConfig)
-	}
-
-	groupSchedulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, groupID := range groupIDs {
-		groupSchedulePolicyOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     groupID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		groupSchedulePolicyOwnershipAccessConfigs = append(groupSchedulePolicyOwnershipAccessConfigs, groupSchedulePolicyOwnershipAccessConfig)
-	}
-
-	schedulePolicyOwnershipUpdateReq := &api.SchedulePolicyOwnershipUpdateRequest{
-		OrgId: orgID,
-		Name:  schedulePolicyName,
-		Ownership: &api.Ownership{
-			Groups:        groupSchedulePolicyOwnershipAccessConfigs,
-			Collaborators: userSchdeulePolicyOwnershipAccessConfigs,
-			Public: &api.Ownership_PublicAccessControl{
-				Type: api.Ownership_AccessType(publicAccess),
-			},
-		},
-		Uid: schedulePolicyUid,
-	}
-
-	_, err := backupDriver.UpdateOwnershipSchedulePolicy(ctx, schedulePolicyOwnershipUpdateReq)
-	if err != nil {
-		return fmt.Errorf("failed to update schedule policy: %v", err)
-	}
-	return nil
-}
-
-// UpdateruleOwnership Updates the rule object ownership
-func UpdateRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
-	log.Infof("UpdateruleOwnership for users %v", userNames)
-	backupDriver := Inst().Backup
-	userIDs := make([]string, 0)
-	groupIDs := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		userIDs = append(userIDs, userID)
-	}
-
-	for _, group := range groups {
-		groupID, err := backup.FetchIDOfGroup(group)
-		if err != nil {
-			return err
-		}
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	userRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, userID := range userIDs {
-		userRuleOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     userID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		userRuleOwnershipAccessConfigs = append(userRuleOwnershipAccessConfigs, userRuleOwnershipAccessConfig)
-	}
-
-	groupRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, groupID := range groupIDs {
-		groupRuleOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     groupID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		groupRuleOwnershipAccessConfigs = append(groupRuleOwnershipAccessConfigs, groupRuleOwnershipAccessConfig)
-	}
-
-	ruleOwnershipUpdateReq := &api.RuleOwnershipUpdateRequest{
-		OrgId: orgID,
-		Name:  ruleName,
-		Ownership: &api.Ownership{
-			Groups:        groupRuleOwnershipAccessConfigs,
-			Collaborators: userRuleOwnershipAccessConfigs,
-			Public: &api.Ownership_PublicAccessControl{
-				Type: api.Ownership_AccessType(publicAccess),
-			},
-		},
-		Uid: ruleUid,
-	}
-
-	_, err := backupDriver.UpdateOwnershipRule(ctx, ruleOwnershipUpdateReq)
-	if err != nil {
-		return fmt.Errorf("failed to update rule ownership: %v", err)
 	}
 	return nil
 }
@@ -4690,6 +4524,695 @@ func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreN
 	err = DeletePodWithLabelInNamespace(namespace, label)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// AddBackupLocationOwnership adds new ownership to the existing backup location object
+func AddBackupLocationOwnership(name string, uid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, userBackupLocationOwnershipAccessConfig)
+	}
+
+	groupBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupBackupLocationOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupBackupLocationOwnershipAccessConfigs = append(groupBackupLocationOwnershipAccessConfigs, groupBackupLocationOwnershipAccessConfig)
+	}
+
+	backupLocationInspectRequest := &api.BackupLocationInspectRequest{
+		OrgId: orgID,
+		Name:  name,
+		Uid:   uid,
+	}
+	backupLocationInspectResp, err := Inst().Backup.InspectBackupLocation(ctx, backupLocationInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupsConfigs := backupLocationInspectResp.BackupLocation.GetOwnership().GetGroups()
+	groupBackupLocationOwnershipAccessConfigs = append(groupBackupLocationOwnershipAccessConfigs, currentGroupsConfigs...)
+	currentUsersConfigs := backupLocationInspectResp.BackupLocation.GetOwnership().GetCollaborators()
+	userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, currentUsersConfigs...)
+
+	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  name,
+		Ownership: &api.Ownership{
+			Groups:        groupBackupLocationOwnershipAccessConfigs,
+			Collaborators: userBackupLocationOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: uid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipBackupLocation(ctx, bLocationOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// AddRuleOwnership adds new ownership to the existing rule object
+func AddRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userRuleOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userRuleOwnershipAccessConfigs = append(userRuleOwnershipAccessConfigs, userRuleOwnershipAccessConfig)
+	}
+
+	groupRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupRuleOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupRuleOwnershipAccessConfigs = append(groupRuleOwnershipAccessConfigs, groupRuleOwnershipAccessConfig)
+	}
+
+	ruleInspectRequest := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Uid:   ruleUid,
+	}
+	ruleInspectResp, err := Inst().Backup.InspectRule(ctx, ruleInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupsConfigs := ruleInspectResp.Rule.GetOwnership().GetGroups()
+	groupRuleOwnershipAccessConfigs = append(groupRuleOwnershipAccessConfigs, currentGroupsConfigs...)
+	currentUsersConfigs := ruleInspectResp.Rule.GetOwnership().GetCollaborators()
+	userRuleOwnershipAccessConfigs = append(userRuleOwnershipAccessConfigs, currentUsersConfigs...)
+
+	ruleOwnershipUpdateReq := &api.RuleOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Ownership: &api.Ownership{
+			Groups:        groupRuleOwnershipAccessConfigs,
+			Collaborators: userRuleOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: ruleUid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipRule(ctx, ruleOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update rule ownership: %v", err)
+	}
+	return nil
+}
+
+// AddSchedulePolicyOwnership adds new ownership to the existing schedulePolicy object.
+func AddSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userSchdeulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userSchedulePolicyOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userSchdeulePolicyOwnershipAccessConfigs = append(userSchdeulePolicyOwnershipAccessConfigs, userSchedulePolicyOwnershipAccessConfig)
+	}
+
+	groupSchedulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupSchedulePolicyOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupSchedulePolicyOwnershipAccessConfigs = append(groupSchedulePolicyOwnershipAccessConfigs, groupSchedulePolicyOwnershipAccessConfig)
+	}
+
+	schedulePolicyInspectRequest := &api.SchedulePolicyInspectRequest{
+		OrgId: orgID,
+		Name:  schedulePolicyName,
+		Uid:   schedulePolicyUid,
+	}
+	schedulePolicyInspectResp, err := Inst().Backup.InspectSchedulePolicy(ctx, schedulePolicyInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroups := schedulePolicyInspectResp.SchedulePolicy.GetOwnership().GetGroups()
+	groupSchedulePolicyOwnershipAccessConfigs = append(groupSchedulePolicyOwnershipAccessConfigs, currentGroups...)
+	currentUsersConfigs := schedulePolicyInspectResp.SchedulePolicy.GetOwnership().GetCollaborators()
+	userSchdeulePolicyOwnershipAccessConfigs = append(userSchdeulePolicyOwnershipAccessConfigs, currentUsersConfigs...)
+
+	schedulePolicyOwnershipUpdateReq := &api.SchedulePolicyOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  schedulePolicyName,
+		Ownership: &api.Ownership{
+			Groups:        groupSchedulePolicyOwnershipAccessConfigs,
+			Collaborators: userSchdeulePolicyOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: schedulePolicyUid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipSchedulePolicy(ctx, schedulePolicyOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update schedule policy: %v", err)
+	}
+	return nil
+}
+
+// RemoveSchedulePolicyOwnership removes ownership from the existing schedulePolicy object.
+func RemoveSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	groupSchedulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+	userSchdeulePolicyOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	schedulePolicyInspectRequest := &api.SchedulePolicyInspectRequest{
+		OrgId: orgID,
+		Name:  schedulePolicyName,
+		Uid:   schedulePolicyUid,
+	}
+	schedulePolicyInspectResp, err := Inst().Backup.InspectSchedulePolicy(ctx, schedulePolicyInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupConfigs := schedulePolicyInspectResp.SchedulePolicy.GetOwnership().GetGroups()
+	for _, currentGroupConfig := range currentGroupConfigs {
+		if !IsPresent(groupIDs, currentGroupConfig.Id) {
+			groupSchedulePolicyOwnershipAccessConfigs = append(groupSchedulePolicyOwnershipAccessConfigs, currentGroupConfig)
+		}
+	}
+
+	currentUsersConfigs := schedulePolicyInspectResp.SchedulePolicy.GetOwnership().GetCollaborators()
+	for _, currentUserConfig := range currentUsersConfigs {
+		if !IsPresent(userIDs, currentUserConfig.Id) {
+			userSchdeulePolicyOwnershipAccessConfigs = append(userSchdeulePolicyOwnershipAccessConfigs, currentUserConfig)
+		}
+	}
+
+	schedulePolicyOwnershipUpdateReq := &api.SchedulePolicyOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  schedulePolicyName,
+		Ownership: &api.Ownership{
+			Groups:        groupSchedulePolicyOwnershipAccessConfigs,
+			Collaborators: userSchdeulePolicyOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: schedulePolicyUid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipSchedulePolicy(ctx, schedulePolicyOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update schedule policy: %v", err)
+	}
+	return nil
+}
+
+// RemoveRuleOwnership removes ownership from to the existing rule object
+func RemoveRuleOwnership(ruleName string, ruleUid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	userRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+	groupRuleOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	ruleInspectRequest := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Uid:   ruleUid,
+	}
+	ruleInspectResp, err := Inst().Backup.InspectRule(ctx, ruleInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupsConfigs := ruleInspectResp.Rule.GetOwnership().GetGroups()
+	for _, currentGroupConfig := range currentGroupsConfigs {
+		if !IsPresent(groupIDs, currentGroupConfig.Id) {
+			groupRuleOwnershipAccessConfigs = append(groupRuleOwnershipAccessConfigs, currentGroupConfig)
+		}
+	}
+
+	currentUsersConfigs := ruleInspectResp.Rule.GetOwnership().GetCollaborators()
+	for _, currentUserConfig := range currentUsersConfigs {
+		if !IsPresent(userIDs, currentUserConfig.Id) {
+			userRuleOwnershipAccessConfigs = append(userRuleOwnershipAccessConfigs, currentUserConfig)
+		}
+	}
+
+	ruleOwnershipUpdateReq := &api.RuleOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Ownership: &api.Ownership{
+			Groups:        groupRuleOwnershipAccessConfigs,
+			Collaborators: userRuleOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: ruleUid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipRule(ctx, ruleOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update rule ownership: %v", err)
+	}
+	return nil
+}
+
+// RemoveBackupLocationOwnership removes ownership from the existing backup location object.
+func RemoveBackupLocationOwnership(name string, uid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	userBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+	groupBackupLocationOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	backupLocationInspectRequest := &api.BackupLocationInspectRequest{
+		OrgId: orgID,
+		Name:  name,
+		Uid:   uid,
+	}
+	backupLocationInspectResp, err := Inst().Backup.InspectBackupLocation(ctx, backupLocationInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupsConfigs := backupLocationInspectResp.BackupLocation.GetOwnership().GetGroups()
+	for _, currentGroupConfig := range currentGroupsConfigs {
+		if !IsPresent(groupIDs, currentGroupConfig.Id) {
+			groupBackupLocationOwnershipAccessConfigs = append(groupBackupLocationOwnershipAccessConfigs, currentGroupConfig)
+		}
+	}
+
+	currentUsersConfigs := backupLocationInspectResp.BackupLocation.GetOwnership().GetCollaborators()
+	for _, currentUserConfig := range currentUsersConfigs {
+		if !IsPresent(userIDs, currentUserConfig.Id) {
+			userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, currentUserConfig)
+		}
+	}
+
+	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  name,
+		Ownership: &api.Ownership{
+			Groups:        groupBackupLocationOwnershipAccessConfigs,
+			Collaborators: userBackupLocationOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: uid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipBackupLocation(ctx, bLocationOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// RemoveCloudCredentialOwnership removes ownership from the existing CloudCredential object.
+func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, publicAccess OwnershipAccessType, ctx context.Context, orgID string) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	cloudCredentialInspectRequest := &api.CloudCredentialInspectRequest{
+		OrgId: orgID,
+		Name:  cloudCredentialName,
+		Uid:   cloudCredentialUid,
+	}
+	cloudCredentialInspectResp, err := Inst().Backup.InspectCloudCredential(ctx, cloudCredentialInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupsConfigs := cloudCredentialInspectResp.CloudCredential.GetOwnership().GetGroups()
+	for _, currentGroupConfig := range currentGroupsConfigs {
+		if !IsPresent(groupIDs, currentGroupConfig.Id) {
+			groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, currentGroupConfig)
+		}
+	}
+
+	currentUsersConfigs := cloudCredentialInspectResp.CloudCredential.GetOwnership().GetCollaborators()
+	for _, currentUserConfig := range currentUsersConfigs {
+		if !IsPresent(userIDs, currentUserConfig.Id) {
+			userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, currentUserConfig)
+		}
+	}
+
+	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  cloudCredentialName,
+		Ownership: &api.Ownership{
+			Groups:        groupCloudCredentialOwnershipAccessConfigs,
+			Collaborators: userCloudCredentialOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: cloudCredentialUid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
+}
+
+// StartKubevirtVM starts the kubevirt VM and waits till the status is Running
+func StartKubevirtVM(name, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.StartVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+		}
+		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+		}
+		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+	return err
+}
+
+// StopKubevirtVM stops the kubevirt VM and waits till the status is Stopped
+func StopKubevirtVM(name, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.StopVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	t := func() (interface{}, bool, error) {
+		vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+		if err != nil {
+			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+		}
+		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
+			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
+		}
+		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+		return "", false, nil
+	}
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+	return err
+}
+
+// RestartKubevirtVM restarts the kubevirt VM
+// If VM is in stopped state it starts the VM
+// If VM is in started state it restarts the VM
+func RestartKubevirtVM(name, namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	switch vm.Status.PrintableStatus {
+	case kubevirtv1.VirtualMachineStatusRunning:
+		err = StopKubevirtVM(name, namespace)
+		if err != nil {
+			return err
+		}
+		err = StartKubevirtVM(name, namespace)
+		if err != nil {
+			return err
+		}
+	case kubevirtv1.VirtualMachineStatusStopped:
+		err = StartKubevirtVM(name, namespace)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state. It should be in running or stopped state", name, namespace, vm.Status.PrintableStatus)
+	}
+	return nil
+}
+
+// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
+// is backed up or not
+func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) error {
+
+	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
+
+	// Fetch a list of backups
+	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup UID")
+	}
+
+	// Get an inspect of the backup object
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: orgID,
+	}
+	backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup inspect object")
+	}
+	backupNamespaces := backupResponse.GetBackup().Namespaces
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	// Get a list of all services and get the namespace where px service is running
+	k8sCore := core.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get list of services")
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == "portworx-service" {
+			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
+		}
+	}
+
+	// Check if the namespaces to be skipped is present or not return error if not
+	for _, namespace := range backupNamespaces {
+		for _, namespacetoskip := range namespacesToSkip {
+			if namespacetoskip == namespace {
+				return fmt.Errorf("expected namespace %s shouldn't be present in backup", namespace)
+			}
+		}
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("switching context to source cluster failed")
+	}
+	return nil
+}
+
+// getNamespaceAge gets the namespace age of all the namespaces on the cluster
+func getNamespaceAge() (map[string]time.Time, error) {
+	var namespaceAge = make(map[string]time.Time)
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		return namespaceAge, fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	for _, namespace := range allNamespaces.Items {
+		namespaceAge[namespace.ObjectMeta.GetName()] = namespace.ObjectMeta.GetCreationTimestamp().Time
+	}
+
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return namespaceAge, fmt.Errorf("switching context to source cluster failed")
+	}
+
+	return namespaceAge, nil
+}
+
+// compareNamespaceAge checks the status of namespaces on clusters where the restore was done
+func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
+	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	namespaceNamesAge, err := getNamespaceAge()
+	k8sCore := core.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get list of services")
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == "portworx-service" {
+			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
+		}
+	}
+
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	for _, namespace := range allNamespaces.Items {
+		for _, skipCase := range namespacesToSkip {
+			if skipCase == namespace.GetName() {
+				if namespaceNamesAge[namespace.GetName()] != oldNamespaceAge[namespace.GetName()] {
+					return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+				}
+			} else {
+				if !namespaceNamesAge[namespace.GetName()].After(oldNamespaceAge[namespace.GetName()]) {
+					return fmt.Errorf("namespace[%s] not restored but was expected to be restored", namespace.GetName())
+				}
+			}
+		}
 	}
 	return nil
 }
