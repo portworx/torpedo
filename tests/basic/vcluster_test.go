@@ -183,7 +183,7 @@ func CreateStorageClass(scName string) error {
 	params := make(map[string]string)
 	params["repl"] = "2"
 	params["priority_io"] = "high"
-	params["io_profile"] = "db_remote"
+	params["io_profile"] = "auto"
 	v1obj := metav1.ObjectMeta{
 		Name: scName,
 	}
