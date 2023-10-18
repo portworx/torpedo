@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var _ = Describe("CreateAndRunFioOnVcluster", func() {
+var _ = Describe("NewCreatevCluster", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
