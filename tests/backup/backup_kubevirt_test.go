@@ -16,17 +16,18 @@ import (
 var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 	var (
-		backupNames          []string
-		restoreNames         []string
-		scheduledAppContexts []*scheduler.Context
-		sourceClusterUid     string
-		cloudCredName        string
-		cloudCredUID         string
-		backupLocationUID    string
-		backupLocationName   string
-		backupLocationMap    map[string]string
-		labelSelectors       map[string]string
-		providers            []string
+		backupNames                []string
+		restoreNames               []string
+		scheduledAppContexts       []*scheduler.Context
+		sourceClusterUid           string
+		cloudCredName              string
+		cloudCredUID               string
+		backupLocationUID          string
+		backupLocationName         string
+		backupLocationMap          map[string]string
+		labelSelectors             map[string]string
+		providers                  []string
+		restoreNameToAppContextMap map[string]*scheduler.Context
 	)
 
 	JustBeforeEach(func() {
@@ -136,6 +137,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			for i, appCtx := range scheduledAppContexts {
 				restoreName := fmt.Sprintf("%s-%s-%v", "auto-restore", appCtx.ScheduleOptions.Namespace, RandomString(6))
 				restoreNames = append(restoreNames, restoreName)
+				restoreNameToAppContextMap[restoreName] = appCtx
 				wg.Add(1)
 				go func(restoreName string, appCtx *scheduler.Context, i int) {
 					defer GinkgoRecover()
@@ -159,15 +161,6 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			}()
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
-			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
-			for _, scheduledAppContext := range scheduledAppContexts {
-				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-				if err != nil {
-					log.Errorf("TransformAppContextWithMappings: %v", err)
-					continue
-				}
-				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
-			}
 			var wg sync.WaitGroup
 			for _, restoreName := range restoreNames {
 				wg.Add(1)
@@ -175,7 +168,9 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 					defer GinkgoRecover()
 					defer wg.Done()
 					log.InfoD("Validating restore [%s]", restoreName)
-					err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+					expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(restoreNameToAppContextMap[restoreName], make(map[string]string), make(map[string]string), true)
+					log.FailOnError(err, "Failed TransformAppContextWithMappings")
+					err = ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{expectedRestoredAppContext}, make([]string, 0))
 					log.FailOnError(err, "Failed while validating restore - "+restoreName)
 				}(restoreName)
 
