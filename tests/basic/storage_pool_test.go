@@ -6251,10 +6251,9 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 		}
 
-		err = nil
 		re := regexp.MustCompile("Requires pool maintenance mode")
-		if !re.MatchString(fmt.Sprintf("%v", err)) == false {
-			err = fmt.Errorf("Failed to verify failure string on invalid Pool UUID")
+		if re.MatchString(fmt.Sprintf("%v", err)) == true {
+			err = nil
 		}
 		log.FailOnError(err, "pool delete successful?")
 
