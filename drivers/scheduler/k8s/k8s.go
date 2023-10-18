@@ -346,6 +346,7 @@ func (k *K8s) AddNewNode(newNode corev1.Node) error {
 	if err := k.IsNodeReady(n); err != nil {
 		return err
 	}
+	log.Infof("AddNewNode - Adding node - %s", n.Name)
 	if err := node.AddNode(n); err != nil {
 		return err
 	}
@@ -449,6 +450,7 @@ func (k *K8s) RefreshNodeRegistry() error {
 	node.CleanupRegistry()
 
 	for _, n := range nodes.Items {
+		log.Infof("RefreshNodeRegistry - %s", n.GetName())
 		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
