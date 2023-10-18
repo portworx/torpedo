@@ -6739,7 +6739,7 @@ var _ = Describe("{AddMultipleDriveStorageLessNodeResizeDisk}", func() {
 
 		// Add multiple Drives to Storage less node
 		maxDrivesToAdd := 6
-		for i := 0; i < maxDrivesToAdd; i++ {
+		for i := 1; i < maxDrivesToAdd+1; i++ {
 			log.InfoD("Adding [%d/%d] disks to the Node [%v]", i, maxDrivesToAdd, pickNode.Name)
 			log.FailOnError(AddCloudDrive(pickNode, -1), "error adding cloud drive on Node [%v]", pickNode.Name)
 		}
