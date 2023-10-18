@@ -70,7 +70,7 @@ var _ = Describe("{sseS3encryption}", func() {
 
 			//// Create backup locations
 			for _, provider := range providers {
-				for _, customBucket := range bucketNames {
+				for _, customBucket := range customBuckets {
 					cloudCredUID = uuid.New()
 					cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 					backupLocationUID = uuid.New()
