@@ -127,24 +127,58 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			wg.Wait()
 		})
 
-		Step("Restoring the backed up namespaces", func() {
-			log.InfoD("Restoring the backed up namespaces")
+		Step("Restoring the all backed up namespaces", func() {
+			log.InfoD("Restoring the all backed up namespaces")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
-
 			restoreNames = make([]string, 0)
 			for i, appCtx := range scheduledAppContexts {
 				restoreName := fmt.Sprintf("%s-%s-%v", "auto-restore", appCtx.ScheduleOptions.Namespace, RandomString(6))
 				restoreNames = append(restoreNames, restoreName)
 				wg.Add(1)
-				go func(backupName string, appCtx *scheduler.Context, i int) {
+				go func(restoreName string, appCtx *scheduler.Context, i int) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					log.InfoD("Restoring [%s] namespace from the [%s] backup", appCtx.ScheduleOptions.Namespace, backupNames[i])
-					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), destinationClusterName, orgID, []*scheduler.Context{appCtx})
+					err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
 				}(restoreName, appCtx, i)
+			}
+			wg.Wait()
+		})
+
+		Step("Validating the all restored namespaces", func() {
+			log.InfoD("Validating the all restored namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			defer func() {
+				log.InfoD("Switching cluster context back to source cluster")
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Switching context to source cluster failed")
+			}()
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range scheduledAppContexts {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+			}
+			var wg sync.WaitGroup
+			for _, restoreName := range restoreNames {
+				wg.Add(1)
+				go func(restoreName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					log.InfoD("Validating restore [%s]", restoreName)
+					err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+					log.FailOnError(err, "Failed while validating restore - "+restoreName)
+				}(restoreName)
+
 			}
 			wg.Wait()
 		})
