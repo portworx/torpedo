@@ -204,15 +204,11 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 	stepLog := "Resize with invalid pool ID"
 	log.InfoD(stepLog)
 	It(stepLog, func() {
-		// pick node to resize
-		nodes := node.GetStorageNodes()
-		nodetoPick := nodes[0]
-
 		// invalidPoolUUID Generation
 		invalidPoolUUID := uuid.New().String()
 
 		// Resize Pool with Invalid Pool ID
-		stepLog = fmt.Sprintf("Expanding pool on node [%s] using auto", nodetoPick.Name)
+		stepLog = fmt.Sprintf("Expanding pool on Node UUID [%s] using auto", invalidPoolUUID)
 		Step(stepLog, func() {
 			resizeErr := Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, 100, true)
 			dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool UUID")
@@ -241,6 +237,8 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToBeResized = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
 
 	JustAfterEach(func() {
@@ -255,9 +253,6 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 	stepLog := "should get the existing pool and expand it by adding a disk and verify from other node"
 	log.InfoD(stepLog)
 	It(stepLog, func() {
-		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
-		log.FailOnError(err, "Failed to get node with given pool ID")
-
 		// get original total size
 		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(*storageNode)
 		var orignalTotalSize float64
