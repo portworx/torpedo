@@ -2,12 +2,14 @@ package vcluster
 
 import (
 	"fmt"
-	"os/exec"
-	"strings"
-	"time"
-
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
+	"io/ioutil"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
 var (
@@ -101,5 +103,34 @@ func WaitForVClusterRunning(vclusterName string, timeout time.Duration) error {
 		return nil, true, fmt.Errorf("Vcluster is not yet in running state")
 	}
 	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
+	return err
+}
+
+func GetVClusterSecret(secretName, secretNamespace string) error {
+	log.Debugf("secret namespace %s", secretNamespace)
+	time.Sleep(30 * time.Second)
+
+	secret, err := core.Instance().GetSecret(secretName, secretNamespace)
+	if err != nil {
+		return err
+	}
+	log.Debugf("printing the vCluster secret %+v", *secret)
+
+	encodedConfig, exists := secret.Data["config"]
+	if !exists {
+		return fmt.Errorf("Secret does not contain a 'config' field.")
+	}
+	log.Debugf("encoded config string %v", string(encodedConfig))
+
+	outputFile := "../drivers/vcluster/kubeconfigs/" + secretName
+	filePath, err := filepath.Abs(outputFile)
+
+	// Write the decoded data to the specified file.
+	err = ioutil.WriteFile(filePath, encodedConfig, 0644)
+	if err != nil {
+		return fmt.Errorf("Error writing to %s: %v\n", outputFile, err)
+	}
+	log.Debugf("Data from secret '%s' in namespace '%s' successfully written to '%s'\n", secretName, secretNamespace, outputFile)
+
 	return err
 }
