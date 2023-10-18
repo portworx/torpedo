@@ -8,6 +8,14 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	v1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sync"
 	"time"
 	//api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -22,27 +30,69 @@ import (
 var _ = Describe("{sseS3encryption}", func() {
 
 	var (
-		//scheduledAppContexts     []*scheduler.Context
-		customBucket      string
-		backupLocationUID string
-		cloudCredUID      string
-		//backupName               string
+		scheduledAppContexts     []*scheduler.Context
+		customBucket             string
+		backupLocationUID        string
+		cloudCredUID             string
+		backupName               string
 		cloudCredUidList         []string
 		customBackupLocationName string
 		backupLocations          []string
 		credName                 string
 		customBuckets            []string
-		//bucketNames              []string
+		bkpNamespaces            []string
+		sourceScName             *storageApi.StorageClass
+		scCount                  int
+		scNames                  []string
+		clusterStatus            api.ClusterInfo_StatusInfo_Status
+		clusterUid               string
+		restoreList              []string
+		bucketNames              []string
 		//clusterUid               string
 		//bkpNamespaces            []string
 		//clusterStatus            api.ClusterInfo_StatusInfo_Status
 	)
+
+	storageClassMapping := make(map[string]string)
+	namespaceMap := make(map[string]string)
+	params := make(map[string]string)
+	k8sStorage := storage.Instance()
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("MultipleCustomRestoreSameTimeDiffStorageClassMapping",
+			"Issue multiple custom restores at the same time using different storage class mapping", nil, 58052)
+		log.InfoD("Deploy applications needed for backup")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		numberOfNameSpace := 2
+		for i := 0; i < numberOfNameSpace; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				bkpNamespaces = append(bkpNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
 	It("Basic Backup Creation", func() {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		providers := getProviders()
+		Step("Validate applications", func() {
+			log.InfoD("Validate applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+		Step("Register cluster for backup", func() {
+			err = CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
 		Step("Adding Credentials and Registering Backup Location", func() {
-			providers := getProviders()
-			log.InfoD("Using pre-provisioned bucket. Creating cloud credentials and backup location.")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			// Create a bucket with and without deny policy
 			bucketMap := map[string]bool{
 				"sse-bucket-with-policy-1": false,
@@ -87,18 +137,103 @@ var _ = Describe("{sseS3encryption}", func() {
 				}
 			}
 		})
-	})
+		Step("Taking backup of application for different combination of restores", func() {
+			log.InfoD("Taking backup of application for different combination of restores")
+			for _, namespace := range bkpNamespaces {
+				for _, bkpLocationName := range backupLocations {
+					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+					bucketNames = append(bucketNames, backupName)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				}
+			}
+		})
+		Step("Create new storage class on source cluster for storage class mapping for restore", func() {
+			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
+			scCount = 10
+			for i := 0; i < scCount; i++ {
+				scName := fmt.Sprintf("replica-sc-%d-%v", time.Now().Unix(), i)
+				params["repl"] = "2"
+				v1obj := metaV1.ObjectMeta{
+					Name: scName,
+				}
+				reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+				bindMode := storageApi.VolumeBindingImmediate
+				scObj := storageApi.StorageClass{
+					ObjectMeta:        v1obj,
+					Provisioner:       k8s.CsiProvisioner,
+					Parameters:        params,
+					ReclaimPolicy:     &reclaimPolicyDelete,
+					VolumeBindingMode: &bindMode,
+				}
 
-	//JustAfterEach(func() {
-	//	// Post test custom bucket delete
-	//	providers := getProviders()
-	//	time.Sleep(100 * time.Second)
-	//	for _, provider := range providers {
-	//		for _, customBucket := range bucketNames {
-	//			DeleteBucket(provider, customBucket)
-	//			customBuckets = append(customBuckets, customBucket)
-	//		}
-	//	}
-	//	defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
-	//})
+				_, err := k8sStorage.CreateStorageClass(&scObj)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on source cluster %s", scName, SourceClusterName))
+				scNames = append(scNames, scName)
+			}
+		})
+		Step("Multiple restore for same backup in different storage class in same cluster at the same time", func() {
+			log.InfoD(fmt.Sprintf("Multiple restore for same backup into %d different storage class in same cluster at the same time", scCount))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], make(map[string]string))
+			singlePvc := pvcs.Items[0]
+			sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
+			var wg sync.WaitGroup
+			//for _, scName := range scNames {
+			for i := 0; i < 4; i++ {
+				storageClassMapping[sourceScName.Name] = scNames[i]
+				time.Sleep(2)
+				namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
+				restoreName := fmt.Sprintf("restore-new-storage-class-%s-%s", scNames[i], RestoreNamePrefix)
+				restoreList = append(restoreList, restoreName)
+				wg.Add(1)
+				go func(scName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err = CreateRestore(restoreName, bucketNames[0], namespaceMap, SourceClusterName, orgID, ctx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
+				}(scNames[i])
+			}
+			wg.Wait()
+		})
+		Step("Multiple restore for same backup in different storage class in different cluster at the same time", func() {
+			log.InfoD(fmt.Sprintf("Multiple restore for same backup into %d different storage class in same cluster at the same time", scCount))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(bkpNamespaces[0], make(map[string]string))
+			singlePvc := pvcs.Items[0]
+			sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
+			var wg sync.WaitGroup
+			//for _, scName := range scNames {
+			for i := 5; i < 10; i++ {
+				storageClassMapping[sourceScName.Name] = scNames[i]
+				time.Sleep(2)
+				namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
+				restoreName := fmt.Sprintf("restore-new-storage-class-%s-%s", scNames[i], RestoreNamePrefix)
+				restoreList = append(restoreList, restoreName)
+				wg.Add(1)
+				go func(scName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err = CreateRestore(restoreName, bucketNames[1], namespaceMap, destinationClusterName, orgID, ctx, storageClassMapping)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
+				}(scNames[i])
+			}
+			wg.Wait()
+		})
+
+		//JustAfterEach(func() {
+		//	// Post test custom bucket delete
+		//	providers := getProviders()
+		//	time.Sleep(100 * time.Second)
+		//	for _, provider := range providers {
+		//		for _, customBucket := range bucketNames {
+		//			DeleteBucket(provider, customBucket)
+		//			customBuckets = append(customBuckets, customBucket)
+		//		}
+		//	}
+		//	defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+	})
 })
