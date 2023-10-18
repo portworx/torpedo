@@ -1480,7 +1480,6 @@ func scheduleAppsWithAutopilot(testName string, testScaleFactor int, apRules []a
 					StorageProvisioner: Inst().Provisioner,
 					PvcNodesAnnotation: options.PvcNodesAnnotation,
 					PvcSize:            options.PvcSize,
-					Nodes:              options.Nodes,
 				})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(context).NotTo(BeEmpty())
