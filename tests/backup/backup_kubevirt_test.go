@@ -36,6 +36,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
+		restoreNameToAppContextMap = make(map[string]*scheduler.Context)
 		providers = getProviders()
 
 		log.InfoD("scheduling applications")
