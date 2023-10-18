@@ -4291,6 +4291,10 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
+//func UpdateS3BackupLocation(ctx context1.Context, ) error {
+//
+//}
+
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
@@ -4328,6 +4332,48 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+// CreateS3BackupLocationWithSseType creates backup location for S3 with SSE type
+func CreateS3BackupLocationWithSseType(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, sseS3EncryptionType api.S3Config_Sse) error {
+	time.Sleep(60 * time.Second)
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
+				},
+			},
+		},
+	}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
 	}
 	return nil
 }
@@ -5420,6 +5466,51 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		}
 	}
 	return err
+}
+
+// ModifyS3BucketWithKmsEncryption creates bucket in S3 with KMS encrypted key
+func ModifyS3BucketWithKmsEncryption(bucketName string) {
+	id, secret, endpoint, s3Region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSSLBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	expect(err).NotTo(haveOccurred(),
+		fmt.Sprintf("Failed to get S3 session to create bucket. Error: [%v]", err))
+
+	S3Client := s3.New(sess)
+
+	// Create a server-side encryption configuration
+	sseConfig := &s3.ServerSideEncryptionConfiguration{
+		Rules: []*s3.ServerSideEncryptionRule{
+			{
+				ApplyServerSideEncryptionByDefault: &s3.ServerSideEncryptionByDefault{
+					SSEAlgorithm:   aws.String("aws:kms"),
+					KMSMasterKeyID: aws.String("alias/aws/s3"),
+				},
+			},
+		},
+	}
+
+	createBucketInput := &s3.PutBucketEncryptionInput{
+		Bucket:                            aws.String(bucketName),
+		ServerSideEncryptionConfiguration: sseConfig,
+	}
+
+	// Modify S3 bucket with KMS Encryption request
+	S3Client.PutBucketEncryptionRequest(createBucketInput)
+
+	//err = S3Client.WaitUntilBucketExists(&s3.HeadBucketInput{
+	//	Bucket: aws.String(bucketName),
+	//})
+	//expect(err).NotTo(haveOccurred(),
+	//	fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
+
+	return
 }
 
 // UpdateS3BucketPolicy applies the given policy to the given bucket.
