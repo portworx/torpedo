@@ -217,6 +217,139 @@ var _ = Describe("{ResizeStorageAndValidateTemplate}", func() {
 	})
 })
 
+var _ = Describe("{PerformStorageResizeBy1Gb100Times}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PerformStorageResizeBy1Gb100Times", "Perform PVC Resize by 1GB for 100 times in a loop and validate the updated vol in the storage config.", pdsLabels, 0)
+		//Initializing the parameters required for workload generation
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
+	})
+
+	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
+
+		var (
+			updatedDeployment     *pds.ModelsDeployment
+			updatedDepList        []*pds.ModelsDeployment
+			resConfigModelUpdated *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated  *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID string
+			newStorageTemplateID  string
+			updatedPvcSize        uint64
+		)
+		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			_, deployments, initialCapacity, resConfigModel, stConfigModel, appConfigID, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(tenantID, controlplane.Templates{
+				CpuLimit:       "2",
+				CpuRequest:     "1",
+				MemoryLimit:    "4G",
+				MemoryRequest:  "2G",
+				StorageRequest: "1G",
+				FsType:         "xfs",
+				ReplFactor:     2,
+				Provisioner:    "pxd.portworx.com",
+				Secure:         false,
+				VolGroups:      false,
+			})
+			for _, ds := range params.DataServiceToTest {
+				dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+				stepLog = "Check PVC for full condition based upto 90% full"
+				storageSizeCounter := 0
+				for i := 2; i <= 100; i++ {
+					storageSizeCounter = i
+					storageSize := fmt.Sprint(storageSizeCounter, "G")
+					log.InfoD("StorageSize calculated is %v", storageSize)
+					stepLog = "Update the resource/storage template with increased storage size"
+					Step(stepLog, func() {
+						newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
+						updatedTemplateConfig := controlplane.Templates{
+							CpuLimit:       *resConfigModel.CpuLimit,
+							CpuRequest:     *resConfigModel.CpuRequest,
+							DataServiceID:  dataserviceID,
+							MemoryLimit:    *resConfigModel.MemoryLimit,
+							MemoryRequest:  *resConfigModel.MemoryRequest,
+							Name:           newTemplateName,
+							StorageRequest: storageSize,
+							FsType:         *stConfigModel.Fs,
+							ReplFactor:     *stConfigModel.Repl,
+							Provisioner:    *stConfigModel.Provisioner,
+							Secure:         false,
+							VolGroups:      false,
+						}
+						stConfigModelUpdated, resConfigModelUpdated, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig)
+						log.FailOnError(err, "Unable to update template")
+						log.InfoD("Successfully updated the template with ID- %v", resConfigModelUpdated.GetId())
+						newResourceTemplateID = resConfigModelUpdated.GetId()
+						newStorageTemplateID = stConfigModelUpdated.GetId()
+					})
+					stepLog = "Apply updated template to the dataservice deployment"
+					Step(stepLog, func() {
+						for ds, deployment := range deployments {
+							if appConfigID == "" {
+								appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+								log.FailOnError(err, "Error while fetching AppConfigID")
+							}
+
+							updatedDeployment, err = dsTest.UpdateDataServices(deployment.GetId(),
+								appConfigID, deployment.GetImageId(),
+								int32(ds.Replicas), newResourceTemplateID, params.InfraToTest.Namespace)
+							log.FailOnError(err, "Error while updating dataservices")
+							Step("Validate Deployments after template update", func() {
+								err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
+								log.FailOnError(err, "Error while validating dataservices")
+								log.InfoD("Data-service: %v is up and healthy", ds.Name)
+								updatedDepList = append(updatedDepList, updatedDeployment)
+								ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(updatedDepList)
+								log.FailOnError(err, "Unable to create scheduler context")
+								updatedPvcSize, err = GetVolumeCapacityInGB(ctx)
+								log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
+							})
+							stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
+							Step(stepLog, func() {
+
+								_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+								log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+								log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigModelUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
+								dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigModelUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+
+								if updatedPvcSize > initialCapacity {
+									flag := true
+									dash.VerifyFatal("PV/Pvc Resize is successful", flag, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
+								} else {
+									log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
+								}
+							})
+							stepLog = "Delete created templates"
+							Step(stepLog, func() {
+								controlPlane.CleanupCustomTemplates(newStorageTemplateID, newResourceTemplateID)
+							})
+
+						}
+					})
+
+				}
+			}
+			Step("Delete Deployments", func() {
+				CleanupDeployments(deploymentsToBeCleaned)
+				controlPlane.CleanupCustomTemplates(stConfigModel.GetId(), resConfigModel.GetId())
+			})
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		err := bkpClient.AWSStorageClient.DeleteBucket()
+		log.FailOnError(err, "Failed while deleting the bucket")
+	})
+})
+
 func DeployDSWithCustomTemplatesRunWorkloads(tenantId string, templates controlplane.Templates) ([]*pds.ModelsDeployment, map[PDSDataService]*pds.ModelsDeployment, uint64, *pds.ModelsResourceSettingsTemplate, *pds.ModelsStorageOptionsTemplate, string, *v1.Deployment, map[string]string, error) {
 	var (
 		wlDeploymentsToBeCleaned []*v1.Deployment
