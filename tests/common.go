@@ -2014,6 +2014,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 		nodes := node.GetWorkerNodes()
 		expect(nodes).NotTo(beEmpty())
 		for _, n := range nodes {
+			log.Infof("Worker nodes - %s", n.Name)
 			for id, sPool := range n.StoragePools {
 				if workloadSizeForPool, ok := workloadSizesByPool[sPool.Uuid]; ok {
 					n.StoragePools[id].WorkloadSize = workloadSizeForPool
