@@ -5297,6 +5297,7 @@ func StartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	k8sKubevirt := kubevirt.Instance()
 	var wg sync.WaitGroup
 	errors := make([]string, 0)
+	var mutex sync.Mutex
 
 	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
 	if err != nil {
@@ -5305,8 +5306,11 @@ func StartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	for _, vm := range vms.Items {
 		wg.Add(1)
 		go func(vm kubevirtv1.VirtualMachine) {
+			defer wg.Done()
 			err := StartKubevirtVM(vm.Name, namespace, waitForCompletion)
 			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
 				errors = append(errors, err.Error())
 			}
 		}(vm)
