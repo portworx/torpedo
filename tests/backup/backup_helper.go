@@ -2171,25 +2171,6 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 	return false, nil
 }
 
-// IsCloudCredPresent checks whether the Cloud Cred is present or not
-func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string) (bool, error) {
-	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
-		OrgId:          orgID,
-		IncludeSecrets: false,
-	}
-	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredential(ctx, cloudCredEnumerateRequest)
-	if err != nil {
-		return false, err
-	}
-	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
-		if cloudCredObj.GetName() == cloudCredName {
-			log.Infof("Cloud Credential [%s] is present", cloudCredName)
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 // CreateCustomRestoreWithPVCs function can be used to deploy custom deployment with it's PVCs. It cannot be used for any other resource type.
 func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string, namespace string) (deploymentName string, err error) {
@@ -5098,6 +5079,121 @@ func RestartKubevirtVM(name, namespace string) error {
 		}
 	default:
 		return fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state. It should be in running or stopped state", name, namespace, vm.Status.PrintableStatus)
+	}
+	return nil
+}
+
+// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
+// is backed up or not
+func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) error {
+
+	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
+
+	// Fetch a list of backups
+	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup UID")
+	}
+
+	// Get an inspect of the backup object
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: orgID,
+	}
+	backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup inspect object")
+	}
+	backupNamespaces := backupResponse.GetBackup().Namespaces
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	// Get a list of all services and get the namespace where px service is running
+	k8sCore := core.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get list of services")
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == "portworx-service" {
+			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
+		}
+	}
+
+	// Check if the namespaces to be skipped is present or not return error if not
+	for _, namespace := range backupNamespaces {
+		for _, namespacetoskip := range namespacesToSkip {
+			if namespacetoskip == namespace {
+				return fmt.Errorf("expected namespace %s shouldn't be present in backup", namespace)
+			}
+		}
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("switching context to source cluster failed")
+	}
+	return nil
+}
+
+// getNamespaceAge gets the namespace age of all the namespaces on the cluster
+func getNamespaceAge() (map[string]time.Time, error) {
+	var namespaceAge = make(map[string]time.Time)
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		return namespaceAge, fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	for _, namespace := range allNamespaces.Items {
+		namespaceAge[namespace.ObjectMeta.GetName()] = namespace.ObjectMeta.GetCreationTimestamp().Time
+	}
+
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return namespaceAge, fmt.Errorf("switching context to source cluster failed")
+	}
+
+	return namespaceAge, nil
+}
+
+// compareNamespaceAge checks the status of namespaces on clusters where the restore was done
+func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
+	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	namespaceNamesAge, err := getNamespaceAge()
+	k8sCore := core.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get list of services")
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == "portworx-service" {
+			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
+		}
+	}
+
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	for _, namespace := range allNamespaces.Items {
+		for _, skipCase := range namespacesToSkip {
+			if skipCase == namespace.GetName() {
+				if namespaceNamesAge[namespace.GetName()] != oldNamespaceAge[namespace.GetName()] {
+					return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+				}
+			} else {
+				if !namespaceNamesAge[namespace.GetName()].After(oldNamespaceAge[namespace.GetName()]) {
+					return fmt.Errorf("namespace[%s] not restored but was expected to be restored", namespace.GetName())
+				}
+			}
+		}
 	}
 	return nil
 }
