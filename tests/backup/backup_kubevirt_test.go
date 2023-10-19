@@ -28,9 +28,16 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		labelSelectors             map[string]string
 		providers                  []string
 		restoreNameToAppContextMap map[string]*scheduler.Context
-		namespaceMapping           map[string]string
+		namespaceMappingMixed      map[string]string
+		namespaceMappingRestart    map[string]string
+		namespaceMappingStopped    map[string]string
 		backupWithVMRestart        string
 		restoreWithVMRestart       string
+		namespaceWithStoppedVM     []string
+		backupWithVMMixed          string
+		restoreWithVMMixed         string
+		backupWithVMStopped        string
+		restoreWithVMStopped       string
 	)
 
 	JustBeforeEach(func() {
@@ -40,12 +47,15 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		restoreNameToAppContextMap = make(map[string]*scheduler.Context)
-		namespaceMapping = make(map[string]string)
+		namespaceMappingMixed = make(map[string]string)
+		namespaceMappingRestart = make(map[string]string)
+		namespaceMappingStopped = make(map[string]string)
+		namespaceWithStoppedVM = make([]string, 0)
 		providers = getProviders()
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 4; i++ {
 			taskName := fmt.Sprintf("%d-%d", 93011, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
@@ -104,16 +114,19 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
-		Step("Stopping VMs in one of the namespaces", func() {
-			namespaceToStopVMs := scheduledAppContexts[1].ScheduleOptions.Namespace
-			log.InfoD("Stopping VMs in one of the namespaces - [%s]", namespaceToStopVMs)
-			err := StopAllVMsInNamespace(namespaceToStopVMs, true)
-			log.FailOnError(err, "Failed stopping the VMs in namespace - "+namespaceToStopVMs)
-
+		Step("Stopping VMs in a few namespaces", func() {
+			log.InfoD("Stopping VMs in a few namespaces")
+			namespaceToStopVMs := []string{scheduledAppContexts[0].ScheduleOptions.Namespace, scheduledAppContexts[1].ScheduleOptions.Namespace}
+			namespaceWithStoppedVM = append(namespaceWithStoppedVM, namespaceToStopVMs...)
+			log.InfoD("Stopping VMs in one of the namespaces - [%v]", namespaceWithStoppedVM)
+			for _, n := range namespaceWithStoppedVM {
+				err := StopAllVMsInNamespace(n, true)
+				log.FailOnError(err, "Failed stopping the VMs in namespace - "+n)
+			}
 		})
 
-		Step("Taking backup of application from source cluster", func() {
-			log.InfoD("Taking backup of applications")
+		Step("Taking individual backup of each namespace", func() {
+			log.InfoD("Taking individual backup of each namespace")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
@@ -134,8 +147,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			wg.Wait()
 		})
 
-		Step("Restoring the all backed up namespaces", func() {
-			log.InfoD("Restoring the all backed up namespaces")
+		Step("Restoring all individual backups", func() {
+			log.InfoD("Restoring all individual backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
@@ -156,8 +169,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			wg.Wait()
 		})
 
-		Step("Validating the all restored namespaces", func() {
-			log.InfoD("Validating the all restored namespaces")
+		Step("Validating restores of individual backups", func() {
+			log.InfoD("Validating restores of individual backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			defer func() {
@@ -184,12 +197,41 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			wg.Wait()
 		})
 
-		Step("Starting the VMs in the namespace where it was stopped", func() {
-			namespace := scheduledAppContexts[1].ScheduleOptions.Namespace
-			log.InfoD("Starting the VMs in the namespace [%s] where it was stopped", namespace)
-			err := StartAllVMsInNamespace(namespace, true)
-			log.FailOnError(err, "Failed stopping the VMs in namespace - "+namespace)
+		Step("Take backup of all namespaces with VMs in Running and Stopped state", func() {
+			log.InfoD("Take backup of all namespaces with VMs in Running and Stopped state")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var namespaces []string
+			for _, appCtx := range scheduledAppContexts {
+				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+				namespaceMappingMixed[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mixed"
+			}
+			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
+			backupNames = append(backupNames, backupWithVMMixed)
+			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMMixed, SourceClusterName, sourceClusterUid, orgID, namespaces, backupLocationName)
+			err = CreateBackup(backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, namespaces,
+				nil, orgID, sourceClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMMixed))
+		})
 
+		Step("Restoring backup taken when VMs were in Running and Stopped state", func() {
+			log.InfoD("Restoring backup taken when VMs were in Running and Stopped state")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreWithVMMixed = fmt.Sprintf("%s-%s", "auto-restore-mixed", RandomString(6))
+			restoreNames = append(restoreNames, restoreWithVMMixed)
+			log.InfoD("Restoring the [%s] backup", backupWithVMMixed)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMMixed, backupWithVMMixed, namespaceMappingMixed, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMMixed, backupWithVMMixed))
+		})
+
+		Step("Starting the VMs in the namespace where it was stopped", func() {
+			log.InfoD("Starting the VMs in the namespace where it was stopped")
+			for _, n := range namespaceWithStoppedVM {
+				log.InfoD("Starting the VMs in the namespace [%s] where it was stopped", n)
+				err := StartAllVMsInNamespace(n, true)
+				log.FailOnError(err, "Failed starting the VMs in namespace - "+n)
+			}
 		})
 
 		Step("Take backup of all namespaces when VMs are restarting", func() {
@@ -200,13 +242,12 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			var namespaces []string
 			for _, appCtx := range scheduledAppContexts {
 				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
-				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-restart"
+				namespaceMappingRestart[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-restart"
 			}
 			backupWithVMRestart = fmt.Sprintf("%s-%s", "auto-backup-restart", RandomString(6))
 			backupNames = append(backupNames, backupWithVMRestart)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMRestart, SourceClusterName, sourceClusterUid, orgID, namespaces, backupLocationName)
-			err = CreateBackup(backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, namespaces,
-				nil, orgID, sourceClusterUid, "", "", "", "", ctx)
+			_, err = CreateBackupWithoutCheck(ctx, backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMRestart))
 			for _, n := range namespaces {
 				wg.Add(1)
@@ -220,15 +261,51 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			wg.Wait()
 		})
 
-		Step("Restoring the all backed up namespaces", func() {
-			log.InfoD("Restoring the all backed up namespaces")
+		Step("Restoring backup taken when VMs were Restarting", func() {
+			log.InfoD("Restoring backup taken when VMs were Restarting")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restoreWithVMRestart = fmt.Sprintf("%s-%s", "auto-restore-restart", RandomString(6))
 			restoreNames = append(restoreNames, restoreWithVMRestart)
 			log.InfoD("Restoring the [%s] backup", backupWithVMRestart)
-			err = CreateRestoreWithValidation(ctx, restoreWithVMRestart, backupWithVMRestart, namespaceMapping, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMRestart, backupWithVMRestart, namespaceMappingRestart, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMRestart, backupWithVMRestart))
+		})
+
+		Step("Stopping all the VMs in all the namespaces", func() {
+			log.InfoD("Stopping all the VMs in all the namespaces")
+			for _, appCtx := range scheduledAppContexts {
+				err := StopAllVMsInNamespace(appCtx.ScheduleOptions.Namespace, true)
+				log.FailOnError(err, "Failed stopping the VMs in namespace - "+appCtx.ScheduleOptions.Namespace)
+			}
+		})
+
+		Step("Take backup of all namespaces with VMs in Stopped state", func() {
+			log.InfoD("Take backup of all namespaces with VMs in Stopped state")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var namespaces []string
+			for _, appCtx := range scheduledAppContexts {
+				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+				namespaceMappingStopped[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-stopped"
+			}
+			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
+			backupNames = append(backupNames, backupWithVMStopped)
+			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMStopped, SourceClusterName, sourceClusterUid, orgID, namespaces, backupLocationName)
+			err = CreateBackup(backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, namespaces,
+				nil, orgID, sourceClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMStopped))
+		})
+
+		Step("Restoring all backups taken when VMs were Stopped", func() {
+			log.InfoD("Restoring all backups taken when VMs were Stopped")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreWithVMStopped = fmt.Sprintf("%s-%s", "auto-restore-stopped", RandomString(6))
+			restoreNames = append(restoreNames, restoreWithVMStopped)
+			log.InfoD("Restoring the [%s] backup", backupWithVMStopped)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMStopped, backupWithVMStopped, namespaceMappingStopped, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMStopped, backupWithVMStopped))
 		})
 	})
 
@@ -257,6 +334,30 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		restoredAppContexts := make([]*scheduler.Context, 0)
 		for _, scheduledAppContext := range scheduledAppContexts {
 			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingMixed, make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingStopped, make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingRestart, make(map[string]string), true)
 			if err != nil {
 				log.Errorf("TransformAppContextWithMappings: %v", err)
 				continue

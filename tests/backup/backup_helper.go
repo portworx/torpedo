@@ -5022,7 +5022,7 @@ func StartKubevirtVM(name string, namespace string, waitForCompletion bool) erro
 			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
 				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
 			}
-			log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
 			return "", false, nil
 		}
 		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
@@ -5051,7 +5051,7 @@ func StopKubevirtVM(name string, namespace string, waitForCompletion bool) error
 			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
 				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
 			}
-			log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
 			return "", false, nil
 		}
 		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
@@ -5080,7 +5080,7 @@ func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) er
 			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
 				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
 			}
-			log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
 			return "", false, nil
 		}
 		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
