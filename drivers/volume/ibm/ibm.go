@@ -2,6 +2,7 @@ package ibm
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -72,6 +73,11 @@ func (i *ibm) GetDriverVersion() (string, error) {
 func (i *ibm) RefreshDriverEndpoints() error {
 	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", i.String())
 	return nil
+}
+
+func (i *ibm) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", i.String())
+	return nil, nil
 }
 
 func init() {
