@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
@@ -232,6 +232,7 @@ const (
 var (
 	k8sCore       = core.Instance()
 	k8sApps       = apps.Instance()
+	k8sStorage    = storage.Instance()
 	apiExtentions = apiextensions.Instance()
 	serviceType   = "LoadBalancer"
 )
@@ -2029,18 +2030,17 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	var storageOp StorageOptions
 
 	//TODO: Identity a way to validate PVC without statefulset
-	k8sClient, err := pdsdriver.GetK8sContext()
-	if err != nil {
-		log.FailOnError(err, "Failed while creating k8s client")
-	}
 
-	storageClasses, err := k8sClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	storageClasses, err := k8sStorage.GetStorageClasses(labelSelector)
 	if err != nil {
-		log.Errorf("An error occured while getting storage class %v ", err)
+		log.FailOnError(err, "An error occured while getting storage class: [%v] ")
 	}
 
 	for _, sc := range storageClasses.Items {
 		if strings.Contains(sc.Name, deployment.GetClusterResourceName()) {
+			log.Debug("Getting config from storage class %v", sc.Name)
 			scAnnotation := sc.Annotations
 			for k, v := range scAnnotation {
 				if k == "kubectl.kubernetes.io/last-applied-configuration" {
@@ -2052,6 +2052,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 					}
 				}
 			}
+			break
 		}
 	}
 
