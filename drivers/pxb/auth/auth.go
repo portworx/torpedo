@@ -376,16 +376,12 @@ type DeleteUserRequest struct {
 type DeleteUserResponse struct{}
 
 func (k *Keycloak) DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
-	headerMap, err := k.GetCommonHeaderMap(ctx)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
 	userID, err := k.GetUserID(ctx, req.Username)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
 	route := fmt.Sprintf("users/%s", userID)
-	_, err = k.Execute(ctx, "DELETE", true, route, nil, headerMap)
+	_, err = k.ExecuteWithAdminToken(ctx, "DELETE", route, nil)
 	if err != nil {
 		return nil, err
 	}
