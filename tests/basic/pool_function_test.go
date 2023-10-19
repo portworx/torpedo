@@ -305,6 +305,11 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			if err != nil {
+				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
+					err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				}
+			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
@@ -326,7 +331,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 
 var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolExpandAndCheckAlerts", "pool expansion using resize-disk ", nil, 0)
+		StartTorpedoTest("PoolExpandAndCheckAlerts", "pool expansion using resize-disk and add-disk and check alerts after each operation", nil, 0)
 		// runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
@@ -367,10 +372,12 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 		selectedPool := stNode.Pools[0]
 		var poolToBeResized *api.StoragePool
 
-
 		stepLog = "Initiate pool expansion using add-disk"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+
+			poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
 
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
@@ -411,11 +418,7 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 				alertExist = false
 				for _, l := range outLines {
 					line := strings.Trim(l, " ")
-					log.Infof("the line is: %v", line)
-					log.Infof("the pool id to resize is %v", poolIDToResize)
-					log.Infof("the expectedSize is %v", expectedSize)
 					if strings.Contains(line, "PoolExpandSuccessful") && strings.Contains(line, poolIDToResize) {
-						log.Info("line contains PoolExpandSuccessful>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 						if strings.Contains(line, fmt.Sprintf("%d", expectedSize)) || strings.Contains(line, fmt.Sprintf("%d", expectedSizeWithJournal)) {
 							alertExist = true
 							log.Infof("The Alert generated is %s", line)
