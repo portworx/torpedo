@@ -261,7 +261,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			}
 			wg.Wait()
 			err = backupSuccessCheck(backupWithVMRestart, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
-			log.FailOnError(err, "Failed while checking success of backup [%s]")
+			log.FailOnError(err, "Failed while checking success of backup [%s]", backupWithVMRestart)
 		})
 
 		Step("Restoring backup taken when VMs were Restarting", func() {
