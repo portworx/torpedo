@@ -2035,7 +2035,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	labelSelector["name"] = deployment.GetClusterResourceName()
 	storageClasses, err := k8sStorage.GetStorageClasses(labelSelector)
 	if err != nil {
-		log.FailOnError(err, "An error occured while getting storage class: [%v] ")
+		log.FailOnError(err, "An error occured while getting storage classes")
 	}
 
 	for _, sc := range storageClasses.Items {
