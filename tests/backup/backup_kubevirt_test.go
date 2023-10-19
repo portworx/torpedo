@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"sync"
+	"time"
 )
 
 // This testcase verifies backup and restore of Kubevirt VMs in different states like Running, Stopped, Restarting
@@ -118,7 +119,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			log.InfoD("Stopping VMs in a few namespaces")
 			namespaceToStopVMs := []string{scheduledAppContexts[0].ScheduleOptions.Namespace, scheduledAppContexts[1].ScheduleOptions.Namespace}
 			namespaceWithStoppedVM = append(namespaceWithStoppedVM, namespaceToStopVMs...)
-			log.InfoD("Stopping VMs in one of the namespaces - [%v]", namespaceWithStoppedVM)
+			log.InfoD("Stopping VMs in namespaces - [%v]", namespaceWithStoppedVM)
 			for _, n := range namespaceWithStoppedVM {
 				err := StopAllVMsInNamespace(n, true)
 				log.FailOnError(err, "Failed stopping the VMs in namespace - "+n)
@@ -259,6 +260,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 				}(n)
 			}
 			wg.Wait()
+			err = backupSuccessCheck(backupWithVMRestart, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+			log.FailOnError(err, "Failed while checking success of backup [%s]")
 		})
 
 		Step("Restoring backup taken when VMs were Restarting", func() {
