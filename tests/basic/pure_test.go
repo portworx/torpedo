@@ -910,3 +910,100 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+// This test clones FACD, FBCD and FADA volumes and validates it
+/*
+https://portworx.testrail.net/index.php?/tests/view/72639348
+https://portworx.testrail.net/index.php?/tests/view/72657575
+
+*/
+var _ = Describe("{ClonePureVolumesAndValidate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ClonePureVolumesAndValidate", "Test clone of pure volumes and validate the volumes", nil, 0)
+	})
+	It("installs with cloud drive volumes on the correct FlashArrays", func() {
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Restart PX on a Node while volume creation is in progress
+/*
+https://portworx.testrail.net/index.php?/tests/view/72615026
+
+*/
+var _ = Describe("{RestartPXWhileVolCreate}", func() {
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 0)
+	})
+	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerRestart) different namespaces and restarts portworx on a different node after every NumberOfDeploymentsPerRestart have been queued to schedule", func() {
+		//Provisioner for pure apps
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		//Number of times portworx has to be restarded
+		n := 3
+		//Number of apps to be deployed after which a restart can be triggered
+		NumberOfDeploymentsPerRestart := 15
+		//Restart portworx n number of times
+		stepLog = "start provisioning nginx apps in the created namespaces and for every 50 deployments restart portworx on one of the nodes"
+		Step(stepLog, func() {
+			for i := 0; i < n; i++ {
+				Step("Schedule applications", func() {
+					log.InfoD("Scheduling applications")
+					for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+						taskName := fmt.Sprintf("test%v", (j+1)+NumberOfDeploymentsPerRestart*i)
+						context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+							AppKeys:            Inst().AppList,
+							StorageProvisioner: Provisioner,
+							PvcSize:            6 * units.GiB,
+						})
+						log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+						contexts = append(contexts, context...)
+					}
+				})
+				stepLog = "Restart Portworx"
+				Step(stepLog, func() {
+					nodes := node.GetStorageDriverNodes()
+					log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[i].Name)
+					StopVolDriverAndWait([]node.Node{nodes[i]})
+					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[i].Name)
+					StartVolDriverAndWait([]node.Node{nodes[i]})
+				})
+				stepLog = "Validate the applications after portworx restart"
+				Step(stepLog, func() {
+					ValidateApplications(contexts)
+				})
+			}
+		})
+
+		for i := 0; i < n; i++ {
+			stepLog = "Restart portworx,destroy apps and check if the pvc's are deleted gracefully"
+			Step(stepLog, func() {
+				nodes := node.GetStorageDriverNodes()
+				stepLog = "Stop Portworx"
+				Step(stepLog, func() {
+					log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[i].Name)
+					StopVolDriverAndWait([]node.Node{nodes[i]})
+				})
+				stepLog = "Destroy Application"
+				Step(stepLog, func() {
+					opts := make(map[string]bool)
+					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+					for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+						TearDownContext(contexts[(j)+NumberOfDeploymentsPerRestart*i], opts)
+					}
+				})
+				stepLog = "Start portworx"
+				Step(stepLog, func() {
+					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[i].Name)
+					StartVolDriverAndWait([]node.Node{nodes[i]})
+				})
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})

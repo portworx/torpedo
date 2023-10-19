@@ -5869,7 +5869,7 @@ func ParseFlags() {
 	sched.Init(time.Second)
 	if schedulerDriver, err = scheduler.Get(s); err != nil {
 		log.Fatalf("Cannot find scheduler driver for %v. Err: %v\n", s, err)
-	} else if volumeDriver, err = volume.Get(v); err != nil {
+	} else if volumeDriver, err = volume.Get("pure"); err != nil {
 		log.Fatalf("Cannot find volume driver for %v. Err: %v\n", v, err)
 	} else if nodeDriver, err = node.Get(n); err != nil {
 		log.Fatalf("Cannot find node driver for %v. Err: %v\n", n, err)
