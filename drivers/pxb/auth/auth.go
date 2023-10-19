@@ -30,7 +30,7 @@ const (
 	GlobalKeycloakServiceName = "pxcentral-keycloak-http"
 	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
 	GlobalPxCentralAdminSecretName = "px-central-admin"
-	// GlobalPxBackupAdminSecretName is the Kubernetes secret that stores the token for Px-Backup admin
+	// GlobalPxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
 	GlobalPxBackupAdminSecretName = "px-backup-admin-secret"
 )
 
@@ -126,11 +126,10 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 		}
 	}
 	if route != "" {
-		if strings.HasPrefix(route, "/") {
-			baseURL += route
-		} else {
-			baseURL += fmt.Sprintf("/%s", route)
+		if !strings.HasPrefix(route, "/") {
+			baseURL += "/"
 		}
+		baseURL += route
 	}
 	return baseURL, nil
 }
@@ -142,7 +141,7 @@ func (k *Keycloak) GetCommonHeaderMap(ctx context.Context) (map[string]string, e
 	}
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/json"
-	headerMap["Authorization"] = fmt.Sprint("Bearer ", pxCentralAdminToken)
+	headerMap["Authorization"] = "Bearer " + pxCentralAdminToken
 	return headerMap, nil
 }
 
@@ -151,14 +150,14 @@ func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, r
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	reqBody, err := func() (*bytes.Reader, error) {
+	reqBody, err := func() ([]byte, error) {
 		switch c := body.(type) {
-		case []byte:
-			return bytes.NewReader(c), nil
-		case string:
-			return bytes.NewReader([]byte(c)), nil
 		case nil:
 			return nil, nil
+		case []byte:
+			return c, nil
+		case string:
+			return []byte(c), nil
 		default:
 			bodyBytes, err := json.Marshal(c)
 			if err != nil {
@@ -166,13 +165,13 @@ func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, r
 				debugMap.Add("content", c)
 				return nil, ProcessError(err, debugMap.String())
 			}
-			return bytes.NewReader(bodyBytes), nil
+			return bodyBytes, nil
 		}
 	}()
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, bytes.NewReader(reqBody))
 	if err != nil {
 		debugMap := DebugMap{}
 		debugMap.Add("ReqURL", reqURL)
@@ -210,7 +209,7 @@ func (k *Keycloak) Do(ctx context.Context, method string, admin bool, route stri
 			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
 		}
 	}()
-	responseBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		debugMap := DebugMap{}
 		debugMap.Add("ResponseBody", resp.Body)
@@ -219,10 +218,10 @@ func (k *Keycloak) Do(ctx context.Context, method string, admin bool, route stri
 	statusCode := resp.StatusCode
 	switch {
 	case statusCode >= 200 && statusCode < 300:
-		return responseBody, nil
+		return respBody, nil
 	default:
-		requestURL, statusText := resp.Request.URL, http.StatusText(statusCode)
-		err = fmt.Errorf("%s %s returned status %d: %s", method, requestURL, statusCode, statusText)
+		reqURL, statusText := resp.Request.URL, http.StatusText(statusCode)
+		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, reqURL, statusCode, statusText)
 		debugMap := DebugMap{}
 		debugMap.Add("Response", resp)
 		return nil, ProcessError(err, debugMap.String())
@@ -262,10 +261,6 @@ func (k *Keycloak) GetPxCentralAdminToken(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	if pxCentralAdminToken == "" {
-		err = fmt.Errorf("[%s] token in secret [%s] is empty", GlobalPxBackupAdminSecretName, GlobalPxBackupOrgToken)
-		return "", ProcessError(err)
-	}
 	return pxCentralAdminToken, nil
 }
 
@@ -303,9 +298,7 @@ func (k *Keycloak) GetAdminCtxFromSecret(ctx context.Context, update bool) (cont
 	if update {
 		err = k.UpdatePxBackupAdminSecret(pxCentralAdminToken)
 		if err != nil {
-			debugMap := DebugMap{}
-			debugMap["PxCentralAdminToken"] = pxCentralAdminToken
-			return nil, ProcessError(err, debugMap.String())
+			return nil, ProcessError(err)
 		}
 	}
 	adminCtx := k.GetCtxWithToken(ctx, pxCentralAdminToken)
