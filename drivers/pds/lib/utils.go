@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -116,7 +117,6 @@ type StorageOptions struct {
 	VolumeGroup bool
 }
 
-// StorageClassConfig struct used to unmarshal
 type StorageClassConfig struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -124,24 +124,32 @@ type StorageClassConfig struct {
 		Annotations struct {
 		} `json:"annotations"`
 		Labels struct {
-			Name              string `json:"name"`
-			Namespace         string `json:"namespace"`
-			PdsDeploymentID   string `json:"pds/deployment-id"`
-			PdsDeploymentName string `json:"pds/deployment-name"`
-			PdsEnvironment    string `json:"pds/environment"`
-			PdsProjectID      string `json:"pds/project-id"`
+			Name                           string `json:"name"`
+			Namespace                      string `json:"namespace"`
+			PdsMutatorAdmit                string `json:"pds.mutator/admit"`
+			PdsMutatorInjectCustomRegistry string `json:"pds.mutator/injectCustomRegistry"`
+			PdsDeploymentID                string `json:"pds/deployment-id"`
+			PdsDeploymentName              string `json:"pds/deployment-name"`
+			PdsEnvironment                 string `json:"pds/environment"`
+			PdsProjectID                   string `json:"pds/project-id"`
 		} `json:"labels"`
 		Name      string `json:"name"`
 		Namespace string `json:"namespace"`
 	} `json:"metadata"`
 	Spec struct {
-		DNSZone          string `json:"dnsZone"`
-		Image            string `json:"image"`
-		ImagePullSecrets []struct {
-			Name string `json:"name"`
-		} `json:"imagePullSecrets"`
-		Initialize string `json:"initialize"`
-		Nodes      int32  `json:"nodes"`
+		Capabilities struct {
+			PdsRestore     string `json:"pds_restore"`
+			PdsSystemUsers string `json:"pds_system_users"`
+		} `json:"capabilities"`
+		Configuration struct {
+			PGDATABASE string `json:"PG_DATABASE"`
+		} `json:"configuration"`
+		DNSZone    string      `json:"dnsZone"`
+		Image      string      `json:"image"`
+		ImageBuild string      `json:"imageBuild"`
+		Images     interface{} `json:"images"`
+		Initialize string      `json:"initialize"`
+		Nodes      int         `json:"nodes"`
 		Resources  struct {
 			Limits struct {
 				CPU    string `json:"cpu"`
@@ -163,9 +171,63 @@ type StorageClassConfig struct {
 			Replicas    string `json:"replicas"`
 			Secure      string `json:"secure"`
 		} `json:"storageOptions"`
-		Version string `json:"version"`
+		TLSEnabled  bool   `json:"tlsEnabled"`
+		TLSIssuer   string `json:"tlsIssuer"`
+		Version     string `json:"version"`
+		VersionName string `json:"versionName"`
 	} `json:"spec"`
 }
+
+// StorageClassConfig struct used to unmarshal
+//type StorageClassConfig struct {
+//	APIVersion string `json:"apiVersion"`
+//	Kind       string `json:"kind"`
+//	Metadata   struct {
+//		Annotations struct {
+//		} `json:"annotations"`
+//		Labels struct {
+//			Name              string `json:"name"`
+//			Namespace         string `json:"namespace"`
+//			PdsDeploymentID   string `json:"pds/deployment-id"`
+//			PdsDeploymentName string `json:"pds/deployment-name"`
+//			PdsEnvironment    string `json:"pds/environment"`
+//			PdsProjectID      string `json:"pds/project-id"`
+//		} `json:"labels"`
+//		Name      string `json:"name"`
+//		Namespace string `json:"namespace"`
+//	} `json:"metadata"`
+//	Spec struct {
+//		DNSZone          string `json:"dnsZone"`
+//		Image            string `json:"image"`
+//		ImagePullSecrets []struct {
+//			Name string `json:"name"`
+//		} `json:"imagePullSecrets"`
+//		Initialize string `json:"initialize"`
+//		Nodes      int32  `json:"nodes"`
+//		Resources  struct {
+//			Limits struct {
+//				CPU    string `json:"cpu"`
+//				Memory string `json:"memory"`
+//			} `json:"limits"`
+//			Requests struct {
+//				CPU     string `json:"cpu"`
+//				Memory  string `json:"memory"`
+//				Storage string `json:"storage"`
+//			} `json:"requests"`
+//		} `json:"resources"`
+//		ServiceType  string `json:"serviceType"`
+//		StorageClass struct {
+//			Provisioner string `json:"provisioner"`
+//		} `json:"storageClass"`
+//		StorageOptions struct {
+//			Filesystem  string `json:"filesystem"`
+//			ForceSpread string `json:"forceSpread"`
+//			Replicas    string `json:"replicas"`
+//			Secure      string `json:"secure"`
+//		} `json:"storageOptions"`
+//		Version string `json:"version"`
+//	} `json:"spec"`
+//}
 
 // PDS const
 const (
@@ -2016,32 +2078,29 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	var config StorageClassConfig
 	var resourceTemp ResourceSettingTemplate
 	var storageOp StorageOptions
-	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+
+	//TODO: Identity a way to validate PVC without statefulset
+	k8sClient, err := pdsdriver.GetK8sContext()
 	if err != nil {
-		log.Warnf("An Error Occured while getting statefulsets %v", err)
-	}
-	err = k8sApps.ValidatePVCsForStatefulSet(ss, timeOut, timeInterval)
-	if err != nil {
-		log.Errorf("An error occured while validating pvcs of statefulsets %v ", err)
-	}
-	pvcList, err := k8sApps.GetPVCsForStatefulSet(ss)
-	if err != nil {
-		log.Warnf("An Error Occured while getting pvcs of statefulsets %v", err)
+		log.FailOnError(err, "Failed while creating k8s client")
 	}
 
-	for _, pvc := range pvcList.Items {
-		sc, err := k8sCore.GetStorageClassForPVC(&pvc)
-		if err != nil {
-			log.Errorf("Error Occured while getting storage class for pvc %v", err)
-		}
-		scAnnotation := sc.Annotations
-		for k, v := range scAnnotation {
-			if k == "kubectl.kubernetes.io/last-applied-configuration" {
-				log.Infof("Storage Options Values %v", v)
-				data := []byte(v)
-				err := json.Unmarshal(data, &config)
-				if err != nil {
-					log.Errorf("Error Occured while getting volume params %v", err)
+	storageClasses, err := k8sClient.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		log.Errorf("An error occured while getting storage class %v ", err)
+	}
+
+	for _, sc := range storageClasses.Items {
+		if strings.Contains(sc.Name, deployment.GetClusterResourceName()) {
+			scAnnotation := sc.Annotations
+			for k, v := range scAnnotation {
+				if k == "kubectl.kubernetes.io/last-applied-configuration" {
+					log.Infof("Storage Options Values %v", v)
+					data := []byte(v)
+					err := json.Unmarshal(data, &config)
+					if err != nil {
+						log.Errorf("Error Occured while getting volume params %v", err)
+					}
 				}
 			}
 		}
