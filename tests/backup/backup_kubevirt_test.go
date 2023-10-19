@@ -104,8 +104,9 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
-		Step("Changing the states of Kubevirt Virtual Machines", func() {
+		Step("Stopping VMs in one of the namespaces", func() {
 			namespaceToStopVMs := scheduledAppContexts[1].ScheduleOptions.Namespace
+			log.InfoD("Stopping VMs in one of the namespaces - [%s]", namespaceToStopVMs)
 			err := StopAllVMsInNamespace(namespaceToStopVMs, true)
 			log.FailOnError(err, "Failed stopping the VMs in namespace - "+namespaceToStopVMs)
 
@@ -183,8 +184,16 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			wg.Wait()
 		})
 
+		Step("Starting the VMs in the namespace where it was stopped", func() {
+			namespace := scheduledAppContexts[1].ScheduleOptions.Namespace
+			log.InfoD("Starting the VMs in the namespace [%s] where it was stopped", namespace)
+			err := StartAllVMsInNamespace(namespace, true)
+			log.FailOnError(err, "Failed stopping the VMs in namespace - "+namespace)
+
+		})
+
 		Step("Take backup of all namespaces when VMs are restarting", func() {
-			log.InfoD("Taking backup of applications")
+			log.InfoD("Take backup of all namespaces when VMs are restarting")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
