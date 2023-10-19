@@ -149,7 +149,7 @@ type StorageClassConfig struct {
 		ImageBuild string      `json:"imageBuild"`
 		Images     interface{} `json:"images"`
 		Initialize string      `json:"initialize"`
-		Nodes      int         `json:"nodes"`
+		Nodes      int32       `json:"nodes"`
 		Resources  struct {
 			Limits struct {
 				CPU    string `json:"cpu"`
@@ -177,57 +177,6 @@ type StorageClassConfig struct {
 		VersionName string `json:"versionName"`
 	} `json:"spec"`
 }
-
-// StorageClassConfig struct used to unmarshal
-//type StorageClassConfig struct {
-//	APIVersion string `json:"apiVersion"`
-//	Kind       string `json:"kind"`
-//	Metadata   struct {
-//		Annotations struct {
-//		} `json:"annotations"`
-//		Labels struct {
-//			Name              string `json:"name"`
-//			Namespace         string `json:"namespace"`
-//			PdsDeploymentID   string `json:"pds/deployment-id"`
-//			PdsDeploymentName string `json:"pds/deployment-name"`
-//			PdsEnvironment    string `json:"pds/environment"`
-//			PdsProjectID      string `json:"pds/project-id"`
-//		} `json:"labels"`
-//		Name      string `json:"name"`
-//		Namespace string `json:"namespace"`
-//	} `json:"metadata"`
-//	Spec struct {
-//		DNSZone          string `json:"dnsZone"`
-//		Image            string `json:"image"`
-//		ImagePullSecrets []struct {
-//			Name string `json:"name"`
-//		} `json:"imagePullSecrets"`
-//		Initialize string `json:"initialize"`
-//		Nodes      int32  `json:"nodes"`
-//		Resources  struct {
-//			Limits struct {
-//				CPU    string `json:"cpu"`
-//				Memory string `json:"memory"`
-//			} `json:"limits"`
-//			Requests struct {
-//				CPU     string `json:"cpu"`
-//				Memory  string `json:"memory"`
-//				Storage string `json:"storage"`
-//			} `json:"requests"`
-//		} `json:"resources"`
-//		ServiceType  string `json:"serviceType"`
-//		StorageClass struct {
-//			Provisioner string `json:"provisioner"`
-//		} `json:"storageClass"`
-//		StorageOptions struct {
-//			Filesystem  string `json:"filesystem"`
-//			ForceSpread string `json:"forceSpread"`
-//			Replicas    string `json:"replicas"`
-//			Secure      string `json:"secure"`
-//		} `json:"storageOptions"`
-//		Version string `json:"version"`
-//	} `json:"spec"`
-//}
 
 // PDS const
 const (
