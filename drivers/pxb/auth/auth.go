@@ -192,7 +192,7 @@ func (k *Keycloak) GetResponse(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func (k *Keycloak) Do(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
+func (k *Keycloak) Execute(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
 	req, err := k.MakeRequest(ctx, method, admin, route, body, headerMap)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -228,6 +228,14 @@ func (k *Keycloak) Do(ctx context.Context, method string, admin bool, route stri
 	}
 }
 
+func (k *Keycloak) ExecuteWithAdminToken(ctx context.Context, method string, route string, body interface{}) ([]byte, error) {
+	headerMap, err := k.GetCommonHeaderMap(ctx)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	return k.Execute(ctx, method, true, route, body, headerMap)
+}
+
 func (k *Keycloak) GetToken(ctx context.Context, username, password string) (string, error) {
 	route := "/protocol/openid-connect/token"
 	values := make(url.Values)
@@ -238,7 +246,7 @@ func (k *Keycloak) GetToken(ctx context.Context, username, password string) (str
 	values.Set("token-duration", "365d")
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
-	body, err := k.Do(ctx, "POST", false, route, values.Encode(), headerMap)
+	body, err := k.Execute(ctx, "POST", false, route, values.Encode(), headerMap)
 	if err != nil {
 		return "", ProcessError(err)
 	}
@@ -330,15 +338,7 @@ type AddUserResponse struct{}
 
 func (k *Keycloak) AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
 	route := "users"
-	headerMap, err := k.GetCommonHeaderMap(ctx)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	userRepBytes, err := json.Marshal(req.UserRepresentation)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	_, err = k.Do(ctx, "POST", true, route, string(userRepBytes), headerMap)
+	_, err := k.ExecuteWithAdminToken(ctx, "POST", route, req.UserRepresentation)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func (k *Keycloak) EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	respBody, err := k.Do(ctx, "GET", true, route, nil, headerMap)
+	respBody, err := k.Execute(ctx, "GET", true, route, nil, headerMap)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (k *Keycloak) DeleteUser(ctx context.Context, req *DeleteUserRequest) (*Del
 		return nil, ProcessError(err)
 	}
 	route := fmt.Sprintf("users/%s", userID)
-	_, err = k.Do(ctx, "DELETE", true, route, nil, headerMap)
+	_, err = k.Execute(ctx, "DELETE", true, route, nil, headerMap)
 	if err != nil {
 		return nil, err
 	}
