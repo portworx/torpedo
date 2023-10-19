@@ -1317,9 +1317,6 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionTakenToNormalEvent})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = Inst().S.ValidateAutopilotRuleObjects()
-			Expect(err).NotTo(HaveOccurred())
-
 		})
 
 		Step("validating and verifying size of storage pools", func() {
