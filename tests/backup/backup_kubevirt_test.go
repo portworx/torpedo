@@ -28,6 +28,9 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		labelSelectors             map[string]string
 		providers                  []string
 		restoreNameToAppContextMap map[string]*scheduler.Context
+		namespaceMapping           map[string]string
+		backupWithVMRestart        string
+		restoreWithVMRestart       string
 	)
 
 	JustBeforeEach(func() {
@@ -37,6 +40,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		restoreNameToAppContextMap = make(map[string]*scheduler.Context)
+		namespaceMapping = make(map[string]string)
 		providers = getProviders()
 
 		log.InfoD("scheduling applications")
@@ -177,6 +181,45 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 			}
 			wg.Wait()
+		})
+
+		Step("Take backup of all namespaces when VMs are restarting", func() {
+			log.InfoD("Taking backup of applications")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var namespaces []string
+			for _, appCtx := range scheduledAppContexts {
+				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-restart"
+			}
+			backupWithVMRestart = fmt.Sprintf("%s-%s", "auto-backup-restart", RandomString(6))
+			backupNames = append(backupNames, backupWithVMRestart)
+			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMRestart, SourceClusterName, sourceClusterUid, orgID, namespaces, backupLocationName)
+			err = CreateBackup(backupWithVMRestart, SourceClusterName, backupLocationName, backupLocationUID, namespaces,
+				nil, orgID, sourceClusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMRestart))
+			for _, n := range namespaces {
+				wg.Add(1)
+				go func(n string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					err := RestartAllVMsInNamespace(n, true)
+					log.FailOnError(err, "Failed restarting the VMs in namespace - "+n)
+				}(n)
+			}
+			wg.Wait()
+		})
+
+		Step("Restoring the all backed up namespaces", func() {
+			log.InfoD("Restoring the all backed up namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreWithVMRestart = fmt.Sprintf("%s-%s", "auto-restore-restart", RandomString(6))
+			restoreNames = append(restoreNames, restoreWithVMRestart)
+			log.InfoD("Restoring the [%s] backup", backupWithVMRestart)
+			err = CreateRestoreWithValidation(ctx, restoreWithVMRestart, backupWithVMRestart, namespaceMapping, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreWithVMRestart, backupWithVMRestart))
 		})
 	})
 
