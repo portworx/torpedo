@@ -88,7 +88,7 @@ type TokenRepresentation struct {
 
 type Keycloak struct {
 	*http.Client
-	Namespace string
+	//Namespace string
 }
 
 func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
