@@ -937,7 +937,7 @@ https://portworx.testrail.net/index.php?/tests/view/72615026
 var _ = Describe("{RestartPXWhileVolCreate}", func() {
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 0)
+		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 72615026)
 	})
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerRestart) different namespaces and restarts portworx on a different node after every NumberOfDeploymentsPerRestart have been queued to schedule", func() {
 		//Provisioner for pure apps
