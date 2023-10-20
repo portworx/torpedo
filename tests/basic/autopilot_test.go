@@ -136,7 +136,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), func() {
 		Step("schedule applications", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				id := 0
-				apRule := aututils.PVCRuleByUsageCapacity(50, 50, "16Gi")
+				apRule := aututils.PVCRuleByTotalSize(20, 50, "18Gi")
 				taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
 				apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
 				labels := map[string]string{
