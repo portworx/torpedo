@@ -400,6 +400,7 @@ PodLoop:
 				}
 				symlinkPath = strings.TrimSpace(symlinkPath)
 				if symlinkPath != "" && symlinkPath != path {
+					log.Infof("symlinkPath - %s", symlinkPath)
 					paths = append(paths[:i], paths[i+1:]...)
 					paths = append(paths, symlinkPath)
 				}
