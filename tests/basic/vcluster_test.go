@@ -73,7 +73,7 @@ var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
 	var scName string
 	var appNS string
 	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 5      // Number of FIO Pods to run in parallel in a single iteration
+	const batchCount = 10     // Number of FIO Pods to run in parallel in a single iteration
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",
@@ -165,7 +165,7 @@ var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
 		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
 		log.FailOnError(err, "Error in creating Nginx Application")
 		log.Infof("Successfully created Nginx App on Vcluster")
-		log.Infof("==========Hard Sleep of 10 seconds=========")
+		log.Infof("Hard Sleep for 10 seconds after creation of Nginx Deployment")
 		time.Sleep(10 * time.Second)
 		// Trying to Scale up the Deployment
 		log.Infof("Trying to Scale up this Nginx Deployment to 3 replicas")
