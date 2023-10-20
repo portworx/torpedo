@@ -275,9 +275,18 @@ func (v *VCluster) SetClientSetForVCluster() error {
 }
 
 // CreatePVC creates a PVC in vcluster
-func (v *VCluster) CreatePVC(pvcName, svcName, appNs string) (string, error) {
+func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string, error) {
 	if pvcName == "" {
 		pvcName = v.Name + "-" + svcName + "-pvc"
+	}
+	var mode corev1.PersistentVolumeAccessMode
+	switch accessMode {
+	case "RWO":
+		mode = corev1.ReadWriteOnce
+	case "RWX":
+		mode = corev1.ReadWriteMany
+	default:
+		mode = corev1.ReadWriteOnce
 	}
 	createOpts := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -285,7 +294,7 @@ func (v *VCluster) CreatePVC(pvcName, svcName, appNs string) (string, error) {
 			Namespace: appNs,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			AccessModes:      []corev1.PersistentVolumeAccessMode{mode},
 			StorageClassName: &svcName,
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -407,13 +416,23 @@ func (v *VCluster) VClusterCleanup(scName string) error {
 	if err := v.TerminateVCluster(); err != nil {
 		return err
 	}
-	if err := k8sCore.DeleteNamespace(v.Namespace); err != nil {
+	if err := DeleteNSFromHost(v.Namespace); err != nil {
 		return err
 	}
-	if err := k8sStorage.DeleteStorageClass(scName); err != nil {
+	if err := DeleteStorageclassFromHost(scName); err != nil {
 		return err
 	}
 	return nil
+}
+
+// DeleteNSFromHost delete a namespace from host cluster
+func DeleteNSFromHost(ns string) error {
+	return k8sCore.DeleteNamespace(ns)
+}
+
+// DeleteStorageclassFromHost deletes a storageclass from host cluster
+func DeleteStorageclassFromHost(sc string) error {
+	return k8sStorage.DeleteStorageClass(sc)
 }
 
 // WaitForFIOCompletion checks for FIO pod completion in vcluster context
