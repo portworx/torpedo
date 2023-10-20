@@ -1256,6 +1256,13 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 			}
 		}
+
+		// TODO: remove this retry once PWX-27773 is fixed
+		// DevicePath
+		if vol.DevicePath == "" {
+			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
+		}
+
 		return vol, false, nil
 	}
 
