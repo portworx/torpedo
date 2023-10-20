@@ -2,6 +2,9 @@ package tests
 
 import (
 	"fmt"
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/pkg/units"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -333,5 +336,118 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{ResizePVCToMaxLimit}", func() {
+
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/72657582
+
+	var (
+		namespaces          = make([]string, 0)
+		contexts            = make([]*scheduler.Context, 0)
+		volumeMap           = make(map[string][]*api.Volume)
+		minVolSizeIncrement = uint64(1 * units.TiB)
+	)
+
+	// getMaxVolSize gets the maximum volume size based on the given volType
+	getMaxVolSize := func(volType string) uint64 {
+		switch volType {
+		case "FACD":
+			return 40 * units.TiB
+		default:
+			return 100 * units.TiB
+		}
+	}
+
+	// getNextSize gets the next closest multiple in powers of 2 greater than currentSize
+	getNextSize := func(currentSize uint64) uint64 {
+		if currentSize < minVolSizeIncrement {
+			return minVolSizeIncrement
+		}
+		return currentSize * 2
+	}
+
+	// resizeVolume resizes given the volume using powers of 2 until the max limit is reached
+	resizeVolume := func(volType string, vol *api.Volume) error {
+		log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
+		maxVolSize := getMaxVolSize(volType)
+		currentSize := vol.Spec.Size
+		for {
+			newSize := getNextSize(currentSize)
+			if newSize > maxVolSize {
+				log.Infof("Volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
+				return fmt.Errorf("volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
+			}
+			log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, currentSize, newSize)
+			err = Inst().V.ResizeVolume(vol.Id, newSize)
+			if err != nil {
+				return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, currentSize, newSize, err)
+			}
+			currentSize = newSize
+		}
+	}
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizePVCToMaxLimit", "Validate PVC resize to max limit on FADA, FBDA, and FACD", nil, 72657582)
+	})
+
+	It("Validates PVC resize to max limit on FADA, FBDA, and FACD", func() {
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("pure-test-%d", i)
+				for _, ctx := range ScheduleApplications(taskName) {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+					namespaces = append(namespaces, GetAppNamespace(ctx, taskName))
+				}
+			}
+		})
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Categorize volumes based on their proxy protocols", func() {
+			log.InfoD("Categorizing volumes based on their proxy protocols")
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
+				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
+					switch proxySpec.ProxyProtocol {
+					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+						volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
+					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+						volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
+					default:
+						volumeMap["FACD"] = append(volumeMap["FACD"], apiVol)
+					}
+				}
+			}
+		})
+		Step(fmt.Sprintf("Resize a volume of each type to max limit"), func() {
+			log.InfoD("Resizing a volume of each type to max limit")
+			for volType, vols := range volumeMap {
+				if len(vols) > 0 {
+					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+					vol := vols[rand.Intn(len(vols))]
+					log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
+					err := resizeVolume(volType, vol)
+					log.FailOnError(err, "failed to resize [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		DestroyApps(contexts, opts)
 	})
 })
