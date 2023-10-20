@@ -131,13 +131,12 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), func() {
 	})
 	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volume, validate and teardown apps", func() {
-		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
+		testName := strings.ToLower(fmt.Sprintf("%sPvcBasicInScale", testSuiteName))
 
 		Step("schedule applications", func() {
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				// for id, apRule := range autopilotruleBasicTestCases {
 				id := 0
-				apRule := autopilotruleBasicTestCases[0]
+				apRule := aututils.PVCRuleByUsageCapacity(50, 50, "16Gi")
 				taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
 				apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
 				labels := map[string]string{
@@ -154,7 +153,6 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), func() {
 				Expect(context).NotTo(BeEmpty())
 				contexts = append(contexts, context...)
 			}
-			// }
 		})
 
 		Step("wait until workload completes on volume", func() {
@@ -1274,7 +1272,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 		Expect(len(storageNodes)).Should(BeNumerically(">=", 4))
 
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "16"}, false),
+			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "15"}, false),
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
 			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[2])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
