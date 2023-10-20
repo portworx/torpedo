@@ -853,18 +853,27 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step("validate mount options for pure volumes", func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			processError(err, errChan...)
+		}
 
-		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		// Ignore mount path check if current version is < 3.0.0 (https://portworx.atlassian.net/browse/PWX-34000)
+		log.InfoD("Validate current Version [%v]", driverVersion)
+		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+		if !re.MatchString(driverVersion) {
+			Step("validate mount options for pure volumes", func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
 
+			Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
+		}
 	})
 }
 
@@ -1422,6 +1431,7 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 		} else {
 			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
 		}
+
 	}
 }
 
@@ -4231,14 +4241,38 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 // CreateS3BackupLocation creates backup location for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
-	time.Sleep(60 * time.Second)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	// Get SSE S3 Encryption Type
+	sseS3EncryptionType, err := GetSseS3EncryptionType()
+	if err != nil {
+		return err
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4258,14 +4292,10 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
 				},
 			},
 		},
-	}
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
 	}
 
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -4279,6 +4309,11 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	// Get SSE S3 Encryption Type
+	sseS3EncryptionType, err := GetSseS3EncryptionType()
+	if err != nil {
+		return err
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4298,12 +4333,13 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
 				},
 			},
 		},
 	}
 
-	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return err
 	}
@@ -9379,7 +9415,25 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 	_, err := task.DoRetryWithTimeout(delVol, time.Duration(3)*appReadinessTimeout, 30*time.Second)
 
 	return schedVolumeSnapstatus, err
+}
 
+// IsCloudCredPresent checks whether the Cloud Cred is present or not
+func IsCloudCredPresent(cloudCredName string, ctx context1.Context, orgID string) (bool, error) {
+	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredentialByUser(ctx, cloudCredEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
+		if cloudCredObj.GetName() == cloudCredName {
+			log.Infof("Cloud Credential [%s] is present", cloudCredName)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // GetAllPoolsPresent returns list of all pools present in the cluster
@@ -9499,4 +9553,25 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
 
 	return policy, nil
+}
+
+// GetSseS3EncryptionType fetches SSE type for S3 bucket from the environment variable
+func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
+	var sseType api.S3Config_Sse
+	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
+	if s3SseTypeEnv != "" {
+		sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+		if err != nil {
+			return sseType, err
+		}
+		switch sseDetails.SseType {
+		case s3utils.SseS3:
+			sseType = api.S3Config_SSE_S3
+		default:
+			return sseType, fmt.Errorf("failed to sse s3 encryption type not valid: [%v]", sseDetails.SseType)
+		}
+	} else {
+		sseType = api.S3Config_Invalid
+	}
+	return sseType, nil
 }
