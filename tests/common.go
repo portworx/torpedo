@@ -6161,7 +6161,14 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 
 	// Check to handle cloud based deployment with 0 master nodes
 	if len(node.GetMasterNodes()) == 0 {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
+		return
+	}
+
+	// In case of ocp if ssh_key is given skip log collection
+	sshKey := os.Getenv("TORPEDO_SSH_KEY")
+	if sshKey != "" {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
 		return
 	}
 
