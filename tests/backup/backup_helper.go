@@ -5017,7 +5017,7 @@ func StartKubevirtVM(name string, namespace string, waitForCompletion bool) erro
 		t := func() (interface{}, bool, error) {
 			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
 			if err != nil {
-				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
 			}
 			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
 				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
@@ -5046,7 +5046,7 @@ func StopKubevirtVM(name string, namespace string, waitForCompletion bool) error
 		t := func() (interface{}, bool, error) {
 			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
 			if err != nil {
-				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
 			}
 			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
 				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
@@ -5075,7 +5075,7 @@ func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) er
 		t := func() (interface{}, bool, error) {
 			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
 			if err != nil {
-				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
 			}
 			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
 				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
