@@ -42,8 +42,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states",
-			nil, 93011)
+		StartTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states", nil, 93011)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
@@ -66,7 +65,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		}
 	})
 
-	It("Basic Backup Creation", func() {
+	It("Verify backup and restore of Kubevirt VMs in different states", func() {
 		defer func() {
 			log.InfoD("switching to default context")
 			err := SetClusterContext("")
@@ -210,8 +209,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
 			backupNames = append(backupNames, backupWithVMMixed)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMMixed, SourceClusterName, sourceClusterUid, orgID, namespaces, backupLocationName)
-			err = CreateBackup(backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, namespaces,
-				nil, orgID, sourceClusterUid, "", "", "", "", ctx)
+			err = CreateBackupWithValidation(ctx, backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				nil, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMMixed))
 		})
 
@@ -295,8 +294,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
 			backupNames = append(backupNames, backupWithVMStopped)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMStopped, SourceClusterName, sourceClusterUid, orgID, namespaces, backupLocationName)
-			err = CreateBackup(backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, namespaces,
-				nil, orgID, sourceClusterUid, "", "", "", "", ctx)
+			err = CreateBackupWithValidation(ctx, backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				nil, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMStopped))
 		})
 
