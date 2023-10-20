@@ -1308,7 +1308,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 			err := aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.NormalToTriggeredEvent})
 			Expect(err).NotTo(HaveOccurred())
 
-			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
 			Expect(err).NotTo(HaveOccurred())
 
 			err = Inst().V.ValidateRebalanceJobs()
