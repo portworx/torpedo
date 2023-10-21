@@ -33,7 +33,7 @@ const (
 	PxCentralAdminSecretName = "px-central-admin"
 	// PxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
 	PxBackupAdminSecretName = "px-backup-admin-secret"
-	// GlobalPxBackupServiceName is the name of the Kubernetes service within with Px-Backup namespace
+	// GlobalPxBackupServiceName is the name of the Kubernetes service within Px-Backup namespace
 	GlobalPxBackupServiceName = "px-backup"
 )
 

@@ -21,11 +21,11 @@ type Organization struct {
 	BackupDataStore          *generics.DataStore[*api.BackupObject]
 	BackupLocationDataStore  *generics.DataStore[*api.BackupLocationObject]
 	BackupScheduleDataStore  *generics.DataStore[*api.BackupScheduleObject]
-	ClusterDataStore         *generics.DataStore[*api.ClusterObject]
 	SchedulePolicyDataStore  *generics.DataStore[*api.SchedulePolicyObject]
 	RoleDataStore            *generics.DataStore[*api.RoleObject]
-	RestoreDataStore         *generics.DataStore[*api.RestoreObject]
 	RuleDataStore            *generics.DataStore[*api.RuleObject]
+	ClusterDataStore         *generics.DataStore[*api.ClusterObject]
+	RestoreDataStore         *generics.DataStore[*api.RestoreObject]
 	CloudCredentialDataStore *generics.DataStore[*api.CloudCredentialObject]
 }
 
@@ -44,7 +44,7 @@ type PxBackup struct {
 	UserDataStore *generics.DataStore[*User]
 }
 
-func (b *PxBackup) GetKeycloakURL(admin bool, route string) (string, error) {
+func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
 	reqURL := ""
 	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(EnvPxCentralUIURL)
@@ -85,8 +85,8 @@ func (b *PxBackup) GetKeycloakURL(admin bool, route string) (string, error) {
 	return reqURL, nil
 }
 
-func (b *PxBackup) GetKeycloakResponse(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
-	reqURL, err := b.GetKeycloakURL(admin, route)
+func (b *PxBackup) CallKeycloak(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
+	reqURL, err := b.BuildKeycloakURL(admin, route)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
@@ -111,14 +111,10 @@ func (b *PxBackup) GetKeycloakResponse(ctx context.Context, method string, admin
 			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
 		}
 	}()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
 	statusCode := resp.StatusCode
 	switch {
 	case statusCode >= 200 && statusCode < 300:
-		return respBody, nil
+		return io.ReadAll(resp.Body)
 	default:
 		reqURL, statusText := resp.Request.URL, http.StatusText(statusCode)
 		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, reqURL, statusCode, statusText)
