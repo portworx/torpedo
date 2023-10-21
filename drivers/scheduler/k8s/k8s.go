@@ -165,6 +165,8 @@ const (
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 	cdiImportComplete                 = "Import Complete"
+	cdiImageImportTimeout             = 20 * time.Minute
+	cdiImageImportRetry               = 30 * time.Second
 )
 
 const (
@@ -5239,7 +5241,7 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName)
 				}
 			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			if err != nil {
 				return err
 			}
