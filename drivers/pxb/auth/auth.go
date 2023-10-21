@@ -90,7 +90,7 @@ type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
-func BuildURL(admin bool, route string) (string, error) {
+func BuildURL(admin bool, route string, namespace string) (string, error) {
 	baseURL := ""
 	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
@@ -105,7 +105,7 @@ func BuildURL(admin bool, route string) (string, error) {
 			baseURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
 		}
 	} else {
-		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.Namespace)
+		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, namespace)
 		if err != nil {
 			debugMap := DebugMap{}
 			debugMap.Add("ODICSecretName", oidcSecretName)
@@ -115,7 +115,7 @@ func BuildURL(admin bool, route string) (string, error) {
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, k.Namespace)
+		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, namespace)
 		newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
@@ -134,7 +134,7 @@ func BuildURL(admin bool, route string) (string, error) {
 }
 
 func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
-	pxCentralAdminToken, err := k.GetPxCentralAdminToken(ctx)
+	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
@@ -144,11 +144,7 @@ func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
 	return headerMap, nil
 }
 
-func MakeRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) (*http.Request, error) {
-	reqURL, err := k.BuildURL(admin, route)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
+func MakeRequest(ctx context.Context, method string, reqURL string, body interface{}, headerMap map[string]string) (*http.Request, error) {
 	reqBody, err := func() ([]byte, error) {
 		switch c := body.(type) {
 		case nil:
@@ -184,7 +180,7 @@ func MakeRequest(ctx context.Context, method string, admin bool, route string, b
 }
 
 func GetResponse(req *http.Request) (*http.Response, error) {
-	resp, err := k.Client.Do(req)
+	resp, err := GlobalHTTPClient.Do(req)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
