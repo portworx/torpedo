@@ -3,6 +3,7 @@ package pxb
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -12,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -120,4 +122,28 @@ func (b *PxBackup) ProcessKeycloakRequest(ctx context.Context, method string, ad
 		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, reqURL, statusCode, statusText)
 		return nil, ProcessError(err)
 	}
+}
+
+func (b *PxBackup) GetKeycloakAccessToken(ctx context.Context, username, password string) (string, error) {
+	route := "/protocol/openid-connect/token"
+	values := make(url.Values)
+	values.Set("username", username)
+	values.Set("password", password)
+	values.Set("grant_type", "password")
+	values.Set("client_id", "pxcentral")
+	values.Set("token-duration", "365d")
+	headerMap := make(map[string]string)
+	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
+	body, err := b.ProcessKeycloakRequest(ctx, "POST", false, route, values.Encode(), headerMap)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	token := &keycloak.TokenRepresentation{}
+	err = json.Unmarshal(body, &token)
+	if err != nil {
+		debugMap := DebugMap{}
+		debugMap.Add("Body", body)
+		return "", ProcessError(err, debugMap.String())
+	}
+	return token.AccessToken, nil
 }
