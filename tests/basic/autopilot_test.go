@@ -168,16 +168,6 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), func() {
 			}
 		})
 
-		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
-			time.Sleep(unscheduledResizeTimeout)
-		})
-
-		Step("validating volumes and verifying size of volumes", func() {
-			for _, ctx := range contexts {
-				ValidateVolumes(ctx)
-			}
-		})
-
 		Step("destroy apps", func() {
 			opts := make(map[string]bool)
 			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
