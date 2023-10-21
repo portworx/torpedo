@@ -1,19 +1,49 @@
 package pxbutils
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
 )
 
+// GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
+const GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
+
+// DefaultOIDCSecretName is the fallback Kubernetes secret in case EnvPxBackupOIDCSecretName is not set
+const DefaultOIDCSecretName = "pxc-backup-secret"
+
 const (
-	// GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
-	GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
-	// GlobalPxBackupServiceName is the name of the Kubernetes service associated with Px-Backup
+	// PxCentralAdminUsername is the username for px-central-admin user
+	PxCentralAdminUsername = "px-central-admin"
+	// PxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
+	PxBackupAuthHeader = "authorization"
+	// PxBackupAuthTokenType is the type of authentication token in Px-Backup requests
+	PxBackupAuthTokenType = "bearer"
+	// PxBackupKeycloakServiceName is the Kubernetes service that facilitates user authentication
+	// through Keycloak in Px-Backup
+	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
+	// PxBackupOrgToken is the organization token key within PxBackupAdminSecretName
+	PxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
+	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
+	PxCentralAdminSecretName = "px-central-admin"
+	// PxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
+	PxBackupAdminSecretName = "px-backup-admin-secret"
+	// GlobalPxBackupServiceName is the name of the Kubernetes service within with Px-Backup namespace
 	GlobalPxBackupServiceName = "px-backup"
+)
+
+const (
+	// EnvPxBackupOIDCEndpoint is the env var for the OIDC endpoint
+	EnvPxBackupOIDCEndpoint = "OIDC_ENDPOINT"
+	// EnvPxBackupOIDCSecretName is the env var for the OIDC secret within px-backup namespace
+	EnvPxBackupOIDCSecretName = "SECRET_NAME"
+	// EnvPxCentralUIURL is the env var for the px-central UI URL. Example: http://pxcentral-keycloak-http:80
+	EnvPxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
 
 type DebugMap map[string]interface{}
@@ -115,6 +145,14 @@ func ToString(value interface{}) string {
 	return fmt.Sprintf("{%s}", strings.Join(fields, ", "))
 }
 
+func GetOIDCSecretName() string {
+	oidcSecretName, ok := os.LookupEnv(EnvPxBackupOIDCSecretName)
+	if !ok || oidcSecretName == "" {
+		oidcSecretName = DefaultOIDCSecretName
+	}
+	return oidcSecretName
+}
+
 // GetPxBackupNamespace retrieves the namespace where GlobalPxBackupServiceName exists
 func GetPxBackupNamespace() (string, error) {
 	services, err := core.Instance().ListServices("", metav1.ListOptions{})
@@ -128,4 +166,18 @@ func GetPxBackupNamespace() (string, error) {
 	}
 	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", GlobalPxBackupServiceName)
 	return "", ProcessError(err)
+}
+
+func BuildFQDN(serviceName string, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
+}
+
+func ToByteArray(body interface{}) ([]byte, error) {
+	if b, ok := body.([]byte); ok {
+		return b, nil
+	}
+	if s, ok := body.(string); ok {
+		return []byte(s), nil
+	}
+	return json.Marshal(body)
 }
