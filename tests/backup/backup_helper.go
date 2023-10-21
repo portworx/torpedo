@@ -1931,7 +1931,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 						if restoredObj.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
 							if restoredObj.Status.Status == api.RestoreInfo_StatusInfo_Retained {
 								if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
-									err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was retained - [%s], with reason [%s], despite the replace policy being [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status, restoredObj.Status.Reason, theRestore.ReplacePolicy)
+									err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [Retained], with reason [%s], despite the replace policy being [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Reason, theRestore.ReplacePolicy)
 									errors = append(errors, err)
 								}
 							} else {
