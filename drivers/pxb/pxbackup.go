@@ -47,7 +47,12 @@ type Organization struct {
 	SchedulePolicyDataStore  *generics.DataStore[*api.SchedulePolicyObject]
 }
 
+type PxBackupSpec struct {
+	Namespace string
+}
+
 type PxBackup struct {
+	Spec          *PxBackupSpec
 	UserDataStore *generics.DataStore[*User]
 }
 

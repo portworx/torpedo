@@ -90,8 +90,12 @@ type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
+func MakeFQDN(serviceName string, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
+}
+
 func BuildURL(admin bool, route string, namespace string) (string, error) {
-	baseURL := ""
+	reqURL := ""
 	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
 	// The condition checks whether pxCentralUIURL is set. This condition is added to
@@ -100,37 +104,35 @@ func BuildURL(admin bool, route string, namespace string) (string, error) {
 	// local machine using the Ginkgo CLI.
 	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
 		if admin {
-			baseURL = fmt.Sprint(pxCentralUIURL, "/auth/admin/realms/master")
+			reqURL = fmt.Sprint(pxCentralUIURL, "/auth/admin/realms/master")
 		} else {
-			baseURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
+			reqURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
 		}
 	} else {
 		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, namespace)
 		if err != nil {
-			debugMap := DebugMap{}
-			debugMap.Add("ODICSecretName", oidcSecretName)
-			return "", ProcessError(err, debugMap.String())
+			return "", ProcessError(err)
 		}
 		oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpoint])
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, namespace)
+		replacement := MakeFQDN(GlobalPxBackupKeycloakServiceName, namespace)
 		newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
-			baseURL = fmt.Sprint(split[0], "auth/admin", split[1])
+			reqURL = fmt.Sprint(split[0], "auth/admin", split[1])
 		} else {
-			baseURL = newURL
+			reqURL = newURL
 		}
 	}
 	if route != "" {
 		if !strings.HasPrefix(route, "/") {
-			baseURL += "/"
+			reqURL += "/"
 		}
-		baseURL += route
+		reqURL += route
 	}
-	return baseURL, nil
+	return reqURL, nil
 }
 
 func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
@@ -144,37 +146,27 @@ func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
 	return headerMap, nil
 }
 
+func ToByteArray(body interface{}) ([]byte, error) {
+	if b, ok := body.([]byte); ok {
+		return b, nil
+	}
+	if s, ok := body.(string); ok {
+		return []byte(s), nil
+	}
+	return json.Marshal(body)
+}
+
 func MakeRequest(ctx context.Context, method string, reqURL string, body interface{}, headerMap map[string]string) (*http.Request, error) {
-	reqBody, err := func() ([]byte, error) {
-		switch c := body.(type) {
-		case nil:
-			return nil, nil
-		case []byte:
-			return c, nil
-		case string:
-			return []byte(c), nil
-		default:
-			bodyBytes, err := json.Marshal(c)
-			if err != nil {
-				debugMap := DebugMap{}
-				debugMap.Add("content", c)
-				return nil, ProcessError(err, debugMap.String())
-			}
-			return bodyBytes, nil
-		}
-	}()
+	reqBody, err := ToByteArray(body)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, bytes.NewReader(reqBody))
 	if err != nil {
-		debugMap := DebugMap{}
-		debugMap.Add("ReqURL", reqURL)
-		debugMap.Add("ReqBody", reqBody)
-		return nil, ProcessError(err, debugMap.String())
+		return nil, ProcessError(err)
 	}
-	for key, value := range headerMap {
-		req.Header.Set(key, value)
+	for key, val := range headerMap {
+		req.Header.Set(key, val)
 	}
 	return req, nil
 }
@@ -187,12 +179,16 @@ func GetResponse(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func Execute(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
-	req, err := k.MakeRequest(ctx, method, admin, route, body, headerMap)
+func Process(ctx context.Context, method string, admin bool, route string, namespace string, body interface{}, headerMap map[string]string) ([]byte, error) {
+	reqURL, err := BuildURL(admin, route, namespace)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	resp, err := k.GetResponse(req)
+	req, err := MakeRequest(ctx, method, reqURL, body, headerMap)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	resp, err := GetResponse(req)
 	if err != nil {
 		debugMap := DebugMap{}
 		debugMap.Add("Request", req)
@@ -223,12 +219,12 @@ func Execute(ctx context.Context, method string, admin bool, route string, body 
 	}
 }
 
-func ExecuteWithAdminToken(ctx context.Context, method string, route string, body interface{}) ([]byte, error) {
-	headerMap, err := k.GetCommonHeaderMap(ctx)
+func ProcessWithCommonHeaderMap(ctx context.Context, method string, route string, body interface{}) ([]byte, error) {
+	headerMap, err := GetCommonHeaderMap(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
-	return k.Execute(ctx, method, true, route, body, headerMap)
+	return Process(ctx, method, true, route, namespace, body, headerMap)
 }
 
 func GetToken(ctx context.Context, username, password string) (string, error) {
