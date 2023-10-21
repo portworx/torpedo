@@ -8,7 +8,6 @@ import (
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"google.golang.org/grpc/metadata"
 	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -72,30 +71,6 @@ func ProcessWithCommonHeaderMap(ctx context.Context, method string, route string
 		return nil, ProcessError(err)
 	}
 	return Process(ctx, method, true, route, namespace, body, headerMap)
-}
-
-func GetToken(ctx context.Context, username, password string) (string, error) {
-	route := "/protocol/openid-connect/token"
-	values := make(url.Values)
-	values.Set("username", username)
-	values.Set("password", password)
-	values.Set("grant_type", "password")
-	values.Set("client_id", "pxcentral")
-	values.Set("token-duration", "365d")
-	headerMap := make(map[string]string)
-	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
-	body, err := k.Execute(ctx, "POST", false, route, values.Encode(), headerMap)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	token := &TokenRepresentation{}
-	err = json.Unmarshal(body, &token)
-	if err != nil {
-		debugMap := DebugMap{}
-		debugMap.Add("Body", body)
-		return "", ProcessError(err, debugMap.String())
-	}
-	return token.AccessToken, nil
 }
 
 func GetPxCentralAdminToken(ctx context.Context) (string, error) {

@@ -52,7 +52,7 @@ func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
 	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
 	// cases, gRPC calls pxcentral-keycloak-http:80 would fail when made from a VM or
 	// local machine using the Ginkgo CLI.
-	if pxCentralUIURL != " " && len(pxCentralUIURL) > 0 {
+	if len(pxCentralUIURL) > 0 {
 		if admin {
 			reqURL = fmt.Sprint(pxCentralUIURL, "/auth/admin/realms/master")
 		} else {
@@ -85,7 +85,7 @@ func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
 	return reqURL, nil
 }
 
-func (b *PxBackup) CallKeycloak(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
+func (b *PxBackup) ProcessKeycloakRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
 	reqURL, err := b.BuildKeycloakURL(admin, route)
 	if err != nil {
 		return nil, ProcessError(err)
