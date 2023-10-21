@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -25,9 +26,9 @@ const (
 	GlobalPxBackupAuthHeader = "authorization"
 	// GlobalPxBackupAuthTokenType is the type of authentication token in Px-Backup requests
 	GlobalPxBackupAuthTokenType = "bearer"
-	// GlobalKeycloakServiceName is the Kubernetes service that facilitates
-	// user authentication through Keycloak in Px-Backup
-	GlobalKeycloakServiceName = "pxcentral-keycloak-http"
+	// GlobalPxBackupKeycloakServiceName is the Kubernetes service that facilitates user authentication
+	// through Keycloak in Px-Backup
+	GlobalPxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 	// GlobalPxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
 	GlobalPxCentralAdminSecretName = "px-central-admin"
 	// GlobalPxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
@@ -36,6 +37,11 @@ const (
 
 // DefaultOIDCSecretName is the fallback Kubernetes secret in case PxBackupOIDCSecretName is not set
 const DefaultOIDCSecretName = "pxc-backup-secret"
+
+// GlobalHTTPClient is an HTTP client with a predefined timeout
+var GlobalHTTPClient = &http.Client{
+	Timeout: 1 * time.Minute,
+}
 
 const (
 	// PxBackupOIDCEndpoint is the env var for the OIDC endpoint
@@ -70,8 +76,6 @@ func NewTestUserRepresentation(username string, password string) *UserRepresenta
 	return &UserRepresentation{
 		ID:            "",
 		Username:      username,
-		FirstName:     "first-" + username,
-		LastName:      username + "-last",
 		Email:         username + "@cnbu.com",
 		EmailVerified: true,
 		Enabled:       true,
@@ -86,14 +90,9 @@ type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
-type Keycloak struct {
-	*http.Client
-	//Namespace string
-}
-
-func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
+func BuildURL(admin bool, route string) (string, error) {
 	baseURL := ""
-	oidcSecretName := k.GetOIDCSecretName()
+	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(PxCentralUIURL)
 	// The condition checks whether pxCentralUIURL is set. This condition is added to
 	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
@@ -116,8 +115,8 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalKeycloakServiceName, k.Namespace)
-		newURL := strings.Replace(oidcEndpoint, GlobalKeycloakServiceName, replacement, 1)
+		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", GlobalPxBackupKeycloakServiceName, k.Namespace)
+		newURL := strings.Replace(oidcEndpoint, GlobalPxBackupKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
 			baseURL = fmt.Sprint(split[0], "auth/admin", split[1])
@@ -134,7 +133,7 @@ func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 	return baseURL, nil
 }
 
-func (k *Keycloak) GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
+func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
 	pxCentralAdminToken, err := k.GetPxCentralAdminToken(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -145,7 +144,7 @@ func (k *Keycloak) GetCommonHeaderMap(ctx context.Context) (map[string]string, e
 	return headerMap, nil
 }
 
-func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) (*http.Request, error) {
+func MakeRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) (*http.Request, error) {
 	reqURL, err := k.BuildURL(admin, route)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -184,7 +183,7 @@ func (k *Keycloak) MakeRequest(ctx context.Context, method string, admin bool, r
 	return req, nil
 }
 
-func (k *Keycloak) GetResponse(req *http.Request) (*http.Response, error) {
+func GetResponse(req *http.Request) (*http.Response, error) {
 	resp, err := k.Client.Do(req)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -192,7 +191,7 @@ func (k *Keycloak) GetResponse(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-func (k *Keycloak) Execute(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
+func Execute(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
 	req, err := k.MakeRequest(ctx, method, admin, route, body, headerMap)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -228,7 +227,7 @@ func (k *Keycloak) Execute(ctx context.Context, method string, admin bool, route
 	}
 }
 
-func (k *Keycloak) ExecuteWithAdminToken(ctx context.Context, method string, route string, body interface{}) ([]byte, error) {
+func ExecuteWithAdminToken(ctx context.Context, method string, route string, body interface{}) ([]byte, error) {
 	headerMap, err := k.GetCommonHeaderMap(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -236,7 +235,7 @@ func (k *Keycloak) ExecuteWithAdminToken(ctx context.Context, method string, rou
 	return k.Execute(ctx, method, true, route, body, headerMap)
 }
 
-func (k *Keycloak) GetToken(ctx context.Context, username, password string) (string, error) {
+func GetToken(ctx context.Context, username, password string) (string, error) {
 	route := "/protocol/openid-connect/token"
 	values := make(url.Values)
 	values.Set("username", username)
@@ -260,7 +259,7 @@ func (k *Keycloak) GetToken(ctx context.Context, username, password string) (str
 	return token.AccessToken, nil
 }
 
-func (k *Keycloak) GetPxCentralAdminToken(ctx context.Context) (string, error) {
+func GetPxCentralAdminToken(ctx context.Context) (string, error) {
 	pxCentralAdminPassword, err := k.GetPxCentralAdminPassword()
 	if err != nil {
 		return "", ProcessError(err)
@@ -272,7 +271,7 @@ func (k *Keycloak) GetPxCentralAdminToken(ctx context.Context) (string, error) {
 	return pxCentralAdminToken, nil
 }
 
-func (k *Keycloak) GetPxCentralAdminPassword() (string, error) {
+func GetPxCentralAdminPassword() (string, error) {
 	pxCentralAdminSecret, err := core.Instance().GetSecret(GlobalPxCentralAdminSecretName, k.Namespace)
 	if err != nil {
 		return "", ProcessError(err)
@@ -285,7 +284,7 @@ func (k *Keycloak) GetPxCentralAdminPassword() (string, error) {
 	return pxCentralAdminPassword, nil
 }
 
-func (k *Keycloak) UpdatePxBackupAdminSecret(token string) error {
+func UpdatePxBackupAdminSecret(token string) error {
 	pxBackupAdminSecret, err := core.Instance().GetSecret(GlobalPxBackupAdminSecretName, k.Namespace)
 	if err != nil {
 		return ProcessError(err)
@@ -298,7 +297,7 @@ func (k *Keycloak) UpdatePxBackupAdminSecret(token string) error {
 	return nil
 }
 
-func (k *Keycloak) GetAdminCtxFromSecret(ctx context.Context, update bool) (context.Context, error) {
+func GetAdminCtxFromSecret(ctx context.Context, update bool) (context.Context, error) {
 	pxCentralAdminToken, err := k.GetPxCentralAdminToken(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -313,7 +312,7 @@ func (k *Keycloak) GetAdminCtxFromSecret(ctx context.Context, update bool) (cont
 	return adminCtx, nil
 }
 
-func (k *Keycloak) GetOIDCSecretName() string {
+func GetOIDCSecretName() string {
 	oidcSecretName, ok := os.LookupEnv(PxBackupOIDCSecretName)
 	if !ok || oidcSecretName == "" {
 		oidcSecretName = DefaultOIDCSecretName
@@ -321,7 +320,7 @@ func (k *Keycloak) GetOIDCSecretName() string {
 	return oidcSecretName
 }
 
-func (k *Keycloak) GetCtxWithToken(ctx context.Context, token string) context.Context {
+func GetCtxWithToken(ctx context.Context, token string) context.Context {
 	authMetadata := metadata.New(
 		map[string]string{
 			GlobalPxBackupAuthHeader: fmt.Sprintf("%s %s", GlobalPxBackupAuthTokenType, token),
@@ -336,7 +335,7 @@ type AddUserRequest struct {
 
 type AddUserResponse struct{}
 
-func (k *Keycloak) AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
+func AddUser(ctx context.Context, req *AddUserRequest) (*AddUserResponse, error) {
 	route := "users"
 	_, err := k.ExecuteWithAdminToken(ctx, "POST", route, req.UserRepresentation)
 	if err != nil {
@@ -351,7 +350,7 @@ type EnumerateUserResponse struct {
 	Users []*UserRepresentation
 }
 
-func (k *Keycloak) EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUserResponse, error) {
+func EnumerateUser(ctx context.Context, _ *EnumerateUserRequest) (*EnumerateUserResponse, error) {
 	route := "users"
 	headerMap, err := k.GetCommonHeaderMap(ctx)
 	if err != nil {
@@ -375,7 +374,7 @@ type DeleteUserRequest struct {
 
 type DeleteUserResponse struct{}
 
-func (k *Keycloak) DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
+func DeleteUser(ctx context.Context, req *DeleteUserRequest) (*DeleteUserResponse, error) {
 	userID, err := k.GetUserID(ctx, req.Username)
 	if err != nil {
 		return nil, ProcessError(err)
@@ -388,7 +387,7 @@ func (k *Keycloak) DeleteUser(ctx context.Context, req *DeleteUserRequest) (*Del
 	return &DeleteUserResponse{}, nil
 }
 
-func (k *Keycloak) GetUserID(ctx context.Context, username string) (string, error) {
+func GetUserID(ctx context.Context, username string) (string, error) {
 	enumerateUserReq := &EnumerateUserRequest{}
 	enumerateUserResp, err := k.EnumerateUser(ctx, enumerateUserReq)
 	if err != nil {
