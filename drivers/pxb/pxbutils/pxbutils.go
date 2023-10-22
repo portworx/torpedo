@@ -12,21 +12,21 @@ import (
 )
 
 const (
-	// PxCentralAdminUsername is the username for px-central-admin user
+	// PxCentralAdminUsername is the username of px-central-admin user
 	PxCentralAdminUsername = "px-central-admin"
 	// PxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
 	PxBackupAuthHeader = "authorization"
-	// PxBackupAuthTokenType is the type of authentication token in Px-Backup requests
+	// PxBackupAuthTokenType is the type of token used for authentication in Px-Backup requests
 	PxBackupAuthTokenType = "bearer"
-	// PxBackupKeycloakServiceName is the Kubernetes service that facilitates user authentication
-	// through Keycloak in Px-Backup
-	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
-	// PxBackupOrgToken is the organization token key within PxBackupAdminSecretName
+	// PxBackupOrgToken is the org token key inside secret named PxBackupAdminSecretName
 	PxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
 	// PxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
 	PxBackupAdminSecretName = "px-backup-admin-secret"
 	// PxBackupServiceName is the Kubernetes service within Px-Backup namespace
 	PxBackupServiceName = "px-backup"
+	// PxBackupKeycloakServiceName is the Kubernetes service that facilitates user authentication
+	// through Keycloak in Px-Backup
+	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
 	PxCentralAdminSecretName = "px-central-admin"
 )
