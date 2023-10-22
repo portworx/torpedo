@@ -621,6 +621,7 @@ https://portworx.testrail.net/index.php?/tests/view/72615025
 
 var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 	var contexts []*scheduler.Context
+	var wg sync.WaitGroup
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeWhileVolCreate", "Test creates multiple FADA volume and reboots a node while volume creation is in progress", nil, 72615025)
 	})
@@ -631,61 +632,35 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 		NumberOfDeploymentsPerReboot := 15
 		//Reboot a random storage node n number of times
 		for i := 0; i < n; i++ {
-			Step("Schedule applications", func() {
-				log.InfoD("Scheduling applications")
-				for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
-					taskName := fmt.Sprintf("test-%v", (j+1)+NumberOfDeploymentsPerReboot*i)
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Provisioner,
-						PvcSize:            6 * units.GiB,
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-					contexts = append(contexts, context...)
-				}
-			})
-			stepLog = "Pick a random storage node and reboot"
-			Step(stepLog, func() {
-				nodes := node.GetStorageDriverNodes()
-				randomNode := rand.Intn(len(nodes))
-				log.Infof("Stopping node %s", nodes[randomNode].Name)
-				err = Inst().N.RebootNode(nodes[randomNode],
-					node.RebootNodeOpts{
-						Force: true,
-						ConnectionOpts: node.ConnectionOpts{
-							Timeout:         defaultCommandTimeout,
-							TimeBeforeRetry: defaultCommandRetry,
-						},
-					})
-				log.Infof("wait for node: %s to be back up", nodes[randomNode].Name)
-				nodeReadyStatus := func() (interface{}, bool, error) {
-					err := Inst().S.IsNodeReady(nodes[randomNode])
-					if err != nil {
-						return "", true, err
+			// Step 1: Schedule applications
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				Step("Schedule applications", func() {
+					log.InfoD("Scheduling applications")
+					for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
+						taskName := fmt.Sprintf("test-%v", (j+1)+NumberOfDeploymentsPerReboot*i)
+						context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+							AppKeys:            Inst().AppList,
+							StorageProvisioner: Provisioner,
+							PvcSize:            6 * units.GiB,
+						})
+						log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+						contexts = append(contexts, context...)
 					}
-					return "", false, nil
-				}
-				_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodes[randomNode].Name))
-				err = Inst().V.WaitDriverUpOnNode(nodes[randomNode], Inst().DriverStartTimeout)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodes[randomNode].Name))
-				log.FailOnError(err, "Failed to reboot node")
-				stepLog = "Validate the applications"
-				Step(stepLog, func() {
-					ValidateApplications(contexts)
 				})
-
-			})
-		}
-
-		for i := 0; i < n; i++ {
-			stepLog = "Reboot a random node,destroy scheduled apps and check if pvc's are deleted gracefully"
-			Step(stepLog, func() {
-				nodes := node.GetStorageDriverNodes()
-				randomNode := rand.Intn(len(nodes))
-				stepLog = "Reboot one random storage node"
+			}()
+			// Step 2: Pick a random storage node and reboot
+			wg.Add(1)
+			nodes := node.GetStorageDriverNodes()
+			randomNode := rand.Intn(len(nodes))
+			go func() {
+				defer wg.Done()
+				stepLog := "Pick a random storage node and reboot"
 				Step(stepLog, func() {
-					err = Inst().N.RebootNode(nodes[randomNode],
+
+					log.Infof("Stopping node %s", nodes[randomNode].Name)
+					err := Inst().N.RebootNode(nodes[randomNode],
 						node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -693,16 +668,66 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
-					log.FailOnError(err, "Failed to reboot node")
+					log.FailOnError(err, "Failed to reboot node %v", nodes[randomNode].Name)
 				})
-				stepLog = "Destroy Application"
-				Step(stepLog, func() {
-					opts := make(map[string]bool)
-					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-					for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
-						TearDownContext(contexts[(j)+NumberOfDeploymentsPerReboot*i], opts)
-					}
-				})
+			}()
+
+			// Wait for both steps to complete
+			wg.Wait()
+
+			log.Infof("wait for node: %s to be back up", nodes[randomNode].Name)
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(nodes[randomNode])
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodes[randomNode].Name))
+			err = Inst().V.WaitDriverUpOnNode(nodes[randomNode], Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodes[randomNode].Name))
+			log.FailOnError(err, "Failed to reboot node")
+			stepLog = "Validate the applications"
+			Step(stepLog, func() {
+				ValidateApplications(contexts)
+			})
+		}
+		for i := 0; i < n; i++ {
+			nodes := node.GetStorageDriverNodes()
+			randomNode := rand.Intn(len(nodes))
+			stepLog = "Reboot a random node,destroy scheduled apps and check if pvc's are deleted gracefully"
+
+			Step(stepLog, func() {
+				wg.Add(1)
+				// Step 1: Reboot one random storage node
+				go func() {
+					defer wg.Done()
+					stepLog := "Reboot one random storage node"
+					Step(stepLog, func() {
+						err := Inst().N.RebootNode(nodes[randomNode], node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						log.FailOnError(err, "Failed to reboot node")
+					})
+				}()
+				// Step 2: Destroy Application
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Destroy Application"
+					Step(stepLog, func() {
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
+							TearDownContext(contexts[j+NumberOfDeploymentsPerReboot*i], opts)
+						}
+					})
+				}()
 				stepLog = "Wait for node to come up"
 				Step(stepLog, func() {
 					nodeReadyStatus := func() (interface{}, bool, error) {
