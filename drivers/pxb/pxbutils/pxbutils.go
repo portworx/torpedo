@@ -172,10 +172,6 @@ func GetPxBackupNamespace() (string, error) {
 	return "", ProcessError(err)
 }
 
-func BuildFQDN(serviceName string, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
-}
-
 func ToByteArray(body interface{}) ([]byte, error) {
 	if b, ok := body.([]byte); ok {
 		return b, nil
