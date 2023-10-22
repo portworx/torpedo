@@ -958,7 +958,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 					Step("Schedule applications", func() {
 						log.InfoD("Scheduling applications")
 						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
-							taskName := fmt.Sprintf("test%v", (j+4)+NumberOfDeploymentsPerRestart*i)
+							taskName := fmt.Sprintf("test%v", (j)+NumberOfDeploymentsPerRestart*i)
 							context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 								AppKeys:            Inst().AppList,
 								StorageProvisioner: Provisioner,
