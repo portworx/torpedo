@@ -12,15 +12,6 @@ import (
 )
 
 const (
-	// GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
-	GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
-)
-const (
-	// DefaultOIDCSecretName is the fallback Kubernetes secret in case EnvPxBackupOIDCSecretName is not set
-	DefaultOIDCSecretName = "pxc-backup-secret"
-)
-
-const (
 	// PxCentralAdminUsername is the username for px-central-admin user
 	PxCentralAdminUsername = "px-central-admin"
 	// PxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
@@ -32,12 +23,22 @@ const (
 	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 	// PxBackupOrgToken is the organization token key within PxBackupAdminSecretName
 	PxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
-	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
-	PxCentralAdminSecretName = "px-central-admin"
 	// PxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
 	PxBackupAdminSecretName = "px-backup-admin-secret"
-	// GlobalPxBackupServiceName is the name of the Kubernetes service within Px-Backup namespace
-	GlobalPxBackupServiceName = "px-backup"
+	// PxBackupServiceName is the Kubernetes service within Px-Backup namespace
+	PxBackupServiceName = "px-backup"
+	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
+	PxCentralAdminSecretName = "px-central-admin"
+)
+
+const (
+	// TorpedoWorkDirectory is the working directory inside the Torpedo container
+	TorpedoWorkDirectory = "/go/src/github.com/portworx/"
+)
+
+const (
+	// DefaultOIDCSecretName is the fallback Kubernetes secret in case EnvPxBackupOIDCSecretName is empty
+	DefaultOIDCSecretName = "pxc-backup-secret"
 )
 
 const (
@@ -65,7 +66,7 @@ func ProcessError(err error, debugMessage ...string) error {
 		return nil
 	}
 	_, file, line, _ := runtime.Caller(1)
-	file = strings.TrimPrefix(file, GlobalTorpedoWorkDirectory)
+	file = strings.TrimPrefix(file, TorpedoWorkDirectory)
 	callerInfo := fmt.Sprintf("%s:%d", file, line)
 	debugInfo := "no debug message"
 	if len(debugMessage) > 0 {
@@ -156,18 +157,18 @@ func GetOIDCSecretName() string {
 	return oidcSecretName
 }
 
-// GetPxBackupNamespace retrieves the namespace where GlobalPxBackupServiceName exists
+// GetPxBackupNamespace retrieves the namespace where PxBackupServiceName exists
 func GetPxBackupNamespace() (string, error) {
 	services, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", ProcessError(err)
 	}
 	for _, svc := range services.Items {
-		if svc.Name == GlobalPxBackupServiceName {
+		if svc.Name == PxBackupServiceName {
 			return svc.Namespace, nil
 		}
 	}
-	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", GlobalPxBackupServiceName)
+	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", PxBackupServiceName)
 	return "", ProcessError(err)
 }
 
