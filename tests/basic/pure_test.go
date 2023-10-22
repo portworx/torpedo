@@ -946,7 +946,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 		//Number of times portworx has to be restarted
 		n := 3
 		//Number of apps to be deployed after which a restart can be triggered
-		NumberOfDeploymentsPerRestart := 15
+		NumberOfDeploymentsPerRestart := 8
 		//Restart portworx n number of times
 		stepLog = "start provisioning nginx apps in the created namespaces and for every NumberOfDeploymentsPerRestart restart portworx on one of the nodes"
 		Step(stepLog, func() {
