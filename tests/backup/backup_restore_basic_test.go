@@ -3862,7 +3862,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 
 		Step("Restore manual backup and validate status post restore", func() {
 			log.InfoD("Restoring new application namespaces from next schedule backup in source cluster")
-			oldNamespaceAge, err := getNamespaceAge()
+			oldNamespaceAge, err := getPodAge()
 			dash.VerifyFatal(err, nil, "Getting namespace age")
 			restoreName = fmt.Sprintf("%s-%s", "test-restore-manual", RandomString(4))
 			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
@@ -3877,7 +3877,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			err = SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
 
-			err = compareNamespaceAge(oldNamespaceAge)
+			err = comparePodAge(oldNamespaceAge)
 			dash.VerifyFatal(err, nil, "Comparing namespace age namespace age")
 		})
 
@@ -3912,7 +3912,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 
 		Step("Restore schedule backup and validate post restpre", func() {
 			log.InfoD("Restore schedule backup")
-			oldNamespaceAge, err := getNamespaceAge()
+			oldNamespaceAge, err := getPodAge()
 			dash.VerifyFatal(err, nil, "Getting namespace age")
 
 			restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(4))
@@ -3924,7 +3924,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			restoreNames = append(restoreNames, restoreName)
 
 			ValidateApplications(scheduledAppContexts)
-			err = compareNamespaceAge(oldNamespaceAge)
+			err = comparePodAge(oldNamespaceAge)
 			dash.VerifyFatal(err, nil, "Comparing namespace age")
 		})
 	})
