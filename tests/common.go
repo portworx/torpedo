@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -6165,9 +6166,8 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 		return
 	}
 
-	// In case of ocp if ssh_key is given skip log collection
-	sshKey := os.Getenv("TORPEDO_SSH_KEY")
-	if sshKey != "" {
+	// In case of ocp skip log collection
+	if Inst().S.String() == openshift.SchedName {
 		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
 		return
 	}
