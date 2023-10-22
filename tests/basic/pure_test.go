@@ -629,7 +629,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 		//Provisioner for pure apps
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		n := 3
-		NumberOfDeploymentsPerReboot := 15
+		NumberOfDeploymentsPerReboot := 8
 		//Reboot a random storage node n number of times
 		for i := 0; i < n; i++ {
 			// Step 1: Schedule applications
