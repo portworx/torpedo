@@ -796,6 +796,7 @@ https://portworx.testrail.net/index.php?/tests/view/72615026
 */
 var _ = Describe("{RestartPXWhileVolCreate}", func() {
 	var contexts []*scheduler.Context
+	var wg sync.WaitGroup
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 72615026)
 	})
@@ -810,56 +811,81 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 		stepLog = "start provisioning nginx apps in the created namespaces and for every NumberOfDeploymentsPerRestart restart portworx on one of the nodes"
 		Step(stepLog, func() {
 			for i := 0; i < n; i++ {
-				Step("Schedule applications", func() {
-					log.InfoD("Scheduling applications")
-					for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
-						taskName := fmt.Sprintf("test%v", (j+1)+NumberOfDeploymentsPerRestart*i)
-						context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-							AppKeys:            Inst().AppList,
-							StorageProvisioner: Provisioner,
-							PvcSize:            6 * units.GiB,
-						})
-						log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-						contexts = append(contexts, context...)
-					}
-				})
-				stepLog = "Restart Portworx"
-				Step(stepLog, func() {
-					nodes := node.GetStorageDriverNodes()
-					log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[i].Name)
-					StopVolDriverAndWait([]node.Node{nodes[i]})
-					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[i].Name)
-					StartVolDriverAndWait([]node.Node{nodes[i]})
-				})
+				// Step 1: Schedule applications
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					Step("Schedule applications", func() {
+						log.InfoD("Scheduling applications")
+						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+							taskName := fmt.Sprintf("test%v", (j+1)+NumberOfDeploymentsPerRestart*i)
+							context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+								AppKeys:            Inst().AppList,
+								StorageProvisioner: Provisioner,
+								PvcSize:            6 * units.GiB,
+							})
+							log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+							contexts = append(contexts, context...)
+						}
+					})
+				}()
+
+				// Step 2: Restart Portworx
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Restart Portworx"
+					Step(stepLog, func() {
+						nodes := node.GetStorageDriverNodes()
+						randomNode := rand.Intn(len(nodes))
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[randomNode].Name)
+						StopVolDriverAndWait([]node.Node{nodes[randomNode]})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[randomNode].Name)
+						StartVolDriverAndWait([]node.Node{nodes[randomNode]})
+					})
+				}()
+				// Wait for both steps to complete
+				wg.Wait()
 				stepLog = "Validate the applications after portworx restart"
 				Step(stepLog, func() {
 					ValidateApplications(contexts)
 				})
 			}
 		})
-
 		for i := 0; i < n; i++ {
 			stepLog = "Restart portworx,destroy apps and check if the pvc's are deleted gracefully"
 			Step(stepLog, func() {
-				nodes := node.GetStorageDriverNodes()
-				stepLog = "Stop Portworx"
-				Step(stepLog, func() {
-					log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[i].Name)
-					StopVolDriverAndWait([]node.Node{nodes[i]})
-				})
-				stepLog = "Destroy Application"
-				Step(stepLog, func() {
-					opts := make(map[string]bool)
-					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-					for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
-						TearDownContext(contexts[(j)+NumberOfDeploymentsPerRestart*i], opts)
-					}
-				})
-				stepLog = "Start portworx"
-				Step(stepLog, func() {
-					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[i].Name)
-					StartVolDriverAndWait([]node.Node{nodes[i]})
-				})
+				// Step 1: Restart Portworx
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Restart Portworx"
+					Step(stepLog, func() {
+						nodes := node.GetStorageDriverNodes()
+						randomNode := rand.Intn(len(nodes))
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[randomNode].Name)
+						StopVolDriverAndWait([]node.Node{nodes[randomNode]})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[randomNode].Name)
+						StartVolDriverAndWait([]node.Node{nodes[randomNode]})
+					})
+				}()
+
+				// Step 2: Destroy Application
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Destroy Application"
+					Step(stepLog, func() {
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+							TearDownContext(contexts[j+NumberOfDeploymentsPerRestart*i], opts)
+						}
+					})
+				}()
+
+				// Wait for both steps to complete
+				wg.Wait()
 			})
 		}
 	})
