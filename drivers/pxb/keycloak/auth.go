@@ -49,11 +49,6 @@ func NewTestUserRepresentation(username string, password string) *UserRepresenta
 	}
 }
 
-// TokenRepresentation defines the scheme for representing the Keycloak access token
-type TokenRepresentation struct {
-	AccessToken string `json:"access_token"`
-}
-
 func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
 	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
 	if err != nil {
@@ -71,31 +66,6 @@ func ProcessWithCommonHeaderMap(ctx context.Context, method string, route string
 		return nil, ProcessError(err)
 	}
 	return Process(ctx, method, true, route, namespace, body, headerMap)
-}
-
-func GetPxCentralAdminToken(ctx context.Context) (string, error) {
-	pxCentralAdminPassword, err := k.GetPxCentralAdminPassword()
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	pxCentralAdminToken, err := k.GetToken(ctx, PxCentralAdminUsername, pxCentralAdminPassword)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	return pxCentralAdminToken, nil
-}
-
-func GetPxCentralAdminPassword() (string, error) {
-	pxCentralAdminSecret, err := core.Instance().GetSecret(PxCentralAdminSecretName, k.Namespace)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	pxCentralAdminPassword := string(pxCentralAdminSecret.Data["credential"])
-	if pxCentralAdminPassword == "" {
-		err = fmt.Errorf("invalid secret [%s]", PxCentralAdminSecretName)
-		return "", ProcessError(err)
-	}
-	return pxCentralAdminPassword, nil
 }
 
 func UpdatePxBackupAdminSecret(token string) error {

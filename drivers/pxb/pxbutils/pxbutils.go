@@ -11,11 +11,14 @@ import (
 	"strings"
 )
 
-// GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
-const GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
-
-// DefaultOIDCSecretName is the fallback Kubernetes secret in case EnvPxBackupOIDCSecretName is not set
-const DefaultOIDCSecretName = "pxc-backup-secret"
+const (
+	// GlobalTorpedoWorkDirectory represents the working directory in the Torpedo container
+	GlobalTorpedoWorkDirectory = "/go/src/github.com/portworx/"
+)
+const (
+	// DefaultOIDCSecretName is the fallback Kubernetes secret in case EnvPxBackupOIDCSecretName is not set
+	DefaultOIDCSecretName = "pxc-backup-secret"
+)
 
 const (
 	// PxCentralAdminUsername is the username for px-central-admin user

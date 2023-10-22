@@ -18,6 +18,10 @@ import (
 	"strings"
 )
 
+type PxBackupSpec struct {
+	Namespace string
+}
+
 type Organization struct {
 	Spec                     *api.OrganizationObject
 	BackupDataStore          *generics.DataStore[*api.BackupObject]
@@ -31,22 +35,17 @@ type Organization struct {
 	CloudCredentialDataStore *generics.DataStore[*api.CloudCredentialObject]
 }
 
-type PxBackupSpec struct {
-	Namespace string
+// TokenRepresentation defines the scheme for representing the Keycloak access token
+type TokenRepresentation struct {
+	AccessToken string `json:"access_token"`
 }
 
-type User struct {
-	Spec                  *keycloak.UserRepresentation
-	PxBackup              *PxBackup
-	OrganizationDataStore *generics.DataStore[*Organization]
+type Keycloak struct {
+	*PxBackup
+	HTTPClient *http.Client
 }
 
-type PxBackup struct {
-	Spec          *PxBackupSpec
-	UserDataStore *generics.DataStore[*User]
-}
-
-func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
+func (k *Keycloak) BuildURL(admin bool, route string) (string, error) {
 	reqURL := ""
 	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(EnvPxCentralUIURL)
@@ -61,7 +60,7 @@ func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
 			reqURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
 		}
 	} else {
-		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, b.Spec.Namespace)
+		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.Spec.Namespace)
 		if err != nil {
 			return "", ProcessError(err)
 		}
@@ -69,7 +68,7 @@ func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := BuildFQDN(PxBackupKeycloakServiceName, b.Spec.Namespace)
+		replacement := BuildFQDN(PxBackupKeycloakServiceName, k.Spec.Namespace)
 		newURL := strings.Replace(oidcEndpoint, PxBackupKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
@@ -87,8 +86,8 @@ func (b *PxBackup) BuildKeycloakURL(admin bool, route string) (string, error) {
 	return reqURL, nil
 }
 
-func (b *PxBackup) ProcessKeycloakRequest(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
-	reqURL, err := b.BuildKeycloakURL(admin, route)
+func (k *Keycloak) Call(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
+	reqURL, err := k.BuildURL(admin, route)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
@@ -124,7 +123,7 @@ func (b *PxBackup) ProcessKeycloakRequest(ctx context.Context, method string, ad
 	}
 }
 
-func (b *PxBackup) GetKeycloakAccessToken(ctx context.Context, username, password string) (string, error) {
+func (k *Keycloak) GetAccessToken(ctx context.Context, username, password string) (string, error) {
 	route := "/protocol/openid-connect/token"
 	values := make(url.Values)
 	values.Set("username", username)
@@ -134,16 +133,83 @@ func (b *PxBackup) GetKeycloakAccessToken(ctx context.Context, username, passwor
 	values.Set("token-duration", "365d")
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
-	body, err := b.ProcessKeycloakRequest(ctx, "POST", false, route, values.Encode(), headerMap)
+	respBody, err := k.Call(ctx, "POST", false, route, values.Encode(), headerMap)
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	token := &keycloak.TokenRepresentation{}
-	err = json.Unmarshal(body, &token)
+	token := &TokenRepresentation{}
+	err = json.Unmarshal(respBody, &token)
 	if err != nil {
-		debugMap := DebugMap{}
-		debugMap.Add("Body", body)
-		return "", ProcessError(err, debugMap.String())
+		return "", ProcessError(err)
 	}
 	return token.AccessToken, nil
+}
+
+func (k *Keycloak) GetPxCentralAdminPassword() (string, error) {
+	pxCentralAdminSecret, err := core.Instance().GetSecret(PxCentralAdminSecretName, k.Spec.Namespace)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	pxCentralAdminPassword := string(pxCentralAdminSecret.Data["credential"])
+	if pxCentralAdminPassword == "" {
+		err = fmt.Errorf("empty credential in secret [%s]", PxCentralAdminSecretName)
+		return "", ProcessError(err)
+	}
+	return pxCentralAdminPassword, nil
+}
+
+func (b *PxBackup) GetPxCentralAdminToken(ctx context.Context) (string, error) {
+	pxCentralAdminPassword, err := b.GetPxCentralAdminPassword()
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	pxCentralAdminToken, err := k.GetToken(ctx, PxCentralAdminUsername, pxCentralAdminPassword)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	return pxCentralAdminToken, nil
+}
+
+func UpdatePxBackupAdminSecret(token string) error {
+	pxBackupAdminSecret, err := core.Instance().GetSecret(PxBackupAdminSecretName, k.Namespace)
+	if err != nil {
+		return ProcessError(err)
+	}
+	pxBackupAdminSecret.Data[PxBackupOrgToken] = []byte(token)
+	_, err = core.Instance().UpdateSecret(pxBackupAdminSecret)
+	if err != nil {
+		return ProcessError(err)
+	}
+	return nil
+}
+
+func GetPxCentralAdminCtxFromSecret(ctx context.Context, update bool) (context.Context, error) {
+	pxCentralAdminToken, err := k.GetPxCentralAdminToken(ctx)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	if update {
+		err = k.UpdatePxBackupAdminSecret(pxCentralAdminToken)
+		if err != nil {
+			return nil, ProcessError(err)
+		}
+	}
+	adminCtx := k.GetCtxWithToken(ctx, pxCentralAdminToken)
+	return adminCtx, nil
+}
+
+type User struct {
+	Spec *keycloak.UserRepresentation
+	*PxBackup
+	OrganizationDataStore *generics.DataStore[*Organization]
+}
+
+func (u *User) Remove() error {
+	return nil
+}
+
+type PxBackup struct {
+	Spec          *PxBackupSpec
+	Keycloak      *Keycloak
+	UserDataStore *generics.DataStore[*User]
 }
