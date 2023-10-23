@@ -623,25 +623,24 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeWhileVolCreate", "Test creates multiple FADA volume and reboots a node while volume creation is in progress", nil, 72615025)
 	})
-	var contexts = make([]*scheduler.Context, 0)
-	var wg sync.WaitGroup
-	//Scheduling app with volume placement strategy
-	applist := Inst().AppList
-	//select a storage node to place volumes and restart
-	storageNodes := node.GetStorageNodes()
-	selectedNode := storageNodes[rand.Intn(len(storageNodes))]
-	var err error
-	defer func() {
-		Inst().AppList = applist
-		err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
-		log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
-	}()
-	Inst().AppList = []string{"nginx-fada-fastpath-vps"}
-	err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
-	log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
-
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerReboot) different namespaces and reboots a different node after every NumberOfDeploymentsPerReboot have been queued to schedule", func() {
 		//Provisioner for pure apps
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		//select a storage node to place volumes and restart
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		Inst().AppList = []string{"nginx-fada-fastpath-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		n := 3
 		NumberOfDeploymentsPerReboot := 8
