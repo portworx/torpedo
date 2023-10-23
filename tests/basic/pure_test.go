@@ -569,6 +569,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 				})
 			})
 		}
+		wg.Wait()
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
