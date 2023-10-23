@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	"sync"
 	"time"
 
@@ -161,7 +162,7 @@ var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
 		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
 		log.Infof("Successfully created PVC with name: %v", pvcName)
 		deploymentName := "nginx-deployment"
-		// Create FIO Deployment on VCluster using the above PVC
+		// Create Nginx Deployment on VCluster using the above PVC
 		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
 		log.FailOnError(err, "Error in creating Nginx Application")
 		log.Infof("Successfully created Nginx App on Vcluster")
@@ -346,6 +347,80 @@ var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
 			vcluster.DeleteNSFromHost(vc.Namespace)
 		}
 		vcluster.DeleteStorageclassFromHost(scName)
+	})
+})
+
+var _ = Describe("VolumeDriverDownVCluster", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeDriverDownVCluster", "Creates Nginx Deployment on Vcluster, Brings Down Portworx on All nodes and then brings it up, Validates Nginx Deployment", nil, 0)
+		vc = vcluster.NewVCluster("my-vcluster1")
+		err := vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create Nginx Deployment on VCluster, bring down Px on all nodes and once it is up, validate Nginx again", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("nginx-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		deploymentName := "nginx-deployment"
+		// Create Nginx Deployment on VCluster using the above PVC
+		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
+		log.FailOnError(err, "Error in creating Nginx Application")
+		log.Infof("Successfully created Nginx App on Vcluster")
+		log.Infof("Hard Sleep for 10 seconds after creation of Nginx Deployment")
+		time.Sleep(10 * time.Second)
+		// Validate if Nginx Deployment is healthy or not
+		err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+		log.FailOnError(err, "Looks like Nginx Deployment is not healthy")
+		log.Infof("Nginx Deployment %s is healthy. Will kill Px and wait for its restart on all nodes now", deploymentName)
+		Step("get nodes bounce volume driver", func() {
+			for _, appNode := range node.GetStorageDriverNodes() {
+				stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StopVolDriverAndWait([]node.Node{appNode})
+					})
+
+				stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StartVolDriverAndWait([]node.Node{appNode})
+					})
+
+				stepLog = "Giving few seconds for volume driver to stabilize"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(20 * time.Second)
+				})
+				// Validate if Nginx Deployment is healthy or not
+				err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+				log.FailOnError(err, "Looks like Nginx Deployment is not healthy")
+				log.Infof("Nginx Deployment %s is healthy. Will kill Px and wait for its restart on all nodes now", deploymentName)
+			}
+		})
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
+		}
 	})
 })
 

@@ -556,33 +556,29 @@ func (v *VCluster) ScaleVclusterDeployment(appNS string, deploymentName string, 
 
 // ValidateDeploymentScaling Validates if a deployment on Vcluster is having expected number of Replicas or not
 func (v *VCluster) ValidateDeploymentScaling(appNS string, deploymentName string, expectedReplicas int32) error {
-	timeout := time.After(VclusterAppTimeout)
-	ticker := time.NewTicker(VClusterAppRetryInterval)
-	for {
-		select {
-		case <-timeout:
-			return fmt.Errorf("timed out waiting for deployment %s to scale", deploymentName)
-		case <-ticker.C:
-			pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
-				LabelSelector: "app=" + deploymentName,
-			})
-			if err != nil {
-				return err
-			}
-			runningPods := 0
-			for _, pod := range pods.Items {
-				if pod.Status.Phase == corev1.PodRunning {
-					runningPods++
-				}
-			}
-			if int32(runningPods) == expectedReplicas {
-				log.Infof("Deployment %s has successfully scaled to %d replicas.", deploymentName, expectedReplicas)
-				return nil
-			} else {
-				log.Infof("Deployment %s has %d replicas. Expected: %d", deploymentName, runningPods, expectedReplicas)
+	checkDeploymentScaling := func() (interface{}, bool, error) {
+		pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "app=" + deploymentName,
+		})
+		if err != nil {
+			return nil, true, err
+		}
+		runningPods := 0
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == corev1.PodRunning {
+				runningPods++
 			}
 		}
+		if int32(runningPods) == expectedReplicas {
+			log.Infof("Deployment %s has successfully scaled to %d replicas.", deploymentName, expectedReplicas)
+			return nil, false, nil
+		} else {
+			log.Infof("Deployment %s has %d replicas. Expected: %d", deploymentName, runningPods, expectedReplicas)
+			return nil, true, fmt.Errorf("Deployment %s has not scaled to expected replicas", deploymentName)
+		}
 	}
+	_, err := task.DoRetryWithTimeout(checkDeploymentScaling, VclusterAppTimeout, VClusterAppRetryInterval)
+	return err
 }
 
 // DeleteDeploymentOnVCluster deletes a deployment on the Vcluister
@@ -591,4 +587,40 @@ func (v *VCluster) DeleteDeploymentOnVCluster(appNS string, deploymentName strin
 	return v.Clientset.AppsV1().Deployments(appNS).Delete(context.TODO(), deploymentName, metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	})
+}
+
+// IsDeploymentHealthy validates if a deployment is healthy in a vcluster
+func (v *VCluster) IsDeploymentHealthy(appNS string, deploymentName string, expectedReplicas int32) error {
+	checkDeploymentHealth := func() (interface{}, bool, error) {
+		pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "app=" + deploymentName,
+		})
+		if err != nil {
+			return nil, true, err
+		}
+		healthyPods := 0
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == corev1.PodRunning {
+				allContainersReady := true
+				for _, containerStatus := range pod.Status.ContainerStatuses {
+					if !containerStatus.Ready {
+						allContainersReady = false
+						break
+					}
+				}
+				if allContainersReady {
+					healthyPods++
+				}
+			}
+		}
+		if int32(healthyPods) == expectedReplicas {
+			log.Infof("Deployment %s is healthy with %d healthy replicas.", deploymentName, expectedReplicas)
+			return nil, false, nil
+		} else {
+			log.Infof("Deployment %s has %d healthy replicas. Expected: %d", deploymentName, healthyPods, expectedReplicas)
+			return nil, true, fmt.Errorf("Deployment %s is not yet healthy", deploymentName)
+		}
+	}
+	_, err := task.DoRetryWithTimeout(checkDeploymentHealth, VclusterAppTimeout, VClusterAppRetryInterval)
+	return err
 }
