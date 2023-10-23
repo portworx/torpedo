@@ -1513,10 +1513,10 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 	})
 
 	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		defer func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
-			EndPxBackupTorpedoTest(scheduledAppContexts)
 		}()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
