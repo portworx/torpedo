@@ -817,7 +817,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerRestart) different namespaces and restarts portworx on a different node after every NumberOfDeploymentsPerRestart have been queued to schedule", func() {
 		//Provisioner for pure apps
-		Provisioner := fmt.Sprintf("%v", "csi")
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of times portworx has to be restarted
 		n := 3
 		//Number of apps to be deployed after which a restart can be triggered
