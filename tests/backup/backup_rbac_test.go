@@ -1276,7 +1276,6 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		postRuleName               string
 		preRuleUid                 string
 		postRuleUid                string
-		srcClusterUid              string
 		scheduledBackupName        string
 		userScheduleName           string
 		restoreName                string
@@ -1298,14 +1297,14 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 		}
 	})
 
-	It("To verify all the RBAC operations for an app-user", func() {
+	It("To verify all the RBAC operations for an App-user", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
 
-		Step("Create an app-user", func() {
-			log.InfoD("Creating a new user and assigning the role of app-user")
+		Step("Create an App-user", func() {
+			log.InfoD("Creating a new user and assigning the role of App-user")
 			appUser = createUsers(1)[0]
 			err := backup.AddRoleToUser(appUser, backup.ApplicationUser, fmt.Sprintf("Adding Application User role to %s", appUser))
 			log.FailOnError(err, "Failed to add role to user - [%s]", appUser)
@@ -1318,10 +1317,10 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "Fetching non admin ctx")
 			for _, provider := range providers {
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				credName = fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
 				if provider != drivers.ProviderNfs {
-					cloudCredUID = uuid.New()
-					backupLocationUID = uuid.New()
-					credName = fmt.Sprintf("cred-%s-%v", provider, RandomString(6))
 					err = CreateCloudCredential(provider, credName, cloudCredUID, orgID, ctxNonAdmin)
 					dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating cloud credentials for provider [%s]", appUser, provider))
 				} else {
@@ -1412,8 +1411,8 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			}
 		})
 
-		Step("Verify if the Px-Admin user has permission to share RBAC resources with the app-user", func() {
-			log.InfoD("Verify if the Px-Admin user has permission to share RBAC resources with the app-user")
+		Step("Verify if the Px-Admin user has permission to share RBAC resources with the App-user", func() {
+			log.InfoD("Verify if the Px-Admin user has permission to share RBAC resources with the App-user")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
@@ -1450,15 +1449,9 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctxNonAdmin)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			srcClusterUid, err = Inst().Backup.GetClusterUID(ctxNonAdmin, orgID, SourceClusterName)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
-			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
 			dstClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctxNonAdmin)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
 			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
-			dstClusterUid, err := Inst().Backup.GetClusterUID(ctxNonAdmin, orgID, destinationClusterName)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
-			log.Infof("Cluster [%s] uid: [%s]", destinationClusterName, dstClusterUid)
 		})
 
 		Step(fmt.Sprintf("Validate taking a scheduled backup of applications from the App-User [%s]", appUser), func() {
@@ -1506,8 +1499,8 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", userScheduleName, appUser))
 		})
 
-		Step(fmt.Sprintf("Validate deleting of source and destination cluster for the user [%s]", appUser), func() {
-			log.InfoD(fmt.Sprintf("Validate deleting of source and destination cluster for the user [%s]", appUser))
+		Step(fmt.Sprintf("Validate deleting of source and destination cluster for the App-user [%s]", appUser), func() {
+			log.InfoD(fmt.Sprintf("Validate deleting of source and destination cluster for the App-user [%s]", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
 			for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
@@ -1520,7 +1513,11 @@ var _ = Describe("{VerfiyRBACforAppUser}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+			EndPxBackupTorpedoTest(scheduledAppContexts)
+		}()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
