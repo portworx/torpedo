@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -337,6 +338,80 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	})
 })
 
+// ToString provides a string representation of the given value.
+// If the value is empty, it returns an empty string (""); for nil, it returns "nil"
+func ToString(value interface{}) string {
+	v := reflect.ValueOf(value)
+	if stringer, ok := value.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return "nil"
+		}
+		return ToString(v.Elem().Interface())
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Sprintf("%v", value)
+	}
+	t := v.Type()
+	var fields []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.IsExported() {
+			fieldVal := v.Field(i)
+			var fieldString string
+			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
+				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
+			} else {
+				switch fieldVal.Kind() {
+				case reflect.Ptr, reflect.Interface:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Elem().Interface()))
+					}
+				case reflect.Slice:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Struct:
+					fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Interface()))
+				case reflect.Chan, reflect.Func:
+					fieldString = fmt.Sprintf("%s: %T", field.Name, fieldVal.Interface())
+				case reflect.String:
+					if fieldVal.Len() == 0 {
+						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Map:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						mapKeys := fieldVal.MapKeys()
+						var mapStrings []string
+						for _, key := range mapKeys {
+							keyItem := ToString(key.Interface())
+							valItem := ToString(fieldVal.MapIndex(key).Interface())
+							mapStrings = append(mapStrings, fmt.Sprintf("%s: %s", keyItem, valItem))
+						}
+						fieldString = fmt.Sprintf("%s: {%s}", field.Name, strings.Join(mapStrings, ","))
+					}
+				default:
+					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+				}
+			}
+			fields = append(fields, fieldString)
+		} else {
+			fields = append(fields, fmt.Sprintf("%s: unexported", field.Name))
+		}
+	}
+	return fmt.Sprintf("{%s}", strings.Join(fields, ", "))
+}
+
 var _ = Describe("{ResizePVCToMaxLimit}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/72657582
@@ -410,6 +485,7 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 				for _, vol := range volumes {
 					apiVol, err := Inst().V.InspectVolume(vol.ID)
 					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					log.Infof("API-VOL FOR %s - %s", ctx.App.Key, ToString(apiVol))
 					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
 					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
 					if proxySpec != nil {
