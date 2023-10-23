@@ -2,15 +2,12 @@ package tests
 
 import (
 	"fmt"
-<<<<<<< HEAD
 	"strings"
 	"time"
 
-=======
 	"regexp"
 
 	"github.com/google/uuid"
->>>>>>> master
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
