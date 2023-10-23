@@ -642,7 +642,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerReboot) different namespaces and reboots a different node after every NumberOfDeploymentsPerReboot have been queued to schedule", func() {
 		//Provisioner for pure apps
-		Provisioner := fmt.Sprintf("%v", "csi")
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		n := 3
 		NumberOfDeploymentsPerReboot := 8
 		//Reboot a random storage node n number of times
