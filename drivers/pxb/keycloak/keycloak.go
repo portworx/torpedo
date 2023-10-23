@@ -16,6 +16,44 @@ var HTTPClient = &http.Client{
 	Timeout: 1 * time.Minute,
 }
 
+// CredentialRepresentation defines the scheme for representing the user credential in Keycloak
+type CredentialRepresentation struct {
+	Type      string `json:"type"`
+	Value     string `json:"value"`
+	Temporary bool   `json:"temporary"`
+}
+
+// UserRepresentation defines the scheme for representing the user in Keycloak
+type UserRepresentation struct {
+	ID            string                     `json:"id"`
+	Username      string                     `json:"username"`
+	FirstName     string                     `json:"firstName"`
+	LastName      string                     `json:"lastName"`
+	Email         string                     `json:"email"`
+	EmailVerified bool                       `json:"emailVerified"`
+	Enabled       bool                       `json:"enabled"`
+	Credentials   []CredentialRepresentation `json:"credentials"`
+}
+
+// NewTestUserRepresentation initializes UserRepresentation for a test user with the given credentials
+func NewTestUserRepresentation(username string, password string) *UserRepresentation {
+	return &UserRepresentation{
+		ID:            "",
+		Username:      username,
+		Email:         username + "@cnbu.com",
+		EmailVerified: true,
+		Enabled:       true,
+		Credentials: []CredentialRepresentation{
+			{Type: "password", Value: password, Temporary: false},
+		},
+	}
+}
+
+// TokenRepresentation defines the scheme for representing the Keycloak access token
+type TokenRepresentation struct {
+	AccessToken string `json:"access_token"`
+}
+
 func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
 	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
 	if err != nil {

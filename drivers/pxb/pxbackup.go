@@ -12,7 +12,6 @@ import (
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"github.com/portworx/torpedo/pkg/log"
 	"io"
-	v1 "k8s.io/api/core/v1"
 	"net/http"
 	"net/url"
 	"os"
@@ -34,44 +33,6 @@ type Organization struct {
 	ClusterDataStore         *generics.DataStore[*api.ClusterObject]
 	RestoreDataStore         *generics.DataStore[*api.RestoreObject]
 	CloudCredentialDataStore *generics.DataStore[*api.CloudCredentialObject]
-}
-
-// CredentialRepresentation defines the scheme for representing the user credential in Keycloak
-type CredentialRepresentation struct {
-	Type      string `json:"type"`
-	Value     string `json:"value"`
-	Temporary bool   `json:"temporary"`
-}
-
-// UserRepresentation defines the scheme for representing the user in Keycloak
-type UserRepresentation struct {
-	ID            string                     `json:"id"`
-	Username      string                     `json:"username"`
-	FirstName     string                     `json:"firstName"`
-	LastName      string                     `json:"lastName"`
-	Email         string                     `json:"email"`
-	EmailVerified bool                       `json:"emailVerified"`
-	Enabled       bool                       `json:"enabled"`
-	Credentials   []CredentialRepresentation `json:"credentials"`
-}
-
-// NewTestUserRepresentation initializes UserRepresentation for a test user with the given credentials
-func NewTestUserRepresentation(username string, password string) *UserRepresentation {
-	return &UserRepresentation{
-		ID:            "",
-		Username:      username,
-		Email:         username + "@cnbu.com",
-		EmailVerified: true,
-		Enabled:       true,
-		Credentials: []CredentialRepresentation{
-			{Type: "password", Value: password, Temporary: false},
-		},
-	}
-}
-
-// TokenRepresentation defines the scheme for representing the Keycloak access token
-type TokenRepresentation struct {
-	AccessToken string `json:"access_token"`
 }
 
 type Keycloak struct {
@@ -185,25 +146,12 @@ func (k *Keycloak) GetAccessToken(ctx context.Context, username, password string
 	return token.AccessToken, nil
 }
 
-func (k *Keycloak) GetPxCentralAdminPassword() (string, error) {
-	pxCentralAdminSecret, err := core.Instance().GetSecret(PxCentralAdminSecretName, k.Spec.Namespace)
+func (k *Keycloak) GetPxCentralAdminAccessToken(ctx context.Context) (string, error) {
+	pxCentralAdminPassword, err := k.GetPxCentralAdminPassword()
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	pxCentralAdminPassword := string(pxCentralAdminSecret.Data["credential"])
-	if pxCentralAdminPassword == "" {
-		err = fmt.Errorf("empty credential in secret [%s]", PxCentralAdminSecretName)
-		return "", ProcessError(err)
-	}
-	return pxCentralAdminPassword, nil
-}
-
-func (b *PxBackup) GetPxCentralAdminAccessToken(ctx context.Context) (string, error) {
-	pxCentralAdminPassword, err := b.GetPxCentralAdminPassword()
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	pxCentralAdminToken, err := k.GetToken(ctx, PxCentralAdminUsername, pxCentralAdminPassword)
+	pxCentralAdminToken, err := k.GetAccessToken(ctx, PxCentralAdminUsername, pxCentralAdminPassword)
 	if err != nil {
 		return "", ProcessError(err)
 	}
@@ -254,6 +202,15 @@ type PxBackup struct {
 	UserDataStore *generics.DataStore[*User]
 }
 
-func GetOIDCSecret() (*v1.Secret, error) {
-
+func (b *PxBackup) GetPxCentralAdminPassword() (string, error) {
+	pxCentralAdminSecret, err := core.Instance().GetSecret(PxCentralAdminSecretName, b.Spec.Namespace)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	pxCentralAdminPassword := string(pxCentralAdminSecret.Data["credential"])
+	if pxCentralAdminPassword == "" {
+		err = fmt.Errorf("empty credential in secret [%s]", PxCentralAdminSecretName)
+		return "", ProcessError(err)
+	}
+	return pxCentralAdminPassword, nil
 }
