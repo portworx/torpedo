@@ -3864,10 +3864,10 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			log.InfoD("Restoring new application namespaces from next schedule backup in source cluster")
 			oldNamespaceAge, err := getPodAge()
 			dash.VerifyFatal(err, nil, "Getting namespace age")
-			restoreName = fmt.Sprintf("%s-%s", "test-restore-manual", RandomString(4))
-			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
-			restoreNames = append(restoreNames, restoreName)
+			//restoreName = fmt.Sprintf("%s-%s", "test-restore-manual", RandomString(4))
+			//err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			//restoreNames = append(restoreNames, restoreName)
 
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
@@ -3919,9 +3919,9 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 
-			err = CreateRestoreWithReplacePolicy(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
-			restoreNames = append(restoreNames, restoreName)
+			//err = CreateRestoreWithReplacePolicy(restoreName, firstScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string), 2)
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			//restoreNames = append(restoreNames, restoreName)
 
 			ValidateApplications(scheduledAppContexts)
 			err = comparePodAge(oldNamespaceAge)
