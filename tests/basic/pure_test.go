@@ -620,14 +620,29 @@ https://portworx.testrail.net/index.php?/tests/view/72615025
 */
 
 var _ = Describe("{RebootNodeWhileVolCreate}", func() {
-	var contexts []*scheduler.Context
-	var wg sync.WaitGroup
 	JustBeforeEach(func() {
 		StartTorpedoTest("RebootNodeWhileVolCreate", "Test creates multiple FADA volume and reboots a node while volume creation is in progress", nil, 72615025)
 	})
+	var contexts = make([]*scheduler.Context, 0)
+	var wg sync.WaitGroup
+	//Scheduling app with volume placement strategy
+	applist := Inst().AppList
+	//select a storage node to place volumes and restart
+	storageNodes := node.GetStorageNodes()
+	selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+	var err error
+	defer func() {
+		Inst().AppList = applist
+		err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+		log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+	}()
+	Inst().AppList = []string{"nginx-fada-fastpath-vps"}
+	err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+	log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerReboot) different namespaces and reboots a different node after every NumberOfDeploymentsPerReboot have been queued to schedule", func() {
 		//Provisioner for pure apps
-		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		Provisioner := fmt.Sprintf("%v", "csi")
 		n := 3
 		NumberOfDeploymentsPerReboot := 8
 		//Reboot a random storage node n number of times
@@ -652,15 +667,13 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 			}()
 			// Step 2: Pick a random storage node and reboot
 			wg.Add(1)
-			nodes := node.GetStorageDriverNodes()
-			randomNode := rand.Intn(len(nodes))
 			go func() {
 				defer wg.Done()
 				stepLog := "Pick a random storage node and reboot"
 				Step(stepLog, func() {
 
-					log.Infof("Stopping node %s", nodes[randomNode].Name)
-					err := Inst().N.RebootNode(nodes[randomNode],
+					log.Infof("Stopping node %s", selectedNode.Name)
+					err := Inst().N.RebootNode(selectedNode,
 						node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -668,25 +681,25 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 								TimeBeforeRetry: defaultCommandRetry,
 							},
 						})
-					log.FailOnError(err, "Failed to reboot node %v", nodes[randomNode].Name)
+					log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
 				})
 			}()
 
 			// Wait for both steps to complete
 			wg.Wait()
 
-			log.Infof("wait for node: %s to be back up", nodes[randomNode].Name)
+			log.Infof("wait for node: %s to be back up", selectedNode.Name)
 			nodeReadyStatus := func() (interface{}, bool, error) {
-				err := Inst().S.IsNodeReady(nodes[randomNode])
+				err := Inst().S.IsNodeReady(selectedNode)
 				if err != nil {
 					return "", true, err
 				}
 				return "", false, nil
 			}
 			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodes[randomNode].Name))
-			err = Inst().V.WaitDriverUpOnNode(nodes[randomNode], Inst().DriverStartTimeout)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodes[randomNode].Name))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
 			log.FailOnError(err, "Failed to reboot node")
 			stepLog = "Validate the applications"
 			Step(stepLog, func() {
@@ -694,8 +707,6 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 			})
 		}
 		for i := 0; i < n; i++ {
-			nodes := node.GetStorageDriverNodes()
-			randomNode := rand.Intn(len(nodes))
 			stepLog = "Reboot a random node,destroy scheduled apps and check if pvc's are deleted gracefully"
 
 			Step(stepLog, func() {
@@ -705,7 +716,7 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 					defer wg.Done()
 					stepLog := "Reboot one random storage node"
 					Step(stepLog, func() {
-						err := Inst().N.RebootNode(nodes[randomNode], node.RebootNodeOpts{
+						err := Inst().N.RebootNode(selectedNode, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
 								Timeout:         defaultCommandTimeout,
@@ -731,16 +742,16 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 				stepLog = "Wait for node to come up"
 				Step(stepLog, func() {
 					nodeReadyStatus := func() (interface{}, bool, error) {
-						err := Inst().S.IsNodeReady(nodes[randomNode])
+						err := Inst().S.IsNodeReady(selectedNode)
 						if err != nil {
 							return "", true, err
 						}
 						return "", false, nil
 					}
 					_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, K8sNodeReadyTimeout*time.Minute, K8sNodeRetryInterval*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", nodes[randomNode].Name))
-					err = Inst().V.WaitDriverUpOnNode(nodes[randomNode], Inst().DriverStartTimeout)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", nodes[randomNode].Name))
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+					err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
 				})
 			})
 		}
