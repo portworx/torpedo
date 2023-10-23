@@ -414,17 +414,17 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
 					if proxySpec != nil {
 						log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s] for app %s", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name, ctx.App.Key)
+						switch proxySpec.ProxyProtocol {
+						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+							volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
+						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+							volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
+						default:
+							volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], apiVol)
+						}
 					} else {
 						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", apiVol.Id, vol.Name, ctx.App.Key)
 
-					}
-					switch proxySpec.ProxyProtocol {
-					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
-						volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
-					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
-						volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
-					default:
-						volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], apiVol)
 					}
 				}
 			}
