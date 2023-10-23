@@ -412,7 +412,12 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
 					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
 					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
-					log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s]", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name)
+					if proxySpec != nil {
+						log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s] for app %s", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name, ctx.App.Key)
+					} else {
+						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", apiVol.Id, vol.Name, ctx.App.Key)
+
+					}
 					switch proxySpec.ProxyProtocol {
 					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
 						volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
