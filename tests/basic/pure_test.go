@@ -798,25 +798,25 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 72615026)
 	})
-	var contexts = make([]*scheduler.Context, 0)
-	var wg sync.WaitGroup
-	//Scheduling app with volume placement strategy
-	applist := Inst().AppList
-	//select a storage node to place volumes and restart
-	storageNodes := node.GetStorageNodes()
-	selectedNode := storageNodes[rand.Intn(len(storageNodes))]
-	var err error
-	defer func() {
-		Inst().AppList = applist
-		err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
-		log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
-	}()
-	Inst().AppList = []string{"nginx-fada-fastpath-vps"}
-	err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
-	log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 
 	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerRestart) different namespaces and restarts portworx on a different node after every NumberOfDeploymentsPerRestart have been queued to schedule", func() {
 		//Provisioner for pure apps
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		//select a storage node to place volumes and restart
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of times portworx has to be restarted
 		n := 3
