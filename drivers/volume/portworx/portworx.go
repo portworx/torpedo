@@ -1787,7 +1787,7 @@ func (d *portworx) ValidatePureVolumesNoReplicaSets(volumeName string, params ma
 type pureLocalPathEntry struct {
 	WWID        string
 	SinglePaths []string
-	Size        int
+	Size        uint64
 }
 
 func GetSerialFromWWID(wwid string) (string, error) {
@@ -1805,24 +1805,23 @@ func GetSerialFromWWID(wwid string) (string, error) {
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 	/* Parses output like this
-	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE
-	3624a937056b76b18a47e4ad200011dfe  1000G
-	|-sdi                              1000G
-	`-sdh                              1000G
-	sdd                                 128G
-	sdb                                  32G
-	3624a937056b76b18a47e4ad200011fb3  1000G
-	|-sdf                              1000G
-	`-sdg                              1000G
-	sde                                 128G
-	sdc2                                125G
-	`-sdc                               128G
-	sdc1                                  3G
-	`-sdc                               128G
-	sda2                              124.3G
-	`-sda                               128G
-	sda1                                3.7G
-	`-sda                               128G
+	[root@akrpan-pxone-1 ~]# lsblk --inverse --ascii --noheadings -o NAME,SIZE -b
+	sdd                               137438953472
+	sdb                                34359738368
+	3624a9370ea876434795b4b54000a4128   6442450944
+	|-sdf                               6442450944
+	|-sdi                               6442450944
+	|-sdg                               6442450944
+	`-sdh                               6442450944
+	sde2                              134217728000
+	`-sde                             137438953472
+	sde1                                3219128320
+	`-sde                             137438953472
+	sdc                               137438953472
+	sda2                              133438636032
+	`-sda                             137438953472
+	sda1                                3999268864
+	`-sda                             137438953472
 	*/
 
 	foundDevices := map[string]pureLocalPathEntry{}
@@ -1843,7 +1842,7 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 			parts := strings.Fields(line)
 			wwid := parts[0]
 			sizeStr := parts[1]
-			size, err := strconv.Atoi(sizeStr[:len(sizeStr)-1]) // Trim the last character off as it's the suffix (G/T/P/etc)
+			size, err := strconv.ParseUint(sizeStr, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse size '%s' from lsblk output, Err: %v", sizeStr, err)
 			}
@@ -1895,8 +1894,13 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 		dmsetupFoundMappers = append(dmsetupFoundMappers, mapperName)
 	}
 
-	// Then run `lsblk --inverse -l -o NAME,SIZE` to get the WWN and size of each device
-	out, err = d.nodeDriver.RunCommandWithNoRetry(n, "lsblk --inverse --ascii --noheadings -o NAME,SIZE", node.ConnectionOpts{
+	// Then run `lsblk` to get the WWN and size of each device. Flags:
+	// * --inverse: show parents before children (instead of the default output that has single paths as the top level)
+	// * --ascii: show ASCII characters only (no unicode, normally it displays the fancy tree characters, this makes it only show |- and `-)
+	// * --noheadings: don't show the header line
+	// * -o NAME,SIZE: only show the name and size columns
+	// * -b: show size in bytes instead of human-readable with a suffix
+	out, err = d.nodeDriver.RunCommandWithNoRetry(n, "lsblk --inverse --ascii --noheadings -o NAME,SIZE -b", node.ConnectionOpts{
 		Timeout:         crashDriverTimeout,
 		TimeBeforeRetry: defaultRetryInterval,
 	})
@@ -1955,92 +1959,110 @@ func (d *portworx) InitializePureLocalVolumePaths() error {
 }
 
 // ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
-func (d *portworx) ValidatePureLocalVolumePaths(tpVolumes []*torpedovolume.Volume) error {
-	currentDevices, err := d.getCurrentPureLocalVolumePaths()
-	if err != nil {
-		return err
-	}
-	logrus.Infof("Current pure devices: %+v", currentDevices)
-
-	// TODO: handle FACD drive failovers properly (these will show up as new devices but they're actually fine)
-	// Remove all devices that are in the baseline (complex set math time!). Also warn if any baseline devices are now missing?
-	for node, baselineDevices := range d.pureDeviceBaseline {
-		currentNodeDevices := currentDevices[node]
-		for wwid := range baselineDevices {
-			if _, exists := currentNodeDevices[wwid]; exists {
-				delete(currentNodeDevices, wwid)
-			} else {
-				return fmt.Errorf("baseline FA device %s originally present on node %s is missing, this should not happen", wwid, node)
-			}
-		}
-	}
-
-	// Inspect all volumes provided to get the PX spec
-	pxVolumes := []*api.Volume{}
-	for _, v := range tpVolumes {
-		vol, err := d.InspectVolume(v.ID)
+func (d *portworx) ValidatePureLocalVolumePaths() error {
+	t := func() error {
+		currentDevices, err := d.getCurrentPureLocalVolumePaths()
 		if err != nil {
 			return err
 		}
-		pxVolumes = append(pxVolumes, vol)
-	}
+		logrus.Infof("Current pure devices: %+v", currentDevices)
 
-	// For each volume, check which nodes it should be on. Remove it from the list of devices on that node. Error if we can't find it.
-	for _, v := range pxVolumes {
-		if !v.Spec.IsPureVolume() {
-			continue
-		}
-		if v.Spec.ProxySpec.PureBlockSpec == nil {
-			// TODO: handle FBDA volumes properly as well
-			continue
-		}
-
-		// Find the node this volume is on
-		var foundNode *node.Node
-		attachedOn := v.GetAttachedOn()
-		for _, n := range node.GetStorageDriverNodes() {
-			if n.MgmtIp == attachedOn { // TODO: RWX support
-				tempVar := n
-				foundNode = &tempVar
-				break
+		// TODO: handle FACD drive failovers properly (these will show up as new devices but they're actually fine)
+		// Remove all devices that are in the baseline (complex set math time!). Also warn if any baseline devices are now missing?
+		for node, baselineDevices := range d.pureDeviceBaseline {
+			currentNodeDevices := currentDevices[node]
+			for wwid := range baselineDevices {
+				if _, exists := currentNodeDevices[wwid]; exists {
+					delete(currentNodeDevices, wwid)
+				} else {
+					return fmt.Errorf("baseline FA device %s originally present on node %s is missing, this should not happen", wwid, node)
+				}
 			}
 		}
-		if foundNode == nil {
-			logrus.Infof("Volume %s is not attached to any node, skipping", v.Locator.Name)
-			continue
-		}
 
-		// Find the device for this volume
-		var device *pureLocalPathEntry
-		for _, deviceEntry := range currentDevices[foundNode.MgmtIp] {
-			serial, err := GetSerialFromWWID(deviceEntry.WWID)
+		allVolNames, err := d.ListAllVolumes()
+		if err != nil {
+			return err
+		}
+		// Inspect all volumes provided to get the PX spec
+		fadaVolumes := []*api.Volume{}
+		for _, volName := range allVolNames {
+			v, err := d.InspectVolume(volName)
 			if err != nil {
 				return err
 			}
-			if serial == strings.ToLower(v.Spec.GetProxySpec().PureBlockSpec.SerialNum) {
-				device = &deviceEntry
-				break
+			if !v.Spec.IsPureVolume() {
+				continue
+			}
+			if v.Spec.ProxySpec.PureBlockSpec == nil {
+				// TODO: handle FBDA volumes properly as well
+				continue
+			}
+			fadaVolumes = append(fadaVolumes, v)
+		}
+
+		// For each volume, check which nodes it should be on. Remove it from the list of devices on that node. Error if we can't find it.
+		for _, v := range fadaVolumes {
+			// Find the node this volume is on
+			var foundNode *node.Node
+			attachedOn := v.GetAttachedOn()
+			for _, n := range node.GetStorageDriverNodes() {
+				if n.MgmtIp == attachedOn { // TODO: RWX support
+					tempVar := n
+					foundNode = &tempVar
+					break
+				}
+			}
+			if foundNode == nil {
+				logrus.Infof("Volume %s is not attached to any node, skipping", v.Locator.Name)
+				continue
+			}
+
+			// Find the device for this volume
+			var device *pureLocalPathEntry
+			for _, deviceEntry := range currentDevices[foundNode.MgmtIp] {
+				serial, err := GetSerialFromWWID(deviceEntry.WWID)
+				if err != nil {
+					return err
+				}
+				if serial == strings.ToLower(v.Spec.GetProxySpec().PureBlockSpec.SerialNum) {
+					device = &deviceEntry
+					break
+				}
+			}
+			if device == nil {
+				return fmt.Errorf("volume %s is attached to node %s but not found in any local path", v.Locator.Name, foundNode.MgmtIp)
+			}
+
+			// Check that the device is actually of the correct size
+			if device.Size != v.Spec.Size {
+				return fmt.Errorf("volume %s is attached to node %s but has incorrect size %d instead of expected size %d", v.Locator.Name, foundNode.MgmtIp, device.Size, v.Spec.Size)
+			}
+
+			// Remove the device from the list of devices on that node
+			delete(currentDevices[foundNode.MgmtIp], device.WWID)
+		}
+
+		logrus.Infof("Remaining devices after removing all attached FADA volumes: %+v", currentDevices)
+
+		// At the very end, ensure that all the lists are empty. If they aren't, there is an extra device on that node not matching to a pod.
+		// TODO: check if this is an FACD drive device, if so then it's also fine
+		for node, devices := range currentDevices {
+			if len(devices) > 0 {
+				return fmt.Errorf("found %d extra devices on node %s that are not attached to any torpedo app volume (it may be from a clone test pod)", len(devices), node)
 			}
 		}
-		if device == nil {
-			return fmt.Errorf("volume %s is attached to node %s but not found in any local path", v.Locator.Name, foundNode.MgmtIp)
-		}
 
-		// Remove the device from the list of devices on that node
-		delete(currentDevices[foundNode.MgmtIp], device.WWID)
+		return nil
 	}
-
-	logrus.Infof("Remaining devices after removing all attached FADA volumes: %+v", currentDevices)
-
-	// At the very end, ensure that all the lists are empty. If they aren't, there is an extra device on that node not matching to a pod.
-	// TODO: check if this is an FACD drive device, if so then it's also fine
-	for node, devices := range currentDevices {
-		if len(devices) > 0 {
-			return fmt.Errorf("found %d extra devices on node %s that are not attached to any torpedo app volume (it may be from a clone test pod)", len(devices), node)
+	_, err := task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+		err := t()
+		if err != nil {
+			return nil, true, err
 		}
-	}
-
-	return nil
+		return nil, false, nil
+	}, time.Minute*2, defaultRetryInterval)
+	return err
 }
 
 func (d *portworx) SetIoBandwidth(vol *torpedovolume.Volume, readBandwidthMBps uint32, writeBandwidthMBps uint32) error {

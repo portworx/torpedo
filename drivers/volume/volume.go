@@ -159,7 +159,7 @@ type Driver interface {
 	InitializePureLocalVolumePaths() error
 
 	// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
-	ValidatePureLocalVolumePaths(volumes []*Volume) error
+	ValidatePureLocalVolumePaths() error
 
 	// ValidateVolumeInPxctlList validates that the given volume appears in the output of `pxctl v l`
 	ValidateVolumeInPxctlList(name string) error

@@ -408,7 +408,7 @@ func (d *DefaultDriver) InitializePureLocalVolumePaths() error {
 }
 
 // ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
-func (d *DefaultDriver) ValidatePureLocalVolumePaths(volumes []*Volume) error {
+func (d *DefaultDriver) ValidatePureLocalVolumePaths() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidatePureLocalVolumePaths()",
