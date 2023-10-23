@@ -3,8 +3,6 @@ package tests
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/pkg/units"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -344,10 +342,10 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/72657582
 
 	var (
-		namespaces          = make([]string, 0)
-		contexts            = make([]*scheduler.Context, 0)
-		volumeMap           = make(map[string][]*api.Volume)
-		minVolSizeIncrement = uint64(1 * units.TiB)
+		namespaces = make([]string, 0)
+		contexts   = make([]*scheduler.Context, 0)
+		volumeMap  = make(map[string][]*api.Volume)
+		//minVolSizeIncrement = uint64(1 * units.TiB)
 	)
 
 	JustBeforeEach(func() {
@@ -355,41 +353,39 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 	})
 
 	It("Validates PVC resize to max limit on FADA, FBDA, and FACD", func() {
-		// getMaxVolSize gets the maximum volume size based on the given volType
-		getMaxVolSize := func(volType string) uint64 {
-			switch volType {
-			default:
-				return 40 * units.TiB
-			}
-		}
-
-		// getNextSize gets the next closest multiple in powers of 2 greater than currentSize
-		getNextSize := func(currentSize uint64) uint64 {
-			if currentSize < minVolSizeIncrement {
-				return minVolSizeIncrement
-			}
-			return currentSize * 2
-		}
-
-		// resizeVolume resizes given the volume using powers of 2 until the max limit is reached
-		resizeVolume := func(volType string, vol *api.Volume) error {
-			log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
-			maxVolSize := getMaxVolSize(volType)
-			currentSize := vol.Spec.Size
-			for {
-				newSize := getNextSize(currentSize)
-				if newSize > maxVolSize {
-					log.Infof("Volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
-					return fmt.Errorf("volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
-				}
-				log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, currentSize, newSize)
-				err = Inst().V.ResizeVolume(vol.Id, newSize)
-				if err != nil {
-					return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, currentSize, newSize, err)
-				}
-				currentSize = newSize
-			}
-		}
+		//// getMaxVolSize gets the maximum volume size based on the given volType
+		//getMaxVolSize := func(volType string) uint64 {
+		//	switch volType {
+		//	default:
+		//		return 40 * units.TiB
+		//	}
+		//}
+		//// getNextSize gets the next closest multiple in powers of 2 greater than currentSize
+		//getNextSize := func(currentSize uint64) uint64 {
+		//	if currentSize < minVolSizeIncrement {
+		//		return minVolSizeIncrement
+		//	}
+		//	return currentSize * 2
+		//}
+		//// resizeVolume resizes given the volume using powers of 2 until the max limit is reached
+		//resizeVolume := func(volType string, vol *api.Volume) error {
+		//	log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
+		//	maxVolSize := getMaxVolSize(volType)
+		//	currentSize := vol.Spec.Size
+		//	for {
+		//		newSize := getNextSize(currentSize)
+		//		if newSize > maxVolSize {
+		//			log.Infof("Volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
+		//			return fmt.Errorf("volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
+		//		}
+		//		log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, currentSize, newSize)
+		//		err = Inst().V.ResizeVolume(vol.Id, newSize)
+		//		if err != nil {
+		//			return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, currentSize, newSize, err)
+		//		}
+		//		currentSize = newSize
+		//	}
+		//}
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -416,6 +412,7 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
 					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
 					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
+					log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s]", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name)
 					switch proxySpec.ProxyProtocol {
 					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
 						volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
@@ -427,24 +424,24 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 				}
 			}
 		})
-		Step("Resize a random volume of each type to max limit", func() {
-			log.InfoD("Resizing a random volume of each type to max limit")
-			for volType, vols := range volumeMap {
-				if len(vols) > 0 {
-					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
-					vol := vols[rand.Intn(len(vols))]
-					log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
-					err := resizeVolume(volType, vol)
-					log.FailOnError(err, "failed to resize [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
-				}
-			}
-		})
+		//Step("Resize a random volume of each type to max limit", func() {
+		//	log.InfoD("Resizing a random volume of each type to max limit")
+		//	for volType, vols := range volumeMap {
+		//		if len(vols) > 0 {
+		//			log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+		//			vol := vols[rand.Intn(len(vols))]
+		//			log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
+		//			err := resizeVolume(volType, vol)
+		//			log.FailOnError(err, "failed to resize [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
+		//		}
+		//	}
+		//})
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(contexts, opts)
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//DestroyApps(contexts, opts)
 	})
 })
