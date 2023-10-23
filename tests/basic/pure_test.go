@@ -350,49 +350,46 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 		minVolSizeIncrement = uint64(1 * units.TiB)
 	)
 
-	// getMaxVolSize gets the maximum volume size based on the given volType
-	getMaxVolSize := func(volType string) uint64 {
-		switch volType {
-		case "FACD":
-			return 40 * units.TiB
-		default:
-			return 100 * units.TiB
-		}
-	}
-
-	// getNextSize gets the next closest multiple in powers of 2 greater than currentSize
-	getNextSize := func(currentSize uint64) uint64 {
-		if currentSize < minVolSizeIncrement {
-			return minVolSizeIncrement
-		}
-		return currentSize * 2
-	}
-
-	// resizeVolume resizes given the volume using powers of 2 until the max limit is reached
-	resizeVolume := func(volType string, vol *api.Volume) error {
-		log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
-		maxVolSize := getMaxVolSize(volType)
-		currentSize := vol.Spec.Size
-		for {
-			newSize := getNextSize(currentSize)
-			if newSize > maxVolSize {
-				log.Infof("Volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
-				return fmt.Errorf("volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
-			}
-			log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, currentSize, newSize)
-			err = Inst().V.ResizeVolume(vol.Id, newSize)
-			if err != nil {
-				return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, currentSize, newSize, err)
-			}
-			currentSize = newSize
-		}
-	}
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizePVCToMaxLimit", "Validate PVC resize to max limit on FADA, FBDA, and FACD", nil, 72657582)
 	})
 
 	It("Validates PVC resize to max limit on FADA, FBDA, and FACD", func() {
+		// getMaxVolSize gets the maximum volume size based on the given volType
+		getMaxVolSize := func(volType string) uint64 {
+			switch volType {
+			default:
+				return 40 * units.TiB
+			}
+		}
+
+		// getNextSize gets the next closest multiple in powers of 2 greater than currentSize
+		getNextSize := func(currentSize uint64) uint64 {
+			if currentSize < minVolSizeIncrement {
+				return minVolSizeIncrement
+			}
+			return currentSize * 2
+		}
+
+		// resizeVolume resizes given the volume using powers of 2 until the max limit is reached
+		resizeVolume := func(volType string, vol *api.Volume) error {
+			log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
+			maxVolSize := getMaxVolSize(volType)
+			currentSize := vol.Spec.Size
+			for {
+				newSize := getNextSize(currentSize)
+				if newSize > maxVolSize {
+					log.Infof("Volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
+					return fmt.Errorf("volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
+				}
+				log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, currentSize, newSize)
+				err = Inst().V.ResizeVolume(vol.Id, newSize)
+				if err != nil {
+					return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, currentSize, newSize, err)
+				}
+				currentSize = newSize
+			}
+		}
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -425,13 +422,13 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 					case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
 						volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
 					default:
-						volumeMap["FACD"] = append(volumeMap["FACD"], apiVol)
+						volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], apiVol)
 					}
 				}
 			}
 		})
-		Step(fmt.Sprintf("Resize a volume of each type to max limit"), func() {
-			log.InfoD("Resizing a volume of each type to max limit")
+		Step("Resize a random volume of each type to max limit", func() {
+			log.InfoD("Resizing a random volume of each type to max limit")
 			for volType, vols := range volumeMap {
 				if len(vols) > 0 {
 					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
