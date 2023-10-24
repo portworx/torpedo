@@ -5140,9 +5140,11 @@ func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) e
 	return nil
 }
 
+type nsPodAge map[string]time.Time
+
 // getPodAge gets the pod age of all pods on all the namespaces on the cluster
-func getPodAge() (map[string]time.Time, error) {
-	var podAge = make(map[string]time.Time)
+func getPodAge() (map[string]nsPodAge, error) {
+	var podAge = make(map[string]nsPodAge)
 	err := SetDestinationKubeConfig()
 	if err != nil {
 		return podAge, fmt.Errorf("failed to switch destination cluster context")
@@ -5156,7 +5158,7 @@ func getPodAge() (map[string]time.Time, error) {
 			return podAge, fmt.Errorf("failed to get pods for namespace")
 		}
 		for _, pod := range pods.Items {
-			podAge[namespace.ObjectMeta.GetName()+pod.ObjectMeta.GetName()] = pod.ObjectMeta.GetCreationTimestamp().Time
+			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetName(): pod.ObjectMeta.GetCreationTimestamp().Time}
 		}
 	}
 
@@ -5169,7 +5171,7 @@ func getPodAge() (map[string]time.Time, error) {
 }
 
 // comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
-func comparePodAge(oldPodAge map[string]time.Time) error {
+func comparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 	err := SetDestinationKubeConfig()
 	if err != nil {
@@ -5197,10 +5199,10 @@ func comparePodAge(oldPodAge map[string]time.Time) error {
 					return fmt.Errorf("failed to get pods for namespace")
 				}
 				for _, pod := range pods.Items {
-					if podAge[namespace.ObjectMeta.GetName()+pod.ObjectMeta.GetName()] != oldPodAge[namespace.ObjectMeta.GetName()+pod.ObjectMeta.GetName()] {
+					if podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] != oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] {
 						return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
 					} else {
-						if !podAge[namespace.ObjectMeta.GetName()+pod.ObjectMeta.GetName()].After(oldPodAge[namespace.ObjectMeta.GetName()+pod.ObjectMeta.GetName()]) {
+						if !podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()].After(oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()]) {
 							return fmt.Errorf("namespace[%s] was not to be restored but was expected to be restored due to pod [%s] ", namespace.GetName(), pod.ObjectMeta.GetName())
 						}
 					}
