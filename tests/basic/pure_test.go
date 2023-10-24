@@ -553,6 +553,8 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 						}
 					})
 				}()
+				//wait for both the steps to finish
+				wg.Wait()
 				stepLog = "Wait for node to come up"
 				Step(stepLog, func() {
 					nodeReadyStatus := func() (interface{}, bool, error) {
@@ -569,7 +571,6 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 				})
 			})
 		}
-		wg.Wait()
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
