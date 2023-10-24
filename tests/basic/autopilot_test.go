@@ -1256,16 +1256,16 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%srebalance", testSuiteName))
-		poolLabel := map[string]string{"autopilot": "adddisk"}
+		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		storageNodes := node.GetStorageDriverNodes()
 		// check if we have enough storage nodes to run the test
 		Expect(len(storageNodes)).Should(BeNumerically(">=", 4))
 
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleRebalanceByProvisionedMean([]string{"-10", "15"}, false),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[2])*120/100)/units.GiB, 50, aututils.RuleScaleTypeAddDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[2])*120/100)/units.GiB, 50, aututils.RuleScaleTypeResizeDisk, poolLabel),
 		}
 
 		for i := range apRules {
