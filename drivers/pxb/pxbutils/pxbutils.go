@@ -20,7 +20,7 @@ const (
 	PxBackupAuthTokenType = "bearer"
 	// PxBackupOrgToken is the org token key inside secret named PxBackupAdminSecretName
 	PxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
-	// PxBackupAdminSecretName is the Kubernetes secret that stores Px-Backup admin token
+	// PxBackupAdminSecretName is the Kubernetes secret that contains Px-Backup admin token
 	PxBackupAdminSecretName = "px-backup-admin-secret"
 	// PxBackupServiceName is the Kubernetes service within Px-Backup namespace
 	PxBackupServiceName = "px-backup"

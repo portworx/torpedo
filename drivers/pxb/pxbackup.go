@@ -18,11 +18,8 @@ import (
 	"strings"
 )
 
-type PxBackupSpec struct {
-	Namespace string
-}
-
 type Organization struct {
+	User                     *User
 	Spec                     *api.OrganizationObject
 	BackupDataStore          *generics.DataStore[*api.BackupObject]
 	BackupLocationDataStore  *generics.DataStore[*api.BackupLocationObject]
@@ -36,7 +33,6 @@ type Organization struct {
 }
 
 type Keycloak struct {
-	*PxBackup
 	HTTPClient *http.Client
 }
 
@@ -55,7 +51,7 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 			reqURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
 		}
 	} else {
-		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.Spec.Namespace)
+		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.PxBackup.Spec.Namespace)
 		if err != nil {
 			return "", ProcessError(err)
 		}
@@ -63,7 +59,7 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakServiceName, k.Spec.Namespace)
+		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakServiceName, k.PxBackup.Spec.Namespace)
 		newURL := strings.Replace(oidcEndpoint, PxBackupKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
@@ -187,30 +183,12 @@ func GetPxCentralAdminCtxFromSecret(ctx context.Context, update bool) (context.C
 }
 
 type User struct {
-	Spec *keycloak.UserRepresentation
-	*PxBackup
+	PxBackup              *PxBackup
+	Spec                  *keycloak.UserRepresentation
 	OrganizationDataStore *generics.DataStore[*Organization]
-}
-
-func (u *User) Remove() error {
-	return nil
 }
 
 type PxBackup struct {
 	Spec          *PxBackupSpec
-	Keycloak      *Keycloak
 	UserDataStore *generics.DataStore[*User]
-}
-
-func (b *PxBackup) GetPxCentralAdminPassword() (string, error) {
-	pxCentralAdminSecret, err := core.Instance().GetSecret(PxCentralAdminSecretName, b.Spec.Namespace)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	pxCentralAdminPassword := string(pxCentralAdminSecret.Data["credential"])
-	if pxCentralAdminPassword == "" {
-		err = fmt.Errorf("empty credential in secret [%s]", PxCentralAdminSecretName)
-		return "", ProcessError(err)
-	}
-	return pxCentralAdminPassword, nil
 }

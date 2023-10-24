@@ -7,14 +7,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"google.golang.org/grpc/metadata"
-	"net/http"
-	"time"
 )
-
-// HTTPClient is an HTTP client with a predefined timeout
-var HTTPClient = &http.Client{
-	Timeout: 1 * time.Minute,
-}
 
 // CredentialRepresentation defines the scheme for representing the user credential in Keycloak
 type CredentialRepresentation struct {
