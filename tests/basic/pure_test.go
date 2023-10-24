@@ -545,6 +545,8 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 				go func() {
 					defer wg.Done()
 					stepLog := "Destroy Application"
+					log.InfoD("sleep for 4 minutes for pods to comeback to running state")
+					time.Sleep(4 * time.Minute)
 					Step(stepLog, func() {
 						opts := make(map[string]bool)
 						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
@@ -553,22 +555,26 @@ var _ = Describe("{RebootNodeWhileVolCreate}", func() {
 						}
 					})
 				}()
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog = "Wait for node to come up"
+					Step(stepLog, func() {
+						nodeReadyStatus := func() (interface{}, bool, error) {
+							err := Inst().S.IsNodeReady(selectedNode)
+							if err != nil {
+								return "", true, err
+							}
+							return "", false, nil
+						}
+						_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+						err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+					})
+				}()
 				//wait for both the steps to finish
 				wg.Wait()
-				stepLog = "Wait for node to come up"
-				Step(stepLog, func() {
-					nodeReadyStatus := func() (interface{}, bool, error) {
-						err := Inst().S.IsNodeReady(selectedNode)
-						if err != nil {
-							return "", true, err
-						}
-						return "", false, nil
-					}
-					_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
-					err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
-				})
 			})
 		}
 	})
