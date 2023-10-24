@@ -526,3 +526,72 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 		//DestroyApps(contexts, opts)
 	})
 })
+
+var _ = Describe("{ResizePVCToMaxLimit}", func() {
+
+	/*
+		Testrail corresponds to:
+		https://portworx.testrail.net/index.php?/tests/view/72639348
+		https://portworx.testrail.net/index.php?/tests/view/72657575
+	*/
+
+	var (
+		namespaces = make([]string, 0)
+		contexts   = make([]*scheduler.Context, 0)
+		volumeMap  = make(map[string][]*api.Volume)
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CloneVolAndValidate", "Validate clone volumes on FADA, FBDA, and FACD", nil, 72639348)
+	})
+	It("Validates clone of volumes on FADA, FBDA, and FACD", func() {
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("pure-test-%d", i)
+				for _, ctx := range ScheduleApplications(taskName) {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+					namespaces = append(namespaces, GetAppNamespace(ctx, taskName))
+				}
+			}
+		})
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Categorize volumes based on their proxy protocols", func() {
+			log.InfoD("Categorizing volumes based on their proxy protocols")
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
+				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					log.Infof("API-VOL FOR %s - %s", ctx.App.Key, ToString(apiVol))
+					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
+					if proxySpec != nil {
+						log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s] for app %s", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name, ctx.App.Key)
+						switch proxySpec.ProxyProtocol {
+						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+							volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
+						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+							volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
+						default:
+							volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], apiVol)
+						}
+					} else {
+						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", apiVol.Id, vol.Name, ctx.App.Key)
+
+					}
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
