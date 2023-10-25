@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -29,6 +28,9 @@ const (
 	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
 	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
 	PxCentralAdminSecretName = "px-central-admin"
+
+	// EnvPxBackupOIDCEndpoint is the env var for the OIDC endpoint
+	EnvPxBackupOIDCEndpoint = "OIDC_ENDPOINT"
 )
 
 const (
@@ -42,10 +44,6 @@ const (
 )
 
 const (
-	// EnvPxBackupOIDCEndpoint is the env var for the OIDC endpoint
-	EnvPxBackupOIDCEndpoint = "OIDC_ENDPOINT"
-	// EnvPxBackupOIDCSecretName is the env var for the OIDC secret within px-backup namespace
-	EnvPxBackupOIDCSecretName = "SECRET_NAME"
 	// EnvPxCentralUIURL is the env var for the px-central UI URL. Example: http://pxcentral-keycloak-http:80
 	EnvPxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
@@ -149,26 +147,18 @@ func ToString(value interface{}) string {
 	return fmt.Sprintf("{%s}", strings.Join(fields, ", "))
 }
 
-func GetOIDCSecretName() string {
-	oidcSecretName, ok := os.LookupEnv(EnvPxBackupOIDCSecretName)
-	if !ok || oidcSecretName == "" {
-		oidcSecretName = DefaultOIDCSecretName
-	}
-	return oidcSecretName
-}
-
 // GetPxBackupNamespace retrieves the namespace where PxBackupServiceName exists
 func GetPxBackupNamespace() (string, error) {
-	services, err := core.Instance().ListServices("", metav1.ListOptions{})
+	serviceList, err := core.Instance().ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", ProcessError(err)
 	}
-	for _, svc := range services.Items {
+	for _, svc := range serviceList.Items {
 		if svc.Name == PxBackupServiceName {
 			return svc.Namespace, nil
 		}
 	}
-	err = fmt.Errorf("cannot find Px-Backup service [%s] from the list of services", PxBackupServiceName)
+	err = fmt.Errorf("cannot find Px-Backup service [%s] in the service-list", PxBackupServiceName)
 	return "", ProcessError(err)
 }
 
