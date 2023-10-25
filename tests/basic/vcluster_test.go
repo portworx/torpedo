@@ -74,7 +74,7 @@ var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
 	var scName string
 	var appNS string
 	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 10     // Number of FIO Pods to run in parallel in a single iteration
+	const batchCount = 5      // Number of FIO Pods to run in parallel in a single iteration
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",

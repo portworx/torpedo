@@ -554,12 +554,18 @@ func (v *VCluster) ScaleVclusterDeployment(appNS string, deploymentName string, 
 	return nil
 }
 
+// ListDeploymentPods This method lists all pods in a deployment in vcluster context
+func (v *VCluster) ListDeploymentPods(appNS, deploymentName string) (*v1.PodList, error) {
+	pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "app=" + deploymentName,
+	})
+	return pods, err
+}
+
 // ValidateDeploymentScaling Validates if a deployment on Vcluster is having expected number of Replicas or not
 func (v *VCluster) ValidateDeploymentScaling(appNS string, deploymentName string, expectedReplicas int32) error {
 	checkDeploymentScaling := func() (interface{}, bool, error) {
-		pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
-			LabelSelector: "app=" + deploymentName,
-		})
+		pods, err := v.ListDeploymentPods(appNS, deploymentName)
 		if err != nil {
 			return nil, true, err
 		}
