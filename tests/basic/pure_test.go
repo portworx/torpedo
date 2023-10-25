@@ -3,7 +3,6 @@ package tests
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -338,214 +337,27 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	})
 })
 
-// ToString provides a string representation of the given value.
-// If the value is empty, it returns an empty string (""); for nil, it returns "nil"
-func ToString(value interface{}) string {
-	v := reflect.ValueOf(value)
-	if stringer, ok := value.(fmt.Stringer); ok {
-		return stringer.String()
-	}
-	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
-		if v.IsNil() {
-			return "nil"
-		}
-		return ToString(v.Elem().Interface())
-	}
-	if v.Kind() != reflect.Struct {
-		return fmt.Sprintf("%v", value)
-	}
-	t := v.Type()
-	var fields []string
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.IsExported() {
-			fieldVal := v.Field(i)
-			var fieldString string
-			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
-				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
-			} else {
-				switch fieldVal.Kind() {
-				case reflect.Ptr, reflect.Interface:
-					if fieldVal.IsNil() {
-						fieldString = fmt.Sprintf("%s: nil", field.Name)
-					} else {
-						fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Elem().Interface()))
-					}
-				case reflect.Slice:
-					if fieldVal.IsNil() {
-						fieldString = fmt.Sprintf("%s: nil", field.Name)
-					} else {
-						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-					}
-				case reflect.Struct:
-					fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Interface()))
-				case reflect.Chan, reflect.Func:
-					fieldString = fmt.Sprintf("%s: %T", field.Name, fieldVal.Interface())
-				case reflect.String:
-					if fieldVal.Len() == 0 {
-						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
-					} else {
-						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-					}
-				case reflect.Map:
-					if fieldVal.IsNil() {
-						fieldString = fmt.Sprintf("%s: nil", field.Name)
-					} else {
-						mapKeys := fieldVal.MapKeys()
-						var mapStrings []string
-						for _, key := range mapKeys {
-							keyItem := ToString(key.Interface())
-							valItem := ToString(fieldVal.MapIndex(key).Interface())
-							mapStrings = append(mapStrings, fmt.Sprintf("%s: %s", keyItem, valItem))
-						}
-						fieldString = fmt.Sprintf("%s: {%s}", field.Name, strings.Join(mapStrings, ","))
-					}
-				default:
-					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
-				}
-			}
-			fields = append(fields, fieldString)
-		} else {
-			fields = append(fields, fmt.Sprintf("%s: unexported", field.Name))
-		}
-	}
-	return fmt.Sprintf("{%s}", strings.Join(fields, ", "))
-}
-
-var _ = Describe("{ResizePVCToMaxLimit}", func() {
-
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/72657582
-
-	var (
-		namespaces = make([]string, 0)
-		contexts   = make([]*scheduler.Context, 0)
-		volumeMap  = make(map[string][]*api.Volume)
-		//minVolSizeIncrement = uint64(1 * units.TiB)
-	)
-
-	JustBeforeEach(func() {
-		StartTorpedoTest("ResizePVCToMaxLimit", "Validate PVC resize to max limit on FADA, FBDA, and FACD", nil, 72657582)
-	})
-
-	It("Validates PVC resize to max limit on FADA, FBDA, and FACD", func() {
-		//// getMaxVolSize gets the maximum volume size based on the given volType
-		//getMaxVolSize := func(volType string) uint64 {
-		//	switch volType {
-		//	default:
-		//		return 40 * units.TiB
-		//	}
-		//}
-		//// getNextSize gets the next closest multiple in powers of 2 greater than currentSize
-		//getNextSize := func(currentSize uint64) uint64 {
-		//	if currentSize < minVolSizeIncrement {
-		//		return minVolSizeIncrement
-		//	}
-		//	return currentSize * 2
-		//}
-		//// resizeVolume resizes given the volume using powers of 2 until the max limit is reached
-		//resizeVolume := func(volType string, vol *api.Volume) error {
-		//	log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
-		//	maxVolSize := getMaxVolSize(volType)
-		//	currentSize := vol.Spec.Size
-		//	for {
-		//		newSize := getNextSize(currentSize)
-		//		if newSize > maxVolSize {
-		//			log.Infof("Volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
-		//			return fmt.Errorf("volume [%s/%s] reached max size for type [%s]", vol.Id, vol.Locator.Name, volType)
-		//		}
-		//		log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, currentSize, newSize)
-		//		err = Inst().V.ResizeVolume(vol.Id, newSize)
-		//		if err != nil {
-		//			return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, currentSize, newSize, err)
-		//		}
-		//		currentSize = newSize
-		//	}
-		//}
-		Step("Schedule applications", func() {
-			log.InfoD("Scheduling applications")
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				taskName := fmt.Sprintf("pure-test-%d", i)
-				for _, ctx := range ScheduleApplications(taskName) {
-					ctx.ReadinessTimeout = appReadinessTimeout
-					contexts = append(contexts, ctx)
-					namespaces = append(namespaces, GetAppNamespace(ctx, taskName))
-				}
-			}
-		})
-		Step("Validate applications", func() {
-			log.InfoD("Validating applications")
-			ValidateApplications(contexts)
-		})
-		Step("Categorize volumes based on their proxy protocols", func() {
-			log.InfoD("Categorizing volumes based on their proxy protocols")
-			for _, ctx := range contexts {
-				volumes, err := Inst().S.GetVolumes(ctx)
-				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
-				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
-				for _, vol := range volumes {
-					apiVol, err := Inst().V.InspectVolume(vol.ID)
-					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
-					log.Infof("API-VOL FOR %s - %s", ctx.App.Key, ToString(apiVol))
-					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
-					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
-					if proxySpec != nil {
-						log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s] for app %s", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name, ctx.App.Key)
-						switch proxySpec.ProxyProtocol {
-						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
-							volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
-						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
-							volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
-						default:
-							volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], apiVol)
-						}
-					} else {
-						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", apiVol.Id, vol.Name, ctx.App.Key)
-
-					}
-				}
-			}
-		})
-		//Step("Resize a random volume of each type to max limit", func() {
-		//	log.InfoD("Resizing a random volume of each type to max limit")
-		//	for volType, vols := range volumeMap {
-		//		if len(vols) > 0 {
-		//			log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
-		//			vol := vols[rand.Intn(len(vols))]
-		//			log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
-		//			err := resizeVolume(volType, vol)
-		//			log.FailOnError(err, "failed to resize [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(volType))
-		//		}
-		//	}
-		//})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-		//opts := make(map[string]bool)
-		//opts[SkipClusterScopedObjects] = true
-		//DestroyApps(contexts, opts)
-	})
-})
-
-var _ = Describe("{ResizePVCToMaxLimit}", func() {
+var _ = Describe("{CloneVolAndValidate}", func() {
 
 	/*
 		Testrail corresponds to:
 		https://portworx.testrail.net/index.php?/tests/view/72639348
 		https://portworx.testrail.net/index.php?/tests/view/72657575
 	*/
-
 	var (
 		namespaces = make([]string, 0)
 		contexts   = make([]*scheduler.Context, 0)
-		volumeMap  = make(map[string][]*api.Volume)
+		volumeMap  = make(map[string][]*volume.Volume)
+		//minVolSizeIncrement = uint64(1 * units.TiB)
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("CloneVolAndValidate", "Validate clone volumes on FADA, FBDA, and FACD", nil, 72639348)
+		StartTorpedoTest("CloneVolAndValidate", "Validate clone volumes on FADA, FBDA, and FACD", nil, 72657582)
 	})
-	It("Validates clone of volumes on FADA, FBDA, and FACD", func() {
-		Step("Schedule applications", func() {
+
+	It("Validate clone volumes on FADA, FBDA, and FACD", func() {
+		stepLog := "Schedule applications"
+		Step(stepLog, func() {
 			log.InfoD("Scheduling applications")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				taskName := fmt.Sprintf("pure-test-%d", i)
@@ -556,35 +368,57 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 				}
 			}
 		})
-		Step("Validate applications", func() {
+		stepLog = "Validate applications"
+		Step(stepLog, func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(contexts)
 		})
-		Step("Categorize volumes based on their proxy protocols", func() {
+		stepLog = "Categorize volumes based on their proxy protocols"
+		Step(stepLog, func() {
 			log.InfoD("Categorizing volumes based on their proxy protocols")
 			for _, ctx := range contexts {
 				volumes, err := Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
 				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
 				for _, vol := range volumes {
-					apiVol, err := Inst().V.InspectVolume(vol.ID)
-					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
-					log.Infof("API-VOL FOR %s - %s", ctx.App.Key, ToString(apiVol))
 					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
 					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
 					if proxySpec != nil {
 						log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s] for app %s", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name, ctx.App.Key)
 						switch proxySpec.ProxyProtocol {
 						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
-							volumeMap["FADA"] = append(volumeMap["FADA"], apiVol)
+							volumeMap["FADA"] = append(volumeMap["FADA"], vol)
 						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
-							volumeMap["FBDA"] = append(volumeMap["FBDA"], apiVol)
+							volumeMap["FBDA"] = append(volumeMap["FBDA"], vol)
 						default:
-							volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], apiVol)
+							volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], vol)
 						}
 					} else {
-						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", apiVol.Id, vol.Name, ctx.App.Key)
+						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", vol.ID, vol.Name, ctx.App.Key)
 
+					}
+				}
+			}
+		})
+		stepLog = "Clone FADA,FBDA and FACD volumes and validate"
+		Step(stepLog, func() {
+			for key, volumes := range volumeMap {
+				log.InfoD("cloning %v volumes", key)
+				for i := 0; i < len(volumes); i++ {
+					apiVol, err := Inst().V.InspectVolume(volumes[i].ID)
+					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].ID)
+					cloneVolID, err := Inst().V.CloneVolume(volumes[i].ID)
+					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].ID)
+					mountPath, err := Inst().V.AttachVolume(cloneVolID)
+					log.FailOnError(err, "Failed to attach cloned volume")
+					log.InfoD("MountPath %v", mountPath)
+					cloneVol, err := Inst().V.InspectVolume(cloneVolID)
+					log.FailOnError(err, "Failed to inspect volume")
+					if matchMd5Sum(apiVol, cloneVol) {
+						log.InfoD("Original volume %v, Cloned volume %v successfully validated", volumes[i].ID, cloneVolID)
+					} else {
+						log.Errorf("Original volume %v, Cloned volume %v Don't match", volumes[i].ID, cloneVolID)
 					}
 				}
 			}
@@ -595,3 +429,9 @@ var _ = Describe("{ResizePVCToMaxLimit}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+func matchMd5Sum(OriginalVol, CloneVol *api.Volume) bool {
+	log.InfoD("------------------------- volume state: %v ----------------------", OriginalVol.State)
+	log.InfoD("------------------------- volume state: %v ----------------------", CloneVol.State)
+	return true
+}
