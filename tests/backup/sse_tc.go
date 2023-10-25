@@ -27,7 +27,7 @@ var _ = Describe("{sseS3encryption}", func() {
 		//customBackupLocationName string
 		//credName                 string
 		customBuckets []string
-		bucketNames   []string
+		//bucketNames   []string
 		//clusterUid               string
 		//bkpNamespaces            []string
 		//clusterStatus            api.ClusterInfo_StatusInfo_Status
