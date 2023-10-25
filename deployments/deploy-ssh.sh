@@ -303,15 +303,15 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
-if [ -n "${PROVIDERS}" ]; then
-  echo "Create configs for providers",${PROVIDERS}
-  for i in ${PROVIDERS//,/ };do
-     if [ "${i}" == "aws" ]; then
-      VOLUMES="${VOLUMES},${AWS_VOLUME}"
-      VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
-     fi
-  done
-fi
+#if [ -n "${PROVIDERS}" ]; then
+#  echo "Create configs for providers",${PROVIDERS}
+#  for i in ${PROVIDERS//,/ };do
+#     if [ "${i}" == "aws" ]; then
+#      VOLUMES="${VOLUMES},${AWS_VOLUME}"
+#      VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
+#     fi
+#  done
+#fi
 
 if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
     VOLUMES="${VOLUMES},${TORPEDO_SSH_KEY_VOLUME}"
