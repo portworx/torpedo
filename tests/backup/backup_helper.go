@@ -1854,7 +1854,9 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	if err != nil {
 		return err
 	}
+	log.Infof("restoreInspectResponse - %v", *restoreInspectResponse)
 	theRestore := restoreInspectResponse.GetRestore()
+	log.Infof("theRestore - %v", *theRestore)
 	restoredResourcesInfo := theRestore.GetResources()
 	apparentlyRestoredVolumes := theRestore.GetVolumes()
 	namespaceMappings := theRestore.GetNamespaceMapping()
