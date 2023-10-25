@@ -188,6 +188,11 @@ type User struct {
 	OrganizationDataStore *generics.DataStore[*Organization]
 }
 
+type PxBackupSpec struct {
+	Namespace    string
+	OIDCEndpoint string
+}
+
 type PxBackup struct {
 	Spec          *PxBackupSpec
 	UserDataStore *generics.DataStore[*User]
