@@ -127,6 +127,9 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+
+	//ReplVPS volume placement strategy node label value
+	ReplVPS = "replvps"
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
@@ -162,6 +165,8 @@ const (
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
 	cdiImportComplete                 = "Import Complete"
+	cdiImageImportTimeout             = 20 * time.Minute
+	cdiImageImportRetry               = 30 * time.Second
 )
 
 const (
@@ -1749,6 +1754,12 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 			return nil, err
 		}
 		return obj, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		obj, err := k8sKubevirt.GetVirtualMachine(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
@@ -1833,6 +1844,19 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		vpsSpec := "/torpedo/deployments/customconfigs/fastpath-vps.yaml"
 		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
 			log.Warnf("Cannot find fastpath-vps.yaml in path %s", vpsSpec)
+		} else {
+			cmdArgs := []string{"apply", "-f", vpsSpec}
+			err = osutils.Kubectl(cmdArgs)
+			if err != nil {
+				log.Errorf("Error applying spec %s", vpsSpec)
+			}
+		}
+	}
+
+	if strings.Contains(app.Key, "repl-vps") {
+		vpsSpec := "/torpedo/deployments/customconfigs/repl-vps.yaml"
+		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find repl-vps.yaml in path %s", vpsSpec)
 		} else {
 			cmdArgs := []string{"apply", "-f", vpsSpec}
 			err = osutils.Kubectl(cmdArgs)
@@ -5217,7 +5241,7 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName)
 				}
 			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			if err != nil {
 				return err
 			}
