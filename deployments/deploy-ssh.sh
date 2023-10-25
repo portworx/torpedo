@@ -728,6 +728,7 @@ spec:
 
 EOF
 
+##
 cat torpedo.yaml
 
 echo "Deploying torpedo pod..."
