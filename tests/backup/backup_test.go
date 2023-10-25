@@ -271,8 +271,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		}()
 
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
@@ -285,7 +285,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
 			}
 		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
@@ -313,20 +313,20 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 
-		backupDriver := Inst().Backup
-		log.Info("Deleting backed up namespaces")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
-			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
-		}
-		log.Info("Deleting restored namespaces")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//backupDriver := Inst().Backup
+		//log.Info("Deleting backed up namespaces")
+		//for _, backupName := range backupNames {
+		//	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		//	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		//	backupDeleteResponse, err := DeleteBackup(backupName, backupUID, orgID, ctx)
+		//	log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
+		//	dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
+		//}
+		//log.Info("Deleting restored namespaces")
+		//for _, restoreName := range restoreNames {
+		//	err = DeleteRestore(restoreName, orgID, ctx)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		//}
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })

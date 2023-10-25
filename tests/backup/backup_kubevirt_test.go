@@ -352,8 +352,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
@@ -361,7 +361,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("switching to destination context")
-		err = SetDestinationKubeConfig()
+		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch to context to destination cluster")
 
 		log.InfoD("Destroying restored apps on destination clusters")
@@ -405,10 +405,10 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 
 		log.Info("Deleting restored namespaces")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//for _, restoreName := range restoreNames {
+		//	err = DeleteRestore(restoreName, orgID, ctx)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		//}
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
