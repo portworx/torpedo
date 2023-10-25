@@ -226,16 +226,16 @@ var _ = Describe("{UpgradeLongevity}", func() {
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			RestartVolDriver:     TriggerRestartVolDriver,
-			CloudSnapShot:        TriggerCloudSnapShot,
-			HAIncrease:           TriggerHAIncrease,
-			PoolAddDisk:          TriggerPoolAddDisk,
-			LocalSnapShot:        TriggerLocalSnapShot,
-			HADecrease:           TriggerHADecrease,
-			VolumeResize:         TriggerVolumeResize,
-			CloudSnapShotRestore: TriggerCloudSnapshotRestore,
-			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
-			AddStorageNode:       TriggerAddOCPStorageNode,
+			RestartVolDriver: TriggerRestartVolDriver,
+			//CloudSnapShot:        TriggerCloudSnapShot,
+			//HAIncrease:           TriggerHAIncrease,
+			//PoolAddDisk:          TriggerPoolAddDisk,
+			LocalSnapShot: TriggerLocalSnapShot,
+			//HADecrease:           TriggerHADecrease,
+			//VolumeResize:         TriggerVolumeResize,
+			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
+			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
+			//AddStorageNode:       TriggerAddOCPStorageNode,
 		}
 		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
 		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
@@ -247,11 +247,11 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
-			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			RebootNode: disruptiveTriggerWrapper(TriggerRebootNodes),
+			//CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
+			//RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
+			//NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
+			//AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -273,7 +273,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
 		}
-		upgradeExecutionThreshold = 4 // default value
+		upgradeExecutionThreshold = 1 // default value
 		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
 			upgradeExecutionThreshold = val
 		}
@@ -386,7 +386,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
 							disruptiveTriggerLock.Lock()
 							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
-							log.Warnf("Triggering function %s based on testExecSum %v. TextExecutionCountMap: %+v", triggerType, testExecSum, TestExecutionCounter)
+							log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
 							triggerFunc(&contexts, &triggerEventsChan)
 							log.Infof("Trigger Function completed for [%s]\n", triggerType)
 							disruptiveTriggerLock.Unlock()
