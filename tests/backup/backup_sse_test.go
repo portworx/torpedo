@@ -48,7 +48,7 @@ var _ = Describe("{sseS3encryption}", func() {
 		clusterStatus            api.ClusterInfo_StatusInfo_Status
 		clusterUid               string
 		restoreList              []string
-		bucketNames              []string
+		//bucketNames              []string
 		//clusterUid               string
 		//bkpNamespaces            []string
 		//clusterStatus            api.ClusterInfo_StatusInfo_Status
@@ -135,20 +135,33 @@ var _ = Describe("{sseS3encryption}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 					log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
 					backupLocations = append(backupLocations, customBackupLocationName)
+					log.InfoD("Taking backup of application for different combination of restores")
+					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
 				}
 			}
 		})
 		Step("Taking backup of application for different combination of restores", func() {
 			log.InfoD("Taking backup of application for different combination of restores")
 			//for _, namespace := range bkpNamespaces {
-			for _, bkpLocationName := range backupLocations {
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-				backupNames = append(backupNames, backupName)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			}
+			//for _, bkpLocationName := range backupLocations {
+			//	backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			//	appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			//	err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+			//	backupNames = append(backupNames, backupName)
+			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			//}
+			//}
+			//Step("Taking backup of application for different combination of restores", func() {
+			//	log.InfoD("Taking backup of application for different combination of restores")
+			//	backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			//	appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			//	err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			//})
 		})
 		Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
@@ -193,7 +206,7 @@ var _ = Describe("{sseS3encryption}", func() {
 				go func(scName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestore(restoreName, bucketNames[0], namespaceMap, SourceClusterName, orgID, ctx, storageClassMapping)
+					err = CreateRestore(restoreName, backupNames[0], namespaceMap, SourceClusterName, orgID, ctx, storageClassMapping)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
 				}(scNames[i])
 			}
@@ -218,7 +231,7 @@ var _ = Describe("{sseS3encryption}", func() {
 				go func(scName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestore(restoreName, bucketNames[1], namespaceMap, destinationClusterName, orgID, ctx, storageClassMapping)
+					err = CreateRestore(restoreName, backupNames[1], namespaceMap, destinationClusterName, orgID, ctx, storageClassMapping)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
 				}(scNames[i])
 			}
