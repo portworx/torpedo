@@ -19,7 +19,7 @@ const (
 	bucketName           = "pds-qa-automation"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
-	bkpTimeInterval      = 20 * time.Second
+	bkpTimeInterval      = 60 * time.Second
 	bkpMaxtimeInterval   = 10 * time.Minute
 	BACKUP_JOB_SUCCEEDED = "Succeeded"
 )
