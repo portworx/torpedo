@@ -431,9 +431,14 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 					log.InfoD("Source: %+v", apiVol.Source)
 					log.InfoD("Group: %+v", apiVol.Group)
 					log.InfoD("Readonly: %v", apiVol.Readonly)
-					log.InfoD("Locator: %+v", apiVol.Locator)
+					log.InfoD("Locator: %+v", apiVol.Locator.Name)
+					cmd := "status"
+					nodes := node.GetWorkerNodes()
+					out, err := Inst().V.GetPxctlCmdOutput(nodes[0], cmd)
+					log.InfoD(out, "pxctl status output")
 				}
 			}
+
 		})
 	})
 
