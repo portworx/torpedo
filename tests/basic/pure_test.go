@@ -411,7 +411,7 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 					cloneVolID, err := Inst().V.CloneVolume(volumes[i].ID)
 					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].ID)
 					mountPath, err := Inst().V.AttachVolume(cloneVolID)
-					log.FailOnError(err, "Failed to attach cloned volume")
+					log.FailOnError(err, "IFailed to attach cloned volume")
 					log.InfoD("MountPath %v", mountPath)
 					cloneVol, err := Inst().V.InspectVolume(cloneVolID)
 					log.FailOnError(err, "Failed to inspect volume")
@@ -420,6 +420,18 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 					} else {
 						log.Errorf("Original volume %v, Cloned volume %v Don't match", volumes[i].ID, cloneVolID)
 					}
+					log.InfoD("vol info %v,%v,%v,%v,%v,%v,%v", volumes[i].ID, volumes[i].Name, volumes[i].Namespace, volumes[i].Raw, volumes[i].RequestedSize, volumes[i].Shared, volumes[i].Size)
+					for key, i := range volumes[i].Labels {
+						log.InfoD("labels %v,%v", key, i)
+					}
+					for key, i := range volumes[i].Annotations {
+						log.InfoD("labels %v,%v", key, i)
+					}
+					log.InfoD("--------Id: %s", apiVol.Id)
+					log.InfoD("Source: %+v", apiVol.Source)
+					log.InfoD("Group: %+v", apiVol.Group)
+					log.InfoD("Readonly: %v", apiVol.Readonly)
+					log.InfoD("Locator: %+v", apiVol.Locator)
 				}
 			}
 		})
