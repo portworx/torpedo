@@ -807,6 +807,7 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 			Uid:  bkpUid,
 		},
 	}
+	log.Infof("createRestoreReq - %v", *createRestoreReq)
 	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
 	if err != nil {
 		return err
