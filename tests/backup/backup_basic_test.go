@@ -157,8 +157,8 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
-			s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
-			if s3SseTypeEnv != "" {
+			s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
+			if s3EncryptionPolicy != "" {
 				sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
 				log.FailOnError(err, "Failed to get sse details form environment")
 				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
@@ -205,8 +205,8 @@ var _ = AfterSuite(func() {
 	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	//Cleanup policy
-	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
-	if s3SseTypeEnv != "" {
+	s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
+	if s3EncryptionPolicy != "" {
 		err = RemoveS3BucketPolicy(globalAWSBucketName)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 	}
@@ -267,7 +267,7 @@ var _ = AfterSuite(func() {
 							log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
 						}
 					}
-					err = DeleteCluster(clusterName, orgID, ctx, true)
+					err = DeleteCluster(clusterName, orgID, ctx, false)
 					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 					clusterDeleteStatus := func() (interface{}, bool, error) {
 						status, err := IsClusterPresent(clusterName, ctx, orgID)
