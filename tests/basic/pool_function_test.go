@@ -255,12 +255,8 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 	//2) Create a volume on that pool and write some data on the volume.
 	//3) expand the volume to the pool
 	//4) perform resize disk operation on the pool while volume update is in-progress
-	var testrailID = 51284
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51284
-	var runID int
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolVolUpdateResizeDisk", "expand volume to the pool and pool expansion using resize-disk", nil, testrailID)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		StartTorpedoTest("PoolVolUpdateResizeDisk", "expand volume to the pool and pool expansion using resize-disk", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
@@ -390,7 +386,6 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolExpandAndCheckAlerts", "pool expansion using resize-disk and add-disk and check alerts after each operation", nil, 0)
-		// runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 	var contexts []*scheduler.Context
 
@@ -696,4 +691,3 @@ var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 	})
 
 })
-
