@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"math/rand"
 	"net/http"
 	"os"
@@ -1898,6 +1899,16 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1938,10 +1949,9 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					for ds, deployment := range deployments {
 						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
 							log.InfoD("Running Workloads on DataService %v ", ds.Name)
-							var params pdslib.WorkloadGenerationParams
-							pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-							log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
-							generateWorkloads[ds.Name] = dep.Name
+							_, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+							log.FailOnError(err, "Error while genearating workloads")
+							generateWorkloads[ds.Name] = wlDep.Name
 							for dsName, workloadContainer := range generateWorkloads {
 								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
 							}
@@ -2023,7 +2033,7 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 
 			Step("Resizing the PVC size", func() {
 				log.FailOnError(err, "Unable to create scheduler context")
-				err, _ = IncreasePVCby1Gig(namespace, deployment, 1)
+				_, err = IncreasePVCby1Gig(namespace, deployment, 1)
 				log.FailOnError(err, "Failing while Increasing the PVC name...")
 			})
 			//ToDo: Add a step to take backup after resize.
