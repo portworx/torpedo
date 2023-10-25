@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -536,4 +537,33 @@ func (v *VCluster) FetchFIOLogs(podName, namespace string) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func GetVClusterSecret(secretName, secretNamespace string) error {
+	log.Debugf("secret namespace %s", secretNamespace)
+	time.Sleep(30 * time.Second)
+
+	secret, err := core.Instance().GetSecret(secretName, secretNamespace)
+	if err != nil {
+		return err
+	}
+	log.Debugf("printing the vCluster secret %+v", *secret)
+
+	encodedConfig, exists := secret.Data["config"]
+	if !exists {
+		return fmt.Errorf("Secret does not contain a 'config' field.")
+	}
+	log.Debugf("encoded config string %v", string(encodedConfig))
+
+	outputFile := "../drivers/vcluster/kubeconfigs/" + secretName
+	filePath, err := filepath.Abs(outputFile)
+
+	// Write the decoded data to the specified file.
+	err = ioutil.WriteFile(filePath, encodedConfig, 0644)
+	if err != nil {
+		return fmt.Errorf("Error writing to %s: %v\n", outputFile, err)
+	}
+	log.Debugf("Data from secret '%s' in namespace '%s' successfully written to '%s'\n", secretName, secretNamespace, outputFile)
+
+	return err
 }
