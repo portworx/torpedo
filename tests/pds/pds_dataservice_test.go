@@ -1965,11 +1965,10 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				}()
 
 				Step("Checking the PVC usage", func() {
-					ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 					log.FailOnError(err, "Unable to create scheduler context")
-					err = CheckPVCtoFullCondition(ctx)
+					err = CheckStorageFullCondition(namespace, deployment)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
-					err = IncreasePVCby1Gig(ctx)
+					_, err = IncreasePVCby1Gig(namespace, deployment, 1)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
 					controlPlane.UpdateResourceTemplateName("Small")
 				})
@@ -2023,9 +2022,8 @@ var _ = Describe("{ResizePVCBy1GB}", func() {
 			}()
 
 			Step("Resizing the PVC size", func() {
-				ctx, err := Inst().Pds.CreateSchedulerContextForPDSApps(depList)
 				log.FailOnError(err, "Unable to create scheduler context")
-				err = IncreasePVCby1Gig(ctx)
+				err, _ = IncreasePVCby1Gig(namespace, deployment, 1)
 				log.FailOnError(err, "Failing while Increasing the PVC name...")
 			})
 			//ToDo: Add a step to take backup after resize.
