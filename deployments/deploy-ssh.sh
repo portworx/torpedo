@@ -347,21 +347,21 @@ fi
 
 kubectl create configmap cloud-config --from-file=/config/cloud-json
 
-# List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
-FROM_FILE=""
-CLUSTER_CONFIGS=""
-echo "Create kubeconfig configmap",${KUBECONFIGS}
-if [ -n "${KUBECONFIGS}" ]; then
-  for i in ${KUBECONFIGS//,/ };do
-     FROM_FILE="${FROM_FILE} --from-file=${i}"
-     if [[ -z ${CLUSTER_CONFIGS} ]]; then
-       CLUSTER_CONFIGS="`basename ${i}`"
-     else
-       CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
-     fi
-  done
-  kubectl create configmap kubeconfigs ${FROM_FILE}
-fi
+## List of additional kubeconfigs of k8s clusters to register with px-backup, px-dr
+#FROM_FILE=""
+#CLUSTER_CONFIGS=""
+#echo "Create kubeconfig configmap",${KUBECONFIGS}
+#if [ -n "${KUBECONFIGS}" ]; then
+#  for i in ${KUBECONFIGS//,/ };do
+#     FROM_FILE="${FROM_FILE} --from-file=${i}"
+#     if [[ -z ${CLUSTER_CONFIGS} ]]; then
+#       CLUSTER_CONFIGS="`basename ${i}`"
+#     else
+#       CLUSTER_CONFIGS="${CLUSTER_CONFIGS},`basename ${i}`"
+#     fi
+#  done
+#  kubectl create configmap kubeconfigs ${FROM_FILE}
+#fi
 
 K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
