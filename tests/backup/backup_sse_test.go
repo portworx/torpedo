@@ -35,6 +35,7 @@ var _ = Describe("{sseS3encryption}", func() {
 		backupLocationUID        string
 		cloudCredUID             string
 		backupName               string
+		backupNames              []string
 		cloudCredUidList         []string
 		customBackupLocationName string
 		backupLocations          []string
@@ -139,15 +140,15 @@ var _ = Describe("{sseS3encryption}", func() {
 		})
 		Step("Taking backup of application for different combination of restores", func() {
 			log.InfoD("Taking backup of application for different combination of restores")
-			for _, namespace := range bkpNamespaces {
-				for _, bkpLocationName := range backupLocations {
-					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
-					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-					bucketNames = append(bucketNames, backupName)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-				}
+			//for _, namespace := range bkpNamespaces {
+			for _, bkpLocationName := range backupLocations {
+				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+				backupNames = append(backupNames, backupName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
+			//}
 		})
 		Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
