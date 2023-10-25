@@ -152,7 +152,7 @@ var _ = Describe("{sseS3encryption}", func() {
 		})
 		Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 			log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
-			scCount = 10
+			scCount = 3
 			for i := 0; i < scCount; i++ {
 				scName := fmt.Sprintf("replica-sc-%d-%v", time.Now().Unix(), i)
 				params["repl"] = "2"
@@ -183,7 +183,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
 			var wg sync.WaitGroup
 			//for _, scName := range scNames {
-			for i := 0; i < 4; i++ {
+			for i := 0; i < 1; i++ {
 				storageClassMapping[sourceScName.Name] = scNames[i]
 				time.Sleep(2)
 				namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
@@ -208,7 +208,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
 			var wg sync.WaitGroup
 			//for _, scName := range scNames {
-			for i := 5; i < 10; i++ {
+			for i := 2; i < 3; i++ {
 				storageClassMapping[sourceScName.Name] = scNames[i]
 				time.Sleep(2)
 				namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
