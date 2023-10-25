@@ -14,6 +14,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
 	"os"
 	"strings"
@@ -156,6 +157,16 @@ var _ = BeforeSuite(func() {
 			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAWSBucketName)
 			log.Infof("Bucket created with name - %s", globalAWSBucketName)
+			s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
+			if s3EncryptionPolicy != "" {
+				sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+				log.FailOnError(err, "Failed to get sse details form environment")
+				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
+				log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
+				err = UpdateS3BucketPolicy(globalAWSBucketName, policy)
+				log.FailOnError(err, "Failed to apply bucket policy")
+				log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
+			}
 		case drivers.ProviderAzure:
 			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
 			CreateBucket(provider, globalAzureBucketName)
@@ -192,6 +203,13 @@ var _ = AfterSuite(func() {
 
 	ctx, err := backup.GetAdminCtxFromSecret()
 	log.FailOnError(err, "Fetching px-central-admin ctx")
+
+	//Cleanup policy
+	s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
+	if s3EncryptionPolicy != "" {
+		err = RemoveS3BucketPolicy(globalAWSBucketName)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
+	}
 
 	// Cleanup all backups
 	allBackups, err := GetAllBackupsAdmin()
@@ -249,7 +267,7 @@ var _ = AfterSuite(func() {
 							log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterName)
 						}
 					}
-					err = DeleteCluster(clusterName, orgID, ctx, true)
+					err = DeleteCluster(clusterName, orgID, ctx, false)
 					Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 					clusterDeleteStatus := func() (interface{}, bool, error) {
 						status, err := IsClusterPresent(clusterName, ctx, orgID)
