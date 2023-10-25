@@ -4,7 +4,6 @@ import (
 	//"github.com/aws/aws-sdk-go/aws"
 	//"github.com/aws/aws-sdk-go/service/s3"
 
-	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	//"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/s3utils"
 
@@ -52,7 +51,7 @@ var _ = Describe("{sseS3encryption}", func() {
 				if policy {
 					sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-					policy, err := GenerateS3BucketPolicy(string(api.BackupLocationInfo_S3), string(sseDetails.SseEncryptionPolicy), customBucket)
+					policy, err := GenerateS3BucketPolicy(sseDetails.SsePolicySid, string(sseDetails.SseEncryptionPolicy), customBucket)
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 					err = UpdateS3BucketPolicy(customBucket, policy)
 					log.FailOnError(err, "Failed to apply bucket policy")
