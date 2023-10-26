@@ -4304,6 +4304,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, bucketName string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 
 	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	bLocationUpdateReq := &api.BackupLocationUpdateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4319,7 +4320,10 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 			Type: api.BackupLocationInfo_S3,
 			Config: &api.BackupLocationInfo_S3Config{
 				S3Config: &api.S3Config{
-					SseType: sseS3EncryptionType,
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
 				},
 			},
 		},
