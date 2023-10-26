@@ -71,6 +71,8 @@ type FIOOptions struct {
 
 // NewVCluster Creates instance of Vcluster
 func NewVCluster(name string) *VCluster {
+	err := SetDefaultStorageClass()
+	log.FailOnError(err, "Cannot set a default storage class. Exiting the test case.")
 	namespace := "vcluster-" + name
 	return &VCluster{Namespace: namespace, Name: name}
 }
@@ -98,6 +100,27 @@ func CreateVCluster(vclusterName string, absPath string) error {
 		return err
 	}
 	log.Infof("vCluster with the name %v created successfully", vclusterName)
+	return nil
+}
+
+// SetDefaultStorageClass This method sets a default storage class if there is none set already
+func SetDefaultStorageClass() error {
+	// Check if there is already a default storage class
+	defaultSCs, err := k8sStorage.GetDefaultStorageClasses()
+	if err != nil {
+		return err
+	}
+	// If there is no default storage class, set "px-db" as the default
+	if len(defaultSCs.Items) == 0 {
+		log.Infof("No default StorageClass set. Setting 'px-db' as default StorageClass.")
+		err := k8sStorage.AnnotateStorageClassAsDefault("px-db")
+		if err != nil {
+			return err
+		}
+		log.Infof("'px-db' successfully set as default StorageClass.")
+	} else {
+		log.Infof("Default StorageClass already exists. No changes made.")
+	}
 	return nil
 }
 
