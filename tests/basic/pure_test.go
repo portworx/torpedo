@@ -431,8 +431,6 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 
 func matchMd5Sum(OriginalVol *volume.Volume, CloneVol *api.Volume) bool {
 	//Make a *volume.Volume type for CloneVol so that it is compatible with GetNodeForVolume
-	var CloneVolVolumeType *volume.Volume
-	CloneVolVolumeType.ID = CloneVol.Id
 	OriginalVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
 	log.FailOnError(err, "Could not get the node for volume:%v", OriginalVol.ID)
 	//CloneVolNode, err := Inst().V.GetNodeForVolume(CloneVolVolumeType, cmdTimeout, cmdRetry)
