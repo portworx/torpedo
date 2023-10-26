@@ -9,6 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/sched-ops/k8s/operator"
 
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -343,6 +346,7 @@ const (
 	defaultDriverStartTimeout = 10 * time.Minute
 	defaultKvdbRetryInterval  = 5 * time.Minute
 	addDriveUpTimeOut         = 15 * time.Minute
+	podDestroyTimeout         = 5 * time.Minute
 )
 
 const (
@@ -4241,12 +4245,31 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 // CreateS3BackupLocation creates backup location for S3
 func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
-	time.Sleep(60 * time.Second)
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
 	// Get SSE S3 Encryption Type
@@ -4277,11 +4300,6 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 				},
 			},
 		},
-	}
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
 	}
 
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -6147,7 +6165,13 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 
 	// Check to handle cloud based deployment with 0 master nodes
 	if len(node.GetMasterNodes()) == 0 {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
+		return
+	}
+
+	// In case of ocp skip log collection
+	if Inst().S.String() == openshift.SchedName {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
 		return
 	}
 
@@ -9401,7 +9425,25 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 	_, err := task.DoRetryWithTimeout(delVol, time.Duration(3)*appReadinessTimeout, 30*time.Second)
 
 	return schedVolumeSnapstatus, err
+}
 
+// IsCloudCredPresent checks whether the Cloud Cred is present or not
+func IsCloudCredPresent(cloudCredName string, ctx context1.Context, orgID string) (bool, error) {
+	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredentialByUser(ctx, cloudCredEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
+		if cloudCredObj.GetName() == cloudCredName {
+			log.Infof("Cloud Credential [%s] is present", cloudCredName)
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // GetAllPoolsPresent returns list of all pools present in the cluster
@@ -9542,4 +9584,71 @@ func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
 		sseType = api.S3Config_Invalid
 	}
 	return sseType, nil
+}
+
+func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
+	// Get PX StorageCluster
+	clusterSpec, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+
+	var newEnvVarList []corev1.EnvVar
+
+	//Update environment variables in the spec
+	if envVar != nil && len(envVar) > 0 {
+		for _, env := range clusterSpec.Spec.Env {
+			newEnvVarList = append(newEnvVarList, env)
+		}
+
+		for k, v := range envVar {
+			newEnvVarList = append(newEnvVarList, corev1.EnvVar{Name: k, Value: v})
+		}
+		clusterSpec.Spec.Env = newEnvVarList
+	}
+
+	//Update RunTimeOpts in the spec
+	if runTimeOpts != nil && len(runTimeOpts) > 0 {
+		if clusterSpec.Spec.RuntimeOpts == nil {
+			clusterSpec.Spec.RuntimeOpts = make(map[string]string)
+		}
+		for k, v := range runTimeOpts {
+			clusterSpec.Spec.RuntimeOpts[k] = v
+		}
+	}
+
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(clusterSpec)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
+	err = DeletePXPods(clusterSpec.Namespace)
+	if err != nil {
+		return err
+	}
+	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 15*time.Minute); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeletePXPods delete px pods
+func DeletePXPods(nameSpace string) error {
+	pxLabel := make(map[string]string)
+	pxLabel["name"] = "portworx"
+	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
+		return err
+	}
+	return nil
 }
