@@ -425,6 +425,10 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 	})
 
 	JustAfterEach(func() {
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Destroying applications")
+		DestroyApps(contexts, opts)
 		defer EndTorpedoTest()
 	})
 })
