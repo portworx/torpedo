@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/storage"
-	"github.com/portworx/sched-ops/task"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -360,9 +359,10 @@ func IncreasePVCby1Gig(namespace string, deployment *pds.ModelsDeployment, sizeI
 
 	if newcapacity > initialCapacity {
 		log.InfoD("Successfully resized the pvc by 1gb")
-		return nil, err
+		return vol, nil
+	} else {
+		return vol, err
 	}
-	return vol, nil
 }
 
 // Get volume capacity
