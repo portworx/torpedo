@@ -4047,11 +4047,11 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 }
 
 // UpdateBackupLocation creates backup location using the given context
-func UpdateBackupLocation(provider string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+func UpdateBackupLocation(provider string, name string, uid string, orgID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = UpdateS3BackupLocation(ctx, sseS3EncryptionType)
+		err = UpdateS3BackupLocation(name, uid, orgID, ctx, sseS3EncryptionType)
 	}
 	return err
 }
