@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"math/rand"
 	"net/http"
 	"os"
@@ -1898,6 +1899,16 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1938,10 +1949,9 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					for ds, deployment := range deployments {
 						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
 							log.InfoD("Running Workloads on DataService %v ", ds.Name)
-							var params pdslib.WorkloadGenerationParams
-							pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+							_, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
 							log.FailOnError(err, "Error while genearating workloads")
-							generateWorkloads[ds.Name] = dep.Name
+							generateWorkloads[ds.Name] = wlDep.Name
 							for dsName, workloadContainer := range generateWorkloads {
 								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
 							}
@@ -1965,6 +1975,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				}()
 
 				Step("Checking the PVC usage", func() {
+					log.FailOnError(err, "Unable to create scheduler context")
 					err = CheckStorageFullCondition(namespace, deployment)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					_, err = IncreasePVCby1Gig(namespace, deployment, 1)
