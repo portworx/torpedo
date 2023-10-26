@@ -9,6 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/sched-ops/k8s/operator"
 
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -343,6 +346,7 @@ const (
 	defaultDriverStartTimeout = 10 * time.Minute
 	defaultKvdbRetryInterval  = 5 * time.Minute
 	addDriveUpTimeOut         = 15 * time.Minute
+	podDestroyTimeout         = 5 * time.Minute
 )
 
 const (
@@ -6164,7 +6168,13 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 
 	// Check to handle cloud based deployment with 0 master nodes
 	if len(node.GetMasterNodes()) == 0 {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
+		return
+	}
+
+	// In case of ocp skip log collection
+	if Inst().S.String() == openshift.SchedName {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
 		return
 	}
 
@@ -9577,4 +9587,71 @@ func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
 		sseType = api.S3Config_Invalid
 	}
 	return sseType, nil
+}
+
+func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
+	// Get PX StorageCluster
+	clusterSpec, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+
+	var newEnvVarList []corev1.EnvVar
+
+	//Update environment variables in the spec
+	if envVar != nil && len(envVar) > 0 {
+		for _, env := range clusterSpec.Spec.Env {
+			newEnvVarList = append(newEnvVarList, env)
+		}
+
+		for k, v := range envVar {
+			newEnvVarList = append(newEnvVarList, corev1.EnvVar{Name: k, Value: v})
+		}
+		clusterSpec.Spec.Env = newEnvVarList
+	}
+
+	//Update RunTimeOpts in the spec
+	if runTimeOpts != nil && len(runTimeOpts) > 0 {
+		if clusterSpec.Spec.RuntimeOpts == nil {
+			clusterSpec.Spec.RuntimeOpts = make(map[string]string)
+		}
+		for k, v := range runTimeOpts {
+			clusterSpec.Spec.RuntimeOpts[k] = v
+		}
+	}
+
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(clusterSpec)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
+	err = DeletePXPods(clusterSpec.Namespace)
+	if err != nil {
+		return err
+	}
+	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 15*time.Minute); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeletePXPods delete px pods
+func DeletePXPods(nameSpace string) error {
+	pxLabel := make(map[string]string)
+	pxLabel["name"] = "portworx"
+	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
+		return err
+	}
+	return nil
 }
