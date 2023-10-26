@@ -1997,6 +1997,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
 				log.Infof("restoredVolInfo.Status.Status - %s", restoredVolInfo.Status.Status)
 				if restoredVolInfo.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
+					log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					errors = append(errors, err)
 					continue
