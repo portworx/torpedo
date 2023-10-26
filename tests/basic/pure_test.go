@@ -348,7 +348,6 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 		namespaces = make([]string, 0)
 		contexts   = make([]*scheduler.Context, 0)
 		volumeMap  = make(map[string][]*volume.Volume)
-		//minVolSizeIncrement = uint64(1 * units.TiB)
 	)
 
 	JustBeforeEach(func() {
@@ -406,7 +405,6 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 			for key, volumes := range volumeMap {
 				log.InfoD("cloning %v volumes", key)
 				for i := 0; i < len(volumes); i++ {
-					apiVol, err := Inst().V.InspectVolume(volumes[i].ID)
 					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].ID)
 					cloneVolID, err := Inst().V.CloneVolume(volumes[i].ID)
 					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].ID)
@@ -415,27 +413,11 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 					log.InfoD("MountPath %v", mountPath)
 					cloneVol, err := Inst().V.InspectVolume(cloneVolID)
 					log.FailOnError(err, "Failed to inspect volume")
-					if matchMd5Sum(apiVol, cloneVol) {
+					if matchMd5Sum(volumes[i], cloneVol) {
 						log.InfoD("Original volume %v, Cloned volume %v successfully validated", volumes[i].ID, cloneVolID)
 					} else {
 						log.Errorf("Original volume %v, Cloned volume %v Don't match", volumes[i].ID, cloneVolID)
 					}
-					log.InfoD("vol info %v,%v,%v,%v,%v,%v,%v", volumes[i].ID, volumes[i].Name, volumes[i].Namespace, volumes[i].Raw, volumes[i].RequestedSize, volumes[i].Shared, volumes[i].Size)
-					for key, i := range volumes[i].Labels {
-						log.InfoD("labels %v,%v", key, i)
-					}
-					for key, i := range volumes[i].Annotations {
-						log.InfoD("labels %v,%v", key, i)
-					}
-					log.InfoD("--------Id: %s", apiVol.Id)
-					log.InfoD("Source: %+v", apiVol.Source)
-					log.InfoD("Group: %+v", apiVol.Group)
-					log.InfoD("Readonly: %v", apiVol.Readonly)
-					log.InfoD("Locator: %+v", apiVol.Locator.Name)
-					cmd := "status"
-					nodes := node.GetWorkerNodes()
-					out, err := Inst().V.GetPxctlCmdOutput(nodes[0], cmd)
-					log.InfoD(out, "pxctl status output")
 				}
 			}
 
@@ -447,8 +429,15 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 	})
 })
 
-func matchMd5Sum(OriginalVol, CloneVol *api.Volume) bool {
-	log.InfoD("------------------------- volume state: %v ----------------------", OriginalVol.State)
-	log.InfoD("------------------------- volume state: %v ----------------------", CloneVol.State)
+func matchMd5Sum(OriginalVol *volume.Volume, CloneVol *api.Volume) bool {
+	//Make a *volume.Volume type for CloneVol so that it is compatible with GetNodeForVolume
+	var CloneVolVolumeType *volume.Volume
+	CloneVolVolumeType.ID = CloneVol.Id
+	OriginalVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
+	log.FailOnError(err, "Could not get the node for volume:%v", OriginalVol.ID)
+	CloneVolNode, err := Inst().V.GetNodeForVolume(CloneVolVolumeType, cmdTimeout, cmdRetry)
+	log.FailOnError(err, "Could not get the node for volume:%v", CloneVol.Id)
+	log.InfoD("Original volume attached on node:%v", OriginalVolNode.Name)
+	log.InfoD("Clone volume attached on node:%v", CloneVolNode.Name)
 	return true
 }
