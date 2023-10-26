@@ -70,12 +70,14 @@ type FIOOptions struct {
 }
 
 // NewVCluster Creates instance of Vcluster
-func NewVCluster(name string) *VCluster {
+func NewVCluster(name string) (*VCluster, error) {
 	err := SetDefaultStorageClass()
-	log.FailOnError(err, "Cannot set a default storage class. Exiting the test case.")
+	if err != nil {
+		return nil, err
+	}
 	namespace := fmt.Sprintf("ns-%v-%v", name, time.Now().Unix())
 	log.Infof("Namespace for Vcluster %v is : %v", name, namespace)
-	return &VCluster{Namespace: namespace, Name: name}
+	return &VCluster{Namespace: namespace, Name: name}, nil
 }
 
 // ExecuteVClusterCommand executes any generic vCluster command
