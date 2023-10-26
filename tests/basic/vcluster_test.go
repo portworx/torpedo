@@ -145,8 +145,6 @@ var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", func() {
 	var pvcName string
 	var appNS string
 	JustBeforeEach(func() {
-		log.Infof(" ================ Sleeping for 2 minutes ==============")
-		time.Sleep(2 * time.Minute)
 		StartTorpedoTest("ScaleUpScaleDownAppOnVcluster", "Creates Nginx Deployment on Vcluster, Scales it up and then scale it down", nil, 0)
 		vc = vcluster.NewVCluster("my-vcluster1")
 		err := vc.CreateAndWaitVCluster()
