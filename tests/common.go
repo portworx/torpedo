@@ -4046,6 +4046,16 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	return err
 }
 
+// UpdateBackupLocation creates backup location using the given context
+func UpdateBackupLocation(provider string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = UpdateS3BackupLocation(ctx, sseS3EncryptionType)
+	}
+	return err
+}
+
 // CreateCluster creates/registers cluster with px-backup
 func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	var clusterCreateReq *api.ClusterCreateRequest
@@ -4291,9 +4301,26 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-//func UpdateS3BackupLocation(ctx context1.Context, ) error {
-//
-//}
+func UpdateS3BackupLocation(ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+
+	backupDriver := Inst().Backup
+	bLocationCreateReq := &api.BackupLocationUpdateRequest{
+		BackupLocation: &api.BackupLocationInfo{
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					SseType: sseS3EncryptionType,
+				},
+			},
+		},
+	}
+
+	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
 func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
