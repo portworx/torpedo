@@ -430,13 +430,43 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 })
 
 func matchMd5Sum(OriginalVol *volume.Volume, CloneVol *api.Volume) bool {
+	OriginalVolInspect, err := Inst().V.InspectVolume(OriginalVol.ID)
+	log.FailOnError(err, "Failed to inspect volume:%v", OriginalVol.ID)
+	OriginalVolMountPath := OriginalVolInspect.DevicePath
+	log.InfoD("Mount Path for original vol %s", OriginalVolMountPath)
+	CloneVolMountPath := CloneVol.DevicePath
+	log.InfoD("Mount Path for original vol %s", CloneVolMountPath)
 	//Make a *volume.Volume type for CloneVol so that it is compatible with GetNodeForVolume
 	OriginalVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
 	log.FailOnError(err, "Could not get the node for volume:%v", OriginalVol.ID)
+	log.InfoD("Original volume attached on node:%v", OriginalVolNode.Name)
 	OriginalVol.ID = CloneVol.Id
 	CloneVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
 	log.FailOnError(err, "Could not get the node for volume:%v", CloneVol.Id)
-	log.InfoD("Original volume attached on node:%v", OriginalVolNode.Name)
 	log.InfoD("Clone volume attached on node:%v", CloneVolNode.Name)
-	return true
+	md5SumOfOriginalVol, err := getMd5Sum(OriginalVolMountPath, OriginalVolNode)
+	log.FailOnError(err, "Failed to get md5Sum of vol:%s", OriginalVol.ID)
+	md5SumOfCloneVol, err := getMd5Sum(CloneVolMountPath, CloneVolNode)
+	log.FailOnError(err, "Failed to get md5Sum of vol:%s", CloneVol.Id)
+	log.InfoD("md5sum of original vol:%s, cloned vol:%s", md5SumOfOriginalVol, md5SumOfCloneVol)
+	if md5SumOfCloneVol == md5SumOfOriginalVol {
+		return true
+	}
+	return false
+}
+
+func getMd5Sum(mountPath string, nodeDetail *node.Node) (string, error) {
+	md5Cmd := fmt.Sprintf("md5sum %s/*", mountPath)
+	log.Infof("Running command %s  on %s", md5Cmd, nodeDetail.Name)
+	output, err := Inst().N.RunCommand(*nodeDetail, md5Cmd, node.ConnectionOpts{
+		Timeout:         defaultTimeout,
+		TimeBeforeRetry: defaultRetryInterval,
+		Sudo:            true,
+	})
+
+	if err != nil {
+		return "", err
+	}
+	log.Infof("md5sum of vol on node %s : %s", nodeDetail.Name, output)
+	return output, nil
 }
