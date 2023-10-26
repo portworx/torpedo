@@ -21,8 +21,6 @@ import (
 	"time"
 	//api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
-	//"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/s3utils"
 
 	"github.com/portworx/torpedo/pkg/log"
 	//"github.com/portworx/torpedo/drivers/scheduler"
@@ -107,9 +105,9 @@ var _ = Describe("{sseS3encryption}", func() {
 				for bucketName, policy := range bucketMap {
 					customBucket = GetCustomBucketName(provider, bucketName)
 					if policy {
-						sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+						//sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
 						log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-						policy, err := GenerateS3BucketPolicy(sseDetails.SsePolicySid, string(sseDetails.SseEncryptionPolicy), customBucket)
+						policy, err := GenerateS3BucketPolicy("DenyNonAES256Uploads", string(api.S3Config_SSE_S3), customBucket)
 						log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 						err = UpdateS3BucketPolicy(customBucket, policy)
 						log.FailOnError(err, "Failed to apply bucket policy")
