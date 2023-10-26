@@ -73,7 +73,7 @@ type FIOOptions struct {
 func NewVCluster(name string) *VCluster {
 	err := SetDefaultStorageClass()
 	log.FailOnError(err, "Cannot set a default storage class. Exiting the test case.")
-	namespace := "vcluster-" + name
+	namespace := fmt.Sprintf("ns-%v-%v", name, time.Now().Unix())
 	return &VCluster{Namespace: namespace, Name: name}
 }
 
