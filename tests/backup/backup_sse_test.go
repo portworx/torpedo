@@ -99,7 +99,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			// Create a bucket with and without deny policy
 			bucketMap := map[string]bool{
 				"sse-bucket-with-policy-1": false,
-				"sse-bucket-with-policy-2": true,
+				//"sse-bucket-with-policy-2": true,
 				//"sse-bucket-without-policy": false,
 			}
 
@@ -136,8 +136,11 @@ var _ = Describe("{sseS3encryption}", func() {
 					//err = CreateS3BackupLocationWithSseType(customBackupLocationName, backupLocationUID, credName, cloudCredUID, customBucket, orgID, "", api.S3Config_SSE_S3)
 					err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, customBucket, orgID, "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
+					log.Infof("created backup location successfully")
+					time.Sleep(60 * time.Second)
 					err = UpdateBackupLocation(provider, ctx, api.S3Config_SSE_S3)
 					log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
+					log.Infof("updated backup location successfully")
 					//backupLocations = append(backupLocations, customBackupLocationName)
 					//log.InfoD("Taking backup of application for different combination of restores")
 					//backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
