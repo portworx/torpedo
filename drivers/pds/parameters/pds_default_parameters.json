@@ -2,17 +2,96 @@
   "DataServiceToTest": [
     {
       "Name": "PostgreSQL",
-      "Version": "15.3",
-      "Image": "64f33ae",
-      "Replicas": 2,
-      "ScaleReplicas": 3,
+      "Version": "14.6",
+      "Image": "37490df",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
       "OldVersion": "14.4",
       "OldImage": "b64d741"
+    },
+    {
+      "Name": "MySQL",
+      "Version": "8.0.31",
+      "Image": "033c060",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "8.0.30",
+      "OldImage": "78d76cf"
+    },
+    {
+      "Name": "Kafka",
+      "Version": "3.2.3",
+      "Image": "1b480fb",
+      "Replicas": 3,
+      "ScaleReplicas": 6,
+      "OldVersion": "3.2.1",
+      "OldImage": "1a1dc76"
+    },
+    {
+      "Name": "RabbitMQ",
+      "Version": "3.10.9",
+      "Image": "716b7b8",
+      "Replicas": 3,
+      "ScaleReplicas": 4,
+      "OldVersion": "3.10.7",
+      "OldImage": "862425e"
+    },
+    {
+      "Name": "Cassandra",
+      "Version": "4.0.6",
+      "Image": "f888127",
+      "Replicas": 3,
+      "ScaleReplicas": 5,
+      "OldVersion": "4.0.5",
+      "OldImage": "029172b"
+    },
+    {
+      "Name": "ZooKeeper",
+      "Version": "3.8.0",
+      "Image": "273fa6f",
+      "Replicas": 3,
+      "OldVersion": "3.7.1",
+      "OldImage": "d8f144f"
+    },
+    {
+      "Name": "Consul",
+      "Version": "1.14.0",
+      "Image": "e737dd6",
+      "Replicas": 3,
+      "ScaleReplicas": 6
+    },
+    {
+      "Name": "Couchbase",
+      "Version": "7.1.1",
+      "Image": "d1b7cf1",
+      "Replicas": 3,
+      "ScaleReplicas": 5
+    },
+    {
+      "Name": "Elasticsearch",
+      "Version": "8.5.2",
+      "Image": "bb4743b",
+      "Replicas": 3,
+      "ScaleReplicas": 5
+    },
+    {
+      "Name": "MongoDB Enterprise",
+      "Version": "6.0.3",
+      "Image": "b9b2afe",
+      "Replicas": 3,
+      "ScaleReplicas": 5
+    },
+    {
+      "Name": "Redis",
+      "Version": "7.0.5",
+      "Image": "9181925",
+      "Replicas": 6,
+      "ScaleReplicas": 8
     }
   ],
   "InfraToTest": {
     "ControlPlaneURL": "https://staging.pds.portworx.com/",
-    "AccountName": "Automation",
+    "AccountName": "Portworx",
     "TenantName": "Default",
     "ProjectName": "Default",
     "ClusterType": "onprem",
