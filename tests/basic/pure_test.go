@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -344,17 +346,58 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 		https://portworx.testrail.net/index.php?/tests/view/72639348
 		https://portworx.testrail.net/index.php?/tests/view/72657575
 	*/
+
+	// Backend represents the cloud storage provider or platform where the volumes are provisioned
+	type Backend string
+
+	const (
+		BackendPure    Backend = "PURE"
+		BackendVSphere Backend = "VSPHERE"
+		BackendUnknown Backend = "UNKNOWN"
+	)
+
+	// VolumeType represents the type of provisioned storage volume
+	type VolumeType string
+
+	const (
+		VolumeFADA    VolumeType = "FADA"
+		VolumeFBDA    VolumeType = "FBDA"
+		VolumeFACD    VolumeType = "FACD"
+		VolumeVsCD    VolumeType = "VsCD"
+		VolumeUnknown VolumeType = "UNKNOWN"
+	)
+
 	var (
-		namespaces = make([]string, 0)
-		contexts   = make([]*scheduler.Context, 0)
-		volumeMap  = make(map[string][]*volume.Volume)
+		contexts     = make([]*scheduler.Context, 0)
+		namespaces   = make([]string, 0)
+		backend      = BackendUnknown
+		volumeMap    = make(map[VolumeType][]*api.Volume)
+		volumeCtxMap = make(map[string]*scheduler.Context)
 	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("CloneVolAndValidate", "Validate clone volumes on FADA, FBDA, and FACD", nil, 72657582)
 	})
-
 	It("Validate clone volumes on FADA, FBDA, and FACD", func() {
+		// getPureVolumeType determines the type of the volume based on the proxy spec
+		getPureVolumeType := func(vol *volume.Volume) (VolumeType, error) {
+			proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+			if err != nil {
+				return "", fmt.Errorf("failed to get proxy spec for the volume [%s/%s]. Err: [%v]", vol.Namespace, vol.Name, err)
+			}
+			if proxySpec != nil {
+				switch proxySpec.ProxyProtocol {
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					return VolumeFBDA, nil
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					return VolumeFADA, nil
+				default:
+					return VolumeUnknown, nil
+				}
+			} else {
+				return VolumeFACD, nil
+			}
+		}
 		stepLog := "Schedule applications"
 		Step(stepLog, func() {
 			log.InfoD("Scheduling applications")
@@ -372,31 +415,42 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(contexts)
 		})
-		stepLog = "Categorize volumes based on their proxy protocols"
-		Step(stepLog, func() {
-			log.InfoD("Categorizing volumes based on their proxy protocols")
+		Step("Identify backend and categorize volumes", func() {
+			log.InfoD("Identifying backend")
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secretList, err := core.Instance().ListSecret(volDriverNamespace, v1.ListOptions{})
+			log.FailOnError(err, "failed to get secret list from namespace [%s]", volDriverNamespace)
+			for _, secret := range secretList.Items {
+				switch secret.Name {
+				case PX_PURE_SECRET_NAME:
+					backend = BackendPure
+					break
+				case PX_VSPHERE_SCERET_NAME:
+					backend = BackendVSphere
+					break
+				}
+			}
+			log.InfoD("Backend: %v", backend)
+			log.InfoD("Categorizing volumes")
 			for _, ctx := range contexts {
 				volumes, err := Inst().S.GetVolumes(ctx)
 				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
 				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
 				for _, vol := range volumes {
-					proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
 					apiVol, err := Inst().V.InspectVolume(vol.ID)
-					log.FailOnError(err, "failed to get proxy spec for the volume [%s/%s]", vol.Namespace, vol.Name)
-					if proxySpec != nil {
-						log.Infof("proxySpec.ProxyProtocol %v - %s - %+v for vol [%s/%s] for app %s", proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, proxySpec.ProxyProtocol, apiVol.Id, vol.Name, ctx.App.Key)
-						switch proxySpec.ProxyProtocol {
-						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
-							volumeMap["FADA"] = append(volumeMap["FADA"], vol)
-						case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
-							volumeMap["FBDA"] = append(volumeMap["FBDA"], vol)
-						default:
-							volumeMap["CloudDrive"] = append(volumeMap["CloudDrive"], vol)
-						}
-					} else {
-						log.Infof("non proxySpec.ProxyProtocol for vol [%s/%s] for app %s", vol.ID, vol.Name, ctx.App.Key)
-
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					switch backend {
+					case BackendPure:
+						volType, err := getPureVolumeType(vol)
+						log.FailOnError(err, "failed to get pure volume type for volume [%+v]", vol)
+						volumeMap[volType] = append(volumeMap[volType], apiVol)
+					case BackendVSphere:
+						volumeMap[VolumeVsCD] = append(volumeMap[VolumeVsCD], apiVol)
+					default:
+						volumeMap[VolumeUnknown] = append(volumeMap[VolumeUnknown], apiVol)
 					}
+					volumeCtxMap[apiVol.Id] = ctx
 				}
 			}
 		})
@@ -405,22 +459,18 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 			for key, volumes := range volumeMap {
 				log.InfoD("cloning %v volumes", key)
 				for i := 0; i < len(volumes); i++ {
-					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].ID)
-					cloneVolID, err := Inst().V.CloneVolume(volumes[i].ID)
-					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].ID)
-					mountPath, err := Inst().V.AttachVolume(cloneVolID)
-					log.FailOnError(err, "Failed to attach cloned volume")
-					log.InfoD("MountPath %v", mountPath)
-					cloneVol, err := Inst().V.InspectVolume(cloneVolID)
-					log.FailOnError(err, "Failed to inspect volume")
-					if matchMd5Sum(volumes[i], cloneVol) {
-						log.InfoD("Original volume %v, Cloned volume %v successfully validated", volumes[i].ID, cloneVolID)
-					} else {
-						log.Errorf("Original volume %v, Cloned volume %v Don't match", volumes[i].ID, cloneVolID)
+					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].Id)
+					clonedVolID, err := Inst().V.CloneVolume(volumes[i].Id)
+					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].Id)
+					params := make(map[string]string)
+					if Inst().ConfigMap != "" {
+						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 					}
+					err = Inst().V.ValidateCreateVolume(clonedVolID, params)
+					log.FailOnError(err, "Failed to validate clone")
+					log.Infof("successfully cloned and validated")
 				}
 			}
-
 		})
 	})
 
@@ -432,45 +482,3 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 		defer EndTorpedoTest()
 	})
 })
-
-func matchMd5Sum(OriginalVol *volume.Volume, CloneVol *api.Volume) bool {
-	OriginalVolInspect, err := Inst().V.InspectVolume(OriginalVol.ID)
-	log.FailOnError(err, "Failed to inspect volume:%v", OriginalVol.ID)
-	OriginalVolMountPath := OriginalVolInspect.DevicePath
-	log.InfoD("Mount Path for original vol %s", OriginalVolMountPath)
-	CloneVolMountPath := CloneVol.DevicePath
-	log.InfoD("Mount Path for original vol %s", CloneVolMountPath)
-	//Make a *volume.Volume type for CloneVol so that it is compatible with GetNodeForVolume
-	OriginalVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
-	log.FailOnError(err, "Could not get the node for volume:%v", OriginalVol.ID)
-	log.InfoD("Original volume attached on node:%v", OriginalVolNode.Name)
-	OriginalVol.ID = CloneVol.Id
-	CloneVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
-	log.FailOnError(err, "Could not get the node for volume:%v", CloneVol.Id)
-	log.InfoD("Clone volume attached on node:%v", CloneVolNode.Name)
-	md5SumOfOriginalVol, err := getMd5Sum(OriginalVolMountPath, OriginalVolNode)
-	log.FailOnError(err, "Failed to get md5Sum of vol:%s", OriginalVol.ID)
-	md5SumOfCloneVol, err := getMd5Sum(CloneVolMountPath, CloneVolNode)
-	log.FailOnError(err, "Failed to get md5Sum of vol:%s", CloneVol.Id)
-	log.InfoD("md5sum of original vol:%s, cloned vol:%s", md5SumOfOriginalVol, md5SumOfCloneVol)
-	if md5SumOfCloneVol == md5SumOfOriginalVol {
-		return true
-	}
-	return false
-}
-
-func getMd5Sum(mountPath string, nodeDetail *node.Node) (string, error) {
-	md5Cmd := fmt.Sprintf("md5sum %s/*", mountPath)
-	log.Infof("Running command %s  on %s", md5Cmd, nodeDetail.Name)
-	output, err := Inst().N.RunCommand(*nodeDetail, md5Cmd, node.ConnectionOpts{
-		Timeout:         defaultTimeout,
-		TimeBeforeRetry: defaultRetryInterval,
-		Sudo:            true,
-	})
-
-	if err != nil {
-		return "", err
-	}
-	log.Infof("md5sum of vol on node %s : %s", nodeDetail.Name, output)
-	return output, nil
-}
