@@ -248,6 +248,9 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 
 var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 
+	var testrailID = 34542946
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542946
+
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeInvalidPoolID",
 			"Initiate pool expansion using invalid Id", nil, testrailID)
@@ -275,13 +278,16 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 			if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
 				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
 			}
-			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID failed as expected.")
 		})
 	})
 
 })
 
 var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
+
+	var testrailID = 34542840
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542840
 
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
@@ -359,6 +365,9 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 
 var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 
+	var testrailID = 34542945
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542945
+
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpansionDiskResizeInvalidSize",
 			"Initiate pool expansion using invalid expansion size", nil, testrailID)
@@ -385,12 +394,15 @@ var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
 			errMatch = fmt.Errorf("failed to verify failure using invalid Pool size")
 		}
-		dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+		dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID failed as expected.")
 	})
 
 })
 
 var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
+
+	var testrailID = 34542944
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542944
 
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeWithSameSize",
@@ -421,11 +433,14 @@ var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
 		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
 			errMatch = fmt.Errorf("failed to verify failure using same Pool size")
 		}
-		dash.VerifyFatal(errMatch, nil, "Pool expand with Same Pool Size completed?")
+		dash.VerifyFatal(errMatch, nil, "Pool expand with Same Pool Size failed as expected.")
 	})
 })
 
 var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
+
+	var testrailID = 34542896
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542896
 
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandWhileResizeDiskInProgress",
@@ -450,7 +465,7 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 		EndTorpedoTest()
 	})
 
-	stepLog := "should get the existing pool and expand it by adding a resize-disk and again trigger pool expand on same pool"
+	stepLog := "should get the existing pool and expand it by initiating a resize-disk and again trigger pool expand on same pool"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
@@ -475,10 +490,9 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 		var errMatch error
 		re := regexp.MustCompile(`.*already in progress.*`)
 		if !re.MatchString(fmt.Sprintf("%v", err)) {
-			fmt.Println("*** resizeErr=", err.Error())
 			errMatch = fmt.Errorf("failed to verify pool expand when one already in progress")
 		}
-		dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID completed?")
+		dash.VerifyFatal(errMatch, nil, "Pool expand with one resize already in Porgress failed as expected.")
 
 		Step("Ensure pool has been expanded to the expected size", func() {
 			err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
