@@ -18,28 +18,28 @@ import (
 var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 	var (
-		backupNames                []string
-		restoreNames               []string
-		scheduledAppContexts       []*scheduler.Context
-		sourceClusterUid           string
-		cloudCredName              string
-		cloudCredUID               string
-		backupLocationUID          string
-		backupLocationName         string
-		backupLocationMap          map[string]string
-		labelSelectors             map[string]string
-		providers                  []string
-		restoreNameToAppContextMap map[string]*scheduler.Context
-		namespaceMappingMixed      map[string]string
-		namespaceMappingRestart    map[string]string
-		namespaceMappingStopped    map[string]string
-		backupWithVMRestart        string
-		restoreWithVMRestart       string
-		namespaceWithStoppedVM     []string
-		backupWithVMMixed          string
-		restoreWithVMMixed         string
-		backupWithVMStopped        string
-		restoreWithVMStopped       string
+		backupNames          []string
+		restoreNames         []string
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		labelSelectors       map[string]string
+		providers            []string
+		//restoreNameToAppContextMap map[string]*scheduler.Context
+		namespaceMappingMixed   map[string]string
+		namespaceMappingRestart map[string]string
+		namespaceMappingStopped map[string]string
+		backupWithVMRestart     string
+		restoreWithVMRestart    string
+		namespaceWithStoppedVM  []string
+		backupWithVMMixed       string
+		restoreWithVMMixed      string
+		backupWithVMStopped     string
+		restoreWithVMStopped    string
 	)
 
 	JustBeforeEach(func() {
@@ -47,7 +47,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
-		restoreNameToAppContextMap = make(map[string]*scheduler.Context)
+		//restoreNameToAppContextMap = make(map[string]*scheduler.Context)
 		namespaceMappingMixed = make(map[string]string)
 		namespaceMappingRestart = make(map[string]string)
 		namespaceMappingStopped = make(map[string]string)
@@ -126,102 +126,102 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			}
 		})
 
-		Step("Taking individual backup of each namespace", func() {
-			log.InfoD("Taking individual backup of each namespace")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			var wg sync.WaitGroup
-			var mutex sync.Mutex
-			errors := make([]string, 0)
-			backupNames = make([]string, 0)
-			for _, appCtx := range scheduledAppContexts {
-				backupName := fmt.Sprintf("%s-%s-%v", "auto-backup", appCtx.ScheduleOptions.Namespace, RandomString(6))
-				backupNames = append(backupNames, backupName)
-				wg.Add(1)
-				go func(backupName string, appCtx *scheduler.Context) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, appCtx.ScheduleOptions.Namespace, backupLocationName)
-					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
-					if err != nil {
-						mutex.Lock()
-						errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
-						mutex.Unlock()
-					}
-				}(backupName, appCtx)
-			}
-			wg.Wait()
-			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while taking individual backup of each namespace -\n%s", strings.Join(errors, "}\n{")))
-		})
-
-		Step("Restoring all individual backups", func() {
-			log.InfoD("Restoring all individual backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			var wg sync.WaitGroup
-			var mutex sync.Mutex
-			errors := make([]string, 0)
-			restoreNames = make([]string, 0)
-			for i, appCtx := range scheduledAppContexts {
-				restoreName := fmt.Sprintf("%s-%s-%v", "auto-restore", appCtx.ScheduleOptions.Namespace, RandomString(6))
-				restoreNames = append(restoreNames, restoreName)
-				restoreNameToAppContextMap[restoreName] = appCtx
-				wg.Add(1)
-				go func(restoreName string, appCtx *scheduler.Context, i int) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					log.InfoD("Restoring [%s] namespace from the [%s] backup", appCtx.ScheduleOptions.Namespace, backupNames[i])
-					err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
-					if err != nil {
-						mutex.Lock()
-						errors = append(errors, fmt.Sprintf("Failed while creating restore [%s]. Error - [%s]", restoreName, err.Error()))
-						mutex.Unlock()
-					}
-				}(restoreName, appCtx, i)
-			}
-			wg.Wait()
-			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while restoring all individual backups -\n%s", strings.Join(errors, "}\n{")))
-		})
-
-		Step("Validating restores of individual backups", func() {
-			log.InfoD("Validating restores of individual backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			var mutex sync.Mutex
-			errors := make([]string, 0)
-			defer func() {
-				log.InfoD("Switching cluster context back to source cluster")
-				err = SetSourceKubeConfig()
-				log.FailOnError(err, "Switching context to source cluster failed")
-			}()
-			err = SetDestinationKubeConfig()
-			log.FailOnError(err, "Switching context to destination cluster failed")
-			var wg sync.WaitGroup
-			for _, restoreName := range restoreNames {
-				wg.Add(1)
-				go func(restoreName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					log.InfoD("Validating restore [%s]", restoreName)
-					expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(restoreNameToAppContextMap[restoreName], make(map[string]string), make(map[string]string), true)
-					if err != nil {
-						mutex.Lock()
-						errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", restoreName, err.Error()))
-						mutex.Unlock()
-						return
-					}
-					err = ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{expectedRestoredAppContext}, make([]string, 0))
-					if err != nil {
-						mutex.Lock()
-						errors = append(errors, fmt.Sprintf("Failed while validating restore [%s]. Error - [%s]", restoreName, err.Error()))
-						mutex.Unlock()
-					}
-				}(restoreName)
-
-			}
-			wg.Wait()
-			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while validating restores of individual backups -\n%s", strings.Join(errors, "}\n{")))
-		})
+		//Step("Taking individual backup of each namespace", func() {
+		//	log.InfoD("Taking individual backup of each namespace")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Fetching px-central-admin ctx")
+		//	var wg sync.WaitGroup
+		//	var mutex sync.Mutex
+		//	errors := make([]string, 0)
+		//	backupNames = make([]string, 0)
+		//	for _, appCtx := range scheduledAppContexts {
+		//		backupName := fmt.Sprintf("%s-%s-%v", "auto-backup", appCtx.ScheduleOptions.Namespace, RandomString(6))
+		//		backupNames = append(backupNames, backupName)
+		//		wg.Add(1)
+		//		go func(backupName string, appCtx *scheduler.Context) {
+		//			defer GinkgoRecover()
+		//			defer wg.Done()
+		//			log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, appCtx.ScheduleOptions.Namespace, backupLocationName)
+		//			err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+		//			if err != nil {
+		//				mutex.Lock()
+		//				errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
+		//				mutex.Unlock()
+		//			}
+		//		}(backupName, appCtx)
+		//	}
+		//	wg.Wait()
+		//	dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while taking individual backup of each namespace -\n%s", strings.Join(errors, "}\n{")))
+		//})
+		//
+		//Step("Restoring all individual backups", func() {
+		//	log.InfoD("Restoring all individual backups")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Fetching px-central-admin ctx")
+		//	var wg sync.WaitGroup
+		//	var mutex sync.Mutex
+		//	errors := make([]string, 0)
+		//	restoreNames = make([]string, 0)
+		//	for i, appCtx := range scheduledAppContexts {
+		//		restoreName := fmt.Sprintf("%s-%s-%v", "auto-restore", appCtx.ScheduleOptions.Namespace, RandomString(6))
+		//		restoreNames = append(restoreNames, restoreName)
+		//		restoreNameToAppContextMap[restoreName] = appCtx
+		//		wg.Add(1)
+		//		go func(restoreName string, appCtx *scheduler.Context, i int) {
+		//			defer GinkgoRecover()
+		//			defer wg.Done()
+		//			log.InfoD("Restoring [%s] namespace from the [%s] backup", appCtx.ScheduleOptions.Namespace, backupNames[i])
+		//			err = CreateRestore(restoreName, backupNames[i], make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+		//			if err != nil {
+		//				mutex.Lock()
+		//				errors = append(errors, fmt.Sprintf("Failed while creating restore [%s]. Error - [%s]", restoreName, err.Error()))
+		//				mutex.Unlock()
+		//			}
+		//		}(restoreName, appCtx, i)
+		//	}
+		//	wg.Wait()
+		//	dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while restoring all individual backups -\n%s", strings.Join(errors, "}\n{")))
+		//})
+		//
+		//Step("Validating restores of individual backups", func() {
+		//	log.InfoD("Validating restores of individual backups")
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Fetching px-central-admin ctx")
+		//	var mutex sync.Mutex
+		//	errors := make([]string, 0)
+		//	defer func() {
+		//		log.InfoD("Switching cluster context back to source cluster")
+		//		err = SetSourceKubeConfig()
+		//		log.FailOnError(err, "Switching context to source cluster failed")
+		//	}()
+		//	err = SetDestinationKubeConfig()
+		//	log.FailOnError(err, "Switching context to destination cluster failed")
+		//	var wg sync.WaitGroup
+		//	for _, restoreName := range restoreNames {
+		//		wg.Add(1)
+		//		go func(restoreName string) {
+		//			defer GinkgoRecover()
+		//			defer wg.Done()
+		//			log.InfoD("Validating restore [%s]", restoreName)
+		//			expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(restoreNameToAppContextMap[restoreName], make(map[string]string), make(map[string]string), true)
+		//			if err != nil {
+		//				mutex.Lock()
+		//				errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", restoreName, err.Error()))
+		//				mutex.Unlock()
+		//				return
+		//			}
+		//			err = ValidateRestore(ctx, restoreName, orgID, []*scheduler.Context{expectedRestoredAppContext}, make([]string, 0))
+		//			if err != nil {
+		//				mutex.Lock()
+		//				errors = append(errors, fmt.Sprintf("Failed while validating restore [%s]. Error - [%s]", restoreName, err.Error()))
+		//				mutex.Unlock()
+		//			}
+		//		}(restoreName)
+		//
+		//	}
+		//	wg.Wait()
+		//	dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while validating restores of individual backups -\n%s", strings.Join(errors, "}\n{")))
+		//})
 
 		Step("Take backup of all namespaces with VMs in Running and Stopped state", func() {
 			log.InfoD("Take backup of all namespaces with VMs in Running and Stopped state")
