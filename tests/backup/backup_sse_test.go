@@ -264,7 +264,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 
-			err = RemoveS3BucketPolicy(bucketWithPolicy)
+			err = RemoveS3BucketPolicy(customBucketsWithPolicy[0])
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
 
 			// Take backup with BL2
