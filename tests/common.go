@@ -4301,10 +4301,15 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-func UpdateS3BackupLocation(ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+func UpdateS3BackupLocation(name string, uid string, orgID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 
 	backupDriver := Inst().Backup
-	bLocationCreateReq := &api.BackupLocationUpdateRequest{
+	bLocationUpdateReq := &api.BackupLocationUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
 		BackupLocation: &api.BackupLocationInfo{
 			Type: api.BackupLocationInfo_S3,
 			Config: &api.BackupLocationInfo_S3Config{
@@ -4315,7 +4320,7 @@ func UpdateS3BackupLocation(ctx context1.Context, sseS3EncryptionType api.S3Conf
 		},
 	}
 
-	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationUpdateReq)
 	if err != nil {
 		return err
 	}

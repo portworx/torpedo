@@ -135,7 +135,7 @@ var _ = Describe("{sseS3encryption}", func() {
 				customBucket = GetCustomBucketName(provider, bucketWithPolicy)
 				//sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
 				//log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-				policy, err := GenerateS3BucketPolicy("DenyNonAES256Uploads", string(api.S3Config_SSE_S3), customBucket)
+				policy, err := GenerateS3BucketPolicy("DenyNonAES256Uploads", "s3:x-amz-server-side-encryption=AES256", customBucket)
 				log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
 				err = UpdateS3BucketPolicy(customBucket, policy)
 				log.FailOnError(err, "Failed to apply bucket policy")
@@ -236,6 +236,10 @@ var _ = Describe("{sseS3encryption}", func() {
 				}
 				wg.Wait()
 			})
+
+			for _, provider := range providers {
+				err = UpdateBackupLocation(provider, ctx, api.S3Config_SSE_S3)
+			}
 		})
 	})
 })
