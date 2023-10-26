@@ -74,6 +74,7 @@ func NewVCluster(name string) *VCluster {
 	err := SetDefaultStorageClass()
 	log.FailOnError(err, "Cannot set a default storage class. Exiting the test case.")
 	namespace := fmt.Sprintf("ns-%v-%v", name, time.Now().Unix())
+	log.Infof("Namespace for Vcluster %v is : %v", name, namespace)
 	return &VCluster{Namespace: namespace, Name: name}
 }
 
@@ -94,8 +95,8 @@ func (v *VCluster) TerminateVCluster() error {
 }
 
 // CreateVCluster This method creates a vcluster. This requires vcluster.yaml saved in a specific location.
-func CreateVCluster(vclusterName string, absPath string) error {
-	_, err := ExecuteVClusterCommand("create", vclusterName, "-f", absPath, "--connect=false")
+func CreateVCluster(vclusterName, absPath, namespace string) error {
+	_, err := ExecuteVClusterCommand("create", vclusterName, "-n", namespace, "-f", absPath, "--connect=false")
 	if err != nil {
 		return err
 	}
@@ -227,7 +228,7 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 	if err = v.CreateNodePortService(); err != nil {
 		return err
 	}
-	if err = CreateVCluster(v.Name, absPath); err != nil {
+	if err = CreateVCluster(v.Name, absPath, v.Namespace); err != nil {
 		return err
 	}
 	if err = v.SetClientSetForVCluster(); err != nil {
