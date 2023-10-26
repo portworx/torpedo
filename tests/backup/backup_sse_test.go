@@ -96,7 +96,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			_, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 		Step("Adding Credentials and Registering Backup Location", func() {
