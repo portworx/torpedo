@@ -158,7 +158,7 @@ var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", func() {
 		log.Infof("Successfully created StorageClass with name: %v", scName)
 		// Create PVC on VCluster
 		appNS = scName + "-ns"
-		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		pvcName, err = vc.CreatePVC("", scName, appNS, "RWX")
 		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
 		log.Infof("Successfully created PVC with name: %v", pvcName)
 		deploymentName := "nginx-deployment"
