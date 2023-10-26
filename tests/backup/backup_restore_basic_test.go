@@ -3856,7 +3856,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 		})
 
 		Step("Check if kube-system and px namespace was backed up or not", func() {
-			err := checkBackupObjectForNonExpectedNS(ctx, backupNames[0])
+			err := checkBackupObjectForUnexpectedNS(ctx, backupNames[0])
 			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
 		})
 
@@ -3906,7 +3906,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 		Step("Check if kube-system and px namespace was backed up or not", func() {
 			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 			log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
-			err = checkBackupObjectForNonExpectedNS(ctx, firstScheduleBackupName)
+			err = checkBackupObjectForUnexpectedNS(ctx, firstScheduleBackupName)
 			dash.VerifyFatal(err, nil, "Checking backup objects for namespaces")
 		})
 

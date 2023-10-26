@@ -5091,9 +5091,9 @@ func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) er
 	return nil
 }
 
-// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
+// checkBackupObjectForUnexpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
 // is backed up or not
-func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) error {
+func checkBackupObjectForUnexpectedNS(ctx context.Context, backupName string) error {
 
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 
