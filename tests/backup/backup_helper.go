@@ -1984,6 +1984,9 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		if err != nil {
 			err := fmt.Errorf("error getting volumes for namespace (expectedRestoredAppContext) [%s], hence skipping volume validation. Error in Inst().S.GetVolumes: [%v]", expectedRestoredAppContextNamespace, err)
 			errors = append(errors, err)
+			for _, e := range errors {
+				log.Infof("error found - %s", e.Error())
+			}
 			continue
 		}
 		for _, restoredVol := range actualRestoredVolumes {
@@ -2047,6 +2050,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	errStrings := make([]string, 0)
 	for _, err := range errors {
 		if err != nil {
+			log.Infof("final error found - %s", err.Error())
 			errStrings = append(errStrings, err.Error())
 		}
 	}
