@@ -435,9 +435,9 @@ func matchMd5Sum(OriginalVol *volume.Volume, CloneVol *api.Volume) bool {
 	CloneVolVolumeType.ID = CloneVol.Id
 	OriginalVolNode, err := Inst().V.GetNodeForVolume(OriginalVol, cmdTimeout, cmdRetry)
 	log.FailOnError(err, "Could not get the node for volume:%v", OriginalVol.ID)
-	CloneVolNode, err := Inst().V.GetNodeForVolume(CloneVolVolumeType, cmdTimeout, cmdRetry)
-	log.FailOnError(err, "Could not get the node for volume:%v", CloneVol.Id)
+	//CloneVolNode, err := Inst().V.GetNodeForVolume(CloneVolVolumeType, cmdTimeout, cmdRetry)
+	//log.FailOnError(err, "Could not get the node for volume:%v", CloneVol.Id)
 	log.InfoD("Original volume attached on node:%v", OriginalVolNode.Name)
-	log.InfoD("Clone volume attached on node:%v", CloneVolNode.Name)
+	//log.InfoD("Clone volume attached on node:%v", CloneVolNode.Name)
 	return true
 }
