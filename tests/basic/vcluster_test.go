@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("CreateAndRunFioOnVcluster", func() {
+var _ = Describe("{CreateAndRunFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -69,7 +69,7 @@ var _ = Describe("CreateAndRunFioOnVcluster", func() {
 	})
 })
 
-var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
+var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
@@ -139,7 +139,7 @@ var _ = Describe("CreateAndRunMultipleFioOnVcluster", func() {
 	})
 })
 
-var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
+var _ = Describe("{ScaleUpScaleDownAppOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -202,7 +202,7 @@ var _ = Describe("ScaleUpScaleDownAppOnVcluster", func() {
 	})
 })
 
-var _ = Describe("CreateAndRunFioOnVclusterRWX", func() {
+var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
@@ -266,7 +266,7 @@ var _ = Describe("CreateAndRunFioOnVclusterRWX", func() {
 	})
 })
 
-var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
+var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
 	const totalVclusters = 3
 	var vClusters []*vcluster.VCluster
 	var scName string
@@ -350,7 +350,7 @@ var _ = Describe("CreateAndRunMultipleFioOnManyVclusters", func() {
 	})
 })
 
-var _ = Describe("VolumeDriverDownVCluster", func() {
+var _ = Describe("{VolumeDriverDownVCluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var pvcName string
