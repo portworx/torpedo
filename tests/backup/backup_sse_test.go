@@ -242,6 +242,7 @@ var _ = Describe("{sseS3encryption}", func() {
 
 			for _, provider := range providers {
 				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, OrgID, ctx, api.S3Config_SSE_S3)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
 			}
 		})
 	})
