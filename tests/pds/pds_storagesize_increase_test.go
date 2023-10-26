@@ -1407,8 +1407,6 @@ var _ = Describe("{PerformStorageResizeBy1Gb100Times}", func() {
 
 func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string, templates controlplane.Templates) (*pds.ModelsDeployment, uint64, *pds.ModelsResourceSettingsTemplate, *pds.ModelsStorageOptionsTemplate, string, *v1.Deployment, map[string]string, error) {
 	var (
-		//wlDeploymentsToBeCleaned []*v1.Deployment
-		//deployments              = make(map[PDSDataService]*pds.ModelsDeployment)
 		dsVersions             = make(map[string]map[string][]string)
 		depList                []*pds.ModelsDeployment
 		initialCapacity        uint64
