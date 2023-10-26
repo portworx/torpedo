@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/kubevirt"
 
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 
@@ -52,6 +53,7 @@ import (
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -114,6 +116,8 @@ const (
 	clusterCreationRetryTime                  = 10 * time.Second
 	clusterDeleteTimeout                      = 10 * time.Minute
 	clusterDeleteRetryTime                    = 5 * time.Second
+	vmStartStopTimeout                        = 10 * time.Minute
+	vmStartStopRetryTime                      = 30 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
 	rancherActiveCluster                      = "local"
@@ -1106,7 +1110,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, true)
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, false)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
@@ -2165,25 +2169,6 @@ func IsBackupLocationPresent(bkpLocation string, ctx context.Context, orgID stri
 		}
 	}
 	log.Infof("Backup locations fetched - %s", backupLocationNames)
-	return false, nil
-}
-
-// IsCloudCredPresent checks whether the Cloud Cred is present or not
-func IsCloudCredPresent(cloudCredName string, ctx context.Context, orgID string) (bool, error) {
-	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
-		OrgId:          orgID,
-		IncludeSecrets: false,
-	}
-	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredential(ctx, cloudCredEnumerateRequest)
-	if err != nil {
-		return false, err
-	}
-	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
-		if cloudCredObj.GetName() == cloudCredName {
-			log.Infof("Cloud Credential [%s] is present", cloudCredName)
-			return true, nil
-		}
-	}
 	return false, nil
 }
 
@@ -5013,6 +4998,389 @@ func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 	_, err = backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
 	if err != nil {
 		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
+}
+
+// StartKubevirtVM starts the kubevirt VM and waits till the status is Running
+func StartKubevirtVM(name string, namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.StartVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	if waitForCompletion {
+		t := func() (interface{}, bool, error) {
+			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+			if err != nil {
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
+			}
+			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+			}
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			return "", false, nil
+		}
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+		return err
+	}
+	return nil
+}
+
+// StopKubevirtVM stops the kubevirt VM and waits till the status is Stopped
+func StopKubevirtVM(name string, namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.StopVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	if waitForCompletion {
+		t := func() (interface{}, bool, error) {
+			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+			if err != nil {
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
+			}
+			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
+				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
+			}
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			return "", false, nil
+		}
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+		return err
+	}
+	return nil
+}
+
+// RestartKubevirtVM restarts the kubevirt VM
+func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
+	if err != nil {
+		return err
+	}
+	err = k8sKubevirt.RestartVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	if waitForCompletion {
+		t := func() (interface{}, bool, error) {
+			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+			if err != nil {
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
+			}
+			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+			}
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			return "", false, nil
+		}
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
+// is backed up or not
+func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) error {
+
+	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
+
+	// Fetch a list of backups
+	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup UID")
+	}
+
+	// Get an inspect of the backup object
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: orgID,
+	}
+	backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return fmt.Errorf("failed to fetch backup inspect object")
+	}
+	backupNamespaces := backupResponse.GetBackup().Namespaces
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	// Get a list of all services and get the namespace where px service is running
+	k8sCore := core.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get list of services")
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == "portworx-service" {
+			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
+		}
+	}
+
+	// Check if the namespaces to be skipped is present or not return error if not
+	for _, namespace := range backupNamespaces {
+		for _, namespacetoskip := range namespacesToSkip {
+			if namespacetoskip == namespace {
+				return fmt.Errorf("expected namespace %s shouldn't be present in backup", namespace)
+			}
+		}
+	}
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return fmt.Errorf("switching context to source cluster failed")
+	}
+	return nil
+}
+
+// getNamespaceAge gets the namespace age of all the namespaces on the cluster
+func getNamespaceAge() (map[string]time.Time, error) {
+	var namespaceAge = make(map[string]time.Time)
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		return namespaceAge, fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	for _, namespace := range allNamespaces.Items {
+		namespaceAge[namespace.ObjectMeta.GetName()] = namespace.ObjectMeta.GetCreationTimestamp().Time
+	}
+
+	err = SetSourceKubeConfig()
+	if err != nil {
+		return namespaceAge, fmt.Errorf("switching context to source cluster failed")
+	}
+
+	return namespaceAge, nil
+}
+
+// compareNamespaceAge checks the status of namespaces on clusters where the restore was done
+func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
+	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		return fmt.Errorf("failed to switch destination cluster context")
+	}
+
+	namespaceNamesAge, err := getNamespaceAge()
+	k8sCore := core.Instance()
+	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get list of services")
+	}
+	for _, svc := range allServices.Items {
+		if svc.Name == "portworx-service" {
+			namespacesToSkip = append(namespacesToSkip, svc.Namespace)
+		}
+	}
+
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	for _, namespace := range allNamespaces.Items {
+		for _, skipCase := range namespacesToSkip {
+			if skipCase == namespace.GetName() {
+				if namespaceNamesAge[namespace.GetName()] != oldNamespaceAge[namespace.GetName()] {
+					return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+				}
+			} else {
+				if !namespaceNamesAge[namespace.GetName()].After(oldNamespaceAge[namespace.GetName()]) {
+					return fmt.Errorf("namespace[%s] not restored but was expected to be restored", namespace.GetName())
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// createBackupUntilIncrementalBackup creates backup until incremental backups is created returns the name of the incremental backup created
+func createBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContextToBackup *scheduler.Context, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string) (string, error) {
+	namespace := scheduledAppContextToBackup.ScheduleOptions.Namespace
+	incrementalBackupName := fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
+	err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
+	if err != nil {
+		return "", fmt.Errorf("creation and validation of incremental backup [%s] creation: error [%v]", incrementalBackupName, err)
+	}
+
+	log.InfoD("Check if backups are incremental backups or not")
+	backupDriver := Inst().Backup
+	bkpUid, err := backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch backup UID - %s : error [%v]", incrementalBackupName, err)
+	}
+
+	bkpInspectReq := &api.BackupInspectRequest{
+		Name:  incrementalBackupName,
+		OrgId: orgID,
+		Uid:   bkpUid,
+	}
+	bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
+	if err != nil {
+		return "", fmt.Errorf("unable to fetch backup - %s : error [%v]", incrementalBackupName, err)
+	}
+
+	for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+		backupId := vol.GetBackupId()
+		log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
+		if strings.Contains(backupId, "incr") {
+			return incrementalBackupName, nil
+		} else {
+			// Attempting to take backups and checking if they are incremental or not
+			// as the original incremental backup which we took has taken a full backup this is mostly
+			// because CloudSnap is taking full backup instead of incremental backup as it's hitting one of
+			// the if else condition in CloudSnap which forces it to take full instead of incremental backup
+			log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
+			listOfVolumes := make(map[string]bool)
+			noFailures := true
+			for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 8; maxBackupsBeforeIncremental++ {
+				log.InfoD(fmt.Sprintf("Recreate incremental backup iteration: %d", maxBackupsBeforeIncremental))
+				// Create a new incremental backups
+				incrementalBackupName = fmt.Sprintf("%s-%v-%s-%v", "incremental-backup", maxBackupsBeforeIncremental, namespace, time.Now().Unix())
+				err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
+				if err != nil {
+					return "", fmt.Errorf("verifying incremental backup [%s] creation : error [%v]", incrementalBackupName, err)
+				}
+
+				// Check if they are incremental or not
+				bkpUid, err = backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
+				if err != nil {
+					return "", fmt.Errorf("unable to fetch backup - %s : error [%v]", incrementalBackupName, err)
+				}
+				bkpInspectReq := &api.BackupInspectRequest{
+					Name:  incrementalBackupName,
+					OrgId: orgID,
+					Uid:   bkpUid,
+				}
+				bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectReq)
+				if err != nil {
+					return "", fmt.Errorf("unable to fetch backup - %s : error [%v]", incrementalBackupName, err)
+				}
+				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
+					backupId := vol.GetBackupId()
+					log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s ", incrementalBackupName, backupId))
+					if !strings.Contains(backupId, "incr") {
+						listOfVolumes[backupId] = false
+					} else {
+						listOfVolumes[backupId] = true
+					}
+				}
+				for id, isIncremental := range listOfVolumes {
+					if !isIncremental {
+						log.InfoD(fmt.Sprintf("Backup %s wasn't a incremental backup", id))
+						noFailures = false
+					}
+				}
+				if noFailures {
+					break
+				}
+			}
+		}
+	}
+	return incrementalBackupName, nil
+}
+
+// StartAllVMsInNamespace starts all the Kubevirt VMs in the given namespace
+func StartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	errors := make([]string, 0)
+	var mutex sync.Mutex
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := StartKubevirtVM(vm.Name, namespace, waitForCompletion)
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				errors = append(errors, err.Error())
+			}
+		}(vm)
+	}
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while starting VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
+	}
+	return nil
+}
+
+// StopAllVMsInNamespace stops all the Kubevirt VMs in the given namespace
+func StopAllVMsInNamespace(namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	errors := make([]string, 0)
+	var mutex sync.Mutex
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := StopKubevirtVM(vm.Name, namespace, waitForCompletion)
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				errors = append(errors, err.Error())
+			}
+		}(vm)
+	}
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while stopping VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
+	}
+	return nil
+}
+
+// RestartAllVMsInNamespace restarts all the Kubevirt VMs in the given namespace
+func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	errors := make([]string, 0)
+	var mutex sync.Mutex
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := RestartKubevirtVM(vm.Name, namespace, waitForCompletion)
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				errors = append(errors, err.Error())
+			}
+		}(vm)
+	}
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while restarting VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
 	}
 	return nil
 }
