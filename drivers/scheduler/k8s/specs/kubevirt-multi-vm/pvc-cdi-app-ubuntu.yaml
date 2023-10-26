@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: pvc-cdi-ubuntu
+  name: pvc-cdi-ubuntu-app
   labels:
     app: containerized-data-importer
   annotations:
-    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/mysql-postgres-sysbench.img
+    cdi.kubevirt.io/storage.import.endpoint: http://kubevirt-disk-registry.pwx.dev.purestorage.com/mysql-postgres-sysbench.qcow2
 spec:
   storageClassName: kubevirt-sc
   accessModes:
   - ReadWriteMany
   resources:
     requests:
-      storage: 15Gi
+      storage: 17Gi
