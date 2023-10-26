@@ -368,11 +368,10 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 	)
 
 	var (
-		contexts     = make([]*scheduler.Context, 0)
-		namespaces   = make([]string, 0)
-		backend      = BackendUnknown
-		volumeMap    = make(map[VolumeType][]*api.Volume)
-		volumeCtxMap = make(map[string]*scheduler.Context)
+		contexts   = make([]*scheduler.Context, 0)
+		namespaces = make([]string, 0)
+		backend    = BackendUnknown
+		volumeMap  = make(map[VolumeType][]*api.Volume)
 	)
 
 	JustBeforeEach(func() {
@@ -450,7 +449,6 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 					default:
 						volumeMap[VolumeUnknown] = append(volumeMap[VolumeUnknown], apiVol)
 					}
-					volumeCtxMap[apiVol.Id] = ctx
 				}
 			}
 		})
