@@ -200,14 +200,14 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 		}
 	}
 	log.Infof("Control Node IP: %v", ControlNodeIP)
-	sampleVclusterConfig := filepath.Join(currentDir, "..", "..", "deployments", "customconfigs", "vcluster.yaml")
+	sampleVclusterConfig := filepath.Join(currentDir, "vcluster.yaml")
 	sampleVclusterConfigAbsPath, err := filepath.Abs(sampleVclusterConfig)
 	if err != nil {
 		return err
 	}
 
 	vcluster_config_filename := "vcluster-" + v.Name + ".yaml"
-	vClusterPath := filepath.Join(currentDir, "..", "..", "deployments", "customconfigs", vcluster_config_filename)
+	vClusterPath := filepath.Join(currentDir, vcluster_config_filename)
 	absPath, err := filepath.Abs(vClusterPath)
 	if err != nil {
 		return err
