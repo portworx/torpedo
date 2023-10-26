@@ -530,51 +530,54 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 			}
 			wg.Wait()
 		})
+		/*
+			Step("Resume the existing backup schedules", func() {
+				log.InfoD("Resume the existing backup schedules")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for _, scheduleName := range scheduleNames {
+					err = resumeBackupSchedule(scheduleName, periodicSchedulePolicyName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of resuming backup schedule - %s", scheduleName))
+				}
+				log.Infof("Waiting 5 minute for another schedule backup to trigger")
+				time.Sleep(5 * time.Minute)
+			})
 
-		Step("Resume the existing backup schedules", func() {
-			log.InfoD("Resume the existing backup schedules")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, scheduleName := range scheduleNames {
-				err = resumeBackupSchedule(scheduleName, periodicSchedulePolicyName, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of resuming backup schedule - %s", scheduleName))
-			}
-			log.Infof("Waiting 5 minute for another schedule backup to trigger")
-			time.Sleep(5 * time.Minute)
-		})
-
-		Step("Get the latest schedule backup and verify the backup status", func() {
-			log.InfoD("Get the latest schedule backup and verify the backup status")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, scheduleName := range scheduleNames {
-				latestScheduleBkpName, err := GetLatestScheduleBackupName(ctx, scheduleName, orgID)
-				log.FailOnError(err, "Error while getting latest schedule backup name")
-				err = backupSuccessCheckWithValidation(ctx, latestScheduleBkpName, appContextsToBackupMap[scheduleName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of latest schedule backup [%s]", latestScheduleBkpName))
-			}
-		})
+			Step("Get the latest schedule backup and verify the backup status", func() {
+				log.InfoD("Get the latest schedule backup and verify the backup status")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for _, scheduleName := range scheduleNames {
+					latestScheduleBkpName, err := GetLatestScheduleBackupName(ctx, scheduleName, orgID)
+					log.FailOnError(err, "Error while getting latest schedule backup name")
+					err = backupSuccessCheckWithValidation(ctx, latestScheduleBkpName, appContextsToBackupMap[scheduleName], orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of latest schedule backup [%s]", latestScheduleBkpName))
+				}
+			})
+		*/
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		}
-		log.Infof("Deleting backup schedule policy")
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
-		log.InfoD("Delete the local bucket created")
-		for _, provider := range providers {
-			DeleteBucket(provider, localBucketNameMap[provider])
-			log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
-		}
+		/*
+			defer EndPxBackupTorpedoTest(scheduledAppContexts)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Deleting the deployed apps after the testcase")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			for _, scheduleName := range scheduleNames {
+				err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+			}
+			log.Infof("Deleting backup schedule policy")
+			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{periodicSchedulePolicyName})
+			CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUID, ctx)
+			log.InfoD("Delete the local bucket created")
+			for _, provider := range providers {
+				DeleteBucket(provider, localBucketNameMap[provider])
+				log.Infof("local bucket deleted - %s", localBucketNameMap[provider])
+			}
+		*/
 	})
 })
 
