@@ -4614,7 +4614,7 @@ func (k *K8s) GetPodLog(ctx *scheduler.Context, sinceSeconds int64, containerNam
 	return logsByPodName, nil
 }
 
-// Describe describe the test case
+// Describe describes the context
 func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 	var buf bytes.Buffer
 	var err error
@@ -4903,7 +4903,7 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VirtualMachine", obj.Name)))
 			buf.WriteString(insertLineBreak("END VirtualMachine"))
 		} else {
-			log.Warnf("Object type unknown/not supported: %v", obj)
+			log.Warnf("Object type unknown/not supported: %v", specObj)
 		}
 	}
 	return buf.String(), nil

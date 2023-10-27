@@ -9,10 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
-
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"math/rand"
@@ -2078,8 +2077,16 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 func DescribeNamespace(contexts []*scheduler.Context) {
 	context("generating namespace info...", func() {
 		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+			dir := defaultBundleLocation
+			_, err := os.Stat(dir)
+			if os.IsNotExist(err) {
+				log.Infof("Log directory [%s] does not exist, using /tmp/ instead", dir)
+				dir = "/tmp"
+			} else if err != nil {
+				log.Errorf("failed to stat directory [%s]. Cause: %v", dir, err)
+			}
 			for _, ctx := range contexts {
-				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
+				filename := fmt.Sprintf("%s/%s-%s.namespace.log", dir, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
 				if err != nil {
 					log.Errorf("failed to describe namespace for [%s] %s. Cause: %v", ctx.UID, ctx.App.Key, err)
