@@ -1927,7 +1927,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), ReplacePolicy_Delete)
+					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), ReplacePolicyDelete)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
 				}(bkpNameSpace, backupName)
 			}
@@ -3225,7 +3225,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 		labelSelectors           map[string]string
 		backupNames              []string
 		restoreNames             []string
-		numberOfAlternateBackups int = 2
+		numberOfAlternateBackups = 2
 	)
 
 	JustBeforeEach(func() {
