@@ -1951,16 +1951,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 							}
 						}
 
-						if k8s, ok := Inst().S.(*k8s.K8s); ok {
-							_, err := k8s.GetUpdatedSpec(specObj)
-							if err == nil {
-								log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
-							} else {
-								err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
-								errors = append(errors, err)
-							}
+						_, err := k8s.GetUpdatedSpec(specObj)
+						if err == nil {
+							log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 						} else {
-							err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
+							err := fmt.Errorf("presence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 							errors = append(errors, err)
 						}
 
