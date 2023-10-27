@@ -289,7 +289,8 @@ func (backupClient *BackupClient) TriggerAndValidateAdhocBackup(deploymentID str
 	if err != nil {
 		return fmt.Errorf("failed while creating adhoc backup. Err: %v", err)
 	}
-	log.Infof("Created adhoc backup. Details: deployment- %v,backup type - %v, backup resource name: %v", bkpObj.GetDeploymentName(), bkpObj.GetBackupType(), bkpObj.GetClusterResourceName())
+	log.Infof("Created adhoc backup. Details: deployment- %v,backup type - %v, backup resource name: %v, backupObj id: %v", bkpObj.GetDeploymentName(),
+		bkpObj.GetBackupType(), bkpObj.GetClusterResourceName(), bkpObj.GetId())
 
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
 		bkpJobs, err = backupClient.Components.BackupJob.ListBackupJobs(bkpObj.GetId())
