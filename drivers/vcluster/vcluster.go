@@ -656,3 +656,18 @@ func (v *VCluster) IsDeploymentHealthy(appNS string, deploymentName string, expe
 	_, err := task.DoRetryWithTimeout(checkDeploymentHealth, VclusterAppTimeout, VClusterAppRetryInterval)
 	return err
 }
+
+// GetDeploymentPodNodes returns the names of the nodes on which pods of this deployment are running
+func (v *VCluster) GetDeploymentPodNodes(appNS string, deploymentName string) ([]string, error) {
+	pods, err := v.ListDeploymentPods(appNS, deploymentName)
+	if err != nil {
+		return nil, fmt.Errorf("error listing pods: %v", err)
+	}
+	var nodeNames []string
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName != "" {
+			nodeNames = append(nodeNames, pod.Spec.NodeName)
+		}
+	}
+	return nodeNames, nil
+}
