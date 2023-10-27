@@ -477,6 +477,7 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 			poolIDToResize, poolToBeResized.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
+		// we are using pxctl command direclty as we dont want retries and Inst().V.ExpandPool does not returns required error
 		pxctlCmdFull := fmt.Sprintf("pxctl sv pool expand -u %s -s %d -o resize-disk ", poolIDToResize, targetSizeGiB)
 
 		// Execute the command and check the alerts of type POOL
