@@ -4047,11 +4047,13 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 }
 
 // UpdateBackupLocation creates backup location using the given context
-func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, bucketName string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+// func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, bucketName string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, bucketName, ctx, sseS3EncryptionType)
+		err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, ctx, sseS3EncryptionType)
+		//err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, bucketName, ctx, sseS3EncryptionType)
 	}
 	return err
 }
@@ -4301,7 +4303,8 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, bucketName string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+// func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, bucketName string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -4312,7 +4315,6 @@ func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path: bucketName,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
