@@ -3551,6 +3551,10 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 		4. Exit pool maintenance mode
 	*/
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolMaintenanceModeAddDisk", "pool expansion using add-disk when pool is in maintenance mode", nil, 0)
 	})
@@ -3657,6 +3661,11 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 		3. Exit maintenance mode
 		4. Validate pool expansion
 	*/
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskMaintenanceMode", "pool expansion using add-disk then put node is in maintenance mode", nil, 0)
 	})
@@ -3774,9 +3783,12 @@ var _ = Describe("{ResizeNodeMaintenanceMode}", func() {
 		4. Validate pool expansion
 	*/
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizeNodeMaintenanceMode", "pool expansion using resize-disk then put node is in maintenance mode", nil, 0)
-
 	})
 
 	stepLog := "should get the existing storage node,trigger resize-disk and put it in maintenance mode"
@@ -3887,9 +3899,13 @@ var _ = Describe("{ResizePoolMaintenanceMode}", func() {
 		3. Validate pool expansion
 		4. Exit pool maintenance mode
 	*/
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizePoolMaintenanceMode", "pool expansion using resize-disk then put pool in maintenance mode", nil, 0)
-
 	})
 
 	stepLog := "should get the existing storage node and put it in maintenance mode"
@@ -3997,9 +4013,12 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 		4. Exit pool maintenance mode
 	*/
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("AddDiskPoolMaintenanceMode", "pool expansion using add-disk then put pool in maintenance mode", nil, 0)
-
 	})
 
 	stepLog := "should get the existing storage node and put it in maintenance mode"
@@ -5308,6 +5327,10 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/51292
 	var runID int
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolIncreaseSize20TB", "Resize a pool of capacity of 100GB to 20TB", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
@@ -5448,6 +5471,10 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 	var testrailID = 51320
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/51320
 	var runID int
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ResizePoolDrivesInDifferentSize",
@@ -6111,10 +6138,14 @@ outer:
 }
 
 var _ = Describe("{ChangedIOPriorityPersistPoolExpand}", func() {
-	var testrailID = 55349
+	var testrailID = 79487
 	// Testrail Description : Changed pool IO_priority should persist post pool expand
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/79487
 	var runID int
+
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ChangedIOPriorityPersistPoolExpand",
@@ -7925,6 +7956,10 @@ var _ = Describe("{DiffPoolExpansionFromMaintenanceNode}", func() {
 		3. Validate the applications
 	*/
 
+	var (
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("DiffPoolExpansionFromMaintenanceNode",
 			"Trigger pool expansion of node 2 from node 1 while node 1 is in maintenance mode",
@@ -8809,9 +8844,14 @@ var _ = Describe("{VolumeHAPoolOpsNoKVDBleaderDown}", func() {
 
 // Volume replication change
 var _ = Describe("{KvdbFailoverDuringPoolExpand}", func() {
-	var testrailID = 0
-	// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
-	var runID int
+
+	var (
+		testrailID = 0
+		// JIRA ID :https://portworx.atlassian.net/browse/PTX-17728
+		runID    int
+		contexts = make([]*scheduler.Context, 0)
+	)
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("KvdbFailoverDuringPoolExpand",
 			"KVDB failover during pool expand", nil, testrailID)
