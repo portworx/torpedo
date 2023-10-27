@@ -460,6 +460,9 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].Id)
 					clonedVolID, err := Inst().V.CloneVolume(volumes[i].Id)
 					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].Id)
+					mountPath, err := Inst().V.AttachVolume(clonedVolID)
+					log.FailOnError(err, "Failed to attach volume")
+					log.InfoD("Successfully attached volume on path:%v", mountPath)
 					params := make(map[string]string)
 					if Inst().ConfigMap != "" {
 						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
