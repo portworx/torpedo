@@ -1680,12 +1680,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 					continue volloop
 				}
 
-				sched, ok := Inst().S.(*k8s.K8s)
-				if !ok {
-					continue volloop
-				}
-
-				updatedSpec, err := sched.GetUpdatedSpec(pvcSpecObj)
+				updatedSpec, err := k8s.GetUpdatedSpec(pvcSpecObj)
 				if err != nil {
 					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
 					errors = append(errors, err)
