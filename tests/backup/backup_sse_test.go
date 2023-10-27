@@ -32,9 +32,9 @@ import (
 var _ = Describe("{sseS3encryption}", func() {
 
 	var (
-		scheduledAppContexts       []*scheduler.Context
-		customBucket               string
-		customBucket1              string
+		scheduledAppContexts []*scheduler.Context
+		customBucket         string
+		//customBucket1              string
 		backupLocationUID          string
 		cloudCredUID               string
 		cloudCredUID1              string
@@ -125,7 +125,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			// Create bucket BK1 with deny policy true
 			bucketWithOutPolicy := "sse-bucket-without-policy"
 			for _, provider := range providers {
-				customBucket1 = GetCustomBucketName(provider, bucketWithOutPolicy)
+				customBucket = GetCustomBucketName(provider, bucketWithOutPolicy)
 				customBucketsWithOutPolicy = append(customBucketsWithOutPolicy, customBucket)
 			}
 
@@ -179,7 +179,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			}
 
 			for _, provider := range providers {
-				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, customBucket, ctx, api.S3Config_SSE_S3)
+				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, ctx, api.S3Config_SSE_S3)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
 			}
 
@@ -535,7 +535,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 			})
 
 			for _, provider := range providers {
-				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName, cloudCredUID, customBucket, ctx, api.S3Config_SSE_S3)
+				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName, cloudCredUID, ctx, api.S3Config_SSE_S3)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
 			}
 
