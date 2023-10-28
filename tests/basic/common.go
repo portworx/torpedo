@@ -10,7 +10,7 @@ const (
 	replicationUpdateTimeout         = 4 * time.Hour
 	retryTimeout                     = time.Minute * 2
 	addDriveUpTimeOut                = time.Minute * 15
-	poolResizeTimeout                = time.Minute * 120
+	poolResizeTimeout                = time.Minute * 360
 	poolExpansionStatusCheckInterval = time.Minute * 3
 	JournalDeviceSizeInGB            = 3
 )
