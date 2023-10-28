@@ -9,9 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -473,6 +473,13 @@ type PlatformCredentialStruct struct {
 	credName string
 	credUID  string
 }
+
+type (
+	// TestcaseAuthor represents the owner of a Testcase
+	TestcaseAuthor string
+	// TestcaseQuarter represents the fiscal quarter during which the Testcase is automated
+	TestcaseQuarter string
+)
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
@@ -6811,6 +6818,11 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
+func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
