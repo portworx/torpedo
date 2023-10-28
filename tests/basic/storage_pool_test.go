@@ -1985,19 +1985,20 @@ var _ = Describe("{AddWithPXRestart}", func() {
 		StartTorpedoTest("AddWithPXRestart", "Initiate pool expansion using add-disk and restart PX while it is in progress", nil, 0)
 
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
-		pickPoolToResize()
+
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("adddskwrst-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
+
+		pickPoolToResize()
 
 		stNode, err := getRandomNodeWithPoolIOs(contexts)
 		log.FailOnError(err, "error identifying node to run test")
