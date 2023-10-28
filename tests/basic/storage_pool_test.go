@@ -2255,9 +2255,8 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
-			log.InfoD("-----------------------second pool expand------------------------")
-			log.FailOnError(err, "Pool expand failed without force")
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			log.InfoD("error while expanding so re-trigger with force: %v", err)
 			if err != nil {
 				if strings.Contains(fmt.Sprintf("%v", err), "Please re-issue expand with force") {
 					err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
