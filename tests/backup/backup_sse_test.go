@@ -217,7 +217,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 
-			restoreName := fmt.Sprintf("restore-with-replace-%s-%s", RestoreNamePrefix)
+			restoreName := fmt.Sprintf("restore-with-replace-%s", RestoreNamePrefix)
 			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 
