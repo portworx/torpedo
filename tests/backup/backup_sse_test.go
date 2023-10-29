@@ -485,6 +485,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				var wg sync.WaitGroup
 				bkpNamespacesForWithoutSse := bkpNamespaces[:midpoint]
 				for _, backupNameSpace := range bkpNamespacesForWithoutSse {
+					time.Sleep(10 * time.Second)
 					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, backupNameSpace, time.Now().Unix())
 					wg.Add(1)
 					go func(backupNameSpace string) {
@@ -505,6 +506,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				var wg sync.WaitGroup
 				bkpNamespacesWithSse := bkpNamespaces[midpoint:]
 				for _, backupNameSpace := range bkpNamespacesWithSse {
+					time.Sleep(10 * time.Second)
 					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, backupNameSpace, time.Now().Unix())
 					wg.Add(1)
 					go func(backupNameSpace string) {
