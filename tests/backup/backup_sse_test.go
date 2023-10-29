@@ -43,6 +43,7 @@ var _ = Describe("{sseS3encryption}", func() {
 		customBackupLocationName   string
 		customBucketsWithOutPolicy []string
 		//customBucketsWithPolicy    []string
+		scheduleName              string
 		backupLocationUID1        string
 		customBackupLocationName1 string
 		credName                  string
@@ -56,6 +57,9 @@ var _ = Describe("{sseS3encryption}", func() {
 		clusterUid                string
 		restoreList               []string
 		backupNames               []string
+		schedulePolicyName        string
+		schedulePolicyUid         string
+		latestScheduleBackupName  string
 	)
 
 	storageClassMapping := make(map[string]string)
@@ -270,6 +274,40 @@ var _ = Describe("{sseS3encryption}", func() {
 					}(scNames[i])
 				}
 				wg.Wait()
+			})
+
+			Step("Create a schedule policy", func() {
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				schedulePolicyintervalInMins := 15
+				log.InfoD("Creating a schedule policy with interval [%v] mins", schedulePolicyintervalInMins)
+				schedulePolicyName = fmt.Sprintf("interval-%v-%v", schedulePolicyintervalInMins, time.Now().Unix())
+				schedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(schedulePolicyintervalInMins), 5)
+				err = Inst().Backup.BackupSchedulePolicy(schedulePolicyName, uuid.New(), orgID, schedulePolicyInfo)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy [%s] with interval [%v] mins", schedulePolicyName, schedulePolicyintervalInMins))
+				schedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schedulePolicyName)
+				log.FailOnError(err, "Fetching uid of schedule policy [%s]", schedulePolicyName)
+				log.Infof("Schedule policy [%s] uid: [%s]", schedulePolicyName, schedulePolicyUid)
+			})
+
+			Step("Create schedule backup", func() {
+				log.InfoD("Creating a schedule backup")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
+				labelSelectors := make(map[string]string)
+				latestScheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, customBackupLocationName1, backupLocationUID1, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", schedulePolicyName, schedulePolicyUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
+			})
+
+			Step("Restoring the backed up applications from latest scheduled backup", func() {
+				log.InfoD("Restoring the backed up applications from latest scheduled backup")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+
+				restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+				err = CreateRestore(restoreName, latestScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
 
 			//for _, provider := range providers {
