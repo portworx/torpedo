@@ -522,7 +522,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 			})
 
 			Step("Create restore with replace policy set to retain", func() {
-				restoreName := fmt.Sprintf("restore-with-replace-%s", RestoreNamePrefix)
+				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
