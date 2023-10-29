@@ -1,4 +1,5 @@
-//package tests
+package tests
+
 //
 //import (
 //	//"github.com/aws/aws-sdk-go/aws"
