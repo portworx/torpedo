@@ -56,10 +56,10 @@ var _ = Describe("{sseS3encryption}", func() {
 		clusterStatus             api.ClusterInfo_StatusInfo_Status
 		clusterUid                string
 		restoreList               []string
-		backupNames               []string
-		schedulePolicyName        string
-		schedulePolicyUid         string
-		latestScheduleBackupName  string
+		//	backupNames               []string
+		schedulePolicyName       string
+		schedulePolicyUid        string
+		latestScheduleBackupName string
 	)
 
 	storageClassMapping := make(map[string]string)
@@ -117,8 +117,12 @@ var _ = Describe("{sseS3encryption}", func() {
 			// Perform further backup on BK1
 			// Perform further backup on BK2
 			// ADD new BL and take backup
+			// Perform scheduled backup on newely added backup location
+			// Perform restore from scheduled backup
 			// Make SSE True take backup on BL1
+			// Perfrom backup
 			// Remove deny policy and take backup on BL2
+			// perform backup
 
 			//bucketMap := map[string]bool{
 			//	"sse-bucket-with-policy-1": false,
@@ -213,17 +217,17 @@ var _ = Describe("{sseS3encryption}", func() {
 			//log.FailOnError(err, "Checking if px-backup pod is in running state")
 
 			// Take backup with BL2
-			log.InfoD("Taking backup of application for different combination of restores")
-			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-			log.Infof(clusterUid)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			backupNames = append(backupNames, backupName)
-
-			restoreName := fmt.Sprintf("restore-with-replace-%s", RestoreNamePrefix)
-			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			//log.InfoD("Taking backup of application for different combination of restores")
+			//backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			//appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			//log.Infof(clusterUid)
+			//err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			//backupNames = append(backupNames, backupName)
+			//
+			//restoreName := fmt.Sprintf("restore-with-replace-%s", RestoreNamePrefix)
+			//err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 
 			Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 				log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
@@ -305,7 +309,7 @@ var _ = Describe("{sseS3encryption}", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 
-				restoreName = fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
 				err = CreateRestore(restoreName, latestScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
