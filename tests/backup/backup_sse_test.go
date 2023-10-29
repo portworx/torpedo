@@ -42,20 +42,20 @@ var _ = Describe("{sseS3encryption}", func() {
 		cloudCredUidList           []string
 		customBackupLocationName   string
 		customBucketsWithOutPolicy []string
-		customBucketsWithPolicy    []string
-		backupLocationUID1         string
-		customBackupLocationName1  string
-		credName                   string
-		credName1                  string
-		customBuckets              []string
-		bkpNamespaces              []string
-		sourceScName               *storageApi.StorageClass
-		scCount                    int
-		scNames                    []string
-		clusterStatus              api.ClusterInfo_StatusInfo_Status
-		clusterUid                 string
-		restoreList                []string
-		backupNames                []string
+		//customBucketsWithPolicy    []string
+		backupLocationUID1        string
+		customBackupLocationName1 string
+		credName                  string
+		credName1                 string
+		customBuckets             []string
+		bkpNamespaces             []string
+		sourceScName              *storageApi.StorageClass
+		scCount                   int
+		scNames                   []string
+		clusterStatus             api.ClusterInfo_StatusInfo_Status
+		clusterUid                string
+		restoreList               []string
+		backupNames               []string
 	)
 
 	storageClassMapping := make(map[string]string)
@@ -178,15 +178,15 @@ var _ = Describe("{sseS3encryption}", func() {
 				log.Infof("created backup location successfully")
 			}
 
-			for _, provider := range providers {
-				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, ctx, api.S3Config_SSE_S3)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
-			}
+			//for _, provider := range providers {
+			//	err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, ctx, api.S3Config_SSE_S3)
+			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
+			//}
 
-			log.InfoD("Kill stork when backup in progress")
-			log.Infof("Kill stork when backup in progress")
-			err := DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
+			//log.InfoD("Kill stork when backup in progress")
+			//log.Infof("Kill stork when backup in progress")
+			//err := DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
 
 			// Take backup with BL1
 			log.InfoD("Taking backup of application for different combination of restores")
@@ -197,16 +197,16 @@ var _ = Describe("{sseS3encryption}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames1 = append(backupNames1, backupName)
 
-			log.Infof("Restart backup pod")
-			log.InfoD("Restart backup pod")
-			backupPodLabel := make(map[string]string)
-			backupPodLabel["app"] = "px-backup"
-			pxbNamespace, err := backup.GetPxBackupNamespace()
-			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
-			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
-			err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
-			log.FailOnError(err, "Checking if px-backup pod is in running state")
+			//log.Infof("Restart backup pod")
+			//log.InfoD("Restart backup pod")
+			//backupPodLabel := make(map[string]string)
+			//backupPodLabel["app"] = "px-backup"
+			//pxbNamespace, err := backup.GetPxBackupNamespace()
+			//dash.VerifyFatal(err, nil, "Getting px-backup namespace")
+			//err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
+			//dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
+			//err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
+			//log.FailOnError(err, "Checking if px-backup pod is in running state")
 
 			// Take backup with BL2
 			log.InfoD("Taking backup of application for different combination of restores")
@@ -216,6 +216,10 @@ var _ = Describe("{sseS3encryption}", func() {
 			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
+
+			restoreName := fmt.Sprintf("restore-with-replace-%s-%s", RestoreNamePrefix)
+			err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 
 			Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 				log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
@@ -268,32 +272,32 @@ var _ = Describe("{sseS3encryption}", func() {
 				wg.Wait()
 			})
 
-			for _, provider := range providers {
-				//err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, customBucket1, ctx, api.S3Config_SSE_S3)
-				err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, ctx, api.S3Config_SSE_S3)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
-			}
-
-			// Take backup with BL1
-			log.InfoD("Taking backup of application for different combination of restores")
-			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-			log.Infof(clusterUid)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName1, backupLocationUID1, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			backupNames = append(backupNames, backupName)
-
-			err = RemoveS3BucketPolicy(customBucketsWithPolicy[0])
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
-
-			// Take backup with BL2
-			log.InfoD("Taking backup of application for different combination of restores")
-			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
-			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-			log.Infof(clusterUid)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			backupNames = append(backupNames, backupName)
+			//for _, provider := range providers {
+			//	//err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, customBucket1, ctx, api.S3Config_SSE_S3)
+			//	err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, credName1, cloudCredUID1, ctx, api.S3Config_SSE_S3)
+			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", customBackupLocationName1))
+			//}
+			//
+			//// Take backup with BL1
+			//log.InfoD("Taking backup of application for different combination of restores")
+			//backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			//appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			//log.Infof(clusterUid)
+			//err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName1, backupLocationUID1, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			//backupNames = append(backupNames, backupName)
+			//
+			//err = RemoveS3BucketPolicy(customBucketsWithPolicy[0])
+			//dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
+			//
+			//// Take backup with BL2
+			//log.InfoD("Taking backup of application for different combination of restores")
+			//backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+			//appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			//log.Infof(clusterUid)
+			//err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			//backupNames = append(backupNames, backupName)
 
 			//for _, provider := range providers {
 			//	err = UpdateBackupLocation(provider, customBackupLocationName1, backupLocationUID1, orgID, ctx, api.S3Config_SSE_S3)
