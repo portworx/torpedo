@@ -878,7 +878,7 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
 					log.FailOnError(err, "Unable to create scheduler context")
-					_, err = IncreasePVCby1Gig(namespace, deployment, 50)
+					_, err = IncreasePVCby1Gig(namespace, deployment, 1)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
 				})
 				Step("Validate Deployments after PVC Resize", func() {
