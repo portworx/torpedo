@@ -425,64 +425,6 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 		selectedPool := stNode.Pools[0]
 		var poolToBeResized *api.StoragePool
 
-		stepLog = "Initiate pool expansion using add-disk"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-
-			poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
-			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
-
-			drvSize, err := getPoolDiskSize(poolToBeResized)
-			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
-			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
-
-			isjournal, err := IsJournalEnabled()
-			log.FailOnError(err, "Failed to check if Journal enabled")
-			expectedSizeWithJournal := expectedSize
-			if isjournal {
-				expectedSizeWithJournal = expectedSizeWithJournal - 3
-			}
-			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-
-			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
-
-			stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
-				// Get the node to check the pool show output
-				n := node.GetStorageDriverNodes()[0]
-				// Below command to change when PWX-28484 is fixed
-				cmd := "pxctl alerts show| grep -e POOL"
-
-				// Execute the command and check the alerts of type POOL
-				out, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
-					Timeout:         2 * time.Minute,
-					TimeBeforeRetry: 10 * time.Second,
-				})
-
-				log.FailOnError(err, "Unable to execute the alerts show command")
-
-				outLines := strings.Split(out, "\n")
-				var alertExist bool
-				alertExist = false
-				for _, l := range outLines {
-					line := strings.Trim(l, " ")
-					if strings.Contains(line, "PoolExpandSuccessful") && strings.Contains(line, poolIDToResize) {
-						if strings.Contains(line, fmt.Sprintf("%d", expectedSize)) || strings.Contains(line, fmt.Sprintf("%d", expectedSizeWithJournal)) {
-							alertExist = true
-							log.Infof("The Alert generated is %s", line)
-							break
-						}
-					}
-				}
-				dash.VerifyFatal(alertExist, true, "Verify Alert is Present")
-			})
-		})
-
 		stepLog := "Initiate pool expansion using resize-disk"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -539,7 +481,63 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 				}
 				dash.VerifyFatal(alertExist, true, "Verify Alert is Present")
 			})
+		})
 
+		stepLog = "Initiate pool expansion using add-disk"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			poolToBeResized, err = GetStoragePoolByUUID(selectedPool.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selectedPool.Uuid))
+
+			drvSize, err := getPoolDiskSize(poolToBeResized)
+			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
+			expectedSize := (poolToBeResized.TotalSize / units.GiB) + drvSize
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+			expectedSizeWithJournal := expectedSize
+			if isjournal {
+				expectedSizeWithJournal = expectedSizeWithJournal - 3
+			}
+			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", selectedPool.Uuid, stNode.Name))
+
+			stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+				// Get the node to check the pool show output
+				n := node.GetStorageDriverNodes()[0]
+				// Below command to change when PWX-28484 is fixed
+				cmd := "pxctl alerts show| grep -e POOL"
+
+				// Execute the command and check the alerts of type POOL
+				out, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+
+				log.FailOnError(err, "Unable to execute the alerts show command")
+
+				outLines := strings.Split(out, "\n")
+				var alertExist bool
+				alertExist = false
+				for _, l := range outLines {
+					line := strings.Trim(l, " ")
+					if strings.Contains(line, "PoolExpandSuccessful") && strings.Contains(line, poolIDToResize) {
+						if strings.Contains(line, fmt.Sprintf("%d", expectedSize)) || strings.Contains(line, fmt.Sprintf("%d", expectedSizeWithJournal)) {
+							alertExist = true
+							log.Infof("The Alert generated is %s", line)
+							break
+						}
+					}
+				}
+				dash.VerifyFatal(alertExist, true, "Verify Alert is Present")
+			})
 		})
 	})
 	JustAfterEach(func() {
