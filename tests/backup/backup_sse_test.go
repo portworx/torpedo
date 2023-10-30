@@ -352,35 +352,36 @@ var _ = Describe("{sseS3encryption}", func() {
 var _ = Describe("{sseS3encryption1}", func() {
 
 	var (
-		scheduledAppContexts        []*scheduler.Context
-		backupLocationUID           string
-		cloudCredUID                string
-		cloudCredUidForBlWithoutSse string
-		backupsWithSse              []string
-		backupsWithOutSse           []string
-		cloudCredUidList            []string
-		customBackupLocationWithSse string
-		customBucketWithOutPolicy   string
-		customBucketsWithPolicy     []string
-		scheduleName                string
-		backupLocationUidWithoutSse string
-		backupLocationWithoutSse    string
-		credName                    string
-		credNameForBlWithoutSse     string
-		customBucketsWithDenyPolicy []string
-		bkpNamespaces               []string
-		sourceScName                *storageApi.StorageClass
-		scCount                     int
-		scNames                     []string
-		clusterStatus               api.ClusterInfo_StatusInfo_Status
-		clusterUid                  string
-		restoreList                 []string
-		backupNames                 []string
-		schedulePolicyName          string
-		schedulePolicyUid           string
-		latestScheduleBackupName    string
-		backupName                  string
-		appContextsToBackup         []*scheduler.Context
+		scheduledAppContexts               []*scheduler.Context
+		backupLocationUID                  string
+		cloudCredUID                       string
+		cloudCredUidForBlWithoutSse        string
+		backupsWithSse                     []string
+		backupsWithOutSse                  []string
+		cloudCredUidList                   []string
+		customBackupLocationWithSse        string
+		customBucketWithOutPolicy          string
+		customBucketsWithPolicy            []string
+		scheduleName                       string
+		backupLocationUidWithoutSse        string
+		backupLocationWithoutSse           string
+		credName                           string
+		credNameForBlWithoutSse            string
+		customBucketsWithDenyPolicy        []string
+		bkpNamespaces                      []string
+		sourceScName                       *storageApi.StorageClass
+		scCount                            int
+		scNames                            []string
+		clusterStatus                      api.ClusterInfo_StatusInfo_Status
+		clusterUid                         string
+		restoreList                        []string
+		backupNames                        []string
+		schedulePolicyName                 string
+		schedulePolicyUid                  string
+		latestScheduleBackupName           string
+		backupName                         string
+		appContextsToBackup                []*scheduler.Context
+		backupNameAfterRemovalOfDenyPolicy string
 	)
 
 	storageClassMapping := make(map[string]string)
@@ -529,7 +530,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 			Step("Create restore with replace policy set to retain", func() {
 				log.InfoD("Create restore with replace policy set to retain")
 				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
-				err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
+				err = CreateRestoreWithReplacePolicy(restoreName, backupsWithSse[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
 
@@ -652,7 +653,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			})
 
-			Step("Restoring the backed up applications from latest scheduled backup", func() {
+			Step("Restoring the backed up applications from latest scheduled backup which is created after stork and px-backup pod restart", func() {
 				log.InfoD("Restoring the backed up applications from latest scheduled backup")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -661,7 +662,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
 
-			Step("Remove deny policy from S3 bucket", func() {
+			Step("Remove deny policy from S3 bucket which is used in customBackupLocationWithSse", func() {
 				log.InfoD("Remove deny policy from S3 bucket")
 				err = RemoveS3BucketPolicy(customBucketsWithPolicy[0])
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of deny policy from s3 bucket"))
@@ -669,10 +670,17 @@ var _ = Describe("{sseS3encryption1}", func() {
 
 			Step("Taking backup of application after removal of deny policy and sse still set to true", func() {
 				log.InfoD("Taking backup of application after removal of deny policy and sse still set to true")
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
+				backupNameAfterRemovalOfDenyPolicy = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 				appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationWithSse, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup after removal of deny policy and sse still set to true [%s]", backupName))
+			})
+
+			Step("Create restore with replace policy set to retain after removal of deny policy", func() {
+				log.InfoD("Create restore with replace policy set to retain after removal of deny policy")
+				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
+				err = CreateRestoreWithReplacePolicy(restoreName, backupNameAfterRemovalOfDenyPolicy, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
 		}
 	})
