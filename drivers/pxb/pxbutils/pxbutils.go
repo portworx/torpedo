@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const (
@@ -32,6 +34,11 @@ const (
 	// EnvPxBackupOIDCEndpoint is the env var for the OIDC endpoint
 	EnvPxBackupOIDCEndpoint = "OIDC_ENDPOINT"
 )
+
+// HTTPClient is an HTTP client with a predefined timeout
+var HTTPClient = &http.Client{
+	Timeout: 1 * time.Minute,
+}
 
 const (
 	// TorpedoWorkDirectory is the working directory inside the Torpedo container

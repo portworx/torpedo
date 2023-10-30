@@ -1,12 +1,16 @@
 package keycloak
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
+	"github.com/portworx/torpedo/pkg/log"
 	"google.golang.org/grpc/metadata"
+	"io"
+	"net/http"
 	"net/url"
 )
 
@@ -57,10 +61,46 @@ type TokenRepresentation struct {
 }
 
 type Keycloak struct {
-	URL   string
+	URL struct {
+		Admin    string
+		NonAdmin string
+	}
 	Login struct {
 		Username string
 		Password string
+	}
+}
+
+func (k *Keycloak) Invoke(ctx context.Context, method string, url string, body interface{}, headerMap map[string]string) ([]byte, error) {
+	reqBody, err := ToByteArray(body)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	for key, val := range headerMap {
+		req.Header.Set(key, val)
+	}
+	resp, err := HTTPClient.Do(req)
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
+		}
+	}()
+	statusCode := resp.StatusCode
+	statusText := http.StatusText(statusCode)
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		return io.ReadAll(resp.Body)
+	default:
+		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, url, statusCode, statusText)
+		return nil, ProcessError(err)
 	}
 }
 
@@ -73,8 +113,8 @@ func (k *Keycloak) GetAccessToken(ctx context.Context, username string, password
 	values.Set("token-duration", "365d")
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
-	route := "/protocol/openid-connect/token"
-	respBody, err := k.Do(ctx, "POST", false, route, values.Encode(), headerMap)
+	reqURL := k.URL.NonAdmin + "/protocol/openid-connect/token"
+	respBody, err := k.Invoke(ctx, "POST", reqURL, values.Encode(), headerMap)
 	if err != nil {
 		return "", ProcessError(err)
 	}

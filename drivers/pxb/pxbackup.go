@@ -1,7 +1,6 @@
 package pxb
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -9,9 +8,6 @@ import (
 	"github.com/portworx/torpedo/drivers/pxb/generics"
 	"github.com/portworx/torpedo/drivers/pxb/keycloak"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
-	"github.com/portworx/torpedo/pkg/log"
-	"io"
-	"net/http"
 	"os"
 	"strings"
 )
@@ -69,49 +65,6 @@ func GetKeycloakURL(admin bool, route string, namespace string) (string, error) 
 		reqURL += route
 	}
 	return reqURL, nil
-}
-
-func (k *Keycloak) Invoke(ctx context.Context, method string, admin bool, route string, body interface{}, headerMap map[string]string) ([]byte, error) {
-	reqURL, err := k.GetURL(admin, route)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	reqBody, err := ToByteArray(body)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, bytes.NewReader(reqBody))
-	if err != nil {
-		debugMap := DebugMap{}
-		debugMap.Add("ReqURL", reqURL)
-		return nil, ProcessError(err, debugMap.String())
-	}
-	for key, val := range headerMap {
-		req.Header.Set(key, val)
-	}
-	resp, err := k.HTTPClient.Do(req)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	defer func() {
-		err := resp.Body.Close()
-		if err != nil {
-			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
-		}
-	}()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	statusCode := resp.StatusCode
-	switch {
-	case statusCode >= 200 && statusCode < 300:
-		return respBody, nil
-	default:
-		reqURL, statusText := resp.Request.URL, http.StatusText(statusCode)
-		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, reqURL, statusCode, statusText)
-		return nil, ProcessError(err)
-	}
 }
 
 func (k *Keycloak) GetPxCentralAdminAccessToken(ctx context.Context) (string, error) {
