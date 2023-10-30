@@ -442,8 +442,9 @@ var _ = Describe("{sseS3encryption1}", func() {
 			// Create bucket with deny policy
 			Step("Create bucket with deny policy", func() {
 				log.InfoD(fmt.Sprintf("Create bucket with deny policy"))
+				numberOfBucketsWithDenyPolicy := 2
 				bucketWithDenyPolicy := "sse-bucket-with-deny-policy"
-				for i := 0; i < 1; i++ {
+				for i := 0; i < numberOfBucketsWithDenyPolicy; i++ {
 					customBucketWithDenyPolicy := GetCustomBucketName(provider, bucketWithDenyPolicy)
 					policy, err := GenerateS3BucketPolicy("DenyNonAES256Uploads", "s3:x-amz-server-side-encryption=AES256", customBucketWithDenyPolicy)
 					log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
@@ -705,6 +706,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
@@ -712,6 +714,11 @@ var _ = Describe("{sseS3encryption1}", func() {
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+
+		log.Infof("Deleting backup schedule policy")
+		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 
 		// Post test custom bucket delete
