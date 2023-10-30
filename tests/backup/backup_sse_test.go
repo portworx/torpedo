@@ -332,7 +332,7 @@ var _ = Describe("{sseS3encryption}", func() {
 				log.InfoD("Restoring the backed up applications from latest scheduled backup")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
+				restoreName := fmt.Sprintf("%s-%s", "restore-from-schedule", RandomString(10))
 				err = CreateRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
@@ -362,7 +362,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			})
 			Step("Create restore with backup taken on new BackupLocation created post px-backup and stork restart", func() {
 				log.InfoD("Create restore with backup taken on new BackupLocation created post px-backup and stork restart")
-				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreName := fmt.Sprintf("restore-with-replace-from-new-bl-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNameAfterPxBackupRestart, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
@@ -381,7 +381,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			})
 			Step("Create restore with replace policy set to retain after removal of deny policy", func() {
 				log.InfoD("Create restore with replace policy set to retain after removal of deny policy")
-				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
+				restoreName := fmt.Sprintf("restore-with-replace-post-deny-policy-removal-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNameAfterRemovalOfDenyPolicy, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
