@@ -534,6 +534,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupsWithSse[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				restoreList = append(restoreList, restoreName)
 			})
 			Step("Create new storage class on source cluster for storage class mapping for restore", func() {
 				log.InfoD("Create new storage class on source cluster for storage class mapping for restore")
@@ -654,6 +655,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
 				err = CreateRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				restoreList = append(restoreList, restoreName)
 			})
 			// Create BackupLocation with bucketWithPolicy and SSE set to true after px-backup and stork restart
 			Step("Create BackupLocation with bucketWithPolicy and SSE set to true post px-backup and stork restart", func() {
@@ -683,6 +685,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNameAfterPxBackupRestart, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				restoreList = append(restoreList, restoreName)
 			})
 			Step("Remove deny policy from S3 bucket which is used in customBackupLocationWithSse", func() {
 				log.InfoD("Remove deny policy from S3 bucket")
@@ -701,6 +704,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNameAfterRemovalOfDenyPolicy, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				restoreList = append(restoreList, restoreName)
 			})
 		}
 	})
@@ -720,6 +724,12 @@ var _ = Describe("{sseS3encryption1}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+
+		// Deleting restores
+		for _, restoreName := range restoreList {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
 
 		// Post test custom bucket delete
 		providers := getProviders()
