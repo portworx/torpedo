@@ -1,0 +1,15 @@
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: dv-cdi-app
+spec:
+  pvc:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 17Gi
+    storageClassName: kubevirt-sc
+  source:
+    http:
+      url: http://kubevirt-disk-registry.pwx.dev.purestorage.com/mysql-postgres-sysbench.qcow2
