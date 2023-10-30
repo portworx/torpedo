@@ -3658,12 +3658,18 @@ func ValidateBackupLocation(ctx context.Context, orgID string, backupLocationNam
 
 // GetAppLabelFromSpec gets the label of the pod from the spec
 func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]string, error) {
+	labelMap := make(map[string]string)
 	for _, specObj := range AppContextsMapping.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			return obj.Spec.Selector.MatchLabels, nil
+			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Selector.MatchLabels)
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Template.ObjectMeta.Labels)
 		}
 	}
-	return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+	if len(labelMap) == 0 {
+		return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+	}
+	return labelMap, nil
 }
 
 // GetVolumeMounts gets the volume mounts from the spec
