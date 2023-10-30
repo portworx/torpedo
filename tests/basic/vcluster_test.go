@@ -2,7 +2,9 @@ package tests
 
 import (
 	"fmt"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/pkg/snapshotutils"
 	"sync"
 	"time"
 
@@ -12,7 +14,6 @@ import (
 	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -493,6 +494,7 @@ var _ = Describe("{VolumeDriverCrashVCluster}", func() {
 	})
 })
 
+// This test case is failing due to : https://portworx.atlassian.net/browse/PWX-34762
 var _ = Describe("{VolumeDriverAppDownVCluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
@@ -586,6 +588,7 @@ var _ = Describe("{VolumeDriverAppDownVCluster}", func() {
 	})
 })
 
+// This test case is failing due to : https://portworx.atlassian.net/browse/PWX-34762
 var _ = Describe("{VolumeDriverDownVClusterOps}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
@@ -648,8 +651,239 @@ var _ = Describe("{VolumeDriverDownVClusterOps}", func() {
 	})
 })
 
+var _ = Describe("{CreateEncryptedVolVCluster}", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	var secretName string
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   "100s",
+		Filename:  "/data/fiotest",
+		EndFsync:  1,
+	}
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateEncryptedVolVCluster", "Create app on encrypted vol in vcluster, validate app, cleanup", nil, 0)
+		vc, err = vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create app on encrypted vol in vcluster, validate app, cleanup", func() {
+		secretName = fmt.Sprintf("px-vol-encryption-%v", time.Now().Unix())
+		err := vcluster.CreateClusterWideSecret(secretName)
+		log.FailOnError(err, "Failed to create a Cluster Wide Secret")
+		log.Infof("Cluster wide secret successfully created")
+		nodes := node.GetWorkerNodes()
+		cmd := fmt.Sprintf("secrets set-cluster-key --secret %v", vcluster.ClusterWideSecretKey)
+		_, err = Inst().V.GetPxctlCmdOutput(nodes[0], cmd)
+		log.FailOnError(err, "Failed to set cluster key via Pxctl")
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName, WithSecureParameter(true))
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created Secure StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		jobName := "fio-job"
+		// Create FIO Deployment on VCluster using the above PVC
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+		log.FailOnError(err, "Error in creating FIO Application")
+		log.Infof("Successfully ran FIO on Vcluster")
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass, Namespace and Cluster Wide cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		}
+		err = vcluster.DeleteSecret(secretName, vcluster.PxNamespace)
+		if err != nil {
+			log.Errorf("Problem in Cleaning up secret: %v", err)
+		} else {
+			log.Infof("Entire Cleanup successfully done.")
+		}
+	})
+})
+
+var _ = Describe("{NodeRebootVCluster}", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	JustBeforeEach(func() {
+		StartTorpedoTest("NodeRebootVCluster", "Creates Nginx Deployment on Vcluster, Reboots a Px Cluster node, Validates Nginx Deployment", nil, 0)
+		vc, err = vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Creates Nginx Deployment on Vcluster, Reboots a Px Cluster node, Validates Nginx Deployment", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("nginx-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		deploymentName := "nginx-deployment"
+		// Create Nginx Deployment on VCluster using the above PVC
+		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
+		log.FailOnError(err, "Error in creating Nginx Application")
+		log.Infof("Successfully created Nginx App on Vcluster")
+		log.Infof("Hard Sleep for 10 seconds after creation of Nginx Deployment")
+		time.Sleep(10 * time.Second)
+		// Validate if Nginx Deployment is healthy or not
+		err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+		log.FailOnError(err, "Looks like Nginx Deployment is not healthy")
+		log.Infof("Nginx Deployment %s is healthy. Will kill Px and wait for its restart on all nodes now", deploymentName)
+		stepLog = "Reboot All Nodes one by one in rolling fashion"
+		Step(stepLog, func() {
+			nodesToReboot := node.GetWorkerNodes()
+			for _, n := range nodesToReboot {
+				log.InfoD("reboot node: %s", n.Name)
+				err = Inst().N.RebootNode(n, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultCommandTimeout,
+						TimeBeforeRetry: defaultCommandRetry,
+					},
+				})
+				log.FailOnError(err, "Error while rebooting nodes")
+				log.Infof("wait for node: %s to be back up", n.Name)
+				err = Inst().N.TestConnection(n, node.ConnectionOpts{
+					Timeout:         defaultTestConnectionTimeout,
+					TimeBeforeRetry: defaultWaitRebootRetry,
+				})
+				if err != nil {
+					log.FailOnError(err, "Error while testing node status %v, err: %v", n.Name, err.Error())
+				}
+				log.FailOnError(err, "Error while testing connection")
+			}
+		})
+		// Validate if Nginx Deployment is healthy or not
+		err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+		log.FailOnError(err, "Looks like Nginx Deployment is not healthy")
+		log.Infof("Nginx Deployment %s is healthy. Will kill Px and wait for its restart on all nodes now", deploymentName)
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
+		}
+	})
+})
+
+// This Test Case is failing due to : https://portworx.atlassian.net/browse/PWX-34792
+var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+	do_verify := 1
+	verify := "crc32c"
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "write",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   "100s",
+		Filename:  "/data/fiotest",
+		EndFsync:  1,
+		DoVerify:  &do_verify,
+		Verify:    &verify,
+	}
+	JustBeforeEach(func() {
+		StartTorpedoTest("VolumeSnapshotAndRestoreVcluster", "Create, Connect and run FIO Application on Vcluster, Create a Volume Snapshot, Restore it and Read from FIO the data previously written", nil, 0)
+		vc, err = vcluster.NewVCluster("my-vcluster1")
+		log.FailOnError(err, "Failed to initialise VCluster")
+		err = vc.CreateAndWaitVCluster()
+		log.FailOnError(err, "Failed to create VCluster")
+	})
+	It("Create, Connect and run FIO Application on Vcluster, Create a Volume Snapshot, Restore it and Read from FIO the data previously written", func() {
+		// Create Snapshot Schedule Policy
+		snapSchedulePolicy := fmt.Sprintf("snap-schedule-%v", time.Now().Unix())
+		err := snapshotutils.SchedulePolicyInDefaultNamespace(snapSchedulePolicy, 1, 5)
+		log.FailOnError(err, "Failed to create Snapshot Schedule Policy")
+		// Create Storage Class with snapshot schedule policy
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName, WithSnapshotSchedule(snapSchedulePolicy, "local"))
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		log.FailOnError(err, fmt.Sprintf("Error creating PVC with Storageclass name %v", scName))
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+		jobName := "fio-job"
+		// Create FIO Deployment on VCluster using the above PVC
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+		log.FailOnError(err, "Error in creating FIO Application")
+		log.Infof("Successfully ran FIO on Vcluster")
+		log.Infof("Waiting for 60 seconds as that is frequency to take one snapshot")
+		time.Sleep(1 * time.Minute)
+		snapList, err := vc.ListSnapshots()
+		log.FailOnError(err, "Failed to list snapshots")
+		// Finding the most recent snapshot, but not older than 1 minute
+		var chosenSnapshot *snapv1.VolumeSnapshot
+		var minAge time.Duration = 1 * time.Minute
+		for i, snap := range snapList.Items {
+			if snap.Metadata.CreationTimestamp.Time.After(time.Now().Add(-minAge)) {
+				// Choosing the most recent snapshot
+				if chosenSnapshot == nil || snap.Metadata.CreationTimestamp.Time.After(chosenSnapshot.Metadata.CreationTimestamp.Time) {
+					chosenSnapshot = &snapList.Items[i]
+				}
+			}
+		}
+		if chosenSnapshot == nil {
+			log.Errorf("No recent snapshot found for PVC: %s within the past %v", pvcName, minAge)
+		} else {
+			log.Infof("Selected snapshot: %v with creation time: %v", chosenSnapshot.Metadata.Name, chosenSnapshot.Metadata.CreationTimestamp)
+		}
+		// Creqte a Restored PVC from this Snapshot
+		restoredPvcName := "restored-" + pvcName
+		err = vc.RestorePVCFromSnapshot(restoredPvcName, chosenSnapshot.Metadata.Name, appNS, scName, "")
+		log.FailOnError(err, "Failed to restore a PVC from the snapshot")
+		// Create Read only FIO Options and create FIO Job from those
+		fioOptions.RW = "read"
+		fioOptions.VerifyOnly = true
+		jobName = "fio-restored-job"
+		err = vc.CreateFIODeployment(restoredPvcName, appNS, fioOptions, jobName)
+		log.FailOnError(err, "Error in creating FIO Application")
+		log.Infof("Successfully ran FIO on Vcluster")
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			log.Errorf("Problem in Cleanup: %v", err)
+		} else {
+			log.Infof("Cleanup successfully done.")
+		}
+	})
+})
+
 // CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
-func CreateStorageClass(scName string) error {
+func CreateStorageClass(scName string, opts ...StorageClassOption) error {
 	params := make(map[string]string)
 	params["repl"] = "2"
 	params["priority_io"] = "high"
@@ -666,9 +900,33 @@ func CreateStorageClass(scName string) error {
 		ReclaimPolicy:     &reclaimPolicyDelete,
 		VolumeBindingMode: &bindMode,
 	}
+	// Applying each extra option to Storage class definition
+	for _, opt := range opts {
+		opt(&scObj)
+	}
 	k8sStorage := storage.Instance()
 	if _, err := k8sStorage.CreateStorageClass(&scObj); err != nil {
 		return err
 	}
 	return nil
+}
+
+// Generic definition to keep on adding new params to storageclass definition
+type StorageClassOption func(*storageApi.StorageClass)
+
+// WithSecureParameter Method add secure param to existing StorageClass definitions
+func WithSecureParameter(secure bool) StorageClassOption {
+	return func(sc *storageApi.StorageClass) {
+		if secure {
+			sc.Parameters["secure"] = "true"
+		}
+	}
+}
+
+// WithSnapshotSchedule adds a snapshot schedule to the StorageClass parameters
+func WithSnapshotSchedule(scheduleName, snapshotType string) StorageClassOption {
+	return func(sc *storageApi.StorageClass) {
+		yamlSnippet := fmt.Sprintf("schedulePolicyName: %s\nannotations:\n  portworx/snapshot-type: %s", scheduleName, snapshotType)
+		sc.Parameters["snapshotschedule.stork.libopenstorage.org/interval-schedule"] = yamlSnippet
+	}
 }
