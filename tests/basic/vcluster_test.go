@@ -2,18 +2,19 @@ package tests
 
 import (
 	"fmt"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/pkg/snapshotutils"
 	"sync"
 	"time"
 
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/snapshotutils"
 	. "github.com/portworx/torpedo/tests"
+
 	v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
