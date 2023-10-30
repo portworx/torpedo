@@ -83,6 +83,7 @@ var _ = Describe("{ResizeStorageAndPerformRestoreXFSRepl2}", func() {
 					VolGroups:      false,
 				})
 				depList = append(depList, deployment)
+				log.InfoD("Initial deployment ID- %v", deployment.GetId())
 				dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 				stepLog = "Update the resource/storage template with increased storage size"
 				Step(stepLog, func() {
@@ -125,6 +126,9 @@ var _ = Describe("{ResizeStorageAndPerformRestoreXFSRepl2}", func() {
 						updatedDepList = append(updatedDepList, updatedDeployment)
 						updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
 						log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
+						dsEntity = restoreBkp.DSEntity{
+							Deployment: updatedDeployment,
+						}
 					})
 					stepLog = "Validate Workload is running after storage resize"
 					Step(stepLog, func() {
@@ -133,7 +137,6 @@ var _ = Describe("{ResizeStorageAndPerformRestoreXFSRepl2}", func() {
 					})
 					stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 					Step(stepLog, func() {
-
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 						log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigModelUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
@@ -153,7 +156,7 @@ var _ = Describe("{ResizeStorageAndPerformRestoreXFSRepl2}", func() {
 				stepLog = "Perform backup after PVC Resize"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
-					log.Infof("Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
+					log.Infof("Updated Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
 					err = bkpClient.TriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
 					log.FailOnError(err, "Failed while performing adhoc backup.")
 				})
@@ -328,6 +331,9 @@ var _ = Describe("{ResizeStorageAndPerformRestoreXFSRepl3}", func() {
 						log.FailOnError(err, "Error while validating dataservices")
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 						updatedDepList = append(updatedDepList, updatedDeployment)
+						dsEntity = restoreBkp.DSEntity{
+							Deployment: updatedDeployment,
+						}
 						updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
 						log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
 					})
@@ -533,6 +539,9 @@ var _ = Describe("{ResizeStorageAndPerformRestoreExt4Repl2}", func() {
 						log.FailOnError(err, "Error while validating dataservices")
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 						updatedDepList = append(updatedDepList, updatedDeployment)
+						dsEntity = restoreBkp.DSEntity{
+							Deployment: updatedDeployment,
+						}
 						updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
 						log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
 					})
@@ -738,6 +747,9 @@ var _ = Describe("{ResizeStorageAndPerformRestoreExt4Repl3}", func() {
 						log.FailOnError(err, "Error while validating dataservices")
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 						updatedDepList = append(updatedDepList, updatedDeployment)
+						dsEntity = restoreBkp.DSEntity{
+							Deployment: updatedDeployment,
+						}
 						updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
 						log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
 					})
