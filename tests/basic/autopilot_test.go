@@ -144,7 +144,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcBasicInScale}", testSuiteName), func() {
 				}
 				apRule.Spec.ActionsCoolDownPeriod = int64(60)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-					AppKeys:            Inst().AppList,
+					AppKeys:            []string{"aut-vol-only"},
 					StorageProvisioner: Inst().Provisioner,
 					AutopilotRule:      apRule,
 					Labels:             labels,
