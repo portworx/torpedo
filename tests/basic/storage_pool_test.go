@@ -6897,7 +6897,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 
 		// Add Drive on the Node [ PTX-15856 ]
 		err = AddCloudDrive(*nodeDetail, -1)
-		log.FailOnError(err, "adding new pool on the node failed?")
+		dash.VerifyFatal(err != nil, true, "adding new pool on the node failed?")
 	})
 
 	JustAfterEach(func() {
