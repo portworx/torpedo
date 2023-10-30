@@ -389,8 +389,8 @@ var _ = Describe("{sseS3encryption1}", func() {
 	k8sStorage := storage.Instance()
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("MultipleCustomRestoreSameTimeDiffStorageClassMapping",
-			"Issue multiple custom restores at the same time using different storage class mapping", nil, 58052)
+		StartTorpedoTest("sseS3encryption1",
+			"Backup and restore from Backup location created with SSE-S3 and deny policy set from aws s3", nil, 93014)
 		log.InfoD("Deploy applications needed for backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		numberOfNameSpace := 4
@@ -417,6 +417,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				ValidateApplications(scheduledAppContexts)
 			})
 			Step("Register cluster for backup", func() {
+				log.InfoD(fmt.Sprintf("Creating source and destination cluster"))
 				err = CreateApplicationClusters(orgID, "", "", ctx)
 				dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 				clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
@@ -427,13 +428,15 @@ var _ = Describe("{sseS3encryption1}", func() {
 			})
 
 			// Create bucket without deny policy
-			Step("Create bucket BK1 without deny policy", func() {
+			Step("Create bucket without deny policy", func() {
+				log.InfoD(fmt.Sprintf("Create bucket without deny policy"))
 				bucketWithOutPolicy := "sse-bucket-without-deny-policy"
 				customBucketWithOutPolicy = GetCustomBucketName(provider, bucketWithOutPolicy)
 			})
 
 			// Create bucket with deny policy
-			Step("Create bucket BK2 with deny policy", func() {
+			Step("Create bucket with deny policy", func() {
+				log.InfoD(fmt.Sprintf("Create bucket with deny policy"))
 				bucketWithDenyPolicy := "sse-bucket-with-deny-policy"
 				for i := 0; i < 1; i++ {
 					customBucketWithDenyPolicy := GetCustomBucketName(provider, bucketWithDenyPolicy)
@@ -448,6 +451,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 
 			// Create BackupLocation with bucketWithPolicy and SSE set to false
 			Step("Create BackupLocation with bucketWithOutPolicy and SSE set to false", func() {
+				log.InfoD(fmt.Sprintf("Create BackupLocation with bucketWithOutPolicy and SSE set to false"))
 				cloudCredUidForBlWithoutSse = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 				backupLocationUidWithoutSse = uuid.New()
@@ -463,6 +467,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 
 			// Create BackupLocation with bucketWithPolicy and SSE set to true
 			Step("Create BackupLocation with bucketWithPolicy and SSE set to true", func() {
+				log.InfoD("Create BackupLocation with bucketWithPolicy and SSE set to true")
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 				backupLocationUID = uuid.New()
@@ -502,7 +507,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 
 			// Take backup with backupLocationWithSse
 			Step("Create Backup with backupLocationWithSse", func() {
-				log.InfoD("Taking backup of application with backupLocationWithSse for different combination of restores")
+				log.InfoD("Taking backup of application with backupLocationWithSse in parallel for different combination of restores")
 				var wg sync.WaitGroup
 				bkpNamespacesWithSse := bkpNamespaces[midpoint:]
 				for _, backupNameSpace := range bkpNamespacesWithSse {
@@ -516,12 +521,13 @@ var _ = Describe("{sseS3encryption1}", func() {
 						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationWithSse, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					}(backupNameSpace)
-					backupNames = append(backupNames, backupName)
+					backupsWithSse = append(backupsWithSse, backupName)
 				}
 				wg.Wait()
 			})
 
 			Step("Create restore with replace policy set to retain", func() {
+				log.InfoD("Create restore with replace policy set to retain")
 				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNames[0], make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
@@ -560,8 +566,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 				singlePvc := pvcs.Items[0]
 				sourceScName, err = core.Instance().GetStorageClassForPVC(&singlePvc)
 				var wg sync.WaitGroup
-				//for _, scName := range scNames {
-				for i := 0; i < 1; i++ {
+				for i := 0; i < scCount; i++ {
 					storageClassMapping[sourceScName.Name] = scNames[i]
 					time.Sleep(2)
 					namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
@@ -571,12 +576,38 @@ var _ = Describe("{sseS3encryption1}", func() {
 					go func(scName string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err = CreateRestore(restoreName, backupsWithSse[0], namespaceMap, SourceClusterName, orgID, ctx, storageClassMapping)
+						err = CreateRestoreWithValidation(ctx, restoreName, backupsWithSse[0], namespaceMap, storageClassMapping, SourceClusterName, orgID, scheduledAppContexts)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
 					}(scNames[i])
 				}
 				wg.Wait()
 			})
+
+			//Step("Update backup location backupLocationUidWithoutSse to sse true", func() {
+			//	log.InfoD("Update backup location backupLocationUidWithoutSse to sse true")
+			//	err = UpdateBackupLocation(provider, backupLocationWithoutSse, backupLocationUidWithoutSse, orgID, credNameForBlWithoutSse, cloudCredUidForBlWithoutSse, ctx, api.S3Config_SSE_S3)
+			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", backupLocationWithoutSse))
+			//})
+
+			//// Take backup with backupLocationWithoutSse
+			//Step("Create Backup with backupLocationWithoutSse", func() {
+			//	log.InfoD("Taking backup of application with backupLocationWithoutSse after updating the sse to true")
+			//	var wg sync.WaitGroup
+			//	bkpNamespacesForWithoutSse := bkpNamespaces[:midpoint]
+			//	for _, backupNameSpace := range bkpNamespacesForWithoutSse {
+			//		backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, backupNameSpace, time.Now().Unix())
+			//		wg.Add(1)
+			//		go func(backupNameSpace string) {
+			//			defer GinkgoRecover()
+			//			defer wg.Done()
+			//			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
+			//			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+			//			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+			//		}(backupNameSpace)
+			//		backupsWithOutSse = append(backupsWithOutSse, backupName)
+			//	}
+			//	wg.Wait()
+			//})
 
 			Step("kill stork", func() {
 				log.InfoD("Kill stork")
@@ -597,6 +628,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 			})
 
 			Step("Create a schedule policy", func() {
+				log.InfoD("Create a schedule policy")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				schedulePolicyintervalInMins := 15
@@ -624,15 +656,15 @@ var _ = Describe("{sseS3encryption1}", func() {
 				log.InfoD("Restoring the backed up applications from latest scheduled backup")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-
 				restoreName := fmt.Sprintf("%s-%s", "test-restore", RandomString(10))
-				err = CreateRestore(restoreName, latestScheduleBackupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+				err = CreateRestoreWithValidation(ctx, restoreName, latestScheduleBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
 
-			Step("Remove S3 bucket Policy", func() {
+			Step("Remove deny policy from S3 bucket", func() {
+				log.InfoD("Remove deny policy from S3 bucket")
 				err = RemoveS3BucketPolicy(customBucketsWithPolicy[0])
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of S3 bucket policy"))
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verify removal of deny policy from s3 bucket"))
 			})
 
 			Step("Taking backup of application after removal of deny policy and sse still set to true", func() {
@@ -642,31 +674,6 @@ var _ = Describe("{sseS3encryption1}", func() {
 				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationWithSse, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			})
-
-			Step("Update backup location backupLocationUidWithoutSse to Sse true", func() {
-				err = UpdateBackupLocation(provider, backupLocationWithoutSse, backupLocationUidWithoutSse, orgID, credNameForBlWithoutSse, cloudCredUidForBlWithoutSse, ctx, api.S3Config_SSE_S3)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", backupLocationWithoutSse))
-			})
-
-			//// Take backup with backupLocationWithoutSse
-			//Step("Create Backup with backupLocationWithoutSse", func() {
-			//	log.InfoD("Taking backup of application with backupLocationWithoutSse for different combination of restores")
-			//	var wg sync.WaitGroup
-			//	bkpNamespacesForWithoutSse := bkpNamespaces[:midpoint]
-			//	for _, backupNameSpace := range bkpNamespacesForWithoutSse {
-			//		backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, backupNameSpace, time.Now().Unix())
-			//		wg.Add(1)
-			//		go func(backupNameSpace string) {
-			//			defer GinkgoRecover()
-			//			defer wg.Done()
-			//			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
-			//			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-			//			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			//		}(backupNameSpace)
-			//		backupsWithOutSse = append(backupsWithOutSse, backupName)
-			//	}
-			//	wg.Wait()
-			//})
 		}
 	})
 })
