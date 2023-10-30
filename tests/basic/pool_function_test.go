@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"regexp"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
