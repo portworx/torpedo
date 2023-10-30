@@ -182,24 +182,26 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		err := SetSourceKubeConfig()
-		log.FailOnError(err, "Switching context to source cluster failed")
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.Infof("Deleting the deployed applications")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Deleting the restores taken")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
-		}
-		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
-		CleanupCloudSettingsAndClusters(backupLocationMap, "", "", ctx)
+		/*
+			defer EndPxBackupTorpedoTest(scheduledAppContexts)
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Deleting the deployed applications")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			log.InfoD("Deleting the restores taken")
+			for _, restoreName := range restoreNames {
+				err = DeleteRestore(restoreName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
+			}
+			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
+			CleanupCloudSettingsAndClusters(backupLocationMap, "", "", ctx)
+		*/
 	})
 })

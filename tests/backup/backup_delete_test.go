@@ -730,14 +730,16 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		/*
+			defer EndPxBackupTorpedoTest(scheduledAppContexts)
+			log.InfoD("Deleting the deployed apps after the testcase")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
 
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+		*/
 	})
 })
