@@ -4303,7 +4303,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 	return nil
 }
 
-// func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, bucketName string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+// UpdateS3BackupLocation with the provided values
 func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 
 	backupDriver := Inst().Backup

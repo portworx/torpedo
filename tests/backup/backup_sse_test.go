@@ -1,32 +1,22 @@
 package tests
 
 import (
-	//"github.com/aws/aws-sdk-go/aws"
-	//"github.com/aws/aws-sdk-go/service/s3"
-
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
+	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	//"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	//v1 "k8s.io/api/core/v1"
 	storageApi "k8s.io/api/storage/v1"
-	//metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sync"
 	"time"
-	//api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/backup"
-
-	"github.com/portworx/torpedo/pkg/log"
-	//"github.com/portworx/torpedo/drivers/scheduler"
-	. "github.com/portworx/torpedo/tests"
 )
 
 var _ = Describe("{sseS3encryption}", func() {
