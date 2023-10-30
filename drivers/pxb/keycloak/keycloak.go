@@ -7,6 +7,13 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"google.golang.org/grpc/metadata"
+	"net/url"
+)
+
+type CredentialType string
+
+const (
+	Password CredentialType = "password"
 )
 
 // CredentialRepresentation defines the scheme for representing the user credential in Keycloak
@@ -31,13 +38,15 @@ type UserRepresentation struct {
 // NewTestUserRepresentation initializes UserRepresentation for a test user with the given credentials
 func NewTestUserRepresentation(username string, password string) *UserRepresentation {
 	return &UserRepresentation{
-		ID:            "",
 		Username:      username,
 		Email:         username + "@cnbu.com",
 		EmailVerified: true,
 		Enabled:       true,
 		Credentials: []CredentialRepresentation{
-			{Type: "password", Value: password, Temporary: false},
+			{
+				Type:  string(Password),
+				Value: password,
+			},
 		},
 	}
 }
@@ -47,14 +56,44 @@ type TokenRepresentation struct {
 	AccessToken string `json:"access_token"`
 }
 
+type Keycloak struct {
+	URL   string
+	Login struct {
+		Username string
+		Password string
+	}
+}
+
+func (k *Keycloak) GetAccessToken(ctx context.Context, username string, password string) (string, error) {
+	values := make(url.Values)
+	values.Set("username", username)
+	values.Set("password", password)
+	values.Set("grant_type", "password")
+	values.Set("client_id", "pxcentral")
+	values.Set("token-duration", "365d")
+	headerMap := make(map[string]string)
+	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
+	route := "/protocol/openid-connect/token"
+	respBody, err := k.Do(ctx, "POST", false, route, values.Encode(), headerMap)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	tokenRep := &TokenRepresentation{}
+	err = json.Unmarshal(respBody, &tokenRep)
+	if err != nil {
+		return "", ProcessError(err)
+	}
+	return tokenRep.AccessToken, nil
+}
+
 func GetCommonHeaderMap(ctx context.Context) (map[string]string, error) {
-	pxCentralAdminToken, err := GetPxCentralAdminToken(ctx)
+	accessToken, err := GetPxCentralAdminToken(ctx)
 	if err != nil {
 		return nil, ProcessError(err)
 	}
 	headerMap := make(map[string]string)
 	headerMap["Content-Type"] = "application/json"
-	headerMap["Authorization"] = "Bearer " + pxCentralAdminToken
+	headerMap["Authorization"] = "Bearer " + accessToken
 	return headerMap, nil
 }
 
@@ -104,6 +143,8 @@ func GetCtxWithToken(ctx context.Context, token string) context.Context {
 }
 
 type AddUserRequest struct {
+	Username           string
+	Password           string
 	UserRepresentation *UserRepresentation `json:"userRepresentation"`
 }
 

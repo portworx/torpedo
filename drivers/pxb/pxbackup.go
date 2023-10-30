@@ -3,7 +3,6 @@ package pxb
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -13,7 +12,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 )
@@ -32,11 +30,7 @@ type Organization struct {
 	CloudCredentialDataStore *generics.DataStore[*api.CloudCredentialObject]
 }
 
-type Keycloak struct {
-	HTTPClient *http.Client
-}
-
-func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
+func GetKeycloakURL(admin bool, route string, namespace string) (string, error) {
 	reqURL := ""
 	oidcSecretName := GetOIDCSecretName()
 	pxCentralUIURL := os.Getenv(EnvPxCentralUIURL)
@@ -51,7 +45,7 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 			reqURL = fmt.Sprint(pxCentralUIURL, "/auth/realms/master")
 		}
 	} else {
-		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, k.PxBackup.Spec.Namespace)
+		oidcSecret, err := core.Instance().GetSecret(oidcSecretName, namespace)
 		if err != nil {
 			return "", ProcessError(err)
 		}
@@ -59,7 +53,7 @@ func (k *Keycloak) GetURL(admin bool, route string) (string, error) {
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
 		// from different namespace
-		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakServiceName, k.PxBackup.Spec.Namespace)
+		replacement := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakServiceName, namespace)
 		newURL := strings.Replace(oidcEndpoint, PxBackupKeycloakServiceName, replacement, 1)
 		if admin {
 			split := strings.Split(newURL, "auth")
@@ -118,28 +112,6 @@ func (k *Keycloak) Invoke(ctx context.Context, method string, admin bool, route 
 		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, reqURL, statusCode, statusText)
 		return nil, ProcessError(err)
 	}
-}
-
-func (k *Keycloak) GetAccessToken(ctx context.Context, username, password string) (string, error) {
-	route := "/protocol/openid-connect/token"
-	values := make(url.Values)
-	values.Set("username", username)
-	values.Set("password", password)
-	values.Set("grant_type", "password")
-	values.Set("client_id", "pxcentral")
-	values.Set("token-duration", "365d")
-	headerMap := make(map[string]string)
-	headerMap["Content-Type"] = "application/x-www-form-urlencoded"
-	respBody, err := k.Invoke(ctx, "POST", false, route, values.Encode(), headerMap)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	token := &TokenRepresentation{}
-	err = json.Unmarshal(respBody, &token)
-	if err != nil {
-		return "", ProcessError(err)
-	}
-	return token.AccessToken, nil
 }
 
 func (k *Keycloak) GetPxCentralAdminAccessToken(ctx context.Context) (string, error) {
