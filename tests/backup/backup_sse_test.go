@@ -648,8 +648,8 @@ var _ = Describe("{sseS3encryption1}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 			})
 			// Create BackupLocation with bucketWithPolicy and SSE set to true after px-backup and stork restart
-			Step("Create BackupLocation with bucketWithPolicy and SSE set to true", func() {
-				log.InfoD("Create BackupLocation with bucketWithPolicy and SSE set to true")
+			Step("Create BackupLocation with bucketWithPolicy and SSE set to true post px-backup and stork restart", func() {
+				log.InfoD("Create BackupLocation with bucketWithPolicy and SSE set to true post px-backup and stork restart")
 				cloudCredUID = uuid.New()
 				cloudCredUidList = append(cloudCredUidList, cloudCredUID)
 				backupLocationUID = uuid.New()
@@ -662,15 +662,15 @@ var _ = Describe("{sseS3encryption1}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", newBackupLocationWithSseAfterRestart))
 				log.Infof("created backup location successfully")
 			})
-			Step("Taking backup of application after removal of deny policy and sse still set to true", func() {
-				log.InfoD("Taking backup of application after removal of deny policy and sse still set to true")
+			Step("Taking backup of application with new BackupLocation post px-backup and stork restart", func() {
+				log.InfoD("Taking backup of application with new BackupLocation post px-backup and stork restart")
 				backupNameAfterPxBackupRestart = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 				appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
 				err = CreateBackupWithValidation(ctx, backupNameAfterPxBackupRestart, SourceClusterName, newBackupLocationWithSseAfterRestart, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup after removal of deny policy and sse still set to true [%s]", backupNameAfterPxBackupRestart))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup with new BackupLocation post px-backup and stork restart [%s]", backupNameAfterPxBackupRestart))
 			})
-			Step("Create restore with replace policy set to retain after removal of deny policy", func() {
-				log.InfoD("Create restore with replace policy set to retain after removal of deny policy")
+			Step("Create restore with backup taken on new BackupLocation created post px-backup and stork restart", func() {
+				log.InfoD("Create restore with backup taken on new BackupLocation created post px-backup and stork restart")
 				restoreName := fmt.Sprintf("restore-with-replace-%s-%v", RestoreNamePrefix, time.Now().Unix())
 				err = CreateRestoreWithReplacePolicy(restoreName, backupNameAfterPxBackupRestart, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
