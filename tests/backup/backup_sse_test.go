@@ -569,7 +569,7 @@ var _ = Describe("{sseS3encryption1}", func() {
 					go func(scName string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err = CreateRestoreWithValidation(ctx, restoreName, backupsWithSse[0], namespaceMap, storageClassMapping, SourceClusterName, orgID, scheduledAppContexts)
+						err = CreateRestore(restoreName, backupsWithSse[0], namespaceMap, SourceClusterName, orgID, ctx, storageClassMapping)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
 					}(scNames[i])
 				}
