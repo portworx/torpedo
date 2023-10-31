@@ -9,6 +9,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
@@ -499,6 +500,115 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 			err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		})
+
+	})
+
+})
+
+var _ = Describe("{PoolExpandResizeClusterNoQuorum}", func() {
+	//1) Deploy px with cloud drive.
+	//2) Make Cluster out of quorum
+	//3) Expand a healthy pools by resize-disk
+
+	var testrailID = 34542845
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/34542845
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolExpandResizeClusterNoQuorum", "Initiate pool expansion by resize-disk when cluster is out quorum", nil, testrailID)
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	var contexts []*scheduler.Context
+
+	stepLog := "should make cluster out of quorum, and expand healthy pool using resize-disk"
+
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		contexts = make([]*scheduler.Context, 0)
+
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("resiznoqr-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		defer appsValidateAndDestroy(contexts)
+
+		stoageDriverNodes := node.GetStorageDriverNodes()
+
+		nonKvdbNodes := make([]node.Node, 0)
+		kvdbNodes := make([]node.Node, 0)
+		driverDownNodes := make([]node.Node, 0)
+
+		kvdbNodesIDs := make([]string, 0)
+		kvdbMembers, err := Inst().V.GetKvdbMembers(stoageDriverNodes[0])
+		log.FailOnError(err, "Error getting KVDB members")
+
+		for _, n := range kvdbMembers {
+			kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+		}
+		for _, n := range stoageDriverNodes {
+			if Contains(kvdbNodesIDs, n.Id) {
+				kvdbNodes = append(kvdbNodes, n)
+			} else {
+				nonKvdbNodes = append(nonKvdbNodes, n)
+			}
+		}
+		numNodesToBeDown := (len(stoageDriverNodes) / 2) + 1
+		if len(nonKvdbNodes) < numNodesToBeDown {
+			numNodesToBeDown = len(nonKvdbNodes)
+		}
+
+		selPool := kvdbNodes[0].Pools[0]
+		poolToBeResized, err := GetStoragePoolByUUID(selPool.Uuid)
+
+		stepLog = "Make cluster out of quorum"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			i := 0
+			for _, n := range nonKvdbNodes {
+				if i == numNodesToBeDown {
+					break
+				}
+				err := Inst().V.StopDriver([]node.Node{n}, false, nil)
+				log.FailOnError(err, "error stopping driver on node %s", n.Name)
+
+				err = Inst().V.WaitDriverDownOnNode(n)
+				log.FailOnError(err, "error while waiting for driver down on node %s", n.Name)
+				driverDownNodes = append(driverDownNodes, n)
+				i += 1
+			}
+		})
+
+		stepLog = fmt.Sprintf("Expanding pool on kvdb node using resize-disk")
+		Step(stepLog, func() {
+
+			log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", selPool.Uuid))
+			expectedSize := poolToBeResized.TotalSize * 2 / units.GiB
+
+			log.InfoD("Current Size of the pool %s is %d", selPool.Uuid, poolToBeResized.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(selPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+			Step("set cluster to running", func() {
+				log.InfoD("set cluster to running")
+				for _, n := range driverDownNodes {
+					err := Inst().V.StartDriver(n)
+					log.FailOnError(err, "error starting driver on node %s", n.Name)
+					err = Inst().V.WaitDriverUpOnNode(n, 5*time.Minute)
+					log.FailOnError(err, "error while waiting for driver up on node %s", n.Name)
+				}
+			})
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check if Journal enabled")
+
+			resizeErr := waitForPoolToBeResized(expectedSize, selPool.Uuid, isjournal)
+			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", selPool.Uuid))
 		})
 
 	})
