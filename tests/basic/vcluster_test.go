@@ -683,8 +683,8 @@ var _ = Describe("{CreateEncryptedVolVCluster}", func() {
 		log.FailOnError(err, "Failed to create a Cluster Wide Secret")
 		log.Infof("Cluster wide secret successfully created")
 		nodes := node.GetWorkerNodes()
-		cmd := fmt.Sprintf("secrets set-cluster-key --secret %v", vcluster.ClusterWideSecretKey)
-		_, err = Inst().V.GetPxctlCmdOutput(nodes[0], cmd)
+		cmd := fmt.Sprintf("yes | /opt/pwx/bin/pxctl secrets set-cluster-key --secret %v --overwrite", vcluster.ClusterWideSecretKey)
+		_, err = runCmd(cmd, nodes[0])
 		log.FailOnError(err, "Failed to set cluster key via Pxctl")
 		// Create Storage Class on Host Cluster
 		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
