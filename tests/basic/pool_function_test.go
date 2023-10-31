@@ -512,7 +512,7 @@ var _ = Describe("{PoolExpandResizeClusterNoQuorum}", func() {
 	//3) Expand a healthy pools by resize-disk
 
 	var testrailID = 34542845
-	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/34542845
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542845
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolExpandResizeClusterNoQuorum", "Initiate pool expansion by resize-disk when cluster is out quorum", nil, testrailID)
 	})
@@ -585,6 +585,12 @@ var _ = Describe("{PoolExpandResizeClusterNoQuorum}", func() {
 			}
 		})
 
+		for _, n := range nonKvdbNodes {
+			status, err := Inst().V.GetNodeStatus(n)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", n.Name))
+
+			dash.VerifyFatal(*status, api.Status_STATUS_OFFLINE, fmt.Sprintf("Node %s Status not Down", n.Name))
+		}
 		stepLog = fmt.Sprintf("Expanding pool on kvdb node using resize-disk")
 		Step(stepLog, func() {
 
@@ -610,6 +616,17 @@ var _ = Describe("{PoolExpandResizeClusterNoQuorum}", func() {
 			resizeErr := waitForPoolToBeResized(expectedSize, selPool.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on expansion using resize-disk", selPool.Uuid))
 		})
+
+		// Start volumedrivers back to online
+		for _, n := range nonKvdbNodes {
+			err = Inst().V.StartDriver(n)
+			log.FailOnError(err, "error starting vol driver on node [%s]", n.Name)
+
+			status, err := Inst().V.GetNodeStatus(n)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", n.Name))
+
+			dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", n.Name))
+		}
 
 	})
 
