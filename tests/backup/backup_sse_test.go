@@ -409,20 +409,20 @@ var _ = Describe("{sseS3encryption}", func() {
 		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 
-		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
-
 		// Deleting restores
 		for _, restoreName := range restoreList {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
 
+		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
+
 		// Post test custom bucket delete
-		//providers := getProviders()
-		//for _, provider := range providers {
-		//	for _, customBucket := range customBuckets {
-		//		DeleteBucket(provider, customBucket)
-		//	}
-		//}
+		providers := getProviders()
+		for _, provider := range providers {
+			for _, customBucket := range customBuckets {
+				DeleteBucket(provider, customBucket)
+			}
+		}
 	})
 })
