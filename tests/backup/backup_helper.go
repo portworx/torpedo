@@ -3666,6 +3666,7 @@ func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]stri
 			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Template.ObjectMeta.Labels)
 		}
 	}
+	log.Infof("labelMap - %+v", labelMap)
 	if len(labelMap) == 0 {
 		return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
 	}
