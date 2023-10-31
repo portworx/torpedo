@@ -986,27 +986,28 @@ func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string
 	if err != nil {
 		return 0, err
 	}
-	log.Infof("output-\n%s", output)
-	log.Infof("volumeMount - %s", volumeMount)
-	for i, line := range strings.SplitAfter(output, "\n") {
-		log.Infof("Line no. %d - %s", i, line)
+	for _, line := range strings.SplitAfter(output, "\n") {
 		if strings.Contains(line, volumeMount) {
-			log.Infof("Found in line - %s", line)
 			str = strings.Fields(line)[3]
+			break
 		}
 	}
-	log.Infof("final output-\n%s", output)
 	if str == "" {
+		log.Infof("Could not find any mount points for the volume mount [%s] in the pod [%s] in namespace [%s] ", volumeMount, podName, namespace)
+		log.Infof("Trying to check if there is a sym link for [%s]", volumeMount)
 		symlinkPath, err := core.Instance().RunCommandInPod([]string{"readlink", "-f", volumeMount}, podName, containerNames[0], namespace)
 		if err != nil {
 			return number, err
 		}
-		log.Infof("symlinkPath - %s", symlinkPath)
-		for i, line := range strings.SplitAfter(output, "\n") {
-			log.Infof("Line no. %d - %s", i, line)
+		if symlinkPath == "" {
+			return 0, fmt.Errorf("no matching symlink for path [%s] was found in the pod [%s] in namespace [%s]", volumeMount, podName, namespace)
+		} else {
+			log.Infof("Symlink for volume mount [%s] found - [%s]", volumeMount, symlinkPath)
+		}
+		for _, line := range strings.SplitAfter(output, "\n") {
 			if strings.Contains(line, symlinkPath) {
-				log.Infof("Found in line - %s", line)
 				str = strings.Fields(line)[3]
+				break
 			}
 		}
 	}
