@@ -340,6 +340,7 @@ const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
 	defaultVolScaleTimeout    = 4 * time.Minute
+	defaultIbmVolScaleTimeout = 8 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
@@ -1002,7 +1003,12 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			// If provisioner is IBM increase the timeout to 8 min
+			if Inst().Provisioner == "ibm" {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+			} else {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			}
 			if err != nil {
 				PrintDescribeContext(ctx)
 				processError(err, errChan...)
@@ -2908,7 +2914,17 @@ func SetClusterContext(clusterConfigPath string) error {
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
-		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		if !strings.HasPrefix(clusterConfigPath, "/tmp/") {
+			if clusterConfigPath == "" {
+				err = Inst().S.(*rke.Rancher).UpdateRancherClient("source-config")
+				if err != nil {
+					return fmt.Errorf("failed to update rancher client for default source cluster context with error: [%v]", err)
+				}
+				return nil
+			}
+			return fmt.Errorf("invalid clusterConfigPath: %s for %s cluster provider", clusterConfigPath, drivers.ProviderRke)
+		}
+		err = Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
