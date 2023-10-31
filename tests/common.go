@@ -341,6 +341,7 @@ const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
 	defaultVolScaleTimeout    = 4 * time.Minute
+	defaultIbmVolScaleTimeout = 8 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
@@ -474,6 +475,13 @@ type PlatformCredentialStruct struct {
 	credName string
 	credUID  string
 }
+
+type (
+	// TestcaseAuthor represents the owner of a Testcase
+	TestcaseAuthor string
+	// TestcaseQuarter represents the fiscal quarter during which the Testcase is automated
+	TestcaseQuarter string
+)
 
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
@@ -996,7 +1004,12 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			// If provisioner is IBM increase the timeout to 8 min
+			if Inst().Provisioner == "ibm" {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+			} else {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			}
 			if err != nil {
 				PrintDescribeContext(ctx)
 				processError(err, errChan...)
@@ -2902,7 +2915,17 @@ func SetClusterContext(clusterConfigPath string) error {
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
-		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		if !strings.HasPrefix(clusterConfigPath, "/tmp/") {
+			if clusterConfigPath == "" {
+				err = Inst().S.(*rke.Rancher).UpdateRancherClient("source-config")
+				if err != nil {
+					return fmt.Errorf("failed to update rancher client for default source cluster context with error: [%v]", err)
+				}
+				return nil
+			}
+			return fmt.Errorf("invalid clusterConfigPath: %s for %s cluster provider", clusterConfigPath, drivers.ProviderRke)
+		}
+		err = Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
@@ -3619,15 +3642,19 @@ func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName
 
 // DeleteCluster deletes/de-registers cluster from px-backup
 func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
-
 	backupDriver := Inst().Backup
+	clusterUid, err := backupDriver.GetClusterUID(ctx, orgID, name)
+	if err != nil {
+		return err
+	}
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
 		DeleteBackups:  cleanupBackupsRestores,
 		DeleteRestores: cleanupBackupsRestores,
+		Uid:            clusterUid,
 	}
-	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	_, err = backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
 }
 
@@ -3716,7 +3743,11 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	if err != nil {
 		return err
 	}
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
@@ -6812,6 +6843,11 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
+func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
