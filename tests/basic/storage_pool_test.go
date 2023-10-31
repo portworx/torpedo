@@ -6902,7 +6902,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 		containsPXError := strings.Contains(err.Error(), "PX is not running since the systemd service portworx.service is installed but not active")
 		poolExpandCondition := containsCloudDriveError && containsPXError
 		dash.VerifyFatal(poolExpandCondition, true, "adding new pool on the node failed?")
-		log.Errorf(err.Error(), "Pool expand failed")
+		log.InfoD(err.Error(), "Pool expand failed")
 	})
 
 	JustAfterEach(func() {
