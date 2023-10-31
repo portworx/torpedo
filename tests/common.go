@@ -4279,7 +4279,8 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 				Name: cloudCred,
 				Uid:  cloudCredUID,
 			},
-			Type: api.BackupLocationInfo_S3,
+			ValidateCloudCredential: true,
+			Type:                    api.BackupLocationInfo_S3,
 			Config: &api.BackupLocationInfo_S3Config{
 				S3Config: &api.S3Config{
 					Endpoint:   endpoint,
