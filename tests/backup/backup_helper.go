@@ -985,11 +985,16 @@ func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string
 	if err != nil {
 		return 0, err
 	}
-	for _, line := range strings.SplitAfter(ret, "\n") {
+	log.Infof("ret-\n%s", ret)
+	log.Infof("volumeMount - %s", volumeMount)
+	for i, line := range strings.SplitAfter(ret, "\n") {
+		log.Infof("Line no. %d - %s", i, line)
 		if strings.Contains(line, volumeMount) {
+			log.Infof("Found in line - %s", line)
 			ret = strings.Fields(line)[3]
 		}
 	}
+	log.Infof("final ret-\n%s", ret)
 	number, err = strconv.Atoi(ret)
 	if err != nil {
 		return 0, err
