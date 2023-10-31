@@ -6897,7 +6897,10 @@ var _ = Describe("{DriveAddPXDown}", func() {
 
 		// Add Drive on the Node [ PTX-15856 ]
 		err = AddCloudDrive(*nodeDetail, -1)
-		poolExpandCondition := strings.Contains(err.Error(), "add cloud drive failed on node")
+		// Check if the errMessage contains the phrases
+		containsCloudDriveError := strings.Contains(err.Error(), "add cloud drive failed on node")
+		containsPXError := strings.Contains(err.Error(), "PX is not running since the systemd service portworx.service is installed but not active")
+		poolExpandCondition := containsCloudDriveError && containsPXError
 		dash.VerifyFatal(poolExpandCondition, true, "adding new pool on the node failed?")
 		log.Errorf(err.Error(), "Pool expand failed")
 	})
