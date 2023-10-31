@@ -488,7 +488,7 @@ var _ = Describe("{VolumeDriverCrashVCluster}", func() {
 		// VCluster, StorageClass and Namespace cleanup
 		err := vc.VClusterCleanup(scName)
 		if err != nil {
-			log.Errorf("Problem in Cleanup: %v", err)
+			log.FailOnError(err, "Cleanup Failed")
 		} else {
 			log.Infof("Cleanup successfully done.")
 		}
@@ -678,7 +678,7 @@ var _ = Describe("{CreateEncryptedVolVCluster}", func() {
 		log.FailOnError(err, "Failed to create VCluster")
 	})
 	It("Create app on encrypted vol in vcluster, validate app, cleanup", func() {
-		secretName = fmt.Sprintf("px-vol-encryption-%v", time.Now().Unix())
+		secretName = fmt.Sprintf("px-vol-encryption")
 		err := vcluster.CreateClusterWideSecret(secretName)
 		log.FailOnError(err, "Failed to create a Cluster Wide Secret")
 		log.Infof("Cluster wide secret successfully created")
@@ -856,7 +856,8 @@ var _ = Describe("{VolumeSnapshotAndRestoreVcluster}", func() {
 			}
 		}
 		if chosenSnapshot == nil {
-			log.Errorf("No recent snapshot found for PVC: %s within the past %v", pvcName, minAge)
+			err = fmt.Errorf("No recent snapshot found for PVC: %s within the past %v", pvcName, minAge)
+			log.FailOnError(err, "Exiting as no recent snapshot found")
 		} else {
 			log.Infof("Selected snapshot: %v with creation time: %v", chosenSnapshot.Metadata.Name, chosenSnapshot.Metadata.CreationTimestamp)
 		}
