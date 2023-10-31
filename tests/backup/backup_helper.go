@@ -979,27 +979,42 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerNames ...string) (int, error) {
 	var number int
-	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
+	var str string
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
-	log.Infof("ret-\n%s", ret)
+	log.Infof("output-\n%s", output)
 	log.Infof("volumeMount - %s", volumeMount)
-	for i, line := range strings.SplitAfter(ret, "\n") {
+	for i, line := range strings.SplitAfter(output, "\n") {
 		log.Infof("Line no. %d - %s", i, line)
 		if strings.Contains(line, volumeMount) {
 			log.Infof("Found in line - %s", line)
-			ret = strings.Fields(line)[3]
+			str = strings.Fields(line)[3]
 		}
 	}
-	log.Infof("final ret-\n%s", ret)
-	number, err = strconv.Atoi(ret)
-	if err != nil {
-		return 0, err
+	log.Infof("final output-\n%s", output)
+	if str == "" {
+		symlinkPath, err := core.Instance().RunCommandInPod([]string{"readlink", "-f", volumeMount}, podName, containerNames[0], namespace)
+		if err != nil {
+			return number, err
+		}
+		log.Infof("symlinkPath - %s", symlinkPath)
+		for i, line := range strings.SplitAfter(output, "\n") {
+			log.Infof("Line no. %d - %s", i, line)
+			if strings.Contains(line, symlinkPath) {
+				log.Infof("Found in line - %s", line)
+				str = strings.Fields(line)[3]
+			}
+		}
 	}
-	return number, nil
+	if str != "" {
+		number, err = strconv.Atoi(str)
+		return number, err
+	}
+	return 0, fmt.Errorf("no matching volume mount with path [%s] was found in the pod [%s] in namespace [%s]", volumeMount, podName, namespace)
 }
 
 func kubectlExec(arguments []string) (string, error) {

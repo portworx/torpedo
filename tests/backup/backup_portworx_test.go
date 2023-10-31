@@ -776,7 +776,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 						for containerName, paths := range containerPaths {
 							log.Infof("container [%s] has paths [%v]", containerName, paths)
 							for _, path := range paths {
-								beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path)
+								beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
 								dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
 								volListBeforeSizeMap[path] = beforeSize
 							}
@@ -847,7 +847,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 						for containerName, paths := range containerPaths {
 							log.Infof("container [%s] has paths [%v]", containerName, paths)
 							for _, path := range paths {
-								afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path)
+								afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
 								dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, pod.GetName()))
 								volListAfterSizeMap[path] = afterSize
 							}
