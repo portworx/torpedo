@@ -704,6 +704,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 		var (
 			updatedDeployment     *pds.ModelsDeployment
 			updatedDepList        []*pds.ModelsDeployment
+			deploymentsToBeCleaned   []*pds.ModelsDeployment
 			resConfigModelUpdated *pds.ModelsResourceSettingsTemplate
 			stConfigModelUpdated  *pds.ModelsStorageOptionsTemplate
 			stIds                 []string
