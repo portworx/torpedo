@@ -979,7 +979,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerNames ...string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerName ...string) (int, error) {
 	var number int
 	var str string
 	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
@@ -995,7 +995,10 @@ func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string
 	if str == "" {
 		log.Infof("Could not find any mount points for the volume mount [%s] in the pod [%s] in namespace [%s] ", volumeMount, podName, namespace)
 		log.Infof("Trying to check if there is a sym link for [%s]", volumeMount)
-		symlinkPath, err := core.Instance().RunCommandInPod([]string{"readlink", "-f", volumeMount}, podName, containerNames[0], namespace)
+		if len(containerName) == 0 {
+			return number, err
+		}
+		symlinkPath, err := core.Instance().RunCommandInPod([]string{"readlink", "-f", volumeMount}, podName, containerName[0], namespace)
 		if err != nil {
 			return number, err
 		}
