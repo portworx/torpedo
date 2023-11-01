@@ -359,15 +359,20 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 	return resourceTemplateID, nil
 }
 
-func (cp *ControlPlane) CleanupCustomTemplates(storageTemplateID string, resourceTemplateID string) {
-	_, err := components.StorageSettingsTemplate.DeleteTemplate(storageTemplateID)
-	if err != nil {
-		log.Errorf("Failed to delete storage template with ID- %v", storageTemplateID)
+func (cp *ControlPlane) CleanupCustomTemplates(storageTemplateIDs []string, resourceTemplateIDs []string) {
+	for _, stId := range storageTemplateIDs {
+		_, err := components.StorageSettingsTemplate.DeleteTemplate(stId)
+		if err != nil {
+			log.Errorf("Failed to delete storage template with ID- %v", stId)
+		}
 	}
-	_, err = components.ResourceSettingsTemplate.DeleteTemplate(resourceTemplateID)
-	if err != nil {
-		log.Errorf("Failed to delete resource template with ID- %v", resourceTemplateID)
+	for _, resId := range resourceTemplateIDs {
+		_, err := components.ResourceSettingsTemplate.DeleteTemplate(resId)
+		if err != nil {
+			log.Errorf("Failed to delete resource template with ID- %v", resId)
+		}
 	}
+
 }
 
 // GetRegistrationToken return token to register a target cluster.
