@@ -49,6 +49,8 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 			wlDeploymentsToBeCleaned []*v1.Deployment
 			updatedDepList           []*pds.ModelsDeployment
 			depList                  []*pds.ModelsDeployment
+			stIDs                    []string
+			resIds                   []string
 			resConfigModelUpdated    *pds.ModelsResourceSettingsTemplate
 			stConfigModelUpdated     *pds.ModelsStorageOptionsTemplate
 			newResourceTemplateID    string
@@ -84,6 +86,8 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 							Secure:         false,
 							VolGroups:      false,
 						})
+						stIDs = append(stIDs, stConfigModel.GetId())
+						resIds = append(resIds, resConfigModel.GetId())
 						depList = append(depList, deployment)
 						log.InfoD("Initial deployment ID- %v", deployment.GetId())
 						dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
@@ -109,6 +113,8 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 							log.InfoD("Successfully updated the template with ID- %v", resConfigModelUpdated.GetId())
 							newResourceTemplateID = resConfigModelUpdated.GetId()
 							newStorageTemplateID = stConfigModelUpdated.GetId()
+							stIDs = append(stIDs, newStorageTemplateID)
+							resIds = append(resIds, newResourceTemplateID)
 						})
 						stepLog = "Apply updated template to the dataservice deployment"
 						Step(stepLog, func() {
@@ -215,8 +221,7 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 
 						Step("Delete Deployments", func() {
 							CleanupDeployments(deploymentsToBeCleaned)
-							controlPlane.CleanupCustomTemplates(stConfigModel.GetId(), resConfigModel.GetId())
-							controlPlane.CleanupCustomTemplates(newStorageTemplateID, newResourceTemplateID)
+							controlPlane.CleanupCustomTemplates(stIDs, resIds)
 						})
 					}
 				}
@@ -255,6 +260,8 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 			updatedDepList           []*pds.ModelsDeployment
 			depList                  []*pds.ModelsDeployment
 			updatedDepList1          []*pds.ModelsDeployment
+			stIds                    []string
+			resIds                   []string
 			resConfigModelUpdated1   *pds.ModelsResourceSettingsTemplate
 			stConfigModelUpdated1    *pds.ModelsStorageOptionsTemplate
 			newResourceTemplateID1   string
@@ -285,6 +292,8 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						Secure:         false,
 						VolGroups:      false,
 					})
+					stIds = append(stIds, stConfigModel.GetId())
+					resIds = append(resIds, resConfigModel.GetId())
 					depList = append(depList, deployment)
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					stepLog = "Check PVC for full condition based upto 90% full"
@@ -310,6 +319,8 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated1.GetId(), updatedTemplateConfig1.ReplFactor)
 						newResourceTemplateID1 = resConfigModelUpdated1.GetId()
 						newStorageTemplateID1 = stConfigModelUpdated1.GetId()
+						stIds = append(stIds, newStorageTemplateID1)
+						resIds = append(resIds, newResourceTemplateID1)
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -377,6 +388,8 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated1.GetId(), updatedTemplateConfig2.ReplFactor)
 						newResourceTemplateID2 = resConfigModelUpdated2.GetId()
 						newStorageTemplateID2 = stConfigModelUpdated2.GetId()
+						stIds = append(stIds, newStorageTemplateID2)
+						resIds = append(resIds, newResourceTemplateID2)
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -431,9 +444,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 
 					Step("Delete Deployments", func() {
 						CleanupDeployments(deploymentsToBeCleaned)
-						controlPlane.CleanupCustomTemplates(stConfigModel.GetId(), resConfigModel.GetId())
-						controlPlane.CleanupCustomTemplates(newStorageTemplateID1, newResourceTemplateID1)
-						controlPlane.CleanupCustomTemplates(newStorageTemplateID2, newResourceTemplateID2)
+						controlPlane.CleanupCustomTemplates(stIds, resIds)
 					})
 				}
 			}
