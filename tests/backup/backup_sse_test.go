@@ -121,7 +121,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 					log.FailOnError(err, "Failed to apply bucket policy")
 					customBucketsWithDenyPolicy = append(customBucketsWithDenyPolicy, customBucketWithDenyPolicy)
 					customBuckets = append(customBuckets, customBucketWithDenyPolicy)
-					log.Infof("Updated S3 bucket with deny policy - %s", customBucketWithDenyPolicy)
+					time.Sleep(5 * time.Second)
+					log.InfoD("Updated S3 bucket with deny policy - %s", customBucketWithDenyPolicy)
 				}
 			})
 			Step("Create BackupLocation with bucketWithPolicy and SSE set to false", func() {
@@ -409,6 +410,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		providers := getProviders()
 		for _, provider := range providers {
 			for _, customBucket := range customBuckets {
+				log.InfoD("Deleting bucket  - %s", customBucket)
 				DeleteBucket(provider, customBucket)
 			}
 		}
