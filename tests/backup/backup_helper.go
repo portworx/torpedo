@@ -966,7 +966,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
 		err := SetClusterContext(originalClusterConfigPath)
 		if err != nil {
-			log.Errorf("Failed switching cluster context back to cluster path [%s].\nError - %s", originalClusterConfigPath, err.Error())
+			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
 		}
 	}()
 	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
