@@ -87,7 +87,6 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		providers := getProviders()
 
 		for _, provider := range providers {
-
 			Step("Validate applications", func() {
 				log.InfoD("Validate applications")
 				ValidateApplications(scheduledAppContexts)
@@ -102,7 +101,6 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			})
-			// Create bucket without deny policy
 			Step("Create bucket without deny policy", func() {
 				log.InfoD(fmt.Sprintf("Create bucket without deny policy"))
 				bucketWithOutPolicy := "sse-bucket-without-deny-policy"
