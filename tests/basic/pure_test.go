@@ -459,8 +459,12 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 				for i := 0; i < len(volumes); i++ {
 					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].Id)
 					clonedVolID, err := Inst().V.CloneVolume(volumes[i].Id)
+					inspectRealVol, err := Inst().V.InspectVolume(volumes[i].Id)
+					log.InfoD("-----%v-----", inspectRealVol.Locator.VolumeLabels["pvc"])
 					log.FailOnError(err, "Failed to clone %v volume with volume id %v with error:%v", key, volumes[i].Id, err)
 					mountPath, err := Inst().V.AttachVolume(clonedVolID)
+					inspectVol, err := Inst().V.InspectVolume(clonedVolID)
+					log.InfoD("-----%v-----", inspectVol.Locator.VolumeLabels["pvc"])
 					log.FailOnError(err, "Failed to attach volume error:%v", err)
 					log.InfoD("Successfully attached volume on path:%v", mountPath)
 					params := make(map[string]string)
