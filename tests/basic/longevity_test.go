@@ -223,35 +223,36 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		totalFunctionCount        int
 	)
 
+	// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+	disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
+		return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+			triggerLock.Lock()
+			defer triggerLock.Unlock()
+			fn(contexts, recordChan)
+		}
+	}
+
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			RestartVolDriver: TriggerRestartVolDriver,
-			//CloudSnapShot:        TriggerCloudSnapShot,
-			//HAIncrease:           TriggerHAIncrease,
-			//PoolAddDisk:          TriggerPoolAddDisk,
-			LocalSnapShot: TriggerLocalSnapShot,
-			//HADecrease:           TriggerHADecrease,
-			//VolumeResize:         TriggerVolumeResize,
-			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
-			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
-			//AddStorageNode:       TriggerAddOCPStorageNode,
-		}
-		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
-			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-				triggerLock.Lock()
-				defer triggerLock.Unlock()
-				fn(contexts, recordChan)
-			}
+			CloudSnapShot:        TriggerCloudSnapShot,
+			HAIncrease:           TriggerHAIncrease,
+			PoolAddDisk:          TriggerPoolAddDisk,
+			LocalSnapShot:        TriggerLocalSnapShot,
+			HADecrease:           TriggerHADecrease,
+			VolumeResize:         TriggerVolumeResize,
+			CloudSnapShotRestore: TriggerCloudSnapshotRestore,
+			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
+			AddStorageNode:       TriggerAddOCPStorageNode,
 		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode: disruptiveTriggerWrapper(TriggerRebootNodes),
-			//CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			//RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			//NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			//AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			RebootNode:           TriggerRebootNodes,
+			RestartVolDriver:     TriggerRestartVolDriver,
+			CrashNode:            TriggerCrashNodes,
+			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
+			NodeDecommission:     TriggerNodeDecommission,
+			AppTasksDown:         TriggerAppTasksDown,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -321,7 +322,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			for triggerType, triggerFunc := range disruptiveTriggerFunctions {
 				log.InfoD("Registering disruptive trigger: [%v]", triggerType)
 				wg.Add(1)
-				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
+				go testTrigger(&wg, &contexts, triggerType, disruptiveTriggerWrapper(triggerFunc), &disruptiveTriggerLock, &triggerEventsChan)
 			}
 			log.InfoD("Finished registering disruptive test triggers")
 		})
@@ -739,8 +740,10 @@ func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 	} else if upgradeEndpoints != "" {
 		currentCount := len(strings.Split(Inst().UpgradeStorageDriverEndpointList, ","))
 		newCount := len(strings.Split(upgradeEndpoints, ","))
-		if newCount > currentCount {
+		if Inst().UpgradeStorageDriverEndpointList == "" || newCount >= currentCount {
 			Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints
+		} else {
+			log.Warnf("upgradeEndpoints reduced from [%s] to [%s], removal not supported.", Inst().UpgradeStorageDriverEndpointList, upgradeEndpoints)
 		}
 		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
 	}
