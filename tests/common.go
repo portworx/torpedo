@@ -4312,32 +4312,18 @@ func CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgI
 	if err != nil {
 		return err
 	}
-
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-<<<<<<< HEAD
-=======
-
->>>>>>> 5fe9e6f32 (SSE S3 TC Automation)
 	// Initialize a new variable to hold the SSE S3 Encryption Type
 	var sseType api.S3Config_Sse
 	if len(sseS3EncryptionType) == 0 {
 		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
 		sseType, err = GetSseS3EncryptionType()
-<<<<<<< HEAD
 		if err != nil {
 			return err
 		}
 	} else {
 		sseType = sseS3EncryptionType[0]
-=======
-	} else {
-		sseType = sseS3EncryptionType[0]
-	}
-
-	if err != nil {
-		return err
->>>>>>> 5fe9e6f32 (SSE S3 TC Automation)
 	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4415,7 +4401,6 @@ func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucke
 }
 
 // CreateS3BackupLocationWithSseType creates backup location for S3 with SSE type
-<<<<<<< HEAD
 //
 //	func CreateS3BackupLocationWithSseType(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, sseS3EncryptionType api.S3Config_Sse) error {
 //		time.Sleep(60 * time.Second)
@@ -4497,7 +4482,7 @@ func CreateS3BackupLocationWithSseType(name, uid, cloudCred, cloudCredUID, bucke
 	}
 	return nil
 }
-=======
+
 //func CreateS3BackupLocationWithSseType(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
 //	backupDriver := Inst().Backup
 //	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
@@ -4538,7 +4523,6 @@ func CreateS3BackupLocationWithSseType(name, uid, cloudCred, cloudCredUID, bucke
 //	}
 //	return nil
 //}
->>>>>>> 5fe9e6f32 (SSE S3 TC Automation)
 
 // UpdateS3BackupLocation with the provided values
 func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
