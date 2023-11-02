@@ -224,6 +224,9 @@ type Driver interface {
 	//GetBlockDrives returns the block drives on the node
 	GetBlockDrives(n Node, options SystemctlOpts) (map[string]*BlockDrive, error)
 
+	//GetExecPodNamespace returns portworx namespace
+	GetExecPodNamespace() (string, error)
+
 	// RebalanceWorkerPool initiates worker pool rebalance for IBM cluster
 	RebalanceWorkerPool() error
 
