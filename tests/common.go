@@ -4396,52 +4396,93 @@ func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucke
 
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create backup location: %v", err)
 	}
 	return nil
 }
 
 // CreateS3BackupLocationWithSseType creates backup location for S3 with SSE type
-//func CreateS3BackupLocationWithSseType(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, sseS3EncryptionType api.S3Config_Sse) error {
-//	time.Sleep(60 * time.Second)
-//	backupDriver := Inst().Backup
-//	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-//	bLocationCreateReq := &api.BackupLocationCreateRequest{
-//		CreateMetadata: &api.CreateMetadata{
-//			Name:  name,
-//			OrgId: orgID,
-//			Uid:   uid,
-//		},
-//		BackupLocation: &api.BackupLocationInfo{
-//			Path:          bucketName,
-//			EncryptionKey: encryptionKey,
-//			CloudCredentialRef: &api.ObjectRef{
-//				Name: cloudCred,
-//				Uid:  cloudCredUID,
+//
+//	func CreateS3BackupLocationWithSseType(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, sseS3EncryptionType api.S3Config_Sse) error {
+//		time.Sleep(60 * time.Second)
+//		backupDriver := Inst().Backup
+//		_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+//		bLocationCreateReq := &api.BackupLocationCreateRequest{
+//			CreateMetadata: &api.CreateMetadata{
+//				Name:  name,
+//				OrgId: orgID,
+//				Uid:   uid,
 //			},
-//			Type: api.BackupLocationInfo_S3,
-//			Config: &api.BackupLocationInfo_S3Config{
-//				S3Config: &api.S3Config{
-//					Endpoint:   endpoint,
-//					Region:     region,
-//					DisableSsl: disableSSLBool,
-//					SseType:    sseS3EncryptionType,
+//			BackupLocation: &api.BackupLocationInfo{
+//				Path:          bucketName,
+//				EncryptionKey: encryptionKey,
+//				CloudCredentialRef: &api.ObjectRef{
+//					Name: cloudCred,
+//					Uid:  cloudCredUID,
+//				},
+//				Type: api.BackupLocationInfo_S3,
+//				Config: &api.BackupLocationInfo_S3Config{
+//					S3Config: &api.S3Config{
+//						Endpoint:   endpoint,
+//						Region:     region,
+//						DisableSsl: disableSSLBool,
+//						SseType:    sseS3EncryptionType,
+//					},
 //				},
 //			},
-//		},
-//	}
+//		}
 //
-//	ctx, err := backup.GetAdminCtxFromSecret()
-//	if err != nil {
-//		return err
-//	}
+//		ctx, err := backup.GetAdminCtxFromSecret()
+//		if err != nil {
+//			return err
+//		}
 //
-//	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
-//	if err != nil {
-//		return fmt.Errorf("failed to create backup location: %v", err)
+//		_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+//		if err != nil {
+//			return fmt.Errorf("failed to create backup location: %v", err)
+//		}
+//		return nil
 //	}
-//	return nil
-//}
+func CreateS3BackupLocationWithSseType(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
+				},
+			},
+		},
+	}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
 
 // UpdateS3BackupLocation with the provided values
 func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
