@@ -726,7 +726,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	}
 
 	clusterBackupShareStatusCheck := func() (interface{}, bool, error) {
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 		if err != nil {
 			return "", true, err
@@ -946,25 +946,28 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 }
 
 // CreateRestoreWithValidation creates restore, waits and checks for success and validates the backup
-func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) (err error) {
-	err = CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
+func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
+	err := CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
 	if err != nil {
-		return
+		return err
 	}
 	originalClusterConfigPath := CurrentClusterConfigPath
 	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
 		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
-		return
+		return err
 	} else {
 		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
 		err = SetClusterContext(clusterConfigPath)
 		if err != nil {
-			return
+			return err
 		}
 	}
 	defer func() {
 		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		err = SetClusterContext(originalClusterConfigPath)
+		err := SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		}
 	}()
 	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 	for _, scheduledAppContext := range scheduledAppContexts {
@@ -976,25 +979,49 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 	}
 	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
-	return
+	return err
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string) (int, error) {
+func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerName ...string) (int, error) {
 	var number int
-	ret, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
+	var str string
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
 	if err != nil {
 		return 0, err
 	}
-	for _, line := range strings.SplitAfter(ret, "\n") {
+	for _, line := range strings.SplitAfter(output, "\n") {
 		if strings.Contains(line, volumeMount) {
-			ret = strings.Fields(line)[3]
+			str = strings.Fields(line)[3]
+			break
 		}
 	}
-	number, err = strconv.Atoi(ret)
-	if err != nil {
-		return 0, err
+	if str == "" {
+		log.Infof("Could not find any mount points for the volume mount [%s] in the pod [%s] in namespace [%s] ", volumeMount, podName, namespace)
+		log.Infof("Trying to check if there is a sym link for [%s]", volumeMount)
+		if len(containerName) == 0 {
+			return number, err
+		}
+		symlinkPath, err := core.Instance().RunCommandInPod([]string{"readlink", "-f", volumeMount}, podName, containerName[0], namespace)
+		if err != nil {
+			return number, err
+		}
+		if symlinkPath == "" {
+			return 0, fmt.Errorf("no matching symlink for path [%s] was found in the pod [%s] in namespace [%s]", volumeMount, podName, namespace)
+		} else {
+			log.Infof("Symlink for volume mount [%s] found - [%s]", volumeMount, symlinkPath)
+		}
+		for _, line := range strings.SplitAfter(output, "\n") {
+			if strings.Contains(line, symlinkPath) {
+				str = strings.Fields(line)[3]
+				break
+			}
+		}
 	}
-	return number, nil
+	if str != "" {
+		number, err = strconv.Atoi(str)
+		return number, err
+	}
+	return 0, fmt.Errorf("no matching volume mount with path [%s] was found in the pod [%s] in namespace [%s]", volumeMount, podName, namespace)
 }
 
 func kubectlExec(arguments []string) (string, error) {
@@ -1110,7 +1137,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, true)
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, false)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
@@ -1443,6 +1470,7 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
 	var pods *corev1.PodList
 	var err error
+	// TODO: Revisit this function and remove the below code if not needed
 	podList := func() (interface{}, bool, error) {
 		pods, err = core.Instance().GetPods(namespace, label)
 		if err != nil {
@@ -1461,6 +1489,13 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 	if err != nil {
 		return err
 	}
+
+	// fetch the newest set of pods post wait for pods to come up
+	pods, err = core.Instance().GetPods(namespace, label)
+	if err != nil {
+		return err
+	}
+
 	for _, pod := range pods.Items {
 		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
 		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
@@ -1669,12 +1704,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 					continue volloop
 				}
 
-				sched, ok := Inst().S.(*k8s.K8s)
-				if !ok {
-					continue volloop
-				}
-
-				updatedSpec, err := sched.GetUpdatedSpec(pvcSpecObj)
+				updatedSpec, err := k8s.GetUpdatedSpec(pvcSpecObj)
 				if err != nil {
 					err := fmt.Errorf("unable to fetch updated version of PVC(name: [%s], namespace: [%s]) present in the context [%s]. Error: %v", pvcSpecObj.GetName(), pvcSpecObj.GetNamespace(), scheduledAppContextNamespace, err)
 					errors = append(errors, err)
@@ -1940,16 +1970,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 							}
 						}
 
-						if k8s, ok := Inst().S.(*k8s.K8s); ok {
-							_, err := k8s.GetUpdatedSpec(specObj)
-							if err == nil {
-								log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
-							} else {
-								err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
-								errors = append(errors, err)
-							}
+						_, err := k8s.GetUpdatedSpec(specObj)
+						if err == nil {
+							log.Infof("object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] was also present on the cluster/namespace [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 						} else {
-							err := fmt.Errorf("prsence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
+							err := fmt.Errorf("presence of object (name: [%s], kind: [%s], namespace: [%s]) found in the restore [%s] on the cluster/namespace [%s] could not be verified as scheduler is not K8s", name, kind, ns, restoreName, expectedRestoredAppContextNamespace)
 							errors = append(errors, err)
 						}
 
@@ -1991,7 +2016,18 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		// looping over the list of volumes that PX-Backup says it restored, to run some checks
 		for _, restoredVolInfo := range apparentlyRestoredVolumes {
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
-				if restoredVolInfo.Status.Status != api.RestoreInfo_StatusInfo_Success /*Can this also be partialsuccess?*/ {
+				switch restoredVolInfo.Status.Status {
+				case api.RestoreInfo_StatusInfo_Success:
+					log.Infof("in restore [%s], the status of the restored volume [%s] was Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+				case api.RestoreInfo_StatusInfo_Retained:
+					if theRestore.ReplacePolicy == api.ReplacePolicy_Retain {
+						log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+					} else {
+						err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Retained. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
+						errors = append(errors, err)
+						continue
+					}
+				default:
 					err := fmt.Errorf("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					errors = append(errors, err)
 					continue
@@ -3650,12 +3686,19 @@ func ValidateBackupLocation(ctx context.Context, orgID string, backupLocationNam
 
 // GetAppLabelFromSpec gets the label of the pod from the spec
 func GetAppLabelFromSpec(AppContextsMapping *scheduler.Context) (map[string]string, error) {
+	labelMap := make(map[string]string)
 	for _, specObj := range AppContextsMapping.App.SpecList {
 		if obj, ok := specObj.(*appsapi.Deployment); ok {
-			return obj.Spec.Selector.MatchLabels, nil
+			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Selector.MatchLabels)
+		} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			labelMap = k8s.MergeMaps(labelMap, obj.Spec.Template.ObjectMeta.Labels)
 		}
 	}
-	return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+	log.Infof("labelMap - %+v", labelMap)
+	if len(labelMap) == 0 {
+		return nil, fmt.Errorf("unable to find the label for %s", AppContextsMapping.App.Key)
+	}
+	return labelMap, nil
 }
 
 // GetVolumeMounts gets the volume mounts from the spec
@@ -5003,7 +5046,7 @@ func RemoveCloudCredentialOwnership(cloudCredentialName string, cloudCredentialU
 }
 
 // StartKubevirtVM starts the kubevirt VM and waits till the status is Running
-func StartKubevirtVM(name, namespace string) error {
+func StartKubevirtVM(name string, namespace string, waitForCompletion bool) error {
 	k8sKubevirt := kubevirt.Instance()
 	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
 	if err != nil {
@@ -5013,23 +5056,26 @@ func StartKubevirtVM(name, namespace string) error {
 	if err != nil {
 		return err
 	}
-	t := func() (interface{}, bool, error) {
-		vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
-		if err != nil {
-			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+	if waitForCompletion {
+		t := func() (interface{}, bool, error) {
+			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+			if err != nil {
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
+			}
+			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+			}
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			return "", false, nil
 		}
-		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
-			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
-		}
-		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
-		return "", false, nil
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+		return err
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
-	return err
+	return nil
 }
 
 // StopKubevirtVM stops the kubevirt VM and waits till the status is Stopped
-func StopKubevirtVM(name, namespace string) error {
+func StopKubevirtVM(name string, namespace string, waitForCompletion bool) error {
 	k8sKubevirt := kubevirt.Instance()
 	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
 	if err != nil {
@@ -5039,54 +5085,58 @@ func StopKubevirtVM(name, namespace string) error {
 	if err != nil {
 		return err
 	}
-	t := func() (interface{}, bool, error) {
-		vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
-		if err != nil {
-			return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]", name, namespace)
+	if waitForCompletion {
+		t := func() (interface{}, bool, error) {
+			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+			if err != nil {
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
+			}
+			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
+				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
+			}
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			return "", false, nil
 		}
-		if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusStopped {
-			return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusStopped)
-		}
-		log.Infof("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
-		return "", false, nil
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
+		return err
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
-	return err
+	return nil
 }
 
 // RestartKubevirtVM restarts the kubevirt VM
-// If VM is in stopped state it starts the VM
-// If VM is in started state it restarts the VM
-func RestartKubevirtVM(name, namespace string) error {
+func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) error {
 	k8sKubevirt := kubevirt.Instance()
 	vm, err := k8sKubevirt.GetVirtualMachine(name, namespace)
 	if err != nil {
 		return err
 	}
-	switch vm.Status.PrintableStatus {
-	case kubevirtv1.VirtualMachineStatusRunning:
-		err = StopKubevirtVM(name, namespace)
+	err = k8sKubevirt.RestartVirtualMachine(vm)
+	if err != nil {
+		return err
+	}
+	if waitForCompletion {
+		t := func() (interface{}, bool, error) {
+			vm, err = k8sKubevirt.GetVirtualMachine(name, namespace)
+			if err != nil {
+				return "", false, fmt.Errorf("unable to get virtual machine [%s] in namespace [%s]\nerror - %s", name, namespace, err.Error())
+			}
+			if vm.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+				return "", true, fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state, waiting to be in %s state", name, namespace, vm.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+			}
+			log.InfoD("virtual machine [%s] in namespace [%s] is in %s state", name, namespace, vm.Status.PrintableStatus)
+			return "", false, nil
+		}
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(t, vmStartStopTimeout, vmStartStopRetryTime)
 		if err != nil {
 			return err
 		}
-		err = StartKubevirtVM(name, namespace)
-		if err != nil {
-			return err
-		}
-	case kubevirtv1.VirtualMachineStatusStopped:
-		err = StartKubevirtVM(name, namespace)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("virtual machine [%s] in namespace [%s] is in %s state. It should be in running or stopped state", name, namespace, vm.Status.PrintableStatus)
 	}
 	return nil
 }
 
-// checkBackupObjectForNonExpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
+// checkBackupObjectForUnexpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
 // is backed up or not
-func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) error {
+func checkBackupObjectForUnexpectedNS(ctx context.Context, backupName string) error {
 
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 
@@ -5140,37 +5190,45 @@ func checkBackupObjectForNonExpectedNS(ctx context.Context, backupName string) e
 	return nil
 }
 
-// getNamespaceAge gets the namespace age of all the namespaces on the cluster
-func getNamespaceAge() (map[string]time.Time, error) {
-	var namespaceAge = make(map[string]time.Time)
+type nsPodAge map[string]time.Time
+
+// getPodAge gets the pod age of all pods on all the namespaces on the cluster
+func getPodAge() (map[string]nsPodAge, error) {
+	var podAge = make(map[string]nsPodAge)
 	err := SetDestinationKubeConfig()
 	if err != nil {
-		return namespaceAge, fmt.Errorf("failed to switch destination cluster context")
+		return podAge, fmt.Errorf("failed to switch destination cluster context")
 	}
 
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	for _, namespace := range allNamespaces.Items {
-		namespaceAge[namespace.ObjectMeta.GetName()] = namespace.ObjectMeta.GetCreationTimestamp().Time
+		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
+		if err != nil {
+			return podAge, fmt.Errorf("failed to get pods for namespace")
+		}
+		for _, pod := range pods.Items {
+			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetName(): pod.ObjectMeta.GetCreationTimestamp().Time}
+		}
 	}
 
 	err = SetSourceKubeConfig()
 	if err != nil {
-		return namespaceAge, fmt.Errorf("switching context to source cluster failed")
+		return podAge, fmt.Errorf("switching context to source cluster failed")
 	}
 
-	return namespaceAge, nil
+	return podAge, nil
 }
 
-// compareNamespaceAge checks the status of namespaces on clusters where the restore was done
-func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
+// comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
+func comparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 	err := SetDestinationKubeConfig()
 	if err != nil {
 		return fmt.Errorf("failed to switch destination cluster context")
 	}
 
-	namespaceNamesAge, err := getNamespaceAge()
+	podAge, err := getPodAge()
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
@@ -5186,12 +5244,18 @@ func compareNamespaceAge(oldNamespaceAge map[string]time.Time) error {
 	for _, namespace := range allNamespaces.Items {
 		for _, skipCase := range namespacesToSkip {
 			if skipCase == namespace.GetName() {
-				if namespaceNamesAge[namespace.GetName()] != oldNamespaceAge[namespace.GetName()] {
-					return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+				pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
+				if err != nil {
+					return fmt.Errorf("failed to get pods for namespace")
 				}
-			} else {
-				if !namespaceNamesAge[namespace.GetName()].After(oldNamespaceAge[namespace.GetName()]) {
-					return fmt.Errorf("namespace[%s] not restored but was expected to be restored", namespace.GetName())
+				for _, pod := range pods.Items {
+					if podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] != oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] {
+						return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
+					} else {
+						if !podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()].After(oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()]) {
+							return fmt.Errorf("namespace[%s] was not to be restored but was expected to be restored due to pod [%s] ", namespace.GetName(), pod.ObjectMeta.GetName())
+						}
+					}
 				}
 			}
 		}
@@ -5283,4 +5347,97 @@ func createBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContext
 		}
 	}
 	return incrementalBackupName, nil
+}
+
+// StartAllVMsInNamespace starts all the Kubevirt VMs in the given namespace
+func StartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	errors := make([]string, 0)
+	var mutex sync.Mutex
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := StartKubevirtVM(vm.Name, namespace, waitForCompletion)
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				errors = append(errors, err.Error())
+			}
+		}(vm)
+	}
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while starting VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
+	}
+	return nil
+}
+
+// StopAllVMsInNamespace stops all the Kubevirt VMs in the given namespace
+func StopAllVMsInNamespace(namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	errors := make([]string, 0)
+	var mutex sync.Mutex
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := StopKubevirtVM(vm.Name, namespace, waitForCompletion)
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				errors = append(errors, err.Error())
+			}
+		}(vm)
+	}
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while stopping VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
+	}
+	return nil
+}
+
+// RestartAllVMsInNamespace restarts all the Kubevirt VMs in the given namespace
+func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	errors := make([]string, 0)
+	var mutex sync.Mutex
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := RestartKubevirtVM(vm.Name, namespace, waitForCompletion)
+			if err != nil {
+				mutex.Lock()
+				defer mutex.Unlock()
+				errors = append(errors, err.Error())
+			}
+		}(vm)
+	}
+	wg.Wait()
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors generated while restarting VMs in namespace [%s] -\n%s", namespace, strings.Join(errors, "}\n{"))
+	}
+	return nil
 }

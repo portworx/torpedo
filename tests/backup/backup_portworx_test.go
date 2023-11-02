@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"sync"
 	"time"
 
@@ -44,7 +45,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupLocationWithEncryptionKey", "Creating Backup Location with Encryption Keys", nil, 79918)
+		StartPxBackupTorpedoTest("BackupLocationWithEncryptionKey", "Creating Backup Location with Encryption Keys", nil, 79918, Skonda, Q4FY23)
 
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -157,7 +158,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	var scName string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58065)
+		StartPxBackupTorpedoTest("ReplicaChangeWhileRestore", "Change replica while restoring backup", nil, 58065, Kshithijiyer, Q4FY23)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -314,7 +315,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	backupNamespaceMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064)
+		StartPxBackupTorpedoTest("ResizeOnRestoredVolume", "Resize after the volume is restored from a backup", nil, 58064, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -498,7 +499,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 79915)
+		StartPxBackupTorpedoTest("RestoreEncryptedAndNonEncryptedBackups", "Restore encrypted and non encrypted backups", nil, 79915, Skonda, Q4FY23)
 
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -664,7 +665,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		restoreNames                []string
 		nextScheduleBackupName      string
 		volumeMounts                []string
-		podList                     []string
+		podList                     []v1.Pod
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -677,7 +678,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	scheduledAppContexts = make([]*scheduler.Context, 0)
 	appNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress", nil, 58050)
+		StartPxBackupTorpedoTest("ResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress", nil, 58050, Sn, Q1FY24)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -769,14 +770,16 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+					podList = pods.Items
 					for _, pod := range pods.Items {
-						volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-						dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-						for _, volumeMount := range volumeMounts {
-							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-							volListBeforeSizeMap[volumeMount] = beforeSize
-							podList = append(podList, pod.Name)
+						containerPaths := schedops.GetContainerPVCMountMap(pod)
+						for containerName, paths := range containerPaths {
+							log.Infof("container [%s] has paths [%v]", containerName, paths)
+							for _, path := range paths {
+								beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+								volListBeforeSizeMap[path] = beforeSize
+							}
 						}
 					}
 				})
@@ -839,12 +842,15 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 					log.InfoD("Checking size of volume after resize")
 					srcClusterConfigPath, err := GetSourceClusterConfigPath()
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-					for _, podName := range podList {
-						volumeMounts, err = GetVolumeMounts(AppContextsMapping[namespace])
-						for _, volumeMount := range volumeMounts {
-							afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
-							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
-							volListAfterSizeMap[volumeMount] = afterSize
+					for _, pod := range podList {
+						containerPaths := schedops.GetContainerPVCMountMap(pod)
+						for containerName, paths := range containerPaths {
+							log.Infof("container [%s] has paths [%v]", containerName, paths)
+							for _, path := range paths {
+								afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+								dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume after resizing %v from pod %v", afterSize, pod.GetName()))
+								volListAfterSizeMap[path] = afterSize
+							}
 						}
 					}
 					for _, volumeMount := range volumeMounts {

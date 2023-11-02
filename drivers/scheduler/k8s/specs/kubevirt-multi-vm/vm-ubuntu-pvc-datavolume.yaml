@@ -17,12 +17,13 @@ kind: VirtualMachine
 metadata:
   name: vm-ubuntu-pvc-datavolume
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:
         kubevirt.io/domain: ubuntu-bionic
         kubevirt-key: kubevirt-val
+        app: vm-ubuntu-pvc-datavolume
     spec:
       domain:
         cpu:
@@ -50,7 +51,7 @@ spec:
       volumes:
         - name: containervolume
           persistentVolumeClaim:
-            claimName: pvc-cdi-ubuntu
+            claimName: pvc-cdi-ubuntu-app
         - name: datavolume
           dataVolume:
             name: pvc-data-volume
@@ -63,3 +64,5 @@ spec:
                   ubuntu:ubuntu
                   root:toor
                 expire: False
+              scripts-user:
+                -  /usr/bin/python3 /home/ubuntu/mysql_data.python &
