@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
@@ -287,9 +288,9 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 			//})
 			Step("kill stork", func() {
 				log.InfoD("Kill stork")
-				pxNamespace, err := Inst().N.GetExecPodNamespace()
+				pxNamespace, err := ssh.GetExecPodNamespace()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-				err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
+				err = DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork after toggling SSE type %s", backupNames))
 			})
 			Step("Restart backup pod", func() {
