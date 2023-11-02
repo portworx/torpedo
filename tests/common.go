@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -4082,6 +4081,16 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	return err
 }
 
+// UpdateBackupLocation creates backup location using the given context
+func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, ctx, sseS3EncryptionType)
+	}
+	return err
+}
+
 // CreateCluster creates/registers cluster with px-backup
 func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	var clusterCreateReq *api.ClusterCreateRequest
@@ -4376,6 +4385,83 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 	}
 
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateS3BackupLocationWithSseType creates backup location for S3 with SSE type
+func CreateS3BackupLocationWithSseType(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, sseS3EncryptionType api.S3Config_Sse) error {
+	time.Sleep(60 * time.Second)
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationCreateReq := &api.BackupLocationCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			Path:          bucketName,
+			EncryptionKey: encryptionKey,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
+				},
+			},
+		},
+	}
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// UpdateS3BackupLocation with the provided values
+func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationUpdateReq := &api.BackupLocationUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
+				},
+			},
+		},
+	}
+
+	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationUpdateReq)
 	if err != nil {
 		return err
 	}
