@@ -6897,12 +6897,16 @@ var _ = Describe("{DriveAddPXDown}", func() {
 
 		// Add Drive on the Node [ PTX-15856 ]
 		err = AddCloudDrive(*nodeDetail, -1)
-		// Check if the errMessage contains the phrases
-		containsCloudDriveError := strings.Contains(err.Error(), "add cloud drive failed on node")
-		containsPXError := strings.Contains(err.Error(), "PX is not running since the systemd service portworx.service is installed but not active")
-		poolExpandCondition := containsCloudDriveError && containsPXError
-		dash.VerifyFatal(poolExpandCondition, true, "adding new pool on the node failed?")
-		log.InfoD(err.Error(), "Pool expand failed")
+		if err != nil {
+			// Check if the errMessage contains the phrases
+			containsCloudDriveError := strings.Contains(err.Error(), "add cloud drive failed on node")
+			containsPXError := strings.Contains(err.Error(), "PX is not running since the systemd service portworx.service is installed but not active")
+			poolExpandCondition := containsCloudDriveError && containsPXError
+			dash.VerifyFatal(poolExpandCondition, true, "adding new pool on the node failed?")
+			log.InfoD(err.Error(), "Pool expand failed")
+		} else {
+			log.Errorf("Expect the addition of a new pool on the node to fail.")
+		}
 	})
 
 	JustAfterEach(func() {
