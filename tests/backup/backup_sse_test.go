@@ -164,7 +164,6 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				bkpNamespacesForWithoutSse := bkpNamespaces[:midpoint]
 				for _, backupNameSpace := range bkpNamespacesForWithoutSse {
 					backupName = fmt.Sprintf("%s-%s-%s-%v", BackupNamePrefix, backupNameSpace, RandomString(randomStringLength), time.Now().Unix())
-					////tp-backup-postgres-backup-pxbackuptask-1-iyvzl-11-02-08h04m29s-yadnj-1698912329
 					wg.Add(1)
 					go func(backupNameSpace string, backupName string) {
 						defer GinkgoRecover()
