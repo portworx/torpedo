@@ -38,7 +38,8 @@ const (
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
-	PDSChartRepo = "https://portworx.github.io/pds-charts"
+	//PDSChartRepo = "https://portworx.github.io/pds-charts"
+	PDSChartRepo = "https://d2xtayr2ct14mw.cloudfront.net/charts/target"
 	pxLabel      = "pds.portworx.com/available"
 )
 
