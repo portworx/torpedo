@@ -721,6 +721,8 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: PX_NAMESPACE
+      value: "${PX_NAMESPACE}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
