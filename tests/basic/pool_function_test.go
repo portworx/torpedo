@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -169,8 +170,8 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 		EndTorpedoTest()
 	})
 
-	// test resizing all pools on one storage node concurrently and ensure only the first one makes progress
-	It("Select all pools on a storage node and expand them concurrently. ", func() {
+	// test expanding all pools on one storage node concurrently and ensure only the first one makes progress
+	It("Select all pools on a storage node and expand them concurrently", func() {
 		StartTorpedoTest("PoolExpandRejectConcurrent",
 			"Validate storage pool expansion rejects concurrent requests", nil, 0)
 		var pools []*api.StoragePool
@@ -209,6 +210,21 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 				}
 			}
 		})
+	})
+
+	// test expansion request on a pool while a previous expansion is in progress is rejected
+	It("Expand a pool while a previous expansion is in progress", func() {
+		expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+		targetSize := poolToBeResized.TotalSize/units.GiB + 100
+		err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
+		// wait for expansion to start
+		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
+		// when the expansion has already completed.
+		time.Sleep(1)
+		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToBeResized.Uuid, expandType, targetSize+100, true)
+		dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
+		dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
+			"Pool expansion failure reason should be communicated to the user	")
 	})
 })
 
