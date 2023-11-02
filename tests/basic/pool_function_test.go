@@ -156,7 +156,7 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToBeResized = getStoragePool(poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
@@ -215,13 +215,13 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 	// test expansion request on a pool while a previous expansion is in progress is rejected
 	It("Expand a pool while a previous expansion is in progress", func() {
 		expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
-		targetSize := poolToBeResized.TotalSize/units.GiB + 100
+		targetSize := poolToResize.TotalSize/units.GiB + 100
 		err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
 		// wait for expansion to start
 		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
 		// when the expansion has already completed.
 		time.Sleep(1)
-		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToBeResized.Uuid, expandType, targetSize+100, true)
+		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToResize.Uuid, expandType, targetSize+100, true)
 		dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
 		dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
 			"Pool expansion failure reason should be communicated to the user	")
