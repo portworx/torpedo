@@ -543,30 +543,56 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 	})
 
 	It("Initiate pool expansion (DMThin) to its limits (15 TiB) and beyond", func() {
-		StartTorpedoTest("PoolExpandTestLimits",
-			"Initiate pool expansion using add-drive to 20 TB target size", nil, testrailID)
+		Step("Expand pool to 15 TiB (max supported capacity for DMThin) with resize-disk type. ", func() {
+			var testrailID = 51292
+			// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51292
 
-		It("Select a pool and expand it to 15 TiB (max supported capacity for DMThin) with resize-disk type. ", func() {
-			StartTorpedoTest("PoolExpandDiskResize",
-				"Validate storage pool expansion with type=resize-disk", nil, 0)
-			targetSizeInBytes = 15 * units.TiB
+			StartTorpedoTest("PoolExpandTestWithin15TiBLimit",
+				"Initiate pool expansion using resize-disk to 15 TiB target size", nil, testrailID)
+
+			// To achieve total pool size of 15 TiB:
+			// 1. Add another drive of same size for pool to have 2 drives.
+			// 2. Perform resize-disk operation which is faster than pool rebalance
+			//    due to adding a new 7 TiB drive.
+			targetSizeGiB := (poolToResize.TotalSize / units.GiB) * 2
+
+			log.InfoD("Next trying to expand the pool %s to %v GiB with type add-disk",
+				poolIDToResize, targetSizeGiB)
+			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion should not result in error")
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
+			targetSizeTiB := uint64(15)
+			targetSizeInBytes = targetSizeTiB * units.TiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
 
-			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
-				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v TiB with type resize-disk",
+				poolIDToResize, targetSizeGiB, targetSizeTiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			resizeErr = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion should not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
 		})
 
-		Step("Select a pool and expand it to 20 TiB with add-disk type. ", func() {
-			originalSizeInBytes = poolToResize.TotalSize
-			targetSizeInBytes = 20 * units.TiB
+		Step("Expand pool to 20 TiB (beyond max supported capacity for DMThin) with add-disk type. ", func() {
+			var testrailID = 50643
+			// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50643
+
+			StartTorpedoTest("PoolExpandTestBeyond15TiBLimit",
+				"Initiate pool expansion using add-disk to 20 TiB target size", nil, testrailID)
+
+			targetSizeTiB := uint64(20)
+			targetSizeInBytes = targetSizeTiB * units.TiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
-			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+			log.InfoD("Trying to expand pool %s to %v TiB with type add-disk",
+				poolIDToResize, targetSizeTiB)
+			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+			Expect(err).To(HaveOccurred())
+			if err == nil {
+				dash.Fatal("Pool expansion to 20 TB should result in error")
+			}
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			Expect(err).To(HaveOccurred())
 			if resizeErr == nil {
