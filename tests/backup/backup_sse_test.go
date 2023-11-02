@@ -247,6 +247,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				}
 				wg.Wait()
 			})
+			//TODO:https://portworx.atlassian.net/browse/PB-4687 (will enable once bug is fixed)
 			//Step("Update backup location backupLocationUidWithoutSse to sse true", func() {
 			//	log.InfoD("Update backup location backupLocationUidWithoutSse to sse true")
 			//	err = UpdateBackupLocation(provider, backupLocationWithoutSse, backupLocationUidWithoutSse, orgID, credNameForBlWithoutSse, cloudCredUidForBlWithoutSse, ctx, api.S3Config_SSE_S3)
