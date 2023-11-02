@@ -1,0 +1,34 @@
+FROM golang:1.19.5-alpine AS build
+LABEL maintainer="avinash@portworx.com"
+#ARG MAKE_TARGET
+
+WORKDIR /go/src/github.com/portworx/torpedo
+
+# Install setup dependencies
+RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
+
+# Compile
+#RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
+
+# Build a fresh container with just the binaries
+FROM alpine
+
+RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+
+# clone the torpedo repo
+RUN apk go git && git clone https://github.com/portworx/torpedo.git /taas
+
+# Install kubectl from Docker Hub.
+COPY --from=lachlanevenson/k8s-kubectl:latest /usr/local/bin/kubectl /usr/local/bin/kubectl
+
+# Install helm from Docker Hub
+COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
+
+# Install docker
+RUN apk add --update --no-cache docker
+
+# Copy binaries over from previous container
+COPY --from=build /go/src/github.com/portworx/torpedo/bin bin
+
+ENTRYPOINT []
+CMD []

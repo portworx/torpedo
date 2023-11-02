@@ -167,6 +167,12 @@ container-backup:
 	@echo "Building backup.test container "$(TORPEDO_IMG)
 	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-backup -f Dockerfile .
 
+# this target builds a container with torpedo apiserver binary only. Repo is hardcoded to ".../taas".
+container-taas: TORPEDO_IMG=$(DOCKER_HUB_REPO)/taas:$(DOCKER_HUB_TAG)
+container-taas:
+	@echo "Building toas container "$(TORPEDO_IMG)
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) -f Dockerfile-gin .
+
 deploy: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 deploy: container
 	sudo docker push $(TORPEDO_IMG)
@@ -177,6 +183,10 @@ deploy-pds: container-pds
 
 deploy-backup: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
 deploy-backup: container-backup
+	sudo docker push $(TORPEDO_IMG)
+
+deploy-taas: TORPEDO_IMG=$(DOCKER_HUB_REPO)/taas:$(DOCKER_HUB_TAG)
+deploy-backup: container-taas
 	sudo docker push $(TORPEDO_IMG)
 
 clean:
