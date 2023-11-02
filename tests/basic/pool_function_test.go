@@ -156,6 +156,8 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToBeResized = getStoragePool(poolIDToResize)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Previous pool expansion(s) should not result in error")
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
@@ -171,8 +173,9 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 
 	// test resizing all pools on one storage node concurrently and ensure only the first one makes progress
 	It("Select all pools on a storage node and expand them concurrently. ", func() {
+		// TestRail:https://portworx.testrail.net/index.php?/tests/view/34542836&group_by=cases:custom_automated&group_order=desc&group_id=2
 		StartTorpedoTest("PoolExpandRejectConcurrent",
-			"Validate storage pool expansion rejects concurrent requests", nil, 0)
+			"Validate storage pool expansion rejects concurrent requests", nil, 34542836)
 		var pools []*api.StoragePool
 		Step("Verify multiple pools are present on this node", func() {
 			// collect all pools available
