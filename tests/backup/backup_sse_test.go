@@ -55,6 +55,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		newBackupLocationWithSseAfterRestart string
 		backupNameAfterPxBackupRestart       string
 		customBuckets                        []string
+		randomStringLength                   = 10
 	)
 
 	storageClassMapping := make(map[string]string)
@@ -62,7 +63,6 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 	params := make(map[string]string)
 	k8sStorage := storage.Instance()
 	backupLocationMap := make(map[string]string)
-	randomStringLength := 10
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy",
