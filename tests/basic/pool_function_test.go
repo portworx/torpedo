@@ -155,7 +155,7 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToBeResized = getStoragePool(poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Previous pool expansion(s) should not result in error")
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
