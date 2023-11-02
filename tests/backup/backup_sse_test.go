@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-var _ = Describe("{sseS3encryption}", func() {
+var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/93014
 	var (
@@ -64,7 +64,7 @@ var _ = Describe("{sseS3encryption}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("sseS3encryption",
+		StartPxBackupTorpedoTest("CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy",
 			"Backup and restore from Backup location created with SSE-S3 and deny policy set from aws s3", nil, 93014, Sn, Q3FY24)
 		log.InfoD("Deploy applications needed for backup")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -80,7 +80,7 @@ var _ = Describe("{sseS3encryption}", func() {
 			}
 		}
 	})
-	It("sse-s3 encryption", func() {
+	It("Create backup and restore for all combinations of SSE-S3 form px-backup side and deny policy configured on AWS S3 bucket", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		providers := getProviders()
