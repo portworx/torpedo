@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	"strconv"
 	"strings"
 	"sync"
@@ -312,7 +313,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 
 		Step("Kill stork when backup in progress", func() {
 			log.InfoD("Kill stork when backup in progress")
-			err := DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
+			pxNamespace, err := ssh.GetExecPodNamespace()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
+			err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
 		})
 
@@ -338,7 +341,9 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		})
 		Step("Kill stork when restore in-progress", func() {
 			log.InfoD("Kill stork when restore in-progress")
-			err := DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
+			pxNamespace, err := ssh.GetExecPodNamespace()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
+			err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
 			dash.VerifyFatal(err, nil, "Killing stork while all the restores are in progress")
 		})
 		Step("Check if restore is successful when the stork restart happened", func() {

@@ -290,7 +290,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.InfoD("Kill stork")
 				pxNamespace, err := ssh.GetExecPodNamespace()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-				err = DeletePodWithLabelInNamespace(getPXNamespace(), storkLabel)
+				err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork after toggling SSE type %s", backupNames))
 			})
 			Step("Restart backup pod", func() {
