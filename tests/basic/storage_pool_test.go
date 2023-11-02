@@ -6905,7 +6905,7 @@ var _ = Describe("{DriveAddPXDown}", func() {
 			dash.VerifyFatal(poolExpandCondition, true, "adding new pool on the node failed?")
 			log.InfoD(err.Error(), "Pool expand failed")
 		} else {
-			log.Errorf("Expect the addition of a new pool on the node to fail.")
+			log.FailOnError(err, "Expect the addition of a new pool on the node to fail.")
 		}
 	})
 
