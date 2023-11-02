@@ -47,7 +47,6 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		clusterStatus                        api.ClusterInfo_StatusInfo_Status
 		clusterUid                           string
 		restoreList                          []string
-		backupNames                          []string
 		schedulePolicyName                   string
 		schedulePolicyUid                    string
 		latestScheduleBackupName             string
