@@ -459,17 +459,19 @@ var _ = Describe("{CloneVolAndValidate}", func() {
 				for i := 0; i < len(volumes); i++ {
 					log.FailOnError(err, "Failed to inspect volume %v", volumes[i].Id)
 					clonedVolID, err := Inst().V.CloneVolume(volumes[i].Id)
-					log.FailOnError(err, "Failed to clone %v volume with volume id %v", key, volumes[i].Id)
+					log.FailOnError(err, "Failed to clone %v volume with volume id %v with error:%v", key, volumes[i].Id, err)
 					mountPath, err := Inst().V.AttachVolume(clonedVolID)
-					log.FailOnError(err, "Failed to attach volume")
+					log.FailOnError(err, "Failed to attach volume error:%v", err)
 					log.InfoD("Successfully attached volume on path:%v", mountPath)
 					params := make(map[string]string)
 					if Inst().ConfigMap != "" {
 						params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 					}
 					err = Inst().V.ValidateCreateVolume(clonedVolID, params)
-					log.FailOnError(err, "Failed to validate clone")
+					log.FailOnError(err, "Failed to validate clone error:%v", err)
 					log.Infof("successfully cloned and validated")
+					err = Inst().V.DeleteVolume(clonedVolID)
+					log.FailOnError(err, "Failed to delete cloned volume error:%v", err)
 				}
 			}
 		})
