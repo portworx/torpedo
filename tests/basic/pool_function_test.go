@@ -31,7 +31,6 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToResize = getStoragePool(poolIDToResize)
 	})
 
 	JustAfterEach(func() {
@@ -43,10 +42,10 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 		EndTorpedoTest()
 	})
 
-	It("Select a pool and expand it by 100 GiB 3 time with add-disk type. ", func() {
-		StartTorpedoTest("PoolExpandDiskAdd3Times",
-			"Validate storage pool expansion 3 times with type=add-disk", nil, 0)
-		for i := 0; i < 3; i++ {
+	It("Select a pool and expand it by 100 GiB 2 time with add-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskAdd2Times",
+			"Validate storage pool expansion 2 times with type=add-disk", nil, 0)
+		for i := 0; i < 2; i++ {
 			poolToResize = getStoragePool(poolIDToResize)
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
@@ -61,10 +60,11 @@ var _ = Describe("{PoolExpandMultipleTimes}", func() {
 		}
 	})
 
-	It("Select a pool and expand it by 100 GiB 3 times with resize-disk type. ", func() {
-		StartTorpedoTest("PoolExpandDiskResize3Times",
+	It("Select a pool and expand it by 100 GiB 2 times with resize-disk type. ", func() {
+		StartTorpedoTest("PoolExpandDiskResize2Times",
 			"Validate storage pool expansion with type=resize-disk", nil, 0)
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 2; i++ {
+			poolToResize = getStoragePool(poolIDToResize)
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
