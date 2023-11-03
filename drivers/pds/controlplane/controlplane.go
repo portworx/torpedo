@@ -359,19 +359,20 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 	return resourceTemplateID, nil
 }
 
-func (cp *ControlPlane) CleanupCustomTemplates(storageTemplateIDs []string, resourceTemplateIDs []string) {
+func (cp *ControlPlane) CleanupCustomTemplates(storageTemplateIDs []string, resourceTemplateIDs []string) error {
 	for _, stId := range storageTemplateIDs {
 		_, err := components.StorageSettingsTemplate.DeleteTemplate(stId)
 		if err != nil {
-			log.Errorf("Failed to delete storage template with ID- %v", stId)
+			return fmt.Errorf("failed to delete storage template with ID- %v", stId)
 		}
 	}
 	for _, resId := range resourceTemplateIDs {
 		_, err := components.ResourceSettingsTemplate.DeleteTemplate(resId)
 		if err != nil {
-			log.Errorf("Failed to delete resource template with ID- %v", resId)
+			return fmt.Errorf("failed to delete storage template with ID- %v", resId)
 		}
 	}
+	return nil
 
 }
 
