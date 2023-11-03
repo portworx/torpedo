@@ -6,7 +6,6 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
@@ -156,7 +155,7 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 							})
 							stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 							Step(stepLog, func() {
-								err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, newResourceTemplateID, newStorageTemplateID, initialCapacity, updatedPvcSize)
+								err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
 								log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 							})
 						})
@@ -364,7 +363,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated1, resConfigModelUpdated1, newResourceTemplateID1, newStorageTemplateID1, initialCapacity, updatedPvcSize)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated1, resConfigModelUpdated1, initialCapacity, updatedPvcSize)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
@@ -414,7 +413,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated2, resConfigModelUpdated2, newResourceTemplateID2, newStorageTemplateID2, updatedPvcSize, updatedPvcSize1)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
@@ -549,7 +548,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, newResourceTemplateID, newStorageTemplateID, initialCapacity, updatedPvcSize)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 						stepLog = "Validate Workload is running after storage resize by creating new workload"
@@ -588,6 +587,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 	})
 })
 
+// DeployDSWithCustomTemplatesRunWorkloads Deploy dataservice with custom templates and run workloads on them
 func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string, templates controlplane.Templates) (*pds.ModelsDeployment, uint64, *pds.ModelsResourceSettingsTemplate, *pds.ModelsStorageOptionsTemplate, string, *v1.Deployment, map[string]string, pdsdriver.LoadGenParams, error) {
 	var (
 		dsVersions             = make(map[string]map[string][]string)
@@ -673,22 +673,4 @@ func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string,
 	log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
 	pdsdeploymentsmd5Hash1[*deployment.ClusterResourceName] = ckSum
 	return deployment, initialCapacity, resConfigModel, stConfigModel, dataServiceAppConfigID, workloadDep, pdsdeploymentsmd5Hash1, wkloadParams, nil
-}
-
-func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, newResourceTemplateID string, newStorageTemplateID string, initialCapacity uint64, updatedPvcSize uint64) error {
-	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
-	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-	log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
-	dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
-	dash.VerifyFatal(config.Spec.StorageOptions.Filesystem, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
-	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
-	dash.VerifyFatal(config.Spec.StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
-	if updatedPvcSize > initialCapacity {
-		flag := true
-		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
-		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedPvcSize)
-	} else {
-		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
-	}
-	return nil
 }
