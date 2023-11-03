@@ -911,24 +911,6 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 	})
 })
 
-// This test clones FACD, FBCD and FADA volumes and validates it
-/*
-https://portworx.testrail.net/index.php?/tests/view/72639348
-https://portworx.testrail.net/index.php?/tests/view/72657575
-
-*/
-var _ = Describe("{ClonePureVolumesAndValidate}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ClonePureVolumesAndValidate", "Test clone of pure volumes and validate the volumes", nil, 0)
-	})
-	It("installs with cloud drive volumes on the correct FlashArrays", func() {
-
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
 // This test Creates multiple FADA volume/app (nginx) - Restart PX on a Node while volume creation is in progress
 /*
 https://portworx.testrail.net/index.php?/tests/view/72615026
