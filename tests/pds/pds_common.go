@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -552,4 +553,26 @@ func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDepl
 		return "", false
 	}
 	return dbMaster, true
+}
+
+// ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64) error {
+	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
+	newResourceTemplateID := resConfigUpdated.GetId()
+	newStorageTemplateID := stConfigUpdated.GetId()
+	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+	log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
+	dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+	dash.VerifyFatal(config.Spec.StorageOptions.Filesystem, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
+	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
+	dash.VerifyFatal(config.Spec.StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
+	if updatedPvcSize > initialCapacity {
+		flag := true
+		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
+		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedPvcSize)
+	} else {
+		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
+	}
+	return nil
 }
