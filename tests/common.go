@@ -4083,7 +4083,7 @@ func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, buc
 	return err
 }
 
-// UpdateBackupLocation creates backup location using the given context
+// UpdateBackupLocation updates s3 backup location with the provided values
 func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
 	var err error
 	switch provider {
@@ -4400,7 +4400,7 @@ func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucke
 	return nil
 }
 
-// UpdateS3BackupLocation with the provided values
+// UpdateS3BackupLocation updates s3 backup location with the provided values
 func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
 
 	backupDriver := Inst().Backup
