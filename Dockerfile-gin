@@ -7,6 +7,20 @@ WORKDIR /go/src/github.com/portworx/torpedo
 # Install setup dependencies
 RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
 
+# No need to copy *everything*. This keeps the cache useful
+COPY vendor vendor
+COPY Makefile Makefile
+COPY go.mod go.mod
+COPY go.sum go.sum
+COPY pkg pkg
+COPY porx porx
+COPY scripts scripts
+COPY drivers drivers
+COPY deployments deployments
+
+# Why? Errors if this is removed
+COPY .git .git
+
 # Compile
 RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 
