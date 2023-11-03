@@ -195,6 +195,7 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 					err = Inst().V.ExpandPool(p.Uuid, expandType, p.TotalSize/units.GiB+100, true)
 				}(p)
 			}
+			wg.Wait()
 		})
 
 		Step("Verify only one expansion is making progress at any given time", func() {
