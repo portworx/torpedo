@@ -117,8 +117,9 @@ build-backup: $(GOPATH)/bin/ginkgo
 
 # this target builds the gin binary only.
 build-gin: GIN_BUILD_DIR=./apiServer/pxone
+build-gin:
 	mkdir -p $(BIN)
-	go build -tags "$(TAGS)" $(BUILDFLAGS) $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer')
+	go build -tags "$(TAGS)" $(BUILDFLAGS) shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer'
 
 	find $(GIN_BUILD_DIR) -name 'pxone' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
