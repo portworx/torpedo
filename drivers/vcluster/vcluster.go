@@ -16,11 +16,13 @@ import (
 	snapshotv1 "github.com/kubernetes-csi/external-snapshotter/client/v4/apis/volumesnapshot/v1"
 	snapclientset "github.com/kubernetes-csi/external-snapshotter/client/v4/clientset/versioned"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalstorage"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -215,7 +217,8 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 		}
 	}
 	log.Infof("Control Node IP: %v", ControlNodeIP)
-	sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
+	//sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
+	sampleVclusterConfig := filepath.Join(currentDir, "..", "..", "drivers", "vcluster", "vcluster.yaml")
 	sampleVclusterConfigAbsPath, err := filepath.Abs(sampleVclusterConfig)
 	if err != nil {
 		return err
@@ -234,6 +237,9 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: v.Namespace,
+			Labels: map[string]string{
+				"type": "vcluster",
+			},
 		},
 	}
 	if _, err = k8sCore.CreateNamespace(ns); err != nil {
@@ -812,4 +818,60 @@ func (v *VCluster) ListSnapshots() (*snapv1.VolumeSnapshotList, error) {
 		return nil, err
 	}
 	return snapshotList, nil
+}
+
+// PVCRuleByUsageCapacityForVcluster Sets an Autopilot Rule for PVC in context of a Vcluster
+func PVCRuleByUsageCapacityForVcluster(usagePercentage int, scalePercentage int, maxSize string) apapi.AutopilotRule {
+	return apapi.AutopilotRule{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: fmt.Sprintf("pvc-usage-%d-scale-%d", usagePercentage, scalePercentage),
+		},
+		Spec: apapi.AutopilotRuleSpec{
+			NamespaceSelector: apapi.RuleObjectSelector{
+				LabelSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"type": "vcluster",
+					},
+				},
+			},
+			Conditions: apapi.RuleConditions{
+				Expressions: []*apapi.LabelSelectorRequirement{
+					{
+						Key:      aututils.PxVolumeUsagePercentMetric,
+						Operator: apapi.LabelSelectorOpGt,
+						Values:   []string{fmt.Sprintf("%d", usagePercentage)},
+					},
+				},
+			},
+			Actions: []*apapi.RuleAction{
+				{
+					Name: aututils.VolumeSpecAction,
+					Params: map[string]string{
+						aututils.RuleActionsScalePercentage: fmt.Sprintf("%d", scalePercentage),
+					},
+				},
+			},
+		},
+	}
+}
+
+// GetPVC returns PVC object of a PVC in vCluster Context
+func (v *VCluster) GetPVC(pvcName string, namespace string) (*corev1.PersistentVolumeClaim, error) {
+	return v.Clientset.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), pvcName, metav1.GetOptions{})
+}
+
+// GetPvcCapacitySize returns capacity of a Pvc object in GiB
+func GetPvcCapacitySize(pvc *corev1.PersistentVolumeClaim) float64 {
+	size := pvc.Status.Capacity[corev1.ResourceStorage]
+	sizeBytes := size.Value()
+	sizeGiB := float64(sizeBytes) / (1024 * 1024 * 1024)
+	return sizeGiB
+}
+
+// GetPvcOriginalSize returns original size of a PVC object in GiB
+func GetPvcOriginalSize(pvc *corev1.PersistentVolumeClaim) float64 {
+	size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	sizeBytes := size.Value()
+	sizeGiB := float64(sizeBytes) / (1024 * 1024 * 1024)
+	return sizeGiB
 }
