@@ -57,6 +57,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		backupNameAfterPxBackupRestart       string
 		customBuckets                        []string
 		randomStringLength                   = 10
+		backupsAfterSettingSseTrue           []string
 	)
 
 	storageClassMapping := make(map[string]string)
@@ -259,32 +260,40 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				}
 				wg.Wait()
 			})
-			//TODO:https://portworx.atlassian.net/browse/PB-4687 (will enable once bug is fixed)
-			//Step("Update backup location backupLocationUidWithoutSse to sse true", func() {
-			//	log.InfoD("Update backup location backupLocationUidWithoutSse to sse true")
-			//	err = UpdateBackupLocation(provider, backupLocationWithoutSse, backupLocationUidWithoutSse, orgID, credNameForBlWithoutSse, cloudCredUidForBlWithoutSse, ctx, api.S3Config_SSE_S3)
-			//	dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", backupLocationWithoutSse))
-			//})
+			Step("Update backup location backupLocationUidWithoutSse to sse true", func() {
+				log.InfoD("Update backup location backupLocationUidWithoutSse to sse true")
+				err = UpdateBackupLocation(provider, backupLocationWithoutSse, backupLocationUidWithoutSse, orgID, credNameForBlWithoutSse, cloudCredUidForBlWithoutSse, ctx, api.S3Config_SSE_S3)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Updation of backuplocation [%s]", backupLocationWithoutSse))
+			})
 
-			//// Take backup with backupLocationWithoutSse
-			//Step("Create Backup with backupLocationWithoutSse", func() {
-			//	log.InfoD("Taking backup of application with backupLocationWithoutSse after updating the sse to true")
-			//	var wg sync.WaitGroup
-			//	bkpNamespacesForWithoutSse := bkpNamespaces[:midpoint]
-			//	for _, backupNameSpace := range bkpNamespacesForWithoutSse {
-			//		backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, backupNameSpace, time.Now().Unix())
-			//		wg.Add(1)
-			//		go func(backupNameSpace string) {
-			//			defer GinkgoRecover()
-			//			defer wg.Done()
-			//			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
-			//			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
-			//			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			//		}(backupNameSpace)
-			//		backupsWithOutSse = append(backupsWithOutSse, backupName)
-			//	}
-			//	wg.Wait()
-			//})
+			// Take backup with backupLocationWithoutSse
+			Step("Create backup of application with backupLocationWithoutSse after updating the sse to true", func() {
+				log.InfoD("Taking backup of application with backupLocationWithoutSse after updating the sse to true")
+				var wg sync.WaitGroup
+				bkpNamespacesForWithoutSse := bkpNamespaces[:midpoint]
+				for _, backupNameSpace := range bkpNamespacesForWithoutSse {
+					backupName = fmt.Sprintf("%s-%s-%s-%v", BackupNamePrefix, backupNameSpace, RandomString(randomStringLength), time.Now().Unix())
+					wg.Add(1)
+					go func(backupNameSpace string, backupName string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup after setting sse to true [%s]", backupName))
+					}(backupNameSpace, backupName)
+					backupsAfterSettingSseTrue = append(backupsAfterSettingSseTrue, backupName)
+				}
+				wg.Wait()
+			})
+			Step("Restoring the backed up applications after setting the sse to true of backupLocationWithoutSse", func() {
+				log.InfoD("Restoring the backed up applications after setting the sse to true of backupLocationWithoutSse")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s-%v", "restore-after-bl-sse-true", RandomString(randomStringLength), time.Now().Unix())
+				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+				restoreList = append(restoreList, restoreName)
+			})
 			Step("kill stork", func() {
 				log.InfoD("Kill stork")
 				pxNamespace, err := ssh.GetExecPodNamespace()
