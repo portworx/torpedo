@@ -34,6 +34,7 @@ endif
 ifndef PKGS
 # shell does not honor export command above, so we need to explicitly pass GOFLAGS here
 PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/tests')
+PKGIN := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer/pxone')
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -119,9 +120,10 @@ build-backup: $(GOPATH)/bin/ginkgo
 build-gin: GIN_BUILD_DIR=./apiServer/pxone
 build-gin:
 	mkdir -p $(BIN)
-	go build -tags "$(TAGS)" $(BUILDFLAGS) shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer'
+	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGIN)
+	go build $(GIN_BUILD_DIR)
 
-	find $(GIN_BUILD_DIR) -name 'pxone' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	find . -name 'pxone' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
 vendor-update:
