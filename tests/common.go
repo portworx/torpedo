@@ -4359,13 +4359,20 @@ func CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgI
 }
 
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
-func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool) error {
+func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	// Get SSE S3 Encryption Type
-	sseS3EncryptionType, err := GetSseS3EncryptionType()
-	if err != nil {
-		return err
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	var err error
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
 	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4387,7 +4394,7 @@ func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucke
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
-					SseType:    sseS3EncryptionType,
+					SseType:    sseType,
 				},
 			},
 		},
