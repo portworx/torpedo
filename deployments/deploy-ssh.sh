@@ -489,7 +489,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: [“sh”, “-c”, “cd /bin && ./pxone"]
+    command: ["sh", "-c", "cd /bin && ./pxone"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
