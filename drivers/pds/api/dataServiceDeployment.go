@@ -2,7 +2,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	status "net/http"
 
@@ -75,13 +74,7 @@ func (ds *DataServiceDeployment) CreateDeploymentWithRbac(deploymentTargetID str
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-
-	bb, err := json.Marshal(createRequest)
-	if err != nil {
-		fmt.Printf("Error: %s", err)
-	}
-	log.InfoD("req body is- %v", createRequest)
-	log.InfoD("req body is- %v", bb)
+	
 	dsModel, res, err := dsClient.ApiDeploymentsPost(ctx).Body(createRequest).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiDeploymentsPost`: %v\n.Full HTTP response: %v", err, res)
