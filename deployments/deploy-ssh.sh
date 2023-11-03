@@ -489,7 +489,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "cd /taas && go run apiServer/pxone/apiserver.go"]
+    command: ["sh", "-c", "sleep 1800"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
