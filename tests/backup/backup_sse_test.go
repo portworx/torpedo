@@ -289,8 +289,9 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.InfoD("Restoring the backed up applications after setting the sse to true of backupLocationWithoutSse")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
+				appContextsForValidation := scheduledAppContexts[:midpoint]
 				restoreName := fmt.Sprintf("%s-%s-%v", "restore-after-bl-sse-true", RandomString(randomStringLength), time.Now().Unix())
-				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupsAfterSettingSseTrue[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsForValidation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 				restoreList = append(restoreList, restoreName)
 			})
