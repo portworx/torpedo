@@ -1370,6 +1370,8 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 	})
 
 	log.Debugf("map before deletion %v", dataServiceVersionBuildMap)
+	log.Debug("sleeping for a minute...")
+	time.Sleep(1 * time.Minute)
 
 	Step("Validate Storage Configurations", func() {
 		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, dataservice, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
