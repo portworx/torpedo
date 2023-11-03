@@ -292,6 +292,7 @@ var _ = Describe("{ValidateDSHealthStatusOnNodeFailures}", func() {
 				stepLog = "Deploy and validate data service"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
+					// TODO: Intermittent status needs to be validated after temporal changes are in place (DS-7001)
 					deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
 					log.FailOnError(err, "Error while deploying data services")
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
@@ -326,14 +327,10 @@ var _ = Describe("{ValidateDSHealthStatusOnNodeFailures}", func() {
 						log.FailOnError(err, "failed while setting dest cluster path")
 						for _, backupJob := range backupJobs {
 							log.InfoD("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-							restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+							_, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
 
 							// TODO: Intermittent status needs to be validated after temporal changes are in place (DS-7001)
 							dash.VerifyFatal(err != nil, true, "Restore is failed as expected")
-
-							restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-							log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-							deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
 						}
 					})
 
