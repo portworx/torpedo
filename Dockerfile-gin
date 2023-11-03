@@ -21,6 +21,9 @@ COPY deployments deployments
 # Why? Errors if this is removed
 COPY .git .git
 
+# copy tests last to allow caching of the previous docker image layers
+COPY tests tests
+
 # Compile
 RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 
