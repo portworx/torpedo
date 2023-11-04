@@ -5434,3 +5434,13 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	}
 	return nil
 }
+
+func UpgradeKubevirt(version string) error {
+	k8sKubevirt := kubevirt.Instance()
+	current, err := k8sKubevirt.GetVersion()
+	if err != nil {
+		return err
+	}
+	log.Infof("Current version is - %s", current)
+	return nil
+}
