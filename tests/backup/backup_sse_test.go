@@ -320,7 +320,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.InfoD("Create a schedule policy")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-				schedulePolicyintervalInMins := 15
+				schedulePolicyintervalInMins := 30
 				log.InfoD("Creating a schedule policy with interval [%v] mins", schedulePolicyintervalInMins)
 				schedulePolicyName = fmt.Sprintf("interval-%v-%v", schedulePolicyintervalInMins, time.Now().Unix())
 				schedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, int64(schedulePolicyintervalInMins), 5)
