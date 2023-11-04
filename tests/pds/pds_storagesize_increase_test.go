@@ -486,17 +486,16 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 					Secure:         false,
 					VolGroups:      false,
 				})
-				stIds, resIds = nil, nil
-				updatedDepList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-				wlDeploymentsToBeCleaned = []*v1.Deployment{}
-
-				stIds = append(stIds, stConfigModel.GetId())
-				resIds = append(resIds, resConfigModel.GetId())
-				dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
 				for i := 2; i <= 10; i++ {
 					CleanMapEntries(pdsdeploymentsmd5Hash2)
+					stIds, resIds = nil, nil
+					updatedDepList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+					wlDeploymentsToBeCleaned = []*v1.Deployment{}
+					stIds = append(stIds, stConfigModel.GetId())
+					resIds = append(resIds, resConfigModel.GetId())
+					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					log.InfoD("The test is executing for the [%v] iteration", i)
 					storageSizeCounter = i
 					storageSize := fmt.Sprint(storageSizeCounter, "G")
@@ -586,6 +585,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
+
 
 // DeployDSWithCustomTemplatesRunWorkloads Deploy dataservice with custom templates and run workloads on them
 func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string, templates controlplane.Templates) (*pds.ModelsDeployment, uint64, *pds.ModelsResourceSettingsTemplate, *pds.ModelsStorageOptionsTemplate, string, *v1.Deployment, map[string]string, pdsdriver.LoadGenParams, error) {
