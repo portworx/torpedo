@@ -217,8 +217,7 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 		}
 	}
 	log.Infof("Control Node IP: %v", ControlNodeIP)
-	//sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
-	sampleVclusterConfig := filepath.Join(currentDir, "..", "..", "drivers", "vcluster", "vcluster.yaml")
+	sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
 	sampleVclusterConfigAbsPath, err := filepath.Abs(sampleVclusterConfig)
 	if err != nil {
 		return err
@@ -444,7 +443,7 @@ func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, 
 							Name:         "fio-container",
 							Image:        "xridge/fio:latest",
 							Command:      []string{"/bin/sh", "-c"},
-							Args:         []string{strings.Join(fioCmd, " ")}, // Join the FIO command into a single string
+							Args:         []string{strings.Join(fioCmd, " ")},
 							VolumeMounts: volumeMounts,
 						},
 					},
