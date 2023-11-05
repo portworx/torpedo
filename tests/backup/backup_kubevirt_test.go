@@ -475,7 +475,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 
 		Step("Upgrading kubevirt", func() {
 			log.InfoD("Upgrading kubevirt")
-			err := UpgradeKubevirt("v1.0.0")
+			err := UpgradeKubevirt("v1.0.0", true)
 			log.FailOnError(err, "Failed during kubevirt upgrade")
 		})
 
