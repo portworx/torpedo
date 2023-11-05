@@ -374,8 +374,13 @@ func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string
 // int32Ptr converts integer to pointer
 func int32Ptr(i int32) *int32 { return &i }
 
-// CreateFIODeployment creates a FIO Batch Job on given PVC
+// CreateFIODeployment creates a FIO Batch Job on single PVC
 func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string) error {
+	return v.CreateFIOMultiPvcDeployment([]string{pvcName}, appNS, fioOpts, jobName)
+}
+
+// CreateFIOMultiPvcDeployment runs FIO Job on multiple PVCs
+func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, fioOpts FIOOptions, jobName string) error {
 	fioCmd := []string{
 		"fio",
 		"--name=" + fioOpts.Name,
@@ -384,7 +389,6 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 		"--bs=" + fioOpts.BS,
 		"--numjobs=" + strconv.Itoa(fioOpts.NumJobs),
 		"--size=" + fioOpts.Size,
-		"--filename=" + fioOpts.Filename,
 		"--end_fsync=" + strconv.Itoa(fioOpts.EndFsync),
 	}
 	if fioOpts.TimeBased {
@@ -399,6 +403,27 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	}
 	if fioOpts.VerifyOnly {
 		fioCmd = append(fioCmd, "--verify_only")
+	}
+	volumeMounts := make([]corev1.VolumeMount, len(pvcNames))
+	volumes := make([]corev1.Volume, len(pvcNames))
+	for i, pvcName := range pvcNames {
+		mountPath := fmt.Sprintf("/data%d", i)
+		fileName := fmt.Sprintf("file-%d", i)
+		mntPath := mountPath + "/" + fileName
+		fioCmd = append(fioCmd, "--filename="+mntPath)
+		volumeName := "fio-volume-" + strconv.Itoa(i)
+		volumeMounts[i] = corev1.VolumeMount{
+			MountPath: mountPath,
+			Name:      volumeName,
+		}
+		volumes[i] = corev1.Volume{
+			Name: volumeName,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: pvcName,
+				},
+			},
+		}
 	}
 	fioJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -416,27 +441,14 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 					RestartPolicy: "Never",
 					Containers: []corev1.Container{
 						{
-							Name:    "fio-container",
-							Image:   "xridge/fio:latest",
-							Command: fioCmd,
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									MountPath: "/data",
-									Name:      "fio-volume",
-								},
-							},
+							Name:         "fio-container",
+							Image:        "xridge/fio:latest",
+							Command:      []string{"/bin/sh", "-c"},
+							Args:         []string{strings.Join(fioCmd, " ")}, // Join the FIO command into a single string
+							VolumeMounts: volumeMounts,
 						},
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "fio-volume",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: pvcName,
-								},
-							},
-						},
-					},
+					Volumes: volumes,
 				},
 			},
 		},
@@ -449,7 +461,6 @@ func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIO
 	if err := v.WaitForFIOCompletion(appNS, jobName); err != nil {
 		return err
 	}
-
 	// Hard sleep to let fio pod finish up
 	time.Sleep(10 * time.Second)
 	pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
@@ -824,7 +835,7 @@ func (v *VCluster) ListSnapshots() (*snapv1.VolumeSnapshotList, error) {
 func PVCRuleByUsageCapacityForVcluster(usagePercentage int, scalePercentage int, maxSize string) apapi.AutopilotRule {
 	return apapi.AutopilotRule{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fmt.Sprintf("pvc-usage-%d-scale-%d", usagePercentage, scalePercentage),
+			Name: fmt.Sprintf("pvc-usage-%d-scale-%d-%v", usagePercentage, scalePercentage, time.Now().Unix()),
 		},
 		Spec: apapi.AutopilotRuleSpec{
 			NamespaceSelector: apapi.RuleObjectSelector{
