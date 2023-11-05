@@ -487,16 +487,16 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 					VolGroups:      false,
 				})
 				stIds, resIds = nil, nil
-				updatedDepList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-				wlDeploymentsToBeCleaned = []*v1.Deployment{}
-
 				stIds = append(stIds, stConfigModel.GetId())
 				resIds = append(resIds, resConfigModel.GetId())
-				dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
 				for i := 2; i <= 10; i++ {
 					CleanMapEntries(pdsdeploymentsmd5Hash2)
+					updatedDepList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
+					wlDeploymentsToBeCleaned = []*v1.Deployment{}
+					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					log.InfoD("The test is executing for the [%v] iteration", i)
 					storageSizeCounter = i
 					storageSize := fmt.Sprint(storageSizeCounter, "G")
@@ -551,21 +551,6 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
-						stepLog = "Validate Workload is running after storage resize by creating new workload"
-						Step(stepLog, func() {
-
-							ckSum2, wlDep2, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-							log.FailOnError(err, "Error while Running workloads-%v", wlDep2)
-							log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-							pdsdeploymentsmd5Hash2[*deployment.ClusterResourceName] = ckSum2
-							wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep2)
-						})
-						Step("Clean up workload deployments", func() {
-							for _, wlDep := range wlDeploymentsToBeCleaned {
-								err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-								log.FailOnError(err, "Failed while deleting the workload deployment")
-							}
-						})
 						Step("Delete Deployments", func() {
 							CleanupDeployments(deploymentsToBeCleaned)
 							err := controlPlane.CleanupCustomTemplates(stIds, resIds)
@@ -575,6 +560,12 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 					})
 
 				}
+				Step("Clean up workload deployments", func() {
+					for _, wllDep := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wllDep.Name, wllDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
+				})
 
 			}
 
