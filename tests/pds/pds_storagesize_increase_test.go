@@ -492,7 +492,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 				wlDeploymentsToBeCleaned = []*v1.Deployment{}
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
-				for i := 2; i <= 10; i++ {
+				for i := 2; i <= 100; i++ {
 					CleanMapEntries(pdsdeploymentsmd5Hash2)
 					updatedDepList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
 					wlDeploymentsToBeCleaned = []*v1.Deployment{}
