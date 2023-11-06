@@ -11,12 +11,28 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // ControlPlane PDS
 type ControlPlane struct {
 	ControlPlaneURL string
 	components      *api.Components
+}
+
+type Templates struct {
+	CpuLimit       string
+	CpuRequest     string
+	DataServiceID  string
+	MemoryLimit    string
+	MemoryRequest  string
+	Name           string
+	StorageRequest string
+	FsType         string
+	ReplFactor     int32
+	Provisioner    string
+	Secure         bool
+	VolGroups      bool
 }
 
 var (
@@ -269,6 +285,38 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 	return appConfigTemplateID, nil
 }
 
+func (cp *ControlPlane) CreateCustomResourceTemplate(tenantID string, templates Templates) (*pds.ModelsStorageOptionsTemplate, *pds.ModelsResourceSettingsTemplate, error) {
+	stConfigModel, err := components.StorageSettingsTemplate.CreateTemplate(tenantID, templates.VolGroups, templates.FsType, templates.Name, templates.Provisioner, templates.ReplFactor, templates.Secure)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.InfoD("Created Storage Configuration is- %v with Storage-templateID: %v", stConfigModel.GetName(), stConfigModel.GetId())
+	resConfigModel, err := components.ResourceSettingsTemplate.CreateTemplate(tenantID, templates.CpuLimit, templates.CpuRequest, templates.DataServiceID, templates.MemoryLimit, templates.MemoryRequest, templates.Name, templates.StorageRequest)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.InfoD("Created Resource Configuration is- %v with Resource-templateID: %v", stConfigModel.GetName(), stConfigModel.GetId())
+	return stConfigModel, resConfigModel, nil
+}
+
+func (cp *ControlPlane) UpdateCustomResourceTemplates(cusResourceTempId string, templates Templates) (*pds.ModelsResourceSettingsTemplate, error) {
+	resConfigModelUpdated, err := components.ResourceSettingsTemplate.UpdateTemplate(cusResourceTempId, templates.CpuLimit, templates.CpuRequest, templates.MemoryLimit, templates.MemoryRequest, templates.Name, templates.StorageRequest)
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("Updated Resource Configuration is- %v with Resource-templateID: %v", resConfigModelUpdated.GetName(), resConfigModelUpdated.GetId())
+	return resConfigModelUpdated, nil
+}
+
+func (cp *ControlPlane) UpdateCustomStorageTemplates(cusStorageTempId string, templates Templates) (*pds.ModelsStorageOptionsTemplate, error) {
+	stConfigModelUpdated, err := components.StorageSettingsTemplate.UpdateTemplate(cusStorageTempId, templates.VolGroups, templates.FsType, templates.Name, templates.ReplFactor, templates.Secure)
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("Updated Storage Configuration is- %v with Storage-templateID: %v", stConfigModelUpdated.GetName(), stConfigModelUpdated.GetId())
+	return stConfigModelUpdated, nil
+}
+
 // update template name with custom name
 func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
 	log.Infof("Updating the resource template name with : %v", TemplateName)
@@ -312,6 +360,23 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 	return resourceTemplateID, nil
 }
 
+func (cp *ControlPlane) CleanupCustomTemplates(storageTemplateIDs []string, resourceTemplateIDs []string) error {
+	for _, stId := range storageTemplateIDs {
+		_, err := components.StorageSettingsTemplate.DeleteTemplate(stId)
+		if err != nil {
+			return fmt.Errorf("failed to delete storage template with ID- %v", stId)
+		}
+	}
+	for _, resId := range resourceTemplateIDs {
+		_, err := components.ResourceSettingsTemplate.DeleteTemplate(resId)
+		if err != nil {
+			return fmt.Errorf("failed to delete storage template with ID- %v", resId)
+		}
+	}
+	return nil
+
+}
+
 // GetRegistrationToken return token to register a target cluster.
 func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	log.Info("Fetch the registration token.")
@@ -334,6 +399,8 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	log.Debugf("sleeping for 5 min, before validating dns endpoint")
+	time.Sleep(5 * time.Minute)
 	_, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)

@@ -52,7 +52,6 @@ import (
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	storageapi "k8s.io/api/storage/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
@@ -176,12 +175,12 @@ var storkLabel = map[string]string{
 
 type BackupAccess int32
 
-type ReplacePolicy_Type int32
+type ReplacePolicyType int32
 
 const (
-	ReplacePolicy_Invalid ReplacePolicy_Type = 0
-	ReplacePolicy_Retain  ReplacePolicy_Type = 1
-	ReplacePolicy_Delete  ReplacePolicy_Type = 2
+	ReplacePolicyInvalid ReplacePolicyType = 0
+	ReplacePolicyRetain  ReplacePolicyType = 1
+	ReplacePolicyDelete  ReplacePolicyType = 2
 )
 
 const (
@@ -821,7 +820,7 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 
 // CreateRestoreWithReplacePolicy Creates in-place restore and waits for it to complete
 func CreateRestoreWithReplacePolicy(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
-	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
+	orgID string, ctx context.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType) error {
 
 	var bkp *api.BackupObject
 	var bkpUid string
@@ -1830,16 +1829,16 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 	return nil
 }
 
-// restoreSuccessWithReplacePolicy inspects restore task status as per ReplacePolicy_Type
-func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context, replacePolicy ReplacePolicy_Type) error {
+// restoreSuccessWithReplacePolicy inspects restore task status as per ReplacePolicyType
+func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context, replacePolicy ReplacePolicyType) error {
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
 	}
 	var statusesExpected api.RestoreInfo_StatusInfo_Status
-	if replacePolicy == ReplacePolicy_Delete {
+	if replacePolicy == ReplacePolicyDelete {
 		statusesExpected = api.RestoreInfo_StatusInfo_Success
-	} else if replacePolicy == ReplacePolicy_Retain {
+	} else if replacePolicy == ReplacePolicyRetain {
 		statusesExpected = api.RestoreInfo_StatusInfo_PartialSuccess
 	}
 	statusesUnexpected := [...]api.RestoreInfo_StatusInfo_Status{
@@ -2707,7 +2706,7 @@ func upgradeStorkVersion(storkImageToUpgrade string) error {
 	log.Infof("Upgrading stork version to : %s", storkImageVersionToUpgrade)
 
 	if currentStorkVersion.GreaterThanOrEqual(storkImageVersionToUpgrade) {
-		return fmt.Errorf("Cannot upgrade stork version from %s to %s as the current version is higher than the provided version", currentStorkVersion, storkImageVersionToUpgrade)
+		return fmt.Errorf("cannot upgrade stork version from %s to %s as the current version is higher than the provided version", currentStorkVersion, storkImageVersionToUpgrade)
 	}
 	internalDockerRegistry := os.Getenv("INTERNAL_DOCKER_REGISTRY")
 	if internalDockerRegistry != "" {
@@ -3666,7 +3665,7 @@ func GenerateRandomLabelsWithMaxChar(number int, charLimit int) map[string]strin
 // GetCustomBucketName creates a custom bucket and returns name
 func GetCustomBucketName(provider string, testName string) string {
 	var customBucket string
-	customBucket = fmt.Sprintf("%s-%s-%v", provider, testName, time.Now().Unix())
+	customBucket = fmt.Sprintf("%s-%s-%s-%v", provider, testName, RandomString(5), time.Now().Unix())
 	if provider == drivers.ProviderAws {
 		CreateBucket(provider, customBucket)
 	}
@@ -3837,7 +3836,7 @@ func CreateRestoreWithProjectMapping(restoreName string, backupName string, name
 
 // CreateRestoreOnRancherWithoutCheck creates restore with project mapping
 func CreateRestoreOnRancherWithoutCheck(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
-	orgID string, ctx context.Context, storageClassMapping map[string]string, rancherProjectMapping map[string]string, rancherProjectNameMapping map[string]string, replacePolicy ReplacePolicy_Type) error {
+	orgID string, ctx context.Context, storageClassMapping map[string]string, rancherProjectMapping map[string]string, rancherProjectNameMapping map[string]string, replacePolicy ReplacePolicyType) error {
 
 	var bkp *api.BackupObject
 	var bkpUid string
@@ -3902,7 +3901,7 @@ func IsClusterPresent(clusterName string, ctx context.Context, orgID string) (bo
 func GetConfigObj() (backup.BackupCloudConfig, error) {
 	var config backup.BackupCloudConfig
 	var found bool
-	cmList, err := core.Instance().ListConfigMap("default", meta_v1.ListOptions{})
+	cmList, err := core.Instance().ListConfigMap("default", metav1.ListOptions{})
 	log.FailOnError(err, fmt.Sprintf("Error listing Configmaps in default namespace"))
 	for _, cm := range cmList.Items {
 		if cm.Name == cloudCredConfigMap {
@@ -4457,7 +4456,7 @@ func DeleteBackupSchedulePolicyWithContext(orgID string, policyList []string, ct
 	}
 	schedulePolicyList, err := Inst().Backup.EnumerateSchedulePolicy(ctx, schedPolicyEnumerateReq)
 	if err != nil {
-		err = fmt.Errorf("Failed to get list of schedule policies with error: [%v]", err)
+		err = fmt.Errorf("failed to get list of schedule policies with error: [%v]", err)
 		return err
 	}
 	for i := 0; i < len(schedulePolicyList.SchedulePolicies); i++ {
@@ -4471,7 +4470,7 @@ func DeleteBackupSchedulePolicyWithContext(orgID string, policyList []string, ct
 		}
 		_, err := Inst().Backup.DeleteSchedulePolicy(ctx, schedPolicydeleteReq)
 		if err != nil {
-			err = fmt.Errorf("Failed to delete schedule policy %s with error [%v]", policyList[i], err)
+			err = fmt.Errorf("failed to delete schedule policy %s with error [%v]", policyList[i], err)
 			return err
 		}
 	}
@@ -5195,39 +5194,26 @@ type nsPodAge map[string]time.Time
 // getPodAge gets the pod age of all pods on all the namespaces on the cluster
 func getPodAge() (map[string]nsPodAge, error) {
 	var podAge = make(map[string]nsPodAge)
-	err := SetDestinationKubeConfig()
-	if err != nil {
-		return podAge, fmt.Errorf("failed to switch destination cluster context")
-	}
-
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return podAge, fmt.Errorf("failed to get namespaces list")
+	}
 	for _, namespace := range allNamespaces.Items {
 		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
 		if err != nil {
 			return podAge, fmt.Errorf("failed to get pods for namespace")
 		}
 		for _, pod := range pods.Items {
-			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetName(): pod.ObjectMeta.GetCreationTimestamp().Time}
+			podAge[namespace.ObjectMeta.GetName()] = nsPodAge{pod.ObjectMeta.GetGenerateName(): pod.GetCreationTimestamp().Time}
 		}
 	}
-
-	err = SetSourceKubeConfig()
-	if err != nil {
-		return podAge, fmt.Errorf("switching context to source cluster failed")
-	}
-
 	return podAge, nil
 }
 
 // comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
 func comparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
-	err := SetDestinationKubeConfig()
-	if err != nil {
-		return fmt.Errorf("failed to switch destination cluster context")
-	}
-
 	podAge, err := getPodAge()
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
@@ -5242,20 +5228,20 @@ func comparePodAge(oldPodAge map[string]nsPodAge) error {
 
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	for _, namespace := range allNamespaces.Items {
-		for _, skipCase := range namespacesToSkip {
-			if skipCase == namespace.GetName() {
-				pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
-				if err != nil {
-					return fmt.Errorf("failed to get pods for namespace")
+		pods, err := k8sCore.GetPods(namespace.ObjectMeta.GetName(), make(map[string]string))
+		if err != nil {
+			return fmt.Errorf("failed to get pods for namespace")
+		}
+		if IsPresent(namespacesToSkip, namespace.ObjectMeta.GetName()) {
+			for _, pod := range pods.Items {
+				if podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetGenerateName()] != oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetGenerateName()] {
+					return fmt.Errorf("namespace [%s] was restored but was expected to skipped", namespace.ObjectMeta.GetName())
 				}
-				for _, pod := range pods.Items {
-					if podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] != oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()] {
-						return fmt.Errorf("namespace [%s] was restored but was expected to skipped", skipCase)
-					} else {
-						if !podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()].After(oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()]) {
-							return fmt.Errorf("namespace[%s] was not to be restored but was expected to be restored due to pod [%s] ", namespace.GetName(), pod.ObjectMeta.GetName())
-						}
-					}
+			}
+		} else {
+			for _, pod := range pods.Items {
+				if !podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetGenerateName()].After(oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetGenerateName()]) {
+					return fmt.Errorf("namespace[%s] was to be restored but was expected to be restored due to pod [%s] due to old pod age is %v and new pod age is %v ", namespace.GetName(), pod.ObjectMeta.GetName(), oldPodAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()], podAge[namespace.ObjectMeta.GetName()][pod.ObjectMeta.GetName()])
 				}
 			}
 		}
