@@ -1315,8 +1315,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		}
 
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
-
-		//Number of apps to be deployed after which a restart can be triggered
+		//Number of apps to be deployed
 		NumberOfAppsToBeDeployed := 15
 
 		stepLog = "schedule application"
