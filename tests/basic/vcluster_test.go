@@ -552,6 +552,11 @@ var _ = Describe("{VolumeDriverAppDownVCluster}", func() {
 					}
 				}
 			}
+			// Validates if VCluster is still accessible or not by listing namespaces within it
+			err = vc.WaitForVClusterAccess()
+			log.FailOnError(err, "Even after waiting for 5 minutes, Could not access objects within vcluster after Px shutdown")
+			log.Infof("Vcluster has become responsive - going ahead with the test")
+			// Deleting Deployment from Vcluster now once it becomes accessible
 			err = vc.DeleteDeploymentOnVCluster(appNS, deploymentName)
 			log.FailOnError(err, "Failed to delete Nginx Deployment name %v on Vcluster %v", deploymentName, vc.Name)
 			log.Infof("Successfully deleted Nginx deployment %v on Vcluster %v", deploymentName, vc.Name)
@@ -616,6 +621,10 @@ var _ = Describe("{VolumeDriverDownVClusterOps}", func() {
 					StopVolDriverAndWait([]node.Node{nodes[0]})
 				})
 		})
+		// Validates if VCluster is still accessible or not by listing namespaces within it
+		err = vc.WaitForVClusterAccess()
+		log.FailOnError(err, "Even after waiting for 5 minutes, Could not access objects within vcluster after Px shutdown")
+		log.Infof("Vcluster has become responsive - going ahead with the test")
 		// Create PVC on VCluster
 		appNS = scName + "-ns"
 		pvcName, err = vc.CreatePVC("", scName, appNS, "")

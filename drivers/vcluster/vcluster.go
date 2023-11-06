@@ -885,3 +885,22 @@ func GetPvcOriginalSize(pvc *corev1.PersistentVolumeClaim) float64 {
 	sizeGiB := float64(sizeBytes) / (1024 * 1024 * 1024)
 	return sizeGiB
 }
+
+// ListNamespaceVcluster lists all namespaces within a vcluster
+func (v *VCluster) ListNamespaceVcluster() (*corev1.NamespaceList, error) {
+	return v.Clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+}
+
+// WaitForVClusterAccess method's purpose is to wait for 5 mins max to see if vcluster has become inaccessible
+func (v *VCluster) WaitForVClusterAccess() error {
+	f := func() (interface{}, bool, error) {
+		_, err := v.ListNamespaceVcluster()
+		if err != nil {
+			return nil, true, err
+		} else {
+			return nil, false, nil
+		}
+	}
+	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
+	return err
+}
