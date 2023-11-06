@@ -645,25 +645,22 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 
 	})
 
-	isDMthin, err := IsDMthin()
-	log.FailOnError(err, "error verifying if set up is DMTHIN enabled")
-	if err != nil || !isDMthin {
-		dash.Warn("DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `PoolExpandTestBeyond15TiBLimit` test.")
-	} else {
-		It("Expand pool to 20 TiB (beyond max supported capacity for DMThin) with add-disk type. ", func() {
-			var testrailID = 50643
-			// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50643
+	It("Expand pool to 20 TiB (beyond max supported capacity for DMThin) with add-disk type. ", func() {
+		var testrailID = 50643
+		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50643
 
-			StartTorpedoTest("DMThinPoolExpandBeyond15TiBLimit",
-				"Initiate pool expansion using add-disk to 20 TiB target size", nil, testrailID)
+		StartTorpedoTest("DMThinPoolExpandBeyond15TiBLimit",
+			"Initiate pool expansion using add-disk to 20 TiB target size", nil, testrailID)
+		isDMthin, err := IsDMthin()
+		dash.VerifyFatal(err, nil, "error verifying if set up is DMTHIN enabled")
+		dash.VerifyFatal(isDMthin, true, "DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `PoolExpandTestBeyond15TiBLimit` test.")
 
-			targetSizeTiB := uint64(20)
-			targetSizeInBytes = targetSizeTiB * units.TiB
-			targetSizeGiB = targetSizeInBytes / units.GiB
-			log.InfoD("Trying to expand pool %s to %v TiB with type add-disk",
-				poolIDToResize, targetSizeTiB)
-			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
-			dash.VerifyFatal(err != nil, true, "DMThin pool expansion to 20 TB should result in error")
-		})
-	}
+		targetSizeTiB := uint64(20)
+		targetSizeInBytes = targetSizeTiB * units.TiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Trying to expand pool %s to %v TiB with type add-disk",
+			poolIDToResize, targetSizeTiB)
+		err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+		dash.VerifyFatal(err != nil, true, "DMThin pool expansion to 20 TB should result in error")
+	})
 })
