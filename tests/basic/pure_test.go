@@ -1041,7 +1041,12 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
 		selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[rand.Intn(len(storageLessNodes))].ID)
 		log.FailOnError(err, "Failed to get kvdb node details")
-		selectedNodes = append(selectedNodes, selectedKvdbNode)
+		for _, kvdbNode := range kvdbNodes {
+			if kvdbNode.ID != selectedNodes[0].Id && kvdbNode.ID != selectedNodes[1].Id {
+				selectedNodes = append(selectedNodes, selectedKvdbNode)
+				break
+			}
+		}
 
 		defer func() {
 			Inst().AppList = applist
