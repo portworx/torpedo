@@ -687,9 +687,9 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 	*/
 
 	BeforeEach(func() {
-		contexts = scheduleApps()
 		StartTorpedoTest("PoolExpandResizeDiskInMaintenanceMode",
 			"Initiate pool expand with resize-disk when node is already in maintenance mode", nil, testrailID)
+		contexts = scheduleApps()
 	})
 
 	JustBeforeEach(func() {
@@ -707,10 +707,14 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 		EndTorpedoTest()
 	})
 
-	It("Start pool expand with resize-disk on node which is already in maintenance mode ", func() {
+	stepLog := "Start pool expand with resize-disk on node which is already in maintenance mode "
+	It(stepLog, func() {
+		log.InfoD(stepLog)
 		var nodeDetail *node.Node
 		var err error
-		Step("Move node to maintenance mode", func() {
+		stepLog = "Move node to maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to get Node Details using PoolUUID [%v]", poolToResize.Uuid))
 
@@ -719,7 +723,9 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] to Mainteinance Mode", nodeDetail.Name))
 		})
 
-		Step("Initiate pool expand with resize-disk operation", func() {
+		stepLog = "Initiate pool expand with resize-disk operation"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
@@ -730,13 +736,17 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 		})
 
-		Step("Exit node out of maintenance mode", func() {
+		stepLog = "Exit node out of maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			log.InfoD("Bring Node out of Maintenance Mode")
 			err = Inst().V.ExitMaintenance(*nodeDetail)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] out of Mainteinance Mode", nodeDetail.Name))
 		})
 
-		Step("Verify pool expand completes successfully", func() {
+		stepLog = "Verify pool expand completes successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
@@ -757,9 +767,9 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 	*/
 
 	BeforeEach(func() {
-		contexts = scheduleApps()
 		StartTorpedoTest("PoolExpandAddDiskInMaintenanceMode",
 			"Initiate pool expand with add-disk when node is already in maintenance mode", nil, testrailID)
+		contexts = scheduleApps()
 	})
 
 	JustBeforeEach(func() {
@@ -777,10 +787,14 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 		EndTorpedoTest()
 	})
 
-	It("Start pool expand with add-disk on node which is already in maintenance mode ", func() {
+	stepLog := "Start pool expand with add-disk on node which is already in maintenance mode "
+	It(stepLog, func() {
+		log.InfoD(stepLog)
 		var nodeDetail *node.Node
 		var err error
-		Step("Move node to maintenance mode", func() {
+		stepLog = "Move node to maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to get Node Details using PoolUUID [%v]", poolToResize.Uuid))
 
@@ -789,7 +803,9 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] to Mainteinance Mode", nodeDetail.Name))
 		})
 
-		Step("Initiate pool expand with add-disk operation", func() {
+		stepLog = "Initiate pool expand with add-disk operation"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
@@ -800,13 +816,17 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 		})
 
-		Step("Exit node out of maintenance mode", func() {
+		stepLog = "Exit node out of maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			log.InfoD("Bring Node out of Maintenance Mode")
 			err = Inst().V.ExitMaintenance(*nodeDetail)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] out of Mainteinance Mode", nodeDetail.Name))
 		})
 
-		Step("Verify pool expand completes successfully", func() {
+		stepLog = "Verify pool expand completes successfully"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
