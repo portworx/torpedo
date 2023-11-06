@@ -1358,7 +1358,6 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				time.Sleep(30 * time.Second)
 				stepLog := "Kill px nodes"
 				Step(stepLog, func() {
 					for _, selectedNode := range selectedNodes {
@@ -1376,7 +1375,17 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			// Wait for both steps to complete
 			wg.Wait()
 		})
-
+		stepLog = "Wait until all the nodes come up"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, selectedNode := range selectedNodes {
+				err = Inst().N.TestConnection(selectedNode, node.ConnectionOpts{
+					Timeout:         defaultTestConnectionTimeout,
+					TimeBeforeRetry: defaultWaitRebootRetry,
+				})
+				log.FailOnError(err, "node:%v Failed to come up?", selectedNode.Name)
+			}
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
