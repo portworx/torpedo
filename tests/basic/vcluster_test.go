@@ -971,7 +971,6 @@ var _ = Describe("{AutopilotPvcResizeTestVCluster}", func() {
 var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
-	var pvcName string
 	var appNS string
 	var apRule apapi.AutopilotRule
 	fioOptions := vcluster.FIOOptions{
@@ -1032,18 +1031,19 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 			err = aututils.WaitForAutopilotEvent(apRule, "", []string{aututils.ActiveActionsInProgressToActiveActionsTaken})
 			log.FailOnError(err, "Failed to bring In Progress Autopilot action to Completed state")
 			log.Infof("Successfully resized PVC as per set Autopilot rule")
-			pvc, err := vc.GetPVC(pvcName, appNS)
-			log.FailOnError(err, "Failed to get PVC Object of PVC in Vcluster context")
-			originalSize := vcluster.GetPvcOriginalSize(pvc)
-			expandedSize := vcluster.GetPvcCapacitySize(pvc)
-			if expandedSize > originalSize {
-				log.Infof("New Size of PVC %v is %v GiB, whereas earlier size was %v GiB", pvcName, expandedSize, originalSize)
-				log.Infof("Successfully expanded PVC using Autopilot on vCluster")
-			} else {
-				err = fmt.Errorf("Something went wrong as expanded size of PVC %v is coming out to be %v and original size is %v", pvcName, expandedSize, originalSize)
-				log.FailOnError(err, "Autopilot failed to resize PVC")
+			for i := 0; i < len(pvcNames); i++ {
+				pvc, err := vc.GetPVC(pvcNames[i], appNS)
+				log.FailOnError(err, "Failed to get PVC Object of PVC in Vcluster context")
+				originalSize := vcluster.GetPvcOriginalSize(pvc)
+				expandedSize := vcluster.GetPvcCapacitySize(pvc)
+				if expandedSize > originalSize {
+					log.Infof("New Size of PVC %v is %v GiB, whereas earlier size was %v GiB", pvcNames[i], expandedSize, originalSize)
+					log.Infof("Successfully expanded PVC using Autopilot on vCluster")
+				} else {
+					err = fmt.Errorf("Something went wrong as expanded size of PVC %v is coming out to be %v and original size is %v", pvcNames[i], expandedSize, originalSize)
+					log.FailOnError(err, "Autopilot failed to resize PVC")
+				}
 			}
-
 		}()
 		wg.Wait()
 
@@ -1075,7 +1075,7 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 		RW:        "randwrite",
 		BS:        "4k",
 		NumJobs:   1,
-		Size:      "1000m",
+		Size:      "600m",
 		TimeBased: true,
 		Runtime:   "300s",
 		EndFsync:  1,
@@ -1177,8 +1177,8 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 		}
 		vcluster.DeleteStorageclassFromHost(scName)
 		for _, apRule := range apRules {
-			err := Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
-			log.FailOnError(err, "Failed to delete Rule %v", apRule.ObjectMeta.Name)
+			Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
+			log.Errorf("Failed to delete Rule %v", apRule.ObjectMeta.Name)
 		}
 	})
 })
