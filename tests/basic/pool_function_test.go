@@ -635,7 +635,7 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 		EndTorpedoTest()
 	})
 
-	stepLog := "should get the existing pool and expand it by initiating a resize-disk and again trigger pool expand on same pool"
+	stepLog := "cycle through maintenance mode after pool expand is complete"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 
@@ -643,9 +643,9 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 
-		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
 
 		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
@@ -664,5 +664,14 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 		status, err = Inst().V.GetNodeStatus(*storageNode)
 		log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", storageNode.Name))
 		dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", storageNode.Name))
+
+		// verify pool size after maintenance cycle
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
+		// check pool status is healthy after maintenance cycle
+		poolsStatus, err := Inst().V.GetNodePoolsStatus(*storageNode)
+		log.FailOnError(err, "error getting pool status on node %s", storageNode.Name)
+		dash.VerifyFatal(poolsStatus[poolIDToResize], "Online", fmt.Sprintf("Pool %s Status not Online", poolIDToResize))
+
 	})
 })
