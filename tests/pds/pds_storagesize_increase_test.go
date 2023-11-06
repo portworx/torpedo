@@ -551,12 +551,6 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
-						Step("Delete Deployments", func() {
-							CleanupDeployments(deploymentsToBeCleaned)
-							err := controlPlane.CleanupCustomTemplates(stIds, resIds)
-							log.FailOnError(err, "Failed to delete custom templates")
-						})
-
 					})
 
 				}
@@ -566,7 +560,11 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 						log.FailOnError(err, "Failed while deleting the workload deployment")
 					}
 				})
-
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+					log.FailOnError(err, "Failed to delete custom templates")
+				})
 			}
 
 		})
