@@ -5435,40 +5435,75 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 	return nil
 }
 
-func UpgradeKubevirt(version string, workloadUpgrade bool) error {
+// UpgradeKubevirt upgrades the kubevirt control plane to the given version
+// If workloadUpgrade is set to true, kubevirt workloads are upgraded to the given version
+func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	k8sKubevirt := kubevirt.Instance()
+
+	// Checking current version
 	current, err := k8sKubevirt.GetVersion()
 	if err != nil {
 		return err
 	}
 	log.Infof("Current version is - %s", current)
-	manifestYamlURL := fmt.Sprintf("https://github.com/kubevirt/kubevirt/releases/download/%s/kubevirt-operator.yaml", version)
-	output, err := kubectlExec([]string{"apply", "-f", manifestYamlURL})
+
+	// Compare and validate the upgrade path
+	currentKubevirtVersionSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(current, "v", "")))
 	if err != nil {
 		return err
 	}
-	log.Infof("Kubevirt upgrade manifest URL - %s\nOutput -\n%s", manifestYamlURL, output)
-	log.Infof("Kubevirt control plane upgrade completed from version [%s] to [%s]", current, version)
+	versionToUpgradeSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(versionToUpgrade, "v", "")))
+	if err != nil {
+		return err
+	}
+
+	if currentKubevirtVersionSemVer.GreaterThanOrEqual(versionToUpgradeSemVer) {
+		return fmt.Errorf("kubevirt cannot be upgraded from [%s] to [%s]", currentKubevirtVersionSemVer.String(), versionToUpgradeSemVer.String())
+	} else {
+		log.InfoD("Upgrade path chosen (%s) ---> (%s)", current, versionToUpgrade)
+	}
+
+	// Generating the manifest URL and applying it to begin upgrade
+	manifestYamlURL := fmt.Sprintf("https://github.com/kubevirt/kubevirt/releases/download/%s/kubevirt-operator.yaml", versionToUpgrade)
+	_, err = kubectlExec([]string{"apply", "-f", manifestYamlURL})
+	if err != nil {
+		return err
+	}
+
+	// Waiting till the upgrade is complete
+	t := func() (interface{}, bool, error) {
+		upgradedVersion, err := k8sKubevirt.GetVersion()
+		if err != nil {
+			return "", false, err
+		}
+		if upgradedVersion != versionToUpgrade {
+			return "", true, fmt.Errorf("waiting for kubevirt control plane to be upgraded to [%s] but got [%s]", versionToUpgrade, upgradedVersion)
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	log.Infof("Kubevirt control plane upgraded from [%s] to [%s]", current, versionToUpgrade)
+
+	// Workload upgrade
 	if workloadUpgrade {
 		patchString := `[
   		{"op": "replace", "path": "/spec/imagePullPolicy", "value": "IfNotPresent"},
   		{"op": "replace", "path": "/spec/workloadUpdateStrategy", "value": {"workloadUpdateMethods": ["Evict"], "batchEvictionSize": 10, "batchEvictionInterval": "1m"}}
 	]`
 
-		patchOutput, err := kubectlExec([]string{"patch", "kubevirt", "kubevirt", "-n", "kubevirt", "--type=json", fmt.Sprintf("-p=%s", patchString)})
+		_, err = kubectlExec([]string{"patch", "kubevirt", "kubevirt", "-n", "kubevirt", "--type=json", fmt.Sprintf("-p=%s", patchString)})
 		if err != nil {
 			return err
 		}
-		log.Infof("Kubevirt patch for VM upgrade -\n%s", patchOutput)
-		upgradedVersion, err := k8sKubevirt.GetVersion()
-		if err != nil {
-			return err
-		}
-		log.Infof("Upgraded version is - %s", upgradedVersion)
 		namespaces, err := core.Instance().ListNamespaces(make(map[string]string))
 		if err != nil {
 			return err
 		}
+
+		// Getting kubevirt VMs in each namespace and waiting till the upgrade patch is applied, and they are back to running state
 		for _, n := range namespaces.Items {
 			vms, err := k8sKubevirt.ListVirtualMachines(n.GetName())
 			if err != nil {
@@ -5495,7 +5530,7 @@ func UpgradeKubevirt(version string, workloadUpgrade bool) error {
 				}
 			}
 		}
-		log.Infof("Kubevirt workload upgrade completed from version [%s] to [%s]", current, version)
+		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
 	return nil
 }
