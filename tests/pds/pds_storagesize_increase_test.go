@@ -474,7 +474,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 			log.InfoD(stepLog)
 			pdsdeploymentsmd5Hash2 := make(map[string]string)
 			for _, ds := range params.DataServiceToTest {
-				deployment, initialCapacity, resConfigModel, stConfigModel, appConfigID, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
+				deployment, initialCapacity, resConfigModel, stConfigModel, appConfigID, workloadDep, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
 					CpuLimit:       params.StorageConfigurations.CpuLimit,
 					CpuRequest:     params.StorageConfigurations.CpuRequest,
 					MemoryLimit:    params.StorageConfigurations.MemoryLimit,
@@ -487,15 +487,17 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 					VolGroups:      false,
 				})
 				stIds, resIds = nil, nil
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
 				stIds = append(stIds, stConfigModel.GetId())
 				resIds = append(resIds, resConfigModel.GetId())
-				wlDeploymentsToBeCleaned = []*v1.Deployment{}
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, workloadDep)
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
 				for i := 2; i <= 100; i++ {
 					CleanMapEntries(pdsdeploymentsmd5Hash2)
-					updatedDepList, deploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-					wlDeploymentsToBeCleaned = []*v1.Deployment{}
+					updatedDepList = []*pds.ModelsDeployment{}
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					log.InfoD("The test is executing for the [%v] iteration", i)
 					storageSizeCounter = i
@@ -551,9 +553,12 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
+						//ToDo: Re-run  Workload to check if I/O is running post update
+						// ToDo: Perform backup restores on updated dep
 					})
 
 				}
+
 				Step("Clean up workload deployments", func() {
 					for _, wllDep := range wlDeploymentsToBeCleaned {
 						err := k8sApps.DeleteDeployment(wllDep.Name, wllDep.Namespace)
