@@ -489,7 +489,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "cd /bin && ./pxone"]
+    command: ["sh", "-c", "cd /bin && ./taas"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
@@ -659,12 +659,12 @@ cat torpedo.yaml
 echo "Deploying torpedo pod..."
 kubectl apply -f torpedo.yaml
 
-cat >> gin-service.yaml <<EOF
+cat >> taas-service.yaml <<EOF
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: gin-serv
+  name: taas-serv
 spec:
   selector:
     app: torpedo
@@ -676,9 +676,9 @@ spec:
   type: NodePort
 EOF
 
-kubectl apply -f gin-service.yaml
+kubectl apply -f taas-service.yaml
 sleep 180
-echo "Gin service created"
+echo "taas service created"
 
 echo "Waiting for torpedo to start running"
 

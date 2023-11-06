@@ -34,7 +34,7 @@ endif
 ifndef PKGS
 # shell does not honor export command above, so we need to explicitly pass GOFLAGS here
 PKGS := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/tests')
-PKGIN := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer/pxone')
+PKGIN := $(shell GOFLAGS=-mod=vendor go list ./... 2>&1 | grep -v 'github.com/portworx/torpedo/apiServer/taas')
 endif
 
 ifeq ($(BUILD_TYPE),debug)
@@ -64,7 +64,7 @@ PGBENCH_IMG=$(DOCKER_HUB_REPO)/torpedo-pgbench:latest
 ESLOAD_IMG=$(DOCKER_HUB_REPO)/torpedo-esload:latest
 
 
-all: vet build build-pds build-backup build-gin fmt
+all: vet build build-pds build-backup build-taas fmt
 
 deps:
 	go get -d -v $(PKGS)
@@ -117,13 +117,13 @@ build-backup: $(GOPATH)/bin/ginkgo
 	chmod -R 755 bin/*
 
 # this target builds the gin binary only.
-build-gin: GIN_BUILD_DIR=./apiServer/pxone
-build-gin:
+build-taas: GIN_BUILD_DIR=./apiServer/taas
+build-taas:
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGIN)
 	go build $(GIN_BUILD_DIR)
 
-	find . -name 'pxone' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	find . -name 'taas' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
 vendor-update:
@@ -182,7 +182,7 @@ container-backup:
 container-taas: TORPEDO_IMG=$(DOCKER_HUB_REPO)/taas:$(DOCKER_HUB_TAG)
 container-taas:
 	@echo "Building taas container "$(TORPEDO_IMG)
-	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-gin -f Dockerfile-gin .
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-taas -f Dockerfile-gin .
 
 deploy: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 deploy: container
