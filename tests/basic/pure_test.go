@@ -1349,7 +1349,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 					opts := make(map[string]bool)
 					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
 					for j := 0; j < NumberOfAppsToBeDeployed; j++ {
-						TearDownContext(contexts[NumberOfAppsToBeDeployed], opts)
+						TearDownContext(contexts[j], opts)
 					}
 				})
 			}()
