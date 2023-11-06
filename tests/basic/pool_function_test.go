@@ -606,3 +606,63 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 	})
 
 })
+
+var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
+
+	var testrailID = 34542842
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542842
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandResizePoolMaintenanceCycle",
+			"Initiate pool expansion and do a maintenance cycle after resize", nil, testrailID)
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	stepLog := "should get the existing pool and expand it by initiating a resize-disk and again trigger pool expand on same pool"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+
+		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
+		// Enter Maintenance Mode
+		err = Inst().V.EnterMaintenance(*storageNode)
+		log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", storageNode.Name))
+		status, err := Inst().V.GetNodeStatus(*storageNode)
+		log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", storageNode.Name))
+		dash.VerifyFatal(*status, api.Status_STATUS_MAINTENANCE, fmt.Sprintf("Node %s Status not Online", storageNode.Name))
+
+		// Exit Maintenance Mode
+		err = Inst().V.ExitMaintenance(*storageNode)
+		log.FailOnError(err, fmt.Sprintf("fail to exit node %s in maintenance mode", storageNode.Name))
+		status, err = Inst().V.GetNodeStatus(*storageNode)
+		log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", storageNode.Name))
+		dash.VerifyFatal(*status, api.Status_STATUS_OK, fmt.Sprintf("Node %s Status not Online", storageNode.Name))
+	})
+})
