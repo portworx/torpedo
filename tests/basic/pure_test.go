@@ -1014,3 +1014,114 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+// This test Kills the PX in nodes where FADA volumes are attached, Deletes the pods and PVCs.
+/*
+https://portworx.testrail.net/index.php?/tests/view/72760884
+
+*/
+var _ = Describe("{AppCleanUpWhenPxKill}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AppCleanUpWhenPxKill", "Test creates multiple FADA volume and kills px nodes while the pods and pvc's are being deleted", nil, 72760884)
+	})
+	It("Schedules apps that use FADA volumes, kill the nodes where these volumes are placed while the volumes are being deleted.", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the one storage node,one storageless node and one KVDB member node to place volumes and kill the nodes while apps are being destroyed
+		storageNodes := node.GetStorageNodes()
+		storageLessNodes := node.GetStorageLessNodes()
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Failed to get kvdb nodes")
+		var selectedNodes []node.Node
+		selectedNodes = append(selectedNodes, storageNodes[rand.Intn(len(storageNodes))])
+		selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
+		selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[rand.Intn(len(storageLessNodes))].ID)
+		log.FailOnError(err, "Failed to get kvdb node details")
+		selectedNodes = append(selectedNodes, selectedKvdbNode)
+
+		defer func() {
+			Inst().AppList = applist
+			for _, node := range selectedNodes {
+				err = Inst().S.RemoveLabelOnNode(node, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", node.Name)
+			}
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		for _, node := range selectedNodes {
+			err = Inst().S.AddLabelOnNode(node, k8s.NodeType, k8s.ReplVPS)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", node.Name))
+		}
+
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+		//Number of apps to be deployed after which a restart can be triggered
+		NumberOfAppsToBeDeployed := 15
+
+		stepLog = "schedule application"
+		Step(stepLog, func() {
+			Step("Schedule applications", func() {
+				log.InfoD("Scheduling applications")
+				for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+					taskName := fmt.Sprintf("test%v", j)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Provisioner,
+						PvcSize:            6 * units.GiB,
+					})
+					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+					contexts = append(contexts, context...)
+				}
+			})
+			Step(stepLog, func() {
+				ValidateApplications(contexts)
+			})
+		})
+		stepLog = "Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully"
+		Step(stepLog, func() {
+			// Step 1: Destroy Application
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stepLog := "Destroy Application"
+				Step(stepLog, func() {
+					opts := make(map[string]bool)
+					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+					for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+						TearDownContext(contexts[NumberOfAppsToBeDeployed], opts)
+					}
+				})
+			}()
+
+			// Step 2: kill px nodes
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				time.Sleep(30 * time.Second)
+				stepLog := "Kill px nodes"
+				Step(stepLog, func() {
+					for _, selectedNode := range selectedNodes {
+						err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
+						})
+						log.FailOnError(err, "Failed to crash node:%v", selectedNode.Name)
+					}
+				})
+			}()
+			// Wait for both steps to complete
+			wg.Wait()
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
