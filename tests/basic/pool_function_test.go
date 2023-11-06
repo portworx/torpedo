@@ -394,12 +394,26 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandDiskAddAndVerifyFromOtherNode",
 			"Initiate pool expansion and verify from other node", nil, testrailID)
+		contexts = scheduleApps()
+	})
 
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
 
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+	
 	stepLog := "should get the existing pool and expand it by adding a disk and verify from other node"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
