@@ -3,6 +3,8 @@ package tests
 import (
 	"fmt"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -675,3 +677,114 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 
 	})
 })
+
+var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
+
+	var testrailID = 34542894
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandAndCheckAlerts", "pool expansion using resize-disk and add-disk and check alerts after each operation", nil, testrailID)
+		contexts = scheduleApps()
+	})
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+	stepLog := "Initiate pool expansion using resize-disk"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+	})
+
+	Step("Wait for expansion to finish", func() {
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+	})
+	stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+		alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
+		dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
+	})
+
+	stepLog = "Initiate pool expansion using add-disk"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+	})
+
+	Step("Wait for expansion to finish", func() {
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+	})
+
+	stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+		alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
+		dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
+
+	})
+})
+
+func checkAlertsForPoolExpansion(poolIDToResize string, targetSizeGiB uint64) (bool, error) {
+	// Get the node to check the pool show output
+	n := node.GetStorageDriverNodes()[0]
+	// Below command to change when PWX-28484 is fixed
+	cmd := "pxctl alerts show| grep -e POOL"
+	// Execute the command and check the alerts of type POOL
+	out, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	log.FailOnError(err, "Unable to execute the alerts show command")
+	outLines := strings.Split(out, "\n")
+	// var alertExist bool
+	// alertExist = false
+	substr := "[0-9]+ GiB"
+	re := regexp.MustCompile(substr)
+
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "PoolExpandSuccessful") && strings.Contains(line, poolIDToResize) {
+			if re.MatchString(line) {
+				matchedSize := re.FindStringSubmatch(line)[0]
+				poolSize := matchedSize[:len(matchedSize)-4]
+				poolSizeUint, _ := strconv.ParseUint(poolSize, 10, 64)
+				if poolSizeUint >= targetSizeGiB {
+					// alertExist = true
+					log.Infof("The Alert generated is %s", line)
+					return true, nil
+					// break
+				} else {
+					return false, fmt.Errorf("Current pool size after expansion %s GiB is less than expected size %d GiB", matchedSize, targetSizeGiB)
+				}
+			}
+			// return false, fmt.Errorf("Alert does not mention the Size of the Pool")
+
+		}
+	}
+	return true, nil
+}
