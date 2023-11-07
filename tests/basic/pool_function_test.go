@@ -690,7 +690,7 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToResize = getStoragePool(poolIDToResize)
+		// poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
@@ -703,21 +703,20 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 		EndTorpedoTest()
 	})
 	stepLog := "Initiate pool expansion using resize-disk"
-	Step(stepLog, func() {
+	It(stepLog, func() {
 		log.InfoD(stepLog)
+		poolToResize = getStoragePool(poolIDToResize)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-	})
 
-	Step("Wait for expansion to finish", func() {
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-	})
-	stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
-	Step(stepLog, func() {
+
+		stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
+		// Step(stepLog, func() {
 		log.InfoD(stepLog)
 		log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
 		alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
@@ -725,22 +724,21 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 	})
 
 	stepLog = "Initiate pool expansion using add-disk"
-	Step(stepLog, func() {
+	It(stepLog, func() {
 		log.InfoD(stepLog)
+		poolToResize = getStoragePool(poolIDToResize)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-	})
 
-	Step("Wait for expansion to finish", func() {
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-	})
+		// })
 
-	stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
-	Step(stepLog, func() {
+		stepLog = "Ensure that new pool has been expanded to the expected size and also check the pool expand alert"
+		// Step(stepLog, func() {
 		log.InfoD(stepLog)
 		log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
 		alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
