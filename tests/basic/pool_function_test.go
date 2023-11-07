@@ -9,6 +9,7 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"github.com/portworx/torpedo/pkg/units"
@@ -533,5 +534,94 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 		})
 
 	})
+
+})
+
+var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
+
+	var testrailID = 34542876
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542876
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolVolUpdateResizeDisk", "expand volume to the pool and pool expansion using resize-disk", nil, testrailID)
+		contexts = scheduleApps()
+	})
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	var newRep int64
+	var currRep int64
+	volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
+	log.FailOnError(err, "error identifying volume")
+	opts := volume.Options{
+		ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+	}
+	stepLog = "Expand volume to the intended pool"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		currRep, err = Inst().V.GetReplicationFactor(volSelected)
+		log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
+		newRep = currRep
+		if currRep == 3 {
+			newRep = currRep - 1
+			err = Inst().V.SetReplicationFactor(volSelected, newRep, nil, nil, true, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
+		}
+		log.InfoD(fmt.Sprintf("setting repl factor to %d for vol : %s", newRep+1, volSelected.Name))
+		err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{storageNode.Id}, []string{poolToResize.Uuid}, false, opts)
+		log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
+		dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expansion triggered successfully on node %s", volSelected.Name, storageNode.Name))
+	})
+
+	stepLog := "Initiate pool expansion using resize-disk while repl increase is in progress"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+	})
+
+	Step("Wait for expansion to finish", func() {
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+	})
+	err = ValidateReplFactorUpdate(volSelected, newRep+1)
+	log.FailOnError(err, "error validating repl factor for vol [%s]", volSelected.Name)
+
+	stepLog = "Initiate pool expansion using resize-disk after rsync is successfull"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+	})
+
+	Step("Wait for expansion to finish", func() {
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+	})
+
+	//reverting the replication for volume validation
+	if currRep < 3 {
+		err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
+		log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
+	}
 
 })
