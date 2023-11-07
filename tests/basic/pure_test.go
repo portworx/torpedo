@@ -1015,17 +1015,17 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 	})
 })
 
-// This test Creates multiple FADA volume/app (nginx) - Stop PX on a Node, delete the apps and check if all the pods,pvc's and volumes are being deleted from the backend
+// This test Creates multiple FADA volume/app (nginx) - Stop PX on a Node, resize and validate pvc's,delete the apps and check if all the pods,pvc's and volumes are being deleted from the backend
 /*
 https://portworx.testrail.net/index.php?/cases/view/93034
 https://portworx.testrail.net/index.php?/cases/view/93035
 
 */
-var _ = Describe("{StopPXValidateDeleteApps}", func() {
+var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("StopPXValidateDeleteApps", "Test creates multiple FADA volume and stops px on a node and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
+		StartTorpedoTest("StopPXAddDiskDeleteApps", "Test creates multiple FADA volume and stops px on a node,resize pvc and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
 	})
-	It("schedules multiple nginx fada volumes, stops portworx on a node where volumes are placed and checks if all the resources created are deleted gracefully", func() {
+	It("schedules multiple nginx fada volumes, stops portworx on a node where volumes are placed,resize pvc's and checks if all the resources created are deleted gracefully", func() {
 		var contexts = make([]*scheduler.Context, 0)
 		requestedVols := make([]*volume.Volume, 0)
 		//Scheduling app with volume placement strategy
