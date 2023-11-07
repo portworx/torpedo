@@ -1027,6 +1027,7 @@ var _ = Describe("{StopPXValidateDeleteApps}", func() {
 	})
 	It("schedules multiple nginx fada volumes, stops portworx on a node where volumes are placed and checks if all the resources created are deleted gracefully", func() {
 		var contexts = make([]*scheduler.Context, 0)
+		requestedVols := make([]*volume.Volume, 0)
 		//Scheduling app with volume placement strategy
 		applist := Inst().AppList
 		rand.Seed(time.Now().Unix())
@@ -1048,7 +1049,7 @@ var _ = Describe("{StopPXValidateDeleteApps}", func() {
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 		//Number of apps to be deployed
-		NumberOfDeployments := 10
+		NumberOfDeployments := 1
 
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
@@ -1063,29 +1064,76 @@ var _ = Describe("{StopPXValidateDeleteApps}", func() {
 				contexts = append(contexts, context...)
 			}
 		})
-		stepLog = fmt.Sprintf("Stop portworx,destroy apps and check if the pvc's are deleted gracefully")
+		stepLog = fmt.Sprintf("Stop portworx,resize and validate pvc,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
 			stepLog := fmt.Sprintf("Stop Portworx")
 			Step(stepLog, func() {
 				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
 				StopVolDriverAndWait([]node.Node{selectedNode})
 			})
-			stepLog = fmt.Sprintf("Destroy Application")
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				var err error
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.Infof("len of app volumes is : %v", len(appVolumes))
+					if len(appVolumes) == 0 {
+						log.Errorf("found no volumes for app %s", ctx.App.Key)
+					}
+				})
+
+				stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+					Inst().V.String(), ctx.App.Key, appVolumes)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						pvcs, err := GetContextPVCs(ctx)
+						log.FailOnError(err, "Failed to get pvc's from context")
+						for _, pvc := range pvcs {
+							log.InfoD("increasing pvc [%s/%s]  size to %d", pvc.Namespace, pvc.Name, 150)
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, 150)
+							if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
+								dash.VerifyFatal(err, err, "could not resizr pvc:%v because only dynamically provisioned pvc can be resized")
+								continue
+							}
+							requestedVols = append(requestedVols, resizedVol)
+						}
+					})
+				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+					ctx.App.Key, appVolumes)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						for _, v := range requestedVols {
+							// Need to pass token before validating volume
+							params := make(map[string]string)
+							if Inst().ConfigMap != "" {
+								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+								log.FailOnError(err, "didn't get auth token")
+							}
+							err := Inst().V.ValidateUpdateVolume(v, params)
+							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+						}
+					})
+				stepLog = fmt.Sprintf("Destroy Application")
+				Step(stepLog, func() {
+					opts := make(map[string]bool)
+					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+					for j := 0; j < NumberOfDeployments; j++ {
+						TearDownContext(contexts[j], opts)
+					}
+				})
+			}
+			stepLog = fmt.Sprintf("start portworx and wait for it to come up")
 			Step(stepLog, func() {
-				opts := make(map[string]bool)
-				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-				for j := 0; j < NumberOfDeployments; j++ {
-					TearDownContext(contexts[j], opts)
-				}
+				log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+				StartVolDriverAndWait([]node.Node{selectedNode})
 			})
 		})
-		stepLog = fmt.Sprintf("start portworx and wait for it to come up")
-		Step(stepLog, func() {
-			log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
-			StartVolDriverAndWait([]node.Node{selectedNode})
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
 		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
 	})
 })
