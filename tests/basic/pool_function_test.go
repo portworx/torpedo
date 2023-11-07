@@ -683,7 +683,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542904
 
 	BeforeEach(func() {
-		StartTorpedoTest("CheckPoolLabelsAfterExpand",
+		StartTorpedoTest("CheckPoolLabelsAfterResizeDisk",
 			"Initiate pool expansion and Newly set pool labels should persist post pool expand resize-disk operation", nil, testrailID)
 		contexts = scheduleApps()
 	})
@@ -694,6 +694,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
+
 	})
 
 	JustAfterEach(func() {
@@ -708,16 +709,17 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 	stepLog = "set pool label, before pool expand"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		labelBeforeExpand := poolToResize.Labels
 		poolLabelToUpdate := make(map[string]string)
 		poolLabelToUpdate["cust-type"] = "test-label"
 		// Update the pool label
 		err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
 		log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
 		// store the new label that is updated
-	})
-	labelBeforeExpand := poolToResize.Labels
-	stepLog = "expand pool using resize-disk"
-	It(stepLog, func() {
+		// })
+
+		stepLog = "expand pool using resize-disk"
+		// It(stepLog, func() {
 		log.InfoD(stepLog)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
@@ -730,9 +732,9 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-	})
-	stepLog = "check pool label, after pool expand"
-	It(stepLog, func() {
+		// })
+		stepLog = "check pool label, after pool expand"
+		// It(stepLog, func() {
 		log.InfoD(stepLog)
 		labelAfterExpand := poolToResize.Labels
 		result := reflect.DeepEqual(labelBeforeExpand, labelAfterExpand)
@@ -747,7 +749,7 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542906
 
 	BeforeEach(func() {
-		StartTorpedoTest("CheckPoolLabelsAfterExpand",
+		StartTorpedoTest("CheckPoolLabelsAfterAddDisk",
 			"Initiate pool expansion and Newly set pool labels should persist post pool expand add-disk operation", nil, testrailID)
 		contexts = scheduleApps()
 	})
@@ -772,16 +774,17 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 	stepLog = "set pool label, before pool expand"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+		labelBeforeExpand := poolToResize.Labels
 		poolLabelToUpdate := make(map[string]string)
 		poolLabelToUpdate["cust-type"] = "test-label"
 		// Update the pool label
 		err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
 		log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
 		// store the new label that is updated
-	})
-	labelBeforeExpand := poolToResize.Labels
-	stepLog = "expand pool using resize-disk"
-	It(stepLog, func() {
+		// })
+
+		stepLog = "expand pool using resize-disk"
+		// It(stepLog, func() {
 		log.InfoD(stepLog)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
@@ -794,9 +797,9 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-	})
-	stepLog = "check pool label, after pool expand"
-	It(stepLog, func() {
+		// })
+		stepLog = "check pool label, after pool expand"
+		// It(stepLog, func() {
 		log.InfoD(stepLog)
 		labelAfterExpand := poolToResize.Labels
 		result := reflect.DeepEqual(labelBeforeExpand, labelAfterExpand)
