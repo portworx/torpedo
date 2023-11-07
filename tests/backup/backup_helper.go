@@ -5465,7 +5465,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 
 	// Generating the manifest URL and applying it to begin upgrade
 	manifestYamlURL := fmt.Sprintf("https://github.com/kubevirt/kubevirt/releases/download/%s/kubevirt-operator.yaml", versionToUpgrade)
-	_, err = kubectlExec([]string{"apply", "-f", manifestYamlURL})
+	_, err = kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "apply", "-f", manifestYamlURL})
 	if err != nil {
 		return err
 	}
@@ -5485,6 +5485,15 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	if err != nil {
 		return err
 	}
+
+	time.Sleep(10 * time.Second)
+	// Wait for all pods in kubevirt namespace to be running
+	pods, err := k8sCore.GetPods(KubevirtNamespace, make(map[string]string))
+	for _, p := range pods.Items {
+		log.Infof("Checking status for pod - %s", p.GetName())
+		err = core.Instance().ValidatePod(&p, podReadyTimeout, podReadyRetryTime)
+	}
+
 	log.Infof("Kubevirt control plane upgraded from [%s] to [%s]", current, versionToUpgrade)
 
 	// Workload upgrade
@@ -5494,7 +5503,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
   		{"op": "replace", "path": "/spec/workloadUpdateStrategy", "value": {"workloadUpdateMethods": ["Evict"], "batchEvictionSize": 10, "batchEvictionInterval": "1m"}}
 	]`
 
-		_, err = kubectlExec([]string{"patch", "kubevirt", "kubevirt", "-n", "kubevirt", "--type=json", fmt.Sprintf("-p=%s", patchString)})
+		_, err = kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "patch", "kubevirt", "kubevirt", "-n", "kubevirt", "--type=json", fmt.Sprintf("-p=%s", patchString)})
 		if err != nil {
 			return err
 		}

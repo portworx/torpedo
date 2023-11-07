@@ -447,9 +447,10 @@ var (
 )
 
 const (
-	rootLogDir    = "/root/logs"
-	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
-	pxbLogDirPath = "/tmp/px-backup-test-logs"
+	rootLogDir        = "/root/logs"
+	diagsDirPath      = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath     = "/tmp/px-backup-test-logs"
+	KubevirtNamespace = "kubevirt"
 )
 
 type Weekday string
