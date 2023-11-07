@@ -1039,9 +1039,9 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		var selectedNodes []node.Node
 		selectedNodes = append(selectedNodes, storageNodes[rand.Intn(len(storageNodes))])
 		selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
-		selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[rand.Intn(len(kvdbNodes))].ID)
-		log.FailOnError(err, "Failed to get kvdb node details")
 		for _, kvdbNode := range kvdbNodes {
+			selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[rand.Intn(len(kvdbNodes))].ID)
+			log.FailOnError(err, "Failed to get kvdb node details")
 			if kvdbNode.ID != selectedNodes[0].Id && kvdbNode.ID != selectedNodes[1].Id {
 				selectedNodes = append(selectedNodes, selectedKvdbNode)
 				break
@@ -1064,7 +1064,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of apps to be deployed
-		NumberOfAppsToBeDeployed := 15
+		NumberOfAppsToBeDeployed := 300
 
 		stepLog = "schedule application"
 		Step(stepLog, func() {
