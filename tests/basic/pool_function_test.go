@@ -561,16 +561,17 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 		appsValidateAndDestroy(contexts)
 		EndTorpedoTest()
 	})
+	stepLog := "Expand volume to the pool and pool expansion using resize-disk"
+	It(stepLog, func() {
+		var newRep int64
+		var currRep int64
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
+		log.FailOnError(err, "error identifying volume")
+		opts := volume.Options{
+			ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+		}
 
-	var newRep int64
-	var currRep int64
-	volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
-	log.FailOnError(err, "error identifying volume")
-	opts := volume.Options{
-		ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
-	}
-	stepLog = "Expand volume to the intended pool"
-	Step(stepLog, func() {
+		stepLog = "Expand volume to the intended pool"
 		log.InfoD(stepLog)
 		currRep, err = Inst().V.GetReplicationFactor(volSelected)
 		log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
@@ -584,44 +585,35 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 		err = Inst().V.SetReplicationFactor(volSelected, newRep+1, []string{storageNode.Id}, []string{poolToResize.Uuid}, false, opts)
 		log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep+1, volSelected.Name))
 		dash.VerifyFatal(err == nil, true, fmt.Sprintf("vol %s expansion triggered successfully on node %s", volSelected.Name, storageNode.Name))
-	})
 
-	stepLog := "Initiate pool expansion using resize-disk while repl increase is in progress"
-	Step(stepLog, func() {
+		stepLog := "Initiate pool expansion using resize-disk while repl increase is in progress"
 		log.InfoD(stepLog)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-	})
 
-	Step("Wait for expansion to finish", func() {
+		stepLog = "Wait for expansion to finish"
+		log.InfoD(stepLog)
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-	})
-	err = ValidateReplFactorUpdate(volSelected, newRep+1)
-	log.FailOnError(err, "error validating repl factor for vol [%s]", volSelected.Name)
+		err = ValidateReplFactorUpdate(volSelected, newRep+1)
+		log.FailOnError(err, "error validating repl factor for vol [%s]", volSelected.Name)
 
-	stepLog = "Initiate pool expansion using resize-disk after rsync is successfull"
-	Step(stepLog, func() {
+		stepLog = "Initiate pool expansion using resize-disk after rsync is successfull"
 		log.InfoD(stepLog)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-	})
-
-	Step("Wait for expansion to finish", func() {
-		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		resizeErr = waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+		//reverting the replication for volume validation
+		if currRep < 3 {
+			err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
+			log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
+		}
 	})
-
-	//reverting the replication for volume validation
-	if currRep < 3 {
-		err = Inst().V.SetReplicationFactor(volSelected, currRep, nil, nil, true, opts)
-		log.FailOnError(err, fmt.Sprintf("err setting repl factor to %d for vol : %s", newRep, volSelected.Name))
-	}
-
 })
