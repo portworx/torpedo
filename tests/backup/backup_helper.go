@@ -5488,10 +5488,25 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 
 	time.Sleep(10 * time.Second)
 	// Wait for all pods in kubevirt namespace to be running
-	pods, err := k8sCore.GetPods(KubevirtNamespace, make(map[string]string))
-	for _, p := range pods.Items {
-		log.Infof("Checking status for pod - %s", p.GetName())
-		err = core.Instance().ValidatePod(&p, podReadyTimeout, podReadyRetryTime)
+	t = func() (interface{}, bool, error) {
+		pods, err := k8sCore.GetPods(KubevirtNamespace, make(map[string]string))
+		if err != nil {
+			return "", false, err
+		}
+		allReady := true
+		for _, p := range pods.Items {
+			log.Infof("Checking status for pod - %s", p.GetName())
+			for _, condition := range p.Status.Conditions {
+				if condition.Type != corev1.PodReady {
+					log.Infof("Pod [%s] in [%s] namespace expected state - [%s], but got [%s]", p.GetName(), KubevirtNamespace, corev1.PodReady, condition.Type)
+					allReady = false
+				}
+			}
+		}
+		if allReady {
+			return "", false, nil
+		}
+		return "", true, fmt.Errorf("waiting for all the pods in %s namepsace to be ready", KubevirtNamespace)
 	}
 
 	log.Infof("Kubevirt control plane upgraded from [%s] to [%s]", current, versionToUpgrade)
@@ -5526,6 +5541,9 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 			for _, p := range pods.Items {
 				log.Infof("Checking status for pod - %s", p.GetName())
 				err = core.Instance().ValidatePod(&p, podReadyTimeout, podReadyRetryTime)
+				if err != nil {
+					return err
+				}
 			}
 			log.Infof("Waiting for VMs to be upgraded in namespace - [%s]", n.GetName())
 			for _, v := range vms.Items {
