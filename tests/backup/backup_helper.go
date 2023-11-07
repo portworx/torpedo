@@ -5498,6 +5498,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		if err != nil {
 			return err
 		}
+		time.Sleep(10 * time.Second)
 		namespaces, err := core.Instance().ListNamespaces(make(map[string]string))
 		if err != nil {
 			return err
