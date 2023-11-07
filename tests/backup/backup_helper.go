@@ -5500,15 +5500,20 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 				if condition.Type != corev1.PodReady {
 					log.Infof("Pod [%s] in [%s] namespace expected state - [%s], but got [%s]", p.GetName(), KubevirtNamespace, corev1.PodReady, condition.Type)
 					allReady = false
+				} else {
+					allReady = true
 				}
 			}
+			if !allReady {
+				return "", true, fmt.Errorf("waiting for all the pods in %s namespace to be ready", KubevirtNamespace)
+			}
 		}
-		if allReady {
-			return "", false, nil
-		}
-		return "", true, fmt.Errorf("waiting for all the pods in %s namepsace to be ready", KubevirtNamespace)
+		//if allReady {
+		//	return "", false, nil
+		//}
+		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(kubevirtCheck, 5*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(kubevirtCheck, 10*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -5550,22 +5555,22 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 				}
 			}
 			log.Infof("Waiting for VMs to be upgraded in namespace - [%s]", n.GetName())
-			for _, v := range vms.Items {
-				t := func() (interface{}, bool, error) {
-					vmObj, err := k8sKubevirt.GetVirtualMachine(v.GetName(), n.GetName())
-					if err != nil {
-						return nil, false, fmt.Errorf("vm %s in namespace %s is not found", vmObj.GetName(), n.GetName())
-					}
-					if vmObj.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
-						return nil, true, fmt.Errorf("vm %s in namespace %s is in %s state, waiting for the status to be %s", vmObj.GetName(), n.GetName(), vmObj.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
-					}
-					return nil, false, nil
-				}
-				_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
-				if err != nil {
-					return err
-				}
-			}
+			//for _, v := range vms.Items {
+			//	t := func() (interface{}, bool, error) {
+			//		vmObj, err := k8sKubevirt.GetVirtualMachine(v.GetName(), n.GetName())
+			//		if err != nil {
+			//			return nil, false, fmt.Errorf("vm %s in namespace %s is not found", vmObj.GetName(), n.GetName())
+			//		}
+			//		if vmObj.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
+			//			return nil, true, fmt.Errorf("vm %s in namespace %s is in %s state, waiting for the status to be %s", vmObj.GetName(), n.GetName(), vmObj.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
+			//		}
+			//		return nil, false, nil
+			//	}
+			//	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			//	if err != nil {
+			//		return err
+			//	}
+			//}
 		}
 		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
