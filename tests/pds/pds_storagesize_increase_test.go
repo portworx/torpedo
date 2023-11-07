@@ -560,8 +560,6 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
