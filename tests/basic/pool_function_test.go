@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
 	"strings"
 	"sync"
@@ -272,7 +274,7 @@ var _ = Describe("{PoolExpandWithReboot}", func() {
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+				poolIDToResize, poolToResize.TotalSize/un—its.GiB, targetSizeGiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
 		})
 
@@ -856,6 +858,81 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		})
+	})
+})
+
+var _ = Describe("{StorageFullPoolExpansion}", func() {
+	var (
+		appList []string
+		// secondReplNode node.Node
+		selectedNode   *node.Node
+	)
+
+	BeforeEach(func() {
+		Inst().AppList = []string{"fio-fastpath"}
+		contexts = ScheduleApplications("StorageFullPoolExpansion")
+		selectedNode = GetNodeWithLeastSize()
+		//stNodes := node.GetStorageNodes()
+		//for _, stNode := range stNodes {
+		//	if stNode.Name != selectedNode.Name {
+		//		secondReplNode = stNode
+		//		break
+		//	}
+		//}
+		appList = Inst().AppList
+		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed to add label on node %s", selectedNode.Name))
+		//err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
+		//log.FailOnError(err, fmt.Sprintf("Failed to add label on node %s", secondReplNode.Name))
+	})
+
+	JustBeforeEach(func() {
+		//isJournal, err := IsJournalEnabled()
+		//log.FailOnError(err, "failed to check if journal is enabled")
+		//err = adjustReplPools(*selectedNode, secondReplNode, isJournal)
+		//log.FailOnError(err, "Error setting pools for clean volumes")
+	})
+
+	AfterEach(func() {
+		Inst().AppList = appList
+		Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+		// Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+		appsValidateAndDestroy(contexts)
+	})
+
+	It(stepLog, func() {
+		// https://portworx.testrail.net/index.php?/cases/view/51280
+		StartTorpedoTest("StorageFullPoolResize", "Feed a pool full, then expand the pool in type resize-disk", nil, 51280)
+		Step("Prepare a full pool to expand", func() {
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Timed out waiting to load a pool and bring node %s storage down", selectedNode.Name))
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					poolIDToResize = i
+					poolToResize, err = GetStoragePoolByUUID(poolIDToResize)
+					log.FailOnError(err, "error getting pool with UUID [%s]", poolIDToResize)
+					break
+				}
+			}
+		})
+
+		Step("Expand the full pool in type resize-disk", func() {
+			targetSizeGiB = (poolToResize.TotalSize / units.GiB) * 2
+			log.InfoD("Current Size of the pool %s is %d, trying to expand it to double the size", poolToResize.Uuid, poolToResize.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolToResize.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init should be successful.")
+		})
+
+		Step("Verify that pool expansion is successful", func() {
+			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", poolToResize.Uuid))
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
 	})
 })
