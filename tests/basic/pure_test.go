@@ -1014,3 +1014,86 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+// This test Creates multiple FADA volume/app (nginx) - Stop PX on a Node, delete the apps and check if all the pods,pvc's and volumes are being deleted from the backend
+/*
+https://portworx.testrail.net/index.php?/cases/view/93034
+https://portworx.testrail.net/index.php?/cases/view/93035
+
+*/
+var _ = Describe("{KillPXValidateDeleteApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillPXValidateDeleteApps", "Test creates multiple FADA volume and kills px on a node and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
+	})
+	It("schedules multiple nginx fada volumes, kills portworx on a node where volumes are placed and checks if all the resources created are deleted gracefully", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the node to place volumes
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+		//Number of apps to be deployed
+		NumberOfDeployments := 10
+
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for j := 0; j < NumberOfDeployments; j++ {
+				taskName := fmt.Sprintf("test-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+		})
+		stepLog = fmt.Sprintf("kill portworx,destroy apps and check if the pvc's are deleted gracefully")
+		Step(stepLog, func() {
+			stepLog := fmt.Sprintf("kill Portworx")
+			Step(stepLog, func() {
+				err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         defaultCommandTimeout,
+						TimeBeforeRetry: defaultCommandRetry,
+					}})
+				dash.VerifySafely(err, nil, "Validate node is crashed")
+			})
+			stepLog = fmt.Sprintf("Destroy Application")
+			Step(stepLog, func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for j := 0; j < NumberOfDeployments; j++ {
+					TearDownContext(contexts[j], opts)
+				}
+			})
+		})
+		stepLog = fmt.Sprintf("check status of portworx and wait for it to come up")
+		Step(stepLog, func() {
+			err = Inst().N.TestConnection(selectedNode, node.ConnectionOpts{
+				Timeout:         defaultTestConnectionTimeout,
+				TimeBeforeRetry: defaultWaitRebootRetry,
+			})
+			dash.VerifyFatal(err, nil, "Validate node is back up")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
