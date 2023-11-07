@@ -1095,9 +1095,10 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 							log.InfoD("increasing pvc [%s/%s]  size to %d %v", pvc.Namespace, pvc.Name, 150, pvc.UID)
 							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, 150)
 							if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
-								dash.VerifyFatal(err, err, "could not resizr pvc:%v because only dynamically provisioned pvc can be resized")
+								dash.VerifyFatal(err, err, "could not resize pvc:%v because only dynamically provisioned pvc can be resized")
 								continue
 							}
+							log.InfoD("Vol uid %v", resizedVol.ID)
 							requestedVols = append(requestedVols, resizedVol)
 						}
 					})
@@ -1117,15 +1118,15 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
 						}
 					})
-				stepLog = fmt.Sprintf("Destroy Application")
-				Step(stepLog, func() {
-					opts := make(map[string]bool)
-					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-					for j := 0; j < NumberOfDeployments; j++ {
-						TearDownContext(contexts[j], opts)
-					}
-				})
 			}
+			stepLog = fmt.Sprintf("Destroy Application")
+			Step(stepLog, func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for j := 0; j < NumberOfDeployments; j++ {
+					TearDownContext(contexts[j], opts)
+				}
+			})
 			stepLog = fmt.Sprintf("start portworx and wait for it to come up")
 			Step(stepLog, func() {
 				log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
