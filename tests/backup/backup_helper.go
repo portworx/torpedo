@@ -5439,7 +5439,7 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 // If workloadUpgrade is set to true, kubevirt workloads are upgraded to the given version
 func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	k8sKubevirt := kubevirt.Instance()
-
+	k8sCore := core.Instance()
 	// Checking current version
 	current, err := k8sKubevirt.GetVersion()
 	if err != nil {
@@ -5481,7 +5481,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		}
 		return "", false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -5511,6 +5511,11 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 			}
 			if len(vms.Items) == 0 {
 				continue
+			}
+			pods, err := k8sCore.GetPods(n.GetName(), make(map[string]string))
+			for _, p := range pods.Items {
+				log.Infof("Checking status for pod - %s", p.GetName())
+				err = core.Instance().ValidatePod(&p, podReadyTimeout, podReadyRetryTime)
 			}
 			log.Infof("Waiting for VMs to be upgraded in namespace - [%s]", n.GetName())
 			for _, v := range vms.Items {
