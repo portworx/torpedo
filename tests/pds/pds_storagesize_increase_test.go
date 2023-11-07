@@ -488,9 +488,9 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					log.InfoD("The test is executing for the [%v] iteration", i)
 					storageSizeCounter = i
-					log.InfoD("Current Storage Size is- [%v]", strconv.Itoa(storageSizeCounter-1)+"G")
+					log.InfoD("Current Storage Size is- %v", strconv.Itoa(storageSizeCounter-1)+"G")
 					storageSize := fmt.Sprint(storageSizeCounter, "G")
-					log.InfoD("StorageSize calculated is %v", storageSize)
+					log.InfoD("StorageSize calculated for Update is- %v", storageSize)
 					stepLog = "Update the resource/storage template with increased storage size"
 					Step(stepLog, func() {
 						newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
