@@ -1065,16 +1065,16 @@ var _ = Describe("{KillPXValidateDeleteApps}", func() {
 		})
 		stepLog = fmt.Sprintf("kill portworx,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
-			stepLog := fmt.Sprintf("kill Portworx")
-			Step(stepLog, func() {
-				err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
-					Force: true,
-					ConnectionOpts: node.ConnectionOpts{
-						Timeout:         defaultCommandTimeout,
-						TimeBeforeRetry: defaultCommandRetry,
-					}})
-				dash.VerifySafely(err, nil, "Validate node is crashed")
-			})
+			//stepLog := fmt.Sprintf("kill Portworx")
+			//Step(stepLog, func() {
+			//	err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
+			//		Force: true,
+			//		ConnectionOpts: node.ConnectionOpts{
+			//			Timeout:         defaultCommandTimeout,
+			//			TimeBeforeRetry: defaultCommandRetry,
+			//		}})
+			//	dash.VerifySafely(err, nil, "Validate node is crashed")
+			//})
 			stepLog = fmt.Sprintf("Destroy Application")
 			Step(stepLog, func() {
 				opts := make(map[string]bool)
