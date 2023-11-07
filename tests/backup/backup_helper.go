@@ -5488,7 +5488,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 
 	time.Sleep(10 * time.Second)
 	// Wait for all pods in kubevirt namespace to be running
-	t = func() (interface{}, bool, error) {
+	kubevirtCheck := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPods(KubevirtNamespace, make(map[string]string))
 		if err != nil {
 			return "", false, err
@@ -5507,6 +5507,10 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 			return "", false, nil
 		}
 		return "", true, fmt.Errorf("waiting for all the pods in %s namepsace to be ready", KubevirtNamespace)
+	}
+	_, err = task.DoRetryWithTimeout(kubevirtCheck, 5*time.Minute, 30*time.Second)
+	if err != nil {
+		return err
 	}
 
 	log.Infof("Kubevirt control plane upgraded from [%s] to [%s]", current, versionToUpgrade)
