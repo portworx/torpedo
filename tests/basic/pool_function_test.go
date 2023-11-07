@@ -549,9 +549,10 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToResize = getStoragePool(poolIDToResize)
+		// poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
+
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts)
@@ -565,6 +566,8 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 	It(stepLog, func() {
 		var newRep int64
 		var currRep int64
+		originalSizeInBytes = poolToResize.TotalSize
+		storageNodes := node.GetStorageDriverNodes()
 		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
 		log.FailOnError(err, "error identifying volume")
 		opts := volume.Options{
@@ -576,7 +579,8 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 		currRep, err = Inst().V.GetReplicationFactor(volSelected)
 		log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 		newRep = currRep
-		if currRep == 3 {
+		if currRep == int64(len(storageNodes)) {
+		// if currRep == 3 {
 			newRep = currRep - 1
 			err = Inst().V.SetReplicationFactor(volSelected, newRep, nil, nil, true, opts)
 			log.FailOnError(err, fmt.Sprintf("err setting repl factor  to %d for  vol : %s", newRep, volSelected.Name))
@@ -603,6 +607,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 
 		stepLog = "Initiate pool expansion using resize-disk after rsync is successfull"
 		log.InfoD(stepLog)
+		poolToResize = getStoragePool(poolIDToResize)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
