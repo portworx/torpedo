@@ -483,11 +483,12 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 				log.InfoD("workload deployment is- %v", wlDep.Name)
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
-				for i := 2; i <= 100; i++ {
+				for i := 2; i <= params.StorageConfigurations.Iterations; i++ {
 					tempstIds, tempresIds = nil, nil
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					log.InfoD("The test is executing for the [%v] iteration", i)
 					storageSizeCounter = i
+					log.InfoD("Current Storage Size is- [%v]", strconv.Itoa(storageSizeCounter-1)+"G")
 					storageSize := fmt.Sprint(storageSizeCounter, "G")
 					log.InfoD("StorageSize calculated is %v", storageSize)
 					stepLog = "Update the resource/storage template with increased storage size"
@@ -529,7 +530,6 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 							err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
 							log.FailOnError(err, "Error while validating dataservices")
 							log.InfoD("Data-service: %v is up and healthy", ds.Name)
-							//updatedDepList = append(updatedDepList, updatedDeployment)
 							updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
 							log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
 						})
