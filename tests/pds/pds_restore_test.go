@@ -523,7 +523,7 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 
 var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PerformSimultaneousBackupRestoreForMultipleDeployments", "Perform multiple backup and restore simultaneously for different deployments.", pdsLabels, 0)
+		StartTorpedoTest("PerformSimultaneousRestoresDifferentDataService", "Perform multiple backup and restore simultaneously for different dataservices.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		credName := targetName + pdsbkp.RandString(8)

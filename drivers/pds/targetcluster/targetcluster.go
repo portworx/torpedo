@@ -365,28 +365,32 @@ func (targetCluster *TargetCluster) SetConfig() error {
 }
 
 // DeleteDeploymentTargets deletes the unhealthy deployment targets
-func (tc *TargetCluster) DeleteDeploymentTargets(tenantID string) error {
+func (tc *TargetCluster) DeleteDeploymentTargets(tenantID string) (*http.Response, error) {
+	var resp *http.Response
 	deploymentsTargets, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToTenant(tenantID)
 	if err != nil {
-		return fmt.Errorf("error occued while listing templates %v", err)
+		return nil, fmt.Errorf("error occued while listing templates %v", err)
 	}
 	count := 0
 	for _, deploymentTarget := range deploymentsTargets {
 		if strings.Contains(*deploymentTarget.Status, "unhealthy") {
 			log.Debugf("deployment target name %s", *deploymentTarget.Name)
-			resp, err := components.DeploymentTarget.DeleteTarget(deploymentTarget.GetId())
-			if resp.StatusCode != http.StatusConflict {
-				//TODO: Delete backups and deployments in unhealthy target cluster
-				if err != nil {
-					return err
-				}
-				log.InfoD("Deployment Target %s Deleted", *deploymentTarget.Name)
-				count++
+			resp, err = components.DeploymentTarget.DeleteTarget(deploymentTarget.GetId())
+			if err != nil {
+				return resp, err
 			}
+			//if resp.StatusCode != http.StatusConflict {
+			//	//TODO: Delete backups and deployments in unhealthy target cluster
+			//	if err != nil {
+			//		return err
+			//	}
+			//	log.InfoD("Deployment Target %s Deleted", *deploymentTarget.Name)
+			//	count++
+			//}
 		}
 	}
 	log.Debugf("Number of deployment targets deleted: %d", count)
-	return nil
+	return resp, nil
 }
 
 // RegisterClusterToControlPlane checks and registers the given target cluster to the controlplane

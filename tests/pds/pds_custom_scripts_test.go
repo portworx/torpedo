@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -71,7 +72,7 @@ var _ = Describe("{DeleteBackUpTargets}", func() {
 	It("Deletes the automation created backuptargets", func() {
 		stepLog := "Delete backup Targets"
 		Step(stepLog, func() {
-			err := CleanUpBackUpTargets(projectID, "automation--")
+			err := CleanUpBackUpTargets(projectID, "automation--", "s3")
 			log.FailOnError(err, "error occured while deleting backup target")
 		})
 	})
@@ -88,7 +89,22 @@ var _ = Describe("{DeleteUnhealthyDeploymentTargets}", func() {
 	It("Delete Unhealthy Target Cluster from control plane", func() {
 		stepLog := "Delete Unhealthy Deployment Targets"
 		Step(stepLog, func() {
-			err := targetCluster.DeleteDeploymentTargets(tenantID)
+			_, err := targetCluster.DeleteDeploymentTargets(tenantID)
+			if err != nil {
+				deps, err := components.DataServiceDeployment.ListDeployments(projectID)
+				log.FailOnError(err, "error while getting deployments")
+				for _, dep := range deps {
+					_, err := components.DataServiceDeployment.DeleteDeployment(*dep.Id)
+					if err != nil {
+						log.Debugf("Checking for backup entities and cleaning up..")
+						err = DeleteAllDsBackupEntities(&dep)
+						log.FailOnError(err, "Failed during deleting the backup entities for deployment %v",
+							dep.GetClusterResourceName())
+						_, err = pdslib.DeleteDeployment(dep.GetId())
+						log.FailOnError(err, "Error while deleting deployment.")
+					}
+				}
+			}
 			log.FailOnError(err, "error occured while deleting deployment target")
 		})
 	})
