@@ -225,6 +225,15 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
 		// when the expansion has already completed.
 		time.Sleep(1)
+		// verify pool expansion is in progress
+		isExpandInProgress, expandErr := poolResizeIsInProgress(poolToResize)
+		if expandErr != nil {
+			log.Fatalf("Error checking if pool expansion is in progress: %v", expandErr)
+		}
+		if !isExpandInProgress {
+			log.Warnf("Pool expansion already finished. Skipping test. Please retry with an app that writes more data to testing volumes. ")
+			return
+		}
 		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToResize.Uuid, expandType, targetSize+100, true)
 		dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
 		dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
