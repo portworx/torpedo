@@ -231,7 +231,8 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 			log.Fatalf("Error checking if pool expansion is in progress: %v", expandErr)
 		}
 		if !isExpandInProgress {
-			log.Warnf("Pool expansion already finished. Skipping test. Please retry with an app that writes more data to testing volumes. ")
+			log.Warnf("Pool expansion already finished. Skipping this test. Using a testing app that writes " +
+				"more data which may slow down add-disk type expansion. ")
 			return
 		}
 		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToResize.Uuid, expandType, targetSize+100, true)
