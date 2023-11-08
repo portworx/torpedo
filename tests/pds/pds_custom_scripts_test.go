@@ -81,7 +81,7 @@ var _ = Describe("{DeleteBackUpTargets}", func() {
 	})
 })
 
-var _ = Describe("{DeleteUnhealthyDeploymentTargets}", func() {
+var _ = Describe("{DeleteDeploymentTargets}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteUnhealthyDeploymentTargets",
 			"Deletes the unhealthy deployment target clusters", pdsLabels, 0)
@@ -89,23 +89,26 @@ var _ = Describe("{DeleteUnhealthyDeploymentTargets}", func() {
 	It("Delete Unhealthy Target Cluster from control plane", func() {
 		stepLog := "Delete Unhealthy Deployment Targets"
 		Step(stepLog, func() {
-			_, err := targetCluster.DeleteDeploymentTargets(tenantID)
-			if err != nil {
-				deps, err := components.DataServiceDeployment.ListDeployments(projectID)
-				log.FailOnError(err, "error while getting deployments")
-				for _, dep := range deps {
-					_, err := components.DataServiceDeployment.DeleteDeployment(*dep.Id)
-					if err != nil {
-						log.Debugf("Checking for backup entities and cleaning up..")
-						err = DeleteAllDsBackupEntities(&dep)
-						log.FailOnError(err, "Failed during deleting the backup entities for deployment %v",
-							dep.GetClusterResourceName())
-						_, err = pdslib.DeleteDeployment(dep.GetId())
-						log.FailOnError(err, "Error while deleting deployment.")
-					}
-				}
-			}
+			err := pdslib.DeleteDeploymentTargets(projectID)
 			log.FailOnError(err, "error occured while deleting deployment target")
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{DeleteBackUpTargetsAndCreds}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeleteBackUpTargetsAndCreds",
+			"Deletes bkp targets and creds", pdsLabels, 0)
+	})
+	It("Delete Backup targets and credentials", func() {
+		stepLog := "Delete Backup targets and credentials"
+		Step(stepLog, func() {
+			log.Debugf("deployment target %s", deploymentTargetID)
+			err := pdslib.DeleteBackUpTargetsAndCreds("2141f0b9-3a87-4ca4-864f-09970d94bcd2", projectID, false)
+			log.FailOnError(err, "error occured while deleting bkp targets and creds")
 		})
 	})
 	JustAfterEach(func() {

@@ -528,6 +528,9 @@ func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCle
 func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 	log.Infof("Fetch backups associated to the deployment %v ",
 		dsInstance.GetClusterResourceName())
+
+	//ListBackup api uses older way of finding the backups
+	//we need to delete backup jobs
 	backups, err := components.Backup.ListBackup(dsInstance.GetId())
 	if err != nil {
 		return fmt.Errorf("failed while fetching the backup objects.Err - %v", err)
