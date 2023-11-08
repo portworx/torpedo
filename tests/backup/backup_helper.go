@@ -5440,6 +5440,7 @@ func RestartAllVMsInNamespace(namespace string, waitForCompletion bool) error {
 func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	k8sKubevirt := kubevirt.Instance()
 	k8sCore := core.Instance()
+
 	// Checking current version
 	current, err := k8sKubevirt.GetVersion()
 	if err != nil {
@@ -5456,7 +5457,6 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	if err != nil {
 		return err
 	}
-
 	if currentKubevirtVersionSemVer.GreaterThanOrEqual(versionToUpgradeSemVer) {
 		return fmt.Errorf("kubevirt cannot be upgraded from [%s] to [%s]", currentKubevirtVersionSemVer.String(), versionToUpgradeSemVer.String())
 	} else {
@@ -5486,8 +5486,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		return err
 	}
 
-	time.Sleep(10 * time.Second)
-	// Wait for all pods in kubevirt namespace to be running
+	// Waiting for all pods in kubevirt namespace to be Ready
 	kubevirtCheck := func() (interface{}, bool, error) {
 		pods, err := k8sCore.GetPods(KubevirtNamespace, make(map[string]string))
 		if err != nil {
@@ -5510,9 +5509,6 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 				return "", true, fmt.Errorf("waiting for all the pods in %s namespace to be ready", KubevirtNamespace)
 			}
 		}
-		//if allReady {
-		//	return "", false, nil
-		//}
 		return "", false, nil
 	}
 	_, err = task.DoRetryWithTimeout(kubevirtCheck, 10*time.Minute, 30*time.Second)
@@ -5533,13 +5529,15 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		if err != nil {
 			return err
 		}
+
+		// Adding sleep here to account for some for the kubectl patch to go through
 		time.Sleep(10 * time.Second)
 		namespaces, err := core.Instance().ListNamespaces(make(map[string]string))
 		if err != nil {
 			return err
 		}
 
-		// Getting kubevirt VMs in each namespace and waiting till the upgrade patch is applied, and they are back to running state
+		// Validating if all the pods in namespace where kubevirt VMs are deployed are in running state
 		for _, n := range namespaces.Items {
 			vms, err := k8sKubevirt.ListVirtualMachines(n.GetName())
 			if err != nil {
@@ -5556,23 +5554,6 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 					return err
 				}
 			}
-			log.Infof("Waiting for VMs to be upgraded in namespace - [%s]", n.GetName())
-			//for _, v := range vms.Items {
-			//	t := func() (interface{}, bool, error) {
-			//		vmObj, err := k8sKubevirt.GetVirtualMachine(v.GetName(), n.GetName())
-			//		if err != nil {
-			//			return nil, false, fmt.Errorf("vm %s in namespace %s is not found", vmObj.GetName(), n.GetName())
-			//		}
-			//		if vmObj.Status.PrintableStatus != kubevirtv1.VirtualMachineStatusRunning {
-			//			return nil, true, fmt.Errorf("vm %s in namespace %s is in %s state, waiting for the status to be %s", vmObj.GetName(), n.GetName(), vmObj.Status.PrintableStatus, kubevirtv1.VirtualMachineStatusRunning)
-			//		}
-			//		return nil, false, nil
-			//	}
-			//	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
-			//	if err != nil {
-			//		return err
-			//	}
-			//}
 		}
 		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
