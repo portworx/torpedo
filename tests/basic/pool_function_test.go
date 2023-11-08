@@ -702,9 +702,9 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 		appsValidateAndDestroy(contexts)
 		EndTorpedoTest()
 	})
-	stepLog := "Initiate pool expansion using resize-disk"
-	It(stepLog, func() {
-		log.InfoD(stepLog)
+	// stepLog := 
+	It("Initiate pool expansion using resize-disk", func() {
+		// log.InfoD(stepLog)
 		poolToResize = getStoragePool(poolIDToResize)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
@@ -723,9 +723,9 @@ var _ = Describe("{PoolExpandAndCheckAlerts}", func() {
 		dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
 	})
 
-	stepLog = "Initiate pool expansion using add-disk"
-	It(stepLog, func() {
-		log.InfoD(stepLog)
+	// stepLog = 
+	It("Initiate pool expansion using add-disk", func() {
+		// log.InfoD(stepLog)
 		poolToResize = getStoragePool(poolIDToResize)
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
