@@ -1049,7 +1049,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 		//Number of apps to be deployed
-		NumberOfDeployments := 20
+		NumberOfDeployments := 100
 
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
@@ -1093,8 +1093,8 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 						pvcs, err := GetContextPVCs(ctx)
 						log.FailOnError(err, "Failed to get pvc's from context")
 						for _, pvc := range pvcs {
-							log.InfoD("increasing pvc [%s/%s]  size to %d %v", pvc.Namespace, pvc.Name, uint64(2*(pvc.Size()))/1000, pvc.UID)
-							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*(pvc.Size()))/1000)
+							log.InfoD("increasing pvc [%s/%s]  size to %d %v", pvc.Namespace, pvc.Name, uint64(2*(pvc.Size()/units.GiB)), pvc.UID)
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*(pvc.Size()/units.GiB)))
 							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 							log.InfoD("Vol uid %v", resizedVol.ID)
 							requestedVols = append(requestedVols, resizedVol)
