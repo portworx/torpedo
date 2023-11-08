@@ -1063,6 +1063,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 				contexts = append(contexts, context...)
 			}
+			ValidateApplications(contexts)
 		})
 		stepLog = fmt.Sprintf("Stop portworx,resize and validate pvc,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
