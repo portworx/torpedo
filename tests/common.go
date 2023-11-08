@@ -9706,7 +9706,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 }
 		  },
 		  {
-			"Sid": "",
+			"Sid": "DenyUnencryptedObjectUploads",
 			"Effect": "Deny",
 			"Principal": "*",
 			"Action": "s3:PutObject",
