@@ -1294,6 +1294,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 		customRestoreName               string
 		restoreNames                    []string
 		backupNames                     []string
+		scheduleNames                   []string
 	)
 
 	JustBeforeEach(func() {
@@ -1498,6 +1499,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			err = suspendBackupSchedule(userScheduleName, periodicSchedulePolicyName, orgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", userScheduleName, appUser))
 			backupNames = append(backupNames, scheduledBackupName)
+			scheduleNames = append(scheduleNames, userScheduleName)
 		})
 
 		Step(fmt.Sprintf("Validate restoring backups on destination cluster for the App-User [%s]", appUser), func() {
@@ -1545,6 +1547,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			err = suspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyName, orgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, appUser))
 			backupNames = append(backupNames, scheduledBackupNameWithLabel)
+			scheduleNames = append(scheduleNames, backupScheduleWithLabel)
 		})
 
 		Step("Validate restoring the scheduled backup with namespace label", func() {
@@ -1572,8 +1575,8 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 				log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", backupName, appUser)
 				_, err = DeleteBackup(backupName, backupUid, orgID, nonAdminCtx)
 				log.FailOnError(err, "Failed to delete the backup %s of the user %s", backupName, appUser)
-				err = DeleteBackupAndWait(scheduledBackupName, nonAdminCtx)
-				log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", scheduledBackupName))
+				err = DeleteBackupAndWait(backupName, nonAdminCtx)
+				log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
 			}
 		})
 
@@ -1591,12 +1594,10 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			log.InfoD(fmt.Sprintf("Validate deleting of backup schedules for the App-User [%s]", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-			log.InfoD("Deleting the normal schedule")
-			err = DeleteSchedule(userScheduleName, SourceClusterName, orgID, nonAdminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", userScheduleName, appUser))
-			log.InfoD("Deleting the namespace labelled schedule")
-			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, orgID, nonAdminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, appUser))
+			for _, scheduleName := range scheduleNames {
+				err = DeleteSchedule(scheduleName, SourceClusterName, orgID, nonAdminCtx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", scheduleName, appUser))
+			}
 		})
 
 		Step(fmt.Sprintf("Validate deleting of source and destination cluster for the App-user [%s]", appUser), func() {
