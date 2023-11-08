@@ -525,12 +525,14 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			upgradeVersion := GetKubevirtVersionToUpgrade()
 			log.InfoD("Upgrading kubevirt on source cluster")
 			err := UpgradeKubevirt(upgradeVersion, true)
-			log.FailOnError(err, "Failed during kubevirt upgrade")
+			log.FailOnError(err, "Failed during kubevirt upgrade on source cluster")
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			log.InfoD("Upgrading kubevirt on destination cluster")
 			err = UpgradeKubevirt(upgradeVersion, true)
-			log.FailOnError(err, "Failed during kubevirt upgrade")
+			log.FailOnError(err, "Failed during kubevirt upgrade on destination cluster")
+			err = SetSourceKubeConfig()
+			log.FailOnError(err, "Switching context to source cluster failed")
 		})
 
 		Step("Restoring kubevirt app using backup taken pre-upgrade - post-upgrade", func() {
