@@ -1556,7 +1556,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 				restoredNameSpace := fmt.Sprintf("%s-%v", scheduledBackupNameWithLabel, RandomString(5))
 				multipleRestoreMapping[namespace] = restoredNameSpace
 			}
-			customRestoreName = fmt.Sprintf("%s-%v", "customRestore", RandomString(4))
+			customRestoreName = fmt.Sprintf("%s-%v", "customrestore", RandomString(4))
 			err = CreateRestore(customRestoreName, scheduledBackupNameWithLabel, multipleRestoreMapping, destinationClusterName, orgID, nonAdminCtx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s] in custom namespace [%v]", customRestoreName, multipleRestoreMapping))
 		})
