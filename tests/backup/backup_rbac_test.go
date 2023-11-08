@@ -1290,9 +1290,10 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 		dstClusterUid                   string
 		backupScheduleWithLabel         string
 		scheduledBackupNameWithLabel    string
-		//restoreForScheduleBackupWithLabel string
-		multipleRestoreMapping map[string]string
-		customRestoreName      string
+		multipleRestoreMapping          map[string]string
+		customRestoreName               string
+		restoreNames                    []string
+		backupNames                     []string
 	)
 
 	JustBeforeEach(func() {
@@ -1496,6 +1497,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", userScheduleName))
 			err = suspendBackupSchedule(userScheduleName, periodicSchedulePolicyName, orgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", userScheduleName, appUser))
+			backupNames = append(backupNames, scheduledBackupName)
 		})
 
 		Step(fmt.Sprintf("Validate restoring backups on destination cluster for the App-User [%s]", appUser), func() {
@@ -1506,6 +1508,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateRestoreWithValidation(nonAdminCtx, restoreName, scheduledBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, scheduledBackupName))
+			restoreNames = append(restoreNames, restoreName)
 		})
 
 		Step("Validate taking manual backup of applications with namespace label", func() {
@@ -1517,6 +1520,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			err = CreateBackupWithNamespaceLabelWithValidation(nonAdminCtx, manualBackupWithLabel, SourceClusterName, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
 				nil, orgID, srcClusterUid, "", "", "", "", nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with labels [%s]", manualBackupWithLabel, nsLabelString))
+			backupNames = append(backupNames, manualBackupWithLabel)
 		})
 
 		Step("Validate restoring manual backup of applications with namespace label", func() {
@@ -1526,6 +1530,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			restoreForManualBackupWithLabel = fmt.Sprintf("%s-%s", restoreNamePrefix, manualBackupWithLabel)
 			err = CreateRestore(restoreForManualBackupWithLabel, manualBackupWithLabel, nil, SourceClusterName, orgID, nonAdminCtx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration of backup %s", restoreName))
+			restoreNames = append(restoreNames, restoreForManualBackupWithLabel)
 		})
 
 		Step("Validate creating scheduled backup with namespace label", func() {
@@ -1539,16 +1544,12 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelString))
 			err = suspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyName, orgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, appUser))
+			backupNames = append(backupNames, scheduledBackupNameWithLabel)
 		})
 
 		Step("Validate restoring the scheduled backup with namespace label", func() {
 			log.InfoD("Validate restoring the scheduled backup with namespace label")
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
-			//log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
-			//restoreForScheduleBackupWithLabel = fmt.Sprintf("%s-%s", restoreNamePrefix, scheduledBackupNameWithLabel)
-			//err = CreateRestore(restoreForScheduleBackupWithLabel, scheduledBackupNameWithLabel, nil, destinationClusterName, orgID, nonAdminCtx, nil)
-			//dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of restoring scheduled backups - %s", restoreName))
-			// Restore to custom namespace
 			multipleBackupNamespace, err := FetchNamespacesFromBackup(nonAdminCtx, scheduledBackupNameWithLabel, orgID)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching namespaces %v from backup %v", multipleBackupNamespace, scheduledBackupNameWithLabel))
 			multipleRestoreMapping = make(map[string]string)
@@ -1559,44 +1560,27 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			customRestoreName = fmt.Sprintf("%s-%v", "customrestore", RandomString(4))
 			err = CreateRestore(customRestoreName, scheduledBackupNameWithLabel, multipleRestoreMapping, destinationClusterName, orgID, nonAdminCtx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s] in custom namespace [%v]", customRestoreName, multipleRestoreMapping))
+			restoreNames = append(restoreNames, customRestoreName)
 		})
 
 		Step(fmt.Sprintf("Validate deleting of backups and restores for the context of App-User [%s] ", appUser), func() {
 			log.InfoD(fmt.Sprintf("Validate deleting of backups and restores for the context of App-User [%s] ", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-			log.InfoD("Deleting the scheduled backup")
-			backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, scheduledBackupName, orgID)
-			log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", scheduledBackupName, appUser)
-			_, err = DeleteBackup(scheduledBackupName, backupUid, orgID, nonAdminCtx)
-			log.FailOnError(err, "Failed to delete the backup %s of the user %s", scheduledBackupName, appUser)
-			err = DeleteBackupAndWait(scheduledBackupName, nonAdminCtx)
-			log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", scheduledBackupName))
-			log.InfoD("Deleting the restore of scheduled backup")
-			err = DeleteRestore(restoreName, orgID, nonAdminCtx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-
-			log.InfoD("Deleting the manual backup with namespace label")
-			manualBackupWithNsLabelUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, manualBackupWithLabel, orgID)
-			log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", manualBackupWithLabel, appUser)
-			_, err = DeleteBackup(manualBackupWithLabel, manualBackupWithNsLabelUid, orgID, nonAdminCtx)
-			log.FailOnError(err, "Failed to delete the backup %s of the user %s", manualBackupWithLabel, appUser)
-			err = DeleteBackupAndWait(manualBackupWithLabel, nonAdminCtx)
-			log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", scheduledBackupName))
-			log.InfoD("Deleting the restore of manual backup with namespace label")
-			err = DeleteRestore(restoreForManualBackupWithLabel, orgID, nonAdminCtx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreForManualBackupWithLabel))
-
-			log.InfoD("Deleting the schedule backup with namespace label")
-			scheduleBackupWithNsLabelUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, scheduledBackupNameWithLabel, orgID)
-			log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", scheduledBackupNameWithLabel, appUser)
-			_, err = DeleteBackup(scheduledBackupNameWithLabel, scheduleBackupWithNsLabelUid, orgID, nonAdminCtx)
-			log.FailOnError(err, "Failed to delete the backup %s of the user %s", scheduledBackupName, appUser)
-			err = DeleteBackupAndWait(scheduledBackupNameWithLabel, nonAdminCtx)
-			log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", scheduledBackupNameWithLabel))
-			log.InfoD("Deleting the restore of schedule backup with namespace label")
-			err = DeleteRestore(customRestoreName, orgID, nonAdminCtx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", customRestoreName))
+			log.InfoD("Deleting the backups")
+			for _, backupName := range backupNames {
+				backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
+				log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", backupName, appUser)
+				_, err = DeleteBackup(backupName, backupUid, orgID, nonAdminCtx)
+				log.FailOnError(err, "Failed to delete the backup %s of the user %s", backupName, appUser)
+				err = DeleteBackupAndWait(scheduledBackupName, nonAdminCtx)
+				log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", scheduledBackupName))
+			}
+			log.InfoD("Deleting the restores")
+			for _, restoreName := range restoreNames {
+				err := DeleteRestore(restoreName, orgID, nonAdminCtx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
+			}
 		})
 
 		Step(fmt.Sprintf("Validate deleting of backup schedules for the App-User [%s]", appUser), func() {
