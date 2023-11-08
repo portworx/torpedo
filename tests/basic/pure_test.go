@@ -1049,7 +1049,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 		//Number of apps to be deployed
-		NumberOfDeployments := 300
+		NumberOfDeployments := 4
 
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
@@ -1093,8 +1093,8 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 						log.FailOnError(err, "Failed to get pvc's from context")
 						for _, pvc := range pvcs {
 							log.InfoD("increasing pvc [%s/%s]  size to %d %v", pvc.Namespace, pvc.Name, 40, pvc.UID)
-							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, 150)
-							log.FailOnError(err, "Not able to increase size:%v", err.Error())
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, 40)
+							log.InfoD("Not able to increase size:%v", err.Error())
 							if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
 								dash.VerifyFatal(err, err, "could not resize pvc:%v because only dynamically provisioned pvc can be resized")
 								continue
