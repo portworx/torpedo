@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
 	"strings"
@@ -274,7 +273,7 @@ var _ = Describe("{PoolExpandWithReboot}", func() {
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-				poolIDToResize, poolToResize.TotalSize/un—its.GiB, targetSizeGiB)
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
 		})
 
@@ -864,40 +863,29 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 
 var _ = Describe("{StorageFullPoolExpansion}", func() {
 	var (
-		appList []string
-		// secondReplNode node.Node
-		selectedNode   *node.Node
+		appList      []string
+		selectedNode *node.Node
 	)
 
 	BeforeEach(func() {
 		Inst().AppList = []string{"fio-fastpath"}
-		contexts = ScheduleApplications("StorageFullPoolExpansion")
-		selectedNode = GetNodeWithLeastSize()
-		//stNodes := node.GetStorageNodes()
-		//for _, stNode := range stNodes {
-		//	if stNode.Name != selectedNode.Name {
-		//		secondReplNode = stNode
-		//		break
-		//	}
-		//}
+		contexts = ScheduleApplications("storagefull-resize")
 		appList = Inst().AppList
-		err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
-		log.FailOnError(err, fmt.Sprintf("Failed to add label on node %s", selectedNode.Name))
-		//err = Inst().S.AddLabelOnNode(secondReplNode, k8s.NodeType, k8s.FastpathNodeType)
-		//log.FailOnError(err, fmt.Sprintf("Failed to add label on node %s", secondReplNode.Name))
 	})
 
 	JustBeforeEach(func() {
-		//isJournal, err := IsJournalEnabled()
-		//log.FailOnError(err, "failed to check if journal is enabled")
-		//err = adjustReplPools(*selectedNode, secondReplNode, isJournal)
-		//log.FailOnError(err, "Error setting pools for clean volumes")
+		poolToResize = getPoolWithLeastSize()
+		selectedNode, _ = GetNodeWithGivenPoolID(poolToResize.Uuid)
+		fastpathLabels := map[string]string{
+			k8s.NodeType: k8s.FastpathNodeType,
+		}
+		err = Inst().V.UpdatePoolLabels(*selectedNode, poolToResize.Uuid, fastpathLabels)
+		log.FailOnError(err, fmt.Sprintf("Failed to add fastpath label on pool %s", poolToResize.Uuid))
 	})
 
 	AfterEach(func() {
 		Inst().AppList = appList
-		Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
-		// Inst().S.RemoveLabelOnNode(secondReplNode, k8s.NodeType)
+		// TODO: remove label on pool
 		appsValidateAndDestroy(contexts)
 	})
 
