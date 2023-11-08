@@ -9679,16 +9679,16 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 }
 
 // GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
-func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string, enableServerSideEncryption ...bool) (string, error) {
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string, enforceServerSideEncryption ...bool) (string, error) {
 
 	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
 	if len(encryptionPolicyValues) < 2 {
 		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
 	}
-	var enableSse string
-	if len(enableServerSideEncryption) == 0 {
+	var enforceSse string
+	if len(enforceServerSideEncryption) == 0 {
 		// If enableServerSideEncryption is not passed , default it to true
-		enableSse = "true"
+		enforceSse = "true"
 	}
 	policy := `{
 	   "Version": "2012-10-17",
@@ -9721,7 +9721,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 	}`
 
 	// Replace the placeholders in the policy with the values passed to the function.
-	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1], bucketName, encryptionPolicyValues[0], enableSse)
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1], bucketName, encryptionPolicyValues[0], enforceSse)
 
 	return policy, nil
 }
