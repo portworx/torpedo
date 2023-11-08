@@ -1095,7 +1095,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 						for _, pvc := range pvcs {
 							log.InfoD("increasing pvc [%s/%s]  size to %d %v", pvc.Namespace, pvc.Name, 40, pvc.UID)
 							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*(pvc.Size())))
-							log.FailOnError(err, "Could not resize pvc:%v", pvc.UID)
+							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 							log.InfoD("Vol uid %v", resizedVol.ID)
 							requestedVols = append(requestedVols, resizedVol)
 						}
