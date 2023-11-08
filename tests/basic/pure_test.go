@@ -1066,26 +1066,21 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		//Number of apps to be deployed
 		NumberOfAppsToBeDeployed := 300
 
-		stepLog = "schedule application"
+		stepLog = fmt.Sprintf("schedule application")
 		Step(stepLog, func() {
-			Step("Schedule applications", func() {
-				log.InfoD("Scheduling applications")
-				for j := 0; j < NumberOfAppsToBeDeployed; j++ {
-					taskName := fmt.Sprintf("test%v", j)
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Provisioner,
-						PvcSize:            6 * units.GiB,
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-					contexts = append(contexts, context...)
-				}
-			})
-			Step(stepLog, func() {
-				ValidateApplications(contexts)
-			})
+			for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+				taskName := fmt.Sprintf("test%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
 		})
-		stepLog = "Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully"
+		stepLog = fmt.Sprintf("Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
 			// Step 1: Destroy Application
 			wg.Add(1)
@@ -1105,7 +1100,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				stepLog := "Kill px nodes"
+				stepLog := fmt.Sprintf("Kill px nodes")
 				Step(stepLog, func() {
 					for _, selectedNode := range selectedNodes {
 						err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
@@ -1122,7 +1117,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			// Wait for both steps to complete
 			wg.Wait()
 		})
-		stepLog = "Wait until all the nodes come up"
+		stepLog = fmt.Sprintf("Wait until all the nodes come up")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, selectedNode := range selectedNodes {
@@ -1131,6 +1126,9 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 					TimeBeforeRetry: defaultWaitRebootRetry,
 				})
 				log.FailOnError(err, "node:%v Failed to come up?", selectedNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+				log.FailOnError(err, "Portworx not coming up on node:%v", selectedNode.Name)
+
 			}
 		})
 	})
