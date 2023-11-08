@@ -1094,12 +1094,8 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 						log.FailOnError(err, "Failed to get pvc's from context")
 						for _, pvc := range pvcs {
 							log.InfoD("increasing pvc [%s/%s]  size to %d %v", pvc.Namespace, pvc.Name, 40, pvc.UID)
-							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, 40)
-							log.FailOnError(err, "Not able to increase size")
-							if err != nil && !(strings.Contains(err.Error(), "only dynamically provisioned pvc can be resized")) {
-								dash.VerifyFatal(err, err, "could not resize pvc:%v because only dynamically provisioned pvc can be resized")
-								continue
-							}
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*(pvc.Size())))
+							log.FailOnError(err, "Could not resize pvc:%v", pvc.UID)
 							log.InfoD("Vol uid %v", resizedVol.ID)
 							requestedVols = append(requestedVols, resizedVol)
 						}
