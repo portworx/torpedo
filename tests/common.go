@@ -9713,7 +9713,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			"Resource": "arn:aws:s3:::%s/*",
 			"Condition": {
 				"Null": {
-					"%s: "%s"
+					"%s:"%s"
 				}
 			}
 		  }	
