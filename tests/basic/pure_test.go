@@ -1082,7 +1082,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		})
 		stepLog = fmt.Sprintf("Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
-			// Step 1: Destroy Application
+			// Step 1: Destroy Applications
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
