@@ -5497,11 +5497,13 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		for _, p := range pods.Items {
 			log.Infof("Checking status for pod - %s", p.GetName())
 			for _, condition := range p.Status.Conditions {
-				if condition.Type != corev1.PodReady {
+				if condition.Type == corev1.PodReady {
+					log.Infof("Pod [%s] in [%s] namespace is in [%s] state", p.GetName(), KubevirtNamespace, condition.Type)
+					allReady = true
+					break
+				} else {
 					log.Infof("Pod [%s] in [%s] namespace expected state - [%s], but got [%s]", p.GetName(), KubevirtNamespace, corev1.PodReady, condition.Type)
 					allReady = false
-				} else {
-					allReady = true
 				}
 			}
 			if !allReady {
