@@ -1093,8 +1093,8 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 						pvcs, err := GetContextPVCs(ctx)
 						log.FailOnError(err, "Failed to get pvc's from context")
 						for _, pvc := range pvcs {
-							log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, pvc.Spec.Resources.Requests, pvc.UID)
-							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvc.Size()))
+							log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, pvc.Spec.Resources.Requests.Storage(), pvc.UID)
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(pvc.Size()/units.GiB))
 							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
 							log.InfoD("Vol uid %v", resizedVol.ID)
 							requestedVols = append(requestedVols, resizedVol)
