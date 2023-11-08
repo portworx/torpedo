@@ -61,7 +61,7 @@ const (
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
 	upgradeStorkImage                         = "TARGET_STORK_VERSION"
-	latestStorkImage                          = "23.3.1"
+	latestStorkImage                          = "23.9.0"
 	restoreNamePrefix                         = "tp-restore"
 	destinationClusterName                    = "destination-cluster"
 	appReadinessTimeout                       = 10 * time.Minute
@@ -96,7 +96,7 @@ const (
 	backupLocationDeleteRetryTime             = 30 * time.Second
 	rebootNodeTimeout                         = 1 * time.Minute
 	rebootNodeTimeBeforeRetry                 = 5 * time.Second
-	latestPxBackupVersion                     = "2.4.0"
+	latestPxBackupVersion                     = "2.6.0"
 	defaultPxBackupHelmBranch                 = "master"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
