@@ -1567,7 +1567,6 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			log.InfoD(fmt.Sprintf("Validate deleting of backups  for the context of App-User [%s] ", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-			log.InfoD("Deleting the backups :", backupNames)
 			for _, backupName := range backupNames {
 				backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
 				log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", backupName, appUser)
@@ -1582,7 +1581,6 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			log.InfoD(fmt.Sprintf("Validate deleting of restores for the context of App-User [%s] ", appUser))
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appUser)
-			log.InfoD("Deleting the restores :", restoreNames)
 			for _, restoreName := range restoreNames {
 				err := DeleteRestore(restoreName, orgID, nonAdminCtx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
