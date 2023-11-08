@@ -1049,7 +1049,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 		//Number of apps to be deployed
-		NumberOfDeployments := 4
+		NumberOfDeployments := 300
 
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
