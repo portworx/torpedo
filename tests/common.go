@@ -9697,7 +9697,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 "Sid": "%s",
 			 "Effect": "Deny",
 			 "Principal": "*",
-			 "Action": ["s3:PutObject"],
+			 "Action": "s3:PutObject",
 			 "Resource": "arn:aws:s3:::%s/*",
 			 "Condition": {
 				"StringNotEquals": {
