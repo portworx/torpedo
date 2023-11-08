@@ -801,7 +801,7 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 		return "", fmt.Errorf("failed to create volume, Err: %v", err)
 	}
 
-	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
+	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
 	return resp.VolumeId, nil
 }
 
