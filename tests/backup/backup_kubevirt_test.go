@@ -468,7 +468,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
-				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(6))
+				cloudCredName = fmt.Sprintf("%s-%s-%s", "cred", provider, RandomString(6))
 				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
 				cloudCredUID = uuid.New()
 				backupLocationUID = uuid.New()
@@ -504,7 +504,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			log.InfoD("Taking backup of kubevirt application pre-upgrade")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			backupPreUpgrade = fmt.Sprintf("%s-%s-%v", "auto-pre-upgrade-backup", RandomString(6))
+			backupPreUpgrade = fmt.Sprintf("%s-%s", "auto-pre-upgrade-backup", RandomString(6))
 			err = CreateBackupWithValidation(ctx, backupPreUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 				labelSelectors, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPreUpgrade))
@@ -548,7 +548,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			log.InfoD("Taking backup of kubevirt application post-upgrade")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			backupPostUpgrade = fmt.Sprintf("%s-%s-%v", "auto-post-upgrade-backup", RandomString(6))
+			backupPostUpgrade = fmt.Sprintf("%s-%s", "auto-post-upgrade-backup", RandomString(6))
 			err = CreateBackupWithValidation(ctx, backupPostUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
 				nil, orgID, sourceClusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPostUpgrade))
