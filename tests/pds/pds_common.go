@@ -57,37 +57,39 @@ type TestParams struct {
 }
 
 const (
-	pdsNamespace                     = "pds-system"
-	deploymentName                   = "qa"
-	envDeployAllDataService          = "DEPLOY_ALL_DATASERVICE"
-	postgresql                       = "PostgreSQL"
-	cassandra                        = "Cassandra"
-	elasticSearch                    = "Elasticsearch"
-	couchbase                        = "Couchbase"
-	redis                            = "Redis"
-	rabbitmq                         = "RabbitMQ"
-	mongodb                          = "MongoDB"
-	mysql                            = "MySQL"
-	kafka                            = "Kafka"
-	zookeeper                        = "ZooKeeper"
-	consul                           = "Consul"
-	pdsNamespaceLabel                = "pds.portworx.com/available"
-	timeOut                          = 30 * time.Minute
-	maxtimeInterval                  = 30 * time.Second
-	timeInterval                     = 1 * time.Second
-	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
-	RebootNodeDuringAppVersionUpdate = "reboot-node-during-app-version-update"
-	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
-	RestartPxDuringDSScaleUp         = "restart-portworx-during-ds-scaleup"
-	RestartAppDuringResourceUpdate   = "restart-app-during-resource-update"
-	BackUpCRD                        = "backups.pds.io"
-	DeploymentCRD                    = "deployments.pds.io"
-	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"
-	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
-	KillTeleportPodDuringDeployment  = "kill-teleport-pod-during-deployment"
-	RestoreDSDuringPXPoolExpansion   = "restore-ds-during-px-pool-expansion"
-	RestoreDSDuringKVDBFailOver      = "restore-ds-during-kvdb-fail-over"
-	RestoreDuringAllNodesReboot      = "restore-ds-during-node-reboot"
+	pdsNamespace                        = "pds-system"
+	deploymentName                      = "qa"
+	envDeployAllDataService             = "DEPLOY_ALL_DATASERVICE"
+	postgresql                          = "PostgreSQL"
+	cassandra                           = "Cassandra"
+	elasticSearch                       = "Elasticsearch"
+	couchbase                           = "Couchbase"
+	redis                               = "Redis"
+	rabbitmq                            = "RabbitMQ"
+	mongodb                             = "MongoDB"
+	mysql                               = "MySQL"
+	kafka                               = "Kafka"
+	zookeeper                           = "ZooKeeper"
+	consul                              = "Consul"
+	pdsNamespaceLabel                   = "pds.portworx.com/available"
+	timeOut                             = 30 * time.Minute
+	maxtimeInterval                     = 30 * time.Second
+	timeInterval                        = 1 * time.Second
+	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
+	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
+	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp            = "restart-portworx-during-ds-scaleup"
+	RestartAppDuringResourceUpdate      = "restart-app-during-resource-update"
+	BackUpCRD                           = "backups.pds.io"
+	DeploymentCRD                       = "deployments.pds.io"
+	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
+	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion      = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
+	StopPXDuringStorageResize           = "stop-px-during-storage-resize"
+	KillDbMasterNodeDuringStorageResize = "kill-db-master-node-during-storage-resize"
+	RestoreDuringAllNodesReboot         = "restore-ds-during-node-reboot"
 )
 
 var (
@@ -579,6 +581,33 @@ func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDepl
 		return "", false
 	}
 	return dbMaster, true
+}
+
+func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deployment *pds.ModelsDeployment, sourceTarget *targetcluster.TargetCluster) error {
+	log.Debugf("I HAVE ENTERED INTO KILL FUNC")
+	dbMaster, isNativelyDistributed := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+	log.FailOnError(err, "Failed while fetching db master node.")
+	log.InfoD("dbMaster Node is %s", dbMaster)
+	if !isNativelyDistributed {
+		err = sourceTarget.DeleteK8sPods(dbMaster, nsName)
+		log.FailOnError(err, "Failed while deleting db master pod.")
+		err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
+		log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
+		log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
+		newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+		if dbMaster == newDbMaster {
+			log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
+		}
+		log.InfoD("New DB MasterNode- [%v] is created.", newDbMaster)
+	} else {
+		podName, err := sourceTarget.GetAnyPodName(deployment.GetClusterResourceName(), nsName)
+		log.FailOnError(err, "Failed while fetching pod for stateful set %v.", deployment.GetClusterResourceName())
+		err = sourceTarget.KillPodsInNamespace(params.InfraToTest.Namespace, podName)
+		log.FailOnError(err, "Failed while deleting pod.")
+		err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
+		log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
+	}
+	return nil
 }
 
 // ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize

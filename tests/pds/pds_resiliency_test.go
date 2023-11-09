@@ -1563,3 +1563,179 @@ var _ = Describe("{RestoreDSDuringKVDBFailOver}", func() {
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
+
+var _ = Describe("{StopPXDuringStorageResize}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("StopPXDuringStorageResize", "Stop PX on a node during application's storage is resized", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true)
+	})
+
+	It("Deploy Dataservices and Restart PX During App scaleup", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var generateWorkloads = make(map[string]string)
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+
+		Step("Stop Px on Ds Node and replica node while storage size increase", func() {
+			for ds, deployment := range deployments {
+				failuretype := pdslib.TypeOfFailure{
+					Type: StopPXDuringStorageResize,
+					Method: func() error {
+						return pdslib.StopPXDuringStorageIncrease(params.InfraToTest.Namespace, deployment)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+				//Stop PX during storage size Increase by updating the DS from "small" to "medium" template
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
+				log.FailOnError(err, fmt.Sprintf("Error happened while stopping px for data service %v", *deployment.ClusterResourceName))
+
+			}
+		})
+		Step("Running Workloads", func() {
+			for ds, deployment := range deployments {
+				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+					if dep == nil {
+						generateWorkloads[ds.Name] = pod.Name
+					} else {
+						generateWorkloads[ds.Name] = dep.Name
+					}
+					for dsName, workloadContainer := range generateWorkloads {
+						log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					}
+				} else {
+					log.InfoD("Workload script not available for ds %v", ds.Name)
+				}
+			}
+		})
+		defer func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		}()
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+
+	})
+})
+
+var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("KillDbMasterNodeDuringStorageResize", "Kill DB Master node during application's storage is resized", pdsLabels, 0)
+		pdslib.MarkResiliencyTC(true)
+	})
+
+	It("Deploy Dataservices and Restart PX During App scaleup", func() {
+		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
+		var generateWorkloads = make(map[string]string)
+
+		Step("Deploy Data Services", func() {
+			for _, ds := range params.DataServiceToTest {
+				Step("Deploy and validate data service", func() {
+					isDeploymentsDeleted = false
+					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
+				})
+			}
+		})
+
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
+
+		Step("Kill DB Master node during application's storage is resized", func() {
+			for ds, deployment := range deployments {
+				failuretype := pdslib.TypeOfFailure{
+					Type: KillDbMasterNodeDuringStorageResize,
+					Method: func() error {
+						return KillDbMasterNodeDuringStorageIncrease(ds.Name, namespace, deployment, sourceTarget)
+					},
+				}
+				pdslib.DefineFailureType(failuretype)
+				//Kill DB Master Node during storage size Increase by updating the DS from "small" to "medium" template
+				err = pdslib.InduceFailureAfterWaitingForCondition(deployment, namespace, int32(ds.ScaleReplicas))
+				log.FailOnError(err, fmt.Sprintf("Error happened while stopping px for data service %v", *deployment.ClusterResourceName))
+
+			}
+		})
+		Step("Running Workloads", func() {
+			for ds, deployment := range deployments {
+				if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					var params pdslib.WorkloadGenerationParams
+					pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+					if dep == nil {
+						generateWorkloads[ds.Name] = pod.Name
+					} else {
+						generateWorkloads[ds.Name] = dep.Name
+					}
+					for dsName, workloadContainer := range generateWorkloads {
+						log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					}
+				} else {
+					log.InfoD("Workload script not available for ds %v", ds.Name)
+				}
+			}
+		})
+		defer func() {
+			for dsName, workloadContainer := range generateWorkloads {
+				Step("Delete the workload generating deployments", func() {
+					if Contains(dataServiceDeploymentWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
+						err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
+					} else if Contains(dataServicePodWorkloads, dsName) {
+						log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
+						err = pdslib.DeleteK8sPods(workloadContainer, namespace)
+					}
+					log.FailOnError(err, "error deleting workload generating pods")
+				})
+			}
+		}()
+	})
+	JustAfterEach(func() {
+		EndTorpedoTest()
+
+	})
+})

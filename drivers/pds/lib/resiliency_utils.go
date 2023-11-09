@@ -24,25 +24,27 @@ import (
 )
 
 const (
-	PdsDeploymentControllerManagerPod = "pds-deployment-controller-manager"
-	PdsAgentPod                       = "pds-agent"
-	PdsTeleportPod                    = "pds-teleport"
-	PdsBackupControllerPod            = "pds-backup-controller-manager"
-	PdsTargetControllerPod            = "pds-operator-target-controller-manager"
-	ActiveNodeRebootDuringDeployment  = "active-node-reboot-during-deployment"
-	KillDeploymentControllerPod       = "kill-deployment-controller-pod-during-deployment"
-	RestartPxDuringDSScaleUp          = "restart-portworx-during-ds-scaleup"
-	RebootNodesDuringDeployment       = "reboot-multiple-nodes-during-deployment"
-	KillAgentPodDuringDeployment      = "kill-agent-pod-during-deployment"
-	RestartAppDuringResourceUpdate    = "restart-app-during-resource-update"
-	UpdateTemplate                    = "medium"
-	RebootNodeDuringAppVersionUpdate  = "reboot-node-during-app-version-update"
-	KillTeleportPodDuringDeployment   = "kill-teleport-pod-during-deployment"
-	RestoreDSDuringPXPoolExpansion    = "restore-ds-during-px-pool-expansion"
-	RestoreDSDuringKVDBFailOver       = "restore-ds-during-kvdb-fail-over"
-	RestoreDuringAllNodesReboot       = "restore-ds-during-node-reboot"
-	poolResizeTimeout                 = time.Minute * 120
-	retryTimeout                      = time.Minute * 2
+	PdsDeploymentControllerManagerPod   = "pds-deployment-controller-manager"
+	PdsAgentPod                         = "pds-agent"
+	PdsTeleportPod                      = "pds-teleport"
+	PdsBackupControllerPod              = "pds-backup-controller-manager"
+	PdsTargetControllerPod              = "pds-operator-target-controller-manager"
+	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
+	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp            = "restart-portworx-during-ds-scaleup"
+	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
+	RestartAppDuringResourceUpdate      = "restart-app-during-resource-update"
+	UpdateTemplate                      = "Medium"
+	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
+	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion      = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
+	RestoreDuringAllNodesReboot         = "restore-ds-during-node-reboot"
+	StopPXDuringStorageResize           = "stop-px-during-storage-resize"
+	KillDbMasterNodeDuringStorageResize = "kill-db-master-node-during-storage-resize"
+	poolResizeTimeout                   = time.Minute * 120
+	retryTimeout                        = time.Minute * 2
 )
 
 // PDS vars
@@ -158,7 +160,7 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to check if Data service has %v active pods. "+
 			"Once it does, we restart application pods", checkTillReplica)
 		func1 := func() {
-			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate)
+			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate, false)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)
@@ -216,6 +218,24 @@ func InduceFailureAfterWaitingForCondition(deployment *pds.ModelsDeployment, nam
 		log.InfoD("Entering to restore the Data service, while the nodes are rebooted")
 		func1 := func() {
 			RestoreAndValidateConfiguration(namespace, deployment)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case StopPXDuringStorageResize:
+		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
+		func1 := func() {
+			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate, true)
+		}
+		func2 := func() {
+			InduceFailure(FailureType.Type, namespace)
+		}
+		ExecuteInParallel(func1, func2)
+	case KillDbMasterNodeDuringStorageResize:
+		log.InfoD("Entering to resize of the Data service Volume, while PX on volume node is stopped")
+		func1 := func() {
+			UpdateDeploymentResourceConfig(deployment, namespace, UpdateTemplate, true)
 		}
 		func2 := func() {
 			InduceFailure(FailureType.Type, namespace)

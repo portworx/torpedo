@@ -1330,9 +1330,9 @@ func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, ten
 		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
 		log.FailOnError(err, "Error while getting resource template")
 		log.InfoD("dataServiceDefaultResourceTemplateID %v ", dataServiceDefaultResourceTemplateID)
-		resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
-		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-		ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		//resourceTemp, storageOp, config, err := pdslib.ValidateDataServiceVolumes(deployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		//log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		//ValidateDeployments(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	})
 	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
 }

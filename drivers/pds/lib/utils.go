@@ -2402,9 +2402,16 @@ func GetPodsOfSsByNode(SSName string, nodeName string, namespace string) ([]core
 	return nil, errors.New(fmt.Sprintf("There is no pod of the given statefulset running on the given node name %s", nodeName))
 }
 
-func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) error {
-	var resourceTemplateId string
-	var cpuLimits int64
+func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string, validateStorage bool) error {
+	log.Debugf("I HAVE ENTERED INTO UpdateDeploymentResourceConfig")
+	var (
+		resourceTemplateId string
+		cpuLimits          int64
+		initialCapacity    string
+		updatedCapacity    string
+	)
+	initialCapacity = *deployment.Resources.StorageRequest
+	log.InfoD("Initial volume storage size is : %v", initialCapacity)
 	resourceTemplates, err := components.ResourceSettingsTemplate.ListTemplates(*deployment.TenantId)
 	if err != nil {
 		if ResiliencyFlag {
@@ -2425,7 +2432,7 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 	}
 	log.Infof("Deployment details: Ds id- %v, appConfigTemplateID - %v, imageId - %v, Node count -%v, resourceTemplateId- %v ", deployment.GetId(),
 		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId)
-	_, err = components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
+	updatedDeploymnet, err := components.DataServiceDeployment.UpdateDeployment(deployment.GetId(),
 		appConfigTemplateID, deployment.GetImageId(), deployment.GetNodeCount(), resourceTemplateId, nil)
 	if err != nil {
 		if ResiliencyFlag {
@@ -2442,6 +2449,18 @@ func UpdateDeploymentResourceConfig(deployment *pds.ModelsDeployment, namespace 
 	}
 	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
 		// Get Pods of this StatefulSet
+		if validateStorage {
+			updatedCapacity = updatedDeploymnet.Resources.GetStorageRequest()
+			if updatedCapacity > initialCapacity {
+				log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedCapacity)
+				if ResiliencyFlag {
+					ResiliencyCondition <- true
+				}
+				return true, nil
+			} else {
+				return false, nil
+			}
+		}
 		pods, testError := k8sApps.GetStatefulSetPods(ss)
 		if testError != nil {
 			if ResiliencyFlag {
@@ -2677,4 +2696,66 @@ func CreateSiAndIamRoleBindings(accountID string, nsRoles []pds.ModelsBinding) (
 	iamId := *iamModels.Id
 	log.InfoD("Successfully created for IAM Roles- %v", iamId)
 	return actorId, iamId, nil
+}
+
+func StopPXDuringStorageIncrease(ns string, deployment *pds.ModelsDeployment) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+
+	//Waiting till pod have a node assigned
+	var pods []corev1.Pod
+	var nodesToStopPx []node.Node
+	var nodeToRestartPX node.Node
+	var nodeName string
+	var podName string
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if the new Pod have a node assigned or it's in a window where it's just coming up
+		podCount := 0
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				podCount += 1
+				log.Debugf("No of pods that has node assigned: %d", podCount)
+			}
+			if int32(podCount) == *ss.Spec.Replicas {
+				log.Debugf("Expected pod %v has node %v assigned", pod.Name, pod.Spec.NodeName)
+				nodeName = pod.Spec.NodeName
+				podName = pod.Name
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+	nodeToRestartPX, testError = node.GetNodeByName(nodeName)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("Going ahead and stopping PX the node %v as there is an "+
+		"application pod %v that's coming up on this node", nodeName, podName)
+	nodesToStopPx = append(nodesToStopPx, nodeToRestartPX)
+	testError = tests.Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("PX stopped successfully on node %v", podName)
+	return testError
 }
