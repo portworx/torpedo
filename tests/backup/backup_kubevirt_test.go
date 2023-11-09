@@ -434,7 +434,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs in different states", nil, 93013, Mkoppal, Q3FY24)
+		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 93013, Mkoppal, Q3FY24)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
