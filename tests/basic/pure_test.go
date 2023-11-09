@@ -1214,7 +1214,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				stepLog := "Destroy Application"
+				stepLog := "Destroy Applications"
 				Step(stepLog, func() {
 					opts := make(map[string]bool)
 					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
