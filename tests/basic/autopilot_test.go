@@ -1534,111 +1534,6 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 		StartTorpedoTest(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), "Perform several autopilot functional tests", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	It("has to fill up 100 volumes completely, resize the volumes, validate and teardown apps", func() {
-		var contexts []*scheduler.Context
-		testName := strings.ToLower(fmt.Sprintf("%sPvcBasicInScale", testSuiteName))
-
-		Step("schedule applications", func() {
-			for i := 0; i < 100; i++ {
-				id := 0
-				apRule := aututils.PVCRuleByTotalSize(20, 50, "18Gi")
-				taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
-				apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
-				labels := map[string]string{
-					"autopilot": apRule.Name,
-				}
-				apRule.Spec.ActionsCoolDownPeriod = int64(60)
-				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-					AppKeys:            []string{"aut-vol-only"},
-					StorageProvisioner: Inst().Provisioner,
-					AutopilotRule:      apRule,
-					Labels:             labels,
-				})
-				Expect(err).NotTo(HaveOccurred())
-				Expect(context).NotTo(BeEmpty())
-				contexts = append(contexts, context...)
-			}
-		})
-
-		Step("wait until workload completes on volume", func() {
-			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
-
-		Step("validating volumes and verifying size of volumes", func() {
-			for _, ctx := range contexts {
-				ValidateVolumes(ctx)
-			}
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-	})
-
-	It("has to fill up the sharedv4 volume completely, resize the volume, validate and teardown apps", func() {
-		var contexts []*scheduler.Context
-		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
-
-		Step("schedule applications", func() {
-			for i := 0; i < 2; i++ {
-				for id, apRule := range autopilotruleBasicTestCases {
-					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
-					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
-					labels := map[string]string{
-						"autopilot": apRule.Name,
-					}
-					apRule.Spec.ActionsCoolDownPeriod = int64(60)
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            []string{"aut-postgres-sharedv4"},
-						StorageProvisioner: Inst().Provisioner,
-						AutopilotRule:      apRule,
-						Labels:             labels,
-					})
-					Expect(err).NotTo(HaveOccurred())
-					Expect(context).NotTo(BeEmpty())
-					contexts = append(contexts, context...)
-				}
-			}
-		})
-
-		Step("wait until workload completes on volume", func() {
-			for _, ctx := range contexts {
-				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
-				Expect(err).NotTo(HaveOccurred())
-			}
-		})
-
-		Step("validating volumes and verifying size of volumes", func() {
-			for _, ctx := range contexts {
-				ValidateVolumes(ctx)
-			}
-		})
-
-		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
-			time.Sleep(unscheduledResizeTimeout)
-		})
-
-		Step("validating volumes and verifying size of volumes", func() {
-			for _, ctx := range contexts {
-				ValidateVolumes(ctx)
-			}
-		})
-
-		Step("destroy apps", func() {
-			opts := make(map[string]bool)
-			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-			for _, ctx := range contexts {
-				TearDownContext(ctx, opts)
-			}
-		})
-	})
 
 	It("has to run rebalance and resize pools, validate rebalance, validate pools and teardown apps", func() {
 		var contexts []*scheduler.Context
@@ -1707,6 +1602,116 @@ var _ = Describe(fmt.Sprintf("{%sFunctionalTests}", testSuiteName), func() {
 				for key := range poolLabel {
 					Inst().S.RemoveLabelOnNode(storageNode, key)
 				}
+			}
+		})
+	})
+
+	It("has to fill up 100 volumes completely, resize the volumes, validate and teardown apps", func() {
+		var contexts []*scheduler.Context
+		var scaleFactor = 100
+		var appName = "aut-vol-only"
+		testName := strings.ToLower(fmt.Sprintf("%sPvcBasicInScale", testSuiteName))
+
+		Step("schedule applications", func() {
+			for i := 0; i < scaleFactor; i++ {
+				id := 0
+				apRule := aututils.PVCRuleByTotalSize(20, 50, "18Gi")
+				taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
+				apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
+				labels := map[string]string{
+					"autopilot": apRule.Name,
+				}
+				apRule.Spec.ActionsCoolDownPeriod = int64(60)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            []string{appName},
+					StorageProvisioner: Inst().Provisioner,
+					AutopilotRule:      apRule,
+					Labels:             labels,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(context).NotTo(BeEmpty())
+				contexts = append(contexts, context...)
+			}
+		})
+
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
+			}
+		})
+	})
+
+	It("has to fill up the sharedv4 volume completely, resize the volume, validate and teardown apps", func() {
+		var contexts []*scheduler.Context
+		testName := strings.ToLower(fmt.Sprintf("%sPvcBasic", testSuiteName))
+		var scaleFactor = 2
+		var appName = "aut-postgres-sharedv4"
+
+		Step("schedule applications", func() {
+			for i := 0; i < scaleFactor; i++ {
+				for id, apRule := range autopilotruleBasicTestCases {
+					taskName := fmt.Sprintf("%s-%d-aprule%d", testName, i, id)
+					apRule.Name = fmt.Sprintf("%s-%d", apRule.Name, i)
+					labels := map[string]string{
+						"autopilot": apRule.Name,
+					}
+					apRule.Spec.ActionsCoolDownPeriod = int64(60)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            []string{appName},
+						StorageProvisioner: Inst().Provisioner,
+						AutopilotRule:      apRule,
+						Labels:             labels,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					Expect(context).NotTo(BeEmpty())
+					contexts = append(contexts, context...)
+				}
+			}
+		})
+
+		Step("wait until workload completes on volume", func() {
+			for _, ctx := range contexts {
+				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step(fmt.Sprintf("wait for unscheduled resize of volume (%s)", unscheduledResizeTimeout), func() {
+			time.Sleep(unscheduledResizeTimeout)
+		})
+
+		Step("validating volumes and verifying size of volumes", func() {
+			for _, ctx := range contexts {
+				ValidateVolumes(ctx)
+			}
+		})
+
+		Step("destroy apps", func() {
+			opts := make(map[string]bool)
+			opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+			for _, ctx := range contexts {
+				TearDownContext(ctx, opts)
 			}
 		})
 	})
