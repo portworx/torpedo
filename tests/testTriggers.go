@@ -2,10 +2,8 @@ package tests
 
 import (
 	"bytes"
+	"container/ring"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"math"
 	"math/rand"
 	"os"
@@ -18,46 +16,43 @@ import (
 	"text/template"
 	"time"
 
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-
-	"github.com/portworx/torpedo/pkg/applicationbackup"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"gopkg.in/natefinch/lumberjack.v2"
-
-	"container/ring"
-
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	"github.com/onsi/ginkgo"
-
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	apios "github.com/libopenstorage/openstorage/api"
 	opsapi "github.com/libopenstorage/openstorage/api"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
-
-	apios "github.com/libopenstorage/openstorage/api"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor/prometheus"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/sched-ops/task"
+	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor/prometheus"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 const (
@@ -439,6 +434,8 @@ const (
 	MetroDRMigrationSchedule = "metrodrmigrationschedule"
 	// AsyncDR runs Async DR between two clusters
 	AsyncDR = "asyncdr"
+	// AsyncDRExcludeTypes runs Async DR with excluding types between two clusters
+	AsyncDRExcludeTypes = "asyncdrexcludetypes"
 	// AsyncDRMigrationSchedule runs AsyncDR Migrationschedule between two clusters
 	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
@@ -6310,7 +6307,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -6330,6 +6327,122 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		}
 		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRExcludeTypes triggers Async DR
+func TriggerAsyncDRExcludeTypes(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRExcludeTypes)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("AsyncDRExcludeTypes triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: AsyncDR,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRExcludeTypes]
+	var (
+		migrationNamespaces   []string
+		taskNamePrefix        = "async-dr-mig-et"
+		allMigrations         []*storkapi.Migration
+		includeVolumesFlag    = true
+		includeResourcesFlag  = true
+		startApplicationsFlag = false
+		excludeResourceTypes  = []string{"service"}
+	)
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+		// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+		err := asyncdr.WriteKubeconfigToFiles()
+		if err != nil {
+			log.Errorf("Failed to write kubeconfig: %v", err)
+		}
+
+		err = SetSourceKubeConfig()
+		if err != nil {
+			log.Errorf("Failed to Set source kubeconfig: %v", err)
+		}
+		UpdateOutcome(event, err)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+			log.Infof("Task name %s\n", taskName)
+			appContexts := ScheduleApplications(taskName)
+			*contexts = append(*contexts, appContexts...)
+			ValidateApplications(*contexts)
+			for _, ctx := range appContexts {
+				// Override default App readiness time out of 5 mins with 10 mins
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+			}
+		}
+
+		log.Infof("Migration Namespaces: %v", migrationNamespaces)
+
+	})
+
+	log.Info("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, excludeResourceTypes)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+		} else {
+			allMigrations = append(allMigrations, currMig)
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+		}
+		migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+		}
+		dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+	}
+
+	err := SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Failed to Set destination kubeconfig: %v", err)
+		return
+	}
+    
+	for _, currMigNamespace := range migrationNamespaces {
+		services, err := core.Instance().ListServices(currMigNamespace, meta_v1.ListOptions{})
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("Failed to list services on destination cluster"))
+		}
+		log.InfoD("Services count on destination in %v namespace is %v and expected should be 0", currMigNamespace, len(services.Items))
+		if len(services.Items) != 0 {
+			UpdateOutcome(event, fmt.Errorf("%v services migrated, it should be 0", len(services.Items)))
+		}
+	}
+
+	err = SetSourceKubeConfig()
+	if err != nil {
+		log.Errorf("Failed to Set source kubeconfig: %v", err)
+		return
+	}
+
 	updateMetrics(*event)
 }
 
@@ -6424,7 +6537,7 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := metromigrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -6518,7 +6631,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -7353,7 +7466,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {
@@ -7478,7 +7591,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 	for i, currMigNamespace := range migrationNamespaces {
 		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
-		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag, nil)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
 		} else {

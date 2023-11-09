@@ -9,12 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/osutils"
-	"github.com/sirupsen/logrus"
-	storageapi "k8s.io/api/storage/v1"
-
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
@@ -22,10 +16,15 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-
 	"github.com/portworx/sched-ops/task"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
 )
 
 var dash *aetosutil.Dashboard
@@ -192,6 +191,7 @@ func CreateMigration(
 	includeVolumes *bool,
 	includeResources *bool,
 	startApplications *bool,
+	excludeResourceTypes []string,
 ) (*storkapi.Migration, error) {
 
 	migration := &storkapi.Migration{
@@ -205,6 +205,7 @@ func CreateMigration(
 			IncludeResources:  includeResources,
 			StartApplications: startApplications,
 			Namespaces:        []string{migrationNamespace},
+			ExcludeResourceTypes: excludeResourceTypes,
 		},
 	}
 	// TODO figure out a way to check if it's an auth-enabled and add security annotations
