@@ -2088,6 +2088,45 @@ func ValidateRuleNotApplied(contexts []*scheduler.Context, name string) {
 	}
 }
 
+// ValidateRuleNotTriggered is validating PVC to see if rule is not triggered
+func ValidateRuleNotTriggered(contexts []*scheduler.Context, name string) {
+	log.InfoD("Validating rule is active")
+	fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+	waitForActiveAction := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Initializing => Normal") {
+				log.InfoD("Found rule which is initialized")
+				return e.Message, false, nil
+			}
+		}
+		return "", true, fmt.Errorf("Autopilot rule not applied yet")
+	}
+	_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+	checkCount := 0
+	checkRuleTriggered := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Triggered") {
+				log.InfoD("Message in log is: %s", e.Message)
+				return e.Message, false, fmt.Errorf("Triggered found in Autopilot rule.")
+			}
+		}
+		if checkCount <= 10 {
+			checkCount += 1
+			return "", true, fmt.Errorf("Autopilot rule did not trigger yet")
+		} else {
+			log.InfoD("Rule not triggered yet, which is expected")
+			return "", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkRuleTriggered, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+}
+
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 	context("Validating portworx pods restart count ...", func() {
@@ -9679,11 +9718,16 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 }
 
 // GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
-func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) (string, error) {
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string, enforceServerSideEncryption ...bool) (string, error) {
 
 	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
 	if len(encryptionPolicyValues) < 2 {
 		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
+	}
+	var enforceSse string
+	if len(enforceServerSideEncryption) == 0 {
+		// If enableServerSideEncryption is not passed , default it to true
+		enforceSse = "true"
 	}
 	policy := `{
 	   "Version": "2012-10-17",
@@ -9692,19 +9736,31 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 "Sid": "%s",
 			 "Effect": "Deny",
 			 "Principal": "*",
-			 "Action": ["s3:PutObject"],
+			 "Action": "s3:PutObject",
 			 "Resource": "arn:aws:s3:::%s/*",
 			 "Condition": {
 				"StringNotEquals": {
 				   "%s":"%s"
 				}
 			 }
-		  }
+		  },
+		  {
+			"Sid": "DenyUnencryptedObjectUploads",
+			"Effect": "Deny",
+			"Principal": "*",
+			"Action": "s3:PutObject",
+			"Resource": "arn:aws:s3:::%s/*",
+			"Condition": {
+				"Null": {
+					"%s":"%s"
+				}
+			}
+		  }	
 	   ]
 	}`
 
 	// Replace the placeholders in the policy with the values passed to the function.
-	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1], bucketName, encryptionPolicyValues[0], enforceSse)
 
 	return policy, nil
 }
