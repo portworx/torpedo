@@ -430,6 +430,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		backupLocationMap    map[string]string
 		providers            []string
 		labelSelectors       map[string]string
+		namespaceMapping     map[string]string
 	)
 
 	JustBeforeEach(func() {
@@ -438,11 +439,12 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		providers = getProviders()
+		namespaceMapping = make(map[string]string)
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%d-%d", 93011, i)
+			taskName := fmt.Sprintf("%d-%d", 93013, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = appReadinessTimeout
@@ -537,13 +539,16 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 
 		Step("Restoring kubevirt app using backup taken pre-upgrade - post-upgrade", func() {
 			log.InfoD("Restoring kubevirt app using backup taken pre-upgrade - post-upgrade")
+			for _, appCtx := range scheduledAppContexts {
+				namespaceMapping[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-new"
+			}
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			restorePostUpgrade := fmt.Sprintf("%s-%s", "auto-restore-post-upgrade", RandomString(6))
 			restoreNames = append(restoreNames, restorePostUpgrade)
 			log.InfoD("Restoring the [%s] backup", backupPreUpgrade)
-			err = CreateRestoreWithValidation(ctx, restorePostUpgrade, backupPreUpgrade, make(map[string]string), make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restorePostUpgrade, backupPreUpgrade))
+			err = CreateRestoreWithValidation(ctx, restorePostUpgrade, backupPreUpgrade, namespaceMapping, make(map[string]string), destinationClusterName, orgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore with namespace mapping %s from backup %s", restorePostUpgrade, backupPreUpgrade))
 		})
 
 		Step("Taking backup of kubevirt application post-upgrade", func() {
