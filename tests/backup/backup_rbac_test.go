@@ -1397,6 +1397,8 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 			scheduleBackupName, err := CreateScheduleBackupWithValidation(nonAdminCtx, userScheduleName, SourceClusterName, appAdminBackupLocationName, appAdminBackupLocationUID, scheduledAppContexts, make(map[string]string), orgID, preRuleNameMap[appAdminUser], preRuleUidMap[appAdminUser], postRuleNameMap[appAdminUser], postRuleUidMap[appAdminUser], periodicSchedulePolicyNameMap[appAdminUser], periodicSchedulePolicyUidMap[appAdminUser])
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", userScheduleName))
 			userBackupNamesMap[appAdminUser] = SafeAppend(&mutex, userBackupNamesMap[appAdminUser], scheduleBackupName).([]string)
+			err = suspendBackupSchedule(userScheduleName, periodicSchedulePolicyNameMap[appAdminUser], orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", userScheduleName, appAdminUser))
 		})
 
 		Step(fmt.Sprintf("Take restore of applications from the App-admin user %s", appAdminUser), func() {
