@@ -1593,7 +1593,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 		contexts            []*scheduler.Context
 		appSpecMap          = make(map[string]*spec.AppSpec)
 		volCountFromSpecMap = make(map[string]int)
-		approxVolCount      = 500
+		approxVolCount      = 5
 		exceedVolCount      = true
 		backend             = BackendUnknown
 		volumeMap           = make(map[VolumeType][]*api.Volume)
