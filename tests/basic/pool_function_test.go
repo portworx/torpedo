@@ -833,3 +833,41 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 		})
 	})
 })
+
+var _ = Describe("{PoolExpandToMaxLimit}", func() {
+
+	var testrailID = 34542903
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542903
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandToMaxLimit",
+			"Initiate pool expansion to the max limit of the drive type", nil, testrailID)
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("Select a pool and expand it to 15 TiB  with resize-disk operation. ", func() {
+		targetSizeGiB = 15000
+		log.InfoD("Current Size of pool %s is %d GiB. Expand to %v GiB with type resize-disk...",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		// }
+	})
+})
