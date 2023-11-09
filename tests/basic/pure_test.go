@@ -1017,7 +1017,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 
 // This test Kills the PX nodes where FADA volumes are attached, Deletes the pods and PVCs.
 /*
-https://portworx.testrail.net/index.php?/tests/view/72760884
+https://portworx.testrail.net/index.php?/cases/view/92893
 
 */
 var _ = Describe("{AppCleanUpWhenPxKill}", func() {
@@ -1043,6 +1043,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			if kvdbNode.ID != selectedNodes[0].Id {
 				selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
 				log.FailOnError(err, "Failed to get kvdb node details")
+				log.InfoD("Selected kvdb node: %v", selectedKvdbNode.Name)
 				selectedNodes = append(selectedNodes, selectedKvdbNode)
 				break
 			}
@@ -1069,7 +1070,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		stepLog = fmt.Sprintf("schedule application")
 		Step(stepLog, func() {
 			for j := 0; j < NumberOfAppsToBeDeployed; j++ {
-				taskName := fmt.Sprintf("test%v", j)
+				taskName := fmt.Sprintf("app-cleanup-when-px-kill-%v", j)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
 					StorageProvisioner: Provisioner,
@@ -1099,10 +1100,12 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			// Step 2: kill px nodes
 			wg.Add(1)
 			go func() {
+				defer GinkgoRecover()
 				defer wg.Done()
 				stepLog := fmt.Sprintf("Kill px nodes")
 				Step(stepLog, func() {
 					for _, selectedNode := range selectedNodes {
+						log.InfoD("Crashing node: %v", selectedNode.Name)
 						err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
