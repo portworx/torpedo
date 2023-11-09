@@ -1267,7 +1267,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 	})
 })
 
-// This test Kills the PX nodes where FADA volumes are attached, Deletes the pods and PVCs.
+// This test Kills the PX nodes where FADA volumes are attached, and destroys the apps gracefully
 /*
 https://portworx.testrail.net/index.php?/cases/view/92893
 
