@@ -118,65 +118,323 @@ type StorageOptions struct {
 	VolumeGroup bool
 }
 
-type StorageClassConfig struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
+type StatefulesetConfig struct {
+	APIVersion string `yaml:"apiVersion"`
+	Kind       string `yaml:"kind"`
 	Metadata   struct {
 		Annotations struct {
-		} `json:"annotations"`
-		Labels struct {
-			Name                           string `json:"name"`
-			Namespace                      string `json:"namespace"`
-			PdsMutatorAdmit                string `json:"pds.mutator/admit"`
-			PdsMutatorInjectCustomRegistry string `json:"pds.mutator/injectCustomRegistry"`
-			PdsDeploymentID                string `json:"pds/deployment-id"`
-			PdsDeploymentName              string `json:"pds/deployment-name"`
-			PdsEnvironment                 string `json:"pds/environment"`
-			PdsProjectID                   string `json:"pds/project-id"`
-		} `json:"labels"`
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
-	} `json:"metadata"`
+			AdDatadoghqComElasticsearchCheckNames  string `yaml:"ad.datadoghq.com/elasticsearch.check_names"`
+			AdDatadoghqComElasticsearchInitConfigs string `yaml:"ad.datadoghq.com/elasticsearch.init_configs"`
+			AdDatadoghqComElasticsearchInstances   string `yaml:"ad.datadoghq.com/elasticsearch.instances"`
+			AdDatadoghqComElasticsearchLogs        string `yaml:"ad.datadoghq.com/elasticsearch.logs"`
+			StorkLibopenstorageOrgSkipResource     string `yaml:"stork.libopenstorage.org/skip-resource"`
+		} `yaml:"annotations"`
+		CreationTimestamp time.Time `yaml:"creationTimestamp"`
+		Generation        int       `yaml:"generation"`
+		Labels            struct {
+			Name                           string `yaml:"name"`
+			Namespace                      string `yaml:"namespace"`
+			PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+			PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+			PdsDeploymentID                string `yaml:"pds/deployment-id"`
+			PdsDeploymentName              string `yaml:"pds/deployment-name"`
+			PdsEnvironment                 string `yaml:"pds/environment"`
+			PdsProjectID                   string `yaml:"pds/project-id"`
+		} `yaml:"labels"`
+		Name            string `yaml:"name"`
+		Namespace       string `yaml:"namespace"`
+		OwnerReferences []struct {
+			APIVersion         string `yaml:"apiVersion"`
+			BlockOwnerDeletion bool   `yaml:"blockOwnerDeletion"`
+			Controller         bool   `yaml:"controller"`
+			Kind               string `yaml:"kind"`
+			Name               string `yaml:"name"`
+			UID                string `yaml:"uid"`
+		} `yaml:"ownerReferences"`
+		ResourceVersion string `yaml:"resourceVersion"`
+		UID             string `yaml:"uid"`
+	} `yaml:"metadata"`
 	Spec struct {
-		Capabilities struct {
-			PdsRestore     string `json:"pds_restore"`
-			PdsSystemUsers string `json:"pds_system_users"`
-		} `json:"capabilities"`
-		Configuration struct {
-			PGDATABASE string `json:"PG_DATABASE"`
-		} `json:"configuration"`
-		DNSZone    string      `json:"dnsZone"`
-		Image      string      `json:"image"`
-		ImageBuild string      `json:"imageBuild"`
-		Images     interface{} `json:"images"`
-		Initialize string      `json:"initialize"`
-		Nodes      int32       `json:"nodes"`
-		Resources  struct {
-			Limits struct {
-				CPU    string `json:"cpu"`
-				Memory string `json:"memory"`
-			} `json:"limits"`
-			Requests struct {
-				CPU     string `json:"cpu"`
-				Memory  string `json:"memory"`
-				Storage string `json:"storage"`
-			} `json:"requests"`
-		} `json:"resources"`
-		ServiceType  string `json:"serviceType"`
-		StorageClass struct {
-			Provisioner string `json:"provisioner"`
-		} `json:"storageClass"`
-		StorageOptions struct {
-			Filesystem  string `json:"filesystem"`
-			ForceSpread string `json:"forceSpread"`
-			Replicas    string `json:"replicas"`
-			Secure      string `json:"secure"`
-		} `json:"storageOptions"`
-		TLSEnabled  bool   `json:"tlsEnabled"`
-		TLSIssuer   string `json:"tlsIssuer"`
-		Version     string `json:"version"`
-		VersionName string `json:"versionName"`
-	} `json:"spec"`
+		PersistentVolumeClaimRetentionPolicy struct {
+			WhenDeleted string `yaml:"whenDeleted"`
+			WhenScaled  string `yaml:"whenScaled"`
+		} `yaml:"persistentVolumeClaimRetentionPolicy"`
+		PodManagementPolicy  string `yaml:"podManagementPolicy"`
+		Replicas             int    `yaml:"replicas"`
+		RevisionHistoryLimit int    `yaml:"revisionHistoryLimit"`
+		Selector             struct {
+			MatchLabels struct {
+				Name                           string `yaml:"name"`
+				Namespace                      string `yaml:"namespace"`
+				PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+				PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+				PdsDeploymentID                string `yaml:"pds/deployment-id"`
+				PdsDeploymentName              string `yaml:"pds/deployment-name"`
+				PdsEnvironment                 string `yaml:"pds/environment"`
+				PdsProjectID                   string `yaml:"pds/project-id"`
+			} `yaml:"matchLabels"`
+		} `yaml:"selector"`
+		ServiceName string `yaml:"serviceName"`
+		Template    struct {
+			Metadata struct {
+				Annotations struct {
+					AdDatadoghqComElasticsearchCheckNames  string `yaml:"ad.datadoghq.com/elasticsearch.check_names"`
+					AdDatadoghqComElasticsearchInitConfigs string `yaml:"ad.datadoghq.com/elasticsearch.init_configs"`
+					AdDatadoghqComElasticsearchInstances   string `yaml:"ad.datadoghq.com/elasticsearch.instances"`
+					AdDatadoghqComElasticsearchLogs        string `yaml:"ad.datadoghq.com/elasticsearch.logs"`
+					PdsPortworxComDataService              string `yaml:"pds.portworx.com/data_service"`
+					PrometheusIoPort                       string `yaml:"prometheus.io/port"`
+					PrometheusIoScrape                     string `yaml:"prometheus.io/scrape"`
+					StorkLibopenstorageOrgSkipResource     string `yaml:"stork.libopenstorage.org/skip-resource"`
+				} `yaml:"annotations"`
+				CreationTimestamp interface{} `yaml:"creationTimestamp"`
+				Labels            struct {
+					DeploymentsPdsIoPodType        string `yaml:"deployments.pds.io/pod-type"`
+					Name                           string `yaml:"name"`
+					Namespace                      string `yaml:"namespace"`
+					PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+					PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+					PdsDeploymentID                string `yaml:"pds/deployment-id"`
+					PdsDeploymentName              string `yaml:"pds/deployment-name"`
+					PdsEnvironment                 string `yaml:"pds/environment"`
+					PdsProjectID                   string `yaml:"pds/project-id"`
+				} `yaml:"labels"`
+			} `yaml:"metadata"`
+			Spec struct {
+				Affinity struct {
+					NodeAffinity struct {
+						RequiredDuringSchedulingIgnoredDuringExecution struct {
+							NodeSelectorTerms []struct {
+								MatchExpressions []struct {
+									Key      string   `yaml:"key"`
+									Operator string   `yaml:"operator"`
+									Values   []string `yaml:"values"`
+								} `yaml:"matchExpressions"`
+							} `yaml:"nodeSelectorTerms"`
+						} `yaml:"requiredDuringSchedulingIgnoredDuringExecution"`
+					} `yaml:"nodeAffinity"`
+				} `yaml:"affinity"`
+				Containers []struct {
+					Env []struct {
+						Name  string `yaml:"name"`
+						Value string `yaml:"value"`
+					} `yaml:"env"`
+					EnvFrom []struct {
+						ConfigMapRef struct {
+							Name string `yaml:"name"`
+						} `yaml:"configMapRef"`
+					} `yaml:"envFrom,omitempty"`
+					Image           string `yaml:"image"`
+					ImagePullPolicy string `yaml:"imagePullPolicy"`
+					Name            string `yaml:"name"`
+					Resources       struct {
+						Limits struct {
+							CPU              string `yaml:"cpu"`
+							EphemeralStorage string `yaml:"ephemeral-storage"`
+							Memory           string `yaml:"memory"`
+						} `yaml:"limits"`
+						Requests struct {
+							CPU              string `yaml:"cpu"`
+							EphemeralStorage string `yaml:"ephemeral-storage"`
+							Memory           string `yaml:"memory"`
+						} `yaml:"requests"`
+					} `yaml:"resources"`
+					SecurityContext struct {
+						AllowPrivilegeEscalation bool `yaml:"allowPrivilegeEscalation"`
+						Capabilities             struct {
+							Drop []string `yaml:"drop"`
+						} `yaml:"capabilities"`
+					} `yaml:"securityContext"`
+					StartupProbe struct {
+						Exec struct {
+							Command []string `yaml:"command"`
+						} `yaml:"exec"`
+						FailureThreshold int `yaml:"failureThreshold"`
+						PeriodSeconds    int `yaml:"periodSeconds"`
+						SuccessThreshold int `yaml:"successThreshold"`
+						TimeoutSeconds   int `yaml:"timeoutSeconds"`
+					} `yaml:"startupProbe,omitempty"`
+					TerminationMessagePath   string `yaml:"terminationMessagePath"`
+					TerminationMessagePolicy string `yaml:"terminationMessagePolicy"`
+					VolumeMounts             []struct {
+						MountPath string `yaml:"mountPath"`
+						Name      string `yaml:"name"`
+					} `yaml:"volumeMounts"`
+					LivenessProbe struct {
+						FailureThreshold int `yaml:"failureThreshold"`
+						HTTPGet          struct {
+							Path   string `yaml:"path"`
+							Port   int    `yaml:"port"`
+							Scheme string `yaml:"scheme"`
+						} `yaml:"httpGet"`
+						PeriodSeconds    int `yaml:"periodSeconds"`
+						SuccessThreshold int `yaml:"successThreshold"`
+						TimeoutSeconds   int `yaml:"timeoutSeconds"`
+					} `yaml:"livenessProbe,omitempty"`
+					Ports []struct {
+						ContainerPort int    `yaml:"containerPort"`
+						Protocol      string `yaml:"protocol"`
+					} `yaml:"ports,omitempty"`
+					ReadinessProbe struct {
+						FailureThreshold int `yaml:"failureThreshold"`
+						HTTPGet          struct {
+							Path   string `yaml:"path"`
+							Port   int    `yaml:"port"`
+							Scheme string `yaml:"scheme"`
+						} `yaml:"httpGet"`
+						PeriodSeconds    int `yaml:"periodSeconds"`
+						SuccessThreshold int `yaml:"successThreshold"`
+						TimeoutSeconds   int `yaml:"timeoutSeconds"`
+					} `yaml:"readinessProbe,omitempty"`
+				} `yaml:"containers"`
+				DNSPolicy      string `yaml:"dnsPolicy"`
+				InitContainers []struct {
+					Env []struct {
+						Name  string `yaml:"name"`
+						Value string `yaml:"value"`
+					} `yaml:"env"`
+					EnvFrom []struct {
+						ConfigMapRef struct {
+							Name string `yaml:"name"`
+						} `yaml:"configMapRef"`
+					} `yaml:"envFrom"`
+					Image           string `yaml:"image"`
+					ImagePullPolicy string `yaml:"imagePullPolicy"`
+					Name            string `yaml:"name"`
+					Resources       struct {
+						Limits struct {
+							CPU              string `yaml:"cpu"`
+							EphemeralStorage string `yaml:"ephemeral-storage"`
+							Memory           string `yaml:"memory"`
+						} `yaml:"limits"`
+						Requests struct {
+							CPU              string `yaml:"cpu"`
+							EphemeralStorage string `yaml:"ephemeral-storage"`
+							Memory           string `yaml:"memory"`
+						} `yaml:"requests"`
+					} `yaml:"resources"`
+					SecurityContext struct {
+						AllowPrivilegeEscalation bool `yaml:"allowPrivilegeEscalation"`
+						Capabilities             struct {
+							Drop []string `yaml:"drop"`
+						} `yaml:"capabilities"`
+					} `yaml:"securityContext"`
+					TerminationMessagePath   string `yaml:"terminationMessagePath"`
+					TerminationMessagePolicy string `yaml:"terminationMessagePolicy"`
+					VolumeMounts             []struct {
+						MountPath string `yaml:"mountPath"`
+						Name      string `yaml:"name"`
+					} `yaml:"volumeMounts"`
+				} `yaml:"initContainers"`
+				RestartPolicy   string `yaml:"restartPolicy"`
+				SchedulerName   string `yaml:"schedulerName"`
+				SecurityContext struct {
+					FsGroup             int    `yaml:"fsGroup"`
+					FsGroupChangePolicy string `yaml:"fsGroupChangePolicy"`
+					RunAsGroup          int    `yaml:"runAsGroup"`
+					RunAsNonRoot        bool   `yaml:"runAsNonRoot"`
+					RunAsUser           int    `yaml:"runAsUser"`
+					SeccompProfile      struct {
+						Type string `yaml:"type"`
+					} `yaml:"seccompProfile"`
+				} `yaml:"securityContext"`
+				ServiceAccount                string `yaml:"serviceAccount"`
+				ServiceAccountName            string `yaml:"serviceAccountName"`
+				TerminationGracePeriodSeconds int    `yaml:"terminationGracePeriodSeconds"`
+				Volumes                       []struct {
+					EmptyDir struct {
+					} `yaml:"emptyDir,omitempty"`
+					Name                  string `yaml:"name"`
+					PersistentVolumeClaim struct {
+						ClaimName string `yaml:"claimName"`
+					} `yaml:"persistentVolumeClaim,omitempty"`
+					Secret struct {
+						DefaultMode int    `yaml:"defaultMode"`
+						SecretName  string `yaml:"secretName"`
+					} `yaml:"secret,omitempty"`
+					DownwardAPI struct {
+						DefaultMode int `yaml:"defaultMode"`
+						Items       []struct {
+							FieldRef struct {
+								APIVersion string `yaml:"apiVersion"`
+								FieldPath  string `yaml:"fieldPath"`
+							} `yaml:"fieldRef"`
+							Path string `yaml:"path"`
+						} `yaml:"items"`
+					} `yaml:"downwardAPI,omitempty"`
+				} `yaml:"volumes"`
+			} `yaml:"spec"`
+		} `yaml:"template"`
+		UpdateStrategy struct {
+			Type string `yaml:"type"`
+		} `yaml:"updateStrategy"`
+	} `yaml:"spec"`
+	Status struct {
+		AvailableReplicas  int    `yaml:"availableReplicas"`
+		CollisionCount     int    `yaml:"collisionCount"`
+		CurrentReplicas    int    `yaml:"currentReplicas"`
+		CurrentRevision    string `yaml:"currentRevision"`
+		ObservedGeneration int    `yaml:"observedGeneration"`
+		ReadyReplicas      int    `yaml:"readyReplicas"`
+		Replicas           int    `yaml:"replicas"`
+		UpdateRevision     string `yaml:"updateRevision"`
+		UpdatedReplicas    int    `yaml:"updatedReplicas"`
+	} `yaml:"status"`
+}
+
+type StorageClassConfig struct {
+	AllowVolumeExpansion bool   `yaml:"allowVolumeExpansion"`
+	APIVersion           string `yaml:"apiVersion"`
+	Kind                 string `yaml:"kind"`
+	Metadata             struct {
+		Annotations struct {
+			AdDatadoghqComElasticsearchCheckNames  string `yaml:"ad.datadoghq.com/elasticsearch.check_names"`
+			AdDatadoghqComElasticsearchInitConfigs string `yaml:"ad.datadoghq.com/elasticsearch.init_configs"`
+			AdDatadoghqComElasticsearchInstances   string `yaml:"ad.datadoghq.com/elasticsearch.instances"`
+			AdDatadoghqComElasticsearchLogs        string `yaml:"ad.datadoghq.com/elasticsearch.logs"`
+			StorkLibopenstorageOrgSkipResource     string `yaml:"stork.libopenstorage.org/skip-resource"`
+		} `yaml:"annotations"`
+		CreationTimestamp time.Time `yaml:"creationTimestamp"`
+		Labels            struct {
+			Name                           string `yaml:"name"`
+			Namespace                      string `yaml:"namespace"`
+			PdsMutatorAdmit                string `yaml:"pds.mutator/admit"`
+			PdsMutatorInjectCustomRegistry string `yaml:"pds.mutator/injectCustomRegistry"`
+			PdsDeploymentID                string `yaml:"pds/deployment-id"`
+			PdsDeploymentName              string `yaml:"pds/deployment-name"`
+			PdsEnvironment                 string `yaml:"pds/environment"`
+			PdsProjectID                   string `yaml:"pds/project-id"`
+		} `yaml:"labels"`
+		Name            string `yaml:"name"`
+		ResourceVersion string `yaml:"resourceVersion"`
+		UID             string `yaml:"uid"`
+	} `yaml:"metadata"`
+	Parameters struct {
+		DisableIoProfileProtection string `yaml:"disable_io_profile_protection"`
+		Fg                         string `yaml:"fg"`
+		Fs                         string `yaml:"fs"`
+		Group                      string `yaml:"group"`
+		IoProfile                  string `yaml:"io_profile"`
+		PriorityIo                 string `yaml:"priority_io"`
+		Repl                       string `yaml:"repl"`
+	} `yaml:"parameters"`
+	Replicas  int    `yaml:"replicas"`
+	Version   string `yaml:"version"`
+	Resources struct { //custom struct
+		Limits struct {
+			CPU              string `yaml:"cpu"`
+			EphemeralStorage string `yaml:"ephemeral-storage"`
+			Memory           string `yaml:"memory"`
+		} `yaml:"limits"`
+		Requests struct {
+			CPU              string `yaml:"cpu"`
+			EphemeralStorage string `yaml:"ephemeral-storage"`
+			Memory           string `yaml:"memory"`
+		} `yaml:"requests"`
+	} `yaml:"resources"`
+	Provisioner       string `yaml:"provisioner"`
+	ReclaimPolicy     string `yaml:"reclaimPolicy"`
+	VolumeBindingMode string `yaml:"volumeBindingMode"`
 }
 
 // PDS const
@@ -2058,6 +2316,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	var config StorageClassConfig
 	var resourceTemp ResourceSettingTemplate
 	var storageOp StorageOptions
+	var stsConfig StatefulesetConfig
 
 	//TODO: Identity a way to validate PVC without statefulset
 
@@ -2068,23 +2327,49 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 		log.FailOnError(err, "An error occured while getting storage classes")
 	}
 
-	for _, sc := range storageClasses.Items {
-		if strings.Contains(sc.Name, deployment.GetClusterResourceName()) {
-			log.Debug("Getting config from storage class %v", sc.Name)
-			scAnnotation := sc.Annotations
-			for k, v := range scAnnotation {
-				if k == "kubectl.kubernetes.io/last-applied-configuration" {
-					log.Infof("Storage Options Values %v", v)
-					data := []byte(v)
-					err := json.Unmarshal(data, &config)
-					if err != nil {
-						log.Errorf("Error Occured while getting volume params %v", err)
-					}
-				}
-			}
-			break
-		}
+	ss, err := k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
+	if err != nil {
+		log.FailOnError(err, "An error occured while getting statefulset")
 	}
+	stsJsonData, err := json.Marshal(ss)
+	if err != nil {
+		log.FailOnError(err, "An error occured while marshalling statefulset")
+	}
+	err = json.Unmarshal(stsJsonData, &stsConfig)
+	if err != nil {
+		log.FailOnError(err, "An error occured while unmarshalling statefulset")
+	}
+
+	log.Debugf("cpu requested init containers: %v", stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Requests.CPU)
+	log.Debugf("mem requested init containers: %v", stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Requests.Memory)
+	log.Debugf("cpu requested : %v", stsConfig.Spec.Template.Spec.Containers[0].Resources.Requests.CPU)
+	log.Debugf("cpu requested: %v", stsConfig.Spec.Template.Spec.Containers[0].Resources.Requests.Memory)
+	log.Debugf("version tag: %v", stsConfig.Spec.Template.Spec.Containers[0].Image)
+
+	//Get the ds version from the sts
+	docImage := stsConfig.Spec.Template.Spec.Containers[0].Image
+	dsVersionImageTag := strings.Split(docImage, ":")
+	log.Debugf("version tag %v", dsVersionImageTag)
+
+	scJsonData, err := json.Marshal(storageClasses)
+	if err != nil {
+		log.FailOnError(err, "An error occured while marshalling statefulset")
+	}
+	err = json.Unmarshal(scJsonData, &config)
+	if err != nil {
+		log.FailOnError(err, "An error occured while unmarshalling statefulset")
+	}
+	log.Debugf("file system used: %v", config.Parameters.Fs)
+
+	//Assigning values to the custom struct of storageclass config
+	config.Resources.Requests.CPU = stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Requests.CPU
+	config.Resources.Requests.Memory = stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Requests.Memory
+	config.Resources.Requests.EphemeralStorage = stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Requests.EphemeralStorage
+	config.Resources.Limits.CPU = stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Limits.CPU
+	config.Resources.Limits.Memory = stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Limits.Memory
+	config.Resources.Limits.EphemeralStorage = stsConfig.Spec.Template.Spec.InitContainers[0].Resources.Limits.EphemeralStorage
+	config.Replicas = stsConfig.Spec.Replicas
+	config.Version = dsVersionImageTag[1]
 
 	rt, err := components.ResourceSettingsTemplate.GetTemplate(dataServiceDefaultResourceTemplateID)
 	if err != nil {
