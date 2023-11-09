@@ -1693,25 +1693,25 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 		// deleteVolume deletes the given volume
 		deleteVolume := func(volType VolumeType, vol *api.Volume) error {
 			namespace := vol.Spec.VolumeLabels["namespace"]
-			switch volType {
-			case VolumeFADA:
-				pvcName := vol.Spec.VolumeLabels["pvc"]
-				log.Infof("Deleting PVC [%s/%s]", namespace, pvcName)
-				err = core.Instance().DeletePersistentVolumeClaim(pvcName, namespace)
-				if err != nil {
-					return fmt.Errorf("failed to delete pvc [%s/%s] associated with volume [%s/%s]", namespace, pvcName, vol.Id, vol.Locator.Name)
-				}
-			default:
-				log.Infof("Detaching volume [%s/%s]", vol.Id, vol.Locator.Name)
-				err := Inst().V.DetachVolume(vol.Id)
-				if err != nil {
-					return fmt.Errorf("failed to detach [%s] volume [%s/%s] of namespace [%s]. Err [%v]", volType, vol.Id, vol.Locator.Name, namespace, err)
-				}
-				log.Infof("Deleting volume [%s/%s]", vol.Id, vol.Locator.Name)
-				err = Inst().V.DeleteVolume(vol.Id)
-				if err != nil {
-					return fmt.Errorf("failed to delete [%s] volume [%s/%s] of namespace [%s]. Err [%v]", volType, vol.Id, vol.Locator.Name, namespace, err)
-				}
+			//switch volType {
+			//case VolumeFADA:
+			//default:
+			//	log.Infof("Detaching volume [%s/%s]", vol.Id, vol.Locator.Name)
+			//	err := Inst().V.DetachVolume(vol.Id)
+			//	if err != nil {
+			//		return fmt.Errorf("failed to detach [%s] volume [%s/%s] of namespace [%s]. Err [%v]", volType, vol.Id, vol.Locator.Name, namespace, err)
+			//	}
+			//	log.Infof("Deleting volume [%s/%s]", vol.Id, vol.Locator.Name)
+			//	err = Inst().V.DeleteVolume(vol.Id)
+			//	if err != nil {
+			//		return fmt.Errorf("failed to delete [%s] volume [%s/%s] of namespace [%s]. Err [%v]", volType, vol.Id, vol.Locator.Name, namespace, err)
+			//	}
+			//}
+			pvcName := vol.Spec.VolumeLabels["pvc"]
+			log.Infof("Deleting PVC [%s/%s]", namespace, pvcName)
+			err = core.Instance().DeletePersistentVolumeClaim(pvcName, namespace)
+			if err != nil {
+				return fmt.Errorf("failed to delete pvc [%s/%s] associated with volume [%s/%s]", namespace, pvcName, vol.Id, vol.Locator.Name)
 			}
 			waitForVolumeDeletion := func() (interface{}, bool, error) {
 				_, err := Inst().V.InspectVolume(vol.Id)
