@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/blang/semver"
 	"github.com/libopenstorage/openstorage/api"
 	openshiftv1 "github.com/openshift/api/config/v1"
@@ -30,6 +28,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/netutil"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 )
@@ -51,7 +50,7 @@ const (
 	ocPath                      = " -c oc"
 	OpenshiftMachineNamespace   = "openshift-machine-api"
 
-	// Default name for Torpedo SCC that will be created for the OpenShift scheduler
+	// Default name for the Torpedo SecurityContextContaints that will be created for the OpenShift scheduler
 	defaultTorpedoSecurityContextContaintsName = "torpedo-privileged"
 )
 
@@ -251,13 +250,17 @@ func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error 
 	return err
 }
 
+// updateSecurityContextConstraints updates Torpedo SecurityContextConstrains users to allow app provisioning in the given namespace
 func (k *openshift) updateSecurityContextConstraints(namespace string) error {
-	// See if Torpedo privileged SCC exists
-	context, err := k8sOpenshift.GetSecurityContextConstraints(defaultTorpedoSecurityContextContaintsName)
+	log.Debugf("Update Torpedo SecurityContextConstraints [%s]", defaultTorpedoSecurityContextContaintsName)
+
+	// Check if Torpedo SecurityContextConstrains exists, if not create it
+	torpedoScc, err := k8sOpenshift.GetSecurityContextConstraints(defaultTorpedoSecurityContextContaintsName)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			// Create Torpedo SCC
-			context, err = k.createTorpedoSecurityContextConstraints()
+			// Create Torpedo SecurityContextConstrains
+			log.Warnf("SecurityContextConstraints [%s] doesn't exist, will create it..", defaultTorpedoSecurityContextContaintsName)
+			torpedoScc, err = k.createTorpedoSecurityContextConstraints()
 			if err != nil {
 				return err
 			}
@@ -266,11 +269,11 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 		}
 	}
 
-	// Add user and namespace to context
-	context.Users = append(context.Users, "system:serviceaccount:"+namespace+":default")
+	// Add user and namespace to SecurityContextConstrains
+	torpedoScc.Users = append(torpedoScc.Users, "system:serviceaccount:"+namespace+":default")
 
-	// Update context
-	_, err = k8sOpenshift.UpdateSecurityContextConstraints(context)
+	// Update SecurityContextConstrains
+	_, err = k8sOpenshift.UpdateSecurityContextConstraints(torpedoScc)
 	if err != nil {
 		return err
 	}
@@ -278,23 +281,27 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	return nil
 }
 
+// createTorpedoSecurityContextConstraints creates a Torpedo SecurityContextConstrains based on the existing default privileged SecurityContextConstrains
 func (k *openshift) createTorpedoSecurityContextConstraints() (*ocpsecurityv1api.SecurityContextConstraints, error) {
-	// Get privileged context
+	log.Debugf("Create Torpedo SecurityContextConstraints [%s]", defaultTorpedoSecurityContextContaintsName)
+
+	// Get default privileged SecurityContextConstrains
 	context, err := k8sOpenshift.GetSecurityContextConstraints("privileged")
 	if err != nil {
 		return nil, err
 	}
 
+	// Change name of the SecurityContextConstrains and remove ResourceVersion
 	context.Name = defaultTorpedoSecurityContextContaintsName
 	context.ResourceVersion = ""
 
-	// Create Torpedo context
-	torpedoSCC, err := k8sOpenshift.CreateSecurityContextConstraints(context)
+	// Create Torpedo SecurityContextConstrains
+	torpedoScc, err := k8sOpenshift.CreateSecurityContextConstraints(context)
 	if err != nil {
 		return nil, err
 	}
 
-	return torpedoSCC, err
+	return torpedoScc, err
 }
 
 func (k *openshift) UpgradeScheduler(version string) error {
