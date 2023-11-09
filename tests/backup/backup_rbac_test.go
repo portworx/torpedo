@@ -153,6 +153,23 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			}
 		})
 
+		Step(fmt.Sprintf("Create source and destination cluster from the Infra admin user %s", infraAdminUser), func() {
+			log.InfoD(fmt.Sprintf("Creating source and destination cluster from the infra admin user %s", infraAdminUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+			err = CreateApplicationClusters(orgID, "", "", nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with App-User ctx", SourceClusterName, destinationClusterName))
+			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, nonAdminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			dstClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, destinationClusterName, nonAdminCtx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			srcClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, orgID, SourceClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+		})
+
 		Step("Validate taking manual backup of applications with namespace label", func() {
 			log.InfoD("Validate taking manual backup of applications with namespace label")
 			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
