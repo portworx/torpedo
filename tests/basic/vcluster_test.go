@@ -1102,6 +1102,7 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 		totalIterations = testParams.NumIterations
 		batchCount = testParams.ParallelFioJobs
 	}
+	log.Infof("======= Total batch Count is : %v =========", batchCount)
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
