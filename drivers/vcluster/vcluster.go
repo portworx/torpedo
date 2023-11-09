@@ -3,6 +3,7 @@ package vcluster
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -58,6 +59,12 @@ const (
 	ClusterWideSecretKey      = "cluster-wide-secret-key"
 	PxNamespace               = "kube-system"
 )
+
+type VClusterTestParams struct {
+	NumVclusters    int `json:"num_vclusters"`
+	NumIterations   int `json:"num_iterations"`
+	ParallelFioJobs int `json:"parallel_fio_jobs"`
+}
 
 type VCluster struct {
 	Namespace  string
@@ -901,6 +908,20 @@ func (v *VCluster) WaitForVClusterAccess() error {
 			return nil, false, nil
 		}
 	}
-	_, err := task.DoRetryWithTimeout(f, vClusterCreationTimeout, VClusterRetryInterval)
+	_, err := task.DoRetryWithTimeout(f, VclusterAppTimeout, VClusterRetryInterval)
 	return err
+}
+
+// ReadEnvVarAndParse returns the parsed JSON of an env variable
+func ReadEnvVarAndParse(varName string) (*VClusterTestParams, error) {
+	varValue := os.Getenv(varName)
+	if varValue == "" {
+		return nil, fmt.Errorf("environment variable %s is not set", varName)
+	}
+	var params VClusterTestParams
+	err := json.Unmarshal([]byte(varValue), &params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON from environment variable %s: %v", varName, err)
+	}
+	return &params, nil
 }

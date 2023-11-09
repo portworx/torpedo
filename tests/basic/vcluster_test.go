@@ -77,8 +77,16 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
-	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 5      // Number of FIO Pods to run in parallel in a single iteration
+	var totalIterations int
+	var batchCount int
+	testParams, err := vcluster.ReadEnvVarAndParse("VCLUSTER_TEST_PARAMS")
+	if err != nil {
+		totalIterations = 2
+		batchCount = 3
+	} else {
+		totalIterations = testParams.NumIterations
+		batchCount = testParams.ParallelFioJobs
+	}
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",
@@ -220,7 +228,7 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 		NumJobs:   1,
 		Size:      "500m",
 		TimeBased: true,
-		Runtime:   "100s",
+		Runtime:   "600s",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -272,12 +280,22 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 })
 
 var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
-	const totalVclusters = 3
+	var totalVclusters int
+	var totalIterations int
+	var batchCount int
+	testParams, err := vcluster.ReadEnvVarAndParse("VCLUSTER_TEST_PARAMS")
+	if err != nil {
+		totalVclusters = 1
+		totalIterations = 2
+		batchCount = 2
+	} else {
+		totalVclusters = testParams.NumVclusters
+		totalIterations = testParams.NumIterations
+		batchCount = testParams.ParallelFioJobs
+	}
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
-	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 2      // Number of FIO Pods to run in parallel in a single iteration
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",
@@ -1071,13 +1089,23 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 })
 
 var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
-	const totalVclusters = 3
+	var totalVclusters int
+	var totalIterations int
+	var batchCount int
+	testParams, err := vcluster.ReadEnvVarAndParse("VCLUSTER_TEST_PARAMS")
+	if err != nil {
+		totalVclusters = 1
+		totalIterations = 2
+		batchCount = 2
+	} else {
+		totalVclusters = testParams.NumVclusters
+		totalIterations = testParams.NumIterations
+		batchCount = testParams.ParallelFioJobs
+	}
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
 	var apRules []apapi.AutopilotRule
-	const totalIterations = 1 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 2      // Number of FIO Pods to run in parallel in a single iteration
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",

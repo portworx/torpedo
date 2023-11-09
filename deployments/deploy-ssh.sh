@@ -721,6 +721,9 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: VCLUSTER_TEST_PARAMS
+      value: "${VCLUSTER_TEST_PARAMS}"
+
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
