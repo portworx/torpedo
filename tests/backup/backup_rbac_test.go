@@ -177,7 +177,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			srcClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, orgID, SourceClusterName)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
-			manualBackupWithLabel = fmt.Sprintf("%s-%v", "infraAdminUser", RandomString(4))
+			manualBackupWithLabel = fmt.Sprintf("%s-%v", "infraadmin", RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateBackupWithNamespaceLabelWithValidation(nonAdminCtx, manualBackupWithLabel, SourceClusterName, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], appContextsExpectedInBackup,
 				nil, orgID, srcClusterUid, "", "", "", "", nsLabelString)
@@ -199,7 +199,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			log.InfoD("Validate creating scheduled backup with namespace label")
 			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
-			backupScheduleWithLabel = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, "infraAdminUser", RandomString(4))
+			backupScheduleWithLabel = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, "infraadmin", RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
 				nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[customUser])
