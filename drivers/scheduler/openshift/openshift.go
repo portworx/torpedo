@@ -2,7 +2,6 @@ package openshift
 
 import (
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"net/http"
 	"os/exec"
@@ -11,9 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/blang/semver"
 	"github.com/libopenstorage/openstorage/api"
 	openshiftv1 "github.com/openshift/api/config/v1"
+	ocpsecurityv1api "github.com/openshift/api/security/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
@@ -48,6 +50,9 @@ const (
 	defaultUpgradeRetryInterval = 5 * time.Minute
 	ocPath                      = " -c oc"
 	OpenshiftMachineNamespace   = "openshift-machine-api"
+
+	// Default name for Torpedo SCC that will be created for the OpenShift scheduler
+	defaultTorpedoSecurityContextContaintsName = "torpedo-privileged"
 )
 
 var (
@@ -247,10 +252,18 @@ func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error 
 }
 
 func (k *openshift) updateSecurityContextConstraints(namespace string) error {
-	// Get privileged context
-	context, err := k8sOpenshift.GetSecurityContextConstraints("privileged")
+	// See if Torpedo privileged SCC exists
+	context, err := k8sOpenshift.GetSecurityContextConstraints(defaultTorpedoSecurityContextContaintsName)
 	if err != nil {
-		return err
+		if k8serrors.IsNotFound(err) {
+			// Create Torpedo SCC
+			context, err = k.createTorpedoSecurityContextConstraints()
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
 	}
 
 	// Add user and namespace to context
@@ -263,6 +276,25 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	}
 
 	return nil
+}
+
+func (k *openshift) createTorpedoSecurityContextConstraints() (*ocpsecurityv1api.SecurityContextConstraints, error) {
+	// Get privileged context
+	context, err := k8sOpenshift.GetSecurityContextConstraints("privileged")
+	if err != nil {
+		return nil, err
+	}
+
+	context.Name = defaultTorpedoSecurityContextContaintsName
+	context.ResourceVersion = ""
+
+	// Create Torpedo context
+	torpedoSCC, err := k8sOpenshift.CreateSecurityContextConstraints(context)
+	if err != nil {
+		return nil, err
+	}
+
+	return torpedoSCC, err
 }
 
 func (k *openshift) UpgradeScheduler(version string) error {
