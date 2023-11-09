@@ -18,36 +18,47 @@ import (
 // VerifyRBACforInfraAdmin Validates the RBAC operation for infra-admin user.
 var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 	var (
-		scheduledAppContexts          []*scheduler.Context
-		backupLocationMap             = make(map[string]string)
-		backupLocationNameMap         = make(map[string]string)
-		backupLocationUIDMap          = make(map[string]string)
-		cloudCredentialNameMap        = make(map[string]string)
-		cloudCredentialUIDMap         = make(map[string]string)
-		scheduleNameMap               = make(map[string]string)
-		periodicSchedulePolicyNameMap = make(map[string]string)
-		periodicSchedulePolicyUidMap  = make(map[string]string)
-		preRuleNameMap                = make(map[string]string)
-		postRuleNameMap               = make(map[string]string)
-		preRuleUidMap                 = make(map[string]string)
-		postRuleUidMap                = make(map[string]string)
-		numOfUsers                    = 3
-		infraAdminUser                string
-		customUser                    string
-		customInfraRoleName           backup.PxBackupRole
-		customRoleName                backup.PxBackupRole
-		userClusterMap                = make(map[string]map[string]string)
-		backupNameMap                 = make(map[string]string)
-		restoreNameMap                = make(map[string]string)
-		userBackupNamesMap            = make(map[string][]string)
-		cloudCredentialFromAdmin      []string
-		backupLocationsFromAdmin      []string
-		userNames                     = make([]string, 0)
-		providers                     = getProviders()
-		bkpNamespaces                 []string
-		infraAdminRole                backup.PxBackupRole = backup.InfrastructureOwner
-		labelSelectors                map[string]string
-		mutex                         sync.Mutex
+		scheduledAppContexts            []*scheduler.Context
+		backupLocationMap               = make(map[string]string)
+		backupLocationNameMap           = make(map[string]string)
+		backupLocationUIDMap            = make(map[string]string)
+		cloudCredentialNameMap          = make(map[string]string)
+		cloudCredentialUIDMap           = make(map[string]string)
+		scheduleNameMap                 = make(map[string]string)
+		periodicSchedulePolicyNameMap   = make(map[string]string)
+		periodicSchedulePolicyUidMap    = make(map[string]string)
+		preRuleNameMap                  = make(map[string]string)
+		postRuleNameMap                 = make(map[string]string)
+		preRuleUidMap                   = make(map[string]string)
+		postRuleUidMap                  = make(map[string]string)
+		numOfUsers                      = 3
+		infraAdminUser                  string
+		customUser                      string
+		customInfraRoleName             backup.PxBackupRole
+		customRoleName                  backup.PxBackupRole
+		userClusterMap                  = make(map[string]map[string]string)
+		backupNameMap                   = make(map[string]string)
+		restoreNameMap                  = make(map[string]string)
+		userBackupNamesMap              = make(map[string][]string)
+		cloudCredentialFromAdmin        []string
+		backupLocationsFromAdmin        []string
+		userNames                       = make([]string, 0)
+		providers                       = getProviders()
+		bkpNamespaces                   []string
+		infraAdminRole                  backup.PxBackupRole = backup.InfrastructureOwner
+		labelSelectors                  map[string]string
+		mutex                           sync.Mutex
+		nsLabelsMap                     map[string]string
+		nsLabelString                   string
+		manualBackupWithLabel           string
+		restoreForManualBackupWithLabel string
+		srcClusterUid                   string
+		backupScheduleWithLabel         string
+		scheduledBackupNameWithLabel    string
+		multipleRestoreMapping          map[string]string
+		customRestoreName               string
+		labelledRestoreNames            []string
+		labelledBackupNames             []string
 	)
 
 	JustBeforeEach(func() {
@@ -71,6 +82,19 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Adding labels to namespaces", func() {
+			log.InfoD("Adding labels to namespaces")
+			nsLabelsMap = GenerateRandomLabels(2)
+			err := AddLabelsToMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
+		})
+
+		Step("Generating namespace label string from label map for namespaces", func() {
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelString = MapToKeyValueString(nsLabelsMap)
+			log.Infof("label string for namespaces %s", nsLabelString)
 		})
 
 		Step(fmt.Sprintf("Create a user with %s role", infraAdminRole), func() {
@@ -399,6 +423,87 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[customUser], backupNameMap[customUser], make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreNameMap[customUser], backupNameMap[customUser]))
+		})
+		Step("Validate taking manual backup of applications with namespace label", func() {
+			log.InfoD("Validate taking manual backup of applications with namespace label")
+			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			srcClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, orgID, SourceClusterName)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
+			manualBackupWithLabel = fmt.Sprintf("%s-%v", "backup", RandomString(4))
+			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			err = CreateBackupWithNamespaceLabelWithValidation(nonAdminCtx, manualBackupWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
+				nil, orgID, srcClusterUid, "", "", "", "", nsLabelString)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with labels [%s]", manualBackupWithLabel, nsLabelString))
+			labelledBackupNames = append(labelledBackupNames, manualBackupWithLabel)
+		})
+
+		Step("Validate restoring manual backup of applications with namespace label", func() {
+			log.InfoD("Validate restoring manual backup of applications with namespace label")
+			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			restoreForManualBackupWithLabel = fmt.Sprintf("%s-%s", restoreNamePrefix, manualBackupWithLabel)
+			err = CreateRestore(restoreForManualBackupWithLabel, manualBackupWithLabel, nil, SourceClusterName, orgID, nonAdminCtx, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration of backup %s", manualBackupWithLabel))
+			labelledRestoreNames = append(labelledRestoreNames, restoreForManualBackupWithLabel)
+		})
+
+		Step("Validate creating scheduled backup with namespace label", func() {
+			log.InfoD("Validate creating scheduled backup with namespace label")
+			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
+			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
+				nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelString))
+			err = suspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyNameMap[customUser], orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, customUser))
+			labelledBackupNames = append(labelledBackupNames, scheduledBackupNameWithLabel)
+		})
+
+		Step("Validate restoring the scheduled backup with namespace label", func() {
+			log.InfoD("Validate restoring the scheduled backup with namespace label")
+			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			multipleBackupNamespace, err := FetchNamespacesFromBackup(nonAdminCtx, scheduledBackupNameWithLabel, orgID)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching namespaces %v from backup %v", multipleBackupNamespace, scheduledBackupNameWithLabel))
+			multipleRestoreMapping = make(map[string]string)
+			for _, namespace := range multipleBackupNamespace {
+				restoredNameSpace := fmt.Sprintf("%s-%v", scheduledBackupNameWithLabel, RandomString(5))
+				multipleRestoreMapping[namespace] = restoredNameSpace
+			}
+			customRestoreName = fmt.Sprintf("%s-%v", "customrestore", RandomString(4))
+			err = CreateRestore(customRestoreName, scheduledBackupNameWithLabel, multipleRestoreMapping, destinationClusterName, orgID, nonAdminCtx, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s] in custom namespace [%v]", customRestoreName, multipleRestoreMapping))
+			labelledRestoreNames = append(labelledRestoreNames, customRestoreName)
+		})
+
+		Step(fmt.Sprintf("Validate deleting namespace labelled backups and restores from the custom user %s user context", customUser), func() {
+			log.InfoD(fmt.Sprintf("Validate deleting namespace labelled backups and restores from the custom user %s user context", customUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			for _, backupName := range labelledBackupNames {
+				backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, orgID)
+				log.FailOnError(err, "Failed to fetch the backup %s uid of the user %s", backupName, customUser)
+				_, err = DeleteBackup(backupName, backupUid, orgID, nonAdminCtx)
+				log.FailOnError(err, "Failed to delete the backup %s of the user %s", backupName, customUser)
+				err = DeleteBackupAndWait(backupName, nonAdminCtx)
+				log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+			}
+			for _, restoreName := range labelledRestoreNames {
+				err := DeleteRestore(restoreName, orgID, nonAdminCtx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restoreName))
+			}
+		})
+
+		Step(fmt.Sprintf("Delete custom user %s backup schedule ", customUser), func() {
+			log.InfoD(fmt.Sprintf("Delete custom user %s backup schedule ", customUser))
+			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			err = DeleteSchedule(backupScheduleWithLabel, SourceClusterName, orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, customUser))
 		})
 
 		Step(fmt.Sprintf("Delete user %s backups from the user context", customUser), func() {
