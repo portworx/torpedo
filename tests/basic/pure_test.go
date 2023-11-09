@@ -1269,7 +1269,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 
 // This test Kills the PX nodes where FADA volumes are attached, Deletes the pods and PVCs.
 /*
-https://portworx.testrail.net/index.php?/tests/view/72760884
+https://portworx.testrail.net/index.php?/cases/view/92893
 
 */
 var _ = Describe("{AppCleanUpWhenPxKill}", func() {
@@ -1291,10 +1291,11 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		var selectedNodes []node.Node
 		selectedNodes = append(selectedNodes, storageNodes[rand.Intn(len(storageNodes))])
 		selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
-		selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNodes[rand.Intn(len(kvdbNodes))].ID)
-		log.FailOnError(err, "Failed to get kvdb node details")
 		for _, kvdbNode := range kvdbNodes {
-			if kvdbNode.ID != selectedNodes[0].Id && kvdbNode.ID != selectedNodes[1].Id {
+			if kvdbNode.ID != selectedNodes[0].Id {
+				selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get kvdb node details")
+				log.InfoD("Selected kvdb node: %v", selectedKvdbNode.Name)
 				selectedNodes = append(selectedNodes, selectedKvdbNode)
 				break
 			}
@@ -1316,30 +1317,25 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of apps to be deployed
-		NumberOfAppsToBeDeployed := 15
+		NumberOfAppsToBeDeployed := 300
 
-		stepLog = "schedule application"
+		stepLog = fmt.Sprintf("schedule application")
 		Step(stepLog, func() {
-			Step("Schedule applications", func() {
-				log.InfoD("Scheduling applications")
-				for j := 0; j < NumberOfAppsToBeDeployed; j++ {
-					taskName := fmt.Sprintf("test%v", j)
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Provisioner,
-						PvcSize:            6 * units.GiB,
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-					contexts = append(contexts, context...)
-				}
-			})
-			Step(stepLog, func() {
-				ValidateApplications(contexts)
-			})
+			for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+				taskName := fmt.Sprintf("app-cleanup-when-px-kill-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
 		})
-		stepLog = "Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully"
+		stepLog = fmt.Sprintf("Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully")
 		Step(stepLog, func() {
-			// Step 1: Destroy Application
+			// Step 1: Destroy Applications
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -1356,10 +1352,12 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			// Step 2: kill px nodes
 			wg.Add(1)
 			go func() {
+				defer GinkgoRecover()
 				defer wg.Done()
-				stepLog := "Kill px nodes"
+				stepLog := fmt.Sprintf("Kill px nodes")
 				Step(stepLog, func() {
 					for _, selectedNode := range selectedNodes {
+						log.InfoD("Crashing node: %v", selectedNode.Name)
 						err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
@@ -1374,7 +1372,7 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 			// Wait for both steps to complete
 			wg.Wait()
 		})
-		stepLog = "Wait until all the nodes come up"
+		stepLog = fmt.Sprintf("Wait until all the nodes come up")
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for _, selectedNode := range selectedNodes {
@@ -1383,6 +1381,9 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 					TimeBeforeRetry: defaultWaitRebootRetry,
 				})
 				log.FailOnError(err, "node:%v Failed to come up?", selectedNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+				log.FailOnError(err, "Portworx not coming up on node:%v", selectedNode.Name)
+
 			}
 		})
 	})
