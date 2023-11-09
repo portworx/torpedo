@@ -116,12 +116,12 @@ build-backup: $(GOPATH)/bin/ginkgo
 	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
-# this target builds the gin binary only.
-build-taas: GIN_BUILD_DIR=./apiServer/taas
+# this target builds the taas binary only.
+build-taas: TAAS_BUILD_DIR=./apiServer/taas
 build-taas:
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGIN)
-	go build $(GIN_BUILD_DIR)
+	go build $(TAAS_BUILD_DIR)
 
 	find . -name 'taas' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
@@ -182,7 +182,7 @@ container-backup:
 container-taas: TORPEDO_IMG=$(DOCKER_HUB_REPO)/taas:$(DOCKER_HUB_TAG)
 container-taas:
 	@echo "Building taas container "$(TORPEDO_IMG)
-	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-taas -f Dockerfile-gin .
+	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-taas -f Dockerfile-taas .
 
 deploy: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo:$(DOCKER_HUB_TAG)
 deploy: container
@@ -209,7 +209,7 @@ clean:
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
 	@echo "Deleting backup image"
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-backup:$(DOCKER_HUB_TAG)
-	@echo "Deleting gin image"
+	@echo "Deleting taas image"
 	-docker rmi -f $(DOCKER_HUB_REPO)/torpedo-taas:$(DOCKER_HUB_TAG)
 	go clean -i $(PKGS)
 
