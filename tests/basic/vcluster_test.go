@@ -85,14 +85,18 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	if envValueIterations != "" {
 		var err error
 		totalIterations, err = strconv.Atoi(envValueIterations)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
-		totalIterations = 1
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
 	}
 	if envValueBatch != "" {
 		var err error
 		batchCount, err = strconv.Atoi(envValueBatch)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
-		batchCount = 2
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
 	}
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
@@ -296,20 +300,26 @@ var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
 	if envValueVcluster != "" {
 		var err error
 		totalVclusters, err = strconv.Atoi(envValueVcluster)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
-		totalVclusters = 1
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
+			totalVclusters = 1
+		}
 	}
 	if envValueBatch != "" {
 		var err error
 		batchCount, err = strconv.Atoi(envValueBatch)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
-		batchCount = 2
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
 	}
 	if envValueIterations != "" {
 		var err error
 		totalIterations, err = strconv.Atoi(envValueIterations)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
-		totalIterations = 1
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
 	}
 	var vClusters []*vcluster.VCluster
 	var scName string
@@ -1116,22 +1126,27 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 	if envValueVcluster != "" {
 		var err error
 		totalVclusters, err = strconv.Atoi(envValueVcluster)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
-		totalVclusters = 1
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
+			totalVclusters = 1
+		}
 	}
 	if envValueBatch != "" {
 		var err error
 		batchCount, err = strconv.Atoi(envValueBatch)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
-		batchCount = 2
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
 	}
 	if envValueIterations != "" {
 		var err error
 		totalIterations, err = strconv.Atoi(envValueIterations)
-		log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
-		totalIterations = 1
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
 	}
-	log.Infof("======= Total batch Count is : %v =========", batchCount)
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
