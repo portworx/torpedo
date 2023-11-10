@@ -31,6 +31,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/hashicorp/go-version"
+	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	"github.com/libopenstorage/stork/pkg/k8sutils"
 	. "github.com/onsi/ginkgo"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -5581,4 +5582,27 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
 	return nil
+}
+
+// ChangeAdminNamespace changes admin namespace for Storage Cluster
+func ChangeAdminNamespace(namesapce string) (*v1.StorageCluster, error) {
+	// Get current storage cluster configuration
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Current stork Configuration %v", stc.Spec.Stork)
+	if adminNamespace, ok := stc.Spec.Stork.Args["admin_namespace"]; ok {
+		log.Info("Current admin namespace", adminNamespace)
+	}
+	// Setting the new admin namespace
+	stc.Spec.Stork.Args["admin_namespace"] = namesapce
+	stc, err = operator.Instance().UpdateStorageCluster(stc)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("Configured admin namespace to %v", namesapce)
+
+	return stc, nil
 }
