@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -77,15 +78,21 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
-	var totalIterations int
-	var batchCount int
-	testParams, err := vcluster.ReadEnvVarAndParse("VCLUSTER_TEST_PARAMS")
-	if err != nil {
-		totalIterations = 2
-		batchCount = 3
-	} else {
-		totalIterations = testParams.NumIterations
-		batchCount = testParams.ParallelFioJobs
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	batchCount := 2
+	totalIterations := 1
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+		totalIterations = 1
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+		batchCount = 2
 	}
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
@@ -280,18 +287,29 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 })
 
 var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
-	var totalVclusters int
-	var totalIterations int
-	var batchCount int
-	testParams, err := vcluster.ReadEnvVarAndParse("VCLUSTER_TEST_PARAMS")
-	if err != nil {
+	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	totalVclusters := 1
+	batchCount := 2
+	totalIterations := 1
+	if envValueVcluster != "" {
+		var err error
+		totalVclusters, err = strconv.Atoi(envValueVcluster)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
 		totalVclusters = 1
-		totalIterations = 2
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
 		batchCount = 2
-	} else {
-		totalVclusters = testParams.NumVclusters
-		totalIterations = testParams.NumIterations
-		batchCount = testParams.ParallelFioJobs
+	}
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+		totalIterations = 1
 	}
 	var vClusters []*vcluster.VCluster
 	var scName string
@@ -1089,18 +1107,29 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 })
 
 var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
-	var totalVclusters int
-	var totalIterations int
-	var batchCount int
-	testParams, err := vcluster.ReadEnvVarAndParse("VCLUSTER_TEST_PARAMS")
-	if err != nil {
+	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	totalVclusters := 1
+	batchCount := 2
+	totalIterations := 1
+	if envValueVcluster != "" {
+		var err error
+		totalVclusters, err = strconv.Atoi(envValueVcluster)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
 		totalVclusters = 1
-		totalIterations = 2
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
 		batchCount = 2
-	} else {
-		totalVclusters = testParams.NumVclusters
-		totalIterations = testParams.NumIterations
-		batchCount = testParams.ParallelFioJobs
+	}
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+		totalIterations = 1
 	}
 	log.Infof("======= Total batch Count is : %v =========", batchCount)
 	var vClusters []*vcluster.VCluster

@@ -3,7 +3,6 @@ package vcluster
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -912,16 +911,11 @@ func (v *VCluster) WaitForVClusterAccess() error {
 	return err
 }
 
-// ReadEnvVarAndParse returns the parsed JSON of an env variable
-func ReadEnvVarAndParse(varName string) (*VClusterTestParams, error) {
-	varValue := os.Getenv(varName)
-	if varValue == "" {
-		return nil, fmt.Errorf("environment variable %s is not set", varName)
+// ReadEnvVariable reads env variable and returns the value
+func ReadEnvVariable(envVar string) string {
+	envValue, present := os.LookupEnv(envVar)
+	if present {
+		return envValue
 	}
-	var params VClusterTestParams
-	err := json.Unmarshal([]byte(varValue), &params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON from environment variable %s: %v", varName, err)
-	}
-	return &params, nil
+	return ""
 }
