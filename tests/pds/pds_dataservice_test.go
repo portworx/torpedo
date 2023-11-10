@@ -1227,87 +1227,6 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	})
 })
 
-//var _ = Describe("{DeployAllDataServices}", func() {
-//
-//	JustBeforeEach(func() {
-//		Step("Get All Supported Dataservices and Versions", func() {
-//			supportedDataServicesNameIDMap = pdslib.GetAllSupportedDataServices()
-//			for dsName := range supportedDataServicesNameIDMap {
-//				supportedDataServices = append(supportedDataServices, dsName)
-//			}
-//			for index := range supportedDataServices {
-//				log.Infof("supported data service %v ", supportedDataServices[index])
-//			}
-//			Step("Get the resource and app config template for supported dataservice", func() {
-//				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetAllDataserviceResourceTemplate(tenantID, supportedDataServices)
-//				Expect(err).NotTo(HaveOccurred())
-//				Expect(dataServiceDefaultResourceTemplateIDMap).NotTo(BeEmpty())
-//				Expect(dataServiceNameIDMap).NotTo(BeEmpty())
-//
-//				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAllDataServiceAppConfTemplate(tenantID, dataServiceNameIDMap)
-//				Expect(err).NotTo(HaveOccurred())
-//				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
-//			})
-//		})
-//	})
-//
-//	It("Deploy All SupportedDataServices", func() {
-//		Step("Deploy All Supported Data Services", func() {
-//			replicas = 3
-//			log.InfoD("Deploying All Supported DataService")
-//			deployments, _, _, err := pdslib.DeployAllDataServices(supportedDataServicesNameIDMap, projectID,
-//				deploymentTargetID,
-//				dnsZone,
-//				deploymentName,
-//				namespaceID,
-//				dataServiceNameDefaultAppConfigMap,
-//				replicas,
-//				serviceType,
-//				dataServiceDefaultResourceTemplateIDMap,
-//				storageTemplateID,
-//				namespace,
-//			)
-//			Expect(err).NotTo(HaveOccurred())
-//			Step("Validate Storage Configurations", func() {
-//				for ds, deployment := range deployments {
-//					for index := range deployment {
-//						log.Infof("data service deployed %v ", ds)
-//						resourceTemp, storageOp, config, err := pdslib.ValidateAllDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
-//						Expect(err).NotTo(HaveOccurred())
-//						log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-//						log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-//						log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-//						log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-//						log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-//						log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-//						log.Infof("volume group %v ", storageOp.VolumeGroup)
-//
-//						Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-//						Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-//						Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-//						Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-//						Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-//						repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-//						Expect(err).NotTo(HaveOccurred())
-//						Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-//						Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-//						Expect(config.Spec.Nodes).Should(Equal(replicas))
-//					}
-//				}
-//			})
-//			defer func() {
-//				Step("Delete created deployments")
-//				for _, dep := range deployments {
-//					for index := range dep {
-//						_, err := pdslib.DeleteDeployment(dep[index].GetId())
-//						Expect(err).NotTo(HaveOccurred())
-//					}
-//				}
-//			}()
-//		})
-//	})
-//})
-
 func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 
 	steplog := "Validate the deployment target is healthy in the control plane"
@@ -1742,7 +1661,7 @@ func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp 
 	log.FailOnError(err, "failed on atoi method")
 	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
 	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
-	dash.VerifyFatal(config.Replicas, int32(replicas), "Validating ds node replicas")
+	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
 
 	for version, build := range dataServiceVersionBuildMap {
 		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
