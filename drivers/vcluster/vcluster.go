@@ -59,12 +59,6 @@ const (
 	PxNamespace               = "kube-system"
 )
 
-type VClusterTestParams struct {
-	NumVclusters    int `json:"num_vclusters"`
-	NumIterations   int `json:"num_iterations"`
-	ParallelFioJobs int `json:"parallel_fio_jobs"`
-}
-
 type VCluster struct {
 	Namespace  string
 	Name       string
