@@ -1,6 +1,8 @@
 package pxbutils
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -38,6 +40,33 @@ const (
 // HTTPClient is an HTTP client with a predefined timeout
 var HTTPClient = &http.Client{
 	Timeout: 1 * time.Minute,
+}
+
+func NewHTTPRequestWithContext(ctx context.Context, method string, url string, body interface{}, headerMap map[string]string) (*http.Request, error) {
+	reqBody, err := func() ([]byte, error) {
+		if body != nil {
+			switch reflect.TypeOf(body).Kind() {
+			case reflect.String:
+				return []byte(body.(string)), nil
+			case reflect.Struct, reflect.Map:
+				return json.Marshal(body)
+			default:
+				err := fmt.Errorf("unsupported body type [%T]", body)
+				return nil, ProcessError(err)
+			}
+		}
+		return nil, nil
+	}()
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, ProcessError(err)
+	}
+
+	for key, val := range headerMap {
+		req.Header.Set(key, val)
+	}
+
+	return req, nil
 }
 
 const (

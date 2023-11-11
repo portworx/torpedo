@@ -61,11 +61,8 @@ type TokenRepresentation struct {
 }
 
 type Keycloak struct {
-	URL struct {
-		Admin    string
-		NonAdmin string
-	}
-	Login struct {
+	Endpoint string
+	Login    struct {
 		Username string
 		Password string
 	}
