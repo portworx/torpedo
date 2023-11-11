@@ -874,19 +874,15 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 	})
 
 	JustBeforeEach(func() {
-		poolToResize = getPoolWithLeastSize()
-		selectedNode, _ = GetNodeWithGivenPoolID(poolToResize.Uuid)
-		fastpathLabels := map[string]string{
-			k8s.NodeType: k8s.FastpathNodeType,
-		}
-		err = Inst().V.UpdatePoolLabels(*selectedNode, poolToResize.Uuid, fastpathLabels)
-		log.FailOnError(err, fmt.Sprintf("Failed to add fastpath label on pool %s", poolToResize.Uuid))
+		selectedNode = GetNodeWithLeastSize()
+		_ = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed to add fastpath label on node %v", selectedNode.Name))
 	})
 
 	AfterEach(func() {
 		Inst().AppList = appList
-		// TODO: remove label on pool
 		appsValidateAndDestroy(contexts)
+		_ = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
 	})
 
 	It(stepLog, func() {
@@ -916,7 +912,7 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 
 		Step("Verify that pool expansion is successful", func() {
 			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
-			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", poolToResize.Uuid))
+			log.FailOnError(err, fmt.Sprintf("Error waiting for pool %s resize", poolToResize.Uuid))
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 			status, err := Inst().V.GetNodeStatus(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
