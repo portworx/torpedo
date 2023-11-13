@@ -12,6 +12,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
 	"strconv"
+	"time"
 )
 
 var _ = Describe("{ServiceIdentityNsLevel}", func() {
@@ -225,10 +226,12 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
+						//wait for scale up to take effect and ds to settle down
+						time.Sleep(30 * time.Second)
+						customParams.SetParamsForServiceIdentityTest(params, false)
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
 						log.FailOnError(err, "Error while validating data service deployment")
 
-						customParams.SetParamsForServiceIdentityTest(params, false)
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
