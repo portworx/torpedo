@@ -478,7 +478,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
 				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
-				dash.VerifyFatal(err, nil, "Creating backup location")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location - %s", backupLocationName))
 			}
 		})
 
@@ -561,7 +561,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPostUpgrade))
 		})
 
-		Step("Restoring kubevirt app using backup taken pre-upgrade", func() {
+		Step("Restoring kubevirt app using backup taken post-upgrade", func() {
 			log.InfoD("Restoring kubevirt app using backup taken post-upgrade")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
