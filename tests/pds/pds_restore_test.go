@@ -157,8 +157,10 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 					}
 				})
 
-				Step("Delete Deployments", func() {
+				Step("Delete Deployments, backUp targets and creds", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
+					err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+					log.FailOnError(err, "error while deleting backup targets and creds")
 				})
 			}
 		})

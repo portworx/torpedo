@@ -735,7 +735,9 @@ func DeleteBackUpCred(tenantID, bkpCredsId string, deleteAll bool) error {
 	return nil
 }
 
-func DeleteBackUpTargetsAndCreds(deploymentTargetID, projectID string, deleteAll bool) error {
+// DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget Takes deploymentTargetID and deletes all the
+// bkptarget belongs to the deployment target id
+func DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget(deploymentTargetID, projectID string, deleteAll bool) error {
 	var bkpTargets []pds.ModelsBackupTarget
 	if deleteAll {
 		bkpTargets, err = components.BackupTarget.ListBackupTargetBelongsToProject(projectID)

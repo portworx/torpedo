@@ -107,7 +107,7 @@ var _ = Describe("{DeleteBackUpTargetsAndCreds}", func() {
 		stepLog := "Delete Backup targets and credentials"
 		Step(stepLog, func() {
 			log.Debugf("deployment target %s", deploymentTargetID)
-			err := pdslib.DeleteBackUpTargetsAndCreds("2141f0b9-3a87-4ca4-864f-09970d94bcd2", projectID, false)
+			err := pdslib.DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget("", projectID, false)
 			log.FailOnError(err, "error occured while deleting bkp targets and creds")
 		})
 	})

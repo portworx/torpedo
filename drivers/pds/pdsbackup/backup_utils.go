@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	bucketName           = "pds-qa-automation-1"
+	bucketName           = "pds-automation"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
 	bkpTimeInterval      = 60 * time.Second
@@ -147,11 +147,6 @@ func (backupClient *BackupClient) GetAllBackUpTargets(projectID, bkptargetPrefix
 
 // DeleteAwsS3BackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId string) error {
-	log.Info("Delete S3 bucket from AWS cloud.")
-	err := backupClient.AWSStorageClient.DeleteBucket()
-	if err != nil {
-		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
-	}
 	log.Info("Removing S3 backup creadentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
