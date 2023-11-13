@@ -228,10 +228,10 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						//wait for scale up to take effect and ds to settle down
 						//time.Sleep(30 * time.Second)
 						customParams.SetParamsForServiceIdentityTest(params, false)
-						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
+						err = dsTest.ValidateDataServiceDeployment(resDep, ns2.Name)
 						log.FailOnError(err, "Error while validating data service deployment")
 
-						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
+						_, _, config, err := pdslib.ValidateDataServiceVolumes(resDep, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
 					}
