@@ -179,7 +179,7 @@ var _ = Describe("{AddOCPStorageNode}", func() {
 
 			err := Inst().V.RefreshDriverEndpoints()
 			log.FailOnError(err, "error refreshing driver end points")
-
+			log.InfoD("Driver endpoints refresh successfulßß")
 			updatedStorageNodesCount := len(node.GetStorageNodes())
 			dash.VerifySafely(numOfStorageNodes+1, updatedStorageNodesCount, "verify new storage node is added")
 			ValidateAndDestroy(contexts, nil)
