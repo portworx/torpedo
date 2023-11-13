@@ -20,6 +20,7 @@ import (
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	"github.com/portworx/torpedo/drivers"
+
 	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
@@ -5585,24 +5586,47 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 }
 
 // ChangeAdminNamespace changes admin namespace for Storage Cluster
-func ChangeAdminNamespace(namesapce string) (*v1.StorageCluster, error) {
+func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	// Get current storage cluster configuration
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return nil, err
 	}
+	storkPodLabel := map[string]string{
+		"name": storkDeploymentName,
+	}
+
+	pods, err := core.Instance().GetPods(defaultStorkDeploymentNamespace, storkPodLabel)
+	podAgeBeforeUpdate := GetAgeOfPods(pods)
+	log.InfoD("Age of pods before upgrade %v", podAgeBeforeUpdate)
 	log.Info("Current stork Configuration %v", stc.Spec.Stork)
-	if adminNamespace, ok := stc.Spec.Stork.Args["admin_namespace"]; ok {
+	if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
 		log.Info("Current admin namespace", adminNamespace)
 	}
 	// Setting the new admin namespace
-	stc.Spec.Stork.Args["admin_namespace"] = namesapce
-	stc, err = operator.Instance().UpdateStorageCluster(stc)
-	if err != nil {
-		return nil, err
+	stc.Spec.Stork.Args["admin-namespace"] = namespace
+	// 	stc, err = operator.Instance().UpdateStorageCluster(stc)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	log.Info("Configured admin namespace to %v", namespace)
+
+	podAgeAfterUpdate := GetAgeOfPods(pods)
+	log.InfoD("Age of pods after upgrade %v", podAgeAfterUpdate)
+
+	for pod, time := range podAgeBeforeUpdate {
+		log.Info("Age of pod %v before update %v", pod.Name, time)
+		log.Info("Age of pod %v after update %v", pod.Name, podAgeAfterUpdate[pod])
+
+		log.Info("Pod Status %v", pod.Status)
 	}
-
-	log.Info("Configured admin namespace to %v", namesapce)
-
 	return stc, nil
+}
+
+func GetAgeOfPods(podList *corev1.PodList) map[*corev1.Pod]metav1.Time {
+	var podAge = make(map[*corev1.Pod]metav1.Time)
+	for _, pod := range podList.Items {
+		podAge[&pod] = pod.GetCreationTimestamp()
+	}
+	return podAge
 }
