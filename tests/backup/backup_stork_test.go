@@ -98,9 +98,9 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		})
 		Step("Modifying Admin Namespace for Stork", func() {
 			log.InfoD("Modifying Admin Namespace for Stork to %v", newAdminNamespace)
-			stc, err := ChangeAdminNamespace(newAdminNamespace)
+			_, err := ChangeAdminNamespace(newAdminNamespace)
 			log.FailOnError(err, "Unable to update admin namespace")
-			log.InfoD("Updated admin namespace to %v", stc.Spec.Stork.Args["admin_namespace"])
+			log.Infof("Admin namespace updated successfully")
 		})
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
@@ -140,8 +140,12 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			err := DeleteAppNamespace(newAdminNamespace)
 			log.FailOnError(err, "Unable to delete admin namespace")
 			log.InfoD("Namespace - %v - deleted successfully", newAdminNamespace)
+			_, err = ChangeAdminNamespace("")
+			log.FailOnError(err, "Unable to remove admin namespace")
 		})
-		Step("Taking backup of multiple namespaces - 2", func() {
+		Step("Taking backup of multiple namespaces after admin namespace removal", func() {
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -150,7 +154,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
-		Step("Restoring backup of multiple namespaces - 2", func() {
+		Step("Restoring backup of multiple namespaces after admin namespace removal", func() {
 			log.InfoD("Restoring backup of multiple namespaces")
 			selectedBkpNamespaceMapping := make(map[string]string)
 			for _, namespace := range bkpNamespaces {

@@ -124,6 +124,7 @@ const (
 	rancherActiveCluster                      = "local"
 	rancherProjectDescription                 = "new project"
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
+	storkPodRestartRetryTimeinMinutes         = 15
 )
 
 var (
@@ -5588,45 +5589,53 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 // ChangeAdminNamespace changes admin namespace for Storage Cluster
 func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	// Get current storage cluster configuration
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return nil, err
 	}
-	storkPodLabel := map[string]string{
-		"name": storkDeploymentName,
-	}
+	log.Infof("Is op based deployment %v", isOpBased)
 
-	pods, err := core.Instance().GetPods(defaultStorkDeploymentNamespace, storkPodLabel)
-	podAgeBeforeUpdate := GetAgeOfPods(pods)
-	log.InfoD("Age of pods before upgrade %v", podAgeBeforeUpdate)
-	log.Info("Current stork Configuration %v", stc.Spec.Stork)
+	log.Info("Current stork Configuration")
+	log.Infof("%v", stc.Spec.Stork)
 	if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-		log.Info("Current admin namespace", adminNamespace)
+		log.Info("Current admin namespace")
+		log.Infof("%v", adminNamespace)
 	}
 	// Setting the new admin namespace
-	stc.Spec.Stork.Args["admin-namespace"] = namespace
-	// 	stc, err = operator.Instance().UpdateStorageCluster(stc)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	log.Info("Configured admin namespace to %v", namespace)
-
-	podAgeAfterUpdate := GetAgeOfPods(pods)
-	log.InfoD("Age of pods after upgrade %v", podAgeAfterUpdate)
-
-	for pod, time := range podAgeBeforeUpdate {
-		log.Info("Age of pod %v before update %v", pod.Name, time)
-		log.Info("Age of pod %v after update %v", pod.Name, podAgeAfterUpdate[pod])
-
-		log.Info("Pod Status %v", pod.Status)
+	if namespace != "" {
+		stc.Spec.Stork.Args["admin-namespace"] = namespace
+	} else {
+		delete(stc.Spec.Stork.Args, "admin-namespace")
+		log.Infof("Args after removing namespace %v", stc.Spec.Stork.Args)
 	}
+	stc, err = operator.Instance().UpdateStorageCluster(stc)
+	if err != nil {
+		return nil, err
+	}
+	if namespace != "" {
+		log.Infof("Configured admin namespace to %s", namespace)
+	} else {
+		log.Infof("Removed admin namespace")
+	}
+	time.Sleep(10 * time.Second)
+
+	storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+
+	log.Infof("Stork deployment specs %v", storkDeployment.Spec)
+	containerDetails := storkDeployment.Spec.Template.Spec.Containers[0]
+
+	log.Infof("Stork deployment containers %v", containerDetails)
+
+	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+	if err != nil {
+		return stc, err
+	}
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return stc, err
+	}
+
 	return stc, nil
-}
-
-func GetAgeOfPods(podList *corev1.PodList) map[*corev1.Pod]metav1.Time {
-	var podAge = make(map[*corev1.Pod]metav1.Time)
-	for _, pod := range podList.Items {
-		podAge[&pod] = pod.GetCreationTimestamp()
-	}
-	return podAge
 }
