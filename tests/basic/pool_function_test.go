@@ -868,6 +868,5 @@ var _ = Describe("{PoolExpandToMaxLimit}", func() {
 		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-		// }
 	})
 })
