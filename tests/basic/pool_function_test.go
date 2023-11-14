@@ -859,3 +859,48 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 		})
 	})
 })
+
+
+var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
+
+	var testrailID = 34542894
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandAndCheckAlertsUsingAddDisk", "pool expansion using add-disk and check alerts after each operation", nil, testrailID)
+		contexts = scheduleApps()
+	})
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("pool expansion using add-disk and check alerts after each operation", func() {
+		log.InfoD("Initiate pool expansion using add-disk")
+		// poolToResize = getStoragePool(poolIDToResize)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+
+		log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+		alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
+		dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
+	})
+
+})
