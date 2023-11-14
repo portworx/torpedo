@@ -390,7 +390,7 @@ var (
 	context = ginkgo.Context
 	fail    = ginkgo.Fail
 	// Step is an alias for ginko "By" which represents a step in the spec
-	Step          = ginkgo.By
+	Step          = StepWithLogger
 	expect        = gomega.Expect
 	haveOccurred  = gomega.HaveOccurred
 	beEmpty       = gomega.BeEmpty
@@ -489,7 +489,10 @@ type (
 	// TestcaseQuarter represents the fiscal quarter during which the Testcase is automated
 	TestcaseQuarter string
 )
-
+func StepWithLogger(text string, callbacks ...func()) {
+	log.InfoD(text)
+	ginkgo.By(text, callbacks...)
+}
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
