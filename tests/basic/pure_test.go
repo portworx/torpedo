@@ -80,6 +80,9 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	})
 
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
+		err := UpdateDriverVariables(map[string]string{"PURE_REST_TIMEOUT": "60"}, map[string]string{"fb-stats-expiry-duration uint": "1"})
+		log.FailOnError(err, "error update storage cluster spec with env variables")
+
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -109,6 +112,10 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 		StartTorpedoTest("PureVolumeCRUDWithPXCTL", "Test pure volumes on applications, run CRUD using pxctl", nil, 0)
 	})
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
+
+		err := UpdateDriverVariables(map[string]string{"PURE_REST_TIMEOUT": "60"}, map[string]string{"fb-stats-expiry-duration uint": "1"})
+		log.FailOnError(err, "error update storage cluster spec with env variables")
+
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
 
