@@ -218,11 +218,9 @@ if [ -z "$TORPEDO_JOB_NAME" ]; then
     TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 
-ANTHOS_ADMIN_WS_NODE=""
 if [ -n "$ANTHOS_ADMIN_WS_NODE" ]; then
     ANTHOS_ADMIN_WS_NODE="${ANTHOS_ADMIN_WS_NODE}"
 fi
-ANTHOS_INST_PATH=""
 if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
@@ -721,6 +719,14 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: NUM_VCLUSTERS
+      value: "${NUM_VCLUSTERS}"
+    - name: VCLUSTER_PARALLEL_APPS
+      value: "${VCLUSTER_PARALLEL_APPS}"
+    - name: VCLUSTER_TOTAL_ITERATIONS
+      value: "${VCLUSTER_TOTAL_ITERATIONS}"
+    - name: KUBEVIRT_UPGRADE_VERSION
+      value: "${KUBEVIRT_UPGRADE_VERSION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

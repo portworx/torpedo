@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -446,9 +447,11 @@ var (
 )
 
 const (
-	rootLogDir    = "/root/logs"
-	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
-	pxbLogDirPath = "/tmp/px-backup-test-logs"
+	rootLogDir            = "/root/logs"
+	diagsDirPath          = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath         = "/tmp/px-backup-test-logs"
+	KubevirtNamespace     = "kubevirt"
+	LatestKubevirtVersion = "v1.0.0"
 )
 
 type Weekday string
@@ -510,6 +513,7 @@ func InitInstance() {
 		SecureApps:                       Inst().SecureAppList,
 		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
 		AnthosInstancePath:               Inst().AnthosInstPath,
+		UpgradeHops:                      Inst().SchedUpgradeHops,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -4674,11 +4678,7 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Type: api.BackupLocationInfo_Google,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -9889,4 +9889,12 @@ func DeletePXPods(nameSpace string) error {
 		return err
 	}
 	return nil
+}
+
+func GetKubevirtVersionToUpgrade() string {
+	kubevirtVersion, present := os.LookupEnv("KUBEVIRT_UPGRADE_VERSION")
+	if present {
+		return kubevirtVersion
+	}
+	return LatestKubevirtVersion
 }
