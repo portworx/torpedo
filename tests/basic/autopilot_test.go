@@ -1832,9 +1832,12 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(80, 50, aututils.RuleScaleTypeAddDisk),
 		}
-		//get global pool size before expand
-		poolSizeBeforeExpand := getGlobalPoolSize()
-		log.InfoD("Pool size before Pool expand: %v", poolSizeBeforeExpand)
+		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
+		var originalTotalSize float64 = 0
+		for _, pstatus := range provisionStatus {
+			originalTotalSize += pstatus.TotalSize
+		}
+		log.InfoD("Pool size before pool expand:%v", originalTotalSize)
 		Step("get kvdb node to crash and add label to the node", func() {
 			stNodes := node.GetNodesByVoDriverNodeID()
 			kvdbNodes, err := GetAllKvdbNodes()
@@ -1906,13 +1909,19 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 						log.FailOnError(err, "Validate node is ready")
 						err = Inst().V.WaitDriverUpOnNode(nodeToCrash, Inst().DriverStartTimeout)
 						log.FailOnError(err, "Validate volume driver is up")
-						poolSizeAfterExpand := getGlobalPoolSize()
-						log.InfoD("Pool size after pool expand: %v", poolSizeAfterExpand)
 					})
 				}(nodeToCrash)
 			}
 			// Wait for all tasks to finish before proceeding
 			wg.Wait()
+			provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
+			log.FailOnError(err, "Failed to get cluster info")
+			var sizeAfterPoolExpand float64 = 0
+			for _, pstatus := range provisionStatus {
+				sizeAfterPoolExpand += pstatus.TotalSize
+			}
+			log.InfoD("Pool size after pool expand:%v", sizeAfterPoolExpand)
+
 		})
 
 		Step("wait until workload completes on volume", func() {
