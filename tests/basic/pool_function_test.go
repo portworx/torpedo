@@ -885,9 +885,9 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 		_ = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
 	})
 
-	It(stepLog, func() {
+	It("Expand pool with resize-disk type after pool is down due to storage full", func() {
 		// https://portworx.testrail.net/index.php?/cases/view/51280
-		StartTorpedoTest("StorageFullPoolResize", "Feed a pool full, then expand the pool in type resize-disk", nil, 51280)
+		StartTorpedoTest("StorageFullPoolExpandResizeType", "Expand pool with resize-disk type after pool is down due to storage full", nil, 51280)
 		Step("Prepare a full pool to expand", func() {
 			err = WaitForPoolOffline(*selectedNode)
 			log.FailOnError(err, fmt.Sprintf("Timed out waiting to load a pool and bring node %s storage down", selectedNode.Name))
