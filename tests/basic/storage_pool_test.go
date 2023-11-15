@@ -8159,9 +8159,9 @@ var _ = Describe("{ResyncFailedPoolOutOfRebalance}", func() {
 				}
 			}
 		}
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing driver end points")
 	})
-	err = Inst().V.RefreshDriverEndpoints()
-	log.FailOnError(err, "error refreshing driver end points")
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
