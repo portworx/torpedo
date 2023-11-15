@@ -336,7 +336,7 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 						log.Infof("Found new profile diags [%s]", newDiags)
 						// Needs to contain both stack/heap
 						if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
-							diagsFiles = strings.Split(newDiags, "\n")
+							diagsFiles = strings.Split(strings.TrimSpace(newDiags), "\n")
 							log.InfoD("Files found on node [%s] [%v]", currNode.Name, diagsFiles)
 							return nil, false, nil
 						}
