@@ -5446,15 +5446,17 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("Current version is - %s", current)
+	log.Infof("Current version is - %s. Trying to upgrade to - %s", current, versionToUpgrade)
 
 	// Compare and validate the upgrade path
 	currentKubevirtVersionSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(current, "v", "")))
 	if err != nil {
+		log.Errorf("failed to get semver for current version")
 		return err
 	}
 	versionToUpgradeSemVer, err := version.NewSemver(strings.TrimSpace(strings.ReplaceAll(versionToUpgrade, "v", "")))
 	if err != nil {
+		log.Errorf("failed to get semver for upgrade version")
 		return err
 	}
 	if currentKubevirtVersionSemVer.GreaterThanOrEqual(versionToUpgradeSemVer) {
@@ -5465,6 +5467,7 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 
 	// Generating the manifest URL and applying it to begin upgrade
 	manifestYamlURL := fmt.Sprintf("https://github.com/kubevirt/kubevirt/releases/download/%s/kubevirt-operator.yaml", versionToUpgrade)
+	log.Infof("Manifest URL - %s", manifestYamlURL)
 	_, err = kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "apply", "-f", manifestYamlURL})
 	if err != nil {
 		return err
