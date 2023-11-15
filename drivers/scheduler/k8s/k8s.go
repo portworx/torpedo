@@ -34,6 +34,7 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
@@ -59,7 +60,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	vcluster "github.com/portworx/torpedo/drivers/vcluster"
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -127,6 +127,17 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+	// PureDAVolumeLabel is the label added to a volume only if the volume is a Pure Direct Access (FADA/FBDA) volume
+	PureDAVolumeLabel = "pure_direct_access"
+	// PureDAVolumeLabelValueFA is the value added for the PureDAVolumeLabel key if the volume is an FADA volume
+	PureDAVolumeLabelValueFA = "fada"
+	// PureDAVolumeLabelValueFB is the value added for the PureDAVolumeLabel key if the volume is an FBDA volume
+	PureDAVolumeLabelValueFB = "fbda"
+	// FADAVolumeSerialLabel is the label added to a volume (only if FlashArray Direct Access) that holds the volume serial
+	FADAVolumeSerialLabel = "fada_volume_serial"
+
+	//ReplVPS volume placement strategy node label value
+	ReplVPS = "replvps"
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
@@ -161,6 +172,9 @@ const (
 	cdiImportSuccessEvent             = "Import Successful"
 	cdiPvcRunningMessageAnnotationKey = "cdi.kubevirt.io/storage.condition.running.message"
 	cdiPvcImportEndpointAnnotationKey = "cdi.kubevirt.io/storage.import.endpoint"
+	cdiImportComplete                 = "Import Complete"
+	cdiImageImportTimeout             = 20 * time.Minute
+	cdiImageImportRetry               = 30 * time.Second
 )
 
 const (
@@ -1455,7 +1469,7 @@ func (k *K8s) UpdateTasksID(ctx *scheduler.Context, id string) error {
 }
 
 // GetUpdatedSpec gets the updated spec of a K8s Object. Just `name`, and if required `namespace` must be specified on `spec` in order to GET the spec from K8s (if it exists).
-func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
+func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 	if specObj, ok := spec.(*appsapi.Deployment); ok {
 		dep, err := k8sApps.GetDeployment(specObj.Name, specObj.Namespace)
 		if err == nil {
@@ -1748,6 +1762,12 @@ func (k *K8s) GetUpdatedSpec(spec interface{}) (interface{}, error) {
 			return nil, err
 		}
 		return obj, nil
+	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		obj, err := k8sKubevirt.GetVirtualMachine(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(spec))
@@ -1841,6 +1861,19 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		}
 	}
 
+	if strings.Contains(app.Key, "repl-vps") {
+		vpsSpec := "/torpedo/deployments/customconfigs/repl-vps.yaml"
+		if _, err := os.Stat(vpsSpec); baseErrors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find repl-vps.yaml in path %s", vpsSpec)
+		} else {
+			cmdArgs := []string{"apply", "-f", vpsSpec}
+			err = osutils.Kubectl(cmdArgs)
+			if err != nil {
+				log.Errorf("Error applying spec %s", vpsSpec)
+			}
+		}
+	}
+
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
@@ -1864,13 +1897,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 				immediate := storageapi.VolumeBindingImmediate
 				obj.VolumeBindingMode = &immediate
 				log.Infof("Setting SC %s volumebinding mode to immediate ", obj.Name)
-			}
-		}
-		// Change Context only in case of vCluster tests
-		if vcluster.ContextChange {
-			log.Infof("Changing context to %v ", vcluster.UpdatedClusterContext)
-			if err := vcluster.SwitchKubeContext(vcluster.UpdatedClusterContext); err != nil {
-				return nil, err
 			}
 		}
 		sc, err := k8sStorage.CreateStorageClass(obj)
@@ -1897,15 +1923,6 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 		sc.Kind = "StorageClass"
 
 		log.Infof("[%v] Created storage class: %v", app.Key, sc.Name)
-		if vcluster.ContextChange {
-			log.Infof("Changing context back to vcluster: %v", vcluster.CurrentClusterContext)
-			err := vcluster.SwitchKubeContext(vcluster.CurrentClusterContext)
-			// Changing ContextChange flag to false to not trigger unnecessary context change further
-			vcluster.ContextChange = false
-			if err != nil {
-				return nil, err
-			}
-		}
 		return sc, nil
 
 	} else if obj, ok := spec.(*corev1.PersistentVolumeClaim); ok {
@@ -2721,16 +2738,6 @@ func (k *K8s) destroyCoreObject(spec interface{}, opts map[string]bool, app *spe
 		}
 
 		log.Infof("[%v] Destroyed AutopilotRule: %v", app.Key, obj.Name)
-	} else if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
-		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
-		if err != nil {
-			return pods, &scheduler.ErrFailedToDestroyApp{
-				App:   app,
-				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
-			}
-		}
-
-		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
 	}
 
 	return pods, nil
@@ -3181,6 +3188,10 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	if apRule.Name != "" {
 		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
 			if err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					log.Infof("deletion of AR failed: %s, expected since we dont deploy new AR", apRule.ObjectMeta.Name)
+					return nil
+				}
 				return err
 			}
 		}
@@ -3295,6 +3306,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	for _, appSpec := range ctx.App.SpecList {
 		t := func() (interface{}, bool, error) {
 			err := k.destroyPodDisruptionBudgetObjects(appSpec, ctx.App)
+			if err != nil {
+				return nil, true, err
+			}
+			return nil, false, nil
+		}
+
+		if _, err := task.DoRetryWithTimeout(t, k8sDestroyTimeout, DefaultRetryInterval); err != nil {
+			return err
+		}
+	}
+
+	for _, appSpec := range ctx.App.SpecList {
+		t := func() (interface{}, bool, error) {
+			err := k.destroyVirtualMachineObjects(appSpec, ctx.App)
 			if err != nil {
 				return nil, true, err
 			}
@@ -4112,6 +4137,67 @@ func (k *K8s) DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOpt
 	return vols, nil
 }
 
+func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeClaim) ([]*volume.Volume, error) {
+	shouldAdd, err := k.filterPureVolumesIfEnabled(pvc)
+	if err != nil {
+		return nil, err
+	}
+	if !shouldAdd {
+		return vols, nil
+	}
+
+	labels := pvc.Labels
+
+	if pvc.Spec.VolumeName != "" {
+		// If this is a Pure volume, run some extra checks to get more information.
+		// Store them as labels as they are not applicable to all volume types.
+		driver, err := volume.Get(k.VolDriverName)
+		if err != nil {
+			return nil, err
+		}
+
+		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
+		if err != nil {
+			if _, ok := err.(*errors.ErrNotSupported); !ok {
+				return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
+			}
+			// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
+		} else {
+			// If this is a Pure volume, run some extra checks to get more information.
+			// Store them as labels as they are not applicable to all volume types.
+			if labels == nil {
+				labels = make(map[string]string)
+			}
+			if inspectedVol.Spec.IsPureVolume() {
+				switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
+				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
+					labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
+				default:
+					return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
+				}
+			}
+		}
+	}
+
+	pvcSizeObj := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	pvcSize, _ := pvcSizeObj.AsInt64()
+	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
+	vol := &volume.Volume{
+		ID:          string(pvc.Spec.VolumeName),
+		Name:        pvc.Name,
+		Namespace:   pvc.Namespace,
+		Shared:      k.isPVCShared(pvc),
+		Annotations: pvc.Annotations,
+		Labels:      labels,
+		Size:        uint64(pvcSize),
+		Raw:         isRaw,
+	}
+	return append(vols, vol), nil
+}
+
 // GetVolumes  Get the volumes
 func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	k8sOps := k8sApps
@@ -4122,31 +4208,10 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
-			shouldAdd, err := k.filterPureVolumesIfEnabled(pvcObj)
+			vols, err = k.appendVolForPVC(vols, pvcObj)
 			if err != nil {
 				return nil, err
 			}
-			if !shouldAdd {
-				continue
-			}
-
-			pvcSizeObj := pvcObj.Spec.Resources.Requests[corev1.ResourceStorage]
-			pvcSize, _ := pvcSizeObj.AsInt64()
-			isRaw := *pvcObj.Spec.VolumeMode == corev1.PersistentVolumeBlock
-			vol := &volume.Volume{
-				ID:          string(pvcObj.Spec.VolumeName),
-				Name:        obj.Name,
-				Namespace:   obj.Namespace,
-				Shared:      k.isPVCShared(obj),
-				Annotations: make(map[string]string),
-				Labels:      pvcObj.Labels,
-				Size:        uint64(pvcSize),
-				Raw:         isRaw,
-			}
-			for key, val := range obj.Annotations {
-				vol.Annotations[key] = val
-			}
-			vols = append(vols, vol)
 		} else if pdsobj, ok := specObj.(*pds.ModelsDeployment); ok {
 			ss, err := k8sApps.GetStatefulSet(*pdsobj.ClusterResourceName, *pdsobj.Namespace.Name)
 			if err != nil {
@@ -4163,17 +4228,11 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Cause: fmt.Sprintf("Failed to get PVC from StatefulSet: %v, Namespace: %s. Err: %v", ss.Name, ss.Namespace, err),
 				}
 			}
-
 			for _, pvc := range pvcList.Items {
-				vols = append(vols, &volume.Volume{
-					ID:        pvc.Spec.VolumeName,
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-					Shared:    k.isPVCShared(&pvc),
-				})
-			}
-			for _, vol := range vols {
-				log.Infof("In Get Volume method, vol name %s", vol.Name)
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
 			}
 		} else if obj, ok := specObj.(*appsapi.StatefulSet); ok {
 			ss, err := k8sOps.GetStatefulSet(obj.Name, obj.Namespace)
@@ -4193,16 +4252,37 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 			}
 
 			for _, pvc := range pvcList.Items {
-				vols = append(vols, &volume.Volume{
-					ID:        pvc.Spec.VolumeName,
-					Name:      pvc.Name,
-					Namespace: pvc.Namespace,
-					Shared:    k.isPVCShared(&pvc),
-				})
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if vm, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(vm.Namespace, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", vm.Namespace, err)
+			}
+			for _, pvc := range pvcList.Items {
+				// check if the pvc has our VM as the owner
+				want := false
+				for _, ownerRef := range pvc.OwnerReferences {
+					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
+						want = true
+					}
+				}
+				if !want {
+					continue
+				}
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
-
+	for _, vol := range vols {
+		log.Infof("K8s.GetVolumes() found volume %s for app %s", vol.Name, ctx.App.Key)
+	}
 	return vols, nil
 }
 
@@ -5145,7 +5225,7 @@ func (k *K8s) createAdmissionRegistrationObjects(
 	return nil, nil
 }
 
-// createVirtualMachineObjects creates the kubevirt VirtualMachines using kubectl apply
+// createVirtualMachineObjects creates the kubevirt VirtualMachines
 func (k *K8s) createVirtualMachineObjects(
 	spec interface{},
 	ns *corev1.Namespace,
@@ -5198,32 +5278,45 @@ func (k *K8s) WaitForImageImportForVM(vmName string, namespace string, v kubevir
 		endpointAnnotation, ok := pvc.Annotations[cdiPvcImportEndpointAnnotationKey]
 		if ok && endpointAnnotation != "" {
 			t := func() (interface{}, bool, error) {
-				events, err := k8sCore.ListEvents(namespace, metav1.ListOptions{
-					FieldSelector: fmt.Sprintf("involvedObject.kind=PersistentVolumeClaim,involvedObject.name=%s", pvcName),
-				})
-				if err != nil {
-					return "", false, err
-				}
-				log.Infof("Events for pvc [%s] in namespace [%s] for virtual machine [%s] \n%v\n", pvcName, namespace, vmName, events)
-				for _, event := range events.Items {
-					if strings.Contains(event.Message, cdiImportSuccessEvent) {
-						pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
-						if err != nil {
-							return "", false, err
-						}
+				pvc, err = k8sCore.GetPersistentVolumeClaim(pvcName, namespace)
+				messageAnnotation, ok := pvc.Annotations[cdiPvcRunningMessageAnnotationKey]
+				if ok {
+					if messageAnnotation == cdiImportComplete {
 						log.Infof("%s - [%s]", cdiPvcRunningMessageAnnotationKey, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
 						return "", false, nil
 					}
+					return "", true, fmt.Errorf("waiting for annotation [%s] in pvc [%s] in namespace [%s] for virtual machine [%s] to be %s, but got %s",
+						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName, cdiImportComplete, pvc.Annotations[cdiPvcRunningMessageAnnotationKey])
+				} else {
+					return "", true, fmt.Errorf("annotation [%s] not found in pvc [%s] in namespace [%s] for virtual machine [%s]",
+						cdiPvcRunningMessageAnnotationKey, pvcName, namespace, vmName)
 				}
-				return "", true, fmt.Errorf("waiting for import to be completed for pvc [%s] in namespace [%s] for virtual machine [%s]", pvcName, namespace, vmName)
 			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+			_, err = task.DoRetryWithTimeout(t, cdiImageImportTimeout, cdiImageImportRetry)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	// TODO: For other Volume Source types like Data Volumes, validation logic should come here
+	return nil
+}
+
+// destroyVirtualMachineObjects deletes the kubevirt VirtualMachines
+func (k *K8s) destroyVirtualMachineObjects(
+	spec interface{},
+	app *spec.AppSpec,
+) error {
+	if obj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		err := k8sKubevirt.DeleteVirtualMachine(obj.Name, obj.Namespace)
+		if err != nil {
+			return &scheduler.ErrFailedToDestroyApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to destroy VirtualMachine: %v. Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Destroyed VirtualMachine: %v", app.Key, obj.Name)
+	}
 	return nil
 }
 

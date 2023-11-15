@@ -100,11 +100,32 @@
     "PDSNamespace": "pds-system",
     "ServiceIdentityToken": false
   },
-  "CleanUpParams": {
-    "AppTemplatePrefix": ["integration-test"],
-    "ResourceTemplatePrefix": ["integration-test"],
-    "StorageTemplatePrefix": ["integration-test"],
-    "SkipTargetClusterCheck": true
+  "StorageConfigurations": {
+    "FSType": [
+      "ext4",
+      "xfs"
+    ],
+    "ReplFactor": [
+      2,
+      3
+    ],
+    "NewStorageSize": "500G",
+    "CpuLimit"  :     "2",
+    "CpuRequest":     "1",
+    "MemoryLimit":    "4G",
+    "MemoryRequest":  "2G",
+    "StorageRequest": "1G",
+    "Iterations" : 2
+  },
+  "LoadGen": {
+    "LoadGenDepName": "workload",
+    "FailOnError": "false",
+    "Mode": "write",
+    "TableName": "wltesting",
+    "NumOfRows": "100",
+    "Iterations": "1",
+    "Timeout": "120s",
+    "Replicas": 1
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1

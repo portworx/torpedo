@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"strings"
 	"sync"
 	"time"
@@ -16,13 +17,15 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/core/v1"
 )
 
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var (
-		appList = Inst().AppList
-		credName string
+		appList      = Inst().AppList
+		credName     string
+		restoreNames []string
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -37,7 +40,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	bkpNamespaces = make([]string, 0)
 	JustBeforeEach(func() {
-		StartTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Deploying backup", nil, 60018)
+		StartPxBackupTorpedoTest("BackupAlternatingBetweenLockedAndUnlockedBuckets", "Deploying backup", nil, 60018, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -111,8 +114,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 					BackupLocationUID = uuid.New()
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID,
-						bucketName, orgID, "")
+					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, orgID, "", true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
 					BackupLocationMap[BackupLocationUID] = backupLocation
 				}
@@ -126,8 +128,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 				bucketName := fmt.Sprintf("%s-%v", getGlobalBucketName(provider), time.Now().Unix())
 				backupLocation = fmt.Sprintf("%s-%s-unlockedbucket", provider, getGlobalBucketName(provider))
 				BackupLocationUID = uuid.New()
-				err := CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID,
-					bucketName, orgID, "")
+				err := CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
 				BackupLocationMap[BackupLocationUID] = backupLocation
 			}
@@ -168,9 +169,10 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for range bkpNamespaces {
 				for _, backupName := range backupList {
-					restoreName := fmt.Sprintf("%s-restore", backupName)
+					restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
 					err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+					restoreNames = append(restoreNames, restoreName)
 				}
 			}
 		})
@@ -181,6 +183,13 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
 
 		log.InfoD("Deleting backup location and cloud setting")
 		for backupLocationUID, backupLocationName := range BackupLocationMap {
@@ -193,7 +202,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			err := DeleteCloudCredential(CredName, orgID, CloudCredUID)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
 		}
-		ctx, err := backup.GetAdminCtxFromSecret()
+		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
 		log.Infof("Deleting registered clusters for admin context")
@@ -219,7 +228,8 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		beforeSize           int
 		credName             string
 		volumeMounts         []string
-		podList              []string
+		podList              []v1.Pod
+		restoreNames         []string
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -233,7 +243,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 	bkpNamespaces = make([]string, 0)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("LockedBucketResizeOnRestoredVolume", "Resize after the volume is restored from a backup from locked bucket", nil, 59904)
+		StartPxBackupTorpedoTest("LockedBucketResizeOnRestoredVolume", "Resize after the volume is restored from a backup from locked bucket", nil, 59904, Kshithijiyer, Q4FY23)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -308,8 +318,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 					err := CreateS3Bucket(bucketName, true, 3, mode)
 					log.FailOnError(err, "Unable to create locked s3 bucket %s", bucketName)
 					BackupLocationUID = uuid.New()
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID,
-						bucketName, orgID, "")
+					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, CloudCredUID, bucketName, orgID, "", true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
 					BackupLocationMap[BackupLocationUID] = backupLocation
 				}
@@ -350,8 +359,10 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				for _, backupName = range backupList {
 					ctx, err := backup.GetAdminCtxFromSecret()
 					log.FailOnError(err, "Fetching px-central-admin ctx")
-					err = CreateRestore(fmt.Sprintf("%s-restore", backupName), backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
+					restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
+					err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
 					log.FailOnError(err, "%s restore failed", fmt.Sprintf("%s-restore", backupName))
+					restoreNames = append(restoreNames, restoreName)
 				}
 			})
 			Step("Getting size before resize", func() {
@@ -363,14 +374,16 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+				podList = pods.Items
 				for _, pod := range pods.Items {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-						volListBeforeSizeMap[volumeMount] = beforeSize
-						podList = append(podList, pod.Name)
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+							volListBeforeSizeMap[path] = beforeSize
+						}
 					}
 				}
 			})
@@ -406,13 +419,15 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 				log.InfoD("Checking size of volume after resize")
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				for _, podName := range podList {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
-						volListAfterSizeMap[volumeMount] = afterSize
+				for _, pod := range podList {
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume after resizing %v from pod %v", afterSize, pod.GetName()))
+							volListAfterSizeMap[path] = afterSize
+						}
 					}
 				}
 				for _, volumeMount := range volumeMounts {
@@ -429,8 +444,15 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 
-		log.InfoD("Deleting backup location, cloud creds and clusters")
 		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+
+		log.InfoD("Deleting backup location, cloud creds and clusters")
+		ctx, err = backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		CleanupCloudSettingsAndClusters(BackupLocationMap, credName, CloudCredUID, ctx)
 	})
@@ -454,7 +476,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		appNamespaces              []string
 		clusterStatus              api.ClusterInfo_StatusInfo_Status
 		volumeMounts               []string
-		podList                    []string
+		podList                    []v1.Pod
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -466,7 +488,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 	volListAfterSizeMap := make(map[string]int)
 	modes := [2]string{"GOVERNANCE", "COMPLIANCE"}
 	JustBeforeEach(func() {
-		StartTorpedoTest("LockedBucketResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress for locked bucket", nil, 59899)
+		StartPxBackupTorpedoTest("LockedBucketResizeVolumeOnScheduleBackup", "Verify schedule backups are successful while volume resize is in progress for locked bucket", nil, 59899, Apimpalgaonkar, Q1FY24)
 		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
 		for i := 0; i < len(appList); i++ {
 			if Contains(postRuleApp, appList[i]) {
@@ -535,8 +557,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating locked s3 bucket %s", bucketName))
 					BackupLocationUID = uuid.New()
 					backupLocationMap[BackupLocationUID] = backupLocation
-					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, cloudCredUID,
-						bucketName, orgID, "")
+					err = CreateBackupLocation(provider, backupLocation, BackupLocationUID, credName, cloudCredUID, bucketName, orgID, "", true)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", backupLocation))
 				}
 			}
@@ -574,14 +595,16 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the pod list"))
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+				podList = pods.Items
 				for _, pod := range pods.Items {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
-						volListBeforeSizeMap[volumeMount] = beforeSize
-						podList = append(podList, pod.Name)
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							beforeSize, err = getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume before resizing %v from pod %v", beforeSize, pod.GetName()))
+							volListBeforeSizeMap[path] = beforeSize
+						}
 					}
 				}
 			})
@@ -616,13 +639,15 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 				log.InfoD("Checking size of volume after resize")
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				for _, podName := range podList {
-					volumeMounts, err := GetVolumeMounts(AppContextsMapping[namespace])
-					dash.VerifyFatal(err, nil, fmt.Sprintf("unable to get the mountpoints from the application spec %s", AppContextsMapping[namespace].App.Key))
-					for _, volumeMount := range volumeMounts {
-						afterSize, err := getSizeOfMountPoint(podName, namespace, srcClusterConfigPath, volumeMount)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume ater resizing %v from pod %v", afterSize, podName))
-						volListAfterSizeMap[volumeMount] = afterSize
+				for _, pod := range podList {
+					containerPaths := schedops.GetContainerPVCMountMap(pod)
+					for containerName, paths := range containerPaths {
+						log.Infof("container [%s] has paths [%v]", containerName, paths)
+						for _, path := range paths {
+							afterSize, err := getSizeOfMountPoint(pod.GetName(), namespace, srcClusterConfigPath, path, containerName)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the size of volume after resizing %v from pod %v", afterSize, pod.GetName()))
+							volListAfterSizeMap[path] = afterSize
+						}
 					}
 				}
 				for _, volumeMount := range volumeMounts {
@@ -702,10 +727,11 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		numberOfUsers                                  = 1
 		numberOfBackups                                = 1
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
+		restoreNames               []string
 	)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteLockedBucketUserObjectsFromAdmin", "Delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin", nil, 87566)
+		StartPxBackupTorpedoTest("DeleteLockedBucketUserObjectsFromAdmin", "Delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin", nil, 87566, Kshithijiyer, Q3FY24)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -752,7 +778,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 						lockedBucketName := fmt.Sprintf("%s-%s-%s-locked", provider, getGlobalLockedBucketName(provider), strings.ToLower(mode))
 						err := CreateS3Bucket(lockedBucketName, true, 3, mode)
 						log.FailOnError(err, "failed to create locked s3 bucket %s", lockedBucketName)
-						err = CreateBackupLocationWithContext(provider, userBackupLocationName, userBackupLocationUID, userCloudCredentialName, userCloudCredentialUID, lockedBucketName, orgID, "", "", nonAdminCtx)
+						err = CreateBackupLocationWithContext(provider, userBackupLocationName, userBackupLocationUID, userCloudCredentialName, userCloudCredentialUID, lockedBucketName, orgID, "", nonAdminCtx, true)
 						log.FailOnError(err, "failed to create locked bucket backup location %s using provider %s for the user", userBackupLocationName, provider)
 						userBackupLocationMap[user] = map[string]string{userBackupLocationUID: userBackupLocationName}
 					}
@@ -865,8 +891,9 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 				}
 				for backupName, namespace := range userBackupMap[user] {
 					wg.Add(1)
-					restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+					restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupName, time.Now().Unix())
 					go createRestore(backupName, restoreName, namespace)
+					restoreNames = append(restoreNames, restoreName)
 				}
 				wg.Wait()
 				log.Infof("The list of user restores taken are: %v", userRestoreMap)
@@ -1023,6 +1050,14 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, restoreName := range restoreNames {
+			err := DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		}
+
 		cleanupUserObjects := func(user string) {
 			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", user)
@@ -1033,7 +1068,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 			err = backup.DeleteUser(user)
 			log.FailOnError(err, "failed to delete user %s", user)
 		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
 		log.FailOnError(err, "failed to cleanup user objects from user")
 	})
 })

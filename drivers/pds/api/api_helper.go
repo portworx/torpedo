@@ -63,7 +63,7 @@ func GetContext() (context.Context, error) {
 			token, err = getBearerToken()
 		} else {
 			token = serviceIdToken
-			log.InfoD("ServiceIdentity Token being used is-  %v", serviceIdToken)
+			log.InfoD("ServiceIdentity Token being used")
 		}
 
 	} else {

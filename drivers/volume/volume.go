@@ -321,11 +321,14 @@ type Driver interface {
 	// IsStorageExpansionEnabled returns true if storage expansion enabled
 	IsStorageExpansionEnabled() (bool, error)
 
-	// IsPureVolume(volume *torpedovolume.Volume) return true if given volume is FA/FB DA volumes
+	// IsPureVolume returns true if given volume belongs FA/FB DA volumes
 	IsPureVolume(volume *Volume) (bool, error)
 
-	// IsPureFileVolume(volume *torpedovolume.Volume) return true if given volume is FB volumes
+	// IsPureFileVolume returns true if given volume belongs to FBDA volumes
 	IsPureFileVolume(volume *Volume) (bool, error)
+
+	// GetProxySpecForAVolume returns the api.ProxySpec associated with the given volume
+	GetProxySpecForAVolume(volume *Volume) (*api.ProxySpec, error)
 
 	// EstimatePoolExpandSize calculates expected pool size based on autopilot rule
 	EstimatePoolExpandSize(apRule apapi.AutopilotRule, pool node.StoragePool, node node.Node) (uint64, error)
@@ -481,6 +484,9 @@ type Driver interface {
 
 	// IsPxReadyOnNode returns true is Px is ready on the node
 	IsPxReadyOnNode(n node.Node) bool
+
+	// GetPxctlStatus returns the PX status using pxctl
+	GetPxctlStatus(n node.Node) (string, error)
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes

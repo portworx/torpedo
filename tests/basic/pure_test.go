@@ -2,6 +2,17 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/units"
+	"strconv"
+
+	"math/rand"
+
+	"github.com/portworx/torpedo/pkg/osutils"
+
+	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/sched-ops/k8s/core"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 	"sync"
 	"time"
@@ -162,7 +173,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 				"FADA/Generic Volumes while kvdb failover in progress", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
+	contexts := make([]*scheduler.Context, 0)
 
 	stepLog := "Validate no panics when creating more number of pods on FADA/Generic " +
 		"Volumes while kvdb failover in progress"
@@ -172,6 +183,10 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 				please use provisioner as portworx.PortworxCsi and storage-device to pure and application as nginx-fa-davol
 			e.x : --app-list nginx-fa-davol --provisioner csi --storage-driver pure
 		*/
+
+		//https://portworx.atlassian.net/browse/PWX-33551
+		err := UpdateDriverVariables(map[string]string{"PURE_REST_TIMEOUT": "60"}, map[string]string{"execution_timeout_sec": "180"})
+		log.FailOnError(err, "error update storage cluster spec with env variables")
 
 		var wg sync.WaitGroup
 		var terminate bool = false
@@ -313,7 +328,7 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 			}
 			return nil, false, nil
 		}
-		_, err := task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
+		_, err = task.DoRetryWithTimeout(waitForPodsRunning, 60*time.Minute, 10*time.Second)
 		log.FailOnError(err, "Error checking pool rebalance")
 
 		for _, eachVol := range allVolumes {
@@ -333,5 +348,1210 @@ var _ = Describe("{BringUpLargePodsVerifyNoPanic}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// This test validates volume token timeout for FADA-volumes
+var _ = Describe("{FADAVolTokenTimout}", func() {
+	/*
+					https://portworx.atlassian.net/browse/PTX-18941
+
+					PWX :
+					https://portworx.atlassian.net/browse/PWX-33632
+
+					Bug Description :
+						The current token manager timeout is 3 minutes. This is not sufficient for FADA volumes since as part of FADA operations a REST call is made to FA.
+		                We have seen slowness in these APIs taking upto 15s to complete. This causes the token timeout to hit and PX to panic.
+
+			1. Deploying nginx pods using two FADA volumes with volume placement strategy, creating volumes on  node-1
+		    2. Deploy nginx pods using two FADA volumes creating 40 volumes at same time on the node-1
+		    3. After that verify volumes are created successfully
+	*/
+	JustBeforeEach(func() {
+
+		StartTorpedoTest("FADAVolTokenTimout", "Validate FADA volumes token timeout when multiple requests hit same node at same time", nil, 0)
+	})
+	stepLog := "Deploy and attach multiple FADA volumes on the same node and validate token request crash"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+		stepLog = "Schedule apps and attach 200+ volumes"
+		i := 0
+		Step(stepLog, func() {
+			contexts = make([]*scheduler.Context, 0)
+			appScale := 200
+
+			for i = 1; i < appScale; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("fadavoltkn-%d", i))...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		var wg sync.WaitGroup
+
+		stepLog = "Attaching 40 volumes at same time"
+		scheduleCount := 40
+		Step(stepLog, func() {
+			scheduleAppParallel := func(c int) {
+				defer wg.Done()
+				defer GinkgoRecover()
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf(fmt.Sprintf("fadavoltkn-%d", c)))...)
+
+			}
+
+			// Create apps in parallel
+			for count := 0; count < scheduleCount; count++ {
+				wg.Add(1)
+				go scheduleAppParallel(i)
+				i++
+			}
+			wg.Wait()
+			ValidateApplications(contexts)
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{FADARemoteDetach}", func() {
+
+	/*
+								https://portworx.atlassian.net/browse/PTX-20624
+
+
+								PWX :
+								https://portworx.atlassian.net/browse/PWX-33898
+								https://portworx.atlassian.net/browse/PWX-34277
+
+								Bug Description :
+									pod is in to ContainerCreation state for longer time when tried to move deployment from one node to other after cordoning the node
+
+							1. Deploying nginx pod with RWO FADA volumes on node-1
+					        2. Cordon the node-1 and rollout another pod consuming same FADA volume in node-2
+				            3. Validate pod is stuck in container creating state.
+							4. Stop PX on node-1, pod running on node-1 should go to Terminating state and pod on node-2 should be in running
+		                    5. Uncordon node-1 and start PX
+							6. pod node-1 should be terminated
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADARemoteDetach", "Validate FADA volume remote detach when px is down", nil, 0)
+	})
+
+	It("create and attach RWO volume. preform remote detach and attach to new pod", func() {
+
+		applist := Inst().AppList
+		var podNode node.Node
+		appPodName := "test-mount-error"
+		var appPod *v1.Pod
+		var newPod *v1.Pod
+
+		var appNamespace string
+		contexts = make([]*scheduler.Context, 0)
+		defer func() {
+			Inst().AppList = applist
+			if podNode.Name != "" {
+				err = Inst().S.EnableSchedulingOnNode(podNode)
+				log.FailOnError(err, "error enabling scheduling on node [%s]", podNode.Name)
+				StartVolDriverAndWait([]node.Node{podNode})
+			}
+
+		}()
+		Inst().AppList = []string{"nginx-fada-deploy"}
+
+		stepLog = "Deploy nginx pod and with RWO FADA Volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			contexts = append(contexts, ScheduleApplications("fadavoldetach")...)
+
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Disable scheduling on the node where pod is running"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			nsList, err := core.Instance().ListNamespaces(map[string]string{"creator": "torpedo"})
+			log.FailOnError(err, "error getting all namespaces")
+
+			for _, ns := range nsList.Items {
+				if strings.Contains(ns.Name, "fadavoldetach") {
+					appNamespace = ns.Name
+					break
+				}
+			}
+			log.Infof("App deployed in namespace %s", appNamespace)
+			appPods, err := core.Instance().GetPods(appNamespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pods in namespace %s", appNamespace))
+			for _, p := range appPods.Items {
+				if strings.Contains(p.Name, appPodName) {
+					appPod = &p
+					break
+				}
+			}
+			if appPod == nil {
+				log.FailOnError(fmt.Errorf("pod with name [%s] not availalbe", appPodName), "error getting app pod")
+			}
+			podNodeName := appPod.Spec.NodeName
+			log.InfoD("pod [%s] is deployed on node %s", appPodName, podNodeName)
+			podNode, err = node.GetNodeByName(podNodeName)
+			log.FailOnError(err, fmt.Sprintf("error getting node with name %s", podNodeName))
+			log.InfoD("Disabling scheduling on node %s", podNodeName)
+			err = Inst().S.DisableSchedulingOnNode(podNode)
+			log.FailOnError(err, fmt.Sprintf("error cordoning the node %s", podNodeName))
+		})
+
+		podVolClaimName := appPod.Spec.Volumes[0].PersistentVolumeClaim.ClaimName
+		stepLog = fmt.Sprintf("Do a rollout restart and create new replacement pod using volume [%s]", podVolClaimName)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			cmd := fmt.Sprintf("kubectl -n %s rollout restart deploy test-mount-error", appNamespace)
+			output, _, err := osutils.ExecShell(cmd)
+			log.FailOnError(err, "failed to run deployment rollout command")
+			if !strings.Contains(output, "restarted") {
+				log.FailOnError(fmt.Errorf("deployment restart failed with error : %s", output), "deployment restart failed")
+			}
+			appPods, err := core.Instance().GetPods(appNamespace, nil)
+			log.FailOnError(err, fmt.Sprintf("error getting pods in namespace %s", appNamespace))
+			for _, p := range appPods.Items {
+				if strings.Contains(p.Name, appPodName) && p.Name != appPod.Name {
+					newPod = &p
+					break
+				}
+			}
+			if newPod == nil {
+				log.FailOnError(fmt.Errorf("new pod with name [%s] is not availalbe", appPodName), "error getting new app pod")
+			}
+
+			err = core.Instance().ValidatePod(newPod, 2*time.Minute, 20*time.Second)
+			if err != nil {
+				currPod, err := core.Instance().GetPodByUID(newPod.UID, newPod.Namespace)
+				log.FailOnError(err, fmt.Sprintf("error getting current pod with UID[%s] in namespace [%s]", newPod.UID, newPod.Namespace))
+				containerState := currPod.Status.ContainerStatuses[0].State
+				if containerState.Waiting != nil {
+					dash.VerifyFatal(containerState.Waiting.Reason, "ContainerCreating", "verify new pod container is in ContainerCreating state")
+				} else {
+					err = fmt.Errorf("current state of pod is %v where as Waiting state is expected", containerState)
+					dash.VerifyFatal(err, nil, "validate new pod state")
+				}
+			}
+		})
+
+		stepLog = fmt.Sprintf("Stop Portworx on node [%s] and validate new pod", podNode.Name)
+		Step(stepLog, func() {
+			StopVolDriverAndWait([]node.Node{podNode})
+			err = core.Instance().ValidatePod(newPod, 5*time.Minute, 10*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("verify new pod [%s] is in ready state", newPod.Name))
+
+			// Waiting for original pod to be in terminating state
+			waitForPodTerminatingState := func() (interface{}, bool, error) {
+				orgPod, err := core.Instance().GetPodByUID(appPod.UID, appPod.Namespace)
+				if err != nil {
+					return nil, true, err
+				}
+				containerState := orgPod.Status.ContainerStatuses[0].State
+				if containerState.Running != nil {
+					return nil, true, fmt.Errorf("container is still in running state")
+				}
+				log.Infof("current state is %v", containerState)
+
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodTerminatingState, 5*time.Minute, 10*time.Second)
+			log.FailOnError(err, fmt.Sprintf("error validating pod with UID[%s] status in namespace [%s]", newPod.UID, newPod.Namespace))
+			StartVolDriverAndWait([]node.Node{podNode})
+			// Waiting for original pod to be in terminating state
+			waitForPodTerminated := func() (interface{}, bool, error) {
+				appPods, err := core.Instance().GetPods(appNamespace, nil)
+				if err != nil {
+					return nil, true, err
+				}
+
+				for _, p := range appPods.Items {
+					if p.Name == appPod.Name {
+						return nil, true, fmt.Errorf("pod [%s] still not terminated. Current state [%v]", appPod.Name, p.Status.ContainerStatuses[0].State)
+					}
+				}
+
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodTerminated, 5*time.Minute, 10*time.Second)
+
+			dash.VerifyFatal(err, nil, "validate original pod is deleted after px is started.")
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Reboots a Node while volume creation is in progress
+/*
+
+https://portworx.testrail.net/index.php?/tests/view/72615025
+
+*/
+
+var _ = Describe("{RebootNodeWhileVolCreate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RebootNodeWhileVolCreate", "Test creates multiple FADA volume and reboots a node while volume creation is in progress", nil, 72615025)
+	})
+	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerReboot) different namespaces and reboots a different node after every NumberOfDeploymentsPerReboot have been queued to schedule", func() {
+		//Provisioner for pure apps
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		n := 3
+		NumberOfDeploymentsPerReboot := 8
+		//Reboot a random storage node n number of times
+		for i := 0; i < n; i++ {
+			// Step 1: Schedule applications
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				Step("Schedule applications", func() {
+					log.InfoD("Scheduling applications")
+					for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
+						taskName := fmt.Sprintf("test-%v", (j+1)+NumberOfDeploymentsPerReboot*i)
+						context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+							AppKeys:            Inst().AppList,
+							StorageProvisioner: Provisioner,
+							PvcSize:            6 * units.GiB,
+						})
+						log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+						contexts = append(contexts, context...)
+					}
+				})
+			}()
+			// Step 2: Pick a random storage node and reboot
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stepLog := "Pick a random storage node and reboot"
+				Step(stepLog, func() {
+
+					log.Infof("Stopping node %s", selectedNode.Name)
+					err := Inst().N.RebootNode(selectedNode,
+						node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+					log.FailOnError(err, "Failed to reboot node %v", selectedNode.Name)
+				})
+			}()
+
+			// Wait for both steps to complete
+			wg.Wait()
+
+			log.Infof("wait for node: %s to be back up", selectedNode.Name)
+			nodeReadyStatus := func() (interface{}, bool, error) {
+				err := Inst().S.IsNodeReady(selectedNode)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+			_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+			log.FailOnError(err, "Failed to reboot node")
+			stepLog = "Validate the applications"
+			Step(stepLog, func() {
+				ValidateApplications(contexts)
+			})
+		}
+		for i := 0; i < n; i++ {
+			stepLog = "Reboot a random node,destroy scheduled apps and check if pvc's are deleted gracefully"
+
+			Step(stepLog, func() {
+				wg.Add(1)
+				// Step 1: Reboot one random storage node
+				go func() {
+					defer wg.Done()
+					stepLog := "Reboot one random storage node"
+					Step(stepLog, func() {
+						err := Inst().N.RebootNode(selectedNode, node.RebootNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         defaultCommandTimeout,
+								TimeBeforeRetry: defaultCommandRetry,
+							},
+						})
+						log.FailOnError(err, "Failed to reboot node")
+					})
+				}()
+				// Step 2: Destroy Application
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Destroy Application"
+					//this wait is added because while reboot some of the pods go to error state and takes time to comeback to normal state
+					log.InfoD("sleep for 2 and half minutes for pods to comeback to running state")
+					time.Sleep((5 / 2) * time.Minute)
+					Step(stepLog, func() {
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						for j := 0; j < NumberOfDeploymentsPerReboot; j++ {
+							TearDownContext(contexts[j+NumberOfDeploymentsPerReboot*i], opts)
+						}
+					})
+				}()
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog = "Wait for node to come up"
+					Step(stepLog, func() {
+						nodeReadyStatus := func() (interface{}, bool, error) {
+							err := Inst().S.IsNodeReady(selectedNode)
+							if err != nil {
+								return "", true, err
+							}
+							return "", false, nil
+						}
+						_, err := DoRetryWithTimeoutWithGinkgoRecover(nodeReadyStatus, 10*time.Minute, 35*time.Second)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the status of rebooted node %s", selectedNode.Name))
+						err = Inst().V.WaitDriverUpOnNode(selectedNode, Inst().DriverStartTimeout)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying the node driver status of rebooted node %s", selectedNode.Name))
+					})
+				}()
+				//wait for both the steps to finish
+				wg.Wait()
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Restart PX on a Node while volume creation is in progress
+/*
+https://portworx.testrail.net/index.php?/tests/view/72615026
+
+*/
+var _ = Describe("{RestartPXWhileVolCreate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 72615026)
+	})
+	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerRestart) different namespaces and restarts portworx on a node where volumes are placed after every NumberOfDeploymentsPerRestart have been queued to schedule", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the node to place volumes and PX will be restarted in this node
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+		//Number of times portworx has to be restarted
+		n := 3
+
+		//Number of apps to be deployed after which a restart can be triggered
+		NumberOfDeploymentsPerRestart := 8
+
+		//Restart portworx n number of times
+		stepLog = "start provisioning nginx apps in the created namespaces and for every NumberOfDeploymentsPerRestart restart portworx on the selected node"
+		Step(stepLog, func() {
+			for i := 0; i < n; i++ {
+
+				// Step 1: Schedule applications
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					Step("Schedule applications", func() {
+						log.InfoD("Scheduling applications")
+						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+							taskName := fmt.Sprintf("test%v", (j)+NumberOfDeploymentsPerRestart*i)
+							context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+								AppKeys:            Inst().AppList,
+								StorageProvisioner: Provisioner,
+								PvcSize:            6 * units.GiB,
+							})
+							log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+							contexts = append(contexts, context...)
+						}
+					})
+				}()
+
+				// Step 2: Restart Portworx
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Restart Portworx"
+					Step(stepLog, func() {
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+						StopVolDriverAndWait([]node.Node{selectedNode})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+						StartVolDriverAndWait([]node.Node{selectedNode})
+					})
+				}()
+				// Wait for both steps to complete
+				wg.Wait()
+				stepLog = "Validate the applications after portworx restart"
+				Step(stepLog, func() {
+					ValidateApplications(contexts)
+				})
+			}
+		})
+		for i := 0; i < n; i++ {
+			stepLog = "Restart portworx,destroy apps and check if the pvc's are deleted gracefully"
+			Step(stepLog, func() {
+
+				// Step 1: Restart Portworx
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Restart Portworx"
+					Step(stepLog, func() {
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+						StopVolDriverAndWait([]node.Node{selectedNode})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+						StartVolDriverAndWait([]node.Node{selectedNode})
+					})
+				}()
+
+				// Step 2: Destroy Application
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Destroy Application"
+					Step(stepLog, func() {
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+							TearDownContext(contexts[j+NumberOfDeploymentsPerRestart*i], opts)
+						}
+					})
+				}()
+				// Wait for both steps to complete
+				wg.Wait()
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Restart PX on a Node while volume creation is in progress
+/*
+https://portworx.testrail.net/index.php?/tests/view/72615026
+
+*/
+var _ = Describe("{RestartPXWhileVolCreate}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("RestartPXWhileVolCreate", "Test creates multiple FADA volume and restarts px on a node while volume creation is in progress", nil, 72615026)
+	})
+	It("schedules nginx fada volumes on (n) * (NumberOfDeploymentsPerRestart) different namespaces and restarts portworx on a node where volumes are placed after every NumberOfDeploymentsPerRestart have been queued to schedule", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the node to place volumes and PX will be restarted in this node
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+		//Number of times portworx has to be restarted
+		n := 3
+
+		//Number of apps to be deployed after which a restart can be triggered
+		NumberOfDeploymentsPerRestart := 8
+
+		//Restart portworx n number of times
+		stepLog = "start provisioning nginx apps in the created namespaces and for every NumberOfDeploymentsPerRestart restart portworx on the selected node"
+		Step(stepLog, func() {
+			for i := 0; i < n; i++ {
+
+				// Step 1: Schedule applications
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					Step("Schedule applications", func() {
+						log.InfoD("Scheduling applications")
+						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+							taskName := fmt.Sprintf("test%v", (j)+NumberOfDeploymentsPerRestart*i)
+							context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+								AppKeys:            Inst().AppList,
+								StorageProvisioner: Provisioner,
+								PvcSize:            6 * units.GiB,
+							})
+							log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+							contexts = append(contexts, context...)
+						}
+					})
+				}()
+
+				// Step 2: Restart Portworx
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Restart Portworx"
+					Step(stepLog, func() {
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+						StopVolDriverAndWait([]node.Node{selectedNode})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+						StartVolDriverAndWait([]node.Node{selectedNode})
+					})
+				}()
+				// Wait for both steps to complete
+				wg.Wait()
+				stepLog = "Validate the applications after portworx restart"
+				Step(stepLog, func() {
+					ValidateApplications(contexts)
+				})
+			}
+		})
+		for i := 0; i < n; i++ {
+			stepLog = "Restart portworx,destroy apps and check if the pvc's are deleted gracefully"
+			Step(stepLog, func() {
+
+				// Step 1: Restart Portworx
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Restart Portworx"
+					Step(stepLog, func() {
+						log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+						StopVolDriverAndWait([]node.Node{selectedNode})
+						log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+						StartVolDriverAndWait([]node.Node{selectedNode})
+					})
+				}()
+
+				// Step 2: Destroy Application
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					stepLog := "Destroy Application"
+					Step(stepLog, func() {
+						opts := make(map[string]bool)
+						opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+						for j := 0; j < NumberOfDeploymentsPerRestart; j++ {
+							TearDownContext(contexts[j+NumberOfDeploymentsPerRestart*i], opts)
+						}
+					})
+				}()
+				// Wait for both steps to complete
+				wg.Wait()
+			})
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// This test Creates multiple FADA volume/app (nginx) - Stop PX on a Node, resize and validate pvc's,delete the apps and check if all the pods,pvc's and volumes are being deleted from the backend
+/*
+https://portworx.testrail.net/index.php?/cases/view/93034
+https://portworx.testrail.net/index.php?/cases/view/93035
+
+*/
+var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("StopPXAddDiskDeleteApps", "Test creates multiple FADA volume and stops px on a node,resize pvc and checks if all the pods,pvc's are being deleted gracefully", nil, 93034)
+	})
+	It("schedules multiple nginx fada volumes, stops portworx on a node where volumes are placed,resize pvc's and checks if all the resources created are deleted gracefully", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		requestedVols := make([]*volume.Volume, 0)
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the node to place volumes and PX will be stopped in this node
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+
+		var err error
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+		//Number of apps to be deployed
+		NumberOfDeployments := 200
+
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for j := 0; j < NumberOfDeployments; j++ {
+				taskName := fmt.Sprintf("test-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = fmt.Sprintf("Stop portworx,resize and validate pvc,destroy apps and check if the pvc's are deleted gracefully")
+		Step(stepLog, func() {
+			stepLog := fmt.Sprintf("Stop Portworx")
+			Step(stepLog, func() {
+				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+				StopVolDriverAndWait([]node.Node{selectedNode})
+			})
+			for _, ctx := range contexts {
+				var appVolumes []*volume.Volume
+				var err error
+				stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					appVolumes, err = Inst().S.GetVolumes(ctx)
+					log.Infof("len of app volumes is : %v", len(appVolumes))
+					if len(appVolumes) == 0 {
+						log.Errorf("found no volumes for app %s", ctx.App.Key)
+					}
+				})
+
+				stepLog = fmt.Sprintf("increase volume size %s on app %s's volumes: %v",
+					Inst().V.String(), ctx.App.Key, appVolumes)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						pvcs, err := GetContextPVCs(ctx)
+						log.FailOnError(err, "Failed to get pvc's from context")
+						for _, pvc := range pvcs {
+							pvcSize := pvc.Spec.Resources.Requests.Storage().String()
+							pvcSize = strings.TrimSuffix(pvcSize, "Gi")
+							pvcSizeInt, err := strconv.Atoi(pvcSize)
+							log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
+							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
+							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
+							log.InfoD("Vol uid %v", resizedVol.ID)
+							requestedVols = append(requestedVols, resizedVol)
+						}
+					})
+				stepLog = fmt.Sprintf("validate successful volume size increase on app %s's volumes: %v",
+					ctx.App.Key, appVolumes)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						for _, v := range requestedVols {
+							// Need to pass token before validating volume
+							params := make(map[string]string)
+							if Inst().ConfigMap != "" {
+								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+								log.FailOnError(err, "didn't get auth token")
+							}
+							err := Inst().V.ValidateUpdateVolume(v, params)
+							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
+						}
+					})
+			}
+			stepLog = fmt.Sprintf("Destroy Application")
+			Step(stepLog, func() {
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for j := 0; j < NumberOfDeployments; j++ {
+					TearDownContext(contexts[j], opts)
+				}
+			})
+			stepLog = fmt.Sprintf("start portworx and wait for it to come up")
+			Step(stepLog, func() {
+				log.Infof("Start volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+				StartVolDriverAndWait([]node.Node{selectedNode})
+			})
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+// This test Kills the PX nodes where FADA volumes are attached, Deletes the pods and PVCs.
+/*
+https://portworx.testrail.net/index.php?/cases/view/92893
+
+*/
+var _ = Describe("{AppCleanUpWhenPxKill}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("AppCleanUpWhenPxKill", "Test creates multiple FADA volume and kills px nodes while the pods and pvc's are being deleted", nil, 72760884)
+	})
+	It("Schedules apps that use FADA volumes, kill the nodes where these volumes are placed while the volumes are being deleted.", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		var wg sync.WaitGroup
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+		rand.Seed(time.Now().Unix())
+
+		//select the one storage node,one storageless node and one KVDB member node to place volumes and kill the nodes while apps are being destroyed
+		storageNodes := node.GetStorageNodes()
+		storageLessNodes := node.GetStorageLessNodes()
+		kvdbNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "Failed to get kvdb nodes")
+		var selectedNodes []node.Node
+		selectedNodes = append(selectedNodes, storageNodes[rand.Intn(len(storageNodes))])
+		selectedNodes = append(selectedNodes, storageLessNodes[rand.Intn(len(storageLessNodes))])
+		for _, kvdbNode := range kvdbNodes {
+			if kvdbNode.ID != selectedNodes[0].Id {
+				selectedKvdbNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+				log.FailOnError(err, "Failed to get kvdb node details")
+				log.InfoD("Selected kvdb node: %v", selectedKvdbNode.Name)
+				selectedNodes = append(selectedNodes, selectedKvdbNode)
+				break
+			}
+		}
+
+		defer func() {
+			Inst().AppList = applist
+			for _, node := range selectedNodes {
+				err = Inst().S.RemoveLabelOnNode(node, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", node.Name)
+			}
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		for _, node := range selectedNodes {
+			err = Inst().S.AddLabelOnNode(node, k8s.NodeType, k8s.ReplVPS)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", node.Name))
+		}
+
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		//Number of apps to be deployed
+		NumberOfAppsToBeDeployed := 300
+
+		stepLog = fmt.Sprintf("schedule application")
+		Step(stepLog, func() {
+			for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+				taskName := fmt.Sprintf("app-cleanup-when-px-kill-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+					PvcSize:            6 * units.GiB,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = fmt.Sprintf("Kill PX nodes,destroy apps and check if the pvc's are deleted gracefully")
+		Step(stepLog, func() {
+			// Step 1: Destroy Applications
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stepLog := "Destroy Applications"
+				Step(stepLog, func() {
+					opts := make(map[string]bool)
+					opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+					for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+						TearDownContext(contexts[j], opts)
+					}
+				})
+			}()
+
+			// Step 2: kill px nodes
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				stepLog := fmt.Sprintf("Kill px nodes")
+				Step(stepLog, func() {
+					for _, selectedNode := range selectedNodes {
+						log.InfoD("Crashing node: %v", selectedNode.Name)
+						err := Inst().N.CrashNode(selectedNode, node.CrashNodeOpts{
+							Force: true,
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+							},
+						})
+						log.FailOnError(err, "Failed to crash node:%v", selectedNode.Name)
+					}
+				})
+			}()
+			// Wait for both steps to complete
+			wg.Wait()
+		})
+		stepLog = fmt.Sprintf("Wait until all the nodes come up")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, selectedNode := range selectedNodes {
+				err = Inst().N.TestConnection(selectedNode, node.ConnectionOpts{
+					Timeout:         defaultTestConnectionTimeout,
+					TimeBeforeRetry: defaultWaitRebootRetry,
+				})
+				log.FailOnError(err, "node:%v Failed to come up?", selectedNode.Name)
+				err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+				log.FailOnError(err, "Portworx not coming up on node:%v", selectedNode.Name)
+
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{ResizePVCToMaxLimit}", func() {
+
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20636
+			https://portworx.atlassian.net/browse/PTX-20637
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/87940
+			https://portworx.testrail.net/index.php?/tests/view/87941
+	*/
+
+	// Backend represents the cloud storage provider for volume provisioning
+	type Backend string
+
+	const (
+		BackendPure    Backend = "PURE"
+		BackendVSphere Backend = "VSPHERE"
+		BackendUnknown Backend = "UNKNOWN"
+	)
+
+	// VolumeType represents the type of provisioned volume
+	type VolumeType string
+
+	const (
+		VolumeFADA    VolumeType = "FADA"
+		VolumeFBDA    VolumeType = "FBDA"
+		VolumeFACD    VolumeType = "FACD"
+		VolumeVsCD    VolumeType = "VsCD"
+		VolumeUnknown VolumeType = "UNKNOWN"
+	)
+
+	var (
+		contexts            = make([]*scheduler.Context, 0)
+		backend             = BackendUnknown
+		volumeMap           = make(map[VolumeType][]*api.Volume)
+		volumeCtxMap        = make(map[string]*scheduler.Context)
+		steps        uint64 = 5
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ResizePVCToMaxLimit", "Validate PVC resize to max limit", nil, 87940)
+	})
+
+	It("Validates PVC resize to max limit", func() {
+		// getPureMaxVolSize returns the maximum volume size based on the given volume type on pure backend
+		getPureMaxVolSize := func(volType VolumeType) uint64 {
+			switch volType {
+			case VolumeFADA, VolumeFBDA:
+				return 100 * units.TiB
+			default:
+				return uint64(MaxVolumeSize) * units.TiB
+			}
+		}
+		// getMaxVolSize gets the maximum volume size based on the given backend and volume type
+		getMaxVolSize := func(backend Backend, volType VolumeType) uint64 {
+			switch backend {
+			case BackendPure:
+				return getPureMaxVolSize(volType)
+			default:
+				return 40 * units.TiB
+			}
+		}
+		// getResizeSequence generates a sequence of sizes to resize to, based on the start, max values and number of steps
+		getResizeSequence := func(start uint64, max uint64, steps uint64) []uint64 {
+			seq := make([]uint64, 0)
+			if steps == 0 {
+				return []uint64{max}
+			}
+			if start >= max {
+				log.Errorf("start value [%d] should be less than max value [%d]", start, max)
+				return nil
+			}
+			d := (max - start) / steps
+			for i := uint64(1); i <= steps; i++ {
+				value := start + i*d
+				seq = append(seq, value)
+			}
+			return seq
+		}
+		// getPureVolumeType determines the type of the volume based on the proxy spec
+		getPureVolumeType := func(vol *volume.Volume) (VolumeType, error) {
+			proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+			if err != nil {
+				return "", fmt.Errorf("failed to get proxy spec for the volume [%s/%s]. Err: [%v]", vol.Namespace, vol.Name, err)
+			}
+			if proxySpec != nil {
+				switch proxySpec.ProxyProtocol {
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					return VolumeFBDA, nil
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					return VolumeFADA, nil
+				default:
+					return VolumeUnknown, nil
+				}
+			} else {
+				return VolumeFACD, nil
+			}
+		}
+		// formatMaxVolSizeReachedErrorMessage formats the error message when the maximum volume size is reached
+		formatMaxVolSizeReachedErrorMessage := func(allowedSize uint64, requestedSize uint64) string {
+			return "rpc error: code = Internal desc = Failed to update volume: " +
+				"rpc error: code = Internal desc = Failed to update volume: " +
+				"Feature upgrade needed. Licensed maximum reached for " +
+				"'VolumeSize' feature (allowed " + fmt.Sprintf("%d", allowedSize/units.GiB) +
+				" GiB, requested " + fmt.Sprintf("%d", requestedSize/units.GiB) + " GiB)\n"
+		}
+		// getContextAndPVC retrieves the scheduler context and PVC spec associated with a given volume
+		getContextAndPVC := func(vol *api.Volume) (*scheduler.Context, *v1.PersistentVolumeClaim, error) {
+			pvcName := vol.Spec.VolumeLabels["pvc"]
+			namespace := vol.Spec.VolumeLabels["namespace"]
+			pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, namespace)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get PVC [%s/%s] spec", pvcName, namespace)
+			}
+			if ctx, ok := volumeCtxMap[vol.Id]; !ok {
+				return nil, nil, fmt.Errorf("context associated with PVC [%s/%s] not found", pvcName, namespace)
+			} else {
+				return ctx, pvc, nil
+			}
+		}
+		// getPVCSize returns the requested storage size of the given PVC in bytes
+		getPVCSize := func(pvc *v1.PersistentVolumeClaim) (uint64, error) {
+			storage, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]
+			if !ok {
+				return 0, fmt.Errorf("failed to get storage resource request from PVC [%v]", pvc)
+			}
+			return uint64(storage.Value()), nil
+		}
+		// resizePVC resizes the given PVC using K8s API
+		resizePVC := func(volType VolumeType, vol *api.Volume, newSize uint64) error {
+			ctx, pvc, err := getContextAndPVC(vol)
+			if err != nil {
+				return fmt.Errorf("failed to get pvc from contexts. Err: [%v]", err)
+			}
+			pvcSize, err := getPVCSize(pvc)
+			if err != nil {
+				return fmt.Errorf("failed to get pvc [%v] size. Err: [%v]", pvc, err)
+			}
+			// adjustedSize ensures ResizePVC sets the volume to newSize
+			adjustedSize := newSize - pvcSize
+			log.Infof("Adjusted size for resizing [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, adjustedSize)
+			_, err = Inst().S.ResizePVC(ctx, pvc, adjustedSize/units.GiB)
+			if err != nil {
+				return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, pvcSize, newSize, err)
+			}
+			return nil
+		}
+		// resizeVolume attempts to resize the volume to the maximum allowed size
+		resizeVolume := func(volType VolumeType, vol *api.Volume) error {
+			maxVolSize := getMaxVolSize(backend, volType)
+			previousSize := vol.Spec.Size
+			resizeSequence := getResizeSequence(vol.Spec.Size, maxVolSize, steps)
+			log.Infof("Original size of [%s] volume [%s/%s] is [%d]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size)
+			waitForResizeCompletionBasedOnSize := func(newSize uint64) (interface{}, bool, error) {
+				vol, err = Inst().V.InspectVolume(vol.Id)
+				if err != nil {
+					return nil, false, fmt.Errorf("failed to inspect [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+				}
+				if vol.Spec.Size == newSize {
+					return nil, false, nil
+				}
+				return nil, true, fmt.Errorf("volume size mismatch: inspected [%d], estimated [%d]", vol.Spec.Size, newSize)
+			}
+			for _, newSize := range resizeSequence {
+				log.Infof("Resizing [%s] volume [%s/%s] from [%d] to [%d]", volType, vol.Id, vol.Locator.Name, previousSize, newSize)
+				switch volType {
+				case VolumeFADA:
+					err = resizePVC(volType, vol, newSize)
+				default:
+					err = Inst().V.ResizeVolume(vol.Id, newSize)
+				}
+				if err != nil {
+					return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, previousSize, newSize, err)
+				}
+				waitForResizeCompletion := func() (interface{}, bool, error) {
+					return waitForResizeCompletionBasedOnSize(newSize)
+				}
+				_, err = task.DoRetryWithTimeout(waitForResizeCompletion, 10*time.Minute, 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to wait for volume [%s] resize completion. Err: [%v]", vol.Locator.Name, err)
+				}
+				previousSize = newSize
+			}
+			newSize := 2 * previousSize
+			log.Infof("Resizing [%s] volume [%s/%s] from [%d] to size [%d], which is over the limit [%d]", volType, vol.Id, vol.Locator.Name, previousSize, newSize, maxVolSize)
+			switch volType {
+			case VolumeFADA:
+				err = resizePVC(volType, vol, newSize)
+				waitForResizeCompletion := func() (interface{}, bool, error) {
+					return waitForResizeCompletionBasedOnSize(newSize)
+				}
+				_, err = task.DoRetryWithTimeout(waitForResizeCompletion, 10*time.Minute, 30*time.Second)
+				if err != nil {
+					return fmt.Errorf("failed to wait for volume [%s] resize completion. Err: [%v]", vol.Locator.Name, err)
+				}
+			default:
+				err = Inst().V.ResizeVolume(vol.Id, newSize)
+			}
+			if err != nil {
+				switch err.Error() {
+				case formatMaxVolSizeReachedErrorMessage(vol.Spec.Size, newSize):
+					log.InfoD("Skipping error [%v] as it falls within expected behavior", err)
+					return nil
+				default:
+					return fmt.Errorf("failed to resize [%s] volume [%s/%s] from [%d] to [%d]. Err: [%v]", volType, vol.Id, vol.Locator.Name, vol.Spec.Size, newSize, err)
+				}
+			}
+			return nil
+		}
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("pure-test-%d", i)
+				for _, ctx := range ScheduleApplications(taskName) {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+				}
+			}
+		})
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Identify backend and categorize volumes", func() {
+			log.InfoD("Identifying backend")
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
+			log.FailOnError(err, "failed to get secret list from namespace [%s]", volDriverNamespace)
+			for _, secret := range secretList.Items {
+				switch secret.Name {
+				case PX_PURE_SECRET_NAME:
+					backend = BackendPure
+					break
+				case PX_VSPHERE_SCERET_NAME:
+					backend = BackendVSphere
+					break
+				}
+			}
+			log.InfoD("Backend: %v", backend)
+			log.InfoD("Categorizing volumes")
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
+				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for resizing")
+				// The CloudStorage.Provider in StorageCluster Spec is not accurate
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					switch backend {
+					case BackendPure:
+						volType, err := getPureVolumeType(vol)
+						log.FailOnError(err, "failed to get pure volume type for volume [%+v]", vol)
+						volumeMap[volType] = append(volumeMap[volType], apiVol)
+					case BackendVSphere:
+						volumeMap[VolumeVsCD] = append(volumeMap[VolumeVsCD], apiVol)
+					default:
+						volumeMap[VolumeUnknown] = append(volumeMap[VolumeUnknown], apiVol)
+					}
+					volumeCtxMap[apiVol.Id] = ctx
+				}
+			}
+		})
+		Step("Resize a random volume of each type to max limit", func() {
+			log.InfoD("Resizing a random volume of each type to max limit")
+			for volType, vols := range volumeMap {
+				if len(vols) > 0 {
+					log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+					vol := vols[rand.Intn(len(vols))]
+					log.InfoD("Resizing random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(backend, volType))
+					err := resizeVolume(volType, vol)
+					log.FailOnError(err, "failed to resize random [%s] volume [%s/%s] to max limit [%d]", volType, vol.Id, vol.Locator.Name, getMaxVolSize(backend, volType))
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Destroying applications")
+		DestroyApps(contexts, opts)
 	})
 })

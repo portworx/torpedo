@@ -2,6 +2,7 @@ package pdsrestore
 
 import (
 	"fmt"
+	"github.com/onsi/ginkgo"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	ds "github.com/portworx/torpedo/drivers/pds/dataservice"
@@ -14,10 +15,11 @@ import (
 )
 
 const (
-	restoreTimeOut         = 30 * time.Minute
 	restoreTimeInterval    = 20 * time.Second
 	restoreMaxTimeInterval = 1 * time.Minute
 )
+
+var restoreTimeOut = 30 * time.Minute
 
 type RestoreClient struct {
 	TenantId             string
@@ -80,6 +82,16 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 
 // WaitForRestoreAndValidate will wait for the restore to complete and validate its configuration
 func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds.ModelsRestore, bkpDsEntity DSEntity, nsName string) error {
+
+	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
+	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	log.Debugf("Testcase Name %v", testName)
+
+	if testName == "{ValidateDSHealthStatusOnNodeFailures}" {
+		log.Debugf("Updating the restoreTimeout to 2min")
+		restoreTimeOut = 2 * time.Minute
+	}
+
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
 		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
 		state := restore.GetStatus()
@@ -115,6 +127,24 @@ func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds
 	return nil
 }
 
+func (restoreClient *RestoreClient) RestoreDataServiceWithRbac(pdsRestoreTargetClusterID string, backupJobId string, namespace string, bkpDsEntity DSEntity, pdsNamespaceId string, validate bool) (*pds.ModelsRestore, error) {
+
+	restoredModel, err := restoreClient.Components.Restore.RestoreToNewDeployment(backupJobId, "autom-res", pdsRestoreTargetClusterID, pdsNamespaceId)
+	if err != nil {
+		log.Errorf("Failed during restore.")
+		return nil, fmt.Errorf("failed during restore")
+	}
+
+	if validate {
+		err = restoreClient.WaitForRestoreAndValidate(restoredModel, bkpDsEntity, namespace)
+		if err != nil {
+			log.Errorf("Failed to validate restored dataservice")
+			return nil, fmt.Errorf("failed to validate restored dataservice")
+		}
+	}
+	return restoredModel, nil
+}
+
 func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string, string, error) {
 	randomName := generateRandomName("restore")
 	_, err := restoreClient.RestoreTargetCluster.CreateNamespace(randomName)
@@ -126,6 +156,34 @@ func (restoreClient *RestoreClient) getNameSpaceId(pdsClusterId string) (string,
 		return "", "", fmt.Errorf("unable to fetch  %v", randomName)
 	}
 	return randomName, nsId, nil
+}
+func (restoreClient *RestoreClient) getNameSpaceIdCustomNs(pdsClusterId string, nsName string) (string, string, error) {
+	nsName, nsId, err := restoreClient.getNameSpaceId(pdsClusterId)
+	if err != nil {
+		return "", "", fmt.Errorf("unable to fetch  %v", nsName)
+	}
+	return nsName, nsId, nil
+}
+
+func (restoreClient *RestoreClient) GetNameSpaceNameToRestore(backupJobId string, pdsRestoreTargetClusterID string, namespace string, isRestoreInSameNS bool) (string, string, error) {
+	var bkpJob *pds.ModelsBackupJob
+	var nsName string
+	var pdsNamespaceId string
+	var err error
+	if !isRestoreInSameNS {
+		nsName, pdsNamespaceId, err = restoreClient.getNameSpaceIdCustomNs(pdsRestoreTargetClusterID, namespace)
+		if err != nil {
+			return "", "", nil
+		}
+	} else {
+		bkpJob, err = restoreClient.Components.BackupJob.GetBackupJob(backupJobId)
+		if err != nil {
+			return "", "", nil
+		}
+		nsName, pdsNamespaceId = namespace, bkpJob.GetNamespaceId()
+	}
+	log.Infof("backup Job - %v,Restore Target Cluster Id - %v, NamespaceId - %v", backupJobId, pdsRestoreTargetClusterID, pdsNamespaceId)
+	return nsName, pdsNamespaceId, nil
 }
 
 func (restoreClient *RestoreClient) ValidateRestore(bkpDsEntity, restoreDsEntity DSEntity) error {

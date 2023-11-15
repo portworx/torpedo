@@ -26,6 +26,8 @@ type VirtualMachineOps interface {
 	StartVirtualMachine(*kubevirtv1.VirtualMachine) error
 	// StopVirtualMachine Stop VirtualMachine
 	StopVirtualMachine(*kubevirtv1.VirtualMachine) error
+	// RestartVirtualMachine restarts VirtualMachine
+	RestartVirtualMachine(*kubevirtv1.VirtualMachine) error
 }
 
 // ListVirtualMachines List Kubevirt VirtualMachine in given namespace
@@ -76,8 +78,9 @@ func (c *Client) ValidateVirtualMachineRunning(name, namespace string, timeout, 
 	}
 
 	// Start the VirtualMachine if its not Started yet
-	if !*vm.Spec.Running {
-		if err = instance.StartVirtualMachine(vm); err != nil {
+	if vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopped ||
+		vm.Status.PrintableStatus == kubevirtv1.VirtualMachineStatusStopping {
+		if err = c.StartVirtualMachine(vm); err != nil {
 			return fmt.Errorf("Failed to start VirtualMachine %v", err)
 		}
 	}
@@ -119,4 +122,12 @@ func (c *Client) StopVirtualMachine(vm *kubevirtv1.VirtualMachine) error {
 	}
 
 	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Stop(vm.GetName(), &kubevirtv1.StopOptions{})
+}
+
+// RestartVirtualMachine restarts VirtualMachine
+func (c *Client) RestartVirtualMachine(vm *kubevirtv1.VirtualMachine) error {
+	if err := c.initClient(); err != nil {
+		return err
+	}
+	return c.kubevirt.VirtualMachine(vm.GetNamespace()).Restart(vm.GetName(), &kubevirtv1.RestartOptions{})
 }

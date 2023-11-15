@@ -46,7 +46,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 	singleNamespaceBkp = "singleNamespaceBkp"
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteNfsExecutorPodWhileBackupAndRestoreInProgress", "Delete nfs executor pod while backup and restore are in progress and validate the status", nil, 86105)
+		StartPxBackupTorpedoTest("DeleteNfsExecutorPodWhileBackupAndRestoreInProgress", "Delete nfs executor pod while backup and restore are in progress and validate the status", nil, 86105, Sagrawal, Q3FY24)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
@@ -76,7 +76,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 				bkpLocationName = fmt.Sprintf("%s-%s-%s", provider, getGlobalBucketName(provider), RandomString(10))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, "", "", getGlobalBucketName(provider), orgID, "")
+				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, "", "", getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
 			}
 		})

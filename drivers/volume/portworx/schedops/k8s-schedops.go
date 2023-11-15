@@ -321,7 +321,7 @@ func (k *k8sSchedOps) validateDevicesInPods(
 			return validatedDevicePods, err
 		}
 		log.Debugf("validating the devices in pod %s/%s", p.Namespace, p.Name)
-		containerPaths := getContainerPVCMountMap(*pod)
+		containerPaths := GetContainerPVCMountMap(*pod)
 		if len(containerPaths) == 0 {
 			return validatedDevicePods, fmt.Errorf("pod: [%s] %s does not have raw block devices.", pod.Namespace, pod.Name)
 		}
@@ -376,7 +376,7 @@ PodLoop:
 		}
 
 		log.Debugf("validating the mounts in pod %s/%s", p.Namespace, p.Name)
-		containerPaths := getContainerPVCMountMap(*pod)
+		containerPaths := GetContainerPVCMountMap(*pod)
 		skipHostMountCheck := false
 		for containerName, paths := range containerPaths {
 			log.Infof("container [%s] has paths [%v]", containerName, paths)
@@ -400,8 +400,8 @@ PodLoop:
 				}
 				symlinkPath = strings.TrimSpace(symlinkPath)
 				if symlinkPath != "" && symlinkPath != path {
-					paths = append(paths[:i], paths[i+1:]...)
-					paths = append(paths, symlinkPath)
+					log.Infof("Linked path found for [%s] -> [%s]", path, symlinkPath)
+					paths[i] = symlinkPath
 				}
 			}
 			log.Infof("container [%s] and paths [%v] after checking sym links", containerName, paths)
@@ -414,12 +414,6 @@ PodLoop:
 					if len(pxMounts) > 0 {
 						log.Debugf("pod: [%s] %s has PX mount: %v", pod.Namespace, pod.Name, pxMounts)
 						pxMountFound = true
-
-						// If we encounter a Pure volume, we should skip the host mount check as we can't get the
-						// volume serial to confirm which volume it is (which is what the path contains)
-						if regexp.MustCompile(pureMapperRegex).MatchString(line) {
-							skipHostMountCheck = true
-						}
 
 						// in case there are two pods running with non shared volume, one of them will be in read-only
 						if isMountReadOnly(line) {
@@ -453,8 +447,12 @@ PodLoop:
 			IgnoreError:     true,
 		}
 
+		grepPattern := pvName // For normal PX vols, and for FBDA, we can grep for the filesystem name
+		if pureType, ok := vol.Labels[k8sdriver.PureDAVolumeLabel]; ok && pureType == k8sdriver.PureDAVolumeLabelValueFA {
+			grepPattern = strings.ToLower(vol.Labels[k8sdriver.FADAVolumeSerialLabel]) // FADA we need to grep by volume serial
+		}
 		volMount, _ := d.RunCommand(currentNode,
-			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_)' | grep %s", pvName), connOpts)
+			fmt.Sprintf("cat /proc/mounts | grep -E '(pxd|pxfs|pxns|pxd-enc|loop|px_|/dev/mapper)' | grep %s", grepPattern), connOpts)
 		if len(volMount) == 0 {
 			return validatedMountPods, fmt.Errorf("volume %s not mounted on node %s", vol.Name, currentNode.Name)
 		}
@@ -860,9 +858,9 @@ func (k *k8sSchedOps) GetRemotePXNodes(destKubeConfig string) ([]node.Node, erro
 	return remoteNodeList, nil
 }
 
-// getContainerPVCMountMap is a helper routine to return map of containers in the pod that
+// GetContainerPVCMountMap is a helper routine to return map of containers in the pod that
 // have a PVC. The values in the map are the mount paths of the PVC
-func getContainerPVCMountMap(pod corev1.Pod) map[string][]string {
+func GetContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 	containerPaths := make(map[string][]string)
 
 	// Each pvc in a pod spec has a associated name (which is different from the actual PVC name).

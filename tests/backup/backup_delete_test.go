@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,96 +17,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
-
-// createBackupUntilIncrementalBackup creates backup until incremental backups is created returns the name of the incremental backup created
-func createBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContextToBackup *scheduler.Context, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string) (string, error) {
-	namespace := scheduledAppContextToBackup.ScheduleOptions.Namespace
-	incrementalBackupName := fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-	err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
-	if err != nil {
-		return "", fmt.Errorf("creation and validation of incremental backup [%s] creation", incrementalBackupName)
-	}
-
-	log.InfoD("Check if backups are incremental backups or not")
-	backupDriver := Inst().Backup
-	ctx, err = backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return "", fmt.Errorf("fetching px-central-admin ctx")
-	}
-	bkpUid, err := backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch backup UID - %s", incrementalBackupName)
-	}
-
-	bkpInspectReq := &api.BackupInspectRequest{
-		Name:  incrementalBackupName,
-		OrgId: orgID,
-		Uid:   bkpUid,
-	}
-	bkpInspectResponse, err := backupDriver.InspectBackup(ctx, bkpInspectReq)
-	if err != nil {
-		return "", fmt.Errorf("unable to fetch backup - %s", incrementalBackupName)
-	}
-
-	for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
-		backupId := vol.GetBackupId()
-		log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
-		if strings.Contains(backupId, "incr") {
-			return incrementalBackupName, nil
-		} else {
-			// Attempting to take backups and checking if they are incremental or not
-			// as the original incremental backup which we took has taken a full backup this is mostly
-			// because CloudSnap is taking full backup instead of incremental backup as it's hitting one of
-			// the if else condition in CloudSnap which forces it to take full instead of incremental backup
-			log.InfoD("New backup wasn't an incremental backup hence recreating new backup")
-			listOfVolumes := make(map[string]bool)
-			noFailures := true
-			for maxBackupsBeforeIncremental := 0; maxBackupsBeforeIncremental < 8; maxBackupsBeforeIncremental++ {
-				log.InfoD(fmt.Sprintf("Recreate incremental backup iteration: %d", maxBackupsBeforeIncremental))
-				// Create a new incremental backups
-				incrementalBackupName = fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
-				err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
-				if err != nil {
-					return "", fmt.Errorf("verifying incremental backup [%s] creation", incrementalBackupName)
-				}
-
-				// Check if they are incremental or not
-				bkpUid, err = backupDriver.GetBackupUID(ctx, incrementalBackupName, orgID)
-				if err != nil {
-					return "", fmt.Errorf("unable to fetch backup - %s", incrementalBackupName)
-				}
-				bkpInspectReq := &api.BackupInspectRequest{
-					Name:  incrementalBackupName,
-					OrgId: orgID,
-					Uid:   bkpUid,
-				}
-				bkpInspectResponse, err = backupDriver.InspectBackup(ctx, bkpInspectReq)
-				if err != nil {
-					return "", fmt.Errorf("unable to fetch backup - %s", incrementalBackupName)
-				}
-				for _, vol := range bkpInspectResponse.GetBackup().GetVolumes() {
-					backupId := vol.GetBackupId()
-					log.InfoD(fmt.Sprintf("Backup Name: %s; BackupID: %s", incrementalBackupName, backupId))
-					if !strings.Contains(backupId, "incr") {
-						listOfVolumes[backupId] = false
-					} else {
-						listOfVolumes[backupId] = true
-					}
-				}
-				for id, isIncremental := range listOfVolumes {
-					if !isIncremental {
-						log.InfoD(fmt.Sprintf("Backup %s wasn't a incremental backup", id))
-						noFailures = false
-					}
-				}
-				if noFailures {
-					break
-				}
-			}
-		}
-	}
-	return incrementalBackupName, nil
-}
 
 // IssueDeleteOfIncrementalBackupsAndRestore Issues delete of incremental backups in between and tries to restore from
 // the newest backup.
@@ -135,8 +44,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("IssueDeleteOfIncrementalBackupsAndRestore",
-			"Issue delete of incremental backups and try to restore the newest backup", nil, 58056)
+		StartPxBackupTorpedoTest("IssueDeleteOfIncrementalBackupsAndRestore",
+			"Issue delete of incremental backups and try to restore the newest backup", nil, 58056, Kshithijiyer, Q1FY24)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -183,7 +92,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 				}
 				_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredCreateStatus, 10*time.Minute, 30*time.Second)
 				customBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
-				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 				backupLocationMap[backupLocationUID] = customBackupLocationName
 				log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
@@ -313,8 +222,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	backupLocationMap := make(map[string]string)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
-			"Delete incremental Backups and re-create them", nil, 58039)
+		StartPxBackupTorpedoTest("DeleteIncrementalBackupsAndRecreateNew",
+			"Delete incremental Backups and re-create them", nil, 58039, Kshithijiyer, Q1FY24)
 		log.InfoD("Deploy applications")
 
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -350,7 +259,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating cloud credential %s", credName))
 				log.InfoD("Created Cloud Credentials with name - %s", credName)
 				customBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
-				err := CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "")
+				err := CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 				backupLocationMap[backupLocationUID] = customBackupLocationName
 				log.InfoD("Created Backup Location with name - %s", customBackupLocationName)
@@ -466,7 +375,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBucketVerifyCloudBackupMissing", "Validates the backup state (CloudBackupMissing) when bucket is deleted.", nil, 58070)
+		StartPxBackupTorpedoTest("DeleteBucketVerifyCloudBackupMissing", "Validates the backup state (CloudBackupMissing) when bucket is deleted.", nil, 58070, Ak, Q1FY24)
 		log.Infof("Deploying applications required for the testcase")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -508,8 +417,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 				backupLocationMap[backupLocationUID] = bkpLocationName
 				err := CreateCloudCredential(provider, cloudAccountName, cloudAccountUID, orgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud account named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
-				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudAccountName, cloudAccountUID,
-					localBucketNameMap[provider], orgID, "")
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudAccountName, cloudAccountUID, localBucketNameMap[provider], orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
 		})
@@ -692,8 +600,8 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBackupAndCheckIfBucketIsEmpty",
-			"Delete backups and verify if contents are deleted from backup location or not", nil, 58071)
+		StartPxBackupTorpedoTest("DeleteBackupAndCheckIfBucketIsEmpty",
+			"Delete backups and verify if contents are deleted from backup location or not", nil, 58071, Kshithijiyer, Q2FY24)
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -742,7 +650,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", credName, orgID, provider))
 				log.InfoD("Created Cloud Credentials with name - %s", credName)
 				customBackupLocationName = fmt.Sprintf("autogenerated-backup-location-%v", time.Now().Unix())
-				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, customBucketName, orgID, "")
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, cloudCredUID, customBucketName, orgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 				backupLocationMap[backupLocationUID] = customBackupLocationName
 			}

@@ -9,13 +9,20 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
+
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+
 	kubevirtv1 "kubevirt.io/api/core/v1"
+
 	"math/rand"
 	"net/http"
 	"regexp"
 	"runtime"
+
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"golang.org/x/sync/errgroup"
@@ -108,6 +115,7 @@ import (
 	// import ibm driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
+
 	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
 
@@ -232,6 +240,7 @@ const (
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
+	defaultnamespace                   = "default"
 
 	milestoneFlag               = "testrail-milestone"
 	testrailRunNameFlag         = "testrail-run-name"
@@ -289,7 +298,10 @@ const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
 	BackupRestoreCompletionTimeoutMin = 20
-	clusterDeleteTimeout              = 10 * time.Minute
+	clusterDeleteTimeout              = 60 * time.Minute
+	clusterDeleteRetryTime            = 30 * time.Second
+	poolExpandApplyTimeOut            = 15 * time.Minute
+	poolExpandApplyRetryTime          = 30 * time.Second
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -299,6 +311,8 @@ const (
 	SchedulePolicyScaleName           = "schedule-policy-scale"
 	BucketNamePrefix                  = "tp-backup-bucket"
 	mongodbStatefulset                = "pxc-backup-mongodb"
+	AwsS3encryptionPolicy             = "s3:x-amz-server-side-encryption=AES256"
+	AwsS3Sid                          = "DenyNonAES256Uploads"
 )
 
 const (
@@ -332,12 +346,14 @@ const (
 	waitResourceCleanup       = 2 * time.Minute
 	defaultTimeout            = 5 * time.Minute
 	defaultVolScaleTimeout    = 4 * time.Minute
+	defaultIbmVolScaleTimeout = 8 * time.Minute
 	defaultRetryInterval      = 10 * time.Second
 	defaultCmdTimeout         = 20 * time.Second
 	defaultCmdRetryInterval   = 5 * time.Second
 	defaultDriverStartTimeout = 10 * time.Minute
 	defaultKvdbRetryInterval  = 5 * time.Minute
 	addDriveUpTimeOut         = 15 * time.Minute
+	podDestroyTimeout         = 5 * time.Minute
 )
 
 const (
@@ -431,9 +447,11 @@ var (
 )
 
 const (
-	rootLogDir    = "/root/logs"
-	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
-	pxbLogDirPath = "/tmp/px-backup-test-logs"
+	rootLogDir            = "/root/logs"
+	diagsDirPath          = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath         = "/tmp/px-backup-test-logs"
+	KubevirtNamespace     = "kubevirt"
+	LatestKubevirtVersion = "v1.0.0"
 )
 
 type Weekday string
@@ -465,6 +483,13 @@ type PlatformCredentialStruct struct {
 	credUID  string
 }
 
+type (
+	// TestcaseAuthor represents the owner of a Testcase
+	TestcaseAuthor string
+	// TestcaseQuarter represents the fiscal quarter during which the Testcase is automated
+	TestcaseQuarter string
+)
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
@@ -488,6 +513,7 @@ func InitInstance() {
 		SecureApps:                       Inst().SecureAppList,
 		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
 		AnthosInstancePath:               Inst().AnthosInstPath,
+		UpgradeHops:                      Inst().SchedUpgradeHops,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -848,18 +874,27 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		Step("validate mount options for pure volumes", func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateMountOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			processError(err, errChan...)
+		}
 
-		Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
-			}
-		})
+		// Ignore mount path check if current version is < 3.0.0 (https://portworx.atlassian.net/browse/PWX-34000)
+		log.InfoD("Validate current Version [%v]", driverVersion)
+		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+		if !re.MatchString(driverVersion) {
+			Step("validate mount options for pure volumes", func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
 
+			Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+				if !ctx.SkipVolumeValidation {
+					ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+				}
+			})
+		}
 	})
 }
 
@@ -977,7 +1012,12 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
 			}
 			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-			err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			// If provisioner is IBM increase the timeout to 8 min
+			if Inst().Provisioner == "ibm" {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+			} else {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			}
 			if err != nil {
 				PrintDescribeContext(ctx)
 				processError(err, errChan...)
@@ -1417,6 +1457,7 @@ func ValidateCreateOptionsWithPureVolumes(ctx *scheduler.Context, errChan ...*ch
 		} else {
 			log.Infof("Storage class doesn't have createoption -b of size 2048 added to it")
 		}
+
 	}
 }
 
@@ -2010,6 +2051,84 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 	err = Inst().V.ValidateStoragePools()
 	expect(err).NotTo(haveOccurred())
 
+}
+
+// ValidateRuleNotApplied is validating storage pool, but expects the error to occur
+func ValidateRuleNotApplied(contexts []*scheduler.Context, name string) {
+
+	strExpansionEnabled, err := Inst().V.IsStorageExpansionEnabled()
+	expect(err).NotTo(haveOccurred())
+
+	if strExpansionEnabled {
+		log.InfoD("Validating Error shows up in events")
+		fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+		waitForActiveAction := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+			expect(err).NotTo(haveOccurred())
+			for _, e := range events.Items {
+				if strings.Contains(e.Message, "ActiveActionsInProgress") {
+					log.InfoD("Found Active action is in progress in autopilot events")
+					return e.Message, false, nil
+				}
+			}
+			return "", true, fmt.Errorf("Autopilot rule not applied yet")
+		}
+		_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+		checkRuleFailed := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+			expect(err).NotTo(haveOccurred())
+			for _, e := range events.Items {
+				if strings.Contains(e.Message, "cloud drive is not initialized") {
+					log.InfoD("Found the error, stating cloud drive is not initialized")
+					log.InfoD("Message in log is: %s", e.Message)
+					return e.Message, false, nil
+				}
+			}
+			return "", true, fmt.Errorf("Autopilot rule did not fail yet")
+		}
+		_, err = task.DoRetryWithTimeout(checkRuleFailed, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+		expect(err).NotTo(haveOccurred())
+	}
+}
+
+// ValidateRuleNotTriggered is validating PVC to see if rule is not triggered
+func ValidateRuleNotTriggered(contexts []*scheduler.Context, name string) {
+	log.InfoD("Validating rule is active")
+	fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+	waitForActiveAction := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Initializing => Normal") {
+				log.InfoD("Found rule which is initialized")
+				return e.Message, false, nil
+			}
+		}
+		return "", true, fmt.Errorf("Autopilot rule not applied yet")
+	}
+	_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+	checkCount := 0
+	checkRuleTriggered := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Triggered") {
+				log.InfoD("Message in log is: %s", e.Message)
+				return e.Message, false, fmt.Errorf("Triggered found in Autopilot rule.")
+			}
+		}
+		if checkCount <= 10 {
+			checkCount += 1
+			return "", true, fmt.Errorf("Autopilot rule did not trigger yet")
+		} else {
+			log.InfoD("Rule not triggered yet, which is expected")
+			return "", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkRuleTriggered, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
 }
 
 // ValidatePxPodRestartCount validates portworx restart count
@@ -2882,7 +3001,17 @@ func SetClusterContext(clusterConfigPath string) error {
 	log.InfoD("Switched context to [%s]", clusterConfigPathForLog)
 	// To update the rancher client for current cluster context
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {
-		err := Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
+		if !strings.HasPrefix(clusterConfigPath, "/tmp/") {
+			if clusterConfigPath == "" {
+				err = Inst().S.(*rke.Rancher).UpdateRancherClient("source-config")
+				if err != nil {
+					return fmt.Errorf("failed to update rancher client for default source cluster context with error: [%v]", err)
+				}
+				return nil
+			}
+			return fmt.Errorf("invalid clusterConfigPath: %s for %s cluster provider", clusterConfigPath, drivers.ProviderRke)
+		}
+		err = Inst().S.(*rke.Rancher).UpdateRancherClient(strings.Split(clusterConfigPath, "/tmp/")[1])
 		if err != nil {
 			return fmt.Errorf("failed to update rancher client for %s with error: [%v]", clusterConfigPath, err)
 		}
@@ -3599,15 +3728,19 @@ func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName
 
 // DeleteCluster deletes/de-registers cluster from px-backup
 func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
-
 	backupDriver := Inst().Backup
+	clusterUid, err := backupDriver.GetClusterUID(ctx, orgID, name)
+	if err != nil {
+		return err
+	}
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
 		DeleteBackups:  cleanupBackupsRestores,
 		DeleteRestores: cleanupBackupsRestores,
+		Uid:            clusterUid,
 	}
-	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	_, err = backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
 }
 
@@ -3625,7 +3758,7 @@ func DeleteClusterWithUID(name string, uid string, orgID string, ctx context1.Co
 	if err != nil {
 		return err
 	}
-	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterCreationRetryTime)
+	err = backupDriver.WaitForClusterDeletionWithUID(ctx, name, uid, orgID, clusterDeleteTimeout, clusterDeleteRetryTime)
 	if err != nil {
 		return err
 	}
@@ -3696,7 +3829,11 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	if err != nil {
 		return err
 	}
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
@@ -3842,7 +3979,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						if err != nil {
 							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
 						}
-						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, Invalid, Read, adminCtx, orgID)
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, Invalid, Read, adminCtx, orgID)
 						if err != nil {
 							return fmt.Errorf("failed to share the cloud cred with error %v", err)
 						}
@@ -3874,7 +4011,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						if err != nil {
 							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
 						}
-						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
 						if err != nil {
 							return fmt.Errorf("failed to share the cloud cred with error %v", err)
 						}
@@ -3908,7 +4045,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						if err != nil {
 							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
 						}
-						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
 						if err != nil {
 							return fmt.Errorf("failed to share the cloud cred with error %v", err)
 						}
@@ -3940,7 +4077,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						if err != nil {
 							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
 						}
-						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
 						if err != nil {
 							return fmt.Errorf("failed to share the cloud cred with error %v", err)
 						}
@@ -3972,7 +4109,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						if err != nil {
 							return fmt.Errorf("failed to create cloud cred %s with error %v", clusterCredName, err)
 						}
-						err = UpdateCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
+						err = AddCloudCredentialOwnership(clusterCredName, clusterCredUid, nil, nil, 0, Read, adminCtx, orgID)
 						if err != nil {
 							return fmt.Errorf("failed to share the cloud cred with error %v", err)
 						}
@@ -4000,33 +4137,43 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 }
 
 // CreateBackupLocation creates backup location
-func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) error {
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, validate bool) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
+		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
-		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, validate)
 	}
 	return err
 }
 
 // CreateBackupLocationWithContext creates backup location using the given context
-func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, subPath string, ctx context1.Context) error {
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
+		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
-		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
+		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocationWithContext(name, uid, subPath, orgID, encryptionKey, ctx, true)
+		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, validate)
+	}
+	return err
+}
+
+// UpdateBackupLocation updates s3 backup location with the provided values
+func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, ctx, sseS3EncryptionType, false)
 	}
 	return err
 }
@@ -4226,14 +4373,43 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 		log.Warnf("failed to create cloud credential with name [%s] in org [%s] with [%s] as provider with error [%v]", credName, orgID, provider, err)
 		return err
 	}
+	// check for cloud cred status
+	cloudCredStatus := func() (interface{}, bool, error) {
+		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		if err != nil {
+			return "", true, fmt.Errorf("cloud cred %s present with error %v", credName, err)
+		}
+		if status {
+			return "", true, nil
+		}
+		return "", false, nil
+	}
+	_, err = task.DoRetryWithTimeout(cloudCredStatus, defaultTimeout, defaultRetryInterval)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 // CreateS3BackupLocation creates backup location for S3
-func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
-	time.Sleep(60 * time.Second)
+func CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		return err
+	}
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4241,8 +4417,9 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4253,14 +4430,10 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    sseType,
 				},
 			},
 		},
-	}
-
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
 	}
 
 	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
@@ -4271,9 +4444,21 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 }
 
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
-func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	var err error
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
+	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  name,
@@ -4281,8 +4466,9 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4293,12 +4479,49 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
+					SseType:    sseType,
 				},
 			},
 		},
 	}
 
-	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// UpdateS3BackupLocation updates s3 backup location with the provided values
+func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
+
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationUpdateReq := &api.BackupLocationUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			ValidateCloudCredential: validate,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseS3EncryptionType,
+				},
+			},
+		},
+	}
+
+	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationUpdateReq)
 	if err != nil {
 		return err
 	}
@@ -4306,7 +4529,7 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 }
 
 // CreateAzureBackupLocation creates backup location for Azure
-func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4316,8 +4539,9 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4337,7 +4561,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 }
 
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
-func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4346,8 +4570,9 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4363,7 +4588,7 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 }
 
 // CreateGCPBackupLocation creates backup location for Google cloud
-func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4373,8 +4598,9 @@ func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCre
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4394,7 +4620,7 @@ func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCre
 }
 
 // CreateGCPBackupLocationWithContext creates backup location for Google cloud
-func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context) error {
+func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4404,8 +4630,9 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4413,11 +4640,7 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Type: api.BackupLocationInfo_Google,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -5265,12 +5488,13 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 }
 
 func IsNFSSubPathEmpty(subPath string) (bool, error) {
+	//TODO enhance the method to work with NFS server on cloud
 	// Get NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
 
-	// Mount the NFS share to the master node.
-	masterNode := node.GetMasterNodes()[0]
+	// Mount the NFS share to the worker node.
+	masterNode := node.GetWorkerNodes()[0]
 	mountCmds := []string{
 		fmt.Sprintf("mkdir -p %s", mountDir),
 		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
@@ -5377,7 +5601,7 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 		fmt.Sprintf("Failed to wait for bucket [%v] to get created. Error: [%v]", bucketName, err))
 
 	if retainCount > 0 && objectLock == true {
-		// Update ObjectLockConfigureation to bucket
+		// Update ObjectLockConfiguration to bucket
 		enabled := "Enabled"
 		_, err = S3Client.PutObjectLockConfiguration(&s3.PutObjectLockConfigurationInput{
 			Bucket: aws.String(bucketName),
@@ -5388,10 +5612,67 @@ func CreateS3Bucket(bucketName string, objectLock bool, retainCount int64, objec
 						Days: aws.Int64(retainCount),
 						Mode: aws.String(objectLockMode)}}}})
 		if err != nil {
-			err = fmt.Errorf("Failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
+			err = fmt.Errorf("failed to update Objectlock config with Retain Count [%v] and Mode [%v]. Error: [%v]", retainCount, objectLockMode, err)
 		}
 	}
 	return err
+}
+
+// UpdateS3BucketPolicy applies the given policy to the given bucket.
+func UpdateS3BucketPolicy(bucketName string, policy string) error {
+
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to get S3 session to update bucket policy : [%v]", err)
+	}
+	s3Client := s3.New(sess)
+	_, err = s3Client.PutBucketPolicy(&s3.PutBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+		Policy: aws.String(policy),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update bucket policy with Policy [%v]. Error: [%v]", policy, err)
+	}
+	return nil
+}
+
+// RemoveS3BucketPolicy removes the given policy from the given bucket.
+func RemoveS3BucketPolicy(bucketName string) error {
+	// Create a new S3 client.
+	id, secret, endpoint, s3Region, disableSslBool := s3utils.GetAWSDetailsFromEnv()
+	sess, err := session.NewSession(&aws.Config{
+		Endpoint:         aws.String(endpoint),
+		Credentials:      credentials.NewStaticCredentials(id, secret, ""),
+		Region:           aws.String(s3Region),
+		DisableSSL:       aws.Bool(disableSslBool),
+		S3ForcePathStyle: aws.Bool(true),
+	},
+	)
+	if err != nil {
+		return fmt.Errorf("Failed to get S3 session to remove S3 bucket policy : [%v]", err)
+	}
+
+	s3Client := s3.New(sess)
+
+	// Create a new DeleteBucketPolicyInput object.
+	input := &s3.DeleteBucketPolicyInput{
+		Bucket: aws.String(bucketName),
+	}
+
+	// Delete the bucket policy.
+	_, err = s3Client.DeleteBucketPolicy(input)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // CreateAzureBucket creates bucket in Azure
@@ -6062,7 +6343,13 @@ func CollectLogsFromPods(testCaseName string, podLabel map[string]string, namesp
 
 	// Check to handle cloud based deployment with 0 master nodes
 	if len(node.GetMasterNodes()) == 0 {
-		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s]", logLabel, testCaseName)
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's cloud cluster", logLabel, testCaseName)
+		return
+	}
+
+	// In case of ocp skip log collection
+	if Inst().S.String() == openshift.SchedName {
+		log.Warnf("Skipping pod log collection for pods with [%s] label in test case [%s] as it's ocp cluster", logLabel, testCaseName)
 		return
 	}
 
@@ -6702,6 +6989,11 @@ func EnableAutoFSTrim() {
 func EndTorpedoTest() {
 	CloseLogger(TestLogger)
 	dash.TestCaseEnd()
+}
+
+// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
+func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
@@ -9034,68 +9326,6 @@ func IsVolumeExits(volName string) bool {
 	return isVolExist
 }
 
-// UpdateCloudCredentialOwnership updates the CloudCredential object ownership
-func UpdateCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context, orgID string) error {
-	log.Infof("UpdateCloudCredentialOwnership for users %v", userNames)
-	backupDriver := Inst().Backup
-	userIDs := make([]string, 0)
-	groupIDs := make([]string, 0)
-	for _, userName := range userNames {
-		userID, err := backup.FetchIDOfUser(userName)
-		if err != nil {
-			return err
-		}
-		userIDs = append(userIDs, userID)
-	}
-
-	for _, group := range groups {
-		groupID, err := backup.FetchIDOfGroup(group)
-		if err != nil {
-			return err
-		}
-		groupIDs = append(groupIDs, groupID)
-	}
-
-	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, userID := range userIDs {
-		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     userID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
-	}
-
-	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
-
-	for _, groupID := range groupIDs {
-		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
-			Id:     groupID,
-			Access: api.Ownership_AccessType(accessType),
-		}
-		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
-	}
-
-	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
-		OrgId: orgID,
-		Name:  cloudCredentialName,
-		Ownership: &api.Ownership{
-			Groups:        groupCloudCredentialOwnershipAccessConfigs,
-			Collaborators: userCloudCredentialOwnershipAccessConfigs,
-			Public: &api.Ownership_PublicAccessControl{
-				Type: api.Ownership_AccessType(publicAccess),
-			},
-		},
-		Uid: cloudCredentialUid,
-	}
-
-	_, err := backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
-	if err != nil {
-		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
-	}
-	return nil
-}
-
 func ValidateCRMigration(pods *v1.PodList, appData *asyncdr.AppData) error {
 	pods_created_len := len(pods.Items)
 	log.InfoD("Num of Pods on source: %v", pods_created_len)
@@ -9185,6 +9415,7 @@ type ProvisionStatus struct {
 	NodeStatus    string
 	PoolID        string
 	PoolUUID      string
+	PoolStatus    string
 	IoPriority    string
 	TotalSize     float64
 	AvailableSize float64
@@ -9209,17 +9440,58 @@ func convertToGiB(size string) float64 {
 	return -1
 }
 
-func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
+// GetClusterProvisionStatusOnSpecificNode Returns provision status from the specific node
+func GetClusterProvisionStatusOnSpecificNode(n node.Node) ([]ProvisionStatus, error) {
 	clusterProvision := []ProvisionStatus{}
-	pattern := `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
 	cmd := "pxctl cluster provision-status list"
+	output, err := runCmdGetOutput(cmd, n)
+	if err != nil {
+		log.Infof("running command [%v] failed on Node [%v]", cmd, n.Name)
+		return nil, err
+	}
+	log.InfoD("Output of CMD Output [%v]", output)
 
+	lines := strings.Split(output, "\n")
+	pattern := `(\S+)\s+(\S+)\s+\S+\s+(\S+)\s+(\S+)\s+\(\s+(\S+)\s+\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	if !strings.Contains(lines[0], "HOSTNAME") {
+		// This is needed as in 2.x.y output don't print HOSTNAME
+		pattern = `(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\(\s(\S+)\s\)\s+(\S+)\s+(\S+)\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+(\S+\s\S+)+\s+`
+	}
+	// Compile the regex pattern
+	r := regexp.MustCompile(pattern)
+
+	for _, eachLine := range lines {
+		var provisionStatus ProvisionStatus
+		if !strings.Contains(eachLine, "NODE") {
+			matches := r.FindStringSubmatch(eachLine)
+			if len(matches) > 0 {
+				provisionStatus.NodeUUID = matches[1]
+				provisionStatus.IpAddress = matches[2]
+				provisionStatus.NodeStatus = matches[3]
+				provisionStatus.PoolID = matches[4]
+				provisionStatus.PoolUUID = matches[5]
+				provisionStatus.PoolStatus = matches[6]
+				provisionStatus.IoPriority = matches[7]
+				provisionStatus.TotalSize = convertToGiB(matches[8])
+				provisionStatus.AvailableSize = convertToGiB(matches[9])
+				provisionStatus.UsedSize = convertToGiB(matches[10])
+				clusterProvision = append(clusterProvision, provisionStatus)
+			}
+		}
+	}
+	log.Infof("Cluster provision status [%v]", clusterProvision)
+	return clusterProvision, nil
+}
+
+// GetClusterProvisionStatus  returns details of cluster provision status
+func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	// Using Node which is up and running
 	var selectedNode []node.Node
-	for _, eachNode := range node.GetNodes() {
+	for _, eachNode := range node.GetStorageDriverNodes() {
 		status, err := IsPxRunningOnNode(&eachNode)
 		if err != nil {
-			return nil, err
+			log.InfoD("Px is not running on the Node.. searching for other node")
+			continue
 		}
 		if status {
 			selectedNode = append(selectedNode, eachNode)
@@ -9229,33 +9501,17 @@ func GetClusterProvisionStatus() ([]ProvisionStatus, error) {
 	if len(selectedNode) == 0 {
 		return nil, fmt.Errorf("No Valid node exists")
 	}
-	output, err := runCmdGetOutput(cmd, selectedNode[0])
+
+	// Select Random Volumes for pool Expand
+	randomIndex := rand.Intn(len(selectedNode))
+	randomNode := selectedNode[randomIndex]
+
+	clusterProvision, err := GetClusterProvisionStatusOnSpecificNode(randomNode)
 	if err != nil {
 		return nil, err
 	}
-	// Compile the regex pattern
-	r := regexp.MustCompile(pattern)
 
-	lines := strings.Split(output, "\n")
-	for _, eachLine := range lines {
-		var provisionStatus ProvisionStatus
-		if !strings.Contains(eachLine, "NODE ID") {
-			matches := r.FindStringSubmatch(eachLine)
-			if len(matches) > 0 {
-				provisionStatus.NodeUUID = matches[1]
-				provisionStatus.IpAddress = matches[2]
-				provisionStatus.HostName = matches[3]
-				provisionStatus.NodeStatus = matches[4]
-				provisionStatus.PoolID = matches[5]
-				provisionStatus.PoolUUID = matches[6]
-				provisionStatus.IoPriority = matches[7]
-				provisionStatus.TotalSize = convertToGiB(matches[8])
-				provisionStatus.AvailableSize = convertToGiB(matches[9])
-				provisionStatus.UsedSize = convertToGiB(matches[10])
-				clusterProvision = append(clusterProvision, provisionStatus)
-			}
-		}
-	}
+	log.Infof("Cluster provision status [%v]", clusterProvision)
 	return clusterProvision, nil
 }
 
@@ -9287,6 +9543,7 @@ func GetPoolAvailableSize(poolUUID string) (float64, error) {
 	return -1, err
 }
 
+// GetAllPoolsOnNode Returns list of all pool uuids present on specific Node
 func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 	var poolDetails []string
 	provision, err := GetClusterProvisionStatus()
@@ -9316,6 +9573,7 @@ func GetGkeSecret() (string, error) {
 	return cm.Data["cloud-json"], nil
 }
 
+// WaitForSnapShotToReady returns snapshot status after waiting till snapshot gets to Ready state
 func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace string) (*storkapi.ScheduledVolumeSnapshotStatus, error) {
 
 	var schedVolumeSnapstatus *storkapi.ScheduledVolumeSnapshotStatus
@@ -9350,5 +9608,255 @@ func WaitForSnapShotToReady(snapshotScheduleName, snapshotName, appNamespace str
 	_, err := task.DoRetryWithTimeout(delVol, time.Duration(3)*appReadinessTimeout, 30*time.Second)
 
 	return schedVolumeSnapstatus, err
+}
 
+// IsCloudCredPresent checks whether the Cloud Cred is present or not
+func IsCloudCredPresent(cloudCredName string, ctx context1.Context, orgID string) (bool, error) {
+	cloudCredEnumerateRequest := &api.CloudCredentialEnumerateRequest{
+		OrgId:          orgID,
+		IncludeSecrets: false,
+	}
+	cloudCredObjs, err := Inst().Backup.EnumerateCloudCredentialByUser(ctx, cloudCredEnumerateRequest)
+	if err != nil {
+		return false, err
+	}
+	for _, cloudCredObj := range cloudCredObjs.GetCloudCredentials() {
+		if cloudCredObj.GetName() == cloudCredName {
+			log.Infof("Cloud Credential [%s] is present", cloudCredName)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// GetAllPoolsPresent returns list of all pools present in the cluster
+func GetAllPoolsPresent() ([]string, error) {
+	var poolDetails []string
+	provision, err := GetClusterProvisionStatus()
+	if err != nil {
+		return nil, err
+	}
+	for _, eachProvision := range provision {
+		poolDetails = append(poolDetails, eachProvision.PoolUUID)
+	}
+	return poolDetails, nil
+}
+
+// AddCloudCredentialOwnership adds new ownership to the existing CloudCredential object.
+func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid string, userNames []string, groups []string, accessType OwnershipAccessType, publicAccess OwnershipAccessType, ctx context1.Context, orgID string) error {
+	backupDriver := Inst().Backup
+	userIDs := make([]string, 0)
+	groupIDs := make([]string, 0)
+	for _, userName := range userNames {
+		userID, err := backup.FetchIDOfUser(userName)
+		if err != nil {
+			return err
+		}
+		userIDs = append(userIDs, userID)
+	}
+
+	for _, group := range groups {
+		groupID, err := backup.FetchIDOfGroup(group)
+		if err != nil {
+			return err
+		}
+		groupIDs = append(groupIDs, groupID)
+	}
+
+	userCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, userID := range userIDs {
+		userCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     userID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, userCloudCredentialOwnershipAccessConfig)
+	}
+
+	groupCloudCredentialOwnershipAccessConfigs := make([]*api.Ownership_AccessConfig, 0)
+
+	for _, groupID := range groupIDs {
+		groupCloudCredentialOwnershipAccessConfig := &api.Ownership_AccessConfig{
+			Id:     groupID,
+			Access: api.Ownership_AccessType(accessType),
+		}
+		groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, groupCloudCredentialOwnershipAccessConfig)
+	}
+
+	cloudCredentialInspectRequest := &api.CloudCredentialInspectRequest{
+		OrgId: orgID,
+		Name:  cloudCredentialName,
+		Uid:   cloudCredentialUid,
+	}
+	cloudCredentialInspectResp, err := Inst().Backup.InspectCloudCredential(ctx, cloudCredentialInspectRequest)
+	if err != nil {
+		return err
+	}
+	currentGroupsConfigs := cloudCredentialInspectResp.CloudCredential.GetOwnership().GetGroups()
+	groupCloudCredentialOwnershipAccessConfigs = append(groupCloudCredentialOwnershipAccessConfigs, currentGroupsConfigs...)
+	currentUsersConfigs := cloudCredentialInspectResp.CloudCredential.GetOwnership().GetCollaborators()
+	userCloudCredentialOwnershipAccessConfigs = append(userCloudCredentialOwnershipAccessConfigs, currentUsersConfigs...)
+
+	cloudCredentialOwnershipUpdateReq := &api.CloudCredentialOwnershipUpdateRequest{
+		OrgId: orgID,
+		Name:  cloudCredentialName,
+		Ownership: &api.Ownership{
+			Groups:        groupCloudCredentialOwnershipAccessConfigs,
+			Collaborators: userCloudCredentialOwnershipAccessConfigs,
+			Public: &api.Ownership_PublicAccessControl{
+				Type: api.Ownership_AccessType(publicAccess),
+			},
+		},
+		Uid: cloudCredentialUid,
+	}
+
+	_, err = backupDriver.UpdateOwnershipCloudCredential(ctx, cloudCredentialOwnershipUpdateReq)
+	if err != nil {
+		return fmt.Errorf("failed to update CloudCredential ownership : %v", err)
+	}
+	return nil
+}
+
+// GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string, enforceServerSideEncryption ...bool) (string, error) {
+
+	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
+	if len(encryptionPolicyValues) < 2 {
+		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
+	}
+	var enforceSse string
+	if len(enforceServerSideEncryption) == 0 {
+		// If enableServerSideEncryption is not passed , default it to true
+		enforceSse = "true"
+	}
+	policy := `{
+	   "Version": "2012-10-17",
+	   "Statement": [
+		  {
+			 "Sid": "%s",
+			 "Effect": "Deny",
+			 "Principal": "*",
+			 "Action": "s3:PutObject",
+			 "Resource": "arn:aws:s3:::%s/*",
+			 "Condition": {
+				"StringNotEquals": {
+				   "%s":"%s"
+				}
+			 }
+		  },
+		  {
+			"Sid": "DenyUnencryptedObjectUploads",
+			"Effect": "Deny",
+			"Principal": "*",
+			"Action": "s3:PutObject",
+			"Resource": "arn:aws:s3:::%s/*",
+			"Condition": {
+				"Null": {
+					"%s":"%s"
+				}
+			}
+		  }	
+	   ]
+	}`
+
+	// Replace the placeholders in the policy with the values passed to the function.
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1], bucketName, encryptionPolicyValues[0], enforceSse)
+
+	return policy, nil
+}
+
+// GetSseS3EncryptionType fetches SSE type for S3 bucket from the environment variable
+func GetSseS3EncryptionType() (api.S3Config_Sse, error) {
+	var sseType api.S3Config_Sse
+	s3SseTypeEnv := os.Getenv("S3_SSE_TYPE")
+	if s3SseTypeEnv != "" {
+		sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+		if err != nil {
+			return sseType, err
+		}
+		switch sseDetails.SseType {
+		case s3utils.SseS3:
+			sseType = api.S3Config_SSE_S3
+		default:
+			return sseType, fmt.Errorf("failed to sse s3 encryption type not valid: [%v]", sseDetails.SseType)
+		}
+	} else {
+		sseType = api.S3Config_Invalid
+	}
+	return sseType, nil
+}
+
+func UpdateDriverVariables(envVar, runTimeOpts map[string]string) error {
+	// Get PX StorageCluster
+	clusterSpec, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+
+	var newEnvVarList []corev1.EnvVar
+
+	//Update environment variables in the spec
+	if envVar != nil && len(envVar) > 0 {
+		for _, env := range clusterSpec.Spec.Env {
+			newEnvVarList = append(newEnvVarList, env)
+		}
+
+		for k, v := range envVar {
+			newEnvVarList = append(newEnvVarList, corev1.EnvVar{Name: k, Value: v})
+		}
+		clusterSpec.Spec.Env = newEnvVarList
+	}
+
+	//Update RunTimeOpts in the spec
+	if runTimeOpts != nil && len(runTimeOpts) > 0 {
+		if clusterSpec.Spec.RuntimeOpts == nil {
+			clusterSpec.Spec.RuntimeOpts = make(map[string]string)
+		}
+		for k, v := range runTimeOpts {
+			clusterSpec.Spec.RuntimeOpts[k] = v
+		}
+	}
+
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(clusterSpec)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Deleting PX pods for reloading the runtime Opts")
+	err = DeletePXPods(clusterSpec.Namespace)
+	if err != nil {
+		return err
+	}
+	_, err = optest.ValidateStorageClusterIsOnline(clusterSpec, 10*time.Minute, 3*time.Minute)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Waiting for PX Nodes to be up")
+	for _, n := range node.GetStorageDriverNodes() {
+		if err := Inst().V.WaitDriverUpOnNode(n, 15*time.Minute); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeletePXPods delete px pods
+func DeletePXPods(nameSpace string) error {
+	pxLabel := make(map[string]string)
+	pxLabel["name"] = "portworx"
+	if err := core.Instance().DeletePodsByLabels(nameSpace, pxLabel, podDestroyTimeout); err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetKubevirtVersionToUpgrade() string {
+	kubevirtVersion, present := os.LookupEnv("KUBEVIRT_UPGRADE_VERSION")
+	if present {
+		return kubevirtVersion
+	}
+	return LatestKubevirtVersion
 }
