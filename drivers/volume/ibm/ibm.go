@@ -76,6 +76,7 @@ func (i *ibm) RefreshDriverEndpoints() error {
 	return nil
 }
 
+// InspectVolume inspects the volume with the given name
 func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 	log.Warnf("InspectVolume function has not been implemented for volume driver - %s", i.String())
 	return nil, &errors.ErrNotSupported{
