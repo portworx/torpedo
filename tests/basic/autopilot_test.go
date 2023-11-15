@@ -195,7 +195,6 @@ var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
 })
 
 var pvcRule = aututils.PVCRuleByTotalSize(10, 100, "20Gi")
-
 // This test checks if removing the label from PVC will not trigger a rule, but when added back it should update the PVC
 var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 	var testrailID = 93307
@@ -233,10 +232,10 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 		})
 		msg := "Removing the label"
 		log.Infof(msg)
-		Step(msg, func() {
+		Step(msg, func(){
 			time.Sleep(5 * time.Second)
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s-No-OP", pvcRule.Name)
+			pvcRule.Spec.Selector.MatchLabels["autopilot"] =  fmt.Sprintf("%s-No-OP", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -248,7 +247,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 		log.InfoD(msg)
 		Step(msg, func() {
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s", pvcRule.Name)
+			pvcRule.Spec.Selector.MatchLabels["autopilot"] =  fmt.Sprintf("%s", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
