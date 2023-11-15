@@ -1063,11 +1063,6 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 			processError(err, errChan...)
 		})
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
-		})
-
 		var vols map[string]map[string]string
 		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
 			vols, err = Inst().S.GetVolumeParameters(ctx)
@@ -1105,6 +1100,11 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 

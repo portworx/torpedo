@@ -1791,7 +1791,7 @@ type pureLocalPathEntry struct {
 }
 
 func GetSerialFromWWID(wwid string) (string, error) {
-	if !strings.Contains(wwid, "24a937") {
+	if !strings.Contains(wwid, schedops.PureVolumeOUI) {
 		return "", fmt.Errorf("not a Pure Storage multipath WWID '%s'", wwid)
 	}
 
@@ -1800,7 +1800,7 @@ func GetSerialFromWWID(wwid string) (string, error) {
 		return strings.ToLower(fmt.Sprintf("%s%s", wwid[6:20], wwid[26:36])), nil
 	}
 	// SCSI
-	return strings.TrimPrefix(strings.ToLower(wwid), "3624a9370"), nil
+	return strings.TrimPrefix(strings.ToLower(wwid), "36"+schedops.PureVolumeOUI), nil
 }
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
@@ -1835,7 +1835,7 @@ func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
 		}
 
 		// If we see a WWID, we are starting a new entry
-		if strings.Contains(line, "24a937") {
+		if strings.Contains(line, schedops.PureVolumeOUI) {
 			if currentEntry != nil {
 				foundDevices[currentEntry.WWID] = *currentEntry
 			}
@@ -1887,7 +1887,7 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 	}
 	dmsetupFoundMappers := []string{}
 	for _, line := range strings.Split(out, "\n") {
-		if !strings.Contains(line, "24a937") {
+		if !strings.Contains(line, schedops.PureVolumeOUI) {
 			continue
 		}
 		mapperName := strings.Split(line, "\t")[0]
@@ -1911,6 +1911,10 @@ func (d *portworx) collectLocalNodeInfo(n node.Node) (map[string]pureLocalPathEn
 	lsblkParsed, err := parseLsblkOutput(out)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse lsblk output on node %s, Err: %v", n.MgmtIp, err)
+	}
+
+	if len(lsblkParsed) != len(dmsetupFoundMappers) {
+		return nil, fmt.Errorf("found %d mappers in dmsetup but %d devices in lsblk on node %s, inconsistent disk state (we didn't clean something up right?)", len(dmsetupFoundMappers), len(lsblkParsed), n.MgmtIp)
 	}
 
 	// Also, raise an error if there is a mismatch in the devices in the two outputs (e.g. if there is a mapper
