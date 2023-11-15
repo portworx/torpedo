@@ -868,7 +868,7 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 	)
 
 	BeforeEach(func() {
-		Inst().AppList = []string{"fio-fastpath-rep1"}
+		Inst().AppList = []string{"fio-fastpath-repl1"}
 		contexts = ScheduleApplications("storagefull-resize")
 		appList = Inst().AppList
 	})
