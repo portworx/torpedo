@@ -21,7 +21,7 @@ import (
 var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 
 	var (
-		newAdminNamespace           string
+		newAdminNamespace           string // New admin namespace to be set as custom admin namespace
 		backupName                  string
 		scheduledAppContexts        []*scheduler.Context
 		bkpNamespaces               []string
@@ -48,7 +48,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		scheduleNames               []string
 	)
 	JustBeforeEach(func() {
-		newAdminNamespace = "stork-namespace-ghyfp"
+		newAdminNamespace = StorkNamePrefix + "-" + RandomString(5) // Randomly generating the value for custom admin namespace
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 		bkpNamespaces = make([]string, 0)
 		restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -58,7 +58,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		numDeployments = 2 // 2 apps deployed in 2 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "All namespace backup and restore all namespaces", nil, 83717, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 83717, ATrivedi, Q4FY24)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
@@ -74,7 +74,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			}
 		}
 	})
-	It("Restore after adding and removing admin namespace", func() {
+	It("Backup and restore with non existing custom admin namespace", func() {
 
 		Step("Validating deployed applications", func() {
 			log.InfoD("Validating deployed applications")
@@ -231,7 +231,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			log.FailOnError(err, "Unable to delete admin namespace")
 			log.InfoD("Namespace - %v - deleted successfully", newAdminNamespace)
 		})
-		Step("Taking backup of multiple namespaces after admin namespace removal", func() {
+		Step("Taking backup of multiple namespaces after admin namespace removal", func() { // This step should fail
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
@@ -243,7 +243,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			dash.VerifyFatal(strings.Contains(err.Error(), "CR"), true, fmt.Sprintf("Backup creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 		Step("Creating schedule backups for applications after admin namespace removal", func() {
-			log.InfoD("Creating schedule backups")
+			log.InfoD("Creating schedule backups - This should recreate the admin namespace")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
@@ -252,9 +252,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
 			backupNames = append(backupNames, scheduleBackupName)
-			k8sCore := core.Instance()
-			allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
-			log.Infof("All namespaces after schedule backup %v", allNamespaces)
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
