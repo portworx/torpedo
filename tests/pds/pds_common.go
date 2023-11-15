@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/node"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -503,6 +504,49 @@ func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
 	replPools := replicaSets[0].PoolUuids
 
 	return replPools, replicaNodes, nil
+}
+
+func GetVolumeNodesOnWhichPxIsRunning(namespace string, deployment *pds.ModelsDeployment) []node.Node {
+	var volNodes []string
+	var nodesToStopPx []node.Node
+	var nodeToStopPx string
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	for _, vol := range vols {
+		_, volNodes, _ = GetReplicaNodes(vol)
+	}
+	for _, volNode := range volNodes {
+		nodeToStopPx = volNode
+	}
+	stopPxNode, err := node.GetNodeByName(nodeToStopPx)
+	if err != nil {
+		log.FailOnError(err, "Error while getting PX Node to Restart")
+	}
+	log.InfoD("Going ahead and stopping PX the node %v as there is an ", stopPxNode)
+	nodesToStopPx = append(nodesToStopPx, stopPxNode)
+	return nodesToStopPx
+}
+func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
+	log.InfoD("I AM IN STOP PX VOL NODE")
+	err = Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if err != nil {
+		log.FailOnError(err, "Error while trying to STOP PX on the volNode- [%v]", nodesToStopPx)
+	}
+	log.InfoD("PX stopped successfully on node %v", nodesToStopPx)
+	return nil
+}
+
+func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
+	log.InfoD("I AM IN START PX VOL NODE")
+	for _, nodeName := range nodesToStartPx {
+		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
+		err = Inst().V.RestartDriver(nodeName, nil)
+		if err != nil {
+			log.FailOnError(err, "Error while trying to ReStarting PX on the volNode- [%v]", nodeName)
+			return err
+		}
+		log.InfoD("PX ReStarted successfully on node %v", nodeName)
+	}
+	return nil
 }
 
 func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
