@@ -195,6 +195,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCVolDetached}", testSuiteName), func() {
 })
 
 var pvcRule = aututils.PVCRuleByTotalSize(10, 100, "20Gi")
+
 // This test checks if removing the label from PVC will not trigger a rule, but when added back it should update the PVC
 var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 	var testrailID = 93307
@@ -232,10 +233,10 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 		})
 		msg := "Removing the label"
 		log.Infof(msg)
-		Step(msg, func(){
+		Step(msg, func() {
 			time.Sleep(5 * time.Second)
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] =  fmt.Sprintf("%s-No-OP", pvcRule.Name)
+			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s-No-OP", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -247,7 +248,7 @@ var _ = Describe(fmt.Sprintf("{%sPVCLabelChange}", testSuiteName), func() {
 		log.InfoD(msg)
 		Step(msg, func() {
 			pvcRule, err := Inst().S.GetAutopilotRule(pvcRule.Name)
-			pvcRule.Spec.Selector.MatchLabels["autopilot"] =  fmt.Sprintf("%s", pvcRule.Name)
+			pvcRule.Spec.Selector.MatchLabels["autopilot"] = fmt.Sprintf("%s", pvcRule.Name)
 			_, err = Inst().S.UpdateAutopilotRule(pvcRule)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -1825,12 +1826,15 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sAutoPoolExpandCrashTest", testSuiteName))
 		poolLabel := map[string]string{"node-type": "fastpath"}
 		crashedNodes := make([]node.Node, 0)
-		storageNode := node.GetStorageDriverNodes()[2]
+		storageNode := node.GetStorageNodes()[0]
 		crashedNodes = append(crashedNodes, storageNode)
 		log.InfoD("storage pool %s", storageNode.Name)
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(80, 50, aututils.RuleScaleTypeAddDisk),
 		}
+		//get global pool size before expand
+		poolSizeBeforeExpand := getGlobalPoolSize()
+		log.InfoD("Pool size before Pool expand: %v", poolSizeBeforeExpand)
 		Step("get kvdb node to crash and add label to the node", func() {
 			stNodes := node.GetNodesByVoDriverNodeID()
 			kvdbNodes, err := GetAllKvdbNodes()
@@ -1902,6 +1906,8 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 						log.FailOnError(err, "Validate node is ready")
 						err = Inst().V.WaitDriverUpOnNode(nodeToCrash, Inst().DriverStartTimeout)
 						log.FailOnError(err, "Validate volume driver is up")
+						poolSizeAfterExpand := getGlobalPoolSize()
+						log.InfoD("Pool size after pool expand: %v", poolSizeAfterExpand)
 					})
 				}(nodeToCrash)
 			}
@@ -1924,10 +1930,14 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 				TearDownContext(ctx, opts)
 			}
 			for _, apRule := range apRules {
-				Inst().S.DeleteAutopilotRule(apRule.Name)
+				err = Inst().S.DeleteAutopilotRule(apRule.Name)
+				log.FailOnError(err, "Failed to delete autopilot rule")
 			}
 			for key := range poolLabel {
-				Inst().S.RemoveLabelOnNode(storageNode, key)
+				for _, node := range crashedNodes {
+					err = Inst().S.RemoveLabelOnNode(node, key)
+					log.FailOnError(err, "Failed to remove label from node:%v", node.Name)
+				}
 			}
 		})
 
@@ -1957,7 +1967,16 @@ func getTheSmallestPoolSize() uint64 {
 	}
 	return smallestPoolSize
 }
-
+func getGlobalPoolSize() uint64 {
+	storageNodes := node.GetStorageNodes()
+	var totalGlobalPoolSize uint64 = 0
+	for _, storageNode := range storageNodes {
+		for _, p := range storageNode.StoragePools {
+			totalGlobalPoolSize += p.TotalSize
+		}
+	}
+	return totalGlobalPoolSize
+}
 func getTotalPoolSize(node node.Node) uint64 {
 	// calculate total storage pools size on the given node
 	var totalPoolSize uint64
