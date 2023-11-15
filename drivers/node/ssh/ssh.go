@@ -719,6 +719,9 @@ func (s *SSH) getConnectionOnUsableAddr(n node.Node, options node.ConnectionOpts
 			// check if address is responding on port 22
 			endpoint := net.JoinHostPort(addr, strconv.Itoa(int(DefaultSSHPort)))
 			conn, err := ssh_pkg.Dial("tcp", endpoint, s.sshConfig)
+			if err != nil {
+				fmt.Println("%#+v", err)
+			}
 			return conn, true, err
 		}
 		if cli, sshErr = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry); sshErr == nil {
