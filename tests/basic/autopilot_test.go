@@ -1824,7 +1824,7 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 	It("has to crash one kvdb node and one storage node when multiple pools are expanded with add-disk , validate and teardown apps", func() {
 		var contexts []*scheduler.Context
 		testName := strings.ToLower(fmt.Sprintf("%sAutoPoolExpandCrashTest", testSuiteName))
-		poolLabel := map[string]string{"node-type": "fastpath"}
+		poolLabel := map[string]string{"node-type": "fastpath", "autopilot": "adddisk"}
 		crashedNodes := make([]node.Node, 0)
 		storageNode := node.GetStorageNodes()[0]
 		crashedNodes = append(crashedNodes, storageNode)
@@ -1973,6 +1973,7 @@ func getGlobalPoolSize() uint64 {
 	var totalGlobalPoolSize uint64 = 0
 	for _, storageNode := range storageNodes {
 		for _, p := range storageNode.StoragePools {
+			log.Infof("Pool:%v,size:%v", p.ID, p.TotalSize)
 			totalGlobalPoolSize += p.TotalSize
 		}
 	}
