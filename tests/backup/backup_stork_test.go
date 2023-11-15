@@ -21,33 +21,34 @@ import (
 var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 
 	var (
-		newAdminNamespace          string
-		backupName                 string
-		scheduledAppContexts       []*scheduler.Context
-		bkpNamespaces              []string
-		clusterUid                 string
-		clusterStatus              api.ClusterInfo_StatusInfo_Status
-		restoreName                string
-		cloudCredName              string
-		cloudCredUID               string
-		backupLocationUID          string
-		bkpLocationName            string
-		numDeployments             int
-		providers                  []string
-		backupLocationMap          map[string]string
-		labelSelectors             map[string]string
-		multipleRestoreMapping     map[string]string
-		restoreNames               []string
-		backupNames                []string
-		periodicSchedulePolicyName string
-		periodicSchedulePolicyUid  string
-		schPolicyUid               string
-		scheduleName               string
-		scheduleBackupName         string
-		scheduleNames              []string
+		newAdminNamespace           string
+		backupName                  string
+		scheduledAppContexts        []*scheduler.Context
+		bkpNamespaces               []string
+		clusterUid                  string
+		clusterStatus               api.ClusterInfo_StatusInfo_Status
+		restoreName                 string
+		cloudCredName               string
+		cloudCredUID                string
+		backupLocationUID           string
+		bkpLocationName             string
+		numDeployments              int
+		providers                   []string
+		backupLocationMap           map[string]string
+		labelSelectors              map[string]string
+		selectedBkpNamespaceMapping map[string]string
+		multipleRestoreMapping      map[string]string
+		restoreNames                []string
+		backupNames                 []string
+		periodicSchedulePolicyName  string
+		periodicSchedulePolicyUid   string
+		schPolicyUid                string
+		scheduleName                string
+		scheduleBackupName          string
+		scheduleNames               []string
 	)
 	JustBeforeEach(func() {
-		newAdminNamespace = StorkNamePrefix + "-" + RandomString(5)
+		newAdminNamespace = "stork-namespace-ghyfp"
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 		bkpNamespaces = make([]string, 0)
 		restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -159,7 +160,8 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		})
 		Step("Restoring backup of multiple namespaces", func() {
 			log.InfoD("Restoring backup of multiple namespaces")
-			selectedBkpNamespaceMapping := make(map[string]string)
+			selectedBkpNamespaceMapping = make(map[string]string)
+			multipleRestoreMapping = make(map[string]string)
 			for _, namespace := range bkpNamespaces {
 				selectedBkpNamespaceMapping[namespace] = namespace
 			}
@@ -170,20 +172,21 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 
 			// Restore to custom namespace
-			for _, namespace := range selectedBkpNamespaceMapping {
+			for _, namespace := range bkpNamespaces {
 				restoredNameSpace := fmt.Sprintf("%s-%v", backupName, time.Now().Unix())
 				multipleRestoreMapping[namespace] = restoredNameSpace
 			}
+			log.Infof("Custom restore map %v", multipleRestoreMapping)
 			customRestoreName := fmt.Sprintf("%s-%v", "multiple-application", time.Now().Unix())
-			err = CreateRestore(customRestoreName, backupName, multipleRestoreMapping, SourceClusterName, orgID, ctx, nil)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s] in custom namespace [%v]", customRestoreName, multipleRestoreMapping))
+			err = CreateRestore(customRestoreName, backupName, multipleRestoreMapping, SourceClusterName, orgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s]", customRestoreName))
 			restoreNames = append(restoreNames, restoreName, customRestoreName)
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			selectedBkpNamespaceMapping := make(map[string]string)
+			selectedBkpNamespaceMapping = make(map[string]string)
 			for _, namespace := range bkpNamespaces {
 				selectedBkpNamespaceMapping[namespace] = namespace
 			}
@@ -199,8 +202,10 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			log.InfoD("Namespace - %v - deleted successfully", newAdminNamespace)
 		})
 		Step("Restoring backup of multiple namespaces after admin namespace removal", func() {
-			log.InfoD("Restoring backup of multiple namespaces")
-			selectedBkpNamespaceMapping := make(map[string]string)
+			log.InfoD("Restoring backup of multiple namespaces - Admin namespace will be recreated")
+			selectedBkpNamespaceMapping = make(map[string]string)
+			multipleRestoreMapping = make(map[string]string)
+			restoreName = fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
 			for _, namespace := range bkpNamespaces {
 				selectedBkpNamespaceMapping[namespace] = namespace
 			}
@@ -211,13 +216,20 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 
 			// Restore to custom namespace
-			for _, namespace := range selectedBkpNamespaceMapping {
+			for _, namespace := range bkpNamespaces {
 				restoredNameSpace := fmt.Sprintf("%s-%v", backupName, time.Now().Unix())
 				multipleRestoreMapping[namespace] = restoredNameSpace
 			}
+			log.Infof("Custom restore map %v", multipleRestoreMapping)
 			customRestoreName := fmt.Sprintf("%s-%v", "multiple-application", time.Now().Unix())
-			err = CreateRestore(customRestoreName, backupName, multipleRestoreMapping, SourceClusterName, orgID, ctx, nil)
-			dash.VerifyFatal(strings.Contains(err.Error(), "CR"), true, fmt.Sprintf("Restore failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			err = CreateRestore(customRestoreName, backupName, multipleRestoreMapping, SourceClusterName, orgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+		})
+		Step("Deleting new admin namespace again", func() {
+			log.Info("Deleting namespace - %v", newAdminNamespace)
+			err := DeleteAppNamespace(newAdminNamespace)
+			log.FailOnError(err, "Unable to delete admin namespace")
+			log.InfoD("Namespace - %v - deleted successfully", newAdminNamespace)
 		})
 		Step("Taking backup of multiple namespaces after admin namespace removal", func() {
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
@@ -240,12 +252,15 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
 			backupNames = append(backupNames, scheduleBackupName)
+			k8sCore := core.Instance()
+			allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+			log.Infof("All namespaces after schedule backup %v", allNamespaces)
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			selectedBkpNamespaceMapping := make(map[string]string)
+			selectedBkpNamespaceMapping = make(map[string]string)
 			for _, namespace := range bkpNamespaces {
 				selectedBkpNamespaceMapping[namespace] = namespace
 			}
