@@ -25,6 +25,8 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
@@ -130,7 +132,6 @@ import (
 
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 
 	// import portworx driver to invoke it's init
@@ -1758,6 +1759,24 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
 		return options
 	}
+}
+
+func GetNumOfDrivesInNode(stNode node.Node) (int, error) {
+	numofDrivesInNode := 0
+	poolListForOps, err := GetPoolsDetailsOnNode(stNode)
+	if err != nil {
+		return 0, err
+	}
+	for i := 0; i < len(poolListForOps); i++ {
+		drvMap, err := Inst().V.GetPoolDrives(&stNode)
+		if err != nil {
+			return 0, err
+		}
+		if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
+			numofDrivesInNode = numofDrivesInNode + len(drvs)
+		}
+	}
+	return numofDrivesInNode, nil
 }
 
 // ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
@@ -7307,6 +7326,31 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	}
 
 	return eligibilityMap, nil
+}
+
+// GetPoolMaxCloudDriveLimit identifying the max drives allowed based on type of setup
+func GetPoolMaxCloudDriveLimit(stNode *node.Node) (int32, error) {
+	var err error
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return 0, err
+	}
+
+	var maxCloudDrives int32
+
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = FA_MAX_CLOUD_DRIVES
+	} else {
+		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
+	}
+
+	if err != nil {
+		return 0, err
+	}
+	return maxCloudDrives, nil
 }
 
 // WaitTillEnterMaintenanceMode wait until the node enters maintenance mode
