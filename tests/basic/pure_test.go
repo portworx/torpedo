@@ -1266,3 +1266,85 @@ var _ = Describe("{AppCleanUpWhenPxKill}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+// This test validates the behaviour of pods when storage node is shutdown where FADA/FBDA/FACD volumes are attached
+// https://portworx.testrail.net/index.php?/cases/view/92882
+
+var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ShutDownNodeWhereVolAttach", "This test shuts down storage node where FADA/FBDA/FACD volumes are attached and checks the behaviour of the pods", nil, 92882)
+	})
+	It("Schedules apps that use FADA/FBDA/FACD volumes, shutdown the storage nodes where these volumes are placed and check if the pods are moved appropriately", func() {
+		var contexts = make([]*scheduler.Context, 0)
+		//Scheduling app with volume placement strategy
+		applist := Inst().AppList
+
+		//select the one storage node,one storageless node and one KVDB member node to place volumes and kill the nodes while apps are being destroyed
+		storageNodes := node.GetStorageNodes()
+		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
+		defer func() {
+			Inst().AppList = applist
+			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+		}()
+
+		Inst().AppList = []string{"nginx-fada-repl-vps"}
+		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
+		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		//Number of apps to be deployed
+		NumberOfAppsToBeDeployed := 10
+
+		stepLog = fmt.Sprintf("schedule application")
+		Step(stepLog, func() {
+			for j := 0; j < NumberOfAppsToBeDeployed; j++ {
+				taskName := fmt.Sprintf("shutdown-node-where-vol-attach-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+		stepLog = fmt.Sprintf("shutdown storage nodes,check if the resources are moved appropriately")
+		Step(stepLog, func() {
+			// Step 1: Shutdown the selected node
+			stepLog := "Shutdown storage node"
+			Step(stepLog, func() {
+				err = Inst().N.ShutdownNode(selectedNode, node.ShutdownNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         1 * time.Minute,
+						TimeBeforeRetry: 5 * time.Second,
+					},
+				})
+				log.FailOnError(err, "Failed to shutdown node:%v", selectedNode.Name)
+			})
+
+			// Step 2: check if pods have been moved and power on the node
+
+			stepLog = fmt.Sprintf("validate pods and poweron the bode")
+			Step(stepLog, func() {
+				err = Inst().N.PowerOnVM(selectedNode)
+				log.FailOnError(err, "Failed to power on node:%v", selectedNode.Name)
+			})
+		})
+		stepLog = fmt.Sprintf("Wait until the node has powered on succesfully")
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err = Inst().N.TestConnection(selectedNode, node.ConnectionOpts{
+				Timeout:         defaultTestConnectionTimeout,
+				TimeBeforeRetry: defaultWaitRebootRetry,
+			})
+			log.FailOnError(err, "node:%v Failed to come up?", selectedNode.Name)
+			err = Inst().V.WaitDriverUpOnNode(selectedNode, 5*time.Minute)
+			log.FailOnError(err, "Portworx not coming up on node:%v", selectedNode.Name)
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
