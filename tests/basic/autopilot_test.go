@@ -1995,18 +1995,7 @@ func getTheSmallestPoolSize() uint64 {
 	}
 	return smallestPoolSize
 }
-func getGlobalPoolSize() uint64 {
-	// calculate total global storage size of the cluster
-	storageNodes := node.GetStorageNodes()
-	var totalGlobalPoolSize uint64 = 0
-	for _, storageNode := range storageNodes {
-		for _, p := range storageNode.StoragePools {
-			log.Infof("Pool:%v,size:%v", p.ID, p.TotalSize)
-			totalGlobalPoolSize += p.TotalSize
-		}
-	}
-	return totalGlobalPoolSize
-}
+
 func getTotalPoolSize(node node.Node) uint64 {
 	// calculate total storage pools size on the given node
 	var totalPoolSize uint64
