@@ -177,7 +177,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			srcClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, orgID, SourceClusterName)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
-			manualBackupWithLabel = fmt.Sprintf("%s-%v", "infraadmin", RandomString(4))
+			manualBackupWithLabel = fmt.Sprintf("%s-%v", "infraadmin", RandomString(15))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateBackupWithNamespaceLabelWithValidation(nonAdminCtx, manualBackupWithLabel, SourceClusterName, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], appContextsExpectedInBackup,
 				nil, orgID, srcClusterUid, "", "", "", "", nsLabelString)
@@ -220,7 +220,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 				restoredNameSpace := fmt.Sprintf("%s-%v", scheduledBackupNameWithLabel, RandomString(3))
 				multipleRestoreMapping[namespace] = restoredNameSpace
 			}
-			customRestoreName = fmt.Sprintf("%s-%v", "customrestore", RandomString(4))
+			customRestoreName = fmt.Sprintf("%s-%v", "customrestore", RandomString(10))
 			err = CreateRestore(customRestoreName, scheduledBackupNameWithLabel, multipleRestoreMapping, destinationClusterName, orgID, nonAdminCtx, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying multiple backup restore [%s] in custom namespace [%v]", customRestoreName, multipleRestoreMapping))
 			infraAdminLabelledRestoreNames = append(infraAdminLabelledRestoreNames, customRestoreName)
@@ -689,12 +689,33 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, commonPassword)
+		backupDriver := Inst().Backup
+		bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+			OrgId: orgID,
+		}
+		nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+		log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+		currentSchedulesForCustomUser, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
+		log.FailOnError(err, "Getting a list of all schedules for Custom user")
+		for _, sch := range currentSchedulesForCustomUser.GetBackupSchedules() {
+			err = DeleteSchedule(sch.Name, SourceClusterName, orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, customUser))
+		}
+		nonAdminCtx, err = backup.GetNonAdminCtx(infraAdminUser, commonPassword)
 		log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
+		currentSchedulesForInfraAdmin, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
+		log.FailOnError(err, "Getting a list of all schedules for Infra admin")
+		for _, sch := range currentSchedulesForInfraAdmin.GetBackupSchedules() {
+			err = DeleteSchedule(sch.Name, SourceClusterName, orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, infraAdminUser))
+		}
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
 		log.InfoD("Deleting the px-backup objects")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredentialNameMap[infraAdminUser], cloudCredentialUIDMap[infraAdminUser], nonAdminCtx)
 		log.InfoD("Switching context to destination cluster for clean up")
@@ -1555,12 +1576,27 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 			EndPxBackupTorpedoTest(scheduledAppContexts)
 		}()
+		backupDriver := Inst().Backup
+		bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+			OrgId: orgID,
+		}
+		nonAdminCtx, err := backup.GetNonAdminCtx(appAdminUser, commonPassword)
+		log.FailOnError(err, "failed to fetch user %s ctx", appAdminUser)
+		currentSchedules, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
+		log.FailOnError(err, "Getting a list of all schedules")
+		for _, sch := range currentSchedules.GetBackupSchedules() {
+			err = DeleteSchedule(sch.Name, SourceClusterName, orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appAdminUser))
+		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "failed to fetch admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
+		log.InfoD("Deleting labels from namespaces - %v", bkpNamespaces)
+		err = DeleteLabelsFromMultipleNamespaces(nsLabelsMap, bkpNamespaces)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] from namespaces [%v]", nsLabelsMap, bkpNamespaces))
 		log.InfoD("Deleting the px-backup objects")
 		CleanupCloudSettingsAndClusters(backupLocationMap, adminCredName, adminCloudCredUID, ctx)
 		log.InfoD("Switching context to destination cluster for clean up")
@@ -1930,6 +1966,18 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 		}()
+		backupDriver := Inst().Backup
+		bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
+			OrgId: orgID,
+		}
+		nonAdminCtx, err := backup.GetNonAdminCtx(appUser, commonPassword)
+		log.FailOnError(err, "failed to fetch user %s ctx", appUser)
+		currentSchedules, err := backupDriver.EnumerateBackupSchedule(nonAdminCtx, bkpScheduleEnumerateReq)
+		log.FailOnError(err, "Getting a list of all schedules")
+		for _, sch := range currentSchedules.GetBackupSchedules() {
+			err = DeleteSchedule(sch.Name, SourceClusterName, orgID, nonAdminCtx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appUser))
+		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the deployed apps after the testcase")
