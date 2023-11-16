@@ -1830,6 +1830,10 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		storageNode := node.GetStorageNodes()[0]
 		crashedNodes = append(crashedNodes, storageNode)
 		log.InfoD("storage pool %s", storageNode.Name)
+
+		//map which holds the initial sizes of the global pool
+		poolSizes := make(map[int]float64, 0)
+
 		apRules := []apapi.AutopilotRule{
 			aututils.PoolRuleByAvailableCapacity(80, 50, aututils.RuleScaleTypeAddDisk),
 		}
@@ -1838,6 +1842,13 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		for _, pstatus := range provisionStatus {
 			originalTotalSize += pstatus.TotalSize
 		}
+		poolSizes[0] = originalTotalSize
+		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
+		originalTotalSize = 0
+		for _, pstatus := range provisionStatus {
+			originalTotalSize += pstatus.TotalSize
+		}
+		poolSizes[1] = originalTotalSize
 		log.InfoD("Pool size before pool expand:%v", originalTotalSize)
 		Step("get kvdb node to crash and add label to the node", func() {
 			stNodes := node.GetNodesByVoDriverNodeID()
@@ -1854,14 +1865,16 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 					continue
 				}
 				crashedNodes = append(crashedNodes, appNode)
-				err := AddLabelsOnNode(appNode, poolLabel)
 				log.FailOnError(err, "Failed to label the node")
 				break
 			}
 		})
 
 		Step("schedule apps with autopilot rules for pool expand", func() {
-			err := AddLabelsOnNode(storageNode, poolLabel)
+			for _, node := range crashedNodes {
+				err = AddLabelsOnNode(node, poolLabel)
+				log.FailOnError(err, "Failed to add label on node:%v", node.Name)
+			}
 			log.FailOnError(err, "Failed to add label to the node")
 			contexts = scheduleAppsWithAutopilot(testName, 1, apRules, scheduler.ScheduleOptions{PvcSize: 50 * units.GiB})
 		})
@@ -1915,17 +1928,21 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			}
 			// Wait for all tasks to finish before proceeding
 			wg.Wait()
+
+			// calculate pool size from first node
 			provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
 			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[0])
+
 			var sizeAfterPoolExpand float64 = 0
 			for _, pstatus := range provisionStatus {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
-
-			if sizeAfterPoolExpand <= originalTotalSize {
+			if sizeAfterPoolExpand <= poolSizes[0] {
 				err := errors.New("error pool expand failed")
 				log.FailOnError(err, "Pool expand failed")
 			}
+
+			//calculate pool size from second node
 			provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
 			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[1].Name)
 			log.InfoD("Pool expand successfully completed, size after pool expand:%v", sizeAfterPoolExpand)
@@ -1935,7 +1952,7 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
 
-			if sizeAfterPoolExpand <= originalTotalSize {
+			if sizeAfterPoolExpand <= poolSizes[1] {
 				err = errors.New("error pool expand failed")
 				log.FailOnError(err, "Pool expand failed")
 			}
