@@ -1916,8 +1916,21 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			// Wait for all tasks to finish before proceeding
 			wg.Wait()
 			provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
-			log.FailOnError(err, "Failed to get cluster info")
+			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[0])
 			var sizeAfterPoolExpand float64 = 0
+			for _, pstatus := range provisionStatus {
+				sizeAfterPoolExpand += pstatus.TotalSize
+			}
+
+			if sizeAfterPoolExpand <= originalTotalSize {
+				err := errors.New("error pool expand failed")
+				log.FailOnError(err, "Pool expand failed")
+			}
+			provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
+			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[1].Name)
+			log.InfoD("Pool expand successfully completed, size after pool expand:%v", sizeAfterPoolExpand)
+
+			sizeAfterPoolExpand = 0
 			for _, pstatus := range provisionStatus {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
@@ -1925,7 +1938,8 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			if sizeAfterPoolExpand <= originalTotalSize {
 				log.FailOnError(err, "Pool expand failed")
 			}
-			log.InfoD("Pool expand successfully completed size after pool expand:%v", sizeAfterPoolExpand)
+
+			log.InfoD("Pool expand successfully completed, size after pool expand:%v", sizeAfterPoolExpand)
 
 		})
 
@@ -1933,7 +1947,7 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			log.InfoD("Volume workload started")
 			for _, ctx := range contexts {
 				err := Inst().S.WaitForRunning(ctx, workloadTimeout, retryInterval)
-				Expect(err).NotTo(HaveOccurred())
+				dash.VerifyFatal(err, nil, "Failed to wait for volume workload to run")
 			}
 		})
 
