@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -1920,7 +1921,11 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			for _, pstatus := range provisionStatus {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
-			log.InfoD("Pool size after pool expand:%v", sizeAfterPoolExpand)
+			err = errors.New("error pool expand failed")
+			if sizeAfterPoolExpand <= originalTotalSize {
+				log.FailOnError(err, "Pool expand failed")
+			}
+			log.InfoD("Pool expand successfully completed size after pool expand:%v", sizeAfterPoolExpand)
 
 		})
 
