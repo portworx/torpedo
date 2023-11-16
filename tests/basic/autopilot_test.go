@@ -1934,8 +1934,9 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			for _, pstatus := range provisionStatus {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
-			err = errors.New("error pool expand failed")
+
 			if sizeAfterPoolExpand <= originalTotalSize {
+				err = errors.New("error pool expand failed")
 				log.FailOnError(err, "Pool expand failed")
 			}
 
