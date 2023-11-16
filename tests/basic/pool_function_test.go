@@ -934,14 +934,13 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 	})
 })
 
-
 var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 
 	var testrailID = 34542876
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542876
 
 	BeforeEach(func() {
-		StartTorpedoTest("PoolVolUpdateResizeDisk", "expand volume to the pool and pool expansion using resize-disk", nil, testrailID)
+		StartTorpedoTest("PoolVolUpdateResizeDisk", "Increase the HA replica of the volume and expand pool using resize-disk during the increase", nil, testrailID)
 		contexts = scheduleApps()
 	})
 	JustBeforeEach(func() {
@@ -960,7 +959,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 		appsValidateAndDestroy(contexts)
 		EndTorpedoTest()
 	})
-	It("Expand volume to the pool and pool expansion using resize-disk", func() {
+	It("Increase the HA replica of the volume and expand pool using resize-disk during the increase", func() {
 		var newRep int64
 		var currRep int64
 		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
@@ -968,7 +967,7 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 		opts := volume.Options{
 			ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 		}
-		Step("Expand volume to the intended pool ", func() {
+		Step("Increase the HA replica of the volume", func() {
 			currRep, err = Inst().V.GetReplicationFactor(volSelected)
 			log.FailOnError(err, fmt.Sprintf("err getting repl factor for  vol : %s", volSelected.Name))
 			newRep = currRep
