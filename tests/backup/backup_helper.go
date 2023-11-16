@@ -5610,7 +5610,7 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		delete(stc.Spec.Stork.Args, "admin-namespace")
 		log.Infof("Args after removing namespace %v", stc.Spec.Stork.Args)
 	}
-	// stc, err = operator.Instance().UpdateStorageCluster(stc)
+	stc, err = operator.Instance().UpdateStorageCluster(stc)
 	if err != nil {
 		return nil, err
 	}
@@ -5624,14 +5624,9 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 
 	log.Infof("Stork deployment specs %v", storkDeployment.Spec)
-	containerDetails := storkDeployment.Spec.Template.Spec.Containers[0].Command
+	containerDetails := storkDeployment.Spec.Template.Spec.Containers[0]
 
-	log.Infof("Stork deployment command %v", containerDetails)
-
-	storkDeployment.Spec.Template.Spec.Containers[0].Command = append(storkDeployment.Spec.Template.Spec.Containers[0].Command, "--admin-namespace=somenamespace")
-	containerDetails = storkDeployment.Spec.Template.Spec.Containers[0].Command
-
-	log.Infof("Stork deployment command after %v", containerDetails)
+	log.Infof("Stork deployment containers %v", containerDetails)
 
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
