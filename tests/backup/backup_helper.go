@@ -5591,50 +5591,56 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	// Get current storage cluster configuration
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	if err != nil {
+		return nil, err
+	}
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return nil, err
 	}
 	log.Infof("Is op based deployment %v", isOpBased)
 
-	log.Info("Current stork Configuration")
-	log.Infof("%v", stc.Spec.Stork)
-	if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-		log.Info("Current admin namespace")
-		log.Infof("%v", adminNamespace)
-	}
-	// Setting the new admin namespace
-	if namespace != "" {
-		stc.Spec.Stork.Args["admin-namespace"] = namespace
+	if isOpBased {
+		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
+			log.Info("Current admin namespace - [%s]", adminNamespace)
+		}
+		// Setting the new admin namespace
+		if namespace != "" {
+			stc.Spec.Stork.Args["admin-namespace"] = namespace
+		} else {
+			delete(stc.Spec.Stork.Args, "admin-namespace")
+		}
+		stc, err = operator.Instance().UpdateStorageCluster(stc)
+		if err != nil {
+			return nil, err
+		}
+		if namespace != "" {
+			log.Infof("Configured admin namespace to %s", namespace)
+		} else {
+			log.Infof("Removed admin namespace") // Removing admin namespace is not supported - https://docs.portworx.com/portworx-backup-on-prem/configure/admin-namespace.html
+		}
 	} else {
-		delete(stc.Spec.Stork.Args, "admin-namespace")
-		log.Infof("Args after removing namespace %v", stc.Spec.Stork.Args)
-	}
-	stc, err = operator.Instance().UpdateStorageCluster(stc)
-	if err != nil {
-		return nil, err
-	}
-	if namespace != "" {
-		log.Infof("Configured admin namespace to %s", namespace)
-	} else {
-		log.Infof("Removed admin namespace")
+		log.Infof("Updating stork deployment as it's pxe is not present")
+		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
+		if err != nil {
+			return nil, err
+		}
+		storkDeployment.Spec.Template.Spec.Containers[0].Command = append(storkDeployment.Spec.Template.Spec.Containers[0].Command, fmt.Sprintf("--admin-namespace=%s", namespace))
+
+		_, err = apps.Instance().UpdateDeployment(storkDeployment)
+		if err != nil {
+			return nil, err
+		}
 	}
 	time.Sleep(10 * time.Second)
 
-	storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
-
-	log.Infof("Stork deployment specs %v", storkDeployment.Spec)
-	containerDetails := storkDeployment.Spec.Template.Spec.Containers[0]
-
-	log.Infof("Stork deployment containers %v", containerDetails)
-
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
-		return stc, err
+		return nil, err
 	}
 	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
 	if err != nil {
-		return stc, err
+		return nil, err
 	}
 
 	return stc, nil
