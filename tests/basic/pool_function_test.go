@@ -979,7 +979,7 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 			log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
 		})
 
-		stepLog = "Move node to maintenance mode"
+		stepLog = "Move pool to maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", storageNode.Name))
