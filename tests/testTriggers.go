@@ -707,7 +707,7 @@ func TriggerVolumeCreatePXRestart(contexts *[]*scheduler.Context, recordChan *ch
 		var err error
 
 		for vol, volPath := range createdVolIDs {
-			//TODO: remove this retry once PWX-27773 is fixed
+			// TODO: remove this retry once PWX-27773 is fixed
 			t := func() (interface{}, bool, error) {
 				cVol, err = Inst().V.InspectVolume(vol)
 				if err != nil {
