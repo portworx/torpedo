@@ -38,7 +38,7 @@ const (
 
 	// PDSNamespace PDS
 	PDSNamespace = "pds-system"
-	PDSChartRepo = "https://pds.pure-px.io/charts/target"
+	PDSChartRepo = "https://d2xtayr2ct14mw.cloudfront.net/charts/target"
 	pxLabel      = "pds.portworx.com/available"
 )
 
@@ -242,7 +242,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	if !isRegistered {
 		log.InfoD("Installing PDS ( helm version -  %v)", helmChartversion)
-		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
+		cmd = fmt.Sprintf("helm install --set clusterName=%s --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
 			"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		if strings.EqualFold(clusterType, "ocp") {
 			cmd = fmt.Sprintf("%s %s ", cmd, "--set platform=ocp")
