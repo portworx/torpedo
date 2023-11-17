@@ -5263,6 +5263,9 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		log.InfoD(stepLog)
 
 		contexts = make([]*scheduler.Context, 0)
+		done := make(chan bool)
+		done <- false
+		defer func() { done <- true }()
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
@@ -5310,21 +5313,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			log.InfoD("setting replication on the volumes")
 			setRepl := func(vol *volume.Volume) error {
-				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
-				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
-				log.FailOnError(err, "Failed to get replication factor on the volume")
-				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, currRepFactor)
-				opts := volume.Options{
-					ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
-				}
-				if currRepFactor == 3 {
-					newRepl := currRepFactor - 1
-					err = Inst().V.SetReplicationFactor(vol, newRepl, nil, nil, true, opts)
-					if err != nil {
-						return err
-					}
-				}
-				// Change Replica sets of each volumes created to 3
 				var (
 					maxReplicaFactor int64
 					nodesToBeUpdated []string
@@ -5333,6 +5321,24 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				maxReplicaFactor = 3
 				nodesToBeUpdated = nil
 				poolsToBeUpdated = nil
+
+				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
+				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
+				log.FailOnError(err, "Failed to get replication factor on the volume")
+				log.Infof("Replication factor on the volume [%v] is [%v]", vol.Name, currRepFactor)
+				opts := volume.Options{
+					ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
+				}
+				poolsToBeUpdated = append(poolsToBeUpdated, rebootPoolID)
+				if currRepFactor == 3 {
+					newRepl := currRepFactor - 1
+					err = Inst().V.SetReplicationFactor(vol, newRepl, nodesToBeUpdated, poolsToBeUpdated, true, opts)
+					if err != nil {
+						return err
+					}
+				}
+				// Change Replica sets of each volumes created to 3
+
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
 					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
@@ -5360,6 +5366,37 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				}(eachVol)
 			}
 			wg.Wait()
+			go func(done <-chan bool) {
+				// Check for cancellation in a loop
+				defer GinkgoRecover()
+				for {
+					select {
+					case <-done:
+						return
+					default:
+						poolsStatus, err := Inst().V.GetNodePoolsStatus(*restartDriver)
+						if err != nil {
+							log.Warnf("Failed to get pool status: %v", err.Error())
+						} else {
+							if poolsStatus != nil {
+								log.InfoD("Poolstatus nil")
+
+								for k, v := range poolsStatus {
+									if v != "Online" {
+										err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+										dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+
+										resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
+										dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", k, restartDriver.Name))
+
+										time.Sleep(30 * time.Second)
+									}
+								}
+							}
+						}
+					}
+				}
+			}(done)
 			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
@@ -5368,11 +5405,13 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
-			err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_AUTO, expectedSize, true)
+			err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
+			close(done)
+
 		}
 	})
 
