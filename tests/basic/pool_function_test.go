@@ -986,6 +986,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 
 		log.InfoD("check pool label, after pool expand")
+		poolToResize = getStoragePool(poolIDToResize)
 		labelAfterExpand := poolToResize.Labels
 		result := reflect.DeepEqual(labelBeforeExpand, labelAfterExpand)
 		dash.VerifyFatal(result, true, "Check if labels changed after pool expand")
