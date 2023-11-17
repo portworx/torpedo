@@ -159,15 +159,15 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 
 				Step("Delete Deployments, backUp targets and creds", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
-					err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-					log.FailOnError(err, "error while deleting backup targets and creds")
 				})
 			}
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -312,7 +312,9 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -419,7 +421,9 @@ var _ = Describe("{PerformRestoreFromMultipleBackupTargets}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -518,7 +522,9 @@ var _ = Describe("{PerformSimultaneousRestoresSameDataService}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -626,7 +632,9 @@ var _ = Describe("{PerformSimultaneousRestoresDifferentDataService}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -796,7 +804,9 @@ var _ = Describe("{PerformRestoreAfterHelmUpgrade}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -933,7 +943,9 @@ var _ = Describe("{PerformRestoreAfterPVCResize}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -1046,7 +1058,9 @@ var _ = Describe("{PerformSimultaneousBackupRestore}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -1243,7 +1257,9 @@ var _ = Describe("{PerformRestoreAfterDataServiceVersionUpdate}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -1437,7 +1453,9 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -1557,7 +1575,9 @@ var _ = Describe("{PerformSimultaneousBackupRestoreForMultipleDeployments}", fun
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
@@ -1666,7 +1686,9 @@ var _ = Describe("{ValidateTransitionalHealthStatus}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+		log.FailOnError(err, "error while deleting backup targets and creds")
+		err = bkpClient.AWSStorageClient.DeleteBucket()
 		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })

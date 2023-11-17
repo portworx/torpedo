@@ -545,6 +545,7 @@ const (
 	PDS_Health_Status_DOWN     PDS_Health_Status = "Partially Available"
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Unavailable"
 	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Available"
+	PDS_TC_Health_Status_DOWN  PDS_Health_Status = "unhealthy"
 
 	errorChannelSize             = 50
 	defaultCommandRetry          = 5 * time.Second
@@ -1069,6 +1070,7 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 	return resp, nil
 }
 
+// DeleteBackUpCred deletes the backup creds based on the params and returns error
 func DeleteBackUpCred(tenantID, bkpCredsId string, deleteAll bool) error {
 	if deleteAll {
 		bkpCreds, err := components.BackupCredential.ListBackupCredentials(tenantID)
@@ -1122,6 +1124,7 @@ func DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget(deploymentTargetID, pro
 	return nil
 }
 
+// GetBackUpJobsOfDeployments returns all the backup jobs of the deployments
 func GetBackUpJobsOfDeployments(dep pds.ModelsDeployment, projectID string) ([]pds.ModelsBackupJob, error) {
 	var bkpJobs []pds.ModelsBackupJob
 
@@ -1134,6 +1137,7 @@ func GetBackUpJobsOfDeployments(dep pds.ModelsDeployment, projectID string) ([]p
 	return bkpJobs, nil
 }
 
+// GetDeploymentsOfTargetCluster returns all the deployments under the target cluster
 func GetDeploymentsOfTargetCluster(deploymentTargetID, projectID string) ([]pds.ModelsDeployment, error) {
 	var actualDeps []pds.ModelsDeployment
 	deps, err := components.DataServiceDeployment.ListDeployments(projectID)
@@ -1150,13 +1154,15 @@ func GetDeploymentsOfTargetCluster(deploymentTargetID, projectID string) ([]pds.
 	return actualDeps, nil
 }
 
+// DeleteDeploymentTargets takes projectID and Delete all the unhealthy target clusters under the project
+// It also takes care in deleting the dependent deployments and its backup jobs
 func DeleteDeploymentTargets(projectID string) error {
 	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToProject(projectID)
 	if err != nil {
 		return fmt.Errorf("error while fetching targetClusters %v", err)
 	}
 	for _, tc := range targetClusters {
-		if strings.Contains(*tc.Status, "unhealthy") {
+		if strings.Contains(*tc.Status, string(PDS_TC_Health_Status_DOWN)) {
 			log.Debugf("Getting details of target cluster %s", *tc.Name)
 			deps, err := GetDeploymentsOfTargetCluster(tc.GetId(), projectID)
 			if err != nil {
@@ -1171,7 +1177,6 @@ func DeleteDeploymentTargets(projectID string) error {
 					log.Debugf("Deleting backupjob [%v]", *bkpjob.Name)
 					_, err := components.BackupJob.DeleteBackupJob(*bkpjob.Id)
 					if err != nil {
-						//log.Debugf("Backup job Deletion Response [%v]", resp.StatusCode)
 						return fmt.Errorf("error while deleting bkpjob %v", err)
 					}
 				}
