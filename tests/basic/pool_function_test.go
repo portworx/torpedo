@@ -962,7 +962,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 		var nodeDetail *node.Node
 		var err error
 
-		stepLog = "Move node to maintenance mode"
+		stepLog = "Move pool to maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
@@ -992,7 +992,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 
 		})
 
-		stepLog = "Exit node out of maintenance mode"
+		stepLog = "Exit pool out of maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			t := func() (interface{}, bool, error) {
