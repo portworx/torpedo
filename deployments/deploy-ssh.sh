@@ -764,7 +764,7 @@ for i in $(seq 1 900); do
       first_iteration=false
     else
       echo -n "Logs from iteration: $i"
-      kubectl logs -f --since=1m -f torpedo
+      kubectl logs -f --since=1m torpedo
     fi
   elif [ "$state" == "Completed" ]; then
     echo "Success: Torpedo finished with $state state"
