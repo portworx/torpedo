@@ -481,7 +481,6 @@ spec:
     securityContext:
       privileged: true
     command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
-  dnsPolicy: ClusterFirstWithHostNet
   containers:
   - name: torpedo
     image: ${TORPEDO_IMG}
