@@ -970,7 +970,7 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 		poolLabelToUpdate["cust-type"] = "test-label"
 		// Update the pool label
 		err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
-		log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
+		dash.VerifyFatal(err, nil, "Check if able to update the label on the pool")
 
 		log.InfoD("expand pool using resize-disk")
 		originalSizeInBytes = poolToResize.TotalSize
