@@ -1261,14 +1261,6 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 			}
 		}
 
-		// DevicePath
-		// TODO: remove this retry once PWX-27773 is fixed
-		// It is noted that the DevicePath is intermittently empty.
-		// The check below validates the response by ensuring the device path is not empty
-		if vol.DevicePath == "" {
-			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
-		}
-
 		return vol, false, nil
 	}
 
