@@ -39,7 +39,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		selectedBkpNamespaceMapping map[string]string
 		multipleRestoreMapping      map[string]string
 		restoreNames                []string
-		backupNames                 []string
 		periodicSchedulePolicyName  string
 		periodicSchedulePolicyUid   string
 		schPolicyUid                string
@@ -133,7 +132,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-			backupNames = append(backupNames, backupName)
 		})
 		Step("Create schedule policy", func() {
 			log.InfoD("Creating a schedule policy")
@@ -156,7 +154,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
-			backupNames = append(backupNames, scheduleBackupName)
 		})
 		Step("Restoring backup of multiple namespaces", func() {
 			log.InfoD("Restoring backup of multiple namespaces")
@@ -251,7 +248,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 			scheduleBackupName, err = CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
 			scheduleNames = append(scheduleNames, scheduleName)
-			backupNames = append(backupNames, scheduleBackupName)
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
@@ -274,6 +270,9 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Removing Stork Namespace")
+		_, err = ChangeAdminNamespace("")
+		log.FailOnError(err, "Unable to remove stork custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
@@ -282,15 +281,9 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting backups")
-		for _, backups := range backupNames {
-			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backups, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backups)
-			_, err = DeleteBackup(backups, backupUID, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the backup named [%s]", backups))
-		}
+		err = DeleteAllBackups(ctx, orgID)
 		log.InfoD("Deleting restore")
-		log.InfoD(fmt.Sprintf("Backup name %v", restoreNames))
+		log.InfoD(fmt.Sprintf("Restore names %v", restoreNames))
 		for _, restores := range restoreNames {
 			err := DeleteRestore(restores, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restores))
@@ -321,7 +314,6 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		multipleRestoreMapping                map[string]string
 		scheduleAndBackup                     map[string]string
 		restoreNames                          []string
-		backupNames                           []string
 		periodicSchedulePolicyName            string
 		schPolicyUid                          string
 		scheduleNames                         []string
@@ -419,7 +411,6 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 			scheduleBackupNameBeforeUpdate, err = CreateScheduleBackupWithValidation(ctx, scheduleNameBeforeUpdate, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleNameBeforeUpdate))
 			scheduleNames = append(scheduleNames, scheduleNameBeforeUpdate)
-			backupNames = append(backupNames, scheduleBackupNameBeforeUpdate)
 			scheduleAndBackup[scheduleNameBeforeUpdate] = periodicSchedulePolicyName
 		})
 		Step("Modifying Admin Namespace for Stork", func() {
@@ -449,7 +440,6 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 			scheduleBackupNameAfterUpdate, err = CreateScheduleBackupWithValidation(ctx, scheduleNameAfterUpdate, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyNameAfterUpdate, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleNameAfterUpdate))
 			scheduleNames = append(scheduleNames, scheduleNameAfterUpdate)
-			backupNames = append(backupNames, scheduleBackupNameAfterUpdate)
 			scheduleAndBackup[scheduleNameAfterUpdate] = periodicSchedulePolicyNameAfterUpdate
 		})
 		Step("Restoring backup of from before admin namespace update", func() {
@@ -531,7 +521,6 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 				log.FailOnError(err, "Error while getting latest schedule backup name")
 				err = backupSuccessCheckWithValidation(ctx, latestScheduleBkpName, scheduledAppContexts, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success and Validation of latest schedule backup [%s]", latestScheduleBkpName))
-				backupNames = append(backupNames, scheduleBackupNameAfterUpdate)
 
 				log.InfoD("Restoring backup of multiple namespaces")
 				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -562,6 +551,9 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Removing Stork Namespace")
+		_, err = ChangeAdminNamespace("")
+		log.FailOnError(err, "Unable to remove stork custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
