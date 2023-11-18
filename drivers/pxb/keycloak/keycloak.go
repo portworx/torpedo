@@ -1,59 +1,68 @@
 package keycloak
 
 import (
-	"context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
-	"github.com/portworx/torpedo/pkg/log"
-	"io"
-	"net/http"
-	"net/url"
+	"os"
+	"strings"
 )
 
-type Keycloak struct {
-	SignIn struct {
-		Username string
-		Password string
-	}
-	Client *http.Client
+const (
+	// EnvPxCentralUIURL is the environment variable key for the px-central UI URL.
+	// Example: http://pxcentral-keycloak-http:80
+	EnvPxCentralUIURL = "PX_CENTRAL_UI_URL"
+)
+
+const (
+	// PxBackupOIDCSecret is the Kubernetes secret that contains OIDC (OpenID Connect) credentials
+	PxBackupOIDCSecret = "pxc-backup-secret"
+	// PxBackupOIDCEndpointKey is the key in PxBackupOIDCSecret for the OIDC endpoint
+	PxBackupOIDCEndpointKey = "OIDC_ENDPOINT"
+	// PxBackupKeycloakService is the Kubernetes service for Keycloak-based user authentication
+	PxBackupKeycloakService = "pxcentral-keycloak-http"
+)
+
+type SignIn struct {
+	Username string
+	Password string
 }
 
-func (k *Keycloak) GetBasePath(admin bool) string {
-	if admin {
-		return "/auth/admin/realms/master"
+func NewSignIn(username string, password string) *SignIn {
+	return &SignIn{
+		Username: username,
+		Password: password,
 	}
-	return "/auth/realms/master"
 }
 
-func (k *Keycloak) Process(ctx context.Context, method string, admin bool, route string, body io.Reader, headerMap map[string]string) ([]byte, error) {
-	reqURL, err := url.JoinPath(k.URI, k.GetBasePath(admin), route)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	for key, val := range headerMap {
-		req.Header.Set(key, val)
-	}
-	resp, err := k.Client.Do(req)
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-	defer func() {
-		err := resp.Body.Close()
+func GetAdminAndNonAdminURL(namespace string) (string, string, error) {
+	realmPath, adminPath, realmName := "auth/realms", "admin", "master"
+	adminURL, nonAdminURL := "", ""
+	pxCentralUIURL := os.Getenv(EnvPxCentralUIURL)
+	// The condition checks whether pxCentralUIURL is set. This condition is added to
+	// handle scenarios where Torpedo is not running as a pod in the cluster. In such
+	// cases, gRPC calls pxcentral-keycloak-http:80 would fail when made from a VM or
+	// local machine using the Ginkgo CLI.
+	if pxCentralUIURL != "" && len(pxCentralUIURL) > 0 {
+		adminURL = fmt.Sprintf("%s/%s/%s/%s", pxCentralUIURL, realmPath, adminPath, realmName)
+		nonAdminURL = fmt.Sprintf("%s/%s/%s", pxCentralUIURL, realmPath, realmName)
+	} else {
+		oidcSecret, err := core.Instance().GetSecret(PxBackupOIDCSecret, namespace)
 		if err != nil {
-			log.Errorf("failed to close response body. Err: [%v]", ProcessError(err))
+			return "", "", ProcessError(err)
 		}
-	}()
-	statusCode := resp.StatusCode
-	statusText := http.StatusText(statusCode)
-	switch {
-	case statusCode >= 200 && statusCode < 300:
-		return io.ReadAll(resp.Body)
-	default:
-		err = fmt.Errorf("[%s] [%s] returned status [%d]: [%s]", method, url, statusCode, statusText)
-		return nil, ProcessError(err)
+		oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpointKey])
+		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
+		// ensure DNS resolution within Kubernetes, especially for requests originating
+		// from different namespace
+		keycloakFQDN := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakService, namespace)
+		newOIDCEndpoint := strings.Replace(oidcEndpoint, PxBackupKeycloakService, keycloakFQDN, 1)
+		adminURL = fmt.Sprintf("%s/%s/%s/%s", newOIDCEndpoint, realmPath, adminPath, realmName)
+		nonAdminURL = fmt.Sprintf("%s/%s/%s", newOIDCEndpoint, realmPath, realmName)
 	}
+	return adminURL, nonAdminURL, nil
+}
+
+func Init() error {
+	return nil
 }

@@ -1,87 +1,73 @@
 package pxbutils
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
-	"time"
 )
 
-const (
-	// PxCentralAdminUsername is the username of px-central-admin user
-	PxCentralAdminUsername = "px-central-admin"
-	// PxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
-	PxBackupAuthHeader = "authorization"
-	// PxBackupAuthTokenType is the type of token used for authentication in Px-Backup requests
-	PxBackupAuthTokenType = "bearer"
-	// PxBackupOrgToken is the org token key inside secret named PxBackupAdminSecretName
-	PxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
-	// PxBackupAdminSecretName is the Kubernetes secret that contains Px-Backup admin token
-	PxBackupAdminSecretName = "px-backup-admin-secret"
-	// PxBackupServiceName is the Kubernetes service within Px-Backup namespace
-	PxBackupServiceName = "px-backup"
-	// PxBackupKeycloakServiceName is the Kubernetes service that facilitates user authentication
-	// through Keycloak in Px-Backup
-	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
-	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
-	PxCentralAdminSecretName = "px-central-admin"
-
-	// EnvPxBackupOIDCEndpoint is the env var for the OIDC endpoint
-	EnvPxBackupOIDCEndpoint = "OIDC_ENDPOINT"
-)
-
-// HTTPClient is an HTTP client with a predefined timeout
-var HTTPClient = &http.Client{
-	Timeout: 1 * time.Minute,
-}
-
-func NewHTTPRequestWithContext(ctx context.Context, method string, url string, body interface{}, headerMap map[string]string) (*http.Request, error) {
-	reqBody, err := func() ([]byte, error) {
-		if body != nil {
-			switch reflect.TypeOf(body).Kind() {
-			case reflect.String:
-				return []byte(body.(string)), nil
-			case reflect.Struct, reflect.Map:
-				return json.Marshal(body)
-			default:
-				err := fmt.Errorf("unsupported body type [%T]", body)
-				return nil, ProcessError(err)
-			}
-		}
-		return nil, nil
-	}()
-	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, ProcessError(err)
-	}
-
-	for key, val := range headerMap {
-		req.Header.Set(key, val)
-	}
-
-	return req, nil
-}
+//const (
+//	// PxCentralAdminUsername is the username of px-central-admin user
+//	PxCentralAdminUsername = "px-central-admin"
+//	// PxBackupAuthHeader is the HTTP header used for authentication in Px-Backup requests
+//	PxBackupAuthHeader = "authorization"
+//	// PxBackupAuthTokenType is the type of token used for authentication in Px-Backup requests
+//	PxBackupAuthTokenType = "bearer"
+//	// PxBackupOrgToken is the org token key inside secret named PxBackupAdminSecretName
+//	PxBackupOrgToken = "PX_BACKUP_ORG_TOKEN"
+//	// PxBackupAdminSecretName is the Kubernetes secret that contains Px-Backup admin token
+//	PxBackupAdminSecretName = "px-backup-admin-secret"
+//	// PxBackupServiceName is the Kubernetes service within Px-Backup namespace
+//	PxBackupServiceName = "px-backup"
+//	// PxBackupKeycloakServiceName is the Kubernetes service that facilitates user authentication
+//	// through Keycloak in Px-Backup
+//	PxBackupKeycloakServiceName = "pxcentral-keycloak-http"
+//	// PxCentralAdminSecretName is the Kubernetes secret that stores px-central-admin credentials
+//	PxCentralAdminSecretName = "px-central-admin"
+//
+//	// EnvPxBackupOIDCEndpoint is the env var for the OIDC endpoint
+//	EnvPxBackupOIDCEndpoint = "OIDC_ENDPOINT"
+//)
+//
+//// HTTPClient is an HTTP client with a predefined timeout
+//var HTTPClient = &http.Client{
+//	Timeout: 1 * time.Minute,
+//}
+//
+//func NewHTTPRequestWithContext(ctx context.Context, method string, url string, body interface{}, headerMap map[string]string) (*http.Request, error) {
+//	reqBody, err := func() ([]byte, error) {
+//		if body != nil {
+//			switch reflect.TypeOf(body).Kind() {
+//			case reflect.String:
+//				return []byte(body.(string)), nil
+//			case reflect.Struct, reflect.Map:
+//				return json.Marshal(body)
+//			default:
+//				err := fmt.Errorf("unsupported body type [%T]", body)
+//				return nil, ProcessError(err)
+//			}
+//		}
+//		return nil, nil
+//	}()
+//	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(reqBody))
+//	if err != nil {
+//		return nil, ProcessError(err)
+//	}
+//
+//	for key, val := range headerMap {
+//		req.Header.Set(key, val)
+//	}
+//
+//	return req, nil
+//}
 
 const (
 	// TorpedoWorkDirectory is the working directory inside the Torpedo container
 	TorpedoWorkDirectory = "/go/src/github.com/portworx/"
-)
-
-const (
-	// DefaultOIDCSecretName is the fallback Kubernetes secret in case EnvPxBackupOIDCSecretName is empty
-	DefaultOIDCSecretName = "pxc-backup-secret"
-)
-
-const (
-	// EnvPxCentralUIURL is the env var for the px-central UI URL. Example: http://pxcentral-keycloak-http:80
-	EnvPxCentralUIURL = "PX_CENTRAL_UI_URL"
 )
 
 type DebugMap map[string]interface{}
