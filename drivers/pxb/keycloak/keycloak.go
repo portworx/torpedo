@@ -3,6 +3,7 @@ package keycloak
 import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/backup"
 	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"os"
 	"strings"
@@ -71,5 +72,19 @@ func GetAdminAndNonAdminURL(namespace string) (string, string, error) {
 }
 
 func Init() error {
+	pxbNamespace, err := GetPxBackupNamespace()
+	if err != nil {
+		return ProcessError(err)
+	}
+	AdminURL, NonAdminURL, err := GetAdminAndNonAdminURL(pxbNamespace)
+	if err != nil {
+		debugMap := DebugMap{}
+		debugMap.Add("pxbNamespace", pxbNamespace)
+		return ProcessError(err, debugMap.String())
+	}
+	PxCentralAdminPassword, err := backup.GetPxCentralAdminPwd()
+	if err != nil {
+		return ProcessError(err)
+	}
 	return nil
 }
