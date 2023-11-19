@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
-	. "github.com/portworx/torpedo/drivers/pxb/pxbutils"
+	"github.com/portworx/torpedo/drivers/pxb/pxbutils"
 	"os"
 	"strings"
 )
@@ -57,7 +57,7 @@ func GetAdminAndNonAdminURL(namespace string) (string, string, error) {
 	} else {
 		oidcSecret, err := core.Instance().GetSecret(PxBackupOIDCSecret, namespace)
 		if err != nil {
-			return "", "", ProcessError(err)
+			return "", "", pxbutils.ProcessError(err)
 		}
 		oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpointKey])
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
@@ -72,19 +72,19 @@ func GetAdminAndNonAdminURL(namespace string) (string, string, error) {
 }
 
 func Init() error {
-	pxbNamespace, err := GetPxBackupNamespace()
+	pxbNamespace, err := pxbutils.GetPxBackupNamespace()
 	if err != nil {
-		return ProcessError(err)
+		return pxbutils.ProcessError(err)
 	}
 	AdminURL, NonAdminURL, err := GetAdminAndNonAdminURL(pxbNamespace)
 	if err != nil {
-		debugMap := DebugMap{}
+		debugMap := pxbutils.DebugMap{}
 		debugMap.Add("pxbNamespace", pxbNamespace)
-		return ProcessError(err, debugMap.String())
+		return pxbutils.ProcessError(err, debugMap.String())
 	}
 	PxCentralAdminPassword, err := backup.GetPxCentralAdminPwd()
 	if err != nil {
-		return ProcessError(err)
+		return pxbutils.ProcessError(err)
 	}
 	return nil
 }
