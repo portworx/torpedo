@@ -267,8 +267,8 @@ type Backup interface {
 	GetVolumeBackupIDs(ctx context.Context, backupName string, namespace string,
 		clusterObj *api.ClusterObject, orgID string) ([]string, error)
 
-	GetBackupCRs(ctx context.Context, backupName string, namespace string,
-		clusterObj *api.ClusterObject, orgID string) error
+	GetBackupCRs(ctx context.Context, namespace string, clusterObj *api.ClusterObject,
+		orgID string) ([]string, error)
 
 	// GetBackupUID returns uid of the given backup name in an organization
 	GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error)

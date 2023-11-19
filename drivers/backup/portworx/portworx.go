@@ -929,46 +929,23 @@ func (p *portworx) GetVolumeBackupIDs(
 
 func (p *portworx) GetBackupCRs(
 	ctx context.Context,
-	backupName string,
 	namespace string,
 	clusterObj *api.ClusterObject,
-	orgID string) error {
+	orgID string) ([]string, error) {
 
-	backupUUID, err := p.GetBackupUID(ctx, backupName, orgID)
-	if err != nil {
-		return err
-	}
-
-	storkApplicationBackupCRName := fmt.Sprintf("%s-%s", backupName, backupUUID[0:7])
-	log.Infof("Stork backup CR name: [%s]", storkApplicationBackupCRName)
-
+	allBackupCRNames := make([]string, 0)
 	_, storkClient, err := getKubernetesInstance(clusterObj)
 
-	getBackupIDfromStork := func() (interface{}, bool, error) {
-		storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
-		if err != nil {
-			log.Warnf("failed to get application backup CR [%s], Error:[%v]", storkApplicationBackupCRName, err)
-			return false, true, err
-		}
-		log.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
-		log.Debugf("storkApplicationBackupCR: [%v]\n", storkApplicationBackupCR)
-		log.Debugf("Type storkApplicationBackupCR: [%T]\n", storkApplicationBackupCR)
-
-		for _, backup := range storkApplicationBackupCR.Items {
-			log.InfoD("Bakcup CR Name : [%v]", backup.ObjectMeta.Name)
-			log.InfoD("Bakcup : [%+v]", backup)
-			log.InfoD("Bakcup CR Type : [%T]", backup)
-		}
-		return false, false, nil
-	}
-
-	_, err = task.DoRetryWithTimeout(getBackupIDfromStork, 5*time.Minute, 15*time.Second)
+	storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
 	if err != nil {
-		return err
+		log.Warnf("failed to get application backup CR from [%s]. Error [%v]", namespace, err)
+		return nil, err
 	}
 
-	return nil
-
+	for _, backup := range storkApplicationBackupCR.Items {
+		allBackupCRNames = append(allBackupCRNames, backup.Name)
+	}
+	return allBackupCRNames, nil
 }
 
 // WaitForBackupCompletion waits for backup to complete successfully
