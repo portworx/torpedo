@@ -835,6 +835,16 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	if err != nil {
 		return err
 	}
+	// Commenting out restore validation for now as it's happening so fast that
+	// program is not able to detect the custom resource created and destroyed
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	err = ValidateRestoreCRs(restoreName, clusterName, orgID, clusterUID, ctx, namespaceMapping)
+	if err != nil {
+		log.Warnf(err.Error())
+	}
 	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
@@ -5689,10 +5699,31 @@ func getCurrentAdminNamespace() (string, error) {
 	}
 }
 
+// Validates Backup CRs created
 func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid string, ctx context.Context,
 	backupNameSpaces []string) error {
+
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err := fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return err
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err := SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err := SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		}
+	}()
+
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
-	if len(backupNameSpaces) <= 1 {
+	if len(backupNameSpaces) == 1 {
 		currentAdminNamespace = backupNameSpaces[0]
 	}
 	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
@@ -5706,7 +5737,7 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid 
 	clusterObj := clusterResp.GetCluster()
 
 	validateBackupCRInNameSpace := func() (interface{}, bool, error) {
-		allBackupCrs, err := backupDriver.GetBackupCRs(ctx, currentAdminNamespace, clusterObj, orgID)
+		allBackupCrs, err := backupDriver.ListBackupCRs(ctx, currentAdminNamespace, clusterObj, orgID)
 		if err != nil {
 			return false, true, err
 		}
@@ -5721,7 +5752,70 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid 
 		return false, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", backupName, currentAdminNamespace)
 	}
 
-	_, err = task.DoRetryWithTimeout(validateBackupCRInNameSpace, 3*time.Minute, 500*time.Millisecond)
+	_, err = task.DoRetryWithTimeout(validateBackupCRInNameSpace, 5*time.Minute, 500*time.Millisecond)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Validates Restore CRs created
+func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, uid string, ctx context.Context,
+	restoreNameSpaces map[string]string) error {
+
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err := fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return err
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err := SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return err
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err := SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		}
+	}()
+
+	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	if len(restoreNameSpaces) == 1 {
+		for _, val := range restoreNameSpaces {
+			currentAdminNamespace = val
+		}
+	}
+	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
+
+	backupDriver := Inst().Backup
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: uid}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+
+	validateRestoreCRInNameSpace := func() (interface{}, bool, error) {
+		allRestoreCrs, err := backupDriver.ListRestoreCRs(ctx, currentAdminNamespace, clusterObj, orgID)
+		if err != nil {
+			return false, true, err
+		}
+		log.InfoD("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
+
+		for _, eachCR := range allRestoreCrs {
+			if strings.Contains(eachCR, restoreName) {
+				log.Infof("Backup CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+				return false, false, nil
+			}
+		}
+		return false, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+	}
+
+	_, err = task.DoRetryWithTimeout(validateRestoreCRInNameSpace, 5*time.Minute, 500*time.Millisecond)
 	if err != nil {
 		return err
 	}

@@ -927,7 +927,8 @@ func (p *portworx) GetVolumeBackupIDs(
 	return volumeBackupIDs, nil
 }
 
-func (p *portworx) GetBackupCRs(
+// ListBackupCRs lists all the Backup CRs present under given namespace
+func (p *portworx) ListBackupCRs(
 	ctx context.Context,
 	namespace string,
 	clusterObj *api.ClusterObject,
@@ -946,6 +947,28 @@ func (p *portworx) GetBackupCRs(
 		allBackupCRNames = append(allBackupCRNames, backup.Name)
 	}
 	return allBackupCRNames, nil
+}
+
+// ListBackupCRs lists all the Restore CRs present under given namespace
+func (p *portworx) ListRestoreCRs(
+	ctx context.Context,
+	namespace string,
+	clusterObj *api.ClusterObject,
+	orgID string) ([]string, error) {
+
+	allRestoreCRNames := make([]string, 0)
+	_, storkClient, err := getKubernetesInstance(clusterObj)
+
+	storkApplicationRestoreCR, err := storkClient.ListApplicationRestores(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Warnf("failed to get application restore CR from [%s]. Error [%v]", namespace, err)
+		return nil, err
+	}
+
+	for _, restore := range storkApplicationRestoreCR.Items {
+		allRestoreCRNames = append(allRestoreCRNames, restore.Name)
+	}
+	return allRestoreCRNames, nil
 }
 
 // WaitForBackupCompletion waits for backup to complete successfully
