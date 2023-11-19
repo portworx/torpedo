@@ -945,14 +945,20 @@ func (p *portworx) GetBackupCRs(
 	_, storkClient, err := getKubernetesInstance(clusterObj)
 
 	getBackupIDfromStork := func() (interface{}, bool, error) {
-		storkApplicationBackupCR, err := storkClient.GetApplicationBackup(storkApplicationBackupCRName, namespace)
+		storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
 		if err != nil {
 			log.Warnf("failed to get application backup CR [%s], Error:[%v]", storkApplicationBackupCRName, err)
 			return false, true, err
 		}
 		log.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
+		log.Debugf("storkApplicationBackupCR: [%v]\n", storkApplicationBackupCR)
 		log.Debugf("Type storkApplicationBackupCR: [%T]\n", storkApplicationBackupCR)
 
+		for _, backup := range storkApplicationBackupCR.Items {
+			log.InfoD("Bakcup CR Name : [%v]", backup.ObjectMeta.Name)
+			log.InfoD("Bakcup : [%+v]", backup)
+			log.InfoD("Bakcup CR Type : [%T]", backup)
+		}
 		return false, false, nil
 	}
 
