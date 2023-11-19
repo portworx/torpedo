@@ -927,6 +927,44 @@ func (p *portworx) GetVolumeBackupIDs(
 	return volumeBackupIDs, nil
 }
 
+func (p *portworx) GetBackupCRs(
+	ctx context.Context,
+	backupName string,
+	namespace string,
+	clusterObj *api.ClusterObject,
+	orgID string) error {
+
+	backupUUID, err := p.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+
+	storkApplicationBackupCRName := fmt.Sprintf("%s-%s", backupName, backupUUID[0:7])
+	log.Infof("Stork backup CR name: [%s]", storkApplicationBackupCRName)
+
+	_, storkClient, err := getKubernetesInstance(clusterObj)
+
+	getBackupIDfromStork := func() (interface{}, bool, error) {
+		storkApplicationBackupCR, err := storkClient.GetApplicationBackup(storkApplicationBackupCRName, namespace)
+		if err != nil {
+			log.Warnf("failed to get application backup CR [%s], Error:[%v]", storkApplicationBackupCRName, err)
+			return false, true, err
+		}
+		log.Debugf("GetVolumeBackupIDs storkApplicationBackupCR: [%+v]\n", storkApplicationBackupCR)
+		log.Debugf("Type storkApplicationBackupCR: [%T]\n", storkApplicationBackupCR)
+
+		return false, false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(getBackupIDfromStork, 5*time.Minute, 15*time.Second)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
 // WaitForBackupCompletion waits for backup to complete successfully
 // or till timeout is reached. API should poll every `timeBeforeRetry` duration
 func (p *portworx) WaitForBackupCompletion(

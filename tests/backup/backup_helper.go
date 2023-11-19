@@ -289,6 +289,15 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	if err != nil {
 		return err
 	}
+	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	log.Infof("Current Admin Namespace: [%s]", currentAdminNamespace)
+	backupDriver := Inst().Backup
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: uid}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	clusterObj := clusterResp.GetCluster()
+
+	_ = backupDriver.GetBackupCRs(ctx, backupName, currentAdminNamespace, clusterObj, orgID)
+
 	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
@@ -5644,4 +5653,31 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	}
 
 	return stc, nil
+}
+
+// getCurrentAdminNamespace returns the value of current admin namespace set
+func getCurrentAdminNamespace() (string, error) {
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	adminNamespace := "kube-system"
+	if isOpBased {
+		stc, err := Inst().V.GetDriver()
+		if err != nil {
+			return "", err
+		}
+		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
+			log.Info("Current admin namespace - [%s]", adminNamespace)
+		} else {
+			adminNamespace, _ := k8sutils.GetStorkPodNamespace()
+			log.Info("Current admin namespace - [%s]", adminNamespace)
+		}
+
+	} else {
+		adminNamespace, err := k8sutils.GetStorkPodNamespace()
+		if err != nil {
+			return "", err
+		}
+		log.Info("Current admin namespace - [%s]", adminNamespace)
+	}
+
+	return adminNamespace, nil
 }
