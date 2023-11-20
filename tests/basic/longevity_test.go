@@ -219,7 +219,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		upgradeTriggerFunction     = make(map[string]TriggerFunction)
 		wg                         sync.WaitGroup
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
-		upgradeExecutionThreshold int
+		//upgradeExecutionThreshold int
 	)
 
 	// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
@@ -274,10 +274,10 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
 		}
-		upgradeExecutionThreshold = 1 // default value
-		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
-			upgradeExecutionThreshold = val
-		}
+		//upgradeExecutionThreshold = 1 // default value
+		//if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
+		//	upgradeExecutionThreshold = val
+		//}
 	})
 
 	It("has to schedule app and register test triggers", func() {
@@ -368,20 +368,21 @@ var _ = Describe("{UpgradeLongevity}", func() {
 								minTestExecCount = count
 							}
 						}
-						if minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold {
-							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
-							currentEndpointIndex++
-							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
-							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
-							disruptiveTriggerLock.Lock()
-							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
-							log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
-							triggerFunc(&contexts, &triggerEventsChan)
-							log.Infof("Trigger Function completed for [%s]\n", triggerType)
-							disruptiveTriggerLock.Unlock()
-							log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
-							Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
-						}
+						log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
+						//if minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold {
+						//	Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
+						//	currentEndpointIndex++
+						//	log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+						//	// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
+						//	disruptiveTriggerLock.Lock()
+						//	log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+						//	log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
+						//	triggerFunc(&contexts, &triggerEventsChan)
+						//	log.Infof("Trigger Function completed for [%s]\n", triggerType)
+						//	disruptiveTriggerLock.Unlock()
+						//	log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+						//	Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
+						//}
 						time.Sleep(controlLoopSleepTime)
 					}
 				}(triggerType, triggerFunc)
