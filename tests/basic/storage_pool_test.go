@@ -5407,7 +5407,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 // This function checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
 func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool) {
 	defer GinkgoRecover()
-
+	log.Infof("Started monitoring pool: %v", PoolID)
 	for {
 		select {
 		case <-*done:
@@ -5415,7 +5415,7 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 		default:
 			poolsStatus, err := Inst().V.GetNodePoolsStatus(selectedNode)
 			if err != nil {
-				log.Warnf("Failed to get pool status: %v", err.Error())
+				*errorChan <- err
 			} else {
 				if poolsStatus != nil {
 					log.InfoD("Poolstatus nil")
