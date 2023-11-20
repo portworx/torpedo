@@ -5268,9 +5268,14 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		log.Infof("step2")
 		errorChan := make(chan error)
 		log.Infof("step3")
-		done <- false
+		go func() {
+			done <- false
+		}()
 		log.Infof("step4")
-		defer func() { done <- true }()
+		defer func() {
+			done <- true
+			close(done)
+		}()
 		log.Infof("step5")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
