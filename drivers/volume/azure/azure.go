@@ -2,7 +2,6 @@ package azure
 
 import (
 	"fmt"
-	"github.com/libopenstorage/openstorage/api"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -36,11 +35,6 @@ func (d *azure) ValidateVolumeCleanup() error {
 
 func (d *azure) RefreshDriverEndpoints() error {
 	return nil
-}
-
-func (d *azure) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
-	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", d.String())
-	return nil, nil
 }
 
 func (d *azure) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
