@@ -290,6 +290,23 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		return err
 	}
 
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Backup [%s] created successfully", backupName)
+	return nil
+}
+
+// CreateBackup creates backup and checks for success
+func CreateBackupWithCRValidation(backupName string, clusterName string, bLocation string, bLocationUID string,
+	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
+	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+
 	err = ValidateBackupCRs(backupName, clusterName, orgID, uid, ctx, namespaces)
 	if err != nil {
 		return err
@@ -456,6 +473,28 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 
 // CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
 func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	if err != nil {
+		return "", err
+	}
+	time.Sleep(1 * time.Minute)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+}
+
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -793,6 +832,57 @@ func GetAllBackupsForUser(username, password string) ([]string, error) {
 
 // CreateRestore creates restore
 func CreateRestore(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
+
+	var bkpUid string
+
+	// Check if the backup used is in successful state or not
+	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   bkpUid,
+		OrgId: orgID,
+	}
+	resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return err
+	}
+	actual := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	if actual != api.BackupInfo_StatusInfo_Success {
+		return fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, api.BackupInfo_StatusInfo_Success, actual, reason)
+	}
+	backupDriver := Inst().Backup
+	createRestoreReq := &api.RestoreCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  restoreName,
+			OrgId: orgID,
+		},
+		Backup:              backupName,
+		Cluster:             clusterName,
+		NamespaceMapping:    namespaceMapping,
+		StorageClassMapping: storageClassMapping,
+		BackupRef: &api.ObjectRef{
+			Name: backupName,
+			Uid:  bkpUid,
+		},
+	}
+	_, err = backupDriver.CreateRestore(ctx, createRestoreReq)
+	if err != nil {
+		return err
+	}
+	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Restore [%s] created successfully", restoreName)
+	return nil
+}
+
+func CreateRestoreWithCRValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
 	orgID string, ctx context.Context, storageClassMapping map[string]string) error {
 
 	var bkpUid string
@@ -5658,7 +5748,7 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 			return nil, err
 		}
 	}
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Minute)
 
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
@@ -5703,25 +5793,6 @@ func getCurrentAdminNamespace() (string, error) {
 func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid string, ctx context.Context,
 	backupNameSpaces []string) error {
 
-	originalClusterConfigPath := CurrentClusterConfigPath
-	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
-		err := fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
-		return err
-	} else {
-		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
-		err := SetClusterContext(clusterConfigPath)
-		if err != nil {
-			return err
-		}
-	}
-	defer func() {
-		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		err := SetClusterContext(originalClusterConfigPath)
-		if err != nil {
-			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		}
-	}()
-
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
 	if len(backupNameSpaces) == 1 {
 		currentAdminNamespace = backupNameSpaces[0]
@@ -5763,26 +5834,6 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid 
 // Validates Restore CRs created
 func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, uid string, ctx context.Context,
 	restoreNameSpaces map[string]string) error {
-
-	originalClusterConfigPath := CurrentClusterConfigPath
-	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
-		err := fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
-		return err
-	} else {
-		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
-		err := SetClusterContext(clusterConfigPath)
-		if err != nil {
-			return err
-		}
-	}
-	defer func() {
-		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		err := SetClusterContext(originalClusterConfigPath)
-		if err != nil {
-			log.FailOnError(err, "Failed switching cluster context back to cluster path [%s]", originalClusterConfigPath)
-		}
-	}()
-
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
 	if len(restoreNameSpaces) == 1 {
 		for _, val := range restoreNameSpaces {
@@ -5808,7 +5859,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, ui
 
 		for _, eachCR := range allRestoreCrs {
 			if strings.Contains(eachCR, restoreName) {
-				log.Infof("Backup CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+				log.Infof("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
 				return false, false, nil
 			}
 		}
