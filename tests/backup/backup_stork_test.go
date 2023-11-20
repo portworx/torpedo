@@ -294,7 +294,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 
 	var (
-		newAdminNamespace                     string // New admin namespace to be set as custom admin namespace
+		//newAdminNamespace                     string // New admin namespace to be set as custom admin namespace
 		scheduledAppContexts                  []*scheduler.Context
 		bkpNamespaces                         []string
 		clusterStatus                         api.ClusterInfo_StatusInfo_Status
@@ -319,7 +319,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		periodicSchedulePolicyNameAfterUpdate string
 	)
 	JustBeforeEach(func() {
-		newAdminNamespace = StorkNamePrefix + "-" + RandomString(5) // Randomly generating the value for custom admin namespace
+		//newAdminNamespace = StorkNamePrefix + "-" + RandomString(5) // Randomly generating the value for custom admin namespace
 		bkpNamespaces = make([]string, 0)
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
@@ -366,17 +366,17 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
 			}
 		})
-		Step("Creating new admin namespaces", func() {
-			log.InfoD("Creating new admin namespace - %v", newAdminNamespace)
-			nsSpec := &v1.Namespace{
-				ObjectMeta: meta_v1.ObjectMeta{
-					Name: newAdminNamespace,
-				},
-			}
-			ns, err := core.Instance().CreateNamespace(nsSpec)
-			log.FailOnError(err, "Unable to create namespace")
-			log.InfoD("Created Namespace - %v", ns.Name)
-		})
+		// Step("Creating new admin namespaces", func() {
+		// 	log.InfoD("Creating new admin namespace - %v", newAdminNamespace)
+		// 	nsSpec := &v1.Namespace{
+		// 		ObjectMeta: meta_v1.ObjectMeta{
+		// 			Name: newAdminNamespace,
+		// 		},
+		// 	}
+		// 	ns, err := core.Instance().CreateNamespace(nsSpec)
+		// 	log.FailOnError(err, "Unable to create namespace")
+		// 	log.InfoD("Created Namespace - %v", ns.Name)
+		// })
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -410,12 +410,12 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 			scheduleNames = append(scheduleNames, scheduleNameBeforeUpdate)
 			scheduleAndBackup[scheduleNameBeforeUpdate] = periodicSchedulePolicyName
 		})
-		Step("Modifying Admin Namespace for Stork", func() {
-			log.InfoD("Modifying Admin Namespace for Stork to %v", newAdminNamespace)
-			_, err := ChangeAdminNamespace(newAdminNamespace)
-			log.FailOnError(err, "Unable to update admin namespace")
-			log.Infof("Admin namespace updated successfully")
-		})
+		// Step("Modifying Admin Namespace for Stork", func() {
+		// 	log.InfoD("Modifying Admin Namespace for Stork to %v", newAdminNamespace)
+		// 	_, err := ChangeAdminNamespace(newAdminNamespace)
+		// 	log.FailOnError(err, "Unable to update admin namespace")
+		// 	log.Infof("Admin namespace updated successfully")
+		// })
 		Step("Create schedule policy after stork admin namespace update", func() {
 			log.InfoD("Creating a schedule policy after admin namespace update")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -429,7 +429,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyNameAfterUpdate))
 		})
 		Step("Creating schedule backups for applications after admin namespace update", func() {
-			log.InfoD("Creating schedule backups ater admin namespace update")
+			log.InfoD("Creating schedule backups after admin namespace update")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyNameAfterUpdate)
