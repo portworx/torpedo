@@ -946,16 +946,16 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 	//	})
 
 	//	Step("Verify that pool expansion is successful", func() {
-			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
-			log.FailOnError(err, fmt.Sprintf("Error waiting for pool %s resize", poolToResize.Uuid))
-			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-			status, err := Inst().V.GetNodeStatus(*selectedNode)
-			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
-			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
-		})
-  })
+//			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
+//			log.FailOnError(err, fmt.Sprintf("Error waiting for pool %s resize", poolToResize.Uuid))
+//			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+//			status, err := Inst().V.GetNodeStatus(*selectedNode)
+//			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+//			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
+//		})
+//  })
 })
-     
+
 
 var _ = Describe("{PoolExpandTestLimits}", func() {
 	BeforeEach(func() {
