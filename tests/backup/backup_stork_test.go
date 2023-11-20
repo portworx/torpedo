@@ -54,7 +54,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 
-		numDeployments = 5 // 2 apps deployed in 2 namespaces
+		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
 		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 83717, ATrivedi, Q4FY24)
@@ -325,10 +325,10 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		labelSelectors = make(map[string]string)
 		scheduleAndBackup = make(map[string]string)
 
-		numDeployments = 5 // 2 apps deployed in 2 namespaces
+		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 83717, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("DeleteUpdateSuspendResumeWithCustomAdminNamespace", "Delete Update Suspend and Resume with custom admin namespace", nil, 83717, ATrivedi, Q4FY24)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
@@ -344,7 +344,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 			}
 		}
 	})
-	It("Backup and restore with non existing custom admin namespace", func() {
+	It("Delete Update Suspend and Resume with custom admin namespace", func() {
 
 		Step("Validating deployed applications", func() {
 			log.InfoD("Validating deployed applications")
@@ -522,8 +522,6 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 				log.InfoD("Restoring backup of multiple namespaces")
 				restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
 				log.InfoD("Selected application namespaces to restore: [%v]", bkpNamespaces)
-				ctx, err := backup.GetAdminCtxFromSecret()
-				log.FailOnError(err, "Fetching px-central-admin ctx")
 				err = CreateRestoreWithCRValidation(restoreName, latestScheduleBkpName, selectedBkpNamespaceMapping, SourceClusterName, orgID, ctx, make(map[string]string))
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
 
