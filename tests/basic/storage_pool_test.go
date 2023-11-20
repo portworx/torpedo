@@ -5376,6 +5376,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				default:
 				}
 				close(errorChan)
+				log.Infof("Closed both the channels")
 			}()
 			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
