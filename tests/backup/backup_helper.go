@@ -5752,7 +5752,7 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Minute)
 
 	if err != nil {
 		return nil, err
@@ -5776,7 +5776,12 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Minute)
+
+	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
+	if err != nil {
+		return nil, err
+	}
 
 	return stc, nil
 }
