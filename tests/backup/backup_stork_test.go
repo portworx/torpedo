@@ -261,7 +261,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		log.InfoD("Just After Each")
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -279,6 +278,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting backups")
 		err = DeleteAllBackups(ctx, orgID)
+		log.FailOnError(err, "Unable to delete all backups")
 		log.InfoD("Deleting restore")
 		log.InfoD(fmt.Sprintf("Restore names %v", restoreNames))
 		for _, restores := range restoreNames {
@@ -542,7 +542,6 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 
 	})
 	JustAfterEach(func() {
-		log.InfoD("Just After Each")
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
