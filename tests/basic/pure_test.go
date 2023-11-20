@@ -87,6 +87,7 @@ var _ = Describe("{PureVolumeCRUDWithSDK}", func() {
 	})
 
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
+
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -116,6 +117,7 @@ var _ = Describe("{PureVolumeCRUDWithPXCTL}", func() {
 		StartTorpedoTest("PureVolumeCRUDWithPXCTL", "Test pure volumes on applications, run CRUD using pxctl", nil, 0)
 	})
 	It("schedule pure volumes on applications, run CRUD, tear down", func() {
+
 		Step("setup credential necessary for cloudsnap", createCloudsnapCredential)
 		contexts = make([]*scheduler.Context, 0)
 

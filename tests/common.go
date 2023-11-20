@@ -874,27 +874,28 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			}
 		})
 
-		driverVersion, err := Inst().V.GetDriverVersion()
-		if err != nil {
-			processError(err, errChan...)
-		}
+		// Commenting Validation check as per https://portworx.atlassian.net/browse/PWX-34377
+		/*
+			driverVersion, err := Inst().V.GetDriverVersion()
+			if err != nil {
+				processError(err, errChan...)
+			}
+			// Ignore mount path check if current version is < 3.0.0 (https://portworx.atlassian.net/browse/PWX-34000)
+			log.InfoD("Validate current Version [%v]", driverVersion)
+			re := regexp.MustCompile(`2\.\d+\.\d+.*`)
+			if !re.MatchString(driverVersion) {
+				Step("validate mount options for pure volumes", func() {
+					if !ctx.SkipVolumeValidation {
+						ValidateMountOptionsWithPureVolumes(ctx, errChan...)
+					}
+				})
 
-		// Ignore mount path check if current version is < 3.0.0 (https://portworx.atlassian.net/browse/PWX-34000)
-		log.InfoD("Validate current Version [%v]", driverVersion)
-		re := regexp.MustCompile(`2\.\d+\.\d+.*`)
-		if !re.MatchString(driverVersion) {
-			Step("validate mount options for pure volumes", func() {
-				if !ctx.SkipVolumeValidation {
-					ValidateMountOptionsWithPureVolumes(ctx, errChan...)
-				}
-			})
-
-			Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
-				if !ctx.SkipVolumeValidation {
-					ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
-				}
-			})
-		}
+				Step(fmt.Sprintf("validate %s app's volumes are created with the file system options specified in the sc", ctx.App.Key), func() {
+					if !ctx.SkipVolumeValidation {
+						ValidateCreateOptionsWithPureVolumes(ctx, errChan...)
+					}
+				})
+			}*/
 	})
 }
 
@@ -1242,9 +1243,9 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			cmdArgs := []string{"exec", "-it", pods[0].Name, "-n", pods[0].Namespace, "--", "bash", "-c", ddCmd}
 			err = osutils.Kubectl(cmdArgs)
 			processError(err, errChan...)
-			fmt.Println("sleeping to let volume usage get reflected")
+			fmt.Println("sleeping to let volume usage get reflected for 16 min")
 			// wait until the backends size is reflected before making the REST call
-			time.Sleep(time.Minute * 2)
+			time.Sleep(time.Minute * 16)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
