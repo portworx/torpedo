@@ -5411,6 +5411,7 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 	for {
 		select {
 		case <-*done:
+			log.Infof("exited Pool status checker: %v", *done)
 			return
 		default:
 			poolsStatus, err := Inst().V.GetNodePoolsStatus(selectedNode)
