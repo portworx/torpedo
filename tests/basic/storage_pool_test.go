@@ -5416,7 +5416,7 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 				*errorChan <- err
 			} else {
 				if poolsStatus != nil {
-					log.InfoD("Poolstatus nil")
+					log.InfoD("Poolstatus: %v", poolsStatus)
 
 					for _, v := range poolsStatus {
 						log.Infof("Started monitoring pool: %v, status: %v", PoolID, v)
