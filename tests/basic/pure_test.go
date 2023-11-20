@@ -1291,6 +1291,7 @@ var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
 		Inst().AppList = []string{"nginx-fada-repl-vps"}
 		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+		log.InfoD("Added label on node: %v", selectedNode.Name)
 
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 		//Number of apps to be deployed
@@ -1313,6 +1314,7 @@ var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
 		Step(stepLog, func() {
 			// Step 1: Shutdown the selected node
 			stepLog := "Shutdown storage node"
+			log.Infof(stepLog)
 			Step(stepLog, func() {
 				err = Inst().N.ShutdownNode(selectedNode, node.ShutdownNodeOpts{
 					Force: true,
@@ -1322,11 +1324,13 @@ var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
 					},
 				})
 				log.FailOnError(err, "Failed to shutdown node:%v", selectedNode.Name)
+				log.Infof("Node: %v has been shut down", selectedNode.Name)
 			})
 
 			// Step 2: check if pods have been moved and power on the node
 
-			stepLog = fmt.Sprintf("validate pods and poweron the bode")
+			stepLog = "validate pods and poweron the node"
+			log.Infof(stepLog)
 			Step(stepLog, func() {
 				err = Inst().N.PowerOnVM(selectedNode)
 				log.FailOnError(err, "Failed to power on node:%v", selectedNode.Name)
