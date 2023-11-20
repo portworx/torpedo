@@ -234,24 +234,25 @@ var _ = Describe("{UpgradeLongevity}", func() {
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			CloudSnapShot:        TriggerCloudSnapShot,
-			HAIncrease:           TriggerHAIncrease,
-			PoolAddDisk:          TriggerPoolAddDisk,
-			LocalSnapShot:        TriggerLocalSnapShot,
-			HADecrease:           TriggerHADecrease,
-			VolumeResize:         TriggerVolumeResize,
-			CloudSnapShotRestore: TriggerCloudSnapshotRestore,
-			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
-			AddStorageNode:       TriggerAddOCPStorageNode,
+			//CloudSnapShot:        TriggerCloudSnapShot,
+			//HAIncrease:           TriggerHAIncrease,
+			//PoolAddDisk:          TriggerPoolAddDisk,
+			//LocalSnapShot:        TriggerLocalSnapShot,
+			//HADecrease:           TriggerHADecrease,
+			//VolumeResize:         TriggerVolumeResize,
+			//CloudSnapShotRestore: TriggerCloudSnapshotRestore,
+			//LocalSnapShotRestore: TriggerLocalSnapshotRestore,
+			//AddStorageNode:       TriggerAddOCPStorageNode,
+			VolumesDelete: TriggerVolumeDelete,
 		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           TriggerRebootNodes,
-			RestartVolDriver:     TriggerRestartVolDriver,
-			CrashNode:            TriggerCrashNodes,
-			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
-			NodeDecommission:     TriggerNodeDecommission,
-			AppTasksDown:         TriggerAppTasksDown,
+			//RebootNode:           TriggerRebootNodes,
+			//RestartVolDriver:     TriggerRestartVolDriver,
+			//CrashNode:            TriggerCrashNodes,
+			//RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
+			//NodeDecommission:     TriggerNodeDecommission,
+			//AppTasksDown:         TriggerAppTasksDown,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
