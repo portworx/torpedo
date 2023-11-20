@@ -5269,8 +5269,8 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			done <- false
 		}()
 		defer func() {
-			done <- true
 			close(done)
+			close(errorChan)
 		}()
 		log.Infof("step5")
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -5388,7 +5388,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
-			close(done)
+
 			select {
 			case err := <-errorChan:
 				fmt.Printf("Error generated while inspecting pool status in the background: %v\n", err)
@@ -5407,7 +5407,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 // This function checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
 func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool) {
 	defer GinkgoRecover()
-	log.Infof("Started monitoring pool: %v", PoolID)
+
 	for {
 		select {
 		case <-*done:
@@ -5421,6 +5421,7 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 					log.InfoD("Poolstatus nil")
 
 					for _, v := range poolsStatus {
+						log.Infof("Started monitoring pool: %v, status: %v", PoolID, v)
 						if v != "Online" {
 							err := Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 							*errorChan <- err
