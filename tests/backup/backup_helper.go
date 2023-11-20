@@ -125,6 +125,7 @@ const (
 	rancherProjectDescription                 = "new project"
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
 	storkPodRestartRetryTimeinMinutes         = 15
+	podDestroyTimeout                         = 5 * time.Minute
 )
 
 var (
@@ -5708,6 +5709,7 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	// Get current storage cluster configuration
 	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
+	storkOldPods, err := core.Instance().GetPods(storkDeploymentNamespace, map[string]string{"name": "stork"})
 	if err != nil {
 		return nil, err
 	}
@@ -5719,7 +5721,7 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 
 	if isOpBased {
 		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-			log.Info("Current admin namespace - [%s]", adminNamespace)
+			log.Infof("Current admin namespace - [%s]", adminNamespace)
 		}
 		// Setting the new admin namespace
 		if namespace != "" {
@@ -5749,8 +5751,12 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 			return nil, err
 		}
 	}
-	time.Sleep(30 * time.Second)
 
+	time.Sleep(10 * time.Second)
+
+	if err != nil {
+		return nil, err
+	}
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
 		return nil, err
@@ -5760,7 +5766,17 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		return nil, err
 	}
 
-	time.Sleep(30 * time.Second)
+	// Removing all old stork pods
+	for _, pod := range storkOldPods.Items {
+		err = core.Instance().DeletePod(pod.Name, pod.Namespace, false)
+		if err != nil {
+			log.Warnf("Unable to delete [%v]. Error - [%s]", pod.Name, err.Error())
+		} else {
+			log.Infof("Old stork pod deleted [%v]", pod.Name)
+		}
+	}
+
+	time.Sleep(10 * time.Second)
 
 	return stc, nil
 }
