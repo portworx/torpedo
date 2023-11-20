@@ -5265,14 +5265,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		done := make(chan bool)
 		errorChan := make(chan error)
-		go func() {
-			done <- false
-		}()
-		defer func() {
-			close(done)
-			close(errorChan)
-		}()
-		log.Infof("step5")
+
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
 		}
@@ -5374,7 +5367,16 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				}(eachVol)
 			}
 			wg.Wait()
-
+			go func() {
+				done <- false
+				close(done)
+				select {
+				case err := <-errorChan:
+					fmt.Printf("Error generated while inspecting pool status in the background: %v\n", err)
+				default:
+				}
+				close(errorChan)
+			}()
 			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
@@ -5388,12 +5390,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
-
-			select {
-			case err := <-errorChan:
-				fmt.Printf("Error generated while inspecting pool status in the background: %v\n", err)
-			default:
-			}
 
 		}
 	})
