@@ -5263,15 +5263,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		log.InfoD(stepLog)
 
 		contexts = make([]*scheduler.Context, 0)
-		log.Infof("step1")
 		done := make(chan bool)
-		log.Infof("step2")
 		errorChan := make(chan error)
-		log.Infof("step3")
 		go func() {
 			done <- false
 		}()
-		log.Infof("step4")
 		defer func() {
 			done <- true
 			close(done)
@@ -5359,7 +5355,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			}
 
 			// This function checks for pool's status if it is offline it does the needfull to get it online
-			go poolStatusChecker(done, errorChan, *restartDriver, rebootPoolID, expectedSize, isjournal)
+			go poolStatusChecker(&done, &errorChan, *restartDriver, rebootPoolID, expectedSize, isjournal)
 			// Set replicaiton on all volumes in parallel so that multiple volumes will be in resync
 			var wg sync.WaitGroup
 			var m sync.Mutex
@@ -5409,12 +5405,12 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 })
 
 // This function checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
-func poolStatusChecker(done <-chan bool, errorChan chan<- error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool) {
+func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool) {
 	defer GinkgoRecover()
 
 	for {
 		select {
-		case <-done:
+		case <-*done:
 			return
 		default:
 			poolsStatus, err := Inst().V.GetNodePoolsStatus(selectedNode)
@@ -5426,10 +5422,10 @@ func poolStatusChecker(done <-chan bool, errorChan chan<- error, selectedNode no
 
 					for _, v := range poolsStatus {
 						if v != "Online" {
-							err = Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-							errorChan <- err
+							err := Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+							*errorChan <- err
 							resizeErr := waitForPoolToBeResized(expectedSize, PoolID, isjournal)
-							errorChan <- resizeErr
+							*errorChan <- resizeErr
 							time.Sleep(30 * time.Second)
 						}
 					}
