@@ -1831,25 +1831,6 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		crashedNodes = append(crashedNodes, storageNode)
 		log.InfoD("storage pool %s", storageNode.Name)
 
-		//map which holds the initial sizes of the global pool
-		poolSizes := make(map[int]float64, 0)
-
-		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByAvailableCapacity(80, 50, aututils.RuleScaleTypeAddDisk),
-		}
-		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
-		var originalTotalSize float64 = 0
-		for _, pstatus := range provisionStatus {
-			originalTotalSize += pstatus.TotalSize
-		}
-		poolSizes[0] = originalTotalSize
-		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
-		originalTotalSize = 0
-		for _, pstatus := range provisionStatus {
-			originalTotalSize += pstatus.TotalSize
-		}
-		poolSizes[1] = originalTotalSize
-		log.InfoD("Pool size before pool expand:%v", originalTotalSize)
 		Step("get kvdb node to crash and add label to the node", func() {
 			stNodes := node.GetNodesByVoDriverNodeID()
 			kvdbNodes, err := GetAllKvdbNodes()
@@ -1869,6 +1850,26 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 				break
 			}
 		})
+
+		//map which holds the initial sizes of the global pool
+		poolSizes := make(map[int]float64, 0)
+
+		apRules := []apapi.AutopilotRule{
+			aututils.PoolRuleByAvailableCapacity(80, 50, aututils.RuleScaleTypeAddDisk),
+		}
+		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
+		var originalTotalSize float64 = 0
+		for _, pstatus := range provisionStatus {
+			originalTotalSize += pstatus.TotalSize
+		}
+		poolSizes[0] = originalTotalSize
+		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
+		originalTotalSize = 0
+		for _, pstatus := range provisionStatus {
+			originalTotalSize += pstatus.TotalSize
+		}
+		poolSizes[1] = originalTotalSize
+		log.InfoD("Pool size before pool expand:%v", originalTotalSize)
 
 		Step("schedule apps with autopilot rules for pool expand", func() {
 			for _, node := range crashedNodes {
