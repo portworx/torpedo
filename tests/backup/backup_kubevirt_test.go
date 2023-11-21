@@ -2,6 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -9,9 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"strings"
-	"sync"
-	"time"
 )
 
 // This testcase verifies backup and restore of Kubevirt VMs in different states like Running, Stopped, Restarting
@@ -141,8 +142,16 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 				go func(backupName string, appCtx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
+					_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(appCtx.ScheduleOptions.Namespace, "pre", "default")
+					log.FailOnError(err, "Unable to create Pre Rule")
+					preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleName)
+					log.FailOnError(err, "Unable fetch pre rule uid")
+					_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(appCtx.ScheduleOptions.Namespace, "post", "default")
+					log.FailOnError(err, "Unable to create Post Rule")
+					postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleName)
+					log.FailOnError(err, "Unable fetch post rule uid")
 					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, appCtx.ScheduleOptions.Namespace, backupLocationName)
-					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, orgID, sourceClusterUid, "", "", "", "")
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, orgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 					if err != nil {
 						mutex.Lock()
 						errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))

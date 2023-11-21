@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 )
 
 const (
@@ -2094,6 +2095,21 @@ var (
 	}
 )
 
+var (
+	// KubeVirtRule template contains the template for pre, post rules
+	// and pod selector to be used for kubevirt backup
+	KubevirtRuleTemplate = map[string]map[string]string{
+		"default": {
+			"pre":            "/usr/bin/virt-freezer --freeze --name <vm-name> --namespace <namespace>",
+			"post":           "/usr/bin/virt-freezer --unfreeze --name <vm-name> --namespace <namespace>",
+			"podSelector":    "name=<vm-name>",
+			"container":      "",
+			"runInSinglePod": "false",
+			"background":     "false",
+		},
+	}
+)
+
 func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error) {
 	var podSelector []map[string]string
 	var actionValue []string
@@ -2144,6 +2160,108 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 	}
 	timestamp := strconv.Itoa(int(time.Now().Unix()))
 	ruleName := fmt.Sprintf("%s-%s-rule-%s", appName, prePostFlag, timestamp)
+	rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalRules)
+	for i := 0; i < totalRules; i++ {
+		ruleAction := api.RulesInfo_Action{Background: background[i], RunInSinglePod: runInSinglePod[i],
+			Value: actionValue[i]}
+		var actions = []*api.RulesInfo_Action{&ruleAction}
+		rulesInfoRuleItem[i].PodSelector = podSelector[i]
+		rulesInfoRuleItem[i].Actions = actions
+		rulesInfoRuleItem[i].Container = container[i]
+		rulesInfo.Rules = append(rulesInfo.Rules, &rulesInfoRuleItem[i])
+	}
+	RuleCreateReq := &api.RuleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  ruleName,
+			OrgId: orgID,
+		},
+		RulesInfo: &rulesInfo,
+	}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	if err != nil {
+		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+		return false, ruleName, err
+	}
+
+	_, err = p.CreateRule(ctx, RuleCreateReq)
+	if err != nil {
+		err = fmt.Errorf("Failed to create backup rules: [%v]", err)
+		return false, ruleName, err
+	}
+	log.Infof("Validate rules for backup")
+	RuleEnumerateReq := &api.RuleEnumerateRequest{
+		OrgId: orgID,
+	}
+	ruleList, err := p.EnumerateRule(ctx, RuleEnumerateReq)
+	for i := 0; i < len(ruleList.Rules); i++ {
+		if ruleList.Rules[i].Metadata.Name == ruleName {
+			uid = ruleList.Rules[i].Metadata.Uid
+			break
+		}
+	}
+	RuleInspectReq := &api.RuleInspectRequest{
+		OrgId: orgID,
+		Name:  ruleName,
+		Uid:   uid,
+	}
+	_, err = p.InspectRule(ctx, RuleInspectReq)
+	if err != nil {
+		err = fmt.Errorf("Failed to validate the created rule with Error: [%v]", err)
+		return false, ruleName, err
+	}
+	return true, ruleName, nil
+}
+
+// CreateRuleForKubevirtBackup created a backup rule for kubevirt
+func (p *portworx) CreateRuleForKubevirtBackup(virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error) {
+	var podSelector []map[string]string
+	var actionValue []string
+	var container []string
+	var runInSinglePod []bool
+	var background []bool
+	var rulesInfo api.RulesInfo
+	var uid string
+	for _, vm := range virtualMachineList {
+		ps := strings.Split(KubevirtRuleTemplate[template]["podSelector"], "=")
+		psMap := make(map[string]string)
+		psMap[ps[0]] = strings.Replace(ps[1], "<vm-name>", vm.Name, 1)
+		podSelector = append(podSelector, psMap)
+		log.Infof("Pod Selector - [%v]", psMap)
+		container = append(container, KubevirtRuleTemplate[template]["container"])
+		podVal, _ := strconv.ParseBool(KubevirtRuleTemplate[template]["runInSinglePod"])
+		runInSinglePod = append(runInSinglePod, podVal)
+		log.Infof("runInSinglePod - [%v]", runInSinglePod)
+		backgroundVal, _ := strconv.ParseBool(KubevirtRuleTemplate[template]["background"])
+		background = append(background, backgroundVal)
+		log.Infof("Background - [%v]", background)
+
+		if prePostFlag == "pre" {
+			actionValue = append(
+				actionValue,
+				strings.Replace(
+					strings.Replace(KubevirtRuleTemplate[template]["pre"], "<vm-name>", vm.Name, 1),
+					"<namespace>",
+					vm.Namespace,
+					1))
+		} else {
+			actionValue = append(
+				actionValue,
+				strings.Replace(
+					strings.Replace(KubevirtRuleTemplate[template]["post"], "<vm-name>", vm.Name, 1),
+					"<namespace>",
+					vm.Namespace,
+					1))
+		}
+		log.Infof("Actions - [%s]", actionValue)
+	}
+
+	totalRules := len(actionValue)
+	if totalRules == 0 {
+		log.Info("Rules not required for the apps")
+		return true, "", nil
+	}
+	timestamp := strconv.Itoa(int(time.Now().Unix()))
+	ruleName := fmt.Sprintf("%s-%s-rule-%s", "kubevirt", prePostFlag, timestamp)
 	rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalRules)
 	for i := 0; i < totalRules; i++ {
 		ruleAction := api.RulesInfo_Action{Background: background[i], RunInSinglePod: runInSinglePod[i],
