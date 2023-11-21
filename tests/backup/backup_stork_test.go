@@ -57,7 +57,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 83717, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 85406, ATrivedi, Q4FY24)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
@@ -328,7 +328,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("DeleteUpdateSuspendResumeWithCustomAdminNamespace", "Delete Update Suspend and Resume with custom admin namespace", nil, 83717, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("DeleteUpdateSuspendResumeWithCustomAdminNamespace", "Delete Update Suspend and Resume with custom admin namespace", nil, 85408, ATrivedi, Q4FY24)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
