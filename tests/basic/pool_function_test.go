@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
 	"strings"
 	"sync"
@@ -857,5 +858,139 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		})
+	})
+})
+
+var _ = Describe("{StorageFullPoolExpansion}", func() {
+	var (
+		appList      []string
+		selectedNode *node.Node
+	)
+
+	BeforeEach(func() {
+		Inst().AppList = []string{"fio-fastpath-repl1"}
+		contexts = ScheduleApplications("storagefull-resize")
+		appList = Inst().AppList
+	})
+
+	JustBeforeEach(func() {
+		selectedNode = GetNodeWithLeastSize()
+		_ = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed to add fastpath label on node %v", selectedNode.Name))
+	})
+
+	AfterEach(func() {
+		Inst().AppList = appList
+		appsValidateAndDestroy(contexts)
+		_ = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+	})
+
+	It("Expand pool with resize-disk type after pool is down due to storage full", func() {
+		// https://portworx.testrail.net/index.php?/cases/view/51280
+		StartTorpedoTest("StorageFullPoolResize", "Feed a pool full, then expand the pool in type resize-disk", nil, 51280)
+		Step("Prepare a full pool to expand", func() {
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Timed out waiting to load a pool and bring node %s storage down", selectedNode.Name))
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					poolIDToResize = i
+					poolToResize, err = GetStoragePoolByUUID(poolIDToResize)
+					log.FailOnError(err, "error getting pool with UUID [%s]", poolIDToResize)
+					break
+				}
+			}
+		})
+
+		Step("Expand the full pool in type resize-disk", func() {
+			targetSizeGiB = (poolToResize.TotalSize / units.GiB) * 2
+			log.InfoD("Current Size of the pool %s is %d, trying to expand it to double the size", poolToResize.Uuid, poolToResize.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolToResize.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init should be successful.")
+		})
+
+		Step("Verify that pool expansion is successful", func() {
+			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Error waiting for pool %s resize", poolToResize.Uuid))
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
+		})
+  })
+})
+     
+
+var _ = Describe("{PoolExpandTestLimits}", func() {
+	BeforeEach(func() {
+		contexts = scheduleApps()
+	})
+
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+	})
+
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("Initiate pool expansion (DMThin) to its limits (15 TiB)", func() {
+		var testrailID = 51292
+		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/51292
+
+		StartTorpedoTest("PoolExpandTestWithin15TiBLimit",
+			"Initiate pool expansion using resize-disk to 15 TiB target size", nil, testrailID)
+
+		// To achieve total pool size of 15 TiB:
+		// 1. Add another drive of same size for pool to have 2 drives.
+		// 2. Perform resize-disk operation which is faster than pool rebalance
+		//    due to adding a new 7 TiB drive.
+		targetSizeGiB := (poolToResize.TotalSize / units.GiB) * 2
+
+		log.InfoD("Next trying to expand the pool %s to %v GiB with type add-disk",
+			poolIDToResize, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion should not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
+		targetSizeTiB := uint64(15)
+		targetSizeInBytes = targetSizeTiB * units.TiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v TiB with type resize-disk",
+			poolIDToResize, targetSizeGiB, targetSizeTiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		resizeErr = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion should not result in error")
+		verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+
+	})
+
+	It("Expand pool to 20 TiB (beyond max supported capacity for DMThin) with add-disk type. ", func() {
+		var testrailID = 50643
+		// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/50643
+
+		StartTorpedoTest("DMThinPoolExpandBeyond15TiBLimit",
+			"Initiate pool expansion using add-disk to 20 TiB target size", nil, testrailID)
+		isDMthin, err := IsDMthin()
+		dash.VerifyFatal(err, nil, "error verifying if set up is DMTHIN enabled")
+		dash.VerifyFatal(isDMthin, true, "DMThin/PX-Storev2 is not enabled on underlaying PX cluster. Skipping `PoolExpandTestBeyond15TiBLimit` test.")
+
+		targetSizeTiB := uint64(20)
+		targetSizeInBytes = targetSizeTiB * units.TiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Trying to expand pool %s to %v TiB with type add-disk",
+			poolIDToResize, targetSizeTiB)
+		err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+		dash.VerifyFatal(err != nil, true, "DMThin pool expansion to 20 TB should result in error")
 	})
 })

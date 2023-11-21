@@ -1100,6 +1100,11 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 
@@ -1187,6 +1192,11 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 
 		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
 		//       CSI resize succeeded.
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 
@@ -1327,6 +1337,9 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
+
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
 		}
 	})
 }
@@ -1360,6 +1373,11 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 				SnapshotclassName: snapShotClassName,
 			}
 			err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
+			processError(err, errChan...)
+
+			// Note: the above only creates PVCs, it does not attach them to pods, so no extra care needs to be taken for local paths
+
+			err = Inst().V.ValidatePureLocalVolumePaths()
 			processError(err, errChan...)
 		}
 	})
@@ -2129,6 +2147,44 @@ func ValidateRuleNotTriggered(contexts []*scheduler.Context, name string) {
 	}
 	_, err = task.DoRetryWithTimeout(checkRuleTriggered, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
 	expect(err).NotTo(haveOccurred())
+}
+
+func ToggleAutopilotInStc() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating autopilot pod is deleted")
+	checkPodIsDeleted := func() (interface{}, bool, error) {
+		autopilotLabels := make(map[string]string)
+		autopilotLabels["name"] = "autopilot"
+		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
+		expect(err).NotTo(haveOccurred())
+		if stc.Spec.Autopilot.Enabled {
+			log.Infof("autopilot is active, checking is pod is present.")
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("autopilot pod is still not deployed")
+			}
+			return "autopilot pod deployed", false, nil
+		} else {
+			log.Infof("autopilot is inactive, checking if pod is deleted.")
+			if len(pods.Items) > 0 {
+				return "", true, fmt.Errorf("autopilot pod is still present")
+			}
+			return "autopilot pod is deleted", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+	log.InfoD("Update STC, is AutopilotEnabled Now?: %t", stc.Spec.Autopilot.Enabled)
+	return nil
 }
 
 // ValidatePxPodRestartCount validates portworx restart count
@@ -5257,7 +5313,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						if restartPX {
 							action = "restart px on"
 						}
-						stepLog = fmt.Sprintf("%a target node %s while repl increase is in-progres", action,
+						stepLog = fmt.Sprintf("%s target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
 							func() {
@@ -9855,7 +9911,7 @@ func DeletePXPods(nameSpace string) error {
 
 func GetKubevirtVersionToUpgrade() string {
 	kubevirtVersion, present := os.LookupEnv("KUBEVIRT_UPGRADE_VERSION")
-	if present {
+	if present && kubevirtVersion != "" {
 		return kubevirtVersion
 	}
 	return LatestKubevirtVersion
