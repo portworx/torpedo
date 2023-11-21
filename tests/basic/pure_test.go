@@ -2286,3 +2286,272 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
+
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20632
+			https://portworx.atlassian.net/browse/PTX-20634
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/92870
+			https://portworx.testrail.net/index.php?/cases/view/92871
+			https://portworx.testrail.net/index.php?/cases/view/92872
+			https://portworx.testrail.net/index.php?/cases/view/92874
+	*/
+
+	// Backend represents the cloud storage provider for volume provisioning
+	type Backend string
+
+	const (
+		BackendPure    Backend = "PURE"
+		BackendVSphere Backend = "VSPHERE"
+		BackendUnknown Backend = "UNKNOWN"
+	)
+
+	// VolumeType represents the type of provisioned volume
+	type VolumeType string
+
+	const (
+		VolumeFADA    VolumeType = "FADA"
+		VolumeFBDA    VolumeType = "FBDA"
+		VolumeFACD    VolumeType = "FACD"
+		VolumeVsCD    VolumeType = "VsCD"
+		VolumeUnknown VolumeType = "UNKNOWN"
+	)
+
+	var (
+		contexts              []*scheduler.Context
+		backend               = BackendUnknown
+		volumeMap             = make(map[VolumeType][]*api.Volume)
+		numSnapshotsPerVolume = 3
+		volumeSnapshotMap     = make(map[string][]*api.SdkVolumeSnapshotCreateResponse)
+		snapshotMap           = make(map[string]*api.Volume)
+		appScaleFactorMap     = make(map[string]map[string]int32)
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateRestoreAndDeleteMultipleSnapshots", "Validate snapshot creation, restoration, and deletion", nil, 92870)
+	})
+
+	It("Validates snapshot creation, restoration, and deletion", func() {
+		// getPureVolumeType determines the type of the volume based on the proxy spec
+		getPureVolumeType := func(vol *volume.Volume) (VolumeType, error) {
+			proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+			if err != nil {
+				return "", fmt.Errorf("failed to get proxy spec for the volume [%s/%s]. Err: [%v]", vol.Namespace, vol.Name, err)
+			}
+			if proxySpec != nil {
+				switch proxySpec.ProxyProtocol {
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					return VolumeFBDA, nil
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					return VolumeFADA, nil
+				default:
+					return VolumeUnknown, nil
+				}
+			} else {
+				return VolumeFACD, nil
+			}
+		}
+		// scaleDownApp scales an app to zero replicas using the given context and waits for pods to terminate
+		scaleDownApp := func(ctx *scheduler.Context) error {
+			scaleApp(ctx, 0)
+			waitForPodsToTerminate := func() (interface{}, bool, error) {
+				vols, err := Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return nil, false, err
+				}
+				podCount := 0
+				for _, vol := range vols {
+					if vol.ID == "" {
+						return nil, false, fmt.Errorf("empty vol.ID in volume [%v]", vol)
+					}
+					pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+					if err != nil {
+						return nil, false, err
+					}
+					podCount += len(pods)
+				}
+				if podCount > 0 {
+					return nil, true, fmt.Errorf("expected no pods, but found [%d] remaining", podCount)
+				}
+				return nil, false, nil
+			}
+			_, err = task.DoRetryWithTimeout(waitForPodsToTerminate, 3*time.Minute, 10*time.Second)
+			if err != nil {
+				return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
+			}
+			return nil
+		}
+		// scaleUpApp scales an app to its original scale factor using the given context and validates the app
+		scaleUpApp := func(ctx *scheduler.Context) error {
+			err = Inst().S.ScaleApplication(ctx, appScaleFactorMap[ctx.App.Key])
+			if err != nil {
+				return fmt.Errorf("failed to scale up the app [%s]. Err: [%v]", ctx.App.Key, err)
+			}
+			ValidateContext(ctx)
+			return nil
+		}
+		// restoreSnapshot restores the snapshot specified by snapshotId to its parent volume
+		restoreSnapshot := func(volType VolumeType, snapshotId string) error {
+			volID := ""
+			for volId, snapshots := range volumeSnapshotMap {
+				for _, snapshot := range snapshots {
+					if snapshot.SnapshotId == snapshotId {
+						volID = volId
+						break
+					}
+				}
+			}
+			switch volType {
+			default:
+				_, err := Inst().V.RestoreSnapshot(snapshotId, volID)
+				if err != nil {
+					return fmt.Errorf("failed to restore snapshot [%s] to volume [%s]. Err: [%v]", snapshotId, volID, err)
+				}
+				// It is observed that the volume source points to a snapshot for a brief period
+				// of time so we until the source parent is empty, ensuring the restore is successfully completed
+				waitForRestoreCompletionBasedOnSource := func() (interface{}, bool, error) {
+					vol, err := Inst().V.InspectVolume(volID)
+					if err != nil {
+						return nil, false, err
+					}
+					if vol.Source.Parent != "" {
+						return nil, true, fmt.Errorf("restoring snapshot [%s] to volume [%s] is in progress", snapshotId, volID)
+					}
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(waitForRestoreCompletionBasedOnSource, defaultTimeout, defaultRetryInterval)
+				if err != nil {
+					return fmt.Errorf("failed to wait for snapshot [%s] restore to volume [%s] completion. Err: [%v]", snapshotId, volID, err)
+				}
+			}
+			return nil
+		}
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("pure-test-%d", i)
+				for _, ctx := range ScheduleApplications(taskName) {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+				}
+			}
+		})
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+			for _, ctx := range contexts {
+				scaleFactorMap, err := Inst().S.GetScaleFactorMap(ctx)
+				log.FailOnError(err, "failed to get scale factor map for app [%s]", ctx.App.Key)
+				appScaleFactorMap[ctx.App.Key] = scaleFactorMap
+				ctx.ReadinessTimeout = time.Duration(Inst().GlobalScaleFactor) * defaultTimeout
+			}
+		})
+		Step("Identify backend and categorize volumes", func() {
+			log.InfoD("Identifying backend")
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
+			log.FailOnError(err, "failed to get secret list from namespace [%s]", volDriverNamespace)
+			for _, secret := range secretList.Items {
+				switch secret.Name {
+				case PX_PURE_SECRET_NAME:
+					backend = BackendPure
+					break
+				case PX_VSPHERE_SCERET_NAME:
+					backend = BackendVSphere
+					break
+				}
+			}
+			log.InfoD("Backend: %v", backend)
+			log.InfoD("Categorizing volumes")
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
+				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for creating snapshots")
+				// The CloudStorage.Provider in StorageCluster Spec is not accurate
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					switch backend {
+					case BackendPure:
+						volType, err := getPureVolumeType(vol)
+						log.FailOnError(err, "failed to get pure volume type for volume [%+v]", vol)
+						volumeMap[volType] = append(volumeMap[volType], apiVol)
+					case BackendVSphere:
+						volumeMap[VolumeVsCD] = append(volumeMap[VolumeVsCD], apiVol)
+					default:
+						volumeMap[VolumeUnknown] = append(volumeMap[VolumeUnknown], apiVol)
+					}
+				}
+			}
+		})
+		Step(fmt.Sprintf("Create a [%d] snapshots for each volume", numSnapshotsPerVolume), func() {
+			log.InfoD("Create a [%d] snapshots for each volume", numSnapshotsPerVolume)
+			for i := 0; i <= numSnapshotsPerVolume; i++ {
+				for volType, vols := range volumeMap {
+					for _, vol := range vols {
+						snapshotName := fmt.Sprintf("%s-snapshot-%d", vol.Locator.Name, i)
+						log.Infof("Create snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshotName, i, volType, vol.Id, vol.Locator.Name)
+						snapshot, err := Inst().V.CreateSnapshot(vol.Id, snapshotName)
+						log.FailOnError(err, "failed to create snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
+						volumeSnapshotMap[vol.Id] = append(volumeSnapshotMap[vol.Id], snapshot)
+						apiSnapshot, err := Inst().V.InspectVolume(snapshot.SnapshotId)
+						log.FailOnError(err, "failed to inspect snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshot.SnapshotId, i, volType, vol.Id, vol.Locator.Name)
+						snapshotMap[snapshot.SnapshotId] = apiSnapshot
+					}
+				}
+			}
+		})
+		Step("Restore a random snapshot of each volume", func() {
+			log.InfoD("Restoring a random snapshot of each volume")
+			for _, ctx := range contexts {
+				log.InfoD("Scaling down app [%s]", ctx.App.Key)
+				err := scaleDownApp(ctx)
+				log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
+			}
+			for volType, vols := range volumeMap {
+				log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+				for _, vol := range vols {
+					snapshots := make([]*api.Volume, 0)
+					for _, snapshot := range volumeSnapshotMap[vol.Id] {
+						snapshots = append(snapshots, snapshotMap[snapshot.SnapshotId])
+					}
+					log.Infof("List of all [%d] [%s] volume [%s/%s] snapshots [%s]", len(snapshotMap), volType, vol.Id, vol.Locator.Name, snapshots)
+				}
+				randomVol := vols[rand.Intn(len(vols))]
+				randomSnapshotId := volumeSnapshotMap[randomVol.Id][rand.Intn(numSnapshotsPerVolume)].SnapshotId
+				log.Infof("Restoring random snapshot [%s] of [%s] volume [%s/%s]", randomSnapshotId, volType, randomVol.Id, randomVol.Locator.Name)
+				err = restoreSnapshot(volType, randomSnapshotId)
+				log.FailOnError(err, "failed to restore random snapshot [%s] of [%s] volume [%s/%s]", randomSnapshotId, volType, randomVol.Id, randomVol.Locator.Name)
+			}
+			for _, ctx := range contexts {
+				log.InfoD("Scaling up app [%s]", ctx.App.Key)
+				err := scaleUpApp(ctx)
+				log.FailOnError(err, "failed to scale up app [%s]", ctx.App.Key)
+			}
+		})
+		Step("Delete snapshots of all volume", func() {
+			log.InfoD("Deleting snapshots of all volume")
+			for volType, vols := range volumeMap {
+				for _, vol := range vols {
+					for i, snapshot := range volumeSnapshotMap[vol.Id] {
+						log.Infof("Deleting snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshot.SnapshotId, i, volType, vol.Id, vol.Locator.Name)
+						err := Inst().V.DeleteVolume(snapshot.SnapshotId)
+						log.FailOnError(err, "failed to delete snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
+					}
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//log.InfoD("Destroying applications")
+		//DestroyApps(contexts, opts)
+	})
+})
