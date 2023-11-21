@@ -7882,8 +7882,6 @@ func EnterPoolMaintenance(stNode node.Node) error {
 		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
 	}
 
-	// //Wait till the Node goes down
-	// return Inst().V.WaitDriverDownOnNode(stNode)
 	return nil
 }
 
@@ -7896,8 +7894,8 @@ func ExitPoolMaintenance(stNode node.Node) error {
 	if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
 		return fmt.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
 	}
-	// Adding wait as even PX is up it is taking some time for pool status to update
-	// when all pools are deleted
+
+	// wait as even PX is up it is taking some time for pool status to update when all pools are deleted
 	time.Sleep(1 * time.Minute)
 	cmd := "pxctl sv pool show"
 	var out string
@@ -7922,7 +7920,6 @@ func ExitPoolMaintenance(stNode node.Node) error {
 		return fmt.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
 	}
 
-	// return Inst().V.WaitDriverUpOnNode(stNode, addDriveUpTimeOut)
 	return nil
 }
 

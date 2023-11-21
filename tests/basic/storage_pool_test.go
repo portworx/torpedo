@@ -10091,7 +10091,6 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 
 	ItLog := "Initiate pool delete, then add a new pool and expand the pool"
 	It(ItLog, func() {
-		// selectedNode := node.GetStorageNodes()[0]
 		testNode := selectPoolDeletableNode(false)
 		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
 		selectedNode := *testNode
