@@ -234,7 +234,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 			CloudSnapShot: TriggerCloudSnapShot,
-			//HAIncrease:           TriggerHAIncrease,
+			HAIncrease:    TriggerHAIncrease,
 			//PoolAddDisk:          TriggerPoolAddDisk,
 			//LocalSnapShot:        TriggerLocalSnapShot,
 			//HADecrease:           TriggerHADecrease,
