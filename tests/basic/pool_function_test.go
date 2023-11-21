@@ -2,8 +2,8 @@ package tests
 
 import (
 	"fmt"
-	"reflect"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -920,9 +920,8 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
-  })
+	})
 })
-     
 
 var _ = Describe("{PoolExpandTestLimits}", func() {
 	BeforeEach(func() {
@@ -1030,13 +1029,13 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 	It("Initiate pool expansion and Newly set pool labels should persist post pool expand add-disk operation", func() {
 
 		labelBeforeExpand := poolToResize.Labels
+		poolInMaintenance := "STATUS_POOLMAINTENANCE"
 
 		stepLog = "set pool label, before pool expand"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			poolLabelToUpdate := make(map[string]string)
 			poolLabelToUpdate["cust-type"] = "test-label"
-			// Update the pool label
 			err = Inst().V.UpdatePoolLabels(*storageNode, poolIDToResize, poolLabelToUpdate)
 			log.FailOnError(err, "Failed to update the label on the pool %s", poolIDToResize)
 		})
@@ -1046,8 +1045,9 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 			log.InfoD(stepLog)
 			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", storageNode.Name))
 			err = Inst().V.EnterPoolMaintenance(*storageNode)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", storageNode.Name))
+			log.FailOnError(err, fmt.Sprintf("failed to enter node %s in maintenance mode", storageNode.Name))
 			status, _ := Inst().V.GetNodeStatus(*storageNode)
+			dash.VerifyFatal(status.String(), poolInMaintenance, "Pool now in maintenance mode")
 			log.InfoD(fmt.Sprintf("Node %s status %s", storageNode.Name, status.String()))
 		})
 
