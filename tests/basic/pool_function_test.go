@@ -947,7 +947,6 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", func() {
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		// poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
@@ -991,8 +990,6 @@ func checkAlertsForPoolExpansion(poolIDToResize string, targetSizeGiB uint64) (b
 	})
 	log.FailOnError(err, "Unable to execute the alerts show command")
 	outLines := strings.Split(out, "\n")
-	// var alertExist bool
-	// alertExist = false
 	substr := "[0-9]+ GiB"
 	re := regexp.MustCompile(substr)
 
