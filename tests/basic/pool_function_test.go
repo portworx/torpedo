@@ -113,6 +113,27 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 	//	verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 	//})
 
+	It("Verify expanding pool with add-disk type is rejected with dmthin. ", func() {
+		StartTorpedoTest("PoolExpandDiskAdd",
+			"Validate storage pool expansion with type=add-disk", nil, 0)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+
+		if isDMthin, _ := IsDMthin(); isDMthin {
+			dash.VerifyFatal(resizeErr != nil, true,
+				"Pool expansion request of add-disk type should be rejected with dmthin")
+		} else {
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		}
+	})
+
 	It("Select a pool and expand it by 100 GiB with resize-disk type. ", func() {
 		StartTorpedoTest("PoolExpandDiskResize",
 			"Validate storage pool expansion with type=resize-disk", nil, 0)
