@@ -5267,7 +5267,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		errorChan := make(chan error)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("snapcreateresizepool-%d", i))...)
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresyncresizepool-%d", i))...)
 		}
 		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
@@ -5366,8 +5366,11 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					}
 				}(eachVol)
 			}
+			log.Infof("Came out of for loop")
 			wg.Wait()
+			log.Infof("set repl go routine completed")
 			go func() {
+				log.Infof("Entered closing go routine")
 				done <- false
 				close(done)
 				select {
