@@ -920,9 +920,8 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
-  })
+	})
 })
-     
 
 var _ = Describe("{PoolExpandTestLimits}", func() {
 	BeforeEach(func() {
@@ -1023,6 +1022,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 	It("pool expansion using add-disk and check alerts after each operation", func() {
 		var nodeDetail *node.Node
 		var err error
+		poolInMaintenance := "STATUS_POOLMAINTENANCE"
 
 		stepLog = "Move pool to maintenance mode"
 		Step(stepLog, func() {
@@ -1030,11 +1030,12 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to get Node Details using PoolUUID [%v]", poolToResize.Uuid))
 
-			log.InfoD("Bring Node to Maintenance Mode")
+			log.InfoD("Bring Pool to Maintenance Mode")
 			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", nodeDetail.Name))
 			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", nodeDetail.Name))
 			status, _ := Inst().V.GetNodeStatus(*nodeDetail)
+			dash.VerifyFatal(status.String(), poolInMaintenance, "Pool now in maintenance mode")
 			log.InfoD(fmt.Sprintf("Node %s status %s", nodeDetail.Name, status.String()))
 		})
 
@@ -1077,7 +1078,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 			log.Infof(fmt.Sprintf("Node %s status %s after exit", nodeDetail.Name, status.String()))
 		})
 
-		stepLog = "Check the alert for pool expand"
+		stepLog = "Check the alerts for pool expand"
 		Step(stepLog, func() {
 			log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
 			alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
@@ -1112,11 +1113,9 @@ func checkAlertsForPoolExpansion(poolIDToResize string, targetSizeGiB uint64) (b
 				if poolSizeUint >= targetSizeGiB {
 					log.Infof("The Alert generated is %s", line)
 					return true, nil
-				} else {
-					return false, fmt.Errorf("Current pool size after expansion %s GiB is less than expected size %d GiB", matchedSize, targetSizeGiB)
 				}
 			}
 		}
 	}
-	return true, nil
+	return false, fmt.Errorf("Alert not found")
 }
