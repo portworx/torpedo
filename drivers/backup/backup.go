@@ -434,7 +434,7 @@ type Rule interface {
 	CreateRuleForBackup(appName string, orgID string, prePostFlag string) (bool, string, error)
 
 	// CreateRuleForKubevirtBackup creates backup rule for kubevirt
-	CreateRuleForKubevirtBackup(virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error)
+	CreateRuleForKubevirtBackup(ctx context.Context, virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error)
 
 	// DeleteRuleForBackup deletes backup rule
 	DeleteRuleForBackup(orgID string, ruleName string) error

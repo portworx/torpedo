@@ -5974,7 +5974,8 @@ func GetRestoreCRs(
 }
 
 // CreateKubevirtBackupRuleForAllVMsInNamespace creates a pre/post rule for all kubevirt vms in a given namespace
-func CreateKubevirtBackupRuleForAllVMsInNamespace(namespace string, ruleType string, template string) (bool, string, error) {
+func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context.Context, namespace string, ruleType string,
+	template string) (bool, string, error) {
 	var listOfVirtualMachine []kubevirtv1.VirtualMachine
 	k8sKubevirt := kubevirt.Instance()
 
@@ -5986,7 +5987,7 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(namespace string, ruleType str
 	for _, vm := range vms.Items {
 		listOfVirtualMachine = append(listOfVirtualMachine, vm)
 	}
-	ruleStatus, ruleName, err := Inst().Backup.CreateRuleForKubevirtBackup(listOfVirtualMachine, orgID, ruleType, template)
+	ruleStatus, ruleName, err := Inst().Backup.CreateRuleForKubevirtBackup(ctx, listOfVirtualMachine, orgID, ruleType, template)
 	if err != nil {
 		return false, "", err
 	}

@@ -2213,7 +2213,8 @@ func (p *portworx) CreateRuleForBackup(appName string, orgID string, prePostFlag
 }
 
 // CreateRuleForKubevirtBackup created a backup rule for kubevirt
-func (p *portworx) CreateRuleForKubevirtBackup(virtualMachineList []kubevirtv1.VirtualMachine, orgID string, prePostFlag string, template string) (bool, string, error) {
+func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachineList []kubevirtv1.VirtualMachine, orgID string,
+	prePostFlag string, template string) (bool, string, error) {
 	var podSelector []map[string]string
 	var actionValue []string
 	var container []string
@@ -2279,13 +2280,13 @@ func (p *portworx) CreateRuleForKubevirtBackup(virtualMachineList []kubevirtv1.V
 		},
 		RulesInfo: &rulesInfo,
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-		return false, ruleName, err
-	}
+	// ctx, err := backup.GetAdminCtxFromSecret()
+	// if err != nil {
+	// 	err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
+	// 	return false, ruleName, err
+	// }
 
-	_, err = p.CreateRule(ctx, RuleCreateReq)
+	_, err := p.CreateRule(ctx, RuleCreateReq)
 	if err != nil {
 		err = fmt.Errorf("Failed to create backup rules: [%v]", err)
 		return false, ruleName, err

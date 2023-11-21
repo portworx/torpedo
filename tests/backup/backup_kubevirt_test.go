@@ -142,11 +142,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 				go func(backupName string, appCtx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(appCtx.ScheduleOptions.Namespace, "pre", "default")
+					_, preRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, appCtx.ScheduleOptions.Namespace, "pre", "default")
 					log.FailOnError(err, "Unable to create Pre Rule")
 					preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleName)
 					log.FailOnError(err, "Unable fetch pre rule uid")
-					_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(appCtx.ScheduleOptions.Namespace, "post", "default")
+					_, postRuleName, err := CreateKubevirtBackupRuleForAllVMsInNamespace(ctx, appCtx.ScheduleOptions.Namespace, "post", "default")
 					log.FailOnError(err, "Unable to create Post Rule")
 					postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleName)
 					log.FailOnError(err, "Unable fetch post rule uid")
