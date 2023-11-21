@@ -5356,7 +5356,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			for _, eachVol := range Volumes {
 				log.InfoD("Set replication on the volume [%v]", eachVol.ID)
 				wg.Add(1)
-				log.Infof("entered")
 				go func(eachVol *volume.Volume) {
 					defer wg.Done()
 					err := setRepl(eachVol)
@@ -5365,25 +5364,8 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 						error_array = append(error_array, err)
 						m.Unlock()
 					}
-					log.Infof("Exited")
 				}(eachVol)
 			}
-			log.Infof("Came out of for loop")
-			wg.Wait()
-			log.Infof("set repl go routine completed")
-			go func() {
-				log.Infof("Entered closing go routine")
-				done <- false
-				close(done)
-				select {
-				case err := <-errorChan:
-					fmt.Printf("Error generated while inspecting pool status in the background: %v\n", err)
-				default:
-				}
-				close(errorChan)
-				log.Infof("Closed both the channels")
-			}()
-			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
 			log.InfoD("Waiting till Volume is In Resync Mode ")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
@@ -5396,6 +5378,19 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
+
+			wg.Wait()
+
+			done <- true
+			close(done)
+			select {
+			case err := <-errorChan:
+				log.InfoD("Errors in poolstatus check: %v", err.Error())
+			default:
+			}
+			close(errorChan)
+			log.Infof("Closed both the channels")
+			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
 		}
 	})
