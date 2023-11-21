@@ -506,27 +506,20 @@ func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
 	return replPools, replicaNodes, nil
 }
 
-func GetVolumeNodesOnWhichPxIsRunning(namespace string, deployment *pds.ModelsDeployment) []node.Node {
-	var volNodes []string
-	var nodesToStopPx []node.Node
-	var nodeToStopPx string
-	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
-	for _, vol := range vols {
-		_, volNodes, _ = GetReplicaNodes(vol)
-	}
-	for _, volNode := range volNodes {
-		nodeToStopPx = volNode
-	}
-	stopPxNode, err := node.GetNodeByName(nodeToStopPx)
+func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
+	var (
+		nodesToStopPx []node.Node
+		stopPxNode    []node.Node
+	)
+	stopPxNode = node.GetStorageNodes()
 	if err != nil {
 		log.FailOnError(err, "Error while getting PX Node to Restart")
 	}
-	log.InfoD("Going ahead and stopping PX the node %v as there is an ", stopPxNode)
-	nodesToStopPx = append(nodesToStopPx, stopPxNode)
+	log.InfoD("PX the node with vol running found is-  %v ", stopPxNode)
+	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
 	return nodesToStopPx
 }
 func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
-	log.InfoD("I AM IN STOP PX VOL NODE")
 	err = Inst().V.StopDriver(nodesToStopPx, true, nil)
 	if err != nil {
 		log.FailOnError(err, "Error while trying to STOP PX on the volNode- [%v]", nodesToStopPx)
@@ -536,12 +529,11 @@ func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
 }
 
 func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
-	log.InfoD("I AM IN START PX VOL NODE")
 	for _, nodeName := range nodesToStartPx {
 		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
-		err = Inst().V.RestartDriver(nodeName, nil)
+		err = Inst().V.StartDriver(nodeName)
 		if err != nil {
-			log.FailOnError(err, "Error while trying to ReStarting PX on the volNode- [%v]", nodeName)
+			log.FailOnError(err, "Error while trying to Start PX on the volNode- [%v]", nodeName)
 			return err
 		}
 		log.InfoD("PX ReStarted successfully on node %v", nodeName)

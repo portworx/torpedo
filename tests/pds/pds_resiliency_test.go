@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"net/http"
 
@@ -1607,7 +1608,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 			}
 		}()
 		Step("Fetch Volume Nodes on which PX is Running", func() {
-			volNodesWithPx = GetVolumeNodesOnWhichPxIsRunning(params.InfraToTest.Namespace, deployment)
+			volNodesWithPx = GetVolumeNodesOnWhichPxIsRunning()
 			log.InfoD("volume nodes list calculated is- %v", volNodesWithPx)
 		})
 		Step("Stop Px on Ds Node and replica node while storage size increase", func() {
@@ -1625,7 +1626,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 			}
 		})
-		Step("Restart PX on the same after volume resize", func() {
+		Step("Restart PX on the same node after volume resize", func() {
 			StartPxOnReplicaVolumeNode(volNodesWithPx)
 		})
 		Step("Running Workloads", func() {
@@ -1683,16 +1684,16 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 			}
 		})
 
-		//defer func() {
-		//	for _, newDeployment := range deployments {
-		//		Step("Delete created deployments")
-		//		resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
-		//		log.FailOnError(err, "Error while deleting data services")
-		//		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-		//		err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
-		//		log.FailOnError(err, "Error while deleting PV and PVCs")
-		//	}
-		//}()
+		defer func() {
+			for _, newDeployment := range deployments {
+				Step("Delete created deployments")
+				resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
+				log.FailOnError(err, "Error while deleting data services")
+				dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+				err = pdslib.DeletePvandPVCs(*newDeployment.ClusterResourceName, false)
+				log.FailOnError(err, "Error while deleting PV and PVCs")
+			}
+		}()
 
 		Step("Kill DB Master node during application's storage is resized", func() {
 			for ds, deployment := range deployments {
