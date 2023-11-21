@@ -1473,7 +1473,7 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 }
 
 // DeletePodWithLabelInNamespace kills pod with the given label in the given namespace
-func DeletePodWithLabelInNamespace(namespace string, label map[string]string) error {
+func DeletePodWithLabelInNamespace(namespace string, label map[string]string, ignoreLabel bool) error {
 	var pods *corev1.PodList
 	var err error
 	// TODO: Revisit this function and remove the below code if not needed
@@ -1501,8 +1501,19 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string) er
 	if err != nil {
 		return err
 	}
-
 	for _, pod := range pods.Items {
+		flag := false
+		if ignoreLabel {
+			for _, podlabel := range label {
+				if IsPresent(pod.GetLabels(), podlabel) {
+					flag = true
+					break
+				}
+			}
+		}
+		if flag {
+			continue
+		}
 		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
 		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
 		if err != nil {
@@ -4517,7 +4528,7 @@ func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupNam
 	if err != nil {
 		return err
 	}
-	err = DeletePodWithLabelInNamespace(namespace, label)
+	err = DeletePodWithLabelInNamespace(namespace, label, false)
 	if err != nil {
 		return err
 	}
@@ -4552,7 +4563,7 @@ func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreN
 	if err != nil {
 		return err
 	}
-	err = DeletePodWithLabelInNamespace(namespace, label)
+	err = DeletePodWithLabelInNamespace(namespace, label, false)
 	if err != nil {
 		return err
 	}
