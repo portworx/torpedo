@@ -5356,6 +5356,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			for _, eachVol := range Volumes {
 				log.InfoD("Set replication on the volume [%v]", eachVol.ID)
 				wg.Add(1)
+				log.Infof("entered")
 				go func(eachVol *volume.Volume) {
 					defer wg.Done()
 					err := setRepl(eachVol)
@@ -5364,6 +5365,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 						error_array = append(error_array, err)
 						m.Unlock()
 					}
+					log.Infof("Exited")
 				}(eachVol)
 			}
 			log.Infof("Came out of for loop")
