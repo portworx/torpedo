@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -2102,7 +2103,7 @@ var (
 		"default": {
 			"pre":            "/usr/bin/virt-freezer --freeze --name <vm-name> --namespace <namespace>",
 			"post":           "/usr/bin/virt-freezer --unfreeze --name <vm-name> --namespace <namespace>",
-			"podSelector":    "name=<vm-name>",
+			"podSelector":    "vm.kubevirt.io/name=<vm-name>",
 			"container":      "",
 			"runInSinglePod": "false",
 			"background":     "false",
@@ -2223,18 +2224,16 @@ func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachi
 	var rulesInfo api.RulesInfo
 	var uid string
 	for _, vm := range virtualMachineList {
+		log.Infof("Creating rule for [%s] in [%s]", vm.Name, vm.Namespace)
 		ps := strings.Split(KubevirtRuleTemplate[template]["podSelector"], "=")
 		psMap := make(map[string]string)
 		psMap[ps[0]] = strings.Replace(ps[1], "<vm-name>", vm.Name, 1)
 		podSelector = append(podSelector, psMap)
-		log.Infof("Pod Selector - [%v]", psMap)
 		container = append(container, KubevirtRuleTemplate[template]["container"])
 		podVal, _ := strconv.ParseBool(KubevirtRuleTemplate[template]["runInSinglePod"])
 		runInSinglePod = append(runInSinglePod, podVal)
-		log.Infof("runInSinglePod - [%v]", runInSinglePod)
 		backgroundVal, _ := strconv.ParseBool(KubevirtRuleTemplate[template]["background"])
 		background = append(background, backgroundVal)
-		log.Infof("Background - [%v]", background)
 
 		if prePostFlag == "pre" {
 			actionValue = append(
@@ -2253,7 +2252,6 @@ func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachi
 					vm.Namespace,
 					1))
 		}
-		log.Infof("Actions - [%s]", actionValue)
 	}
 
 	totalRules := len(actionValue)
@@ -2262,7 +2260,8 @@ func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachi
 		return true, "", nil
 	}
 	timestamp := strconv.Itoa(int(time.Now().Unix()))
-	ruleName := fmt.Sprintf("%s-%s-rule-%s", "kubevirt", prePostFlag, timestamp)
+	uuid := uuid.New()
+	ruleName := fmt.Sprintf("%s-%s-rule-%s-%s", "kubevirt", prePostFlag, timestamp, uuid.String()[:5])
 	rulesInfoRuleItem := make([]api.RulesInfo_RuleItem, totalRules)
 	for i := 0; i < totalRules; i++ {
 		ruleAction := api.RulesInfo_Action{Background: background[i], RunInSinglePod: runInSinglePod[i],

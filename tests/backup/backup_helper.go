@@ -5983,10 +5983,11 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context.Context, namespace
 	if err != nil {
 		return false, "", err
 	}
-
+	log.Infof("Total VMs in the namespace: [%+v]", vms)
 	for _, vm := range vms.Items {
 		listOfVirtualMachine = append(listOfVirtualMachine, vm)
 	}
+	log.Infof("Final List of Vms in the namespace: [%+v]", listOfVirtualMachine)
 	ruleStatus, ruleName, err := Inst().Backup.CreateRuleForKubevirtBackup(ctx, listOfVirtualMachine, orgID, ruleType, template)
 	if err != nil {
 		return false, "", err
