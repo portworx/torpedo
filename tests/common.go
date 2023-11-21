@@ -1100,6 +1100,11 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 
@@ -1187,6 +1192,11 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 
 		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
 		//       CSI resize succeeded.
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 
@@ -1327,6 +1337,9 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
+
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
 		}
 	})
 }
@@ -1360,6 +1373,11 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 				SnapshotclassName: snapShotClassName,
 			}
 			err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
+			processError(err, errChan...)
+
+			// Note: the above only creates PVCs, it does not attach them to pods, so no extra care needs to be taken for local paths
+
+			err = Inst().V.ValidatePureLocalVolumePaths()
 			processError(err, errChan...)
 		}
 	})
@@ -5192,7 +5210,7 @@ func DeleteBucket(provider string, bucketName string) {
 }
 
 // HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
+func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -5292,24 +5310,35 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 					if err == nil {
 						action := "reboot"
-						if restartPX {
+						if errInj == PX_RESTART {
 							action = "restart px on"
+						} else if errInj == CRASH {
+							action = "crash px on"
 						}
-						stepLog = fmt.Sprintf("%a target node %s while repl increase is in-progres", action,
+						stepLog = fmt.Sprintf("%s target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
 							func() {
 								log.InfoD(stepLog)
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
-								if restartPX {
-									testError := Inst().V.RestartDriver(newReplNode, nil)
+								if errInj == PX_RESTART {
+									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
 									if testError != nil {
 										log.Error(testError)
+										UpdateOutcome(event, err)
+										return
+									}
+									log.Infof("waiting for 15 mins before starting volume driver")
+									time.Sleep(15 * time.Minute)
+									testError = Inst().V.StartDriver(newReplNode)
+									if testError != nil {
+										log.Error(testError)
+										UpdateOutcome(event, err)
 										return
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
-								} else {
+								} else if errInj == REBOOT {
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5319,6 +5348,12 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									})
 									if err != nil {
 										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+										UpdateOutcome(event, err)
+									}
+								} else if errInj == CRASH {
+									errorChan := make(chan error, errorChannelSize)
+									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
+									for err := range errorChan {
 										UpdateOutcome(event, err)
 									}
 								}
@@ -5353,7 +5388,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 }
 
 // HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
+func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
 	Step(stepLog,
@@ -5376,13 +5411,21 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 			}
 
 			if err == nil {
-				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+				action := "reboot"
+				if errInj == PX_RESTART {
+					action = "restart px on"
+				} else if errInj == CRASH {
+					action = "crash px on"
+				}
+				stepLog = fmt.Sprintf("%s source node while repl increase volume driver %s on app %s's volume: %v", action,
 					Inst().V.String(), ctx.App.Key, v)
+
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
+
 							replicaNodes := replicaSets[0].Nodes
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
 								newFastPathNode, err := AddFastPathLabel(ctx)
@@ -5402,14 +5445,25 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
-									if restartPX {
-										testError := Inst().V.RestartDriver(replNodeToReboot, nil)
+									if errInj == PX_RESTART {
+
+										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
 										if testError != nil {
 											log.Error(testError)
+											UpdateOutcome(event, err)
 											return
 										}
-										log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
-									} else {
+										log.Infof("waiting for 15 mins before starting volume driver")
+										time.Sleep(15 * time.Minute)
+										testError = Inst().V.StartDriver(replNodeToReboot)
+										if testError != nil {
+											log.Error(testError)
+											UpdateOutcome(event, err)
+											return
+										}
+										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
+
+									} else if errInj == REBOOT {
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5419,6 +5473,12 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										})
 										if err != nil {
 											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+											UpdateOutcome(event, err)
+										}
+									} else if errInj == CRASH {
+										errorChan := make(chan error, errorChannelSize)
+										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
+										for err := range errorChan {
 											UpdateOutcome(event, err)
 										}
 									}
