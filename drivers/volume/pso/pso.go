@@ -100,6 +100,11 @@ func (d *pso) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySp
 	return nil, nil
 }
 
+func (d *pso) RestoreSnapshot(snapshotId string, volumeId string) (*api.SdkVolumeSnapshotRestoreResponse, error) {
+	log.Warnf("RestoreSnapshot function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
 func (d *pso) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
 	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
 	return nil, nil

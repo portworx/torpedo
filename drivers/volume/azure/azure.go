@@ -43,6 +43,11 @@ func (d *azure) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.Proxy
 	return nil, nil
 }
 
+func (d *azure) RestoreSnapshot(snapshotId string, volumeId string) (*api.SdkVolumeSnapshotRestoreResponse, error) {
+	log.Warnf("RestoreSnapshot function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
 func (d *azure) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
 	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
 	return nil, nil
