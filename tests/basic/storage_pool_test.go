@@ -10027,37 +10027,99 @@ func findNodeForReplAdd(vol *volume.Volume) (*node.Node, error) {
 	return nil, fmt.Errorf("failed to find a node for repl add for volume %v", vol.ID)
 }
 
+func selectPoolDeletableNode(allowKvdbNode bool) *node.Node {
+	var testNode *node.Node
+	log.Info("Select non-kvdb node or node with >1 pools)")
+	stNodes := node.GetStorageNodes()
+
+	kvdbNodesIDs := []string{}
+	kvdbMembers, err := Inst().V.GetKvdbMembers(stNodes[0])
+	log.FailOnError(err, "Error getting KVDB members")
+	for _, n := range kvdbMembers {
+		kvdbNodesIDs = append(kvdbNodesIDs, n.Name)
+	}
+
+	for _, n := range stNodes {
+		if !Contains(kvdbNodesIDs, n.Id) {
+			testNode = &n
+			break
+		}
+	}
+	if testNode == nil {
+		dash.VerifyFatal(allowKvdbNode, true, "kvdb node be selected for the pool delete test?")
+		testNode = &stNodes[0]
+		log.InfoD("cannot find nonkvdb node, select kvdb node %v for test", testNode.Addresses)
+		poolsMap, err := Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "cannot get pool drives")
+		log.InfoD("node %v has pools %+v", testNode.Addresses, poolsMap)
+		if len(poolsMap) <= 1 {
+			log.InfoD("try create new pool for test")
+			err = AddCloudDrive(*testNode, -1)
+			log.FailOnError(err, "drive add failed")
+		}
+	} else {
+		log.InfoD("found non-kvdb storage node %v", testNode.Addresses)
+	}
+	dash.VerifyFatal(testNode != nil, true, "select test node")
+	return testNode
+}
+
 var _ = Describe("{PoolDeleteFunctionality}", func() {
 	/*
 		Migrated from px-test: PoolDeleteFunctionality
-			1. Delete pools till total availble pool is 1.
-			2. Verify after each delete if the right pool got deleted.
-			3. Verify Alerts.
-			4. Try to delete the last pool in the node and it should fail.
-			5. Randomly pick a drive which got freeed up because of pool delete and add it back.
+			1. Delete pools till total availble pool is 1 and verify for each delete that the right pool was deleted.
+			2. Delete the last pool and verify node transitions to storageless.
+			3. Randomly pick a drive which got freeed up because of pool delete and add it back.
 	*/
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolDelete", "Initiate pool deletion", nil, 0)
+		StartTorpedoTest("PoolDeleteFunctionality", "Initiate pool deletion", nil, 0)
 	})
 	var contexts []*scheduler.Context
 
 	ItLog := "Initiate pool delete, then add a new pool and expand the pool"
 	It(ItLog, func() {
-		selectedNode := node.GetStorageNodes()[0]
+		// selectedNode := node.GetStorageNodes()[0]
+		testNode := selectPoolDeletableNode(false)
+		dash.VerifyFatal(testNode != nil, true, "verify if select test node ok")
+		selectedNode := *testNode
 		nodePools := selectedNode.StoragePools
 
 		poolToAddBack := nodePools[rand.Intn(len(nodePools))]
-		for _, pool := range nodePools {
-			poolID := strconv.Itoa(int(pool.ID))
-			deletePoolAndValidate(selectedNode, poolID)
-		}
+		stepLog = fmt.Sprintf("Delete [%v/%v] pools on node [%v], so that 1 pool remains", len(nodePools)-1, len(nodePools), selectedNode.Name)
+		Step(stepLog, func() {
+			for _, pool := range nodePools[:len(nodePools)-1] {
+				poolID := strconv.Itoa(int(pool.ID))
+				deletePoolAndValidate(selectedNode, poolID)
+			}
+		})
 
-		// verify all pools deleted
-		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-		log.FailOnError(err, "Failed to list storage pools")
-		dash.VerifyFatal(len(pools) == 0, true, "verify all pools deleted")
+		stepLog = fmt.Sprintf("Delete the last pool on node [%v] and verify it transitions to storageless ", selectedNode.Name)
+		Step(stepLog, func() {
+			// no need to exit pool maintenance mode
+			err = EnterPoolMaintenance(selectedNode)
+			log.FailOnError(err, "")
+			poolID := strconv.Itoa(int(nodePools[len(nodePools)-1].ID))
+			err = Inst().V.DeletePool(selectedNode, poolID, true)
+			log.FailOnError(err, "")
 
+			poolsMap, err := Inst().V.GetPoolDrives(&selectedNode)
+			log.FailOnError(err, "error getting pool drive from the node [%s]", selectedNode.Name)
+			dash.VerifyFatal(len(poolsMap) == 0, true, "verify all pools deleted")
+
+			found := false
+			storagelessNodes, err := Inst().V.GetStoragelessNodes()
+			log.FailOnError(err, "failed to get storageless nodes")
+			for _, n := range storagelessNodes {
+				if n.Id == selectedNode.Id {
+					found = true
+					break
+				}
+			}
+			dash.VerifyFatal(found, true, "expect node to be a storageless node")
+		})
+
+		// deploy applications
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pooldeletefunc-%d", i))...)
@@ -10091,9 +10153,6 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 			err = Inst().V.WaitDriverUpOnNode(selectedNode, addDriveUpTimeOut)
 			log.FailOnError(err, "volume drive down on node %s", selectedNode.Name)
 
-			poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
-			log.FailOnError(err, "Failed to list storage pools")
-			dash.VerifyFatal(len(poolsAfr) == 1, true, "verify new pool is created")
 			newPoolsMap, err := Inst().V.GetPoolDrives(&selectedNode)
 			log.FailOnError(err, "error getting pool drive from the node [%s]", selectedNode.Name)
 			dash.VerifyFatal(len(newPoolsMap) == 1, true, "verify new drive is created")
