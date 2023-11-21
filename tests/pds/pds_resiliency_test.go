@@ -1626,7 +1626,7 @@ var _ = Describe("{StopPXDuringStorageResize}", func() {
 
 			}
 		})
-		Step("Restart PX on the same node after volume resize", func() {
+		Step("Start PX on the same node after volume resize", func() {
 			StartPxOnReplicaVolumeNode(volNodesWithPx)
 		})
 		Step("Running Workloads", func() {

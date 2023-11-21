@@ -506,6 +506,7 @@ func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
 	return replPools, replicaNodes, nil
 }
 
+// GetVolumeNodesOnWhichPxIsRunning fetches the lit of Volnodes on which PX is running
 func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
 	var (
 		nodesToStopPx []node.Node
@@ -519,6 +520,8 @@ func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
 	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
 	return nodesToStopPx
 }
+
+// StopPxOnReplicaVolumeNode is used to STOP PX on the given list of nodes
 func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
 	err = Inst().V.StopDriver(nodesToStopPx, true, nil)
 	if err != nil {
@@ -528,6 +531,7 @@ func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
 	return nil
 }
 
+// StartPxOnReplicaVolumeNode is used to START PX on the given list of nodes
 func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
 	for _, nodeName := range nodesToStartPx {
 		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
