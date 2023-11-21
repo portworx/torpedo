@@ -5991,5 +5991,5 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(namespace string, ruleType str
 		return false, "", err
 	}
 
-	return ruleStatus, ruleName, err
+	return ruleStatus, ruleName, nil
 }
