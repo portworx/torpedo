@@ -166,6 +166,39 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 
 })
 
+var _ = Describe("{PoolExpansionAfterAddingDriveToStoragelessNode}", func() {
+	It("PoolExpansionAfterAddingDriveToStoragelessNode", func() {
+		// https://portworx.testrail.net/index.php?/tests/view/34542822&group_by=cases:custom_automated&group_order=desc&group_id=2
+		StartTorpedoTest("PoolExpansionAfterAddingDriveToStoragelessNode",
+			"Validate storage pool expansion with type=auto ", nil, 34542822)
+
+		slNodes := node.GetStorageLessNodes()
+		if len(slNodes) == 0 {
+			log.Warnf("No storageless nodes found. Skipping this test.")
+			return
+		}
+		slNode := slNodes[0]
+		log.Infof("Picked storageless node %s to add drive", slNode.Name)
+
+		err = AddCloudDrive(slNode, -1)
+		log.FailOnError(err, "error adding cloud drive")
+
+		pools, _ := GetAllPoolsOnNode(slNode.GetId())
+		dash.VerifyFatal(len(pools) > 0, true, "Should find a new pool on node after adding a drive")
+
+		poolIDToResize = pools[0]
+		pool := getStoragePool(poolIDToResize)
+		currentSize := pool.TotalSize / units.GiB
+		log.Infof("Picked pool %s of size %v GiB to resize", poolIDToResize, currentSize)
+		// expand the pool by 100GB with reisze-disk type
+		targetSizeGiB = currentSize + 100
+		log.Infof("Expanding pool %s to %v GiB with type resize-disk", poolIDToResize, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
+		err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
+	})
+})
+
 //var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 //	BeforeEach(func() {
 //		contexts = scheduleApps()
