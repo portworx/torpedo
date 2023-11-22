@@ -2328,7 +2328,7 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		volumeMap                      = make(map[VolumeType][]*api.Volume)
 		numSnapshotsPerVolume          = 3
 		appScaleFactorMap              = make(map[string]map[string]int32)
-		volumeSnapshotClassName string = ""
+		volumeSnapshotClassName string = "testvsc"
 
 		volumeSnapshotMap    = make(map[string][]*api.SdkVolumeSnapshotCreateResponse)
 		volumeCSISnapshotMap = make(map[string][]*vsv1.VolumeSnapshot)
