@@ -2,17 +2,17 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -996,19 +996,21 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 	})
 })
 
-var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
+
+var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", func() {
 
 	var testrailID = 34542894
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
 
 	BeforeEach(func() {
-		StartTorpedoTest("PoolExpandAndCheckAlertsUsingAddDisk", "pool expansion using add-disk and check alerts after each operation", nil, testrailID)
+		StartTorpedoTest("PoolExpandAndCheckAlertsUsingResizeDisk", "pool expansion using resize-disk and check alerts after each operation", nil, testrailID)
 		contexts = scheduleApps()
 	})
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
 		log.Infof("Picked pool %s to resize", poolIDToResize)
-		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
 	})
 	JustAfterEach(func() {
 		AfterEachTest(contexts)
@@ -1019,71 +1021,21 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 		EndTorpedoTest()
 	})
 
-	It("pool expansion using add-disk and check alerts after each operation", func() {
-		var nodeDetail *node.Node
-		var err error
-		poolInMaintenance := "STATUS_POOLMAINTENANCE"
+	It("pool expansion using resize-disk and check alerts after each operation", func() {
+		log.InfoD("Initiate pool expansion using resize-disk")
+		poolToResize = getStoragePool(poolIDToResize)
+		originalSizeInBytes = poolToResize.TotalSize
+		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+		targetSizeGiB = targetSizeInBytes / units.GiB
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
-		stepLog = "Move pool to maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to get Node Details using PoolUUID [%v]", poolToResize.Uuid))
+		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+		dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 
-			log.InfoD("Bring Pool to Maintenance Mode")
-			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", nodeDetail.Name))
-			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
-			log.FailOnError(err, fmt.Sprintf("fail to enter node %s in maintenance mode", nodeDetail.Name))
-			status, _ := Inst().V.GetNodeStatus(*nodeDetail)
-			dash.VerifyFatal(status.String(), poolInMaintenance, "Pool now in maintenance mode")
-			log.InfoD(fmt.Sprintf("Node %s status %s", nodeDetail.Name, status.String()))
-		})
-
-		stepLog = "Initiate pool expand with add-disk operation"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			originalSizeInBytes = poolToResize.TotalSize
-			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-			targetSizeGiB = targetSizeInBytes / units.GiB
-
-			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
-			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
-			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-
-		})
-
-		stepLog = "Exit pool out of maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			t := func() (interface{}, bool, error) {
-				status, err := Inst().V.GetNodePoolsStatus(*nodeDetail)
-				if err != nil {
-					return nil, true, err
-				}
-				log.InfoD(fmt.Sprintf("pool %s has status %s", nodeDetail.Name, status[poolToResize.Uuid]))
-				if status[poolToResize.Uuid] == "In Maintenance" {
-					log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", nodeDetail.Name))
-					if err := Inst().V.ExitPoolMaintenance(*nodeDetail); err != nil {
-						return nil, true, err
-					}
-				}
-				return nil, false, nil
-			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-			status, err := Inst().V.GetNodeStatus(*nodeDetail)
-			log.FailOnError(err, "err getting node [%s] status", nodeDetail.Name)
-			log.Infof(fmt.Sprintf("Node %s status %s after exit", nodeDetail.Name, status.String()))
-		})
-
-		stepLog = "Check the alerts for pool expand"
-		Step(stepLog, func() {
-			log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
-			alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
-			dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
-		})
+		log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+		alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
+		dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
 	})
 
 })
@@ -1119,3 +1071,92 @@ func checkAlertsForPoolExpansion(poolIDToResize string, targetSizeGiB uint64) (b
 	}
 	return false, fmt.Errorf("Alert not found")
 }
+
+
+var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
+
+	var testrailID = 34542894
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542894
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandAndCheckAlertsUsingAddDisk", "pool expansion using add-disk and check alerts after each operation", nil, testrailID)
+		contexts = scheduleApps()
+	})
+	JustBeforeEach(func() {
+		poolIDToResize = pickPoolToResize()
+		log.Infof("Picked pool %s to resize", poolIDToResize)
+		poolToResize = getStoragePool(poolIDToResize)
+		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+		log.FailOnError(err, "Failed to get node with given pool ID")
+	})
+	JustAfterEach(func() {
+		AfterEachTest(contexts)
+	})
+
+	AfterEach(func() {
+		appsValidateAndDestroy(contexts)
+		EndTorpedoTest()
+	})
+
+	It("pool expansion using add-disk and check alerts after each operation", func() {
+		var err error
+
+		stepLog = "Move pool to maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expectedStatus := "In Maintenance"
+			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", storageNode.Name))
+			err = Inst().V.EnterPoolMaintenance(*storageNode)
+			log.FailOnError(err, fmt.Sprintf("failed to enter node %s in maintenance mode", storageNode.Name))
+			status, _ := Inst().V.GetNodeStatus(*storageNode)
+			log.InfoD(fmt.Sprintf("Node %s status %s", storageNode.Name, status.String()))
+			err := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
+			dash.VerifyFatal(err, nil, "Pool now in maintenance mode")
+		})
+
+		stepLog = "Initiate pool expand with add-disk operation"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			originalSizeInBytes = poolToResize.TotalSize
+			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+
+		})
+
+		stepLog = "Exit pool out of maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expectedStatus := "Online"
+			statusMap, err := Inst().V.GetNodePoolsStatus(*storageNode)
+			log.FailOnError(err, "Failed to get map of pool UUID and status")
+			log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, statusMap[poolToResize.Uuid]))
+			if statusMap[poolToResize.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
+				err := Inst().V.ExitPoolMaintenance(*storageNode)
+				log.FailOnError(err, "failed to exit pool maintenance mode")
+			} else {
+				dash.VerifyFatal(statusMap[poolToResize.Uuid], "In Maintenance", "Pool is not in Maintenance mode")
+			}
+			status, err := Inst().V.GetNodeStatus(*storageNode)
+			log.FailOnError(err, "err getting node [%s] status", storageNode.Name)
+			log.Infof(fmt.Sprintf("Node %s status %s after exit", storageNode.Name, status.String()))
+			exitErr := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
+			dash.VerifyFatal(exitErr, nil, "Pool is now online")
+		})
+
+		stepLog = "Check the alerts for pool expand"
+		Step(stepLog, func() {
+			log.Infof("Check the alert for pool expand for pool uuid %s", poolIDToResize)
+			alertExists, _ := checkAlertsForPoolExpansion(poolIDToResize, targetSizeGiB)
+			dash.VerifyFatal(alertExists, true, "Verify Alert is Present")
+		})
+	})
+
+})
