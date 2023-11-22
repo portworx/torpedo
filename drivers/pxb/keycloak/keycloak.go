@@ -44,8 +44,7 @@ func NewSignIn(username string, password string) *SignIn {
 }
 
 // GetAdminAndNonAdminURL retrieves the Keycloak admin and non-admin access URLs from the given Px-Backup namespace
-func GetAdminAndNonAdminURL(namespace string) (string, string, error) {
-	realmPath, adminPath, realmName := "auth/realms", "admin", "master"
+func GetAdminAndNonAdminURL(pxbNamespace string) (string, string, error) {
 	baseURL := ""
 	pxCentralUIURL := os.Getenv(EnvPxCentralUIURL)
 	// The condition checks whether pxCentralUIURL is set. This condition is added to
@@ -55,17 +54,18 @@ func GetAdminAndNonAdminURL(namespace string) (string, string, error) {
 	if pxCentralUIURL != "" && len(pxCentralUIURL) > 0 {
 		baseURL = pxCentralUIURL
 	} else {
-		oidcSecret, err := core.Instance().GetSecret(PxBackupOIDCSecret, namespace)
+		oidcSecret, err := core.Instance().GetSecret(PxBackupOIDCSecret, pxbNamespace)
 		if err != nil {
 			return "", "", pxbutils.ProcessError(err)
 		}
 		oidcEndpoint := string(oidcSecret.Data[PxBackupOIDCEndpointKey])
 		// Construct the fully qualified domain name (FQDN) for the Keycloak service to
 		// ensure DNS resolution within Kubernetes, especially for requests originating
-		// from different namespace
-		keycloakFQDN := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakService, namespace)
+		// from different pxbNamespace
+		keycloakFQDN := fmt.Sprintf("%s.%s.svc.cluster.local", PxBackupKeycloakService, pxbNamespace)
 		baseURL = strings.Replace(oidcEndpoint, PxBackupKeycloakService, keycloakFQDN, 1)
 	}
+	realmPath, adminPath, realmName := "auth/realms", "admin", "master"
 	adminURL := fmt.Sprintf("%s/%s/%s/%s", baseURL, realmPath, adminPath, realmName)
 	nonAdminURL := fmt.Sprintf("%s/%s/%s", baseURL, realmPath, realmName)
 	return adminURL, nonAdminURL, nil
