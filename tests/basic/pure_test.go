@@ -2424,30 +2424,37 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 			}
 			return nil
 		}
+		restoreRandomCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
+			volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      vol.Locator.Name,
+					Namespace: vol.Spec.VolumeLabels["namespace"],
+				},
+				Spec: storkv1.VolumeSnapshotRestoreSpec{
+					SourceName:      snapshot.Name,
+					SourceNamespace: snapshot.Namespace,
+					GroupSnapshot:   false,
+				},
+			}
+			log.Infof("Creating snapshot restore [%+v]", volumeSnapshotRestoreSpec)
+			restore, err := storkops.Instance().CreateVolumeSnapshotRestore(volumeSnapshotRestoreSpec)
+			if err != nil {
+				return fmt.Errorf("failed to restore snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+			}
+			err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, defaultTimeout, defaultRetryInterval)
+			if err != nil {
+				return fmt.Errorf("failed to validate snapshot [%s/%s] restore to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+			}
+			return nil
+		}
 		// restoreRandomSnapshot restores a random snapshot of the given volume
 		restoreRandomSnapshot := func(volType VolumeType, vol *api.Volume) error {
 			switch volType {
 			case VolumeFADA, VolumeFBDA:
 				randomSnapshot := volumeCSISnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)]
-				volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      vol.Locator.Name,
-						Namespace: vol.Spec.VolumeLabels["namespace"],
-					},
-					Spec: storkv1.VolumeSnapshotRestoreSpec{
-						SourceName:      randomSnapshot.Name,
-						SourceNamespace: randomSnapshot.Namespace,
-						GroupSnapshot:   false,
-					},
-				}
-				log.Infof("Creating snapshot restore [%+v]", volumeSnapshotRestoreSpec)
-				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(volumeSnapshotRestoreSpec)
+				err = restoreRandomCSISnapshot(volType, vol, randomSnapshot)
 				if err != nil {
-					return fmt.Errorf("failed to restore snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
-				}
-				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, defaultTimeout, defaultRetryInterval)
-				if err != nil {
-					return fmt.Errorf("failed to validate snapshot restore [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+					return fmt.Errorf("failed to restore CSI snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
 				}
 			default:
 				randomSnapshotId := volumeSnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)].SnapshotId
