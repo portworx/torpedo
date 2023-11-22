@@ -750,7 +750,7 @@ function describe_pod_then_exit {
 first_iteration=true
 
 for i in $(seq 1 900); do
-  echo -n "Iteration: $i"
+  echo "Iteration: $i"
   state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
 
   if [ "$state" == "Error" ]; then
@@ -763,7 +763,7 @@ for i in $(seq 1 900); do
       kubectl logs -f torpedo
       first_iteration=false
     else
-      echo -n "Logs from iteration: $i"
+      echo "Logs from iteration: $i"
       kubectl logs -f --since=1m torpedo
     fi
   elif [ "$state" == "Completed" ]; then
