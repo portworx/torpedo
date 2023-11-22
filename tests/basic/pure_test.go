@@ -6,6 +6,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 
 	"math/rand"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/pkg/units"
+	appsv1 "k8s.io/api/apps/v1"
 	"sort"
 	"strconv"
 	"strings"
@@ -2423,11 +2428,32 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		restoreRandomSnapshot := func(volType VolumeType, vol *api.Volume) error {
 			switch volType {
 			case VolumeFADA, VolumeFBDA:
+				randomSnapshot := volumeCSISnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)]
+				volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      vol.Locator.Name,
+						Namespace: vol.Spec.VolumeLabels["namespace"],
+					},
+					Spec: storkv1.VolumeSnapshotRestoreSpec{
+						SourceName:      randomSnapshot.Name,
+						SourceNamespace: randomSnapshot.Namespace,
+						GroupSnapshot:   false,
+					},
+				}
+				log.Infof("Creating snapshot restore [%+v]", volumeSnapshotRestoreSpec)
+				restore, err := storkops.Instance().CreateVolumeSnapshotRestore(volumeSnapshotRestoreSpec)
+				if err != nil {
+					return fmt.Errorf("failed to restore snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+				}
+				err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, defaultTimeout, defaultRetryInterval)
+				if err != nil {
+					return fmt.Errorf("failed to validate snapshot restore [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+				}
 			default:
 				randomSnapshotId := volumeSnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)].SnapshotId
 				_, err := Inst().V.RestoreSnapshot(randomSnapshotId, vol.Id)
 				if err != nil {
-					return fmt.Errorf("failed to restore snapshot [%s] to volume [%s]. Err: [%v]", randomSnapshotId, vol.Id, err)
+					return fmt.Errorf("failed to restore snapshot [%s] to volume [%s/%s]. Err: [%v]", randomSnapshotId, vol.Id, vol.Locator.Name, err)
 				}
 				// It is observed that the volume source points to a snapshot for a brief period
 				// of time so we until the source parent is empty, ensuring the restore is successfully completed
@@ -2437,13 +2463,13 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 						return nil, false, err
 					}
 					if vol.Source.Parent != "" {
-						return nil, true, fmt.Errorf("restoring snapshot [%s] to volume [%s] is in progress", randomSnapshotId, vol.Id)
+						return nil, true, fmt.Errorf("restoring snapshot [%s] to volume [%s/%s] is in progress", randomSnapshotId, vol.Id, vol.Locator.Name)
 					}
 					return nil, false, nil
 				}
 				_, err = task.DoRetryWithTimeout(waitForRestoreCompletionBasedOnSource, defaultTimeout, defaultRetryInterval)
 				if err != nil {
-					return fmt.Errorf("failed to wait for snapshot [%s] restore to volume [%s] completion. Err: [%v]", randomSnapshotId, vol.Id, err)
+					return fmt.Errorf("failed to wait for snapshot [%s] restore to volume [%s/%s] completion. Err: [%v]", randomSnapshotId, vol.Id, vol.Locator.Name, err)
 				}
 			}
 			return nil
@@ -2510,7 +2536,7 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		Step(fmt.Sprintf("Create a [%d] snapshots for each volume", numSnapshotsPerVolume), func() {
 			log.InfoD("Create a [%d] snapshots for each volume", numSnapshotsPerVolume)
 			if len(volumeMap[VolumeFADA]) != 0 || len(volumeMap[VolumeFBDA]) != 0 {
-				volumeSnapshotClassName = fmt.Sprintf("volume-snapshot-class-%d-%v", 92870, time.Now().Unix())
+				volumeSnapshotClassName = fmt.Sprintf("vsc-tp-%d-%v", 92870, time.Now().Unix())
 				log.Infof("Creating volume snapshot class [%s]", volumeSnapshotClassName)
 				_, err = Inst().S.CreateCsiSnapshotClass(volumeSnapshotClassName, "Delete")
 				log.FailOnError(err, "failed to create volume snapshot class [%s]", volumeSnapshotClassName)
