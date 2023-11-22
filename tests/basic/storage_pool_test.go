@@ -5347,11 +5347,13 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				return nil
 			}
 
-			// This function checks for pool's status if it is offline it does the needfull to get it online
-			go poolStatusChecker(&done, &errorChan, *restartDriver, rebootPoolID, expectedSize, isjournal)
 			// Set replicaiton on all volumes in parallel so that multiple volumes will be in resync
 			var wg sync.WaitGroup
-			var m sync.Mutex
+			var m, poolExpandLock sync.Mutex
+
+			// This function checks for pool's status if it is offline it does the needfull to get it online
+			go poolStatusChecker(&done, &errorChan, *restartDriver, rebootPoolID, expectedSize, isjournal, &poolExpandLock)
+
 			error_array := []error{}
 			for _, eachVol := range Volumes {
 				log.InfoD("Set replication on the volume [%v]", eachVol.ID)
@@ -5373,12 +5375,13 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", rebootPoolID, poolToBeResized.TotalSize/units.GiB)
+			poolExpandLock.Lock()
 			err = Inst().V.ExpandPool(rebootPoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, rebootPoolID, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool [%s] on node [%s] expansion using auto", rebootPoolID, restartDriver.Name))
-
+			poolExpandLock.Unlock()
 			wg.Wait()
 
 			done <- true
@@ -5402,9 +5405,8 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 })
 
 // This function checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
-func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool) {
+func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool, poolExpandLock *sync.Mutex) {
 	defer GinkgoRecover()
-
 	for {
 		select {
 		case <-*done:
@@ -5418,13 +5420,18 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 				if poolsStatus != nil {
 					for _, v := range poolsStatus {
 						log.Infof("monitoring pool: %v, status: %v", PoolID, v)
-						if v == "Offline" {
-							log.InfoD("Pool status checker has triggered pool expand because pool became %v", v)
-							err := Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-							*errorChan <- err
-							resizeErr := waitForPoolToBeResized(expectedSize, PoolID, isjournal)
-							*errorChan <- resizeErr
-							time.Sleep(30 * time.Second)
+						if poolExpandLock.TryLock() {
+							if v == "Offline" {
+								log.InfoD("Pool status checker has triggered pool expand because pool became %v", v)
+								err := Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+								*errorChan <- err
+								resizeErr := waitForPoolToBeResized(expectedSize, PoolID, isjournal)
+								*errorChan <- resizeErr
+								time.Sleep(30 * time.Second)
+								poolExpandLock.Unlock()
+							} else {
+								log.Infof("pool %v is already expanding ", poolIDToResize)
+							}
 						}
 					}
 				}
