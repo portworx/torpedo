@@ -167,10 +167,11 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 			log.InfoD("Restoring the backups application")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for range bkpNamespaces {
+			for _, namespace := range bkpNamespaces {
 				for _, backupName := range backupList {
 					restoreName := fmt.Sprintf("%s-restore-%v", backupName, time.Now().Unix())
-					err = CreateRestore(restoreName, backupName, nil, SourceClusterName, orgID, ctx, make(map[string]string))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), SourceClusterName, orgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
 					restoreNames = append(restoreNames, restoreName)
 				}

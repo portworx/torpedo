@@ -2198,7 +2198,9 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 						restoreName := fmt.Sprintf("%s-%s-%s", nonAdminUserName, config.namePrefix, RandomString(4))
 						restoreNameMap[nonAdminUserName] = restoreName
 						log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v for user [%s]", singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreName, config.namespaceMapping, nonAdminUserName)
-						err = CreateRestore(restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, destinationClusterName, orgID, nonAdminCtx, config.storageClassMapping)
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+						err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, config.storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+						//err = CreateRestore(restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, destinationClusterName, orgID, nonAdminCtx, config.storageClassMapping)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace backup [%s] in cluster [%s] by user [%s]", restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 					}
 				}(nonAdminUserName)
@@ -2220,7 +2222,9 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 					restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
 					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+					//err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
@@ -2241,7 +2245,8 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 					restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
 					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
@@ -2797,7 +2802,9 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 						restoreName := fmt.Sprintf("%s-%s-%s", nonAdminUserName, config.namePrefix, RandomString(4))
 						restoreNameMap[nonAdminUserName] = restoreName
 						log.InfoD("Restoring single namespace backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v for user [%s]", singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreName, config.namespaceMapping, nonAdminUserName)
-						err = CreateRestore(restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, destinationClusterName, orgID, nonAdminCtx, config.storageClassMapping)
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+						err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, config.storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+						//err = CreateRestore(restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], config.namespaceMapping, destinationClusterName, orgID, nonAdminCtx, config.storageClassMapping)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of single namespace backup [%s] in cluster [%s] by user [%s]", restoreNameMap[nonAdminUserName], singleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 					}
 				}(nonAdminUserName)
@@ -2816,7 +2823,9 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					restoreName := fmt.Sprintf("%s-multiple-ns-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
 					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] for user [%s] ", multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName], nonAdminUserName)
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+					//err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}
@@ -2834,7 +2843,9 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 					restoreName := fmt.Sprintf("%s-multiple-ns-label-restore-%s", nonAdminUserName, RandomString(4))
 					restoreNameMap[nonAdminUserName] = restoreName
 					log.InfoD("Restoring multiple namespace backup [%s] in cluster [%s] with restore name [%s] ", multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, restoreNameMap[nonAdminUserName])
-					err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+					err = CreateRestoreWithValidation(nonAdminCtx, restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, storageClassMapping, destinationClusterName, orgID, appContextsToBackup)
+					//err = CreateRestore(restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], namespaceMapping, destinationClusterName, orgID, nonAdminCtx, storageClassMapping)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of multiple namespace schedule backup [%s] in cluster [%s] for user [%s]", restoreNameMap[nonAdminUserName], multipleNamespaceLabelBackupsMap[nonAdminUserName][0], destinationClusterName, nonAdminUserName))
 				}(nonAdminUserName)
 			}

@@ -255,7 +255,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 					go func(scName string) {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err = CreateRestore(restoreName, backupsWithSse[0], namespaceMap, SourceClusterName, orgID, ctx, storageClassMapping)
+						appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[midpoint]})
+						err = CreateRestoreWithValidation(ctx, restoreName, backupsWithSse[0], namespaceMap, storageClassMapping, SourceClusterName, orgID, appContextsToBackup)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v using storage class %v", backupName, scName))
 					}(scNames[i])
 				}
