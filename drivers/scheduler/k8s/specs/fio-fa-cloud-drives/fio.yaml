@@ -4,7 +4,7 @@ metadata:
   name: fio
 spec:
   serviceName: fio
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: fio
