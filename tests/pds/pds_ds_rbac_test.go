@@ -723,7 +723,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *deployment.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns1.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 
 				})
