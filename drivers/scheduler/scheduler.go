@@ -368,7 +368,7 @@ type Driver interface {
 	RecycleNode(n node.Node) error
 
 	// CreateCsiSnapshotClass create csi snapshot class
-	CreateCsiSnapshotClass(snapClassName string, deleionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
+	CreateCsiSnapshotClass(snapClassName string, deletionPolicy string) (*volsnapv1.VolumeSnapshotClass, error)
 
 	// CreateCsiSnapshot create csi snapshot for given pvc
 	// TODO: there's probably better place to place this test, it creates the snapshot and also does the validation.
