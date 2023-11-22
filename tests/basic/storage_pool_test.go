@@ -5418,7 +5418,7 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 				if poolsStatus != nil {
 					for _, v := range poolsStatus {
 						log.Infof("monitoring pool: %v, status: %v", PoolID, v)
-						if v != "Online" {
+						if v == "Offline" {
 							err := Inst().V.ExpandPool(PoolID, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 							*errorChan <- err
 							resizeErr := waitForPoolToBeResized(expectedSize, PoolID, isjournal)
