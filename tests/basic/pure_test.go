@@ -40,6 +40,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
+
+	vsv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 )
 
 const (
@@ -2321,13 +2323,17 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 	)
 
 	var (
-		contexts              []*scheduler.Context
-		backend               = BackendUnknown
-		volumeMap             = make(map[VolumeType][]*api.Volume)
-		numSnapshotsPerVolume = 3
-		//volumeSnapshotMap     = make(map[string][]*api.SdkVolumeSnapshotCreateResponse)
+		contexts                []*scheduler.Context
+		backend                        = BackendUnknown
+		volumeMap                      = make(map[VolumeType][]*api.Volume)
+		numSnapshotsPerVolume          = 3
+		appScaleFactorMap              = make(map[string]map[string]int32)
+		volumeSnapshotClassName string = ""
+
+		volumeSnapshotMap    = make(map[string][]*api.SdkVolumeSnapshotCreateResponse)
+		volumeCSISnapshotMap = make(map[string][]*vsv1.VolumeSnapshot)
+
 		//snapshotMap           = make(map[string]*api.Volume)
-		appScaleFactorMap = make(map[string]map[string]int32)
 	)
 
 	JustBeforeEach(func() {
@@ -2393,29 +2399,32 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		//	ValidateContext(ctx)
 		//	return nil
 		//}
+		createCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
+			pvcName := vol.Spec.VolumeLabels["pvc"]
+			namespace := vol.Spec.VolumeLabels["namespace"]
+			snapshot, err := Inst().S.CreateCsiSnapshot(snapshotName, namespace, volumeSnapshotClassName, pvcName)
+			if err != nil {
+				return fmt.Errorf("failed to create CSI snapshot [%s] of [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
+			}
+			volumeCSISnapshotMap[vol.Id] = append(volumeCSISnapshotMap[vol.Id], snapshot)
+			return nil
+		}
 		createSnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
 			switch volType {
 			case VolumeFADA, VolumeFBDA:
-				pvcName := vol.Spec.VolumeLabels["pvc"]
-				namespace := vol.Spec.VolumeLabels["namespace"]
-				snap, err := Inst().S.CreateCsiSnapshot(snapshotName, namespace, "testvsc", pvcName)
-				if err != nil {
-					return fmt.Errorf("failed to create snapshot [%s] for [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
-				}
-				log.Infof("SNAPSHOT [%s] FOR [%s] VOLUME [%s/%s] is %+v", snapshotName, volType, vol.Id, vol.Locator.Name, snap)
+				err = createCSISnapshot(volType, vol, snapshotName)
 			default:
-				return nil
-				//snapshotName := fmt.Sprintf("%s-snapshot-%d", vol.Locator.Name, i)
-				//log.Infof("Create snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshotName, i, volType, vol.Id, vol.Locator.Name)
-				//snapshot, err := Inst().V.CreateSnapshot(vol.Id, snapshotName)
-				//log.FailOnError(err, "failed to create snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
-				//volumeSnapshotMap[vol.Id] = append(volumeSnapshotMap[vol.Id], snapshot)
-				//apiSnapshot, err := Inst().V.InspectVolume(snapshot.SnapshotId)
-				//log.FailOnError(err, "failed to inspect snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshot.SnapshotId, i, volType, vol.Id, vol.Locator.Name)
-				//snapshotMap[snapshot.SnapshotId] = apiSnapshot
+				snapshot, err := Inst().V.CreateSnapshot(vol.Id, snapshotName)
+				if err != nil {
+					return fmt.Errorf("failed to create snapshot [%s] of [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
+				}
+				volumeSnapshotMap[vol.Id] = append(volumeSnapshotMap[vol.Id], snapshot)
 			}
 			return nil
 		}
+		//snapshotName := fmt.Sprintf("%s-snapshot-%d", vol.Locator.Name, i)
+		//log.Infof("Create snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshotName, i, volType, vol.Id, vol.Locator.Name)
+
 		//// restoreSnapshot restores the snapshot specified by snapshotId to its parent volume
 		//restoreSnapshot := func(volType VolumeType, snapshotId string) error {
 		//	var apiVol *api.Volume
