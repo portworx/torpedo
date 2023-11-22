@@ -7129,6 +7129,7 @@ func EndTorpedoTest() {
 
 // StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
 func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	Inst().InstanceID = strconv.Itoa(testRepoID)
 	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
