@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
-	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
@@ -997,7 +996,6 @@ var _ = Describe("{PoolExpandTestLimits}", func() {
 	})
 })
 
-
 var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", func() {
 
 	var testrailID = 34542894
@@ -1107,7 +1105,7 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 	It("Initiate pool expansion and Newly set pool labels should persist post pool expand add-disk operation", func() {
 
 		labelBeforeExpand := poolToResize.Labels
-		
+
 		stepLog = "set pool label, before pool expand"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1144,34 +1142,29 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-
 		})
 
 		stepLog = "Exit pool out of maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			expectedStatus := "Online"
-			t := func() (interface{}, bool, error) {
-				status, err := Inst().V.GetNodePoolsStatus(*storageNode)
-				if err != nil {
-					return nil, true, err
-				}
-				log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, status[poolToResize.Uuid]))
-				if status[poolToResize.Uuid] == "In Maintenance" {
-					log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
-					if err := Inst().V.ExitPoolMaintenance(*storageNode); err != nil {
-						return nil, true, err
-					}
-				}
-				return nil, false, nil
+			statusMap, err := Inst().V.GetNodePoolsStatus(*storageNode)
+			log.FailOnError(err, "Failed to get map of pool UUID and status")
+			log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, statusMap[poolToResize.Uuid]))
+			if statusMap[poolToResize.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
+				err := Inst().V.ExitPoolMaintenance(*storageNode)
+				log.FailOnError(err, "failed to exit pool maintenance mode")
+			} else {
+				dash.VerifyFatal(statusMap[poolToResize.Uuid], "In Maintenance", "Pool is not in Maintenance mode")
 			}
-			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
 			status, err := Inst().V.GetNodeStatus(*storageNode)
 			log.FailOnError(err, "err getting node [%s] status", storageNode.Name)
 			log.Infof(fmt.Sprintf("Node %s status %s after exit", storageNode.Name, status.String()))
 			exitErr := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
 			dash.VerifyFatal(exitErr, nil, "Pool is now online")
 		})
+
 		stepLog = "check pool label, after pool expand"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
