@@ -1089,8 +1089,6 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 		poolToResize = getStoragePool(poolIDToResize)
 		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
 		log.FailOnError(err, "Failed to get node with given pool ID")
-		// labelBeforeExpand := poolToResize.Labels
-
 	})
 
 	JustAfterEach(func() {
@@ -1123,7 +1121,6 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 			err = Inst().V.EnterPoolMaintenance(*storageNode)
 			log.FailOnError(err, fmt.Sprintf("failed to enter node %s in maintenance mode", storageNode.Name))
 			status, _ := Inst().V.GetNodeStatus(*storageNode)
-			// dash.VerifyFatal(status.String(), poolInMaintenance, "Pool now in maintenance mode")
 			log.InfoD(fmt.Sprintf("Node %s status %s", storageNode.Name, status.String()))
 			err := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
 			dash.VerifyFatal(err, nil, "Pool now in maintenance mode")
