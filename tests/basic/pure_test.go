@@ -2436,7 +2436,6 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 					GroupSnapshot:   false,
 				},
 			}
-			log.Infof("Creating snapshot restore [%+v]", volumeSnapshotRestoreSpec)
 			restore, err := storkops.Instance().CreateVolumeSnapshotRestore(volumeSnapshotRestoreSpec)
 			if err != nil {
 				return fmt.Errorf("failed to restore snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
@@ -2571,7 +2570,10 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 					for i, snapshot := range volumeSnapshotMap[vol.Id] {
 						apiVol, err := Inst().V.InspectVolume(snapshot.SnapshotId)
 						log.FailOnError(err, "failed to inspect snapshot [%s] of [%s] volume [%s/%s]", snapshot.SnapshotId, volType, vol.Id, vol.Locator.Name)
-						log.Infof("Volume [%s/%s] snapshot [%s] of index [%d]: [%v]", vol.Id, vol.Locator.Name, snapshot.SnapshotId, i, apiVol)
+						log.Infof("[%s] volume [%s/%s] snapshot [%s] of index [%d]: [%v]", volType, vol.Id, vol.Locator.Name, snapshot.SnapshotId, i, apiVol)
+					}
+					for i, snapshot := range volumeCSISnapshotMap[vol.Id] {
+						log.Infof("[%s] volume [%s/%s] snapshot [%s] of index [%d]: [%v]", volType, vol.Id, vol.Locator.Name, snapshot.Name, i, snapshot)
 					}
 					log.Infof("Restoring random snapshot of [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
 					err = restoreRandomSnapshot(volType, vol)
