@@ -936,6 +936,9 @@ func (p *portworx) ListBackupCRs(
 
 	allBackupCRNames := make([]string, 0)
 	_, storkClient, err := getKubernetesInstance(clusterObj)
+	if err != nil {
+		return nil, err
+	}
 
 	storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
 	if err != nil {
@@ -958,6 +961,9 @@ func (p *portworx) ListRestoreCRs(
 
 	allRestoreCRNames := make([]string, 0)
 	_, storkClient, err := getKubernetesInstance(clusterObj)
+	if err != nil {
+		return nil, err
+	}
 
 	storkApplicationRestoreCR, err := storkClient.ListApplicationRestores(namespace, metav1.ListOptions{})
 	if err != nil {

@@ -18,7 +18,7 @@ import (
 )
 
 // This testcase verifies backup and restore with non existing and deleted custom stork admin namespaces
-var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
+var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 
 	var (
 		newAdminNamespace           string // New admin namespace to be set as custom admin namespace
@@ -58,7 +58,6 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 		providers = getProviders()
 
 		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 85406, ATrivedi, Q4FY24)
-		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
@@ -103,7 +102,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNameSpace}", func() {
 				},
 			}
 			ns, err := core.Instance().CreateNamespace(nsSpec)
-			log.FailOnError(err, "Unable to create namespace")
+			log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
 			log.InfoD("Created Namespace - %v", ns.Name)
 		})
 		Step("Modifying Admin Namespace for Stork", func() {

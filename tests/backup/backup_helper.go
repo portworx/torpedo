@@ -124,7 +124,6 @@ const (
 	rancherActiveCluster                      = "local"
 	rancherProjectDescription                 = "new project"
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
-	storkPodRestartRetryTimeinMinutes         = 15
 	podDestroyTimeout                         = 5 * time.Minute
 )
 
@@ -5707,7 +5706,10 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 // ChangeAdminNamespace changes admin namespace for Storage Cluster
 func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	// Get current storage cluster configuration
-	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	isOpBased, err := Inst().V.IsOperatorBasedInstall()
+	if err != nil {
+		return nil, err
+	}
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	storkOldPods, err := core.Instance().GetPods(storkDeploymentNamespace, map[string]string{"name": "stork"})
 	if err != nil {
@@ -5752,11 +5754,6 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
-	time.Sleep(1 * time.Minute)
-
-	if err != nil {
-		return nil, err
-	}
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
 		return nil, err
@@ -5798,7 +5795,10 @@ func getCurrentAdminNamespace() (string, error) {
 			log.Infof("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		} else {
-			adminNamespace, _ := k8sutils.GetStorkPodNamespace()
+			adminNamespace, err := k8sutils.GetStorkPodNamespace()
+			if err != nil {
+				return "", err
+			}
 			log.Infof("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		}
@@ -5814,7 +5814,7 @@ func getCurrentAdminNamespace() (string, error) {
 }
 
 // Validates Backup CRs created
-func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid string, ctx context.Context,
+func ValidateBackupCRs(backupName string, clusterName string, orgID string, clusterUID string, ctx context.Context,
 	backupNameSpaces []string) error {
 
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
@@ -5824,30 +5824,30 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid 
 	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
 
 	backupDriver := Inst().Backup
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: uid}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
 
-	validateBackupCRInNameSpace := func() (interface{}, bool, error) {
+	validateBackupCRInNamespace := func() (interface{}, bool, error) {
 		allBackupCrs, err := backupDriver.ListBackupCRs(ctx, currentAdminNamespace, clusterObj, orgID)
 		if err != nil {
-			return false, true, err
+			return nil, true, err
 		}
 		log.InfoD("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
 
 		for _, eachCR := range allBackupCrs {
 			if strings.Contains(eachCR, backupName) {
 				log.Infof("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
-				return false, false, nil
+				return nil, false, nil
 			}
 		}
-		return false, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", backupName, currentAdminNamespace)
+		return nil, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", backupName, currentAdminNamespace)
 	}
 
-	_, err = task.DoRetryWithTimeout(validateBackupCRInNameSpace, 5*time.Minute, 500*time.Millisecond)
+	_, err = task.DoRetryWithTimeout(validateBackupCRInNamespace, 5*time.Minute, 500*time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -5856,7 +5856,7 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, uid 
 }
 
 // Validates Restore CRs created
-func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, uid string, ctx context.Context,
+func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, clusterUID string, ctx context.Context,
 	restoreNameSpaces map[string]string) error {
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
 	if len(restoreNameSpaces) == 1 {
@@ -5867,30 +5867,30 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, ui
 	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
 
 	backupDriver := Inst().Backup
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: uid}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
 
-	validateRestoreCRInNameSpace := func() (interface{}, bool, error) {
+	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
 		allRestoreCrs, err := backupDriver.ListRestoreCRs(ctx, currentAdminNamespace, clusterObj, orgID)
 		if err != nil {
-			return false, true, err
+			return nil, true, err
 		}
 		log.InfoD("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
 
 		for _, eachCR := range allRestoreCrs {
 			if strings.Contains(eachCR, restoreName) {
 				log.Infof("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
-				return false, false, nil
+				return nil, false, nil
 			}
 		}
-		return false, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+		return nil, true, fmt.Errorf("Unable to find CR for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
 	}
 
-	_, err = task.DoRetryWithTimeout(validateRestoreCRInNameSpace, 5*time.Minute, 500*time.Millisecond)
+	_, err = task.DoRetryWithTimeout(validateRestoreCRInNamespace, 5*time.Minute, 500*time.Millisecond)
 	if err != nil {
 		return err
 	}
