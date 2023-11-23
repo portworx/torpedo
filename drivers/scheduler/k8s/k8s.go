@@ -3153,16 +3153,20 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	var podList []corev1.Pod
 
 	allRules, err := k8sAutopilot.ListAutopilotRules()
-	if err != nil {
-		return err
-	}
-
-	for _, rule := range allRules.Items {
-		log.InfoD("Cleaning up autopilot rule: %s", rule.Name)
-		err := k8sAutopilot.DeleteAutopilotRule(rule.Name)
-		if err != nil {
-			return err
+	if err == nil {
+		if len(allRules.Items) > 0 {
+			for _, rule := range allRules.Items {
+				log.InfoD("Cleaning up autopilot rule: %s", rule.Name)
+				err := k8sAutopilot.DeleteAutopilotRule(rule.Name)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			log.InfoD("No autopilot rules found, skipping cleanup")
 		}
+	} else {
+		log.InfoD("Error in getting autopilot rules, skipping cleanup: %v", err)
 	}
 
 	// destruction of CustomResourceObjects must most likely be done *first*,
@@ -3819,7 +3823,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			if err != nil {
 				return err
 			}
-			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0)  && !(len(prometheusPods.Items) == 0)
+			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
 			if autopilotEnabled {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
