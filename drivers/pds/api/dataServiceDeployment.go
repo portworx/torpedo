@@ -199,7 +199,7 @@ func (ds *DataServiceDeployment) DeleteDeployment(deploymentID string) (*status.
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	res, err := dsClient.ApiDeploymentsIdDelete(ctx, deploymentID).Force("true").Execute()
+	res, err := dsClient.ApiDeploymentsIdDelete(ctx, deploymentID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiDeploymentsIdDelete`: %v\n.Full HTTP response: %v", err, res)
 	}
