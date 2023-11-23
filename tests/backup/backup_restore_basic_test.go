@@ -3842,3 +3842,228 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+// BasicDirectoryBackup  excludes mentioned directories or files from backed-up apps and restores them.
+var _ = Describe("{BasicDirectoryBackup}", func() {
+	var (
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		AppContextsMapping   map[string]*scheduler.Context
+		namespace            string
+		//bkpNamespaces        []string
+
+		clusterUid        string
+		clusterStatus     api.ClusterInfo_StatusInfo_Status
+		restoreName       string
+		cloudCredName     string
+		cloudCredUID      string
+		backupLocationUID string
+		bkpLocationName   string
+
+		numDeployments int
+
+		providers          []string
+		excludeFileDirList []string
+		backupLocationMap  map[string]string
+		labelSelectors     map[string]string
+
+		applabelSelectors   map[string]string
+		storageClassFileMap map[string][]string
+		formattedFileString string
+	)
+	JustBeforeEach(func() {
+		//bkpNamespaces = make([]string, 0)
+		excludeFileDirList = make([]string, 0)
+		restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+		backupLocationMap = make(map[string]string)
+		labelSelectors = make(map[string]string)
+		applabelSelectors = make(map[string]string)
+		AppContextsMapping = make(map[string]*scheduler.Context)
+		storageClassFileMap = make(map[string][]string)
+
+		numDeployments = 1 //
+		providers = getProviders()
+
+		StartPxBackupTorpedoTest("BasicDirectoryBackup", "Excludes mentioned directories or files from backed-up apps and restores them", nil, 0, Ak, Q4FY24)
+
+		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		log.InfoD("Starting to deploy applications")
+		for i := 0; i < numDeployments; i++ {
+			log.InfoD(fmt.Sprintf("Iteration %v of deploying applications", i))
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				namespace = GetAppNamespace(ctx, taskName)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+				AppContextsMapping[namespace] = ctx
+			}
+		}
+
+	})
+	It("Exvludes directories/ Files From a Backup", func() {
+
+		Step("Validating deployed applications", func() {
+			log.InfoD("Validating deployed applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("getting mountpath and write directory to mount path", func() {
+			label, err := GetAppLabelFromSpec(AppContextsMapping[namespace])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting app label"))
+			applabelSelectors["app"] = label["app"]
+			podNameList := make([]string, 0)
+			mountPathList, err := GetVolumeMountPath(namespace, applabelSelectors)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting mount path"))
+			log.Infof(fmt.Sprintf("the list of mount paths [%v]", mountPathList))
+			pods, err := core.Instance().GetPods(namespace, applabelSelectors)
+			for _, pod := range pods.Items {
+				podNameList = append(podNameList, pod.Name)
+			}
+			err = createNestedDirectoriesWithFiles(podNameList[0], namespace, mountPathList[0], 10, 0, 0)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("creating nested directory"))
+			fileout, err := fetchFilesAndDirectoriesFromPod(podNameList[0], namespace, mountPathList[0], "/var/lib/postgresql/data/pgdata")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("fetching files and directory from mountpath"))
+			log.Infof(fmt.Sprintf("the list of created data: %v", fileout))
+			dir, files, err := getRandomDirsAndFiles(fileout, 2, 10)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files and directories from path"))
+			log.Infof(fmt.Sprintf("the list of files randomly selected %v", files))
+			log.Infof(fmt.Sprintf("the list of directories randomly selected %v", dir))
+			excludeFileDirList = append(excludeFileDirList, files...)
+			excludeFileDirList = append(excludeFileDirList, dir...)
+			pvcs, err := core.Instance().GetPersistentVolumeClaims(namespace, nil)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting all PVCs from namespace [%s]. Total PVCs - %d", namespace, len(pvcs.Items)))
+			singlePvc := pvcs.Items[0]
+			ScName, err := core.Instance().GetStorageClassForPVC(&singlePvc)
+			storageClassFileMap[ScName.Name] = append(dir, files...)
+			formattedFileString = generateFormattedString(storageClassFileMap)
+			log.Infof(fmt.Sprintf("the formatted string with storage class name %v", formattedFileString))
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
+				bkpLocationName = fmt.Sprintf("%s-%s-bl", provider, getGlobalBucketName(provider))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = bkpLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, orgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, orgID, provider))
+				err = CreateBackupLocation(provider, bkpLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), orgID, "", true)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", bkpLocationName))
+			}
+		})
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+		})
+		Step("list of files from the mount path before backup", func() {
+			label, err := GetAppLabelFromSpec(AppContextsMapping[namespace])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting app label"))
+			applabelSelectors["app"] = label["app"]
+			podNameList := make([]string, 0)
+			mountPathList, err := GetVolumeMountPath(namespace, applabelSelectors)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting mount path"))
+			log.Infof(fmt.Sprintf("the list of mount paths [%v]", mountPathList))
+			pods, err := core.Instance().GetPods(namespace, applabelSelectors)
+			for _, pod := range pods.Items {
+				podNameList = append(podNameList, pod.Name)
+			}
+			fileout, err := fetchFilesAndDirectoriesFromPod(podNameList[0], namespace, mountPathList[0], "/var/lib/postgresql/data/pgdata")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("fetching FilesAndDirectories from mountpath"))
+			log.Infof(fmt.Sprintf("the list of files written into mountPath: %v", fileout))
+
+		})
+		Step("Update KDMP config map on source", func() {
+			err := UpdateKDMPConfigMap("KDMP_EXCLUDE_FILE_LIST", formattedFileString)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("updating KDMP config map"))
+
+		})
+		Step("Taking backup of namespace", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces "))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
+			//appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+			err = CreateBackup(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+		})
+		Step("Selecting random backed-up apps and restoring them", func() {
+			log.InfoD("Selecting random backed-up apps and restoring them")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			//appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+			err = CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, ctx, make(map[string]string))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s]", restoreName))
+			log.Infof("waiting for pods to be up and running")
+			time.Sleep(2 * time.Minute)
+		})
+		Step("list of files from the mount path after restore", func() {
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+			}()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			label, err := GetAppLabelFromSpec(AppContextsMapping[namespace])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("getting app label"))
+			applabelSelectors["app"] = label["app"]
+			podNameList := make([]string, 0)
+			mountPathList, err := GetVolumeMountPath(namespace, applabelSelectors)
+			dash.VerifyFatal(err, nil, fmt.Sprintf(" getting mount path"))
+			log.Infof(fmt.Sprintf("the list of mount paths [%v]", mountPathList))
+			pods, err := core.Instance().GetPods(namespace, applabelSelectors)
+			for _, pod := range pods.Items {
+				podNameList = append(podNameList, pod.Name)
+			}
+			log.Infof(fmt.Sprintf("Fetching files and directories from pod [%s] , namespace [%s] , mountPath [%s]", podNameList[0], namespace, mountPathList[0]))
+			fileout, err := fetchFilesAndDirectoriesFromPod(podNameList[0], namespace, mountPathList[0], "/var/lib/postgresql/data/pgdata")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("fetching files and directries from mountpath"))
+			log.Infof(fmt.Sprintf("the list of files after restore: %v", fileout))
+			for _, file := range excludeFileDirList {
+				if !IsPresent(fileout, file) {
+					log.Infof(fmt.Sprintf("the file [%s] is not present in the mountPath[%s]", file, mountPathList[0]))
+				} else {
+					err := fmt.Errorf("file %s is listed in filelist [%v ] in mountPath: [%s]", file, fileout, mountPathList[0])
+					log.FailOnError(fmt.Errorf(""), err.Error())
+				}
+			}
+
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		/*
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			log.InfoD("Deleting deployed applications")
+			DestroyApps(scheduledAppContexts, opts)
+		*/
+		backupDriver := Inst().Backup
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		log.FailOnError(err, "Failed while trying to get backup UID for - [%s]", backupName)
+		log.InfoD("Deleting backup")
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup [%s]", backupName))
+		log.InfoD("Deleting restore")
+		log.InfoD(fmt.Sprintf("Backup name [%s]", restoreName))
+		err = DeleteRestore(restoreName, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
