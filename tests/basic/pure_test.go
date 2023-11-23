@@ -2427,11 +2427,11 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		restoreCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
 			volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      vol.Locator.Name,
+					Name:      vol.Spec.VolumeLabels["pvc"],
 					Namespace: vol.Spec.VolumeLabels["namespace"],
 				},
 				Spec: storkv1.VolumeSnapshotRestoreSpec{
-					SourceName:      *snapshot.Spec.Source.VolumeSnapshotContentName,
+					SourceName:      snapshot.Name,
 					SourceNamespace: snapshot.Namespace,
 					GroupSnapshot:   false,
 				},
