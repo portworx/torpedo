@@ -2424,14 +2424,14 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 			}
 			return nil
 		}
-		restoreRandomCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
+		restoreCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
 			volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      vol.Locator.Name,
 					Namespace: vol.Spec.VolumeLabels["namespace"],
 				},
 				Spec: storkv1.VolumeSnapshotRestoreSpec{
-					SourceName:      snapshot.Name,
+					SourceName:      *snapshot.Spec.Source.VolumeSnapshotContentName,
 					SourceNamespace: snapshot.Namespace,
 					GroupSnapshot:   false,
 				},
@@ -2452,7 +2452,7 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 			switch volType {
 			case VolumeFADA, VolumeFBDA:
 				randomSnapshot := volumeCSISnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)]
-				err = restoreRandomCSISnapshot(volType, vol, randomSnapshot)
+				err = restoreCSISnapshot(volType, vol, randomSnapshot)
 				if err != nil {
 					return fmt.Errorf("failed to restore CSI snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
 				}
