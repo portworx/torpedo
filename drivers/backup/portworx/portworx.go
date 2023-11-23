@@ -93,8 +93,8 @@ func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error
 	return client, nil
 }
 
-// getKubernetesInstance - Get hanlder to k8s cluster.
-func getKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
+// GetKubernetesInstance - Get hanlder to k8s cluster.
+func GetKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
 	client, err := getKubernetesRestConfig(cluster)
 	if err != nil {
 		return nil, nil, err
@@ -861,7 +861,7 @@ func (p *portworx) GetVolumeBackupIDs(
 ) ([]string, error) {
 
 	var volumeBackupIDs []string
-	_, storkClient, err := getKubernetesInstance(clusterObj)
+	_, storkClient, err := GetKubernetesInstance(clusterObj)
 	if err != nil {
 		return volumeBackupIDs, err
 	}
@@ -925,56 +925,6 @@ func (p *portworx) GetVolumeBackupIDs(
 		}
 	}
 	return volumeBackupIDs, nil
-}
-
-// ListBackupCRs lists all the Backup CRs present under given namespace
-func (p *portworx) ListBackupCRs(
-	ctx context.Context,
-	namespace string,
-	clusterObj *api.ClusterObject,
-	orgID string) ([]string, error) {
-
-	allBackupCRNames := make([]string, 0)
-	_, storkClient, err := getKubernetesInstance(clusterObj)
-	if err != nil {
-		return nil, err
-	}
-
-	storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
-	if err != nil {
-		log.Warnf("failed to get application backup CR from [%s]. Error [%v]", namespace, err)
-		return nil, err
-	}
-
-	for _, backup := range storkApplicationBackupCR.Items {
-		allBackupCRNames = append(allBackupCRNames, backup.Name)
-	}
-	return allBackupCRNames, nil
-}
-
-// ListBackupCRs lists all the Restore CRs present under given namespace
-func (p *portworx) ListRestoreCRs(
-	ctx context.Context,
-	namespace string,
-	clusterObj *api.ClusterObject,
-	orgID string) ([]string, error) {
-
-	allRestoreCRNames := make([]string, 0)
-	_, storkClient, err := getKubernetesInstance(clusterObj)
-	if err != nil {
-		return nil, err
-	}
-
-	storkApplicationRestoreCR, err := storkClient.ListApplicationRestores(namespace, metav1.ListOptions{})
-	if err != nil {
-		log.Warnf("failed to get application restore CR from [%s]. Error [%v]", namespace, err)
-		return nil, err
-	}
-
-	for _, restore := range storkApplicationRestoreCR.Items {
-		allRestoreCRNames = append(allRestoreCRNames, restore.Name)
-	}
-	return allRestoreCRNames, nil
 }
 
 // WaitForBackupCompletion waits for backup to complete successfully
@@ -1691,7 +1641,7 @@ func (p *portworx) WaitForBackupScheduleDeletion(
 				fmt.Errorf("[%v] number of backups remain undeleted", len(backups))
 		}
 		// Check all the backup CRs are deleted.
-		_, inst, err := getKubernetesInstance(clusterObj)
+		_, inst, err := GetKubernetesInstance(clusterObj)
 		if err != nil {
 			return nil, true, err
 		}

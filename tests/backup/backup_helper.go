@@ -124,7 +124,6 @@ const (
 	rancherActiveCluster                      = "local"
 	rancherProjectDescription                 = "new project"
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
-	podDestroyTimeout                         = 5 * time.Minute
 )
 
 var (
@@ -5773,8 +5772,6 @@ func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
-	time.Sleep(1 * time.Minute)
-
 	err = apps.Instance().ValidateDeployment(updatedStorkDeployment, storkPodReadyTimeout, podReadyRetryTime)
 	if err != nil {
 		return nil, err
@@ -5832,7 +5829,7 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, clus
 	clusterObj := clusterResp.GetCluster()
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
-		allBackupCrs, err := backupDriver.ListBackupCRs(ctx, currentAdminNamespace, clusterObj, orgID)
+		allBackupCrs, err := ListBackupCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
 		}
@@ -5875,7 +5872,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 	clusterObj := clusterResp.GetCluster()
 
 	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
-		allRestoreCrs, err := backupDriver.ListRestoreCRs(ctx, currentAdminNamespace, clusterObj, orgID)
+		allRestoreCrs, err := ListRestoreCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
 		}
@@ -5896,4 +5893,50 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 	}
 
 	return nil
+}
+
+// ListBackupCRs lists all the Backup CRs present under given namespace
+func ListBackupCRs(
+	namespace string,
+	clusterObj *api.ClusterObject) ([]string, error) {
+
+	allBackupCRNames := make([]string, 0)
+	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	storkApplicationBackupCR, err := storkClient.ListApplicationBackups(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Warnf("failed to get application backup CR from [%s]. Error [%v]", namespace, err)
+		return nil, err
+	}
+
+	for _, backup := range storkApplicationBackupCR.Items {
+		allBackupCRNames = append(allBackupCRNames, backup.Name)
+	}
+	return allBackupCRNames, nil
+}
+
+// ListBackupCRs lists all the Restore CRs present under given namespace
+func ListRestoreCRs(
+	namespace string,
+	clusterObj *api.ClusterObject) ([]string, error) {
+
+	allRestoreCRNames := make([]string, 0)
+	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	storkApplicationRestoreCR, err := storkClient.ListApplicationRestores(namespace, metav1.ListOptions{})
+	if err != nil {
+		log.Warnf("failed to get application restore CR from [%s]. Error [%v]", namespace, err)
+		return nil, err
+	}
+
+	for _, restore := range storkApplicationRestoreCR.Items {
+		allRestoreCRNames = append(allRestoreCRNames, restore.Name)
+	}
+	return allRestoreCRNames, nil
 }

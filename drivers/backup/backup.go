@@ -267,10 +267,6 @@ type Backup interface {
 	GetVolumeBackupIDs(ctx context.Context, backupName string, namespace string,
 		clusterObj *api.ClusterObject, orgID string) ([]string, error)
 
-	// ListBackupCRs lists all the Backup Custom Resources under given namespace
-	ListBackupCRs(ctx context.Context, namespace string, clusterObj *api.ClusterObject,
-		orgID string) ([]string, error)
-
 	// GetBackupUID returns uid of the given backup name in an organization
 	GetBackupUID(ctx context.Context, backupName string, orgID string) (string, error)
 
@@ -303,10 +299,6 @@ type Restore interface {
 
 	// GetRestoreUID returns uid of the given restore name in an organization
 	GetRestoreUID(ctx context.Context, restoreName string, orgID string) (string, error)
-
-	// ListBackupCRs lists all the Restore Custom Resources under given namespace
-	ListRestoreCRs(ctx context.Context, namespace string, clusterObj *api.ClusterObject,
-		orgID string) ([]string, error)
 
 	// WaitForRestoreCompletion waits for restore to complete successfully
 	// or till timeout is reached. API should poll every `timeBeforeRetry` duration
