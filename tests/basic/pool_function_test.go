@@ -1239,6 +1239,7 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 	BeforeEach(func() {
 		StartTorpedoTest("PoolExpandAndCheckAlertsUsingAddDisk", "pool expansion using add-disk and check alerts after each operation", nil, testrailID)
 		contexts = scheduleApps()
+		ValidateApplications(contexts)
 	})
 	JustBeforeEach(func() {
 		poolIDToResize = pickPoolToResize()
