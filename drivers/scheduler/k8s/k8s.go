@@ -7637,6 +7637,10 @@ func (k *K8s) CreateCsiSnapshot(name string, namespace string, class string, pvc
 	}
 
 	snap := volsnapv1.VolumeSnapshot{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "VolumeSnapshot",
+			APIVersion: "volumesnapshot.external-storage.k8s.io/v1",
+		},
 		ObjectMeta: v1obj,
 		Spec:       spec,
 	}
