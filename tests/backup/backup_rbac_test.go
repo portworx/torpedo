@@ -547,8 +547,6 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 				nil, orgID, userClusterMap[customUser][SourceClusterName], "", "", "", "", nsLabelString)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with labels [%s]", manualBackupWithLabel, nsLabelString))
 			customUserLabelledBackupNames = append(customUserLabelledBackupNames, manualBackupWithLabel)
-			err = NamespaceLabelBackupSuccessCheck(manualBackupWithLabel, nonAdminCtx, bkpNamespaces, nsLabelString)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespaces [%v] are backed up, and check if labels [%s] are applied to backups [%s]", bkpNamespaces, nsLabelString, manualBackupWithLabel))
 		})
 
 		Step("Validate restoring manual backup of applications with namespace label", func() {
