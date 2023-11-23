@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-
 	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
