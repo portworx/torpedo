@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -2021,26 +2020,17 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			for _, pstatus := range provisionStatus {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
-			if sizeAfterPoolExpand <= poolSizes[0] {
-				err := errors.New("error pool expand failed")
-				log.FailOnError(err, "Pool expand failed")
-			}
-
+			dash.VerifyFatal(sizeAfterPoolExpand > poolSizes[0], true, "Pool expand successfully verified on first node")
 			//calculate pool size from second node
 			provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(crashedNodes[1])
 			log.FailOnError(err, "Failed to get cluster info for node:%v", crashedNodes[1].Name)
-			log.InfoD("Pool expand successfully completed, size after pool expand:%v", sizeAfterPoolExpand)
 
 			sizeAfterPoolExpand = 0
 			for _, pstatus := range provisionStatus {
 				sizeAfterPoolExpand += pstatus.TotalSize
 			}
 
-			if sizeAfterPoolExpand <= poolSizes[1] {
-				err = errors.New("error pool expand failed")
-				log.FailOnError(err, "Pool expand failed")
-			}
-
+			dash.VerifyFatal(sizeAfterPoolExpand > poolSizes[1], true, "Pool expand successfully verified on second node")
 			log.InfoD("Pool expand successfully completed, size after pool expand:%v", sizeAfterPoolExpand)
 
 		})
