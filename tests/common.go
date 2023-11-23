@@ -229,6 +229,7 @@ const (
 	licenseExpiryTimeoutHoursFlag        = "license_expiry_timeout_hours"
 	meteringIntervalMinsFlag             = "metering_interval_mins"
 	SourceClusterName                    = "source-cluster"
+	AdditionalClusterNamePrefix          = "px-backup-cluster"
 	destinationClusterName               = "destination-cluster"
 	backupLocationNameConst              = "tp-blocation"
 	backupScheduleNamePrefix             = "tp-bkp-schedule"
@@ -420,6 +421,7 @@ var (
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
 	clusterProvider                      = "aws"
+	additional_clusters                  = 0
 )
 
 var (
@@ -3965,7 +3967,14 @@ func DeleteScheduleWithUIDAndWait(backupScheduleName string, backupScheduleUid s
 func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx context1.Context) error {
 	var clusterCredName string
 	var clusterCredUid string
+	var addition_cluster_index int = 0
+
 	kubeconfigs := os.Getenv("KUBECONFIGS")
+	_, present := os.LookupEnv("ADDITIONAL_CLUSTERS")
+	if present {
+		additional_clusters, _ = strconv.Atoi(os.Getenv("ADDITIONAL_CLUSTERS"))
+	}
+
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
@@ -3992,6 +4001,27 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 
 	ClusterConfigPathMap[SourceClusterName] = srcClusterConfigPath
 	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
+
+	for cluster_index := 0; cluster_index < additional_clusters; cluster_index++ {
+		cluster_name := AdditionalClusterNamePrefix + "-" + strconv.Itoa(cluster_index)
+		additionalClusterConfigPath, err := GetAdditionalClusterConfigPath(cluster_index + 2)
+		if err != nil {
+			return err
+		}
+		ClusterConfigPathMap[cluster_name] = additionalClusterConfigPath
+	}
+
+	getClusterName := func(kubeconfig string) string {
+		cluster_prefix := strings.Split(kubeconfig, "-")[0]
+
+		if strings.Contains(cluster_prefix, "source") || strings.Contains(cluster_prefix, "destination") {
+			return (cluster_prefix + "-cluster")
+		} else {
+			cluster_name := AdditionalClusterNamePrefix + "-" + strconv.Itoa(addition_cluster_index)
+			addition_cluster_index += 1
+			return cluster_name
+		}
+	}
 
 	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string) error {
 		clusterStatus := func() (interface{}, bool, error) {
@@ -4043,7 +4073,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						return fmt.Errorf("failed to create cloud cred with error =%v", err)
 					}
 				}
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				clusterName := getClusterName(kubeconfig)
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -4077,7 +4107,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				} else {
 					log.Infof("Created cloud cred %s for cluster creation", clusterCredName)
 				}
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				clusterName := getClusterName(kubeconfig)
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -4109,7 +4139,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						return fmt.Errorf("failed to create cloud cred with error =%v", err)
 					}
 				}
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				clusterName := getClusterName(kubeconfig)
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -4141,7 +4171,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						return fmt.Errorf("failed to create cloud cred with error =%v", err)
 					}
 				}
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				clusterName := getClusterName(kubeconfig)
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -4173,7 +4203,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 						return fmt.Errorf("failed to create cloud cred with error =%v", err)
 					}
 				}
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				clusterName := getClusterName(kubeconfig)
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -4181,7 +4211,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 			}
 		default:
 			for _, kubeconfig := range kubeconfigList {
-				clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+				clusterName := getClusterName(kubeconfig)
 				err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 				if err != nil {
 					return err
@@ -5022,6 +5052,23 @@ func GetDestinationClusterConfigPath() (string, error) {
 
 	log.Infof("Destination config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]))
 	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[1]), nil
+}
+
+// GetSourceClusterConfigPath returns kubeconfig for source
+func GetAdditionalClusterConfigPath(indexOfKubeconfig int) (string, error) {
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	if kubeconfigs == "" {
+		return "", fmt.Errorf("failed to get source config path. Empty KUBECONFIGS environment variable")
+	}
+
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+	if len(kubeconfigList) < indexOfKubeconfig {
+		return "", fmt.Errorf(`Failed to get source config path.
+				At least minimum [%d] kubeconfigs required but has %d`, indexOfKubeconfig, len(kubeconfigList))
+	}
+
+	log.Infof("Additional cluster config path: %s", fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[indexOfKubeconfig]))
+	return fmt.Sprintf("%s/%s", KubeconfigDirectory, kubeconfigList[indexOfKubeconfig]), nil
 }
 
 // GetAzureCredsFromEnv get creds for azure
