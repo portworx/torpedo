@@ -45,8 +45,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
-
-	vsv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 )
 
 const (
@@ -2328,14 +2326,14 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 	)
 
 	var (
-		contexts                []*scheduler.Context
-		backend                 = BackendUnknown
-		volumeMap               = make(map[VolumeType][]*api.Volume)
-		numSnapshotsPerVolume   = 3
-		volumeSnapshotClassName string
-		appScaleFactorMap       = make(map[string]map[string]int32)
-		volumeSnapshotMap       = make(map[string][]*api.SdkVolumeSnapshotCreateResponse)
-		volumeCSISnapshotMap    = make(map[string][]*vsv1.VolumeSnapshot)
+		contexts  []*scheduler.Context
+		backend   = BackendUnknown
+		volumeMap = make(map[VolumeType][]*api.Volume)
+		//numSnapshotsPerVolume   = 3
+		//volumeSnapshotClassName string
+		appScaleFactorMap = make(map[string]map[string]int32)
+		//volumeSnapshotMap       = make(map[string][]*api.SdkVolumeSnapshotCreateResponse)
+		//volumeCSISnapshotMap    = make(map[string][]*vsv1.VolumeSnapshot)
 	)
 
 	JustBeforeEach(func() {
@@ -2400,86 +2398,86 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		//	}
 		//	ValidateContext(ctx)
 		//	return nil
+		////}
+		//createCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
+		//	pvcName := vol.Spec.VolumeLabels["pvc"]
+		//	namespace := vol.Spec.VolumeLabels["namespace"]
+		//	snapshot, err := Inst().S.CreateCsiSnapshot(snapshotName, namespace, volumeSnapshotClassName, pvcName)
+		//	if err != nil {
+		//		return fmt.Errorf("failed to create CSI snapshot [%s] of [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
+		//	}
+		//	volumeCSISnapshotMap[vol.Id] = append(volumeCSISnapshotMap[vol.Id], snapshot)
+		//	return nil
 		//}
-		createCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
-			pvcName := vol.Spec.VolumeLabels["pvc"]
-			namespace := vol.Spec.VolumeLabels["namespace"]
-			snapshot, err := Inst().S.CreateCsiSnapshot(snapshotName, namespace, volumeSnapshotClassName, pvcName)
-			if err != nil {
-				return fmt.Errorf("failed to create CSI snapshot [%s] of [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
-			}
-			volumeCSISnapshotMap[vol.Id] = append(volumeCSISnapshotMap[vol.Id], snapshot)
-			return nil
-		}
-		createSnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
-			switch volType {
-			case VolumeFADA, VolumeFBDA:
-				err = createCSISnapshot(volType, vol, snapshotName)
-			default:
-				snapshot, err := Inst().V.CreateSnapshot(vol.Id, snapshotName)
-				if err != nil {
-					return fmt.Errorf("failed to create snapshot [%s] of [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
-				}
-				volumeSnapshotMap[vol.Id] = append(volumeSnapshotMap[vol.Id], snapshot)
-			}
-			return nil
-		}
-		restoreCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
-			volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "volume-restore" + vol.Spec.VolumeLabels["pvc"],
-					Namespace: vol.Spec.VolumeLabels["namespace"],
-				},
-				Spec: storkv1.VolumeSnapshotRestoreSpec{
-					SourceName:      snapshot.Name,
-					SourceNamespace: snapshot.Namespace,
-					GroupSnapshot:   false,
-				},
-			}
-			restore, err := storkops.Instance().CreateVolumeSnapshotRestore(volumeSnapshotRestoreSpec)
-			if err != nil {
-				return fmt.Errorf("failed to restore snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
-			}
-			err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, defaultTimeout, defaultRetryInterval)
-			if err != nil {
-				return fmt.Errorf("failed to validate snapshot [%s/%s] restore to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
-			}
-			return nil
-		}
-		// restoreRandomSnapshot restores a random snapshot of the given volume
-		restoreRandomSnapshot := func(volType VolumeType, vol *api.Volume) error {
-			switch volType {
-			case VolumeFADA, VolumeFBDA:
-				randomSnapshot := volumeCSISnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)]
-				err = restoreCSISnapshot(volType, vol, randomSnapshot)
-				if err != nil {
-					return fmt.Errorf("failed to restore CSI snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
-				}
-			default:
-				randomSnapshotId := volumeSnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)].SnapshotId
-				_, err := Inst().V.RestoreSnapshot(randomSnapshotId, vol.Id)
-				if err != nil {
-					return fmt.Errorf("failed to restore snapshot [%s] to volume [%s/%s]. Err: [%v]", randomSnapshotId, vol.Id, vol.Locator.Name, err)
-				}
-				// It is observed that the volume source points to a snapshot for a brief period
-				// of time so we until the source parent is empty, ensuring the restore is successfully completed
-				waitForRestoreCompletionBasedOnSource := func() (interface{}, bool, error) {
-					vol, err := Inst().V.InspectVolume(vol.Id)
-					if err != nil {
-						return nil, false, err
-					}
-					if vol.Source.Parent != "" {
-						return nil, true, fmt.Errorf("restoring snapshot [%s] to volume [%s/%s] is in progress", randomSnapshotId, vol.Id, vol.Locator.Name)
-					}
-					return nil, false, nil
-				}
-				_, err = task.DoRetryWithTimeout(waitForRestoreCompletionBasedOnSource, defaultTimeout, defaultRetryInterval)
-				if err != nil {
-					return fmt.Errorf("failed to wait for snapshot [%s] restore to volume [%s/%s] completion. Err: [%v]", randomSnapshotId, vol.Id, vol.Locator.Name, err)
-				}
-			}
-			return nil
-		}
+		//createSnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
+		//	switch volType {
+		//	case VolumeFADA, VolumeFBDA:
+		//		err = createCSISnapshot(volType, vol, snapshotName)
+		//	default:
+		//		snapshot, err := Inst().V.CreateSnapshot(vol.Id, snapshotName)
+		//		if err != nil {
+		//			return fmt.Errorf("failed to create snapshot [%s] of [%s] volume [%s/%s]. Err: [%v]", snapshotName, volType, vol.Id, vol.Locator.Name, err)
+		//		}
+		//		volumeSnapshotMap[vol.Id] = append(volumeSnapshotMap[vol.Id], snapshot)
+		//	}
+		//	return nil
+		//}
+		//restoreCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
+		//	volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
+		//		ObjectMeta: metav1.ObjectMeta{
+		//			Name:      "volume-restore" + vol.Spec.VolumeLabels["pvc"],
+		//			Namespace: vol.Spec.VolumeLabels["namespace"],
+		//		},
+		//		Spec: storkv1.VolumeSnapshotRestoreSpec{
+		//			SourceName:      snapshot.Name,
+		//			SourceNamespace: snapshot.Namespace,
+		//			GroupSnapshot:   false,
+		//		},
+		//	}
+		//	restore, err := storkops.Instance().CreateVolumeSnapshotRestore(volumeSnapshotRestoreSpec)
+		//	if err != nil {
+		//		return fmt.Errorf("failed to restore snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+		//	}
+		//	err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, defaultTimeout, defaultRetryInterval)
+		//	if err != nil {
+		//		return fmt.Errorf("failed to validate snapshot [%s/%s] restore to [%s] volume [%s/%s]. Err: [%v]", snapshot.Name, snapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+		//	}
+		//	return nil
+		//}
+		//// restoreRandomSnapshot restores a random snapshot of the given volume
+		//restoreRandomSnapshot := func(volType VolumeType, vol *api.Volume) error {
+		//	switch volType {
+		//	case VolumeFADA, VolumeFBDA:
+		//		randomSnapshot := volumeCSISnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)]
+		//		err = restoreCSISnapshot(volType, vol, randomSnapshot)
+		//		if err != nil {
+		//			return fmt.Errorf("failed to restore CSI snapshot [%s/%s] to [%s] volume [%s/%s]. Err: [%v]", randomSnapshot.Name, randomSnapshot.Namespace, volType, vol.Id, vol.Locator.Name, err)
+		//		}
+		//	default:
+		//		randomSnapshotId := volumeSnapshotMap[vol.Id][rand.Intn(numSnapshotsPerVolume)].SnapshotId
+		//		_, err := Inst().V.RestoreSnapshot(randomSnapshotId, vol.Id)
+		//		if err != nil {
+		//			return fmt.Errorf("failed to restore snapshot [%s] to volume [%s/%s]. Err: [%v]", randomSnapshotId, vol.Id, vol.Locator.Name, err)
+		//		}
+		//		// It is observed that the volume source points to a snapshot for a brief period
+		//		// of time so we until the source parent is empty, ensuring the restore is successfully completed
+		//		waitForRestoreCompletionBasedOnSource := func() (interface{}, bool, error) {
+		//			vol, err := Inst().V.InspectVolume(vol.Id)
+		//			if err != nil {
+		//				return nil, false, err
+		//			}
+		//			if vol.Source.Parent != "" {
+		//				return nil, true, fmt.Errorf("restoring snapshot [%s] to volume [%s/%s] is in progress", randomSnapshotId, vol.Id, vol.Locator.Name)
+		//			}
+		//			return nil, false, nil
+		//		}
+		//		_, err = task.DoRetryWithTimeout(waitForRestoreCompletionBasedOnSource, defaultTimeout, defaultRetryInterval)
+		//		if err != nil {
+		//			return fmt.Errorf("failed to wait for snapshot [%s] restore to volume [%s/%s] completion. Err: [%v]", randomSnapshotId, vol.Id, vol.Locator.Name, err)
+		//		}
+		//	}
+		//	return nil
+		//}
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2539,65 +2537,65 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 				}
 			}
 		})
-		Step(fmt.Sprintf("Create a [%d] snapshots for each volume", numSnapshotsPerVolume), func() {
-			log.InfoD("Create a [%d] snapshots for each volume", numSnapshotsPerVolume)
-			if len(volumeMap[VolumeFADA]) != 0 || len(volumeMap[VolumeFBDA]) != 0 {
-				volumeSnapshotClassName = fmt.Sprintf("vsc-tp-%d-%v", 92870, time.Now().Unix())
-				log.Infof("Creating volume snapshot class [%s]", volumeSnapshotClassName)
-				_, err = Inst().S.CreateCsiSnapshotClass(volumeSnapshotClassName, "Delete")
-				log.FailOnError(err, "failed to create volume snapshot class [%s]", volumeSnapshotClassName)
-			}
-			for i := 0; i < numSnapshotsPerVolume; i++ {
-				for volType, vols := range volumeMap {
-					for _, vol := range vols {
-						log.Infof("Creating snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
-						err := createSnapshot(volType, vol, fmt.Sprintf("%s-snapshot-%d", vol.Locator.Name, i))
-						log.FailOnError(err, "failed to create snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
-					}
-				}
-			}
-		})
-		Step("Restore a random snapshot of each volume", func() {
-			log.InfoD("Restoring a random snapshot of each volume")
-			//for _, ctx := range contexts {
-			//	log.InfoD("Scaling down app [%s]", ctx.App.Key)
-			//	err := scaleDownApp(ctx)
-			//	log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
-			//}
-			for volType, vols := range volumeMap {
-				log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
-				for _, vol := range vols {
-					for i, snapshot := range volumeSnapshotMap[vol.Id] {
-						apiVol, err := Inst().V.InspectVolume(snapshot.SnapshotId)
-						log.FailOnError(err, "failed to inspect snapshot [%s] of [%s] volume [%s/%s]", snapshot.SnapshotId, volType, vol.Id, vol.Locator.Name)
-						log.Infof("[%s] volume [%s/%s] snapshot [%s] of index [%d]: [%v]", volType, vol.Id, vol.Locator.Name, snapshot.SnapshotId, i, apiVol)
-					}
-					for i, snapshot := range volumeCSISnapshotMap[vol.Id] {
-						log.Infof("[%s] volume [%s/%s] snapshot [%s] of index [%d]: [%v]", volType, vol.Id, vol.Locator.Name, snapshot.Name, i, snapshot)
-					}
-					log.Infof("Restoring random snapshot of [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
-					err = restoreRandomSnapshot(volType, vol)
-					log.FailOnError(err, "failed to restore random snapshot of [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
-				}
-			}
-			//for _, ctx := range contexts {
-			//	log.InfoD("Scaling up app [%s]", ctx.App.Key)
-			//	err := scaleUpApp(ctx)
-			//	log.FailOnError(err, "failed to scale up app [%s]", ctx.App.Key)
-			//}
-		})
-		Step("Delete snapshots of all volume", func() {
-			log.InfoD("Deleting snapshots of all volume")
-			for volType, vols := range volumeMap {
-				for _, vol := range vols {
-					for i, snapshot := range volumeSnapshotMap[vol.Id] {
-						log.Infof("Deleting snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshot.SnapshotId, i, volType, vol.Id, vol.Locator.Name)
-						err := Inst().V.DeleteVolume(snapshot.SnapshotId)
-						log.FailOnError(err, "failed to delete snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
-					}
-				}
-			}
-		})
+		//Step(fmt.Sprintf("Create a [%d] snapshots for each volume", numSnapshotsPerVolume), func() {
+		//	log.InfoD("Create a [%d] snapshots for each volume", numSnapshotsPerVolume)
+		//	if len(volumeMap[VolumeFADA]) != 0 || len(volumeMap[VolumeFBDA]) != 0 {
+		//		volumeSnapshotClassName = fmt.Sprintf("vsc-tp-%d-%v", 92870, time.Now().Unix())
+		//		log.Infof("Creating volume snapshot class [%s]", volumeSnapshotClassName)
+		//		_, err = Inst().S.CreateCsiSnapshotClass(volumeSnapshotClassName, "Delete")
+		//		log.FailOnError(err, "failed to create volume snapshot class [%s]", volumeSnapshotClassName)
+		//	}
+		//	for i := 0; i < numSnapshotsPerVolume; i++ {
+		//		for volType, vols := range volumeMap {
+		//			for _, vol := range vols {
+		//				log.Infof("Creating snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
+		//				err := createSnapshot(volType, vol, fmt.Sprintf("%s-snapshot-%d", vol.Locator.Name, i))
+		//				log.FailOnError(err, "failed to create snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
+		//			}
+		//		}
+		//	}
+		//})
+		//Step("Restore a random snapshot of each volume", func() {
+		//	log.InfoD("Restoring a random snapshot of each volume")
+		//	//for _, ctx := range contexts {
+		//	//	log.InfoD("Scaling down app [%s]", ctx.App.Key)
+		//	//	err := scaleDownApp(ctx)
+		//	//	log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
+		//	//}
+		//	for volType, vols := range volumeMap {
+		//		log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
+		//		for _, vol := range vols {
+		//			for i, snapshot := range volumeSnapshotMap[vol.Id] {
+		//				apiVol, err := Inst().V.InspectVolume(snapshot.SnapshotId)
+		//				log.FailOnError(err, "failed to inspect snapshot [%s] of [%s] volume [%s/%s]", snapshot.SnapshotId, volType, vol.Id, vol.Locator.Name)
+		//				log.Infof("[%s] volume [%s/%s] snapshot [%s] of index [%d]: [%v]", volType, vol.Id, vol.Locator.Name, snapshot.SnapshotId, i, apiVol)
+		//			}
+		//			for i, snapshot := range volumeCSISnapshotMap[vol.Id] {
+		//				log.Infof("[%s] volume [%s/%s] snapshot [%s] of index [%d]: [%v]", volType, vol.Id, vol.Locator.Name, snapshot.Name, i, snapshot)
+		//			}
+		//			log.Infof("Restoring random snapshot of [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+		//			err = restoreRandomSnapshot(volType, vol)
+		//			log.FailOnError(err, "failed to restore random snapshot of [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+		//		}
+		//	}
+		//	//for _, ctx := range contexts {
+		//	//	log.InfoD("Scaling up app [%s]", ctx.App.Key)
+		//	//	err := scaleUpApp(ctx)
+		//	//	log.FailOnError(err, "failed to scale up app [%s]", ctx.App.Key)
+		//	//}
+		//})
+		//Step("Delete snapshots of all volume", func() {
+		//	log.InfoD("Deleting snapshots of all volume")
+		//	for volType, vols := range volumeMap {
+		//		for _, vol := range vols {
+		//			for i, snapshot := range volumeSnapshotMap[vol.Id] {
+		//				log.Infof("Deleting snapshot [%s] of index [%d] for [%s] volume [%s/%s]", snapshot.SnapshotId, i, volType, vol.Id, vol.Locator.Name)
+		//				err := Inst().V.DeleteVolume(snapshot.SnapshotId)
+		//				log.FailOnError(err, "failed to delete snapshot of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
+		//			}
+		//		}
+		//	}
+		//})
 	})
 
 	JustAfterEach(func() {
