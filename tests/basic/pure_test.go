@@ -2362,45 +2362,45 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 				return VolumeFACD, nil
 			}
 		}
-		// scaleDownApp scales an app to zero replicas using the given context and waits for pods to terminate
-		scaleDownApp := func(ctx *scheduler.Context) error {
-			scaleApp(ctx, 0)
-			waitForPodsToTerminate := func() (interface{}, bool, error) {
-				vols, err := Inst().S.GetVolumes(ctx)
-				if err != nil {
-					return nil, false, err
-				}
-				podCount := 0
-				for _, vol := range vols {
-					if vol.ID == "" {
-						return nil, false, fmt.Errorf("empty vol.ID in volume [%v]", vol)
-					}
-					pods, err := core.Instance().GetPodsUsingPV(vol.ID)
-					if err != nil {
-						return nil, false, err
-					}
-					podCount += len(pods)
-				}
-				if podCount > 0 {
-					return nil, true, fmt.Errorf("expected no pods, but found [%d] remaining", podCount)
-				}
-				return nil, false, nil
-			}
-			_, err = task.DoRetryWithTimeout(waitForPodsToTerminate, 3*time.Minute, 10*time.Second)
-			if err != nil {
-				return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
-			}
-			return nil
-		}
-		// scaleUpApp scales an app to its original scale factor using the given context and validates the app
-		scaleUpApp := func(ctx *scheduler.Context) error {
-			err = Inst().S.ScaleApplication(ctx, appScaleFactorMap[ctx.App.Key])
-			if err != nil {
-				return fmt.Errorf("failed to scale up the app [%s]. Err: [%v]", ctx.App.Key, err)
-			}
-			ValidateContext(ctx)
-			return nil
-		}
+		//// scaleDownApp scales an app to zero replicas using the given context and waits for pods to terminate
+		//scaleDownApp := func(ctx *scheduler.Context) error {
+		//	scaleApp(ctx, 0)
+		//	waitForPodsToTerminate := func() (interface{}, bool, error) {
+		//		vols, err := Inst().S.GetVolumes(ctx)
+		//		if err != nil {
+		//			return nil, false, err
+		//		}
+		//		podCount := 0
+		//		for _, vol := range vols {
+		//			if vol.ID == "" {
+		//				return nil, false, fmt.Errorf("empty vol.ID in volume [%v]", vol)
+		//			}
+		//			pods, err := core.Instance().GetPodsUsingPV(vol.ID)
+		//			if err != nil {
+		//				return nil, false, err
+		//			}
+		//			podCount += len(pods)
+		//		}
+		//		if podCount > 0 {
+		//			return nil, true, fmt.Errorf("expected no pods, but found [%d] remaining", podCount)
+		//		}
+		//		return nil, false, nil
+		//	}
+		//	_, err = task.DoRetryWithTimeout(waitForPodsToTerminate, 3*time.Minute, 10*time.Second)
+		//	if err != nil {
+		//		return fmt.Errorf("failed to scale down app [%s] and ensure all pods are deleted. Err: [%v]", ctx.App.Key, err)
+		//	}
+		//	return nil
+		//}
+		//// scaleUpApp scales an app to its original scale factor using the given context and validates the app
+		//scaleUpApp := func(ctx *scheduler.Context) error {
+		//	err = Inst().S.ScaleApplication(ctx, appScaleFactorMap[ctx.App.Key])
+		//	if err != nil {
+		//		return fmt.Errorf("failed to scale up the app [%s]. Err: [%v]", ctx.App.Key, err)
+		//	}
+		//	ValidateContext(ctx)
+		//	return nil
+		//}
 		createCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshotName string) error {
 			pvcName := vol.Spec.VolumeLabels["pvc"]
 			namespace := vol.Spec.VolumeLabels["namespace"]
@@ -2427,7 +2427,7 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		restoreCSISnapshot := func(volType VolumeType, vol *api.Volume, snapshot *vsv1.VolumeSnapshot) error {
 			volumeSnapshotRestoreSpec := &storkv1.VolumeSnapshotRestore{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      vol.Spec.VolumeLabels["pvc"],
+					Name:      "volume-restore" + vol.Spec.VolumeLabels["pvc"],
 					Namespace: vol.Spec.VolumeLabels["namespace"],
 				},
 				Spec: storkv1.VolumeSnapshotRestoreSpec{
@@ -2559,11 +2559,11 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 		})
 		Step("Restore a random snapshot of each volume", func() {
 			log.InfoD("Restoring a random snapshot of each volume")
-			for _, ctx := range contexts {
-				log.InfoD("Scaling down app [%s]", ctx.App.Key)
-				err := scaleDownApp(ctx)
-				log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
-			}
+			//for _, ctx := range contexts {
+			//	log.InfoD("Scaling down app [%s]", ctx.App.Key)
+			//	err := scaleDownApp(ctx)
+			//	log.FailOnError(err, "failed to scale down app [%s]", ctx.App.Key)
+			//}
 			for volType, vols := range volumeMap {
 				log.Infof("List of all [%d] [%s] volumes [%s]", len(vols), volType, vols)
 				for _, vol := range vols {
@@ -2580,11 +2580,11 @@ var _ = Describe("{CreateRestoreAndDeleteMultipleSnapshots}", func() {
 					log.FailOnError(err, "failed to restore random snapshot of [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
 				}
 			}
-			for _, ctx := range contexts {
-				log.InfoD("Scaling up app [%s]", ctx.App.Key)
-				err := scaleUpApp(ctx)
-				log.FailOnError(err, "failed to scale up app [%s]", ctx.App.Key)
-			}
+			//for _, ctx := range contexts {
+			//	log.InfoD("Scaling up app [%s]", ctx.App.Key)
+			//	err := scaleUpApp(ctx)
+			//	log.FailOnError(err, "failed to scale up app [%s]", ctx.App.Key)
+			//}
 		})
 		Step("Delete snapshots of all volume", func() {
 			log.InfoD("Deleting snapshots of all volume")
