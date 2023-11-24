@@ -5268,11 +5268,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		defer func() {
 			done <- true
 			close(done)
-			select {
-			case err := <-errorChan:
-				log.InfoD("Errors in poolstatus check: %v", err.Error())
-			default:
-			}
 			close(errorChan)
 			log.Infof("Closed both the channels")
 		}()
@@ -5394,7 +5389,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			wg.Wait()
 
 			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
-
+			dash.VerifyFatal(len(errorChan) == 0, true, fmt.Sprintf("errored while expanding pool in poolstatuschecker[%v]", <-errorChan))
 		}
 	})
 
