@@ -5324,6 +5324,8 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					poolsToBeUpdated []string
 				)
 				maxReplicaFactor = 3
+				poolsToBeUpdated = nil
+				nodesToBeUpdated = nil
 
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
 				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
@@ -5332,8 +5334,16 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				opts := volume.Options{
 					ValidateReplicationUpdateTimeout: replicationUpdateTimeout,
 				}
-				poolsToBeUpdated = append(poolsToBeUpdated, rebootPoolID)
+
 				if currRepFactor == 3 {
+					//check if volume is in the pool
+					poolIds, err := GetPoolIDsFromVolName(vol.Name)
+					log.FailOnError(err, "Failed to get pool IDs from volume name")
+					for _, poolId := range poolIds {
+						if poolId == rebootPoolID {
+							poolsToBeUpdated = append(poolsToBeUpdated, rebootPoolID)
+						}
+					}
 					newRepl := currRepFactor - 1
 					err = Inst().V.SetReplicationFactor(vol, newRepl, nodesToBeUpdated, poolsToBeUpdated, true, opts)
 					if err != nil {
@@ -5431,6 +5441,8 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 				}
 			}
 		}
+		log.Infof("poolstatuschecker Sleeping for 20 seconds")
+		time.Sleep(20 * time.Second)
 	}
 }
 
