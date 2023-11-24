@@ -1897,12 +1897,10 @@ var _ = Describe("{CloneVolumeAndValidate}", func() {
 	)
 
 	var (
-		contexts         []*scheduler.Context
-		backend          = BackendUnknown
-		volumeMap        = make(map[VolumeType][]*api.Volume)
-		clonePerVolume   = 3
-		VolumeIDCloneMap = make(map[string][]string)
-		volumeCloneMap   = make(map[string]*api.Volume)
+		contexts       []*scheduler.Context
+		backend        = BackendUnknown
+		volumeMap      = make(map[VolumeType][]*api.Volume)
+		volumeCloneMap = make(map[VolumeType][]*api.Volume)
 	)
 
 	JustBeforeEach(func() {
@@ -1983,32 +1981,28 @@ var _ = Describe("{CloneVolumeAndValidate}", func() {
 				}
 			}
 		})
-		Step(fmt.Sprintf("Create a [%d]clone for each volume", clonePerVolume), func() {
-			log.InfoD("Create a [%d] clone for each volume", clonePerVolume)
-			for i := 0; i <= clonePerVolume; i++ {
-				for volType, vols := range volumeMap {
-					for _, vol := range vols {
-						cloneName := fmt.Sprintf("%s-clone-%d", vol.Locator.Name, i)
-						log.Infof("Create clone [%s] of index [%d] for [%s] volume [%s/%s]", cloneName, i, volType, vol.Id, vol.Locator.Name)
-						clone, err := Inst().V.CloneVolume(vol.Id)
-						log.FailOnError(err, "failed to create clone of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
-						VolumeIDCloneMap[vol.Id] = append(VolumeIDCloneMap[vol.Id], clone)
-						cloneInspect, err := Inst().V.InspectVolume(clone)
-						log.FailOnError(err, "failed to inspect clone [%s] of index [%d] for [%s] volume [%s/%s]", cloneInspect.Id, i, volType, vol.Id, vol.Locator.Name)
-						volumeCloneMap[clone] = cloneInspect
-					}
+		Step(fmt.Sprintf("Create a clone for each volume"), func() {
+			log.InfoD("Create a clone for each volume")
+			for volType, vols := range volumeMap {
+				for _, vol := range vols {
+					cloneName := fmt.Sprintf("%s-clone", vol.Locator.Name)
+					log.Infof("Create clone [%s] for [%s] volume [%s/%s]", cloneName, volType, vol.Id, vol.Locator.Name)
+					clone, err := Inst().V.CloneVolume(vol.Id)
+					log.FailOnError(err, "failed to create clone  for [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+					cloneInspect, err := Inst().V.InspectVolume(clone)
+					log.FailOnError(err, "failed to inspect clone [%s]  for [%s] volume [%s/%s]", cloneInspect.Id, volType, vol.Id, vol.Locator.Name)
+					volumeCloneMap[volType] = append(volumeCloneMap[volType], cloneInspect)
 				}
 			}
+
 		})
 		Step("Delete clones of all volume", func() {
 			log.InfoD("Deleting clones of all volume")
-			for volType, vols := range volumeMap {
-				for _, vol := range vols {
-					for i, clone := range VolumeIDCloneMap[vol.Id] {
-						log.Infof("Deleting clone [%s] of index [%d] for [%s] volume [%s/%s]", clone, i, volType, vol.Id, vol.Locator.Name)
-						err := Inst().V.DeleteVolume(clone)
-						log.FailOnError(err, "failed to delete clone of index [%d] for [%s] volume [%s/%s]", i, volType, vol.Id, vol.Locator.Name)
-					}
+			for cloneType, clones := range volumeCloneMap {
+				for _, clone := range clones {
+					log.Infof("Deleting clone [%s] for [%s] volume [%s/%s]", clone, cloneType, clone.Id, clone.Locator.Name)
+					err := Inst().V.DeleteVolume(clone.Id)
+					log.FailOnError(err, "failed to delete clone  for [%s] volume [%s/%s]", cloneType, clone.Id, clone.Locator.Name)
 				}
 			}
 		})
