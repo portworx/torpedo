@@ -361,7 +361,7 @@ func RestoreAndValidateConfiguration(ns string, deployment *pds.ModelsDeployment
 }
 
 func ResizeDataserviceStorage(deployment *pds.ModelsDeployment, namespace string, resourceTemplate string) (bool, error) {
-	log.Debugf("I HAVE ENTERED INTO UpdateDeploymentResourceConfig")
+	log.Debugf("Starting to resize the storage and UpdateDeploymentResourceConfig")
 	var (
 		resourceTemplateId string
 		cpuLimits          int64
