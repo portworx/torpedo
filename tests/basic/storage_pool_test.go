@@ -5351,7 +5351,9 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					}
 				}
 				// Change Replica sets of each volumes created to 3
-
+				if len(poolsToBeUpdated) == 0 {
+					poolsToBeUpdated = append(poolsToBeUpdated, rebootPoolID)
+				}
 				err = Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
 					nodesToBeUpdated, poolsToBeUpdated, true, opts)
 				if err != nil {
