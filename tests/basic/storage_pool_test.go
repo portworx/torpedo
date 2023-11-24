@@ -5265,6 +5265,17 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 		contexts = make([]*scheduler.Context, 0)
 		done := make(chan bool)
 		errorChan := make(chan error)
+		defer func() {
+			done <- true
+			close(done)
+			select {
+			case err := <-errorChan:
+				log.InfoD("Errors in poolstatus check: %v", err.Error())
+			default:
+			}
+			close(errorChan)
+			log.Infof("Closed both the channels")
+		}()
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volresyncresizepool-%d", i))...)
@@ -5318,8 +5329,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 					poolsToBeUpdated []string
 				)
 				maxReplicaFactor = 3
-				nodesToBeUpdated = nil
-				poolsToBeUpdated = nil
 
 				log.InfoD("setting replication factor of the volume [%v] with ID [%v]", vol.Name, vol.ID)
 				currRepFactor, err := Inst().V.GetReplicationFactor(vol)
@@ -5369,7 +5378,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 				}(eachVol)
 			}
 
-			log.InfoD("Waiting till Volume is In Resync Mode ")
+			log.InfoD("Waiting till Volume is In Resync Mode")
 			if WaitTillVolumeInResync(randomVolIDs) == false {
 				log.InfoD("Failed to get Volume in Resync state [%s]", randomVolIDs)
 			}
@@ -5384,15 +5393,6 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 			poolExpandLock.Unlock()
 			wg.Wait()
 
-			done <- true
-			close(done)
-			select {
-			case err := <-errorChan:
-				log.InfoD("Errors in poolstatus check: %v", err.Error())
-			default:
-			}
-			close(errorChan)
-			log.Infof("Closed both the channels")
 			dash.VerifyFatal(len(error_array) == 0, true, fmt.Sprintf("errored while setting replication on volumes [%v]", error_array))
 
 		}
@@ -5404,7 +5404,7 @@ var _ = Describe("{PoolResizeVolumesResync}", func() {
 	})
 })
 
-// This function checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
+// poolStatusChecker checks for pool status on selectedNode and when the pool goes offline it will expand the pool with ID poolID with the given type of expand and to expected size
 func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node.Node, PoolID string, expectedSize uint64, isjournal bool, poolExpandLock *sync.Mutex) {
 	defer GinkgoRecover()
 	for {
@@ -5427,7 +5427,6 @@ func poolStatusChecker(done *chan bool, errorChan *chan error, selectedNode node
 								*errorChan <- err
 								resizeErr := waitForPoolToBeResized(expectedSize, PoolID, isjournal)
 								*errorChan <- resizeErr
-								time.Sleep(30 * time.Second)
 								poolExpandLock.Unlock()
 							} else {
 								log.Infof("pool %v is already expanding ", poolIDToResize)
