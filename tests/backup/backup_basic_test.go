@@ -151,6 +151,7 @@ func BackupInitInstance() {
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
+	log.Infof("Kubeconfigs - [%+v]", kubeconfigList)
 	DumpKubeconfigs(kubeconfigList)
 	GlobalGkeSecretString, err = GetGkeSecret()
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {

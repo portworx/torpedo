@@ -421,7 +421,7 @@ var (
 	contextsCreated                      []*scheduler.Context
 	CurrentClusterConfigPath             = ""
 	clusterProvider                      = "aws"
-	additional_clusters                  = 0
+	additional_clusters                  = 3
 )
 
 var (
@@ -3977,6 +3977,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
+    log.Infof("Kube config list [%v]", kubeconfigList)
 	// Validate user has provided at least 2 kubeconfigs for source and destination cluster
 	if len(kubeconfigList) < 2 {
 		return fmt.Errorf("minimum 2 kubeconfigs are required for source and destination cluster")
@@ -4004,6 +4005,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 
 	for cluster_index := 0; cluster_index < additional_clusters; cluster_index++ {
 		cluster_name := AdditionalClusterNamePrefix + "-" + strconv.Itoa(cluster_index)
+		log.Infof("Setting cluster path for [%d]", cluster_name)
 		additionalClusterConfigPath, err := GetAdditionalClusterConfigPath(cluster_index + 2)
 		if err != nil {
 			return err
@@ -5850,6 +5852,7 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 		return err
 	}
 	log.Infof("Get over kubeconfig list %v", kubeconfigList)
+	log.Infof("Kubeconfigs - [%+v]", kubeconfigList)
 	for _, kubeconfig := range kubeconfigList {
 		config := cm.Data[kubeconfig]
 		if len(config) == 0 {
