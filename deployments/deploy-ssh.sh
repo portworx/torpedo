@@ -727,6 +727,8 @@ spec:
       value: "${VCLUSTER_TOTAL_ITERATIONS}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
+    - name: DB_PASSWORD
+      value: "${DB_PASSWORD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

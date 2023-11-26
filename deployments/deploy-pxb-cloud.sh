@@ -693,6 +693,8 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: DB_PASSWORD
+      value: "${DB_PASSWORD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

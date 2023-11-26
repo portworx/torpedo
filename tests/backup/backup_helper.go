@@ -5559,3 +5559,65 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	}
 	return nil
 }
+
+// CreateMysqlDatabase creates a mysql database with the name passed in parameter
+func CreateMysqlDatabase(podName string, namespace string, kubeConfigFile string, databaseName string) error {
+
+	// Get database password from env
+	dbPassword := os.Getenv("DB_PASSWORD")
+
+	// run the mysql query
+	_, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v exec %s -n %s -it -- mysql -u root -p%s -e 'CREATE DATABASE IF NOT EXISTS %s;'", kubeConfigFile, podName, namespace, dbPassword, databaseName)})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateMysqlTables creates a mysql table in the database with the name passed in parameter
+func CreateMysqlTables(podName string, namespace string, kubeConfigFile string, databaseName string, tableName string, tableStruct string) error {
+
+	// Get database password from env
+	dbPassword := os.Getenv("DB_PASSWORD")
+
+	// run the mysql query
+	_, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v exec %s -n %s -it -- mysql -u root -p%s  --database=name %s -e 'Create TABLE IF NOT EXISTS %s (%s);'", kubeConfigFile, podName, namespace, dbPassword, databaseName, tableName, tableStruct)})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateMysqlInsert inserts data into a mysql table on a specific databases
+func CreateMysqlInsert(podName string, namespace string, kubeConfigFile string, databaseName string, tableName string, tableStruct string, values string) error {
+
+	// Get database password from env
+	dbPassword := os.Getenv("DB_PASSWORD")
+
+	// run the mysql query
+	_, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v exec %s -n %s -it -- mysql -u root -p%s  --database=name %s -e 'INSERT INTO %s (%s) VALUES(%s);'", kubeConfigFile, podName, namespace, dbPassword, databaseName, tableName, tableStruct, values)})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetRowCount inserts data into a mysql table on a specific databases
+func GetRowCount(podName string, namespace string, kubeConfigFile string, databaseName string, tableName string) (int, error) {
+
+	// Get database password from env
+	dbPassword := os.Getenv("DB_PASSWORD")
+
+	// run the mysql query
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v exec %s -n %s -it -- mysql -u root -p%s --skip-column-names -s --database=name %s  -e 'SELECT COUNT(*) FROM %s;' tail -n 1", kubeConfigFile, podName, namespace, dbPassword, databaseName, tableName)})
+	if err != nil {
+		return -1, err
+	}
+
+	// Convert string output to int
+	numOfRows, err := strconv.Atoi(output)
+	if err != nil {
+		return -1, err
+	}
+	return numOfRows, nil
+}
