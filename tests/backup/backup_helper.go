@@ -1510,10 +1510,11 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string, ig
 					break
 				}
 			}
+			if flag {
+				continue
+			}
 		}
-		if flag {
-			continue
-		}
+
 		log.Infof("Deleting pod %s with label %v", pod.GetName(), label)
 		err = core.Instance().DeletePod(pod.GetName(), namespace, false)
 		if err != nil {
