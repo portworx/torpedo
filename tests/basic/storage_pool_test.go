@@ -9888,7 +9888,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				log.FailOnError(err, "error in getting pool with IO with error")
 				if drvs, ok := drvMap[fmt.Sprintf("%d", poolListForOps[i].ID)]; ok {
 					maxDrivesAllowed = POOL_MAX_CLOUD_DRIVES - len(drvs)
-					numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
+					numofDrivesInNode, err := GetNumOfDrivesInNode(selectedNode)
+					log.FailOnError(err, "failed to get number of drives in node")
 					//check if drives added  to pool will more than permissible for the node
 					if (int(maxDriveLimit) - numofDrivesInNode) > maxDrivesAllowed {
 						selectedPool = poolListForOps[i]
@@ -9931,7 +9932,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 				poolList, err := GetPoolsDetailsOnNode(node)
 				log.FailOnError(err, "failed while getting updated node pool list")
 				poolLeft := maxPoolLength - len(poolList)
-				numofDrivesInNode := GetNumOfDrivesInNode(selectedNode)
+				numofDrivesInNode, err := GetNumOfDrivesInNode(selectedNode)
+				log.FailOnError(err, "failed to get number of drives in node")
 				if poolLeft < int(maxDriveLimit)-numofDrivesInNode {
 					selectedNode = node
 					break
@@ -9956,7 +9958,8 @@ var _ = Describe("{AddDriveBeyondMaxSupported}", func() {
 			poolLeft := maxPoolLength - len(poolList)
 			err = addNewPools(selectedNode, poolLeft)
 			//get the number of available drives in the node
-			drvNumInt := GetNumOfDrivesInNode(selectedNode)
+			drvNumInt, err := GetNumOfDrivesInNode(selectedNode)
+			log.FailOnError(err, "failed to get number of drives in node")
 			maxDriveLimitInt := int(maxDriveLimit)
 			maxDriveAllowed := maxDriveLimitInt - (drvNumInt + 1)
 			err = Inst().V.RefreshDriverEndpoints()
