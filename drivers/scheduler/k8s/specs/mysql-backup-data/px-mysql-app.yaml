@@ -34,19 +34,49 @@ spec:
       initContainers:
         - name: init-mysql-1
           image: busybox
-          command: ['sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql/mysql-test-dd-2 bs=1M count=17066']
+          command:
+            - 'sh'
+            - '-c'
+            - |
+              if [ ! -e /var/lib/mysql/init-complete ]; then
+                # Your initialization commands go here
+                dd if=/dev/urandom of=/var/lib/mysql/mysql-test-dd-2 bs=1M count=17066
+
+                # Create a marker file to indicate completion
+                touch /var/lib/mysql/init-complete
+              fi
           volumeMounts:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
         - name: init-mysql-2
           image: busybox
-          command: ['sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql-aggr/mysql-test-dd-2 bs=1M count=3072']
+          command:
+            - 'sh'
+            - '-c'
+            - |
+              if [ ! -e /var/lib/mysql/init-complete ]; then
+                # Your initialization commands go here
+                dd if=/dev/urandom of=/var/lib/mysql-aggr/mysql-test-dd-2 bs=1M count=3072
+
+                # Create a marker file to indicate completion
+                touch /var/lib/mysql/init-complete
+              fi
           volumeMounts:
             - name: mysql-persistent-storage-aggr
               mountPath: /var/lib/mysql-aggr
         - name: init-mysql-3
           image: busybox
-          command: ['sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql-seq/mysql-test-dd-2 bs=1M count=3072']
+          command:
+            - 'sh'
+            - '-c'
+            - |
+              if [ ! -e /var/lib/mysql/init-complete ]; then
+                # Your initialization commands go here
+                dd if=/dev/urandom of=/var/lib/mysql-seq/mysql-test-dd-2 bs=1M count=3072
+
+                # Create a marker file to indicate completion
+                touch /var/lib/mysql/init-complete
+              fi
           volumeMounts:
             - name: mysql-persistent-storage-seq
               mountPath: /var/lib/mysql-seq
