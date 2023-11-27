@@ -2,6 +2,11 @@ package tests
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -16,10 +21,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
-	"os"
-	"strings"
-	"testing"
-	"time"
 )
 
 // TestcaseAuthor List
@@ -151,7 +152,6 @@ func BackupInitInstance() {
 	dash.VerifyFatal(kubeconfigs != "", true, "Getting KUBECONFIGS Environment variable")
 	kubeconfigList := strings.Split(kubeconfigs, ",")
 	dash.VerifyFatal(len(kubeconfigList) < 2, false, "minimum 2 kubeconfigs are required for source and destination cluster")
-	log.Infof("Kubeconfigs - [%+v]", kubeconfigList)
 	DumpKubeconfigs(kubeconfigList)
 	GlobalGkeSecretString, err = GetGkeSecret()
 	if os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderRke {

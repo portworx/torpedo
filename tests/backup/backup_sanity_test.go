@@ -210,6 +210,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
+			// Setting Additional Cluster Indexes
+			AdditionalClusters = append(AdditionalClusters, 0, 1, 3)
+
 			err = CreateApplicationClusters(orgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
 
@@ -224,6 +227,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+
 		})
 
 		// Step("Taking backup of application from source cluster", func() {
