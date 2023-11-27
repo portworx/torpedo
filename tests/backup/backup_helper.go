@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -43,6 +44,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -148,6 +150,7 @@ var (
 	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
 	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+	wg                         sync.WaitGroup
 )
 
 type userRoleAccess struct {
@@ -5558,4 +5561,206 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 		log.Infof("Kubevirt workload upgrade completed from [%s] to [%s]", current, versionToUpgrade)
 	}
 	return nil
+}
+
+// UpdateKDMPConfigMap update the KDMP configMap with give data key and value.
+func UpdateKDMPConfigMap(dataKey string, dataValue string) error {
+	KDMPconfigMap, err := core.Instance().GetConfigMap("kdmp-config", "kube-system")
+	if err != nil {
+		return err
+	}
+	KDMPconfigMap.Data[dataKey] = dataValue
+	_, err = core.Instance().UpdateConfigMap(KDMPconfigMap)
+	if err != nil {
+		return err
+	}
+	log.Infof("updated the KDMP configMap data with key [%s]: value [%s]", dataKey, dataValue)
+	return nil
+}
+
+func createNestedDirectoriesWithFiles(podName, podNamespace, basePath string, depth, levels, filesPerDirectory int) error {
+
+	var errChan = make(chan error)
+
+	for i := 0; i < depth; i++ {
+		dirPath := filepath.Join(basePath, fmt.Sprintf("level_%d", i))
+		err := createDirectory(podName, podNamespace, dirPath)
+		if err != nil {
+			fmt.Printf("Error creating directory %s: %s\n", dirPath, err.Error())
+			continue
+		}
+		if levels > 1 {
+			wg.Add(1)
+			go func(dirPath string) {
+				defer wg.Done()
+				errChan <- createDirWorker(podName, podNamespace, dirPath, depth, levels-1, filesPerDirectory)
+			}(dirPath)
+		}
+
+	}
+	if filesPerDirectory != 0 {
+		err := createFiles(podName, podNamespace, basePath, filesPerDirectory)
+		if err != nil {
+			return fmt.Errorf("error creating files in %s: %s", basePath, err.Error())
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	for err := range errChan {
+		if err != nil {
+			return fmt.Errorf("error creating nested directories: %s", err.Error())
+		}
+	}
+
+	return nil
+}
+
+func createDirWorker(podName, podNamespace, basePath string, depth, levels, filesPerDirectory int) error {
+	for i := 0; i < depth; i++ {
+		dirPath := filepath.Join(basePath, fmt.Sprintf("level_%d", i))
+		err := createDirectory(podName, podNamespace, dirPath)
+		if err != nil {
+			fmt.Printf("Error creating directory %s: %s\n", dirPath, err.Error())
+			continue
+		}
+
+		if levels > 1 {
+			err := createDirWorker(podName, podNamespace, dirPath, depth, levels-1, filesPerDirectory)
+			if err != nil {
+				return fmt.Errorf("error creating nested directories: %s", err.Error())
+			}
+		} else {
+			err := createFiles(podName, podNamespace, dirPath, filesPerDirectory)
+			if err != nil {
+				return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+func createDirectory(podName, podNamespace, dirPath string) error {
+	cmd := fmt.Sprintf("mkdir -p %s ", dirPath)
+	return WriteToPod(podName, podNamespace, cmd)
+}
+
+func createFiles(podName, podNameSpace, dirPath string, filesPerLevel int) error {
+	for i := 1; i <= filesPerLevel; i++ {
+		filePath := filepath.Join(dirPath, fmt.Sprintf("file%d.txt", i))
+		content := fmt.Sprintf("This is file %d in directory %s", i, dirPath)
+		cmd := fmt.Sprintf("echo \"%s\" > %s", content, filePath)
+		err := WriteToPod(podName, podNameSpace, cmd)
+		if err != nil {
+			return fmt.Errorf("error creating file %s: %s", filePath, err.Error())
+		}
+	}
+	return nil
+}
+
+func WriteToPod(podName, podNamespace, cmd string) error {
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("%s", cmd)}
+	command := exec.Command("kubectl", cmdArgs...)
+	out, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to write data to pod: %s. Output: %s", err, out)
+	}
+	return nil
+}
+
+func GetVolumeMountPath(namespace string, labelSelectors map[string]string) ([]string, error) {
+	pods, err := core.Instance().GetPods(namespace, labelSelectors)
+	pathList := make([]string, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods.Items {
+		containerPaths := schedops.GetContainerPVCMountMap(pod)
+		for containerName, paths := range containerPaths {
+			log.Infof(fmt.Sprintf("containerName:%s,paths: %s ", containerName, paths))
+			pathList = append(pathList, paths...)
+		}
+	}
+	return pathList, nil
+}
+
+func fetchFilesAndDirectoriesFromPod(podName, podNamespace, mountPath string, excludeDirectory string) ([]string, error) {
+	fileDirectoryList := make([]string, 0)
+	cmdArgs := []string{"exec", "-it", podName, "-n", podNamespace, "--", "/bin/sh", "-c", fmt.Sprintf("find %s -path %s -prune -o -type f,d -print", mountPath, excludeDirectory)}
+	command := exec.Command("kubectl", cmdArgs...)
+	output, err := command.CombinedOutput()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch file and directories from pod: %s. Output: %s", err, string(output))
+	}
+
+	filesWithAbsolutePaths := strings.Split(string(output), "\n")
+	// Unwanted error strings or patterns to filter out
+	unwantedPatterns := []string{"Unable to use a TTY - input is not a terminal or the right kind of file"}
+
+	for _, filePath := range filesWithAbsolutePaths {
+		if filePath != "" && filePath != excludeDirectory {
+			includePath := true
+			for _, pattern := range unwantedPatterns {
+				if strings.Contains(filePath, pattern) {
+					includePath = false
+					break
+				}
+			}
+			if includePath {
+				relativePath := strings.TrimPrefix(filePath, mountPath)
+				fileDirectoryList = append(fileDirectoryList, strings.TrimLeft(relativePath, "/"))
+			}
+		}
+	}
+
+	return fileDirectoryList, nil
+}
+
+func getRandomDirsAndFiles(filePaths []string, numDirs, numFiles int) ([]string, []string, error) {
+
+	shuffledPaths := make([]string, len(filePaths))
+	copy(shuffledPaths, filePaths)
+	rand.Shuffle(len(shuffledPaths), func(i, j int) {
+		shuffledPaths[i], shuffledPaths[j] = shuffledPaths[j], shuffledPaths[i]
+	})
+
+	var selectedDirs []string
+	var selectedFiles []string
+
+	for _, path := range shuffledPaths {
+		if len(selectedDirs) >= numDirs && len(selectedFiles) >= numFiles {
+			break
+		}
+
+		if isDirectory(path) {
+			if len(selectedDirs) < numDirs {
+				selectedDirs = append(selectedDirs, path)
+			}
+		} else {
+			if len(selectedFiles) < numFiles {
+				selectedFiles = append(selectedFiles, path)
+			}
+		}
+	}
+
+	return selectedDirs, selectedFiles, nil
+}
+
+func isDirectory(path string) bool {
+	return !strings.Contains(path, "/file")
+}
+
+func generateFormattedString(storageClasses map[string][]string) string {
+	var formattedStrings []string
+	for storageClassName, paths := range storageClasses {
+		// Join formatted paths for this storage class using comma as separator
+		formattedString := fmt.Sprintf("%s=%s", storageClassName, strings.Join(paths, ","))
+		formattedStrings = append(formattedStrings, formattedString)
+	}
+
+	// Join formatted strings for all storage classes using comma as separator
+	return strings.Join(formattedStrings, ",")
 }
