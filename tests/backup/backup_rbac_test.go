@@ -93,17 +93,12 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			nsLabelsMap = GenerateRandomLabels(2)
 			err := AddLabelsToMultipleNamespaces(nsLabelsMap, bkpNamespaces)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v] for infra admin validation", nsLabelsMap, bkpNamespaces))
-			nsLabelsMapCustomUser = GenerateRandomLabels(2)
-			err = AddLabelsToMultipleNamespaces(nsLabelsMapCustomUser, bkpNamespaces)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v] for custom user validation ", nsLabelsMapCustomUser, bkpNamespaces))
 		})
 
 		Step("Generating namespace label string from label map for namespaces", func() {
 			log.InfoD("Generating namespace label string from label map for namespaces")
 			nsLabelString = MapToKeyValueString(nsLabelsMap)
 			log.Infof("label string for namespaces %s", nsLabelString)
-			nsLabelStringCustomUser = MapToKeyValueString(nsLabelsMapCustomUser)
-			log.Infof("label string for namespaces %s", nsLabelStringCustomUser)
 		})
 
 		Step(fmt.Sprintf("Create a user with %s role", infraAdminRole), func() {
@@ -477,6 +472,19 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 				err = CreateBackupLocationWithContext(provider, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], cloudCredentialNameMap[customUser], cloudCredentialUIDMap[customUser], getGlobalBucketName(provider), orgID, "", nonAdminCtx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup location %s using provider %s for the custom user [%s]", backupLocationNameMap[customUser], provider, customUser))
 			}
+		})
+
+		Step("Adding labels to namespaces for custom user", func() {
+			log.InfoD("Adding labels to namespaces for custom user")
+			nsLabelsMapCustomUser = GenerateRandomLabels(2)
+			err = AddLabelsToMultipleNamespaces(nsLabelsMapCustomUser, bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v] for custom user validation ", nsLabelsMapCustomUser, bkpNamespaces))
+		})
+
+		Step("Generating namespace label string from label map for namespaces", func() {
+			log.InfoD("Generating namespace label string from label map for namespaces")
+			nsLabelStringCustomUser = MapToKeyValueString(nsLabelsMapCustomUser)
+			log.Infof("label string for namespaces %s", nsLabelStringCustomUser)
 		})
 
 		Step(fmt.Sprintf("Verify custom user has permission to create a schedule policy"), func() {
