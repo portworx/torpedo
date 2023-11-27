@@ -34,7 +34,7 @@ spec:
       initContainers:
         - name: init-mysql
           image: busybox  # You can use a minimal image for this task
-          command: ['sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql/mysql-test-dd-2 bs=1M count=17066']
+          command: ['sh', '-c', 'dd if=/dev/urandom of=/var/lib/mysql/mysql-test-dd-2 bs=1M count=17066 && dd if=/dev/urandom of=/var/lib/mysql-aggr/mysql-test-dd-2 bs=1M count=10240 && dd if=/dev/urandom of=/var/lib/mysql-seq/mysql-test-dd-2 bs=1M count=10240']
           volumeMounts:
             - name: mysql-persistent-storage
               mountPath: /var/lib/mysql
