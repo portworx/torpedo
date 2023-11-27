@@ -46,8 +46,8 @@ var (
 // GetContext return context for api call.
 func GetContext() (context.Context, error) {
 	var token string
-	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
-	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	testName := strings.Split(currentSpecReport.FullText(), " ")[0]
 	serviceIdFlag := customParams.ReturnServiceIdentityFlag()
 	PDSControlPlaneURL := os.Getenv("CONTROL_PLANE_URL")
 	endpointURL, err := url.Parse(PDSControlPlaneURL)
