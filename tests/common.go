@@ -5878,7 +5878,6 @@ func dumpKubeConfigs(configObject string, kubeconfigList []string) error {
 		return err
 	}
 	log.Infof("Get over kubeconfig list %v", kubeconfigList)
-	log.Infof("Kubeconfigs - [%+v]", kubeconfigList)
 	for _, kubeconfig := range kubeconfigList {
 		config := cm.Data[kubeconfig]
 		if len(config) == 0 {
