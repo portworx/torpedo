@@ -1478,7 +1478,12 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string, ig
 	var err error
 	// TODO: Revisit this function and remove the below code if not needed
 	podList := func() (interface{}, bool, error) {
-		pods, err = core.Instance().GetPods(namespace, label)
+		if ignoreLabel {
+			nolabel := make(map[string]string)
+			pods, err = core.Instance().GetPods(namespace, nolabel)
+		} else {
+			pods, err = core.Instance().GetPods(namespace, label)
+		}
 		if err != nil {
 			if strings.Contains(err.Error(), "no pod found with the label") {
 				return "", true, fmt.Errorf("waiting for pod with the given label %v to come up in namespace %s", label, namespace)
@@ -1497,16 +1502,26 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string, ig
 	}
 
 	// fetch the newest set of pods post wait for pods to come up
-	pods, err = core.Instance().GetPods(namespace, label)
+	if ignoreLabel {
+		nolabel := make(map[string]string)
+		pods, err = core.Instance().GetPods(namespace, nolabel)
+	} else {
+		pods, err = core.Instance().GetPods(namespace, label)
+	}
 	if err != nil {
 		return err
 	}
 	for _, pod := range pods.Items {
 		flag := false
 		if ignoreLabel {
-			for _, podlabel := range label {
-				if IsPresent(pod.GetLabels(), podlabel) {
-					flag = true
+			for key, podlabel := range label {
+				for key2, podlabel2 := range pod.GetLabels() {
+					if key == key2 && podlabel2 == podlabel {
+						flag = true
+						break
+					}
+				}
+				if flag {
 					break
 				}
 			}
