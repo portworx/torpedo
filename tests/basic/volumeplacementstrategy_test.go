@@ -108,7 +108,7 @@ var _ = Describe("{VolumePlacementStrategyFunctional}", func() {
 	AfterEach(func() {
 		Step("destroy apps", func() {
 			log.InfoD("destroying apps")
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				log.InfoD("not destroying apps because the test failed\n")
 				return
 			}

@@ -213,11 +213,11 @@ func (mf *MyFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		funcName = funcName[subIndex+1:]
 	}
 
-	// TODO: Once we migrate to ginkgo v2, we can extract test name as follows:
-	// report := CurrentSpecReport()
-	// testName := report.ContainerHierarchyTexts[0]
-	report := CurrentGinkgoTestDescription()
-	testName := strings.Split(report.FullTestText, " ")[0]
+	report := CurrentSpecReport()
+	testName := ""
+	if len(report.ContainerHierarchyTexts) > 0 {
+		testName = report.ContainerHierarchyTexts[0]
+	}
 	if testName != "" {
 		writeString = fmt.Sprintf("%s:[%s] [%s] %s\n",
 			entry.Time.Format("2006-01-02 15:04:05 -0700"), level, testName,
