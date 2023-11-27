@@ -50,6 +50,8 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 		mutex                           sync.Mutex
 		nsLabelsMap                     map[string]string
 		nsLabelString                   string
+		nsLabelsMapCustomUser           map[string]string
+		nsLabelStringCustomUser         string
 		manualBackupWithLabel           string
 		restoreForManualBackupWithLabel string
 		srcClusterUid                   string
@@ -90,13 +92,18 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			log.InfoD("Adding labels to namespaces")
 			nsLabelsMap = GenerateRandomLabels(2)
 			err := AddLabelsToMultipleNamespaces(nsLabelsMap, bkpNamespaces)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v]", nsLabelsMap, bkpNamespaces))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v] for infra admin validation", nsLabelsMap, bkpNamespaces))
+			nsLabelsMapCustomUser = GenerateRandomLabels(2)
+			err = AddLabelsToMultipleNamespaces(nsLabelsMapCustomUser, bkpNamespaces)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding labels [%v] to namespaces [%v] for custom user validation ", nsLabelsMapCustomUser, bkpNamespaces))
 		})
 
 		Step("Generating namespace label string from label map for namespaces", func() {
 			log.InfoD("Generating namespace label string from label map for namespaces")
 			nsLabelString = MapToKeyValueString(nsLabelsMap)
 			log.Infof("label string for namespaces %s", nsLabelString)
+			nsLabelStringCustomUser = MapToKeyValueString(nsLabelsMapCustomUser)
+			log.Infof("label string for namespaces %s", nsLabelStringCustomUser)
 		})
 
 		Step(fmt.Sprintf("Create a user with %s role", infraAdminRole), func() {
@@ -537,16 +544,18 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreNameMap[customUser], backupNameMap[customUser]))
 		})
 
-		Step("Validate taking manual backup of applications with namespace label", func() {
-			log.InfoD("Validate taking manual backup of applications with namespace label")
+		Step("Validate taking manual backup of applications with namespace label for custom user", func() {
+			log.InfoD("Validate taking manual backup of applications with namespace  for custom user")
 			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			manualBackupWithLabel = fmt.Sprintf("%s-%v", "customuser", RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateBackupWithNamespaceLabelWithValidation(nonAdminCtx, manualBackupWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
-				nil, orgID, userClusterMap[customUser][SourceClusterName], "", "", "", "", nsLabelString)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with labels [%s]", manualBackupWithLabel, nsLabelString))
+				nil, orgID, userClusterMap[customUser][SourceClusterName], "", "", "", "", nsLabelStringCustomUser)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup [%s] creation with labels [%s]", manualBackupWithLabel, nsLabelStringCustomUser))
 			customUserLabelledBackupNames = append(customUserLabelledBackupNames, manualBackupWithLabel)
+			err = NamespaceLabelBackupSuccessCheck(manualBackupWithLabel, nonAdminCtx, bkpNamespaces, nsLabelStringCustomUser)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespaces [%v] are backed up, and check if labels [%s] are applied to backups [%s]", bkpNamespaces, nsLabelStringCustomUser, manualBackupWithLabel))
 		})
 
 		Step("Validate restoring manual backup of applications with namespace label", func() {
@@ -560,18 +569,20 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			customUserLabelledRestoreNames = append(customUserLabelledRestoreNames, restoreForManualBackupWithLabel)
 		})
 
-		Step("Validate creating scheduled backup with namespace label", func() {
-			log.InfoD("Validate creating scheduled backup with namespace label")
+		Step("Validate creating scheduled backup with namespace label for custom user", func() {
+			log.InfoD("Validate creating scheduled backup with namespace label for custom user")
 			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
-				nil, orgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser])
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelString))
+				nil, orgID, "", "", "", "", nsLabelStringCustomUser, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser])
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelStringCustomUser))
 			err = suspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyNameMap[customUser], orgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, customUser))
 			customUserLabelledBackupNames = append(customUserLabelledBackupNames, scheduledBackupNameWithLabel)
+			err = NamespaceLabelBackupSuccessCheck(scheduledBackupNameWithLabel, nonAdminCtx, bkpNamespaces, nsLabelStringCustomUser)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the labeled namespaces [%v] are backed up, and check if labels [%s] are applied to backups [%s]", bkpNamespaces, nsLabelStringCustomUser, scheduledBackupNameWithLabel))
 		})
 
 		Step("Validate restoring the scheduled backup with namespace label", func() {
@@ -1616,7 +1627,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 		log.FailOnError(err, "Getting a list of all schedules")
 		for _, sch := range currentSchedules.GetBackupSchedules() {
 			err = DeleteSchedule(sch.Name, SourceClusterName, orgID, nonAdminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appAdminUser))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appAdminUser))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "failed to fetch admin ctx")
@@ -2015,7 +2026,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 		log.FailOnError(err, "Getting a list of all schedules")
 		for _, sch := range currentSchedules.GetBackupSchedules() {
 			err = DeleteSchedule(sch.Name, SourceClusterName, orgID, nonAdminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appUser))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s] for user [%s]", sch.Name, appUser))
 		}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
