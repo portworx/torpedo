@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/onsi/ginkgo/v2/reporters"
 	"os"
 	"strings"
 	"testing"

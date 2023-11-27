@@ -9,7 +9,7 @@ import (
 	"time"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
