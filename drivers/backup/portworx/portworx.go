@@ -2099,7 +2099,7 @@ var (
 var (
 	// KubeVirtRule template contains the template for pre, post rules
 	// and pod selector to be used for kubevirt backup
-	KubevirtRuleTemplate = map[string]map[string]string{
+	KubevirtRuleSpec = map[string]map[string]string{
 		"default": {
 			"pre":            "/usr/bin/virt-freezer --freeze --name <vm-name> --namespace <namespace>",
 			"post":           "/usr/bin/virt-freezer --unfreeze --name <vm-name> --namespace <namespace>",
@@ -2225,21 +2225,21 @@ func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachi
 	var uid string
 	for _, vm := range virtualMachineList {
 		log.Infof("Creating rule for [%s] in [%s]", vm.Name, vm.Namespace)
-		ps := strings.Split(KubevirtRuleTemplate[template]["podSelector"], "=")
+		ps := strings.Split(KubevirtRuleSpec[template]["podSelector"], "=")
 		psMap := make(map[string]string)
 		psMap[ps[0]] = strings.Replace(ps[1], "<vm-name>", vm.Name, 1)
 		podSelector = append(podSelector, psMap)
-		container = append(container, KubevirtRuleTemplate[template]["container"])
-		podVal, _ := strconv.ParseBool(KubevirtRuleTemplate[template]["runInSinglePod"])
+		container = append(container, KubevirtRuleSpec[template]["container"])
+		podVal, _ := strconv.ParseBool(KubevirtRuleSpec[template]["runInSinglePod"])
 		runInSinglePod = append(runInSinglePod, podVal)
-		backgroundVal, _ := strconv.ParseBool(KubevirtRuleTemplate[template]["background"])
+		backgroundVal, _ := strconv.ParseBool(KubevirtRuleSpec[template]["background"])
 		background = append(background, backgroundVal)
 
 		if prePostFlag == "pre" {
 			actionValue = append(
 				actionValue,
 				strings.Replace(
-					strings.Replace(KubevirtRuleTemplate[template]["pre"], "<vm-name>", vm.Name, 1),
+					strings.Replace(KubevirtRuleSpec[template]["pre"], "<vm-name>", vm.Name, 1),
 					"<namespace>",
 					vm.Namespace,
 					1))
@@ -2247,7 +2247,7 @@ func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachi
 			actionValue = append(
 				actionValue,
 				strings.Replace(
-					strings.Replace(KubevirtRuleTemplate[template]["post"], "<vm-name>", vm.Name, 1),
+					strings.Replace(KubevirtRuleSpec[template]["post"], "<vm-name>", vm.Name, 1),
 					"<namespace>",
 					vm.Namespace,
 					1))
