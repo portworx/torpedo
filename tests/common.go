@@ -2271,7 +2271,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
 func DescribeNamespace(contexts []*scheduler.Context) {
 	context("generating namespace info...", func() {
-		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentSpecReport().LeafNodeText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
@@ -3006,9 +3006,9 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -7139,11 +7139,11 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
-		testCaseName := ginkgoTestDescr.FullTestText
-		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
+		testCaseName := currentSpecReport.FullText()
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(testCaseName)
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
@@ -8868,7 +8868,7 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) (mError error) {
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
@@ -9229,7 +9229,7 @@ func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail 
 // GetContextsOnNode returns the contexts which have volumes attached on the given node.
 func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
 	contextsOnNode := make([]*scheduler.Context, 0)
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)

@@ -2568,8 +2568,8 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	log.Infof("Terminal output: %s", output)
 
 	// Collect mongoDB logs right after the command
-	ginkgoTest := CurrentGinkgoTestDescription()
-	testCaseName := fmt.Sprintf("%s-start", ginkgoTest.FullTestText)
+	currentSpecReport := CurrentSpecReport()
+	testCaseName := fmt.Sprintf("%s-start", currentSpecReport.FullText())
 	CollectMongoDBLogs(testCaseName)
 
 	// Wait for post install hook job to be completed
@@ -2596,8 +2596,8 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	// Collect mongoDB logs once the postInstallHook is completed
-	ginkgoTest = CurrentGinkgoTestDescription()
-	testCaseName = fmt.Sprintf("%s-end", ginkgoTest.FullTestText)
+	currentSpecReport = CurrentSpecReport()
+	testCaseName = fmt.Sprintf("%s-end", currentSpecReport.FullText())
 	CollectMongoDBLogs(testCaseName)
 
 	pxBackupUpgradeEndTime := time.Now()
@@ -2658,9 +2658,9 @@ func ValidateAllPodsInPxBackupNamespace() error {
 			err = core.Instance().ValidatePod(&pod, podReadyTimeout, podReadyRetryTime)
 			if err != nil {
 				// Collect mongoDB logs right after the command
-				ginkgoTest := CurrentGinkgoTestDescription()
-				testCaseName := ginkgoTest.FullTestText
-				matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTest.FullTestText)
+				currentSpecReport := CurrentSpecReport()
+				testCaseName := currentSpecReport.FullText()
+				matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(testCaseName)
 				if len(matches) > 1 {
 					testCaseName = fmt.Sprintf("%s-error-%s", matches[1], label)
 				}

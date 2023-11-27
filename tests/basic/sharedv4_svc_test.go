@@ -344,7 +344,7 @@ var _ = Describe("{PVCAccessModeFunctional}", func() {
 	AfterEach(func() {
 		defer EndTorpedoTest()
 		Step("destroy apps", func() {
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				log.Info("not destroying apps because the test failed\n")
 				return
 			}
@@ -1291,7 +1291,7 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 	AfterEach(func() {
 		Step("destroy apps", func() {
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				log.Info("not destroying apps because the test failed\n")
 				return
 			}

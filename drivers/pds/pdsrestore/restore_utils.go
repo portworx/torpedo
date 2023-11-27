@@ -83,8 +83,8 @@ func (restoreClient *RestoreClient) TriggerAndValidateRestore(backupJobId string
 // WaitForRestoreAndValidate will wait for the restore to complete and validate its configuration
 func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds.ModelsRestore, bkpDsEntity DSEntity, nsName string) error {
 
-	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
-	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	testName := strings.Split(currentSpecReport.FullText(), " ")[0]
 	log.Debugf("Testcase Name %v", testName)
 
 	if testName == "{ValidateDSHealthStatusOnNodeFailures}" {
