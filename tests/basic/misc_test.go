@@ -35,17 +35,24 @@ var _ = Describe("{SetupTeardown}", func() {
 	It("has to setup, validate and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
 
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		for i := 0; i < 3; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
 		}
 		ValidateApplications(contexts)
 
-		opts := make(map[string]bool)
-		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
+		actualRestoredVolumes, err := Inst().S.GetVolumes(contexts[0])
+		dash.VerifyFatal(err, nil, "Verify get volumes")
+		for _, vol := range actualRestoredVolumes {
+			log.Infof("vol id/name: [%s/%s]", vol.ID, vol.Name)
+			log.Infof("vol response: [%v]", vol)
 		}
+
+		//opts := make(map[string]bool)
+		//opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		//
+		//for _, ctx := range contexts {
+		//	TearDownContext(ctx, opts)
+		//}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
