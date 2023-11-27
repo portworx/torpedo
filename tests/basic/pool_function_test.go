@@ -11,7 +11,7 @@ import (
 
     "github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"

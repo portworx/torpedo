@@ -1,8 +1,7 @@
 package tests
 
 import (
-	. "github.com/onsi/ginkgo"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -72,7 +71,7 @@ var _ = Describe("{DeleteBackUpTargets}", func() {
 	It("Deletes the automation created backuptargets", func() {
 		stepLog := "Delete backup Targets"
 		Step(stepLog, func() {
-			err := CleanUpBackUpTargets(projectID, "automation--", "s3")
+			err := CleanUpBackUpTargets(projectID, "automation--")
 			log.FailOnError(err, "error occured while deleting backup target")
 		})
 	})
@@ -81,7 +80,7 @@ var _ = Describe("{DeleteBackUpTargets}", func() {
 	})
 })
 
-var _ = Describe("{DeleteDeploymentTargets}", func() {
+var _ = Describe("{DeleteUnhealthyDeploymentTargets}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeleteUnhealthyDeploymentTargets",
 			"Deletes the unhealthy deployment target clusters", pdsLabels, 0)
@@ -89,26 +88,8 @@ var _ = Describe("{DeleteDeploymentTargets}", func() {
 	It("Delete Unhealthy Target Cluster from control plane", func() {
 		stepLog := "Delete Unhealthy Deployment Targets"
 		Step(stepLog, func() {
-			err := pdslib.DeleteDeploymentTargets(projectID)
+			err := targetCluster.DeleteDeploymentTargets(tenantID)
 			log.FailOnError(err, "error occured while deleting deployment target")
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
-var _ = Describe("{DeleteBackUpTargetsAndCreds}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteBackUpTargetsAndCreds",
-			"Deletes bkp targets and creds", pdsLabels, 0)
-	})
-	It("Delete Backup targets and credentials", func() {
-		stepLog := "Delete Backup targets and credentials"
-		Step(stepLog, func() {
-			log.Debugf("deployment target %s", deploymentTargetID)
-			err := pdslib.DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget("", projectID, false)
-			log.FailOnError(err, "error occured while deleting bkp targets and creds")
 		})
 	})
 	JustAfterEach(func() {
