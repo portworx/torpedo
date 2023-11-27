@@ -16,7 +16,7 @@ import (
 
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"

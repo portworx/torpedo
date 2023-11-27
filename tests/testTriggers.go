@@ -29,7 +29,7 @@ import (
 	"container/ring"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
