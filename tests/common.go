@@ -4016,7 +4016,6 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 		} else {
 			splitConfigName := strings.Split(kubeconfig, "-")
 			clusterName := strings.Join(splitConfigName[:len(splitConfigName)-1], "-")
-			log.Infof("clusterName = [%s]", clusterName)
 			return clusterName
 
 		}
@@ -4043,6 +4042,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 		}
 		return nil
 	}
+
 	clusterProvider := GetClusterProviders()
 	for _, provider := range clusterProvider {
 		switch provider {
