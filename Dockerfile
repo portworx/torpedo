@@ -7,7 +7,7 @@ WORKDIR /go/src/github.com/portworx/torpedo
 # Install setup dependencies
 RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
 
-RUN GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+RUN GOFLAGS= GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.15.0
 
 # Install aws-iam-authenticator
 # This is needed by test running inside EKS cluster and creating aws entities like bucket etc.
