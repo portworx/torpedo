@@ -115,7 +115,7 @@ spec:
     command: [ "ginkgo" ]
     args: [ "$VERBOSE",
             "--trace",
-            "--failFast",
+            "--fail-fast",
             "$FOCUS_ARG",
             "$SKIP_ARG",
              "--slowSpecThreshold", "600",
