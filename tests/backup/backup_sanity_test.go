@@ -213,7 +213,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-			// // To add additional Clusters please pass the index of the clusters to be added
+			// To add additional Clusters please pass the index of the clusters to be added
 			// AdditionalClusters = append(AdditionalClusters, 0, 1, 3)
 
 			err = CreateApplicationClusters(orgID, "", "", ctx)

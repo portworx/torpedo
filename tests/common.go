@@ -4000,6 +4000,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 
 	for _, cluster_index := range AdditionalClusters {
 		cluster_name := AdditionalClusterNamePrefix + "-" + strconv.Itoa(cluster_index)
+		log.Infof("Setting cluster path for [%d]", cluster_name)
 		additionalClusterConfigPath, err := GetAdditionalClusterConfigPath(cluster_index + 2)
 		if err != nil {
 			return err
@@ -4046,11 +4047,10 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 	for _, provider := range clusterProvider {
 		switch provider {
 		case drivers.ProviderRke:
-			for clusterName, kubeconfig := range ClusterConfigPathMap {
-				kubeConfigDetails := strings.Split(kubeconfig, "/")
-				kubeconfig = kubeConfigDetails[len(kubeConfigDetails)-1]
+			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
+				clusterName := getClusterName(kubeconfig)
 				if _, ok := ClusterConfigPathMap[clusterName]; ok {
 					log.Infof("Creating cloud credential for cluster")
 					err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
@@ -4083,11 +4083,10 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		case drivers.ProviderAzure:
-			for clusterName, kubeconfig := range ClusterConfigPathMap {
-				kubeConfigDetails := strings.Split(kubeconfig, "/")
-				kubeconfig = kubeConfigDetails[len(kubeConfigDetails)-1]
+			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
+				clusterName := getClusterName(kubeconfig)
 				if _, ok := ClusterConfigPathMap[clusterName]; ok {
 					log.Infof("Creating cloud credential for cluster")
 					err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
@@ -4123,11 +4122,10 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		case drivers.ProviderAws:
-			for clusterName, kubeconfig := range ClusterConfigPathMap {
-				kubeConfigDetails := strings.Split(kubeconfig, "/")
-				kubeconfig = kubeConfigDetails[len(kubeConfigDetails)-1]
+			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
+				clusterName := getClusterName(kubeconfig)
 				if _, ok := ClusterConfigPathMap[clusterName]; ok {
 					log.Infof("Creating cloud credential for cluster")
 					err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx)
@@ -4161,11 +4159,10 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		case drivers.ProviderGke:
-			for clusterName, kubeconfig := range ClusterConfigPathMap {
-				kubeConfigDetails := strings.Split(kubeconfig, "/")
-				kubeconfig = kubeConfigDetails[len(kubeConfigDetails)-1]
+			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
+				clusterName := getClusterName(kubeconfig)
 				if _, ok := ClusterConfigPathMap[clusterName]; ok {
 					log.Infof("Creating cloud credential for cluster")
 					err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
@@ -4199,11 +4196,10 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		case drivers.ProviderIbm:
-			for clusterName, kubeconfig := range ClusterConfigPathMap {
-				kubeConfigDetails := strings.Split(kubeconfig, "/")
-				kubeconfig = kubeConfigDetails[len(kubeConfigDetails)-1]
+			for _, kubeconfig := range kubeconfigList {
 				clusterCredName = fmt.Sprintf("%v-%v-cloud-cred-%v", provider, kubeconfig, RandomString(5))
 				clusterCredUid = uuid.New()
+				clusterName := getClusterName(kubeconfig)
 				if _, ok := ClusterConfigPathMap[clusterName]; ok {
 					log.Infof("Cluster credential with name [%s] for IBM", clusterCredName)
 					err = CreateCloudCredential(provider, clusterCredName, clusterCredUid, orgID, ctx, kubeconfig)
@@ -4237,9 +4233,8 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 				}
 			}
 		default:
-			for clusterName, kubeconfig := range ClusterConfigPathMap {
-				kubeConfigDetails := strings.Split(kubeconfig, "/")
-				kubeconfig = kubeConfigDetails[len(kubeConfigDetails)-1]
+			for _, kubeconfig := range kubeconfigList {
+				clusterName := getClusterName(kubeconfig)
 				if _, ok := ClusterConfigPathMap[clusterName]; ok {
 					err = clusterCreation(clusterCredName, clusterCredUid, clusterName)
 					if err != nil {
