@@ -500,7 +500,7 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
+            "--slow-spec-threshold", "10m",
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
