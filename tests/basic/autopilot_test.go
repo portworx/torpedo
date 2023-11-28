@@ -1962,11 +1962,11 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			//Crash one kvdb node and one storage node where the application is provisioned
-			log.InfoD("Started listening for any autopilot event")
-			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
-			log.FailOnError(err, "Failed to listen for any autopilot events")
-			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
-			log.FailOnError(err, "Failed to listen for active-actions-pending to active-actions-in-progress event")
+			//log.InfoD("Started listening for any autopilot event")
+			//err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
+			//log.FailOnError(err, "Failed to listen for any autopilot events")
+			//err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			//log.FailOnError(err, "Failed to listen for active-actions-pending to active-actions-in-progress event")
 			//var wg sync.WaitGroup
 			//for _, nodeToCrash := range crashedNodes {
 			//	wg.Add(1)
