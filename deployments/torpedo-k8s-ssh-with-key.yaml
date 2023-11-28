@@ -50,7 +50,7 @@ spec:
   - name: torpedo
     image: portworx/torpedo:latest
     command: [ "ginkgo",
-               "--slowSpecThreshold", "180",
+               "--slow-spec-threshold", "3m",
                "-v",
                "bin/basic.test",
                "--",
