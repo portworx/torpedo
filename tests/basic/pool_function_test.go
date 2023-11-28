@@ -548,43 +548,43 @@ var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 
 })
 
-//var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
-//
-//	var testrailID = 34542944
-//	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542944
-//
-//	BeforeEach(func() {
-//		StartTorpedoTest("PoolExpandResizeWithSameSize",
-//			"Initiate pool expansion using same size", nil, testrailID)
-//	})
-//
-//	AfterEach(func() {
-//		EndTorpedoTest()
-//	})
-//
-//	stepLog := "select a pool and expand it by same pool size with resize-disk type"
-//	It(stepLog, func() {
-//		log.InfoD(stepLog)
-//		// pick pool to resize
-//		pools, err := GetAllPoolsPresent()
-//		log.FailOnError(err, "Unable to get the storage Pools")
-//		pooltoPick := pools[0]
-//		poolToResize = getStoragePool(pooltoPick)
-//
-//		originalSizeGiB := poolToResize.TotalSize / units.GiB
-//		targetSizeGiB = originalSizeGiB
-//		resizeErr := Inst().V.ExpandPool(pooltoPick, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
-//		dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with same pool size")
-//
-//		// Verify error on pool expansion failure
-//		var errMatch error
-//		re := regexp.MustCompile(`.*already at a size.*`)
-//		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
-//			errMatch = fmt.Errorf("failed to verify failure using same Pool size")
-//		}
-//		dash.VerifyFatal(errMatch, nil, "Pool expand with Same Pool Size failed as expected.")
-//	})
-//})
+var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
+
+	var testrailID = 34542944
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542944
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandResizeWithSameSize",
+			"Initiate pool expansion using same size", nil, testrailID)
+	})
+
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	stepLog := "select a pool and expand it by same pool size with resize-disk type"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		// pick pool to resize
+		pools, err := GetAllPoolsPresent()
+		log.FailOnError(err, "Unable to get the storage Pools")
+		pooltoPick := pools[0]
+		poolToResize = getStoragePool(pooltoPick)
+
+		originalSizeGiB := poolToResize.TotalSize / units.GiB
+		targetSizeGiB = originalSizeGiB
+		resizeErr := Inst().V.ExpandPool(pooltoPick, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+		dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with same pool size")
+
+		// Verify error on pool expansion failure
+		var errMatch error
+		re := regexp.MustCompile(`.*already at a size.*`)
+		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
+			errMatch = fmt.Errorf("failed to verify failure using same Pool size")
+		}
+		dash.VerifyFatal(errMatch, nil, "Pool expand with Same Pool Size failed as expected.")
+	})
+})
 
 var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 
