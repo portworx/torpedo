@@ -395,43 +395,43 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 //	})
 //})
 //
-//var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
-//
-//	var testrailID = 34542946
-//	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542946
-//
-//	BeforeEach(func() {
-//		StartTorpedoTest("PoolExpandResizeInvalidPoolID",
-//			"Initiate pool expansion using invalid Id", nil, testrailID)
-//	})
-//
-//	AfterEach(func() {
-//		EndTorpedoTest()
-//	})
-//
-//	stepLog := "Resize with invalid pool ID"
-//	It(stepLog, func() {
-//		log.InfoD(stepLog)
-//		// invalidPoolUUID Generation
-//		invalidPoolUUID := uuid.New().String()
-//
-//		// Resize Pool with Invalid Pool ID
-//		stepLog = fmt.Sprintf("Expanding pool on Node UUID [%s] using auto", invalidPoolUUID)
-//		Step(stepLog, func() {
-//			resizeErr := Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, 100, true)
-//			dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool UUID")
-//			// Verify error on pool expansion failure
-//			var errMatch error
-//			re := regexp.MustCompile(fmt.Sprintf(".*failed to find storage pool with UID.*%s.*",
-//				invalidPoolUUID))
-//			if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
-//				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
-//			}
-//			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID failed as expected.")
-//		})
-//	})
-//
-//})
+var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
+
+	var testrailID = 34542946
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542946
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpandResizeInvalidPoolID",
+			"Initiate pool expansion using invalid Id", nil, testrailID)
+	})
+
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	stepLog := "Resize with invalid pool ID"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		// invalidPoolUUID Generation
+		invalidPoolUUID := uuid.New().String()
+
+		// Resize Pool with Invalid Pool ID
+		stepLog = fmt.Sprintf("Expanding pool on Node UUID [%s] using auto", invalidPoolUUID)
+		Step(stepLog, func() {
+			resizeErr := Inst().V.ExpandPool(invalidPoolUUID, api.SdkStoragePool_RESIZE_TYPE_AUTO, 100, true)
+			dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool UUID")
+			// Verify error on pool expansion failure
+			var errMatch error
+			re := regexp.MustCompile(fmt.Sprintf(".*failed to find storage pool with UID.*%s.*",
+				invalidPoolUUID))
+			if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
+				errMatch = fmt.Errorf("failed to verify failure using invalid PoolUUID [%v]", invalidPoolUUID)
+			}
+			dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID failed as expected.")
+		})
+	})
+
+})
 //
 //var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 //
@@ -512,42 +512,42 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 //
 //})
 //
-//var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
-//
-//	var testrailID = 34542945
-//	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542945
-//
-//	BeforeEach(func() {
-//		StartTorpedoTest("PoolExpansionDiskResizeInvalidSize",
-//			"Initiate pool expansion using invalid expansion size", nil, testrailID)
-//	})
-//
-//	AfterEach(func() {
-//		EndTorpedoTest()
-//	})
-//
-//	stepLog := "select a pool and expand it by 30000000 GiB with resize-disk type"
-//	It(stepLog, func() {
-//		log.InfoD(stepLog)
-//		// pick pool to resize
-//		pools, err := GetAllPoolsPresent()
-//		log.FailOnError(err, "Unable to get the storage Pools")
-//		pooltoPick := pools[0]
-//
-//		resizeErr := Inst().V.ExpandPool(pooltoPick, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 30000000, true)
-//		dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool expansion size")
-//
-//		// Verify error on pool expansion failure
-//		var errMatch error
-//		re := regexp.MustCompile(`.*cannot be expanded beyond maximum size.*`)
-//		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
-//			errMatch = fmt.Errorf("failed to verify failure using invalid Pool size")
-//		}
-//		dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID failed as expected.")
-//	})
-//
-//})
-//
+var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
+
+	var testrailID = 34542945
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542945
+
+	BeforeEach(func() {
+		StartTorpedoTest("PoolExpansionDiskResizeInvalidSize",
+			"Initiate pool expansion using invalid expansion size", nil, testrailID)
+	})
+
+	AfterEach(func() {
+		EndTorpedoTest()
+	})
+
+	stepLog := "select a pool and expand it by 30000000 GiB with resize-disk type"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		// pick pool to resize
+		pools, err := GetAllPoolsPresent()
+		log.FailOnError(err, "Unable to get the storage Pools")
+		pooltoPick := pools[0]
+
+		resizeErr := Inst().V.ExpandPool(pooltoPick, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, 30000000, true)
+		dash.VerifyFatal(resizeErr != nil, true, "Verify error occurs with invalid Pool expansion size")
+
+		// Verify error on pool expansion failure
+		var errMatch error
+		re := regexp.MustCompile(`.*cannot be expanded beyond maximum size.*`)
+		if !re.MatchString(fmt.Sprintf("%v", resizeErr)) {
+			errMatch = fmt.Errorf("failed to verify failure using invalid Pool size")
+		}
+		dash.VerifyFatal(errMatch, nil, "Pool expand with invalid PoolUUID failed as expected.")
+	})
+
+})
+
 //var _ = Describe("{PoolExpandResizeWithSameSize}", func() {
 //
 //	var testrailID = 34542944
