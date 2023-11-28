@@ -1930,7 +1930,7 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		poolSizes := make(map[int]float64, 0)
 
 		apRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByAvailableCapacity(80, 50, aututils.RuleScaleTypeAddDisk),
+			aututils.PoolRuleByAvailableCapacity(80, 10, aututils.RuleScaleTypeAddDisk),
 		}
 		provisionStatus, err := GetClusterProvisionStatusOnSpecificNode(crashedNodes[0])
 		log.FailOnError(err, "Failed to get cluster provision status")
@@ -1962,11 +1962,11 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			//Crash one kvdb node and one storage node where the application is provisioned
-			//log.InfoD("Started listening for any autopilot event")
-			//err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
-			//log.FailOnError(err, "Failed to listen for any autopilot events")
-			//err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
-			//log.FailOnError(err, "Failed to listen for active-actions-pending to active-actions-in-progress event")
+			log.InfoD("Started listening for any autopilot event")
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.AnyToTriggeredEvent})
+			log.FailOnError(err, "Failed to listen for any autopilot events")
+			err = aututils.WaitForAutopilotEvent(apRules[0], "", []string{aututils.ActiveActionsPendingToActiveActionsInProgress})
+			log.FailOnError(err, "Failed to listen for active-actions-pending to active-actions-in-progress event")
 			//var wg sync.WaitGroup
 			//for _, nodeToCrash := range crashedNodes {
 			//	wg.Add(1)
@@ -2040,7 +2040,11 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 				ValidateContext(ctx)
 			}
 		})
-
+		stepLog = "validating and verifying size of storage pools"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateStoragePools(contexts)
+		})
 		stepLog = "destroy apps"
 		Step(stepLog, func() {
 			opts := make(map[string]bool)
@@ -2061,11 +2065,6 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 			}
 		})
 
-		stepLog = "validating and verifying size of storage pools"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			ValidateStoragePools(contexts)
-		})
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
