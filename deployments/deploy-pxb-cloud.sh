@@ -52,7 +52,7 @@ fi
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
     FAIL_FAST="--failFast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
