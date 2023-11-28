@@ -92,5 +92,5 @@ COPY --from=build /usr/local/bin/vcluster /bin/vcluster
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
 
-ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
+ENTRYPOINT ["ginkgo", "--fail-fast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
