@@ -491,7 +491,7 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slow-spec-threshold", "10m",
+            "--poll-progress-after", "10m",
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
