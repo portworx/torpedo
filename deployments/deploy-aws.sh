@@ -118,7 +118,7 @@ spec:
             "--fail-fast",
             "$FOCUS_ARG",
             "$SKIP_ARG",
-             "--slow-spec-threshold", "10m",
+             "--poll-progress-after", "10m",
             "bin/basic.test",
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
