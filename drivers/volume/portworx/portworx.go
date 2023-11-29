@@ -289,6 +289,30 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 					log.Infof("Entered maintenance mode")
 					defer func() {
 						err = exitPoolMaintenanceMode()
+						if err != nil {
+							return
+						}
+						expectedStatus := "Online"
+						t := func() (interface{}, bool, error) {
+							poolsStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
+							if err != nil {
+								return nil, true,
+									fmt.Errorf("error getting pool status on node %s,err: %v", nodePoolExpand.Name, err)
+							}
+							if poolsStatus == nil {
+								return nil,
+									false, fmt.Errorf("pools status is nil")
+							}
+							for k, v := range poolsStatus {
+								if v != expectedStatus {
+									return nil, true,
+										fmt.Errorf("pool %s is not %s, current status: %s", k, expectedStatus, v)
+								}
+							}
+							return nil, false, nil
+						}
+						_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
+
 					}()
 				}
 				//wait for pool to go to maintenance mode
