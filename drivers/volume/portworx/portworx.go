@@ -233,20 +233,10 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 	if err := d.RefreshDriverEndpoints(); err != nil {
 		return err
 	}
-	if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
-		storageNodes := []node.Node{}
+	if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK || operation == api.SdkStoragePool_RESIZE_TYPE_AUTO {
 		nodePoolExpand := node.Node{}
-		nodes := node.GetStorageDriverNodes()
+		storageNodes := node.GetStorageNodes()
 
-		for _, pxnode := range nodes {
-			devices, err := d.GetStorageDevices(pxnode)
-			if err != nil {
-				return err
-			}
-			if len(devices) > 0 {
-				storageNodes = append(storageNodes, pxnode)
-			}
-		}
 		for _, n := range storageNodes {
 			pools := n.Pools
 			for _, p := range pools {
