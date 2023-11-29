@@ -62,6 +62,7 @@ const (
 type VCluster struct {
 	Namespace  string
 	Name       string
+	App        string
 	NodePort   int32
 	Clientset  *kubernetes.Clientset
 	SnapClient *snapclientset.Clientset
@@ -250,6 +251,7 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 	if err = CreateVCluster(v.Name, absPath, v.Namespace); err != nil {
 		return err
 	}
+	time.Sleep(10 * time.Minute)
 	if err = v.SetClientSetForVCluster(); err != nil {
 		return err
 	}
