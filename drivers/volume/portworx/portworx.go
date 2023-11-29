@@ -247,7 +247,6 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			storageNodes = append(storageNodes, pxnode)
 		}
 	}
-
 	for _, n := range storageNodes {
 		pools := n.Pools
 		for _, p := range pools {
