@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/tests"
 	"io/ioutil"
 	"math"
 	"net"
@@ -229,47 +228,72 @@ type statusJSON struct {
 }
 
 // ExpandPool resizes a pool of a given ID
-func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) error {
+func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) (err error) {
 	log.Infof("Initiating pool %v resize by %v with operation type %v", poolUUID, size, operation.String())
-	if err := tests.Inst().V.RefreshDriverEndpoints(); err != nil {
+	if err := d.RefreshDriverEndpoints(); err != nil {
 		log.FailOnError(err, "Failed to refresh driver endpoints")
 	}
-	storageNodes := []node.Node{}
-	nodePoolExpand := node.Node{}
-	nodes := node.GetStorageDriverNodes()
+	if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+		storageNodes := []node.Node{}
+		nodePoolExpand := node.Node{}
+		nodes := node.GetStorageDriverNodes()
 
-	for _, pxnode := range nodes {
-		devices, err := tests.Inst().V.GetStorageDevices(pxnode)
-		if err != nil {
-			log.FailOnError(err, "Failed to get storage devices")
-		}
-		if len(devices) > 0 {
-			storageNodes = append(storageNodes, pxnode)
-		}
-	}
-	for _, n := range storageNodes {
-		pools := n.Pools
-		for _, p := range pools {
-			if poolUUID == p.Uuid {
-				nodePoolExpand = n
+		for _, pxnode := range nodes {
+			devices, err := d.GetStorageDevices(pxnode)
+			if err != nil {
+				log.FailOnError(err, "Failed to get storage devices")
+			}
+			if len(devices) > 0 {
+				storageNodes = append(storageNodes, pxnode)
 			}
 		}
-	}
-
-	nodeStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
-	if err != nil {
-		return err
-	}
-	log.Infof("Node %v pool status %v", nodePoolExpand.Name, nodeStatus)
-	for _, v := range nodeStatus {
-		if v != "In Maintenance" {
-			if err := d.EnterPoolMaintenance(nodePoolExpand); err != nil {
+		for _, n := range storageNodes {
+			pools := n.Pools
+			for _, p := range pools {
+				if poolUUID == p.Uuid {
+					nodePoolExpand = n
+				}
+			}
+		}
+		exitPoolMaintenanceMode := func() error {
+			nodeStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
+			if err != nil {
 				return err
 			}
-			//wait for pool to go to maintenance mode
-			time.Sleep(2 * time.Minute)
-		} else if v == "In Maintenance" {
-			log.Infof("Pool already in maintenance mode")
+			log.Infof("Node %v pool status %v", nodePoolExpand.Name, nodeStatus)
+			for _, v := range nodeStatus {
+				if v != "In Maintenance" {
+					log.Infof("Pool not in maintenance mode")
+					//wait for pool to go to maintenance mode
+				} else if v == "In Maintenance" {
+					if err := d.ExitPoolMaintenance(nodePoolExpand); err != nil {
+						return err
+					}
+					log.Infof("Pool exited out of maintenance mode")
+				}
+			}
+			return nil
+		}
+		defer func() {
+			err = exitPoolMaintenanceMode()
+		}()
+		nodeStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
+		if err != nil {
+			return err
+		}
+
+		log.Infof("Node %v pool status %v", nodePoolExpand.Name, nodeStatus)
+		for _, v := range nodeStatus {
+			if v != "In Maintenance" {
+				if err := d.EnterPoolMaintenance(nodePoolExpand); err != nil {
+					return err
+				}
+				//wait for pool to go to maintenance mode
+				time.Sleep(2 * time.Minute)
+				break
+			} else if v == "In Maintenance" {
+				log.Infof("Pool already in maintenance mode")
+			}
 		}
 	}
 
@@ -292,9 +316,6 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		return nil, false, nil
 	}
 
-	if err := d.ExitPoolMaintenance(nodePoolExpand); err != nil {
-		return err
-	}
 	if _, err := task.DoRetryWithTimeout(t, expandStoragePoolTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
