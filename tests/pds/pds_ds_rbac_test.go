@@ -231,7 +231,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						customParams.SetParamsForServiceIdentityTest(params, false)
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 				})
 				//ToDo : Add workload generation for restored-deps with RBAC roles on ns2
@@ -812,7 +812,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 						log.FailOnError(err, "Error while validating data service deployment")
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 
 				})
