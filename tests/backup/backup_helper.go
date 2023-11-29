@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
@@ -1192,8 +1193,6 @@ func kubectlExec(arguments []string) (string, error) {
 	}
 	cmd := exec.Command("kubectl", arguments...)
 	output, err := cmd.Output()
-	log.InfoD("Command '%s'", cmd.String())
-	log.Infof("Command output for '%s': %s", cmd.String(), string(output))
 	if err != nil {
 		return "", fmt.Errorf("error on executing kubectl command, Err: %+v", err)
 	}
@@ -5995,4 +5994,239 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context.Context, namespace
 	}
 
 	return ruleStatus, ruleName, nil
+}
+
+// UpdateKDMPConfigMap updates the KDMP configMap with the given key and value.
+func UpdateKDMPConfigMap(dataKey string, dataValue string) error {
+	KDMPconfigMapName := "kdmp-config"
+	KDMPconfigMapNamespace := "kube-system"
+	KDMPconfigMap, err := core.Instance().GetConfigMap(KDMPconfigMapName, KDMPconfigMapNamespace)
+	if err != nil {
+		return err
+	}
+	KDMPconfigMap.Data[dataKey] = dataValue
+	_, err = core.Instance().UpdateConfigMap(KDMPconfigMap)
+	if err != nil {
+		return err
+	}
+	log.Infof("updated the KDMP configMap data with key [%s]: value [%s]", dataKey, dataValue)
+	return nil
+}
+
+type PodDirectoryConfig struct {
+	BasePath          string
+	Depth             int
+	Levels            int
+	FilesPerDirectory int
+	FileSizeInMB      int
+	FileName          string
+	DirName           string
+}
+
+// CreateNestedDirectoriesWithFilesInPod creates a nested directory structure with files within a specified Pod.
+func CreateNestedDirectoriesWithFilesInPod(pod corev1.Pod, directoryConfig PodDirectoryConfig) error {
+	var wg sync.WaitGroup
+	var errChan = make(chan error)
+	fileConfig := PodDirectoryConfig{
+		BasePath:          directoryConfig.BasePath,
+		FilesPerDirectory: directoryConfig.FilesPerDirectory,
+	}
+	err := CreateFilesInPodDirectory(pod, fileConfig)
+	if err != nil {
+		return fmt.Errorf("error creating files in %s: %s", directoryConfig.BasePath, err.Error())
+	}
+
+	if directoryConfig.Levels > 0 && directoryConfig.Depth > 0 {
+		for i := 0; i < directoryConfig.Depth; i++ {
+			dirPath := filepath.Join(directoryConfig.BasePath, fmt.Sprintf("level_%d_depth_%d_%s", directoryConfig.Levels, i, RandomString(4)))
+			podConfig := PodDirectoryConfig{
+				BasePath: dirPath,
+			}
+			err := CreateDirectoryInPod(pod, podConfig)
+			if err != nil {
+				log.Infof(fmt.Sprintf("Error creating directory %s: %s\n", dirPath, err.Error()))
+				continue
+			}
+			fileConfig := PodDirectoryConfig{
+				BasePath:          dirPath,
+				FilesPerDirectory: directoryConfig.FilesPerDirectory,
+			}
+
+			err = CreateFilesInPodDirectory(pod, fileConfig)
+			if err != nil {
+				return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
+			}
+
+			if directoryConfig.Levels > 1 {
+				wg.Add(1)
+				go func(dirPath string, depth int) {
+					defer wg.Done()
+					DirectoryConfig := PodDirectoryConfig{
+						BasePath:          dirPath,
+						Depth:             directoryConfig.Depth,
+						Levels:            directoryConfig.Levels - 1,
+						FilesPerDirectory: directoryConfig.FilesPerDirectory,
+					}
+					errChan <- CreateDirectoryStructureInPod(pod, DirectoryConfig)
+				}(dirPath, directoryConfig.Depth)
+			}
+		}
+	}
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+	for err := range errChan {
+		if err != nil {
+			return fmt.Errorf("error creating nested directories: %s", err.Error())
+		}
+	}
+
+	return nil
+}
+
+// CreateDirectoryStructureInPod creates a directory structure with multiple levels and files per directory within a specified Pod.
+func CreateDirectoryStructureInPod(pod corev1.Pod, directoryConfig PodDirectoryConfig) error {
+	for i := 0; i < directoryConfig.Depth; i++ {
+		dirPath := filepath.Join(directoryConfig.BasePath, fmt.Sprintf("level_%d_depth_%d_%s", directoryConfig.Levels, i, RandomString(4)))
+		podConfig := PodDirectoryConfig{
+			BasePath: dirPath,
+		}
+		err := CreateDirectoryInPod(pod, podConfig)
+		if err != nil {
+			log.Infof(fmt.Sprintf("Error creating directory %s: %s\n", dirPath, err.Error()))
+			continue
+		}
+		fileConfig := PodDirectoryConfig{
+			BasePath:          dirPath,
+			FilesPerDirectory: directoryConfig.FilesPerDirectory,
+		}
+
+		err = CreateFilesInPodDirectory(pod, fileConfig)
+		if err != nil {
+			return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
+		}
+
+		if directoryConfig.Levels > 1 {
+			DirectoryConfig := PodDirectoryConfig{
+				BasePath:          dirPath,
+				Depth:             directoryConfig.Depth,
+				Levels:            directoryConfig.Levels - 1,
+				FilesPerDirectory: directoryConfig.FilesPerDirectory,
+			}
+			err := CreateDirectoryStructureInPod(pod, DirectoryConfig)
+			if err != nil {
+				return fmt.Errorf("error creating nested directories: %s", err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+// CreateDirectoryInPod creates a directory within a specified Pod.
+func CreateDirectoryInPod(pod corev1.Pod, directoryConfig PodDirectoryConfig) error {
+	cmd := fmt.Sprintf("mkdir -p %s ", directoryConfig.BasePath)
+	cmdArgs := []string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "exec", "-it", pod.Name, "-n", pod.Namespace, "--", "/bin/sh", "-c", fmt.Sprintf("%s", cmd)}
+	_, err := kubectlExec(cmdArgs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateFilesInPodDirectory creates a specified number of files per directory level in a Pod.
+func CreateFilesInPodDirectory(pod corev1.Pod, fileConfig PodDirectoryConfig) error {
+	var cmd string
+	var fileName string
+	for i := 1; i <= fileConfig.FilesPerDirectory; i++ {
+		if len(fileConfig.FileName) > 0 {
+			fileName = fileConfig.FileName
+		} else {
+			fileName = fmt.Sprintf("file%d.txt", i)
+		}
+		filePath := filepath.Join(fileConfig.BasePath, fmt.Sprintf("%s", fileName))
+		if fileConfig.FileSizeInMB != 0 {
+			cmd = fmt.Sprintf("dd if=/dev/urandom of=%s bs=%dM count=1;", filePath, fileConfig.FileSizeInMB)
+		} else {
+			content := fmt.Sprintf("This is file %d in directory %s", i, fileConfig.BasePath)
+			cmd = fmt.Sprintf("echo \"%s\" > %s", content, filePath)
+		}
+		cmdArgs := []string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "exec", "-it", pod.Name, "-n", pod.Namespace, "--", "/bin/sh", "-c", fmt.Sprintf("%s", cmd)}
+		_, err := kubectlExec(cmdArgs)
+		if err != nil {
+			return fmt.Errorf("error creating file %s: %s", filePath, err.Error())
+		}
+	}
+	return nil
+}
+
+// GetRandomSubset generates a random subset of elements from a given list.
+func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
+	if subsetSize > len(elements) {
+		return nil, fmt.Errorf("subset size exceeds the length of the input list")
+	}
+
+	shuffledElements := make([]string, len(elements))
+	copy(shuffledElements, elements)
+	rand.Shuffle(len(shuffledElements), func(i, j int) {
+		shuffledElements[i], shuffledElements[j] = shuffledElements[j], shuffledElements[i]
+	})
+
+	return shuffledElements[:subsetSize], nil
+}
+
+// GenerateStorageClassFormattedString generates a formatted string representation
+// of storage classes and their associated files and directories.
+// it return string in below formatted structure for updating any value in ConfigMap.
+// usage eg:
+// KDMP_EXCLUDE_FILE_LIST: |-
+//
+//	mysql-sc-seq=level_3,level_2,file4.txt,file5.txt
+//	mysql-sc=level_3,level_2,file5.txt,file1.txt
+//	mysql-sc-aggr=level_2,level_3,file3.txt,file1.txt
+func GenerateStorageClassFormattedString(storageClassesMap map[string][]string) string {
+	var formattedStrings []string
+	for storageClassName, paths := range storageClassesMap {
+		formattedString := fmt.Sprintf("%s=%s", storageClassName, strings.Join(paths, ","))
+		formattedStrings = append(formattedStrings, formattedString)
+	}
+	return strings.Join(formattedStrings, "\n")
+}
+
+// FetchFilesAndDirectoriesFromPod retrieves files and directories from a specified path within a Pod,
+// excluding any specified file or directory entries. It executes a 'find' command within the Pod to gather the files
+// and directories of specified file types ('f' for files and 'd' for directories).
+func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, path string, excludeFileDirectoryList []string) ([]string, []string, error) {
+	fileList := make(map[string][]string)
+	var fileTypes = [2]string{"f", "d"}
+	for _, fileType := range fileTypes {
+		cmdArgs := []string{fmt.Sprintf("--kubeconfig=%v", CurrentClusterConfigPath), "exec", "-it", pod.Name, "-n", pod.Namespace, "--", "/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user root", path, fileType)}
+		output, err := kubectlExec(cmdArgs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to fetch file and directories from pod: %s. Output: %s", err, output)
+		}
+		filesWithAbsolutePaths := strings.Split(output, "\n")
+		// Unwanted error strings or patterns to filter out
+		unwantedPatterns := []string{"Unable to use a TTY - input is not a terminal or the right kind of file"}
+
+		for _, filePath := range filesWithAbsolutePaths {
+			if filePath != "" {
+				includePath := true
+				for _, pattern := range unwantedPatterns {
+					if strings.Contains(filePath, pattern) {
+						includePath = false
+						break
+					}
+				}
+				if includePath {
+					relativePath := strings.TrimPrefix(filePath, path)
+					relativePath = strings.TrimLeft(relativePath, "/")
+					if !IsPresent(excludeFileDirectoryList, relativePath) {
+						fileList[fileType] = append(fileList[fileType], relativePath)
+					}
+				}
+			}
+		}
+	}
+	return fileList["f"], fileList["d"], nil
 }

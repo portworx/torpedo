@@ -895,6 +895,48 @@ func GetContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 	return containerPaths
 }
 
+// GetContainerPVCMountMapWithSC fetches storage class along with mount paths for containers using PVCs
+func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]string, error) {
+	scMountPathsMap := make(map[string]string)
+	pvcNamesInSpec := make(map[string]string)
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			pvcNamesInSpec[v.Name] = v.PersistentVolumeClaim.ClaimName
+		}
+	}
+	for _, c := range pod.Spec.Containers {
+
+		for _, cMount := range c.VolumeMounts {
+			if pvcName, ok := pvcNamesInSpec[cMount.Name]; ok {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
+				storageClass, err := k8sCore.GetStorageClassForPVC(pvc)
+				if err != nil {
+					return nil, err
+				}
+				scMountPathsMap[cMount.MountPath] = storageClass.Name
+			}
+		}
+
+		for _, cDevice := range c.VolumeDevices {
+			if pvcName, ok := pvcNamesInSpec[cDevice.Name]; ok {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
+				storageClass, err := k8sCore.GetStorageClassForPVC(pvc)
+				if err != nil {
+					return nil, err
+				}
+				scMountPathsMap[cDevice.DevicePath] = storageClass.Name
+			}
+		}
+	}
+	return scMountPathsMap, nil
+}
+
 func separateFilePaths(volDirList string) []string {
 	trimmedList := strings.TrimSpace(volDirList)
 	if trimmedList == "" {
