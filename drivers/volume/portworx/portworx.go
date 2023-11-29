@@ -254,12 +254,14 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			for _, v := range nodeStatus {
 				if v != "In Maintenance" {
 					log.Infof("Pool not in maintenance mode")
+					break
 					//wait for pool to go to maintenance mode
 				} else if v == "In Maintenance" {
 					if err := d.ExitPoolMaintenance(nodePoolExpand); err != nil {
 						return err
 					}
 					log.Infof("Pool exited out of maintenance mode")
+					break
 				}
 			}
 			return nil
@@ -310,6 +312,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 				break
 			} else if v == "In Maintenance" {
 				log.Infof("Pool already in maintenance mode")
+				break
 			}
 		}
 
