@@ -1512,21 +1512,16 @@ func DeletePodWithLabelInNamespace(namespace string, label map[string]string, ig
 		return err
 	}
 	for _, pod := range pods.Items {
-		flag := false
+		skipPod := false
 		if ignoreLabel {
-			for key, podlabel := range label {
-				for key2, podlabel2 := range pod.GetLabels() {
-					if key == key2 && podlabel2 == podlabel {
-						flag = true
-						break
-					}
-				}
-				if flag {
+			for key, podlabel := range pod.GetLabels() {
+				if podlabel2, exists := label[key]; exists && podlabel == podlabel2 {
+					skipPod = true
 					break
 				}
 			}
-			if flag {
-				continue
+			if skipPod {
+				break
 			}
 		}
 
