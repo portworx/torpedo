@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
@@ -2944,6 +2945,57 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 	log.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
 	log.Infof("Setting ReplicationFactor to: %v", replFactor)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(nodesToBeUpdated))
+	for _, n := range nodesToBeUpdated {
+		wg.Add(1)
+		go func(nodeName string) {
+			defer wg.Done()
+			nd, err := node.GetNodeDetailsByNodeID(nodeName)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to find node by name [%s]: %v", nodeName, err)
+				return
+			}
+			outFileName := fmt.Sprintf("/var/cores/iostat_info-%s-%v.txt", vol.ID, time.Now().Unix())
+			log.Infof("Output file path: [%s]", outFileName)
+			initialCommand := fmt.Sprintf("echo 'Node: %s, Volume: %s, Replication Factor: %d' > %s", nodeName, vol.String(), replFactor, outFileName)
+			_, err = d.nodeDriver.RunCommand(
+				nd,
+				initialCommand,
+				node.ConnectionOpts{
+					Timeout:         maintenanceWaitTimeout,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+			)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to run initial command on node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
+				return
+			}
+			log.Infof("Writing iostat output in node [%s/%s]", nodeName, nd.MgmtIp)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(2 * time.Second):
+					iostatCommand := fmt.Sprintf("iostat -ktdx >> %s", outFileName)
+					_, err := d.nodeDriver.RunCommand(
+						nd,
+						iostatCommand,
+						node.ConnectionOpts{
+							Timeout:         maintenanceWaitTimeout,
+							TimeBeforeRetry: defaultRetryInterval,
+						},
+					)
+					if err != nil {
+						errChan <- fmt.Errorf("failed to run iostat command on node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
+						return
+					}
+				}
+			}
+		}(n)
+	}
 	t := func() (interface{}, bool, error) {
 		volDriver := d.getVolDriver()
 		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
@@ -2993,6 +3045,18 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			ID:    volumeName,
 			Cause: err.Error(),
 		}
+	}
+	cancel()
+	wg.Wait()
+	close(errChan)
+	var errorMessages []string
+	for e := range errChan {
+		if e != nil {
+			errorMessages = append(errorMessages, e.Error())
+		}
+	}
+	if len(errorMessages) > 0 {
+		return fmt.Errorf("errors occurred: %s", strings.Join(errorMessages, "; "))
 	}
 	return nil
 }
