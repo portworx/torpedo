@@ -255,9 +255,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			}
 		}
 	}
-	//check if pool is already in pool maintenenace mode
-	//wait for pool to go to maintenance mode
-	time.Sleep(2 * time.Minute)
+
 	nodeStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
 	if err != nil {
 		return err
@@ -268,6 +266,8 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			if err := d.EnterPoolMaintenance(nodePoolExpand); err != nil {
 				return err
 			}
+			//wait for pool to go to maintenance mode
+			time.Sleep(2 * time.Minute)
 		} else if v == "In Maintenance" {
 			log.Infof("Pool already in maintenance mode")
 		}
