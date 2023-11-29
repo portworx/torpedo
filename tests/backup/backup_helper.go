@@ -1472,7 +1472,8 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 	return restoreNames, nil
 }
 
-// DeletePodWithWithoutLabelInNamespace kills pod with the given label in the given namespace
+// DeletePodWithWithoutLabelInNamespace kills pod with the given label in the given namespace or skip pod with the given label
+// and delete all pods
 func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]string, ignoreLabel bool) error {
 	var pods *corev1.PodList
 	var err error
