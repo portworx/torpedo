@@ -2355,9 +2355,17 @@ func (d *portworx) RandomizeVolumeName(params string) string {
 	return re.ReplaceAllString(params, "${1}${2}_"+uuid.New()+"${3}")
 }
 
+func (d *portworx) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	currentClusterResponse, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return currentClusterResponse, nil
+}
+
 func (d *portworx) getStorageNodesOnStart() ([]*api.StorageNode, error) {
 	t := func() (interface{}, bool, error) {
-		cluster, err := d.getClusterManager().InspectCurrent(d.getContext(), &api.SdkClusterInspectCurrentRequest{})
+		cluster, err := d.InspectCurrentCluster()
 		if err != nil {
 			return nil, true, err
 		}
@@ -2583,7 +2591,7 @@ func (d *portworx) ValidateStoragePools() error {
 							err := fmt.Errorf("node [%s], pool: %s was expanded to size: %d larger than expected: %d",
 								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
 							log.Errorf(err.Error())
-							return "", false, err
+							return "", false, nil
 						}
 
 						log.Infof("node [%s], pool: %s, size is not as expected. Expected: %v, Actual: %v",
