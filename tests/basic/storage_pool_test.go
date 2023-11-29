@@ -9978,7 +9978,14 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 
 })
 
-func isMaintenanceModeRequiredForAddDisk() bool {
+func isMaintenanceModeRequiredForAddDisk() (bool, error) {
+	dmThin, err := IsDMthin()
+	if err != nil {
+		return false, err
+	}
+	if !dmThin {
+		return false, nil
+	}
 	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
 		cmd := "uname -r"
 
@@ -10000,23 +10007,26 @@ func isMaintenanceModeRequiredForAddDisk() bool {
 			compareVersion, err := semver.NewVersion("5.9.0")
 			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", "5.9.0"))
 			if parsedVersion.LessThan(compareVersion) {
-				return true
+				return true, nil
 			}
 		} else {
 			log.FailOnError(fmt.Errorf("unable for extract major kernal version using version: %s", versionOutput), "error in validating kernal version")
 		}
 
 	}
-	return false
+	return false, nil
 }
 
-func enterPoolMaintenanceAddDisk(poolId string) {
-	if ok := isMaintenanceModeRequiredForAddDisk(); ok {
+func enterPoolMaintenanceAddDisk(poolId string) error {
+	ok, err := isMaintenanceModeRequiredForAddDisk()
+	log.FailOnError(err, fmt.Sprintf("Failed entering maintenance mode"))
+	if ok {
 		n, err := GetNodeWithGivenPoolID(poolId)
 		log.FailOnError(err, fmt.Sprintf("error getting node with pool uid [%s]", poolId))
 		err = Inst().V.EnterPoolMaintenance(*n)
 		log.FailOnError(err, fmt.Sprintf("error entering pool maintenance pool uid [%s]", poolId))
 	}
+	return nil
 }
 
 func exitPoolMaintenance(poolId string) {
