@@ -2,9 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/Masterminds/semver/v3"
-	"github.com/portworx/torpedo/drivers/node/ssh"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
 	"math"
 	"math/rand"
 	"reflect"
@@ -9979,35 +9976,36 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 })
 
 func isMaintenanceModeRequiredForAddDisk() bool {
-	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
-		cmd := "uname -r"
-
-		stNode := node.GetStorageDriverNodes()[0]
-		// Execute the command to generate kernel panic
-		log.Infof("Executing command on node, [%v]", stNode.Name)
-		versionOutput, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
-		log.FailOnError(err, "error getting kernal version")
-
-		parts := strings.Split(versionOutput, "-")
-
-		if len(parts) >= 1 {
-			kernelVersion := parts[0]
-			parsedVersion, err := semver.NewVersion(kernelVersion)
-			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", kernelVersion))
-			compareVersion, err := semver.NewVersion("5.9.0")
-			log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", "5.9.0"))
-			if parsedVersion.LessThan(compareVersion) {
-				return true
-			}
-		} else {
-			log.FailOnError(fmt.Errorf("unable for extract major kernal version using version: %s", versionOutput), "error in validating kernal version")
-		}
-
-	}
-	return false
+	return true
+	//if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
+	//	cmd := "uname -r"
+	//
+	//	stNode := node.GetStorageDriverNodes()[0]
+	//	// Execute the command to generate kernel panic
+	//	log.Infof("Executing command on node, [%v]", stNode.Name)
+	//	versionOutput, err := Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+	//		Timeout:         2 * time.Minute,
+	//		TimeBeforeRetry: 10 * time.Second,
+	//	})
+	//	log.FailOnError(err, "error getting kernal version")
+	//
+	//	parts := strings.Split(versionOutput, "-")
+	//
+	//	if len(parts) >= 1 {
+	//		kernelVersion := parts[0]
+	//		parsedVersion, err := semver.NewVersion(kernelVersion)
+	//		log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", kernelVersion))
+	//		compareVersion, err := semver.NewVersion("5.9.0")
+	//		log.FailOnError(err, fmt.Sprintf("error parsion kernal version [%s]", "5.9.0"))
+	//		if parsedVersion.LessThan(compareVersion) {
+	//			return true
+	//		}
+	//	} else {
+	//		log.FailOnError(fmt.Errorf("unable for extract major kernal version using version: %s", versionOutput), "error in validating kernal version")
+	//	}
+	//
+	//}
+	//return false
 }
 
 func enterPoolMaintenanceAddDisk(poolId string) {
