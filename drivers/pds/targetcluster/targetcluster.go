@@ -1,11 +1,15 @@
 package targetcluster
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+
+	cm "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	"github.com/jetstack/cert-manager/pkg/client/clientset/versioned"
 
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
@@ -37,9 +41,11 @@ const (
 	timeInterval          = 10 * time.Second
 
 	// PDSNamespace PDS
-	PDSNamespace = "pds-system"
-	PDSChartRepo = "https://d2xtayr2ct14mw.cloudfront.net/charts/target"
-	pxLabel      = "pds.portworx.com/available"
+	PDSNamespace       = "pds-system"
+	PDSChartRepo       = "https://d2xtayr2ct14mw.cloudfront.net/charts/target"
+	pxLabel            = "pds.portworx.com/available"
+	CertManager        = "jetstack/cert-manager"
+	CertManagerVersion = "v1.11.0"
 )
 
 var (
@@ -93,6 +99,61 @@ func (targetCluster *TargetCluster) GetDeploymentTargetID(clusterID, tenantID st
 		return "", fmt.Errorf("target cluster is not in healthy State , terminating the testcase execution: %v", err)
 	}
 	return deploymentTargetID, nil
+}
+
+// CreateSelfSignedClusterIssuer Creates SelfSigned ClusterIssuer
+func (targetCluster *TargetCluster) CreateSelfSignedClusterIssuer(ClusterIssuerName string) error {
+	_, config, err := pdsdriver.GetK8sContext()
+	if err != nil {
+		return err
+	}
+	ClusterIssuerSelfSignedSpec := &cm.ClusterIssuer{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ClusterIssuerName,
+		},
+		Spec: cm.IssuerSpec{
+			IssuerConfig: cm.IssuerConfig{
+				SelfSigned: new(cm.SelfSignedIssuer),
+			},
+		},
+	}
+	certManagerClient, err := versioned.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+	_, err = certManagerClient.CertmanagerV1().ClusterIssuers().Create(context.TODO(), ClusterIssuerSelfSignedSpec, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// InstallCertManager installs cert-manager using helm
+func (targetCluster *TargetCluster) InstallCertManager(namespace string) error {
+	cmd := fmt.Sprintf("helm upgrade --install cert-manager %s --namespace %s --create-namespace --version %s --set installCRDs=%s", CertManager, namespace, CertManagerVersion, "true")
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("cert manager installation failed : %v", err)
+	}
+	log.Infof("Terminal output: %v", output)
+	return nil
+}
+
+// AddHelmRepo takes the repo name and url and adds it to the target cluster
+func (targetCluster *TargetCluster) AddHelmRepo(repoName, repoUrl string) error {
+	cmd := fmt.Sprintf("helm repo add %s %s", repoName, repoUrl)
+	output, _, err := osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("adding new repo failed: %v", err)
+	}
+	log.Infof("Terminal output: %v", output)
+	cmd = fmt.Sprintf("helm repo update")
+	output, _, err = osutils.ExecShell(cmd)
+	if err != nil {
+		return fmt.Errorf("helm update failed: %v", err)
+	}
+	log.Infof("Terminal output: %v", output)
+	return nil
 }
 
 // CreatePDSNamespace checks if the namespace is available in the cluster and pds is enabled on it
