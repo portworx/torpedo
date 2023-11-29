@@ -1,9 +1,10 @@
 package tests
 
 import (
+	"time"
+
 	"github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	"time"
 )
 
 const (
