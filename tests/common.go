@@ -609,7 +609,7 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 	}()
 
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		stepLog := fmt.Sprintf("check health status of %s app", ctx.App.Key)
 
 		Step(stepLog, func() {
@@ -635,7 +635,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -788,7 +788,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -906,7 +906,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
@@ -1537,7 +1537,7 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	volOptsMap[SkipClusterScopedObjects] = true
 
 	for _, ctx := range contexts {
-		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -3312,7 +3312,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 			if err, ok := bkpErrors[namespace]; ok {
 				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
-				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+				Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 					Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
