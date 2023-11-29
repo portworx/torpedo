@@ -379,7 +379,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 			log.FailOnError(err, "Getting px-backup namespace")
 			var labelselector = make(map[string]string)
 			labelselector["kdmp.portworx.com/driver-name"] = "kopiamaintenance"
-			err = DeletePodWithLabelInNamespace(pxbNamespace, labelselector, true)
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, labelselector, true)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
 			err = ValidateAllPodsInPxBackupNamespace()
@@ -410,7 +410,7 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		Step("Restart all the backup pod again and wait for it to come up", func() {
 			var labelselector = make(map[string]string)
 			labelselector["kdmp.portworx.com/driver-name"] = "kopiamaintenance"
-			err = DeletePodWithLabelInNamespace(pxbNamespace, labelselector, true)
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, labelselector, true)
 			dash.VerifyFatal(err, nil, "Restart all the backup pods")
 			log.InfoD("Validate if all the backup pods are up")
 			err = ValidateAllPodsInPxBackupNamespace()

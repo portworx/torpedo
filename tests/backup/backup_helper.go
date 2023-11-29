@@ -1472,8 +1472,8 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 	return restoreNames, nil
 }
 
-// DeletePodWithLabelInNamespace kills pod with the given label in the given namespace
-func DeletePodWithLabelInNamespace(namespace string, label map[string]string, ignoreLabel bool) error {
+// DeletePodWithWithoutLabelInNamespace kills pod with the given label in the given namespace
+func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]string, ignoreLabel bool) error {
 	var pods *corev1.PodList
 	var err error
 	// TODO: Revisit this function and remove the below code if not needed
@@ -4539,7 +4539,7 @@ func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupNam
 	if err != nil {
 		return err
 	}
-	err = DeletePodWithLabelInNamespace(namespace, label, false)
+	err = DeletePodWithWithoutLabelInNamespace(namespace, label, false)
 	if err != nil {
 		return err
 	}
@@ -4574,7 +4574,7 @@ func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreN
 	if err != nil {
 		return err
 	}
-	err = DeletePodWithLabelInNamespace(namespace, label, false)
+	err = DeletePodWithWithoutLabelInNamespace(namespace, label, false)
 	if err != nil {
 		return err
 	}
