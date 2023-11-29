@@ -161,12 +161,11 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
 			err = CreateApplicationClusters(orgID, "", "", nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with App-User ctx", SourceClusterName, destinationClusterName))
-			srcClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, nonAdminCtx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-			dstClusterStatus, err := Inst().Backup.GetClusterStatus(orgID, destinationClusterName, nonAdminCtx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
+			for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, clusterName, nonAdminCtx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", clusterName))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", clusterName))
+			}
 			srcClusterUid, err = Inst().Backup.GetClusterUID(nonAdminCtx, orgID, SourceClusterName)
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
