@@ -231,7 +231,7 @@ type statusJSON struct {
 func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_ResizeOperationType, size uint64, skipWaitForCleanVolumes bool) (err error) {
 	log.Infof("Initiating pool %v resize by %v with operation type %v", poolUUID, size, operation.String())
 	if err := d.RefreshDriverEndpoints(); err != nil {
-		log.FailOnError(err, "Failed to refresh driver endpoints")
+		return err
 	}
 	if operation == api.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
 		storageNodes := []node.Node{}
@@ -241,7 +241,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 		for _, pxnode := range nodes {
 			devices, err := d.GetStorageDevices(pxnode)
 			if err != nil {
-				log.FailOnError(err, "Failed to get storage devices")
+				return err
 			}
 			if len(devices) > 0 {
 				storageNodes = append(storageNodes, pxnode)
@@ -274,9 +274,7 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			}
 			return nil
 		}
-		defer func() {
-			err = exitPoolMaintenanceMode()
-		}()
+
 		nodeStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
 		if err != nil {
 			return err
@@ -287,6 +285,11 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			if v != "In Maintenance" {
 				if err := d.EnterPoolMaintenance(nodePoolExpand); err != nil {
 					return err
+				} else {
+					log.Infof("Entered maintenance mode")
+					defer func() {
+						err = exitPoolMaintenanceMode()
+					}()
 				}
 				//wait for pool to go to maintenance mode
 				time.Sleep(2 * time.Minute)
@@ -294,6 +297,31 @@ func (d *portworx) ExpandPool(poolUUID string, operation api.SdkStoragePool_Resi
 			} else if v == "In Maintenance" {
 				log.Infof("Pool already in maintenance mode")
 			}
+		}
+
+		// check if the node is maintenance mode
+		expectedStatus := "In Maintenance"
+		t := func() (interface{}, bool, error) {
+			poolsStatus, err := d.GetNodePoolsStatus(nodePoolExpand)
+			if err != nil {
+				return nil, true,
+					fmt.Errorf("error getting pool status on node %s,err: %v", nodePoolExpand.Name, err)
+			}
+			if poolsStatus == nil {
+				return nil,
+					false, fmt.Errorf("pools status is nil")
+			}
+			for k, v := range poolsStatus {
+				if v != expectedStatus {
+					return nil, true,
+						fmt.Errorf("pool %s is not %s, current status: %s", k, expectedStatus, v)
+				}
+			}
+			return nil, false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
+		if err != nil {
+			return fmt.Errorf("node %s pools are not in status %s. Err: [%v]", nodePoolExpand.Name, expectedStatus, err)
 		}
 	}
 
