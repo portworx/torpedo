@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+    "github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
@@ -937,7 +938,6 @@ var _ = Describe("{StorageFullPoolExpansion}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
 			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
 		})
-<<<<<<< HEAD
 	})
 })
 
@@ -1323,4 +1323,3 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 //	})
 //})
 //
->>>>>>> 778a2b288 (comment out all tests using add-disk type expansion)
