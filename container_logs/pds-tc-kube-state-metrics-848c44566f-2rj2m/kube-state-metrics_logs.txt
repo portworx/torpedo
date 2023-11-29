@@ -1,0 +1,18 @@
+Logs for Pod: pds-tc-kube-state-metrics-848c44566f-2rj2m, Container: kube-state-metrics
+I1128 14:30:41.239375       1 wrapper.go:98] "Starting kube-state-metrics"
+I1128 14:30:41.333465       1 server.go:192] "Used resources" resources=[nodes persistentvolumes validatingwebhookconfigurations endpoints horizontalpodautoscalers pods storageclasses ingresses limitranges resourcequotas cronjobs daemonsets secrets statefulsets leases persistentvolumeclaims services certificatesigningrequests configmaps mutatingwebhookconfigurations namespaces poddisruptionbudgets deployments replicasets replicationcontrollers jobs networkpolicies volumeattachments]
+I1128 14:30:41.333552       1 types.go:184] "Using all namespaces"
+I1128 14:30:41.333586       1 server.go:219] "Metric allow-denylisting" allowDenyStatus="Excluding the following lists that were on denylist: "
+W1128 14:30:41.333693       1 client_config.go:618] Neither --kubeconfig nor --master was specified.  Using the inClusterConfig.  This might not work.
+I1128 14:30:41.337306       1 server.go:364] "Tested communication with server"
+I1128 14:30:41.436431       1 server.go:369] "Run with Kubernetes cluster version" major="1" minor="27" gitVersion="v1.27.2" gitTreeState="clean" gitCommit="7f6f68fdabc4df88cfea2dcf9a19b2b830f1e647" platform="linux/amd64"
+I1128 14:30:41.436469       1 server.go:370] "Communication with server successful"
+I1128 14:30:41.436903       1 server.go:316] "Started metrics server" metricsServerAddress="[::]:8080"
+I1128 14:30:41.436907       1 metrics_handler.go:99] "Autosharding disabled"
+I1128 14:30:41.437055       1 server.go:305] "Started kube-state-metrics self metrics server" telemetryAddress="[::]:8081"
+I1128 14:30:41.534110       1 builder.go:254] "Active resources" activeStoreNames="certificatesigningrequests,configmaps,cronjobs,daemonsets,deployments,endpoints,horizontalpodautoscalers,ingresses,jobs,leases,limitranges,mutatingwebhookconfigurations,namespaces,networkpolicies,nodes,persistentvolumeclaims,persistentvolumes,poddisruptionbudgets,pods,replicasets,replicationcontrollers,resourcequotas,secrets,services,statefulsets,storageclasses,validatingwebhookconfigurations,volumeattachments"
+I1128 14:30:41.637032       1 server.go:74] levelinfomsgListening onaddress0.0.0.0:8081
+I1128 14:30:41.637056       1 server.go:74] levelinfomsgListening onaddress0.0.0.0:8080
+I1128 14:30:41.637081       1 server.go:74] levelinfomsgTLS is disabled.http2falseaddress0.0.0.0:8081
+I1128 14:30:41.637089       1 server.go:74] levelinfomsgTLS is disabled.http2falseaddress0.0.0.0:8080
+-------------------------------------

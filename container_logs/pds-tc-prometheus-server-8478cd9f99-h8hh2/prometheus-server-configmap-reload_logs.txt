@@ -1,0 +1,3 @@
+Logs for Pod: pds-tc-prometheus-server-8478cd9f99-h8hh2, Container: prometheus-server-configmap-reload
+2023/11/28 14:30:45 Watching directory: "/etc/config"
+-------------------------------------

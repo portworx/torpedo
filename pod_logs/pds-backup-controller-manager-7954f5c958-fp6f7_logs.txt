@@ -1,0 +1,50 @@
+Logs for Pod: pds-backup-controller-manager-7954f5c958-fp6f7
+2023-11-28T14:30:18Z	INFO	controller-runtime.metrics	Metrics server is starting to listen	{"addr": "127.0.0.1:8080"}
+2023-11-28T14:30:18Z	INFO	setup	starting manager
+2023-11-28T14:30:18Z	INFO	Starting server	{"path": "/metrics", "kind": "metrics", "addr": "127.0.0.1:8080"}
+2023-11-28T14:30:18Z	INFO	Starting server	{"kind": "health probe", "addr": "0.0.0.0:8081"}
+I1128 14:30:18.164742       1 leaderelection.go:248] attempting to acquire leader lease pds-system/f5491588.pds.io...
+I1128 14:30:33.751807       1 leaderelection.go:258] successfully acquired lease pds-system/f5491588.pds.io
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.Backup"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.Job"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.CronJob"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.VolumeSnapshot"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.Pod"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.BackupJob"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:33Z	INFO	Starting Controller	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment", "source": "kind source: *v1.Deployment"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment", "source": "kind source: *v1.ConfigMap"}
+2023-11-28T14:30:33Z	INFO	Starting Controller	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backupjob", "controllerGroup": "backups.pds.io", "controllerKind": "BackupJob", "source": "kind source: *v1.BackupJob"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backupjob", "controllerGroup": "backups.pds.io", "controllerKind": "BackupJob", "source": "kind source: *v1.Job"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "backupjob", "controllerGroup": "backups.pds.io", "controllerKind": "BackupJob", "source": "kind source: *v1.VolumeSnapshot"}
+2023-11-28T14:30:33Z	INFO	Starting Controller	{"controller": "backupjob", "controllerGroup": "backups.pds.io", "controllerKind": "BackupJob"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "restore", "controllerGroup": "backups.pds.io", "controllerKind": "Restore", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "restore", "controllerGroup": "backups.pds.io", "controllerKind": "Restore", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:33Z	INFO	Starting EventSource	{"controller": "restore", "controllerGroup": "backups.pds.io", "controllerKind": "Restore", "source": "kind source: *v1.Pod"}
+2023-11-28T14:30:33Z	INFO	Starting Controller	{"controller": "restore", "controllerGroup": "backups.pds.io", "controllerKind": "Restore"}
+2023-11-28T14:30:33Z	DEBUG	events	pds-backup-controller-manager-7954f5c958-fp6f7_2c364ced-841a-4e1d-bb5f-bacf8d1b171c became leader	{"type": "Normal", "object": {"kind":"Lease","namespace":"pds-system","name":"f5491588.pds.io","uid":"7653b8b2-56b9-4baa-9779-47d237e182d3","apiVersion":"coordination.k8s.io/v1","resourceVersion":"4890362"}, "reason": "LeaderElection"}
+2023-11-28T14:30:33Z	INFO	Starting workers	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment", "worker count": 1}
+2023-11-28T14:30:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:30:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:30:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:30:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:30:33Z	INFO	Starting workers	{"controller": "restore", "controllerGroup": "backups.pds.io", "controllerKind": "Restore", "worker count": 1}
+2023-11-28T14:30:34Z	INFO	Starting workers	{"controller": "backupjob", "controllerGroup": "backups.pds.io", "controllerKind": "BackupJob", "worker count": 1}
+2023-11-28T14:30:34Z	INFO	Starting workers	{"controller": "backup", "controllerGroup": "backups.pds.io", "controllerKind": "Backup", "worker count": 1}
+2023-11-28T14:35:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:35:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:40:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:40:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:45:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:45:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:50:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:50:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:55:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T14:55:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T15:00:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T15:00:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T15:05:33Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+2023-11-28T15:05:33Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-backup-controller-manager"}
+-------------------------------------

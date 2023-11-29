@@ -1,0 +1,43 @@
+Logs for Pod: pds-mutator-5d974df6b9-rq72n
+{"level":"info","msg":"Listening on port 8443...","time":"2023-11-28T14:29:13Z"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:14Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-external-dns-696f9bccb9-","pod_namespace":"pds-system","time":"2023-11-28T14:30:14Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-external-dns-696f9bccb9-","pod_namespace":"pds-system","time":"2023-11-28T14:30:14Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:14Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:15Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-teleport-5d465bc696-","pod_namespace":"pds-system","time":"2023-11-28T14:30:15Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-teleport-5d465bc696-","pod_namespace":"pds-system","time":"2023-11-28T14:30:15Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:15Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:16Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-deployment-controller-manager-f5dfc4c7f-","pod_namespace":"pds-system","time":"2023-11-28T14:30:16Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-deployment-controller-manager-f5dfc4c7f-","pod_namespace":"pds-system","time":"2023-11-28T14:30:16Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:16Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:17Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-operator-target-controller-manager-67886cc5d9-","pod_namespace":"pds-system","time":"2023-11-28T14:30:17Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-operator-target-controller-manager-67886cc5d9-","pod_namespace":"pds-system","time":"2023-11-28T14:30:17Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:17Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:18Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-agent-6cbf57bf99-","pod_namespace":"pds-system","time":"2023-11-28T14:30:18Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-agent-6cbf57bf99-","pod_namespace":"pds-system","time":"2023-11-28T14:30:18Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:18Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:20Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-teleport-7b74d7f4fd-","pod_namespace":"pds-system","time":"2023-11-28T14:30:20Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-teleport-7b74d7f4fd-","pod_namespace":"pds-system","time":"2023-11-28T14:30:20Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:20Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:20Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-external-dns-c4bbf685f-","pod_namespace":"pds-system","time":"2023-11-28T14:30:20Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-external-dns-c4bbf685f-","pod_namespace":"pds-system","time":"2023-11-28T14:30:20Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:20Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:37Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-tc-prometheus-server-8478cd9f99-","pod_namespace":"pds-system","time":"2023-11-28T14:30:37Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-tc-prometheus-server-8478cd9f99-","pod_namespace":"pds-system","time":"2023-11-28T14:30:37Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:37Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:30:38Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-tc-kube-state-metrics-848c44566f-","pod_namespace":"pds-system","time":"2023-11-28T14:30:38Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-tc-kube-state-metrics-848c44566f-","pod_namespace":"pds-system","time":"2023-11-28T14:30:38Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:30:38Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"received mutation request","time":"2023-11-28T14:31:20Z","uri":"/mutation/pod?timeout=10s"}
+{"level":"info","msg":"Mutating pod","pod_name":"pds-teleport-56445c7fbc-","pod_namespace":"pds-system","time":"2023-11-28T14:31:20Z"}
+{"level":"info","msg":"applying mutation inject_custom_registry","pod_name":"pds-teleport-56445c7fbc-","pod_namespace":"pds-system","time":"2023-11-28T14:31:20Z"}
+{"level":"info","msg":"sending response","time":"2023-11-28T14:31:20Z","uri":"/mutation/pod?timeout=10s"}
+-------------------------------------

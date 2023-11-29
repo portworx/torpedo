@@ -1,0 +1,20 @@
+Logs for Pod: pds-operator-target-controller-manager-67886cc5d9-sdbt5, Container: kube-rbac-proxy
+W1128 14:30:19.521337       1 main.go:165] 
+==== Deprecation Warning ======================
+
+Insecure listen address will be removed.
+Using --insecure-listen-address won't be possible!
+
+The ability to run kube-rbac-proxy without TLS certificates will be removed.
+Not using --tls-cert-file and --tls-private-key-file won't be possible!
+
+For more information, please go to https://github.com/brancz/kube-rbac-proxy/issues/187
+
+===============================================
+
+		
+I1128 14:30:19.521864       1 main.go:218] Valid token audiences: 
+I1128 14:30:19.521967       1 main.go:344] Generating self signed cert as no cert is provided
+I1128 14:30:21.430709       1 main.go:394] Starting TCP socket on 0.0.0.0:8443
+I1128 14:30:21.435384       1 main.go:401] Listening securely on 0.0.0.0:8443
+-------------------------------------

@@ -1,0 +1,1045 @@
+Logs for Pod: pds-deployment-controller-manager-f5dfc4c7f-jkwqf, Container: manager
+2023-11-28T14:30:18Z	INFO	setup	active capabilities	{"capabilities": {"capabilities":"v1","cassandra":"v3","consul":"v2","couchbase":"v3","database":"v1","elasticsearch":"v3","kafka":"v3","mongodb":"v3","mysql":"v3","postgresql":"v3","rabbitmq":"v3","redis":"v3","restore":"v1","sqlserver":"v3","storage_size_increase":"v1","zookeeper":"v3"}}
+2023-11-28T14:30:18Z	INFO	controller-runtime.metrics	Metrics server is starting to listen	{"addr": "127.0.0.1:8080"}
+2023-11-28T14:30:18Z	INFO	setup	starting manager
+2023-11-28T14:30:18Z	INFO	Starting server	{"path": "/metrics", "kind": "metrics", "addr": "127.0.0.1:8080"}
+2023-11-28T14:30:18Z	INFO	Starting server	{"kind": "health probe", "addr": "0.0.0.0:8081"}
+I1128 14:30:18.939109       1 leaderelection.go:248] attempting to acquire leader lease pds-system/eca70202.pds.io...
+I1128 14:30:35.243826       1 leaderelection.go:258] successfully acquired lease pds-system/eca70202.pds.io
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment", "source": "kind source: *v1.Deployment"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "sqlserver", "controllerGroup": "deployments.pds.io", "controllerKind": "Sqlserver", "source": "kind source: *v1.Sqlserver"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "mongodb", "controllerGroup": "deployments.pds.io", "controllerKind": "Mongodb", "source": "kind source: *v1.Mongodb"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment", "source": "kind source: *v1.ConfigMap"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "sqlserver", "controllerGroup": "deployments.pds.io", "controllerKind": "Sqlserver", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "sqlserver", "controllerGroup": "deployments.pds.io", "controllerKind": "Sqlserver", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "sqlserver", "controllerGroup": "deployments.pds.io", "controllerKind": "Sqlserver"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "zookeeper", "controllerGroup": "deployments.pds.io", "controllerKind": "Zookeeper", "source": "kind source: *v1.Zookeeper"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "zookeeper", "controllerGroup": "deployments.pds.io", "controllerKind": "Zookeeper", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "zookeeper", "controllerGroup": "deployments.pds.io", "controllerKind": "Zookeeper", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "zookeeper", "controllerGroup": "deployments.pds.io", "controllerKind": "Zookeeper"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "applicationregistration", "controllerGroup": "stork.libopenstorage.org", "controllerKind": "ApplicationRegistration", "source": "kind source: *v1alpha1.ApplicationRegistration"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "postgresql", "controllerGroup": "deployments.pds.io", "controllerKind": "Postgresql", "source": "kind source: *v1.Postgresql"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "postgresql", "controllerGroup": "deployments.pds.io", "controllerKind": "Postgresql", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "postgresql", "controllerGroup": "deployments.pds.io", "controllerKind": "Postgresql", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "applicationregistration", "controllerGroup": "stork.libopenstorage.org", "controllerKind": "ApplicationRegistration"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "couchbase", "controllerGroup": "deployments.pds.io", "controllerKind": "Couchbase", "source": "kind source: *v1.Couchbase"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "couchbase", "controllerGroup": "deployments.pds.io", "controllerKind": "Couchbase", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "couchbase", "controllerGroup": "deployments.pds.io", "controllerKind": "Couchbase", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "postgresql", "controllerGroup": "deployments.pds.io", "controllerKind": "Postgresql"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.ServiceAccount"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "couchbase", "controllerGroup": "deployments.pds.io", "controllerKind": "Couchbase"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.Role"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.RoleBinding"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.ConfigMap"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.Service"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.Endpoints"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.PodDisruptionBudget"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.StorageClass"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.StatefulSet"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.Job"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *endpoint.DNSEndpoint"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "source": "kind source: *v1.Event"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database"}
+2023-11-28T14:30:35Z	DEBUG	events	pds-deployment-controller-manager-f5dfc4c7f-jkwqf_25272b64-3147-45ba-96b1-be8a092e25b9 became leader	{"type": "Normal", "object": {"kind":"Lease","namespace":"pds-system","name":"eca70202.pds.io","uid":"378f8d04-ba20-4d9f-993c-7d07bd8f3013","apiVersion":"coordination.k8s.io/v1","resourceVersion":"4890375"}, "reason": "LeaderElection"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "mongodb", "controllerGroup": "deployments.pds.io", "controllerKind": "Mongodb", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "redis", "controllerGroup": "deployments.pds.io", "controllerKind": "Redis", "source": "kind source: *v1.Redis"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "kafka", "controllerGroup": "deployments.pds.io", "controllerKind": "Kafka", "source": "kind source: *v1.Kafka"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "redis", "controllerGroup": "deployments.pds.io", "controllerKind": "Redis", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "kafka", "controllerGroup": "deployments.pds.io", "controllerKind": "Kafka", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "kafka", "controllerGroup": "deployments.pds.io", "controllerKind": "Kafka", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "kafka", "controllerGroup": "deployments.pds.io", "controllerKind": "Kafka"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "redis", "controllerGroup": "deployments.pds.io", "controllerKind": "Redis", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "redis", "controllerGroup": "deployments.pds.io", "controllerKind": "Redis"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "mongodb", "controllerGroup": "deployments.pds.io", "controllerKind": "Mongodb", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "mongodb", "controllerGroup": "deployments.pds.io", "controllerKind": "Mongodb"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "consul", "controllerGroup": "deployments.pds.io", "controllerKind": "Consul", "source": "kind source: *v1.Consul"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "consul", "controllerGroup": "deployments.pds.io", "controllerKind": "Consul", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "consul", "controllerGroup": "deployments.pds.io", "controllerKind": "Consul", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "consul", "controllerGroup": "deployments.pds.io", "controllerKind": "Consul"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "mysql", "controllerGroup": "deployments.pds.io", "controllerKind": "Mysql", "source": "kind source: *v1.Mysql"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "mysql", "controllerGroup": "deployments.pds.io", "controllerKind": "Mysql", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "mysql", "controllerGroup": "deployments.pds.io", "controllerKind": "Mysql", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "mysql", "controllerGroup": "deployments.pds.io", "controllerKind": "Mysql"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "datastaxenterprise", "controllerGroup": "deployments.pds.io", "controllerKind": "DatastaxEnterprise", "source": "kind source: *v1.DatastaxEnterprise"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "datastaxenterprise", "controllerGroup": "deployments.pds.io", "controllerKind": "DatastaxEnterprise", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "datastaxenterprise", "controllerGroup": "deployments.pds.io", "controllerKind": "DatastaxEnterprise", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "datastaxenterprise", "controllerGroup": "deployments.pds.io", "controllerKind": "DatastaxEnterprise"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "elasticsearch", "controllerGroup": "deployments.pds.io", "controllerKind": "Elasticsearch", "source": "kind source: *v1.Elasticsearch"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "elasticsearch", "controllerGroup": "deployments.pds.io", "controllerKind": "Elasticsearch", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "elasticsearch", "controllerGroup": "deployments.pds.io", "controllerKind": "Elasticsearch", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "elasticsearch", "controllerGroup": "deployments.pds.io", "controllerKind": "Elasticsearch"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "rabbitmq", "controllerGroup": "deployments.pds.io", "controllerKind": "Rabbitmq", "source": "kind source: *v1.Rabbitmq"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "rabbitmq", "controllerGroup": "deployments.pds.io", "controllerKind": "Rabbitmq", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "rabbitmq", "controllerGroup": "deployments.pds.io", "controllerKind": "Rabbitmq", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "rabbitmq", "controllerGroup": "deployments.pds.io", "controllerKind": "Rabbitmq"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "cassandra", "controllerGroup": "deployments.pds.io", "controllerKind": "Cassandra", "source": "kind source: *v1.Cassandra"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "cassandra", "controllerGroup": "deployments.pds.io", "controllerKind": "Cassandra", "source": "kind source: *v1.Database"}
+2023-11-28T14:30:35Z	INFO	Starting EventSource	{"controller": "cassandra", "controllerGroup": "deployments.pds.io", "controllerKind": "Cassandra", "source": "kind source: *v1.Restore"}
+2023-11-28T14:30:35Z	INFO	Starting Controller	{"controller": "cassandra", "controllerGroup": "deployments.pds.io", "controllerKind": "Cassandra"}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "zookeeper", "controllerGroup": "deployments.pds.io", "controllerKind": "Zookeeper", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "applicationregistration", "controllerGroup": "stork.libopenstorage.org", "controllerKind": "ApplicationRegistration", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/datastaxenterprise"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/datastaxenterprise"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/datastaxenterprise"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/mongodb"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/mongodb"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/mongodb"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/redis-redis-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/redis-redis-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/redis-redis-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/cassandra-cassandra-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/cassandra-cassandra-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/cassandra-cassandra-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/database"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/database"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/database"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/rabbitmq-rabbitmq-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/rabbitmq-rabbitmq-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/rabbitmq-rabbitmq-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/consul"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/consul"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/consul"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/kafka-kafka-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/kafka-kafka-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/kafka-kafka-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/zookeeper"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/zookeeper"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/zookeeper"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/elasticsearch"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/elasticsearch"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/elasticsearch"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/mysql"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/mysql"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/mysql"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/sqlserver"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/sqlserver"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/sqlserver"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/couchbase-couchbase-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/couchbase-couchbase-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/couchbase-couchbase-v1-deployments.pds.io"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	entering reconciliation	{"resource": "/postgresql"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	resource update skipped.	{"resource": "/postgresql"}
+2023-11-28T14:30:35Z	INFO	controllers.DeploymentApplicationRegistration	exiting reconciliation	{"resource": "/postgresql"}
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-backup-controller-manager-7954f5c958", "namespace": "pds-system", "error": "replicasets.apps \"pds-backup-controller-manager-7954f5c958\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-external-dns-696f9bccb9", "namespace": "pds-system", "error": "replicasets.apps \"pds-external-dns-696f9bccb9\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "consul", "controllerGroup": "deployments.pds.io", "controllerKind": "Consul", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "sqlserver", "controllerGroup": "deployments.pds.io", "controllerKind": "Sqlserver", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "rabbitmq", "controllerGroup": "deployments.pds.io", "controllerKind": "Rabbitmq", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "capabilities", "controllerGroup": "apps", "controllerKind": "Deployment", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "cassandra", "controllerGroup": "deployments.pds.io", "controllerKind": "Cassandra", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "elasticsearch", "controllerGroup": "deployments.pds.io", "controllerKind": "Elasticsearch", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "redis", "controllerGroup": "deployments.pds.io", "controllerKind": "Redis", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "database", "controllerGroup": "deployments.pds.io", "controllerKind": "Database", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "postgresql", "controllerGroup": "deployments.pds.io", "controllerKind": "Postgresql", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "couchbase", "controllerGroup": "deployments.pds.io", "controllerKind": "Couchbase", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "datastaxenterprise", "controllerGroup": "deployments.pds.io", "controllerKind": "DatastaxEnterprise", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "mongodb", "controllerGroup": "deployments.pds.io", "controllerKind": "Mongodb", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "mysql", "controllerGroup": "deployments.pds.io", "controllerKind": "Mysql", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	Starting workers	{"controller": "kafka", "controllerGroup": "deployments.pds.io", "controllerKind": "Kafka", "worker count": 1}
+2023-11-28T14:30:35Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:35Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-mutator-5d974df6b9", "namespace": "pds-system", "error": "replicasets.apps \"pds-mutator-5d974df6b9\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:30:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:30:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-deployment-controller-manager-f5dfc4c7f", "namespace": "pds-system", "error": "replicasets.apps \"pds-deployment-controller-manager-f5dfc4c7f\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.storageClass.metadata.creationTimestamp"
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-teleport-5d465bc696", "namespace": "pds-system", "error": "replicasets.apps \"pds-teleport-5d465bc696\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-operator-target-controller-manager-67886cc5d9", "namespace": "pds-system", "error": "replicasets.apps \"pds-operator-target-controller-manager-67886cc5d9\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-teleport-7b74d7f4fd", "namespace": "pds-system", "error": "replicasets.apps \"pds-teleport-7b74d7f4fd\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.datastorage.persistentVolumeSpec.metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.datastorage.storageClass.metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.services[0].metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.services[1].metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.services[2].metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.services[3].metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.services[4].metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.services[5].metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.sharedStorage.persistentVolumeClaim.metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.sharedStorage.storageClass.metadata.creationTimestamp"
+2023-11-28T14:30:35Z	INFO	KubeAPIWarningLogger	unknown field "spec.statefulSet.template.metadata.creationTimestamp"
+2023-11-28T14:30:35Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-teleport-5d465bc696", "namespace": "pds-system", "error": "replicasets.apps \"pds-teleport-5d465bc696\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:35Z	INFO	controllers.Postgresql	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Database", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:35Z	INFO	controllers.Postgresql	All dependent resources reconciled.	{"postgresql": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:35Z	INFO	controllers.Postgresql	Updating status from dependent database.	{"postgresql": "automation/pg-test-p2rjlh", "database status": {"replicas":2,"readyReplicas":2,"pods":[{"ip":"10.233.73.187","name":"pg-test-p2rjlh-0","workerNode":"ip-10-13-161-111.pwx.purestorage.com"},{"ip":"10.233.98.87","name":"pg-test-p2rjlh-1","workerNode":"ip-10-13-167-201.pwx.purestorage.com"}],"health":"Healthy","initialized":"Yes","connectionDetails":{"nodes":["pg-test-p2rjlh-automation-0-vip.pds.io","pg-test-p2rjlh-automation-1-vip.pds.io"],"ports":{"patroni":8009,"postgresql":5432,"sshd":2022}},"resources":[{"resource":{"apiGroup":null,"kind":"Pod","name":"pg-test-p2rjlh-0"},"conditions":[{"type":"PodScheduled","status":"True","lastTransitionTime":"2023-11-27T05:24:03Z","reason":"NoReason","message":"NoMessage"},{"type":"Initialized","status":"True","lastTransitionTime":"2023-11-27T05:24:08Z","reason":"NoReason","message":"NoMessage"},{"type":"Ready","status":"True","lastTransitionTime":"2023-11-27T05:24:34Z","reason":"NoReason","message":"NoMessage"},{"type":"ContainersReady","status":"True","lastTransitionTime":"2023-11-27T05:24:34Z","reason":"NoReason","message":"NoMessage"}]},{"resource":{"apiGroup":null,"kind":"Pod","name":"pg-test-p2rjlh-1"},"conditions":[{"type":"PodScheduled","status":"True","lastTransitionTime":"2023-11-27T05:23:15Z","reason":"NoReason","message":"NoMessage"},{"type":"Initialized","status":"True","lastTransitionTime":"2023-11-27T05:23:17Z","reason":"NoReason","message":"NoMessage"},{"type":"Ready","status":"True","lastTransitionTime":"2023-11-27T05:23:26Z","reason":"NoReason","message":"NoMessage"},{"type":"ContainersReady","status":"True","lastTransitionTime":"2023-11-27T05:23:26Z","reason":"NoReason","message":"NoMessage"}]},{"resource":{"apiGroup":null,"kind":"Pod","name":"pg-test-p2rjlh-cluster-init-6cr55"},"conditions":[{"type":"Initialized","status":"True","lastTransitionTime":"2023-11-21T13:19:16Z","reason":"PodCompleted","message":"NoMessage"},{"type":"PodScheduled","status":"True","lastTransitionTime":"2023-11-21T13:19:16Z","reason":"NoReason","message":"NoMessage"},{"type":"Ready","status":"False","lastTransitionTime":"2023-11-21T13:19:29Z","reason":"PodCompleted","message":"NoMessage"},{"type":"ContainersReady","status":"False","lastTransitionTime":"2023-11-21T13:19:29Z","reason":"PodCompleted","message":"NoMessage"}]},{"resource":{"apiGroup":null,"kind":"Pod","name":"pg-test-p2rjlh-node-init-bs5ch"},"conditions":[{"type":"Initialized","status":"True","lastTransitionTime":"2023-11-21T13:19:16Z","reason":"PodCompleted","message":"NoMessage"},{"type":"PodScheduled","status":"True","lastTransitionTime":"2023-11-21T13:19:16Z","reason":"NoReason","message":"NoMessage"},{"type":"Ready","status":"False","lastTransitionTime":"2023-11-21T13:19:30Z","reason":"PodCompleted","message":"NoMessage"},{"type":"ContainersReady","status":"False","lastTransitionTime":"2023-11-21T13:19:30Z","reason":"PodCompleted","message":"NoMessage"}]}],"resourceEvents":[{"resource":{"apiGroup":"batch","kind":"Job","name":"pg-test-p2rjlh-cluster-init"}},{"resource":{"apiGroup":"batch","kind":"Job","name":"pg-test-p2rjlh-node-init"}},{"resource":{"apiGroup":"","kind":"PersistentVolumeClaim","name":"datadir-pg-test-p2rjlh-0"}},{"resource":{"apiGroup":"","kind":"PersistentVolumeClaim","name":"datadir-pg-test-p2rjlh-1"}},{"resource":{"apiGroup":"","kind":"PersistentVolumeClaim","name":"sharedbackupsdir-pg-test-p2rjlh"}},{"resource":{"apiGroup":"","kind":"Pod","name":"pg-test-p2rjlh-0"}},{"resource":{"apiGroup":"","kind":"Pod","name":"pg-test-p2rjlh-1"}},{"resource":{"apiGroup":"","kind":"Pod","name":"pg-test-p2rjlh-cluster-init-6cr55"}},{"resource":{"apiGroup":"","kind":"Pod","name":"pg-test-p2rjlh-node-init-bs5ch"}},{"resource":{"apiGroup":"policy","kind":"PodDisruptionBudget","name":"pg-test-p2rjlh"}},{"resource":{"apiGroup":"","kind":"Service","name":"pg-test-p2rjlh-automation"}},{"resource":{"apiGroup":"","kind":"Service","name":"pg-test-p2rjlh-automation-0"}},{"resource":{"apiGroup":"","kind":"Service","name":"pg-test-p2rjlh-automation-0-vip"}},{"resource":{"apiGroup":"","kind":"Service","name":"pg-test-p2rjlh-automation-1"}},{"resource":{"apiGroup":"","kind":"Service","name":"pg-test-p2rjlh-automation-1-vip"}},{"resource":{"apiGroup":"","kind":"Service","name":"pg-test-p2rjlh-automation-config"}},{"resource":{"apiGroup":"apps","kind":"StatefulSet","name":"pg-test-p2rjlh"}}]}}
+2023-11-28T14:30:35Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:35Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource created.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource created.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource created.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:36Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-external-dns-696f9bccb9", "namespace": "pds-system", "error": "replicasets.apps \"pds-external-dns-696f9bccb9\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:36Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-external-dns-c4bbf685f", "namespace": "pds-system", "error": "replicasets.apps \"pds-external-dns-c4bbf685f\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-agent-6cbf57bf99", "namespace": "pds-system", "error": "replicasets.apps \"pds-agent-6cbf57bf99\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:36Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:37Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-tc-prometheus-server-8478cd9f99", "namespace": "pds-system", "error": "replicasets.apps \"pds-tc-prometheus-server-8478cd9f99\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:38Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-tc-kube-state-metrics-848c44566f", "namespace": "pds-system", "error": "replicasets.apps \"pds-tc-kube-state-metrics-848c44566f\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:38Z	ERROR	controllers.Database	Failed to get object for event	{"group": "", "version": "v1", "kind": "Endpoints", "name": "pds-tc-kube-state-metrics", "namespace": "", "error": "an empty namespace may not be set when a resource name is provided"}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:30:38Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:38Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:40Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:44Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:49Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:30:52Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:08Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:20Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-teleport-56445c7fbc", "namespace": "pds-system", "error": "replicasets.apps \"pds-teleport-56445c7fbc\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:31:30Z	ERROR	controllers.Database	Failed to get object for event	{"group": "apps", "version": "v1", "kind": "ReplicaSet", "name": "pds-teleport-7b74d7f4fd", "namespace": "pds-system", "error": "replicasets.apps \"pds-teleport-7b74d7f4fd\" is forbidden: User \"system:serviceaccount:pds-system:pds-deployment-controller-manager\" cannot get resource \"replicasets\" in API group \"apps\" in the namespace \"pds-system\""}
+github.com/pure-px/pds-operator-deployments/controllers/database.(*DatabaseReconciler).reconcileDatabaseByEvent
+	/workspace/controllers/database/controller.go:852
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).mapAndEnqueue
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:80
+sigs.k8s.io/controller-runtime/pkg/handler.(*enqueueRequestsFromMapFunc).Create
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/handler/enqueue_mapped.go:57
+sigs.k8s.io/controller-runtime/pkg/source/internal.EventHandler.OnAdd
+	/go/pkg/mod/sigs.k8s.io/controller-runtime@v0.14.5/pkg/source/internal/eventsource.go:63
+k8s.io/client-go/tools/cache.(*processorListener).run.func1
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:911
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:157
+k8s.io/apimachinery/pkg/util/wait.BackoffUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:158
+k8s.io/apimachinery/pkg/util/wait.JitterUntil
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:135
+k8s.io/apimachinery/pkg/util/wait.Until
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:92
+k8s.io/client-go/tools/cache.(*processorListener).run
+	/go/pkg/mod/k8s.io/client-go@v0.26.3/tools/cache/shared_informer.go:905
+k8s.io/apimachinery/pkg/util/wait.(*Group).Start.func1
+	/go/pkg/mod/k8s.io/apimachinery@v0.26.3/pkg/util/wait/wait.go:75
+2023-11-28T14:31:40Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:31:40Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:32:44Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:34:52Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:35:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:35:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:39:08Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:40:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:40:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:45:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:45:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:47:40Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T14:50:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:50:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:55:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T14:55:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T15:00:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T15:00:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ServiceAccount", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Role", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.RoleBinding", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRole", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ClusterRoleBinding", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.ConfigMap", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Queueing DB reconcile request for event	{"group": "deployments.pds.io", "version": "v1", "kind": "Postgresql", "name": "pg-test-p2rjlh", "namespace": "automation", "deployment": "pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Secret", "name": "pg-test-p2rjlh-creds", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-0-vip", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-0", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation-1-vip", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-1", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*endpoint.DNSEndpoint", "name": "pg-test-p2rjlh-automation", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.Service", "name": "pg-test-p2rjlh-automation-config", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PodDisruptionBudget", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-sharedbackups-automation", "namespace": ""}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "sharedbackupsdir-pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StorageClass", "name": "pg-test-p2rjlh-automation", "namespace": ""}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-0", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource unchanged.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.PersistentVolumeClaim", "name": "datadir-pg-test-p2rjlh-1", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Dependent resource updated.	{"owner": "pg-test-p2rjlh", "resourceKind": "*v1.StatefulSet", "name": "pg-test-p2rjlh", "namespace": "automation"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	All dependent resources reconciled.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Collecting pod infos.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Updating replica status.	{"database": "automation/pg-test-p2rjlh", "replicas": 2, "ready replicas": 2}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Updating health status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Updating connectionDetails status.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Collecting resource status conditions.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T15:04:20Z	INFO	controllers.Database	Collecting resource events.	{"database": "automation/pg-test-p2rjlh"}
+2023-11-28T15:05:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T15:05:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T15:10:35Z	INFO	capabilities	entering reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+2023-11-28T15:10:35Z	INFO	capabilities	exiting reconciliation	{"namespace": "pds-system", "name": "pds-deployment-controller-manager"}
+-------------------------------------
