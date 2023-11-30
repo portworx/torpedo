@@ -1316,13 +1316,7 @@ var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
 			stepLog := "Shutdown storage node"
 			log.Infof(stepLog)
 			Step(stepLog, func() {
-				err = Inst().N.ShutdownNode(selectedNode, node.ShutdownNodeOpts{
-					Force: true,
-					ConnectionOpts: node.ConnectionOpts{
-						Timeout:         1 * time.Minute,
-						TimeBeforeRetry: 5 * time.Second,
-					},
-				})
+				err = Inst().N.PowerOffVM(selectedNode)
 				log.FailOnError(err, "Failed to shutdown node:%v", selectedNode.Name)
 				log.Infof("Node: %v has been shut down", selectedNode.Name)
 			})
@@ -1334,6 +1328,7 @@ var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
 			Step(stepLog, func() {
 				err = Inst().N.PowerOnVM(selectedNode)
 				log.FailOnError(err, "Failed to power on node:%v", selectedNode.Name)
+				log.Infof("Node: %v has been powered on", selectedNode.Name)
 			})
 		})
 		stepLog = fmt.Sprintf("Wait until the node has powered on succesfully")
