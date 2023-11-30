@@ -618,6 +618,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, firstScheduleBackupName)
 			err = CreateRestoreWithValidation(ctx, restoreName, firstScheduleBackupName, namespaceMapping, make(map[string]string), destinationClusterName, orgID, appContextsExpectedInBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, firstScheduleBackupName))
 			restoreNames = append(restoreNames, restoreName)
