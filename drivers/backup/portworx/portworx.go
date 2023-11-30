@@ -2279,11 +2279,6 @@ func (p *portworx) CreateRuleForKubevirtBackup(ctx context.Context, virtualMachi
 		},
 		RulesInfo: &rulesInfo,
 	}
-	// ctx, err := backup.GetAdminCtxFromSecret()
-	// if err != nil {
-	// 	err = fmt.Errorf("Failed to fetch px-central-admin ctx: [%v]", err)
-	// 	return false, ruleName, err
-	// }
 
 	_, err := p.CreateRule(ctx, RuleCreateReq)
 	if err != nil {
