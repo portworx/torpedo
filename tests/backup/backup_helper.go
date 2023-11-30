@@ -331,13 +331,6 @@ func ValidateBackupCR(backupInspectResponse *api.BackupInspectResponse, ctx cont
 		return err
 	}
 
-	log.InfoD("Backup Name [%s] Cluster Name [%s] orgID [%s] uid [%s] namespaces [%s]",
-		backupObject.Name,
-		backupObject.Cluster,
-		backupObject.OrgId,
-		clusterUID,
-		backupObject.Namespaces)
-
 	return validateBackupCRs(
 		backupObject.Name,
 		backupObject.Cluster,
