@@ -233,7 +233,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespace}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			err = CreateBackupWithCRValidation(backupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
-			dash.VerifyFatal(strings.Contains(err.Error(), "CR"), true, fmt.Sprintf("Backup creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
+			dash.VerifyFatal(strings.Contains(err.Error(), fmt.Sprintf("failed to create backup location [%s] CR", bkpLocationName)), true, fmt.Sprintf("Backup creation failed due to non existing namespace [%s]. Error : %s", newAdminNamespace, err.Error()))
 		})
 		Step("Creating schedule backups for applications after admin namespace removal", func() {
 			log.InfoD("Creating schedule backups - This should recreate the admin namespace")
