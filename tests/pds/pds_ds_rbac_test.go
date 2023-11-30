@@ -807,13 +807,12 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "Error while updating dataservices")
 						customParams.SetParamsForServiceIdentityTest(params, false)
-						log.InfoD("PDS RESTORE NAMESPACE IS- %v", pdsRestoreNsName)
 						log.InfoD("Successfully scaled up the restored deployment- %v", updatedDeployment)
 						err = dsTest.ValidateDataServiceDeployment(resDep, pdsRestoreNsName)
 						log.FailOnError(err, "Error while validating data service deployment")
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(resDep, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 
 				})
