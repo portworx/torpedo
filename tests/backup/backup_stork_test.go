@@ -47,7 +47,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespace}", func() {
 		scheduleNames               []string
 	)
 	JustBeforeEach(func() {
-		newAdminNamespace = StorkNamePrefix + "-" + RandomString(5) // Randomly generating the value for custom admin namespace
+		newAdminNamespace = StorkNamePrefix
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 		bkpNamespaces = make([]string, 0)
 		restoreName = fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
@@ -318,7 +318,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		periodicSchedulePolicyNameAfterUpdate string
 	)
 	JustBeforeEach(func() {
-		newAdminNamespace = StorkNamePrefix + "-" + RandomString(5) // Randomly generating the value for custom admin namespace
+		newAdminNamespace = StorkNamePrefix
 		bkpNamespaces = make([]string, 0)
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
