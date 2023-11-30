@@ -1277,18 +1277,15 @@ var _ = Describe("{ShutDownNodeWhereVolAttach}", func() {
 	It("Schedules apps that use FADA/FBDA/FACD volumes, shutdown the storage nodes where these volumes are placed and check if the pods are moved appropriately", func() {
 		var contexts = make([]*scheduler.Context, 0)
 		//Scheduling app with volume placement strategy
-		applist := Inst().AppList
 
 		//select the one storage node,one storageless node and one KVDB member node to place volumes and kill the nodes while apps are being destroyed
 		storageNodes := node.GetStorageNodes()
 		selectedNode := storageNodes[rand.Intn(len(storageNodes))]
 		defer func() {
-			Inst().AppList = applist
 			err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
 			log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
 		}()
 
-		Inst().AppList = []string{"nginx-fada-repl-vps"}
 		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 		log.InfoD("Added label on node: %v", selectedNode.Name)
