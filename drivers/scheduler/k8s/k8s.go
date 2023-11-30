@@ -3809,11 +3809,17 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			autopilotLabels := make(map[string]string)
 			autopilotLabels["name"] = "autopilot"
-			pods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
+			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
 			if err != nil {
 				return err
 			}
-			autopilotEnabled = autopilotEnabled && !(len(pods.Items) == 0)
+			prometheusLabels := make(map[string]string)
+			prometheusLabels["app.kubernetes.io/name"] = "prometheus"
+			prometheusPods, err := k8sCore.GetPods(autopilotDefaultNamespace, prometheusLabels)
+			if err != nil {
+				return err
+			}
+			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
 			if autopilotEnabled {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
@@ -3830,6 +3836,8 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
+			} else {
+				log.Infof("[%v] Autopilot is not enabled, skipping PVC: %v size validation", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -6970,7 +6978,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	}
 
 	// Wait for PVC to be bound
-	err = k.waitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", restoredPVCName, err)
 	}
@@ -6996,7 +7004,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
 		if data != fileContent {
-			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+			return fmt.Errorf("compared data of text file & data copied to device path is not same")
 		}
 	} else {
 		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
@@ -7007,7 +7015,32 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
-	log.Info("Validation complete")
+
+	log.Info("Validation complete, deleting restored pods")
+	err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), restoredPod.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("error deleting restored pod: %s", err)
+	}
+
+	// Wait for the pod to be actually gone, checking by pod UID in case it gets recreated (deployment in the future?)
+	t := func() (interface{}, bool, error) {
+		existingPods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to list pods in ns %s. Error: %v", namespace, err)
+		}
+
+		for _, pod := range existingPods.Items {
+			if pod.UID == restoredPod.UID {
+				return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
+			}
+		}
+		return nil, false, nil // Pod is now successfully gone
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -7030,7 +7063,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	}
 
 	// Wait for PVC to be bound
-	err = k.waitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", clonedPVCName, err)
 	}
@@ -7056,7 +7089,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
 		if data != fileContent {
-			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+			return fmt.Errorf("compared data of text file & data copied to device path is not same")
 		}
 	} else {
 		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
@@ -7067,7 +7100,29 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
-	log.Info("Validation complete")
+
+	log.Info("Validation complete, deleting restored pods")
+	err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), restoredPod.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("error deleting restored pod: %s", err)
+	}
+
+	// Wait for the pod to be actually gone
+	t := func() (interface{}, bool, error) {
+		var err error
+		if _, err = clientset.CoreV1().Pods(namespace).Get(context.TODO(), restoredPod.Name, metav1.GetOptions{}); err != nil {
+			if k8serrors.IsNotFound(err) {
+				return nil, false, nil // Pod is now successfully gone
+			}
+			return nil, true, fmt.Errorf("failed to check that pod %s in ns %s is gone. Err: %v", restoredPod.Name, restoredPod.Namespace, err)
+		}
+		return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -7506,8 +7561,8 @@ func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
 	return nil
 }
 
-// waitForRestoredPVCsToBound retries and waits up to 30 minutes for a single PVC to be bound
-func (k *K8s) waitForSinglePVCToBound(pvcName, namespace string) error {
+// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
+func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string) error {
 	var pvc *v1.PersistentVolumeClaim
 	var err error
 	kubeClient, err := k.getKubeClient("")

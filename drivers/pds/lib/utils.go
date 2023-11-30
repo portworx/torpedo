@@ -545,6 +545,7 @@ const (
 	PDS_Health_Status_DOWN     PDS_Health_Status = "Partially Available"
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Unavailable"
 	PDS_Health_Status_HEALTHY  PDS_Health_Status = "Available"
+	PDS_TC_Health_Status_DOWN  PDS_Health_Status = "unhealthy"
 
 	errorChannelSize             = 50
 	defaultCommandRetry          = 5 * time.Second
@@ -1067,6 +1068,134 @@ func DeleteDeployment(deploymentID string) (*state.Response, error) {
 		return nil, err
 	}
 	return resp, nil
+}
+
+// DeleteBackUpCred deletes the backup creds based on the params and returns error
+func DeleteBackUpCred(tenantID, bkpCredsId string, deleteAll bool) error {
+	if deleteAll {
+		bkpCreds, err := components.BackupCredential.ListBackupCredentials(tenantID)
+		if err != nil {
+			return err
+		}
+		for _, bkpCred := range bkpCreds {
+			log.Debugf("Deleting backup creds name-[%v], id-[%v]", *bkpCred.Name, bkpCred.GetId())
+			_, err = components.BackupCredential.DeleteBackupCredential(bkpCred.GetId())
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		log.Debugf("Deleting backup creds [%v]", bkpCredsId)
+		_, err := components.BackupCredential.DeleteBackupCredential(bkpCredsId)
+		if err != nil {
+			if strings.Contains(err.Error(), "404 Not Found") {
+				log.Debugf(err.Error())
+			} else {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget Takes deploymentTargetID and deletes all the
+// bkptarget belongs to the deployment target id
+func DeleteBackUpTargetsAndCredsBelongsToDeploymetTarget(deploymentTargetID, projectID string, deleteAll bool) error {
+	var bkpTargets []pds.ModelsBackupTarget
+	if deleteAll {
+		bkpTargets, err = components.BackupTarget.ListBackupTargetBelongsToProject(projectID)
+	} else {
+		bkpTargets, err = components.BackupTarget.ListBackupTargetBelongsToDeploymentTarget(projectID, deploymentTargetID)
+	}
+	if err != nil {
+		return err
+	}
+	for _, bkpTarget := range bkpTargets {
+		log.Debugf("Deleting Backup Target: [%v]", bkpTarget.GetName())
+		_, err = components.BackupTarget.DeleteBackupTarget(bkpTarget.GetId())
+		if err != nil {
+			return err
+		}
+		err = DeleteBackUpCred("", *bkpTarget.BackupCredentialsId, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetBackUpJobsOfDeployments returns all the backup jobs of the deployments
+func GetBackUpJobsOfDeployments(dep pds.ModelsDeployment, projectID string) ([]pds.ModelsBackupJob, error) {
+	var bkpJobs []pds.ModelsBackupJob
+
+	bkpJobsofDep, err := components.BackupJob.ListBackupJobsBelongToDeployment(projectID, dep.GetId())
+	if err != nil {
+		return nil, err
+	}
+	bkpJobs = append(bkpJobs, bkpJobsofDep...)
+
+	return bkpJobs, nil
+}
+
+// GetDeploymentsOfTargetCluster returns all the deployments under the target cluster
+func GetDeploymentsOfTargetCluster(deploymentTargetID, projectID string) ([]pds.ModelsDeployment, error) {
+	var actualDeps []pds.ModelsDeployment
+	deps, err := components.DataServiceDeployment.ListDeployments(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if len(deps) > 0 {
+		for _, dep := range deps {
+			if dep.GetDeploymentTargetId() == deploymentTargetID {
+				actualDeps = append(actualDeps, dep)
+			}
+		}
+	}
+	return actualDeps, nil
+}
+
+// DeleteDeploymentTargets takes projectID and Delete all the unhealthy target clusters under the project
+// It also takes care in deleting the dependent deployments and its backup jobs
+func DeleteDeploymentTargets(projectID string) error {
+	targetClusters, err := components.DeploymentTarget.ListDeploymentTargetsBelongsToProject(projectID)
+	if err != nil {
+		return fmt.Errorf("error while fetching targetClusters %v", err)
+	}
+	for _, tc := range targetClusters {
+		if strings.Contains(*tc.Status, string(PDS_TC_Health_Status_DOWN)) {
+			log.Debugf("Getting details of target cluster %s", *tc.Name)
+			deps, err := GetDeploymentsOfTargetCluster(tc.GetId(), projectID)
+			if err != nil {
+				return fmt.Errorf("error while fetching deployments %v", err)
+			}
+			for _, dep := range deps {
+				bkpJobs, err := GetBackUpJobsOfDeployments(dep, projectID)
+				if err != nil {
+					return fmt.Errorf("error while fetching backup associated deployments %v", err)
+				}
+				for _, bkpjob := range bkpJobs {
+					log.Debugf("Deleting backupjob [%v]", *bkpjob.Name)
+					_, err := components.BackupJob.DeleteBackupJob(*bkpjob.Id)
+					if err != nil {
+						return fmt.Errorf("error while deleting bkpjob %v", err)
+					}
+				}
+				log.Debugf("Deleting deployment [%v]", dep.GetClusterResourceName())
+				resp, err := DeleteDeployment(dep.GetId())
+				if err != nil {
+					log.Debugf("Deployment Deletion Response [%v]", resp.Body)
+					return fmt.Errorf("error while deleting deployment %v", err)
+				}
+			}
+			log.Debugf("Deleting target cluster [%v]", *tc.Name)
+			resp, err := components.DeploymentTarget.DeleteTarget(tc.GetId())
+			if err != nil {
+				log.Debugf("TC Deletion Response [%v]", resp.Body)
+				return fmt.Errorf("error while deleting target cluster %v", err)
+			}
+		}
+	}
+	return nil
 }
 
 // GetDeploymentConnectionInfo returns the dns endpoint
@@ -2378,6 +2507,7 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	var resourceTemp ResourceSettingTemplate
 	var storageOp StorageOptions
 	var dbConfig DBConfig
+	var docImage string
 
 	labelSelector := make(map[string]string)
 	labelSelector["name"] = deployment.GetClusterResourceName()
@@ -2404,7 +2534,12 @@ func ValidateDataServiceVolumes(deployment *pds.ModelsDeployment, dataService st
 	}
 
 	//Get the ds version from the sts
-	docImage := dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Image
+	if dataService == mssql {
+		docImage = dbConfig.Spec.StatefulSet.Template.Spec.Containers[1].Image
+	} else {
+		docImage = dbConfig.Spec.StatefulSet.Template.Spec.Containers[0].Image
+	}
+	log.Debugf("docImage [%v]", docImage)
 	dsVersionImageTag := strings.Split(docImage, ":")
 	log.Debugf("version tag %v", dsVersionImageTag[1])
 
@@ -3021,4 +3156,66 @@ func CreateSiAndIamRoleBindings(accountID string, nsRoles []pds.ModelsBinding) (
 	iamId := *iamModels.Id
 	log.InfoD("Successfully created for IAM Roles- %v", iamId)
 	return actorId, iamId, nil
+}
+
+func StopPXDuringStorageIncrease(ns string, deployment *pds.ModelsDeployment) error {
+	// Get StatefulSet Object
+	var ss *v1.StatefulSet
+	var testError error
+
+	//Waiting till pod have a node assigned
+	var pods []corev1.Pod
+	var nodesToStopPx []node.Node
+	var nodeToRestartPX node.Node
+	var nodeName string
+	var podName string
+	err = wait.Poll(resiliencyInterval, timeOut, func() (bool, error) {
+		ss, testError = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), ns)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Get Pods of this StatefulSet
+		pods, testError = k8sApps.GetStatefulSetPods(ss)
+		if testError != nil {
+			CapturedErrors <- testError
+			return false, testError
+		}
+		// Check if the new Pod have a node assigned or it's in a window where it's just coming up
+		podCount := 0
+		for _, pod := range pods {
+			log.Infof("Nodename of pod %v is :%v:", pod.Name, pod.Spec.NodeName)
+			if pod.Spec.NodeName == "" || pod.Spec.NodeName == " " {
+				log.Infof("Pod %v still does not have a node assigned. Retrying in 5 seconds", pod.Name)
+				return false, nil
+			} else {
+				podCount += 1
+				log.Debugf("No of pods that has node assigned: %d", podCount)
+			}
+			if int32(podCount) == *ss.Spec.Replicas {
+				log.Debugf("Expected pod %v has node %v assigned", pod.Name, pod.Spec.NodeName)
+				nodeName = pod.Spec.NodeName
+				podName = pod.Name
+				return true, nil
+			}
+		}
+		return true, nil
+	})
+	nodeToRestartPX, testError = node.GetNodeByName(nodeName)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("Going ahead and stopping PX the node %v as there is an "+
+		"application pod %v that's coming up on this node", nodeName, podName)
+	nodesToStopPx = append(nodesToStopPx, nodeToRestartPX)
+	testError = tests.Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if testError != nil {
+		CapturedErrors <- testError
+		return testError
+	}
+
+	log.InfoD("PX stopped successfully on node %v", podName)
+	return testError
 }
