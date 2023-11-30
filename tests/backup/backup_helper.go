@@ -301,12 +301,12 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 func CreateBackupWithCRValidation(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
-	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	backupInspectResponse, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
 
-	err = ValidateBackupCRs(backupName, clusterName, orgID, uid, ctx, namespaces)
+	err = ValidateBackupCR(backupInspectResponse, ctx)
 	if err != nil {
 		return err
 	}
@@ -317,6 +317,35 @@ func CreateBackupWithCRValidation(backupName string, clusterName string, bLocati
 	}
 	log.Infof("Backup [%s] created successfully", backupName)
 	return nil
+}
+
+// ValidateBackupCR validates the CR creation for backup
+func ValidateBackupCR(backupInspectResponse *api.BackupInspectResponse, ctx context.Context) error {
+
+	// Getting the backup object from backupInspectResponse
+	backupObject := backupInspectResponse.GetBackup()
+
+	backupDriver := Inst().Backup
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, backupObject.Cluster)
+	if err != nil {
+		return err
+	}
+
+	log.InfoD("Backup Name [%s] Cluster Name [%s] orgID [%s] uid [%s] namespaces [%s]",
+		backupObject.Name,
+		backupObject.Cluster,
+		backupObject.OrgId,
+		clusterUID,
+		backupObject.Namespaces)
+
+	return validateBackupCRs(
+		backupObject.Name,
+		backupObject.Cluster,
+		backupObject.OrgId,
+		clusterUID,
+		backupObject.Namespaces,
+		ctx)
+
 }
 
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class based on the env variable - VOLUME_SNAPSHOT_CLASS
@@ -501,7 +530,7 @@ func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName stri
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	_, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
+	backupScheduleInspectReponse, err := CreateScheduleBackupWithoutCheck(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -511,16 +540,32 @@ func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName stri
 		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	backupDriver := Inst().Backup
-	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
-	if err != nil {
-		return "", err
-	}
-	err = ValidateBackupCRs(firstScheduleBackupName, clusterName, orgID, clusterUID, ctx, namespaces)
+
+	err = ValidateScheduleBackupCR(firstScheduleBackupName, backupScheduleInspectReponse, ctx)
 	if err != nil {
 		return "", err
 	}
 	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+}
+
+func ValidateScheduleBackupCR(backupName string, backupScheduleInspectReponse *api.BackupScheduleInspectResponse, ctx context.Context) error {
+
+	// Getting the backup schedule object from backupScheduleInspectReponse
+	backupSchedule := backupScheduleInspectReponse.BackupSchedule
+
+	backupDriver := Inst().Backup
+	clusterUID, err := backupDriver.GetClusterUID(ctx, backupSchedule.Metadata.OrgId, backupSchedule.BackupScheduleInfo.Cluster)
+	if err != nil {
+		return err
+	}
+
+	return validateBackupCRs(
+		backupName,
+		backupSchedule.BackupScheduleInfo.Cluster,
+		backupSchedule.Metadata.OrgId,
+		clusterUID,
+		backupSchedule.BackupScheduleInfo.Namespaces,
+		ctx)
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
@@ -5702,8 +5747,8 @@ func UpgradeKubevirt(versionToUpgrade string, workloadUpgrade bool) error {
 	return nil
 }
 
-// ChangeAdminNamespace changes admin namespace for Storage Cluster
-func ChangeAdminNamespace(namespace string) (*v1.StorageCluster, error) {
+// ChangeStorkAdminNamespace changes admin namespace for Storage Cluster
+func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	// Get current storage cluster configuration
 	isOpBased, err := Inst().V.IsOperatorBasedInstall()
 	if err != nil {
@@ -5811,8 +5856,8 @@ func getCurrentAdminNamespace() (string, error) {
 }
 
 // Validates Backup CRs created
-func ValidateBackupCRs(backupName string, clusterName string, orgID string, clusterUID string, ctx context.Context,
-	backupNameSpaces []string) error {
+func validateBackupCRs(backupName string, clusterName string, orgID string, clusterUID string,
+	backupNameSpaces []string, ctx context.Context) error {
 
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
 	if len(backupNameSpaces) == 1 {
@@ -5829,7 +5874,7 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, clus
 	clusterObj := clusterResp.GetCluster()
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
-		allBackupCrs, err := ListBackupCRs(currentAdminNamespace, clusterObj)
+		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
 		}
@@ -5845,11 +5890,8 @@ func ValidateBackupCRs(backupName string, clusterName string, orgID string, clus
 	}
 
 	_, err = task.DoRetryWithTimeout(validateBackupCRInNamespace, 5*time.Minute, 500*time.Millisecond)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 // Validates Restore CRs created
@@ -5872,7 +5914,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 	clusterObj := clusterResp.GetCluster()
 
 	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
-		allRestoreCrs, err := ListRestoreCRs(currentAdminNamespace, clusterObj)
+		allRestoreCrs, err := GetRestoreCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
 		}
@@ -5888,15 +5930,12 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 	}
 
 	_, err = task.DoRetryWithTimeout(validateRestoreCRInNamespace, 5*time.Minute, 500*time.Millisecond)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
-// ListBackupCRs lists all the Backup CRs present under given namespace
-func ListBackupCRs(
+// GetBackupCRs lists all the Backup CRs present under given namespace
+func GetBackupCRs(
 	namespace string,
 	clusterObj *api.ClusterObject) ([]string, error) {
 
@@ -5918,8 +5957,8 @@ func ListBackupCRs(
 	return allBackupCRNames, nil
 }
 
-// ListBackupCRs lists all the Restore CRs present under given namespace
-func ListRestoreCRs(
+// GetRestoreCRs lists all the Restore CRs present under given namespace
+func GetRestoreCRs(
 	namespace string,
 	clusterObj *api.ClusterObject) ([]string, error) {
 

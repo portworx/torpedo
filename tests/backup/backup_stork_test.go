@@ -14,11 +14,11 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // This testcase verifies backup and restore with non existing and deleted custom stork admin namespaces
-var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
+var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespace}", func() {
 
 	var (
 		newAdminNamespace           string // New admin namespace to be set as custom admin namespace
@@ -57,7 +57,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Bakcup and restore with non existing custom namespace", nil, 85406, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespace", "Backup and restore with non existing custom namespace", nil, 85406, ATrivedi, Q4FY24)
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
@@ -97,7 +97,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 		Step("Creating new admin namespaces", func() {
 			log.InfoD("Creating new admin namespace - %v", newAdminNamespace)
 			nsSpec := &v1.Namespace{
-				ObjectMeta: meta_v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: newAdminNamespace,
 				},
 			}
@@ -107,7 +107,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 		})
 		Step("Modifying Admin Namespace for Stork", func() {
 			log.InfoD("Modifying Admin Namespace for Stork to %v", newAdminNamespace)
-			_, err := ChangeAdminNamespace(newAdminNamespace)
+			_, err := ChangeStorkAdminNamespace(newAdminNamespace)
 			log.FailOnError(err, "Unable to update admin namespace")
 			log.Infof("Admin namespace updated successfully")
 		})
@@ -200,7 +200,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 			log.InfoD("Restoring backup of multiple namespaces - Admin namespace will be recreated")
 			selectedBkpNamespaceMapping = make(map[string]string)
 			multipleRestoreMapping = make(map[string]string)
-			restoreName = fmt.Sprintf("%s-%v", restoreNamePrefix, time.Now().Unix())
+			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, RandomString(7))
 			for _, namespace := range bkpNamespaces {
 				selectedBkpNamespaceMapping[namespace] = namespace
 			}
@@ -212,7 +212,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 
 			// Restore to custom namespace
 			for _, namespace := range bkpNamespaces {
-				restoredNameSpace := fmt.Sprintf("%s-%v", backupName, time.Now().Unix())
+				restoredNameSpace := fmt.Sprintf("%s-%s", backupName, RandomString(7))
 				multipleRestoreMapping[namespace] = restoredNameSpace
 			}
 			log.Infof("Custom restore map %v", multipleRestoreMapping)
@@ -266,7 +266,7 @@ var _ = Describe("{BackupandRestoreWithNonExistingAdminNamespace}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Removing Stork Namespace")
-		_, err = ChangeAdminNamespace("")
+		_, err = ChangeStorkAdminNamespace("")
 		log.FailOnError(err, "Unable to remove stork custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
@@ -368,7 +368,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		Step("Creating new admin namespaces", func() {
 			log.InfoD("Creating new admin namespace - %v", newAdminNamespace)
 			nsSpec := &v1.Namespace{
-				ObjectMeta: meta_v1.ObjectMeta{
+				ObjectMeta: metav1.ObjectMeta{
 					Name: newAdminNamespace,
 				},
 			}
@@ -411,7 +411,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		})
 		Step("Modifying Admin Namespace for Stork", func() {
 			log.InfoD("Modifying Admin Namespace for Stork to %v", newAdminNamespace)
-			_, err := ChangeAdminNamespace(newAdminNamespace)
+			_, err := ChangeStorkAdminNamespace(newAdminNamespace)
 			log.FailOnError(err, "Unable to update admin namespace")
 			log.Infof("Admin namespace updated successfully")
 		})
@@ -545,7 +545,7 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Removing Stork Namespace")
-		_, err = ChangeAdminNamespace("")
+		_, err = ChangeStorkAdminNamespace("")
 		log.FailOnError(err, "Unable to remove stork custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {

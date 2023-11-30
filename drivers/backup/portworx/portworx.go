@@ -93,7 +93,7 @@ func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error
 	return client, nil
 }
 
-// GetKubernetesInstance - Get hanlder to k8s cluster.
+// GetKubernetesInstance - Get handler to k8s cluster.
 func GetKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
 	client, err := getKubernetesRestConfig(cluster)
 	if err != nil {
