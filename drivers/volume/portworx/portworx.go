@@ -2958,10 +2958,12 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 				errChan <- fmt.Errorf("failed to find node by name [%s]: %v", nodeName, err)
 				return
 			}
-			outFileName := fmt.Sprintf("/var/cores/iostat_info-%s-%v.txt", vol.ID, time.Now().Unix())
+			outFileName := fmt.Sprintf("/var/cores/iostat_info-%s-%v-repl-%d.txt", vol.ID, time.Now().Unix(), replFactor)
+			tpOutFileName := fmt.Sprintf("/tmp/tp-iostat_info-%s-%v-repl-%d.txt", vol.ID, time.Now().Unix(), replFactor)
 			log.Infof("Output file path: [%s]", outFileName)
-			initialCommand := fmt.Sprintf("echo 'Node: %s, Volume: %s, Replication Factor: %d' > %s", nodeName, vol.String(), replFactor, outFileName)
-			_, err = d.nodeDriver.RunCommand(
+			initialCommand := fmt.Sprintf("echo 'Node: %s, Volume: %s, Replication Factor: %d'", nodeName, vol.String(), replFactor)
+			log.Infof("Initial Command: [%s]", initialCommand)
+			initialCmdOutput, err := d.nodeDriver.RunCommand(
 				nd,
 				initialCommand,
 				node.ConnectionOpts{
@@ -2973,14 +2975,24 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 				errChan <- fmt.Errorf("failed to run initial command on node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
 				return
 			}
+			file, err := os.OpenFile(tpOutFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				errChan <- fmt.Errorf("failed to open file for appending for node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
+				return
+			}
+			defer file.Close()
+			if _, err := file.WriteString(initialCmdOutput + "\n"); err != nil {
+				errChan <- fmt.Errorf("failed to write initial command output to local file for node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
+				return
+			}
 			log.Infof("Writing iostat output in node [%s/%s]", nodeName, nd.MgmtIp)
 			for {
 				select {
 				case <-ctx.Done():
 					return
 				case <-time.After(2 * time.Second):
-					iostatCommand := fmt.Sprintf("iostat -ktdx >> %s", outFileName)
-					_, err := d.nodeDriver.RunCommand(
+					iostatCommand := "iostat -ktdx"
+					cmdOutput, err := d.nodeDriver.RunCommand(
 						nd,
 						iostatCommand,
 						node.ConnectionOpts{
@@ -2992,10 +3004,29 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 						errChan <- fmt.Errorf("failed to run iostat command on node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
 						return
 					}
+					if _, err := file.WriteString(cmdOutput + "\n"); err != nil {
+						errChan <- fmt.Errorf("failed to append iostat command output to local file for node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
+						return
+					}
+					appendToRemoteFileCommand := fmt.Sprintf("echo '%s' >> %s", strings.ReplaceAll(cmdOutput, "'", "'\\''"), outFileName)
+					_, err = d.nodeDriver.RunCommand(
+						nd,
+						appendToRemoteFileCommand,
+						node.ConnectionOpts{
+							Timeout:         maintenanceWaitTimeout,
+							TimeBeforeRetry: defaultRetryInterval,
+						},
+					)
+					if err != nil {
+						errChan <- fmt.Errorf("failed to append command output to remote file for node [%s/%s]: %v", nodeName, nd.MgmtIp, err)
+						return
+					}
 				}
 			}
 		}(n)
 	}
+	log.Infof("Waiting for 5 minutes before to have more data")
+	time.Sleep(5 * time.Minute)
 	t := func() (interface{}, bool, error) {
 		volDriver := d.getVolDriver()
 		volumeInspectResponse, err := volDriver.Inspect(d.getContext(), &api.SdkVolumeInspectRequest{VolumeId: volumeName})
@@ -3046,6 +3077,8 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 			Cause: err.Error(),
 		}
 	}
+	log.Infof("Waiting for 5 minutes after to have more data")
+	time.Sleep(5 * time.Minute)
 	cancel()
 	wg.Wait()
 	close(errChan)

@@ -2313,6 +2313,8 @@ var _ = Describe("{VolUpdateResizeDisk}", func() {
 
 	})
 	JustAfterEach(func() {
+		log.Infof("Sleeping for 24 hours to allow user to check the cluster")
+		time.Sleep(24 * time.Hour)
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
 	})
