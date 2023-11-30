@@ -8,7 +8,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
-	"github.com/onsi/ginkgo/v2/reporters"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -40,11 +39,7 @@ var dash *aetosutil.Dashboard
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Basic", specReporters)
+	RunSpecs(t, "Torpedo : Basic")
 }
 
 var _ = BeforeSuite(func() {
