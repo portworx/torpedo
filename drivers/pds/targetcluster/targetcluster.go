@@ -42,7 +42,7 @@ const (
 
 	// PDSNamespace PDS
 	PDSNamespace       = "pds-system"
-	PDSChartRepo       = "https://d2xtayr2ct14mw.cloudfront.net/charts/target"
+	PDSChartRepo       = "https://pds.pure-px.io/charts/target"
 	pxLabel            = "pds.portworx.com/available"
 	CertManager        = "jetstack/cert-manager"
 	CertManagerVersion = "v1.11.0"
@@ -128,9 +128,16 @@ func (targetCluster *TargetCluster) CreateSelfSignedClusterIssuer(ClusterIssuerN
 	return nil
 }
 
+// UpdateTargetClusterWithClusterIssuer updates the target cluster with cluster issuer name
+func (targetCluster *TargetCluster) UpdateTargetClusterWithClusterIssuer(DeploymentTargetID, ClusterIssuerName string, TLSRequired bool) error {
+	dtModel, err := components.DeploymentTarget.PatchDeploymentTarget(DeploymentTargetID, ClusterIssuerName, TLSRequired)
+	log.Debugf("Deployment Target %s updated with cluster issuer %s", *dtModel.Name, *dtModel.TlsIssuer)
+	return err
+}
+
 // InstallCertManager installs cert-manager using helm
-func (targetCluster *TargetCluster) InstallCertManager(namespace string) error {
-	cmd := fmt.Sprintf("helm upgrade --install cert-manager %s --namespace %s --create-namespace --version %s --set installCRDs=%s", CertManager, namespace, CertManagerVersion, "true")
+func (targetCluster *TargetCluster) InstallCertManager(ClusterIssuerNamespace string) error {
+	cmd := fmt.Sprintf("helm upgrade --install cert-manager %s --namespace %s --create-namespace --version %s --set installCRDs=%s", CertManager, ClusterIssuerNamespace, CertManagerVersion, "true")
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
 		return fmt.Errorf("cert manager installation failed : %v", err)
@@ -280,7 +287,7 @@ func (targetCluster *TargetCluster) DeRegisterFromControlPlane() error {
 }
 
 // RegisterToControlPlane register the target cluster to control plane.
-func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string) error {
+func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL string, helmChartversion string, bearerToken string, tenantId string, clusterType string, enableTLS bool) error {
 	var cmd string
 	apiEndpoint := fmt.Sprintf(controlPlaneURL + "api")
 	isRegistered := false
@@ -298,6 +305,10 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 		if !isLatest {
 			log.InfoD("Upgrading PDS helm chart to %v", helmChartversion)
 			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s", PDSNamespace, PDSChartRepo, helmChartversion)
+		} else if enableTLS {
+			log.InfoD("Upgrading PDS helm with tls enabled %v", helmChartversion)
+			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s "+
+				"--set tenantId=%s --set bearerToken=%s --set apiEndpoint=%s --set dataServiceTLSEnabled=true", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		}
 		isRegistered = true
 	}
@@ -474,10 +485,28 @@ func (targetCluster *TargetCluster) RegisterClusterToControlPlane(infraParams *p
 		return err
 	}
 	bearerToken := *serviceAccToken.Token
-
-	err = targetCluster.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType)
-	if err != nil {
-		return fmt.Errorf("target cluster registeration failed with the error: %v", err)
+	if infraParams.TLS.EnableTLS {
+		err = targetCluster.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType, true)
+		if err != nil {
+			return fmt.Errorf("target cluster registeration failed with the error: %v", err)
+		}
+		err = targetCluster.AddHelmRepo(infraParams.TLS.RepoName, infraParams.TLS.RepoURL)
+		if err != nil {
+			return fmt.Errorf("error while adding repo: %v", err)
+		}
+		err = targetCluster.InstallCertManager(infraParams.TLS.ClusterIssuerNamespace)
+		if err != nil {
+			return fmt.Errorf("error while installing cert-manager: %v", err)
+		}
+		err = targetCluster.CreateSelfSignedClusterIssuer(infraParams.TLS.ClusterIssuerName)
+		if err != nil {
+			return fmt.Errorf("error while creating self-signed cluster issuer repo: %v", err)
+		}
+	} else {
+		err = targetCluster.RegisterToControlPlane(controlPlaneUrl, helmChartversion, bearerToken, tenantId, clusterType, false)
+		if err != nil {
+			return fmt.Errorf("target cluster registeration failed with the error: %v", err)
+		}
 	}
 	return nil
 }
