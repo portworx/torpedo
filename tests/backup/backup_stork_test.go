@@ -268,6 +268,8 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespace}", func() {
 		log.InfoD("Removing Stork Namespace")
 		_, err = ChangeStorkAdminNamespace("")
 		log.FailOnError(err, "Unable to remove stork custom admin namespace")
+		err = DeleteAppNamespace(newAdminNamespace)
+		log.FailOnError(err, "Unable to delete custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
@@ -547,6 +549,8 @@ var _ = Describe("{DeleteUpdateSuspendResumeWithCustomAdminNamespace}", func() {
 		log.InfoD("Removing Stork Namespace")
 		_, err = ChangeStorkAdminNamespace("")
 		log.FailOnError(err, "Unable to remove stork custom admin namespace")
+		err = DeleteAppNamespace(newAdminNamespace)
+		log.FailOnError(err, "Unable to delete custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
