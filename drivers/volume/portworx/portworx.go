@@ -2936,13 +2936,14 @@ func (d *portworx) GetReplicationFactor(vol *torpedovolume.Volume) (int64, error
 
 func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor int64, nodesToBeUpdated []string, poolsToBeUpdated []string, waitForUpdateToFinish bool, opts ...torpedovolume.Options) error {
 	volumeName := d.schedOps.GetVolumeName(vol)
-	var replicationUpdateTimeout time.Duration
-	if len(opts) > 0 {
-		replicationUpdateTimeout = opts[0].ValidateReplicationUpdateTimeout
-	} else {
-		replicationUpdateTimeout = validateReplicationUpdateTimeout
-	}
-	log.Infof("Setting ReplicationUpdateTimeout to %s-%v\n", replicationUpdateTimeout, replicationUpdateTimeout)
+	//var replicationUpdateTimeout time.Duration
+	//if len(opts) > 0 {
+	//	replicationUpdateTimeout = opts[0].ValidateReplicationUpdateTimeout
+	//} else {
+	//	replicationUpdateTimeout = validateReplicationUpdateTimeout
+	//}
+	replicationUpdateTimeout := 24 * time.Hour
+	log.Infof("Setting ReplicationUpdateTimeout to %s\n", replicationUpdateTimeout)
 	log.Infof("Setting ReplicationFactor to: %v", replFactor)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3062,12 +3063,14 @@ func (d *portworx) SetReplicationFactor(vol *torpedovolume.Volume, replFactor in
 		if !waitForUpdateToFinish {
 			return nil, false, nil
 		}
+		log.Infof("Start time for waiting for replication to complete: %v", time.Now())
 		err = d.WaitForReplicationToComplete(vol, replFactor, replicationUpdateTimeout)
 		if err != nil && errIsNotFound(err) {
 			return nil, false, err
 		} else if err != nil {
 			return nil, true, err
 		}
+		log.Infof("End time for waiting for replication to complete: %v", time.Now())
 		return 0, false, nil
 	}
 
