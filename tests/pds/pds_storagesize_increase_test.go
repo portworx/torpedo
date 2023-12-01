@@ -628,7 +628,8 @@ func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string,
 		customStorageTemplateID,
 		ds.Version,
 		ds.Image,
-		namespace)
+		namespace,
+		ds.EnableTLS)
 	log.FailOnError(err, "Error while deploying data services")
 	err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 	log.FailOnError(err, "Error while validating dataservices")
