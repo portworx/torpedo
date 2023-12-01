@@ -2286,3 +2286,102 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{ReDistributeFADAVol}", func() {
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("ReDistributeFADAVol", "Create apps with FADA vol and check if they are distributed to other nodes", nil, 0)
+	})
+	stepLog = "create apps with FADA vol and check if they are distributed to other nodes when the initial node is cordoned and pods are deleted from that node"
+	It(stepLog, func() {
+		//Number of apps to be deployed
+		NumberOfDeployments := 10
+		//Map of pod -> [node,namespace]
+		podNodeMap := make(map[string][]string)
+		// createPodNodeMap creates a map of pods and nodes
+		createPodNodeMap := func(podNodeMap map[string][]string, namespace string) error {
+			pods, err := core.Instance().GetPods(namespace, nil)
+			nodeAndNsList := make([]string, 2)
+			if err != nil {
+				return fmt.Errorf("failed to get pods in namespace [%s]", namespace)
+			}
+			for _, pod := range pods.Items {
+				log.Infof("Pod name: %v, Node name: %v", pod.Name, pod.Spec.NodeName)
+				nodeAndNsList = append(nodeAndNsList, pod.Spec.NodeName)
+				nodeAndNsList = append(nodeAndNsList, namespace)
+				podNodeMap[pod.Name] = nodeAndNsList
+			}
+			return nil
+		}
+		//select the node where highest number of pods are created
+		selectNode := func(podNodeMap map[string][]string) (string, error) {
+			nodeMap := make(map[string]int)
+			for _, node := range podNodeMap {
+				nodeMap[node[0]]++
+			}
+			var max_count int
+			var node string
+			for k, v := range nodeMap {
+				if v > max_count {
+					max_count = v
+					node = k
+				}
+			}
+			return node, nil
+		}
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for j := 0; j < NumberOfDeployments; j++ {
+				taskName := fmt.Sprintf("test-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys: Inst().AppList,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+				err = createPodNodeMap(podNodeMap, taskName)
+				log.FailOnError(err, "Could not create pod node map")
+			}
+			ValidateApplications(contexts)
+		})
+		//select the node with highest number of pods
+		nodeToCordon, err := selectNode(podNodeMap)
+
+		stepLog = "Cordon the node with highest number of pods and delete pods from that node"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			log.FailOnError(err, "Failed to create podNodeMap")
+			//cordon node with highest number of pods
+			err = core.Instance().CordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
+			log.FailOnError(err, "Failed to cordon node %v", nodeToCordon)
+			log.InfoD("cordoned node %v", nodeToCordon)
+			//delete pods from the cordoned node
+			for pod, node := range podNodeMap {
+				if node[0] == nodeToCordon {
+					err = core.Instance().DeletePod(pod, node[1], true)
+					log.FailOnError(err, "Failed to delete pod %v", pod)
+				}
+			}
+		})
+		stepLog = "Verify if pods are scheduled on other nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get the pods from the deleted namespace and check if they are scheduled on other nodes
+			for _, node := range podNodeMap {
+				pods, err := core.Instance().GetPods(node[1], nil)
+				log.FailOnError(err, "Failed to get pods in namespace %v", node[1])
+				for _, pod := range pods.Items {
+					if pod.Spec.NodeName == nodeToCordon {
+						log.FailOnError(fmt.Errorf("pod %v is still running on node %v", pod.Name, nodeToCordon), "Pod should not be running on node %v", nodeToCordon)
+						log.InfoD("Pod :%v is running on node %v", pod.Name, pod.Spec.NodeName)
+					}
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
