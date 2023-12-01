@@ -926,7 +926,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		if len(options.TopologyLabels) > 1 {
 			rotateTopologyArray(&options)
 		}
-
+		appNamespace = fmt.Sprintf("%v-%v", appNamespace, time.Now().Unix())
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
 			return nil, err
@@ -1003,6 +1003,7 @@ func (k *K8s) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string
 // CreateSpecObjects Create application
 func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options scheduler.ScheduleOptions) ([]interface{}, error) {
 	var specObjects []interface{}
+
 	ns, err := k.createNamespace(app, namespace, options)
 	if err != nil {
 		return nil, err
