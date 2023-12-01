@@ -1267,38 +1267,9 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 })
 
 var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
-	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
-	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
-	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
-	totalVclusters := 1
-	batchCount := 2
-	totalIterations := 1
-	if envValueVcluster != "" {
-		var err error
-		totalVclusters, err = strconv.Atoi(envValueVcluster)
-		if err != nil {
-			log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
-			totalVclusters = 1
-		}
-	}
-	if envValueBatch != "" {
-		var err error
-		batchCount, err = strconv.Atoi(envValueBatch)
-		if err != nil {
-			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
-			batchCount = 2
-		}
-	}
-	if envValueIterations != "" {
-		var err error
-		totalIterations, err = strconv.Atoi(envValueIterations)
-		if err != nil {
-			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
-			totalIterations = 1
-		}
-	}
-	nginxAppCount := batchCount
-	fioAppCount := totalIterations
+	totalVclusters := 10
+	nginxAppCount := 7
+	fioAppCount := 3
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
