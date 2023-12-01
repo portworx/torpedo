@@ -21,7 +21,7 @@ import (
 )
 
 // This test performs basic test of starting an application and destroying it (along with storage)
-var _ = Describe("{SetupTeardown}", func() {
+var _ = Describe("{SetupTeardown}", Label("k8s"), func() {
 	var testrailID = 35258
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
 	var runID int
@@ -413,7 +413,7 @@ var _ = Describe("{AppTasksDown}", func() {
 })
 
 // This test scales up and down an application and checks if app has actually scaled accordingly
-var _ = Describe("{AppScaleUpAndDown}", func() {
+var _ = Describe("{AppScaleUpAndDown}", Label("k8s"), func() {
 	var testrailID = 35264
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35264
 	var runID int
