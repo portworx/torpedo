@@ -2323,11 +2323,13 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			var max_count int
 			var node string
 			for k, v := range nodeMap {
+				log.Infof("Node: %v, Number of pods: %v", k, v)
 				if v > max_count {
 					max_count = v
 					node = k
 				}
 			}
+			log.Infof("Node with highest number of pods: %v", node)
 			return node, nil
 		}
 		Step("Schedule applications", func() {
