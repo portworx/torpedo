@@ -2363,9 +2363,11 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			log.InfoD("cordoned node %v", nodeToCordon)
 			//delete pods from the cordoned node
 			for pod, node := range podNodeMap {
+				log.Infof("delete node name:%v , pod name:%v, %v", node["node"], pod, nodeToCordon)
 				if node["node"] == nodeToCordon {
 					err = core.Instance().DeletePod(pod, node["namespace"], true)
 					log.FailOnError(err, "Failed to delete pod %v", pod)
+					log.Infof("deleted pod:%v and namespace:%v", pod, node["namespace"])
 				}
 			}
 		})
@@ -2377,6 +2379,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				pods, err := core.Instance().GetPods(node["namespace"], nil)
 				log.FailOnError(err, "Failed to get pods in namespace %v", node["namespace"])
 				for _, pod := range pods.Items {
+					log.Infof("Pod name: %v, Node name: %v, %v", pod.Name, pod.Spec.NodeName, nodeToCordon)
 					if pod.Spec.NodeName == nodeToCordon {
 						log.FailOnError(fmt.Errorf("pod %v is still running on node %v", pod.Name, nodeToCordon), "Pod should not be running on node %v", nodeToCordon)
 						log.InfoD("Pod :%v is running on node %v", pod.Name, pod.Spec.NodeName)
