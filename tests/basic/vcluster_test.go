@@ -1287,14 +1287,14 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 	})
 	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
 		// Create Storage Class on Host Cluster
-		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		scName = fmt.Sprintf("longevity-app-sc-%v", time.Now().Unix())
 		err = CreateStorageClass(scName)
 		log.FailOnError(err, "Error creating Storageclass")
 		log.Infof("Successfully created StorageClass with name: %v", scName)
 
 		for _, vc := range vClusters {
-			appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(10000))
 			for i := 0; i < nginxAppCount; i++ {
+				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(10000))
 				deploymentName := fmt.Sprintf("nginx-deployment-%d", i)
 				pvcName, _ := vc.CreatePVC("", scName, appNS, "RWX")
 				err := vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
@@ -1302,6 +1302,7 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 			}
 
 			for i := 0; i < fioAppCount; i++ {
+				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(10000))
 				fioOptions := vcluster.FIOOptions{
 					Name:      "mytest",
 					IOEngine:  "libaio",
