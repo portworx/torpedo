@@ -61,7 +61,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeS
 		numDeployments = 5 // 5 apps deployed in 5 namespaces
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeSuspendBackupPolicies", "Test to verify stork-namespace, backup CRs, restore CRs in case of non existing admin namespace and suspended, resumed backup schedules", nil, 85406, ATrivedi, Q4FY24)
+		StartPxBackupTorpedoTest("BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeSuspendBackupPolicies", "Test to verify stork-namespace, backup CRs, restore CRs in case of non existing admin namespace and suspended, resumed backup schedules", nil, 93700, ATrivedi, Q4FY24)
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
