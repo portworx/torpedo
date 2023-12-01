@@ -2301,6 +2301,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		// createPodNodeMap creates a map of pods and nodes
 		createPodNodeMap := func(podNodeMap map[string][]string, namespace string) error {
 			pods, err := core.Instance().GetPods(namespace, nil)
+			log.Infof("Number of pods in namespace [%s] : %v", namespace, len(pods.Items))
 			nodeAndNsList := make([]string, 2)
 			if err != nil {
 				return fmt.Errorf("failed to get pods in namespace [%s]", namespace)
@@ -2332,7 +2333,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
 			for j := 0; j < NumberOfDeployments; j++ {
-				taskName := fmt.Sprintf("test-%v", j)
+				taskName := fmt.Sprintf("nginx-fada-deploy-test-%v", j)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys: Inst().AppList,
 				})
@@ -2345,6 +2346,8 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		})
 		//select the node with highest number of pods
 		nodeToCordon, err := selectNode(podNodeMap)
+		log.FailOnError(err, "Failed to select node with highest number of pods")
+		log.InfoD("Node with highest number of pods: %v", nodeToCordon)
 
 		stepLog = "Cordon the node with highest number of pods and delete pods from that node"
 		Step(stepLog, func() {
