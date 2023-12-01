@@ -1316,7 +1316,7 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 				}
 				jobName := fmt.Sprintf("fio-job-%d", i)
 				pvcName, _ := vc.CreatePVC(scName+"-pvc-"+strconv.Itoa(i), scName, appNS, "")
-				err := vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+				err := vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, false)
 				log.FailOnError(err, "Failed in creating FIO Application")
 			}
 		}
