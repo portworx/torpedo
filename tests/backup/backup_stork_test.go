@@ -65,7 +65,6 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeS
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
-			log.InfoD(fmt.Sprintf("Iteration %v of deploying applications", i))
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
 			for _, ctx := range appContexts {
@@ -76,7 +75,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpatedResumeS
 			}
 		}
 	})
-	It("Backup and restore with non existing custom admin namespace", func() {
+	It("Test to verify stork-namespace, backup CRs, restore CRs in case of non existing admin namespace and suspended, resumed backup schedules", func() {
 
 		Step("Validating deployed applications", func() {
 			log.InfoD("Validating deployed applications")
