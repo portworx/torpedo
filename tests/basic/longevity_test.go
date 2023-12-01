@@ -1451,7 +1451,7 @@ func populateIntervals() {
 	triggerInterval[ValidatePdsApps][2] = 9 * baseInterval
 	triggerInterval[ValidatePdsApps][1] = 10 * baseInterval
 
-	baseInterval = 10 * time.Minute
+	baseInterval = 5 * time.Minute
 
 	triggerInterval[DeployApps][10] = 1 * baseInterval
 	triggerInterval[DeployApps][9] = 2 * baseInterval
