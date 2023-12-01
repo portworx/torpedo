@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -1072,7 +1073,7 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 
 		go func() {
 			defer wg.Done()
-			err = vc.CreateFIOMultiPvcDeployment(pvcNames, appNS, fioOptions, jobName)
+			err = vc.CreateFIOMultiPvcDeployment(pvcNames, appNS, fioOptions, jobName, true)
 			log.FailOnError(err, "Error in creating first FIO Application")
 		}()
 		go func() {
@@ -1262,6 +1263,99 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 			Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
 			log.Errorf("Failed to delete Rule %v", apRule.ObjectMeta.Name)
 		}
+	})
+})
+
+var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
+	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	totalVclusters := 1
+	batchCount := 2
+	totalIterations := 1
+	if envValueVcluster != "" {
+		var err error
+		totalVclusters, err = strconv.Atoi(envValueVcluster)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
+			totalVclusters = 1
+		}
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
+	}
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
+	}
+	nginxAppCount := batchCount
+	fioAppCount := totalIterations
+	var vClusters []*vcluster.VCluster
+	var scName string
+	var appNS string
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployMultipleAppsOnVclusters", "Create, Connect and run Multiple Nginx and FIO Applications on Many Vclusters in Parallel", nil, 0)
+		for i := 0; i < totalVclusters; i++ {
+			vClusterName := fmt.Sprintf("my-vcluster%d", i+1)
+			vc, err := vcluster.NewVCluster(vClusterName)
+			log.FailOnError(err, "Failed to initialise VCluster")
+			vClusters = append(vClusters, vc)
+			err = vc.CreateAndWaitVCluster()
+			log.FailOnError(err, fmt.Sprintf("Failed to create VCluster %s", vClusterName))
+		}
+		rand.Seed(time.Now().UnixNano())
+	})
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err = CreateStorageClass(scName)
+		log.FailOnError(err, "Error creating Storageclass")
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+
+		for _, vc := range vClusters {
+			appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(10000))
+			for i := 0; i < nginxAppCount; i++ {
+				deploymentName := fmt.Sprintf("nginx-deployment-%d", i)
+				pvcName, _ := vc.CreatePVC("", scName, appNS, "RWX")
+				err := vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
+				log.FailOnError(err, "Error in creating Nginx deployment")
+			}
+
+			for i := 0; i < fioAppCount; i++ {
+				fioOptions := vcluster.FIOOptions{
+					Name:      "mytest",
+					IOEngine:  "libaio",
+					RW:        "randwrite",
+					BS:        "4k",
+					NumJobs:   1,
+					Size:      "500m",
+					TimeBased: true,
+					Runtime:   "604800s",
+					EndFsync:  1,
+				}
+				jobName := fmt.Sprintf("fio-job-%d", i)
+				pvcName, _ := vc.CreatePVC(scName+"-pvc-"+strconv.Itoa(i), scName, appNS, "")
+				err := vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName)
+				log.FailOnError(err, "Failed in creating FIO Application")
+			}
+		}
+	})
+	JustAfterEach(func() {
+		// VCluster, StorageClass and Namespace cleanup
+		//for _, vc := range vClusters {
+		//	vc.TerminateVCluster()
+		//	vcluster.DeleteNSFromHost(vc.Namespace)
+		//}
+		//vcluster.DeleteStorageclassFromHost(scName)
 	})
 })
 
