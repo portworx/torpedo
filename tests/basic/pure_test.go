@@ -2317,7 +2317,8 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		//select the node where highest number of pods are created
 		selectNode := func(podNodeMap map[string][]string) (string, error) {
 			nodeMap := make(map[string]int)
-			for _, node := range podNodeMap {
+			for pod, node := range podNodeMap {
+				log.Infof("node name:%v , pod name:%v", node[0], pod)
 				nodeMap[node[0]]++
 			}
 			var max_count int
