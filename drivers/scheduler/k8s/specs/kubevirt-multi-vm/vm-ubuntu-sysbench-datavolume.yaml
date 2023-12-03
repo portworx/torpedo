@@ -1,0 +1,71 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-sysbench-data-volume
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-ubuntu-sysbench-pvc-datavolume
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+        app: vm-ubuntu-sysbench-pvc-datavolume
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            - name: datavolume
+              disk:
+                bus: virtio
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            memory: 2048M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: pvc-sysbench-ubuntu-app
+        - name: datavolume
+          dataVolume:
+            name: pvc-sysbench-data-volume
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False
+              scripts-user:
+                - sysbench cpu --cpu-max-prime=20000 run
+                - sysbench fileio --file-total-size=1G prepare
+                - sysbench fileio --file-total-size=1G --file-test-mode=rndrw --time=300 --max-requests=0 run
+                - sysbench fileio --file-total-size=1G cleanup

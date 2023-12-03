@@ -1,0 +1,150 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-sysbench-data-volume-1
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-sysbench-data-volume-2
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-sysbench-data-volume-3
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-sysbench-data-volume-4
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-sysbench-data-volume-5
+spec:
+  storageClassName: kubevirt-sc
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: vm-ubuntu-sysbench-pvc-multi-datavolume
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/domain: ubuntu-bionic
+        kubevirt-key: kubevirt-val
+        app: vm-ubuntu-sysbench-pvc-multi-datavolume
+    spec:
+      domain:
+        cpu:
+          cores: 2
+        devices:
+          disks:
+            - name: containervolume
+              disk:
+                bus: virtio
+            - name: datavolume1
+              disk:
+                bus: virtio
+            - name: datavolume2
+              disk:
+                bus: virtio
+            - name: datavolume3
+              disk:
+                bus: virtio
+            - name: datavolume4
+              disk:
+                bus: virtio
+            - name: datavolume5
+              disk:
+                bus: virtio
+            - name: cloudinitvolume
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+        resources:
+          requests:
+            memory: 2048M
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containervolume
+          persistentVolumeClaim:
+            claimName: pvc-sysbench-multi-vol-ubuntu-app
+        - name: datavolume1
+          dataVolume:
+            name: pvc-sysbench-data-volume-1
+        - name: datavolume2
+          dataVolume:
+            name: pvc-sysbench-data-volume-2
+        - name: datavolume3
+          dataVolume:
+            name: pvc-sysbench-data-volume-3
+        - name: datavolume4
+          dataVolume:
+            name: pvc-sysbench-data-volume-4
+        - name: datavolume5
+          dataVolume:
+            name: pvc-sysbench-data-volume-5
+        - name: cloudinitvolume
+          cloudInitNoCloud:
+            userData: |-
+              #cloud-config
+              chpasswd:
+                list: |
+                  ubuntu:ubuntu
+                  root:toor
+                expire: False
+              runcmd:
+                - while true; do
+                    sysbench cpu --cpu-max-prime=20000 run
+                    for i in $(seq 1 5); do
+                      sysbench fileio --file-total-size=1G --file-num=10 --file-test-mode=rndrw --time=300 --max-requests=0 --file-extra-flags=direct run --file-fsync-freq=0 --file-fsync-end=false --file-fsync-mode=fsync --file-fsync-all=false --file-fsync-on-close=false --file-io-mode=sync --file-flags=direct --file-block-size=4K --filename=/data$i/test_file
+                      sysbench fileio --file-total-size=1G cleanup --filename=/data$i/test_file
+                    done
+                  done
