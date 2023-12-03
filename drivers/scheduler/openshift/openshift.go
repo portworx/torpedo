@@ -823,7 +823,6 @@ func (k *openshift) checkAndGetNewNode() (string, error) {
 // Waits for newly provisioned OCP node to be ready and running
 func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 	var err error
-	var isTriedOnce bool = false
 	var provState string = "Provisioned"
 	var driverName = k.K8s.NodeDriverName
 	log.Info("Using Node Driver: ", driverName)
@@ -841,22 +840,19 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 			return "", true, fmt.Errorf(
 				"FAILED: Unable to get new OCP VM:[%s] status. cause: %v", result[0], err,
 			)
-		} else if strings.ToLower(result[1]) != "running" {
-			// Observed that OCP unable to power-on VM sometimes for vSphere driver
-			// Trying to power on the new VM once
-			if result[1] == provState && driverName == vsphere.DriverName && !isTriedOnce {
-				isTriedOnce = true
-				driver, _ := node.Get(driverName)
-				if err = driver.AddMachine(result[0]); err != nil {
-					return result[0], true, err
-				}
-				if err = driver.PowerOnVMByName(result[0]); err != nil {
-					return result[0], true, err
-				}
-			}
+		} else if result[1] == provState || strings.ToLower(result[1]) != "running" {
+			// skipping power-on manually PTX-21352
 			return result[0], true, &scheduler.ErrFailedToBringUpNode{
 				Node:  result[0],
 				Cause: fmt.Errorf("FAILED: OCP Unable to bring up the new node"),
+			}
+		} else {
+			driver, err := node.Get(driverName)
+			if err != nil {
+				return result[0], true, err
+			}
+			if err = driver.AddMachine(result[0]); err != nil {
+				return result[0], true, err
 			}
 		}
 		return result[0], false, nil
