@@ -1275,7 +1275,7 @@ var _ = Describe("{DeployMultipleKubevirtApps}", func() {
 		for i := 1; i <= 20; i++ {
 			taskName := fmt.Sprintf("ssie-load-%d", i)
 			_ = ScheduleApplications(taskName)
-			time.Sleep(10 * time.Minute)
+			time.Sleep(2 * time.Minute)
 		}
 	})
 })
