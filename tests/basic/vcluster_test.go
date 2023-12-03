@@ -1266,6 +1266,17 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 	})
 })
 
+var _ = Describe("{DeployMultipleKubevirtApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployMultipleKubevirtApps", "Create, Connect and run Multiple Kubevirt VMs", nil, 0)
+	})
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		Inst().AppList = []string{"kubevirt-multi-vm", "kubevirt-simple-vm"}
+		taskName := "ssie-load"
+		_ = ScheduleApplications(taskName)
+	})
+})
+
 var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 	totalVclusters := 10
 	nginxAppCount := 7
