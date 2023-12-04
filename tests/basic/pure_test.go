@@ -2296,7 +2296,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 	It(stepLog, func() {
 		//Number of apps to be deployed
 		NumberOfDeployments := 10
-		//Map of pod -> [node,namespace]
+		//Map of "pod" -> {"node":nodename,"namespace":ns}
 		podNodeMap := make(map[string]map[string]string)
 		// createPodNodeMap creates a map of pods and nodes
 		createPodNodeMap := func(podNodeMap map[string]map[string]string, namespace string) error {
@@ -2358,6 +2358,10 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 
 			log.FailOnError(err, "Failed to create podNodeMap")
 			//cordon node with highest number of pods
+			defer func() {
+				err = core.Instance().UnCordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to uncordon node %v", nodeToCordon)
+			}()
 			err = core.Instance().CordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
 			log.FailOnError(err, "Failed to cordon node %v", nodeToCordon)
 			log.InfoD("cordoned node %v", nodeToCordon)
@@ -2387,6 +2391,20 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				}
 			}
 		})
+		stepLog = "Destroy applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for j := 0; j < NumberOfDeployments; j++ {
+				go func() {
+					nsName := fmt.Sprintf("nginx-fada-deploy-test-%v", j)
+					//delete namespace
+					err = core.Instance().DeleteNamespace(nsName)
+					log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nsName))
+					log.Infof("Deleted namespace %v", nsName)
+				}()
+			}
+		})
+
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
