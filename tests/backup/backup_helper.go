@@ -289,7 +289,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		return err
 	}
 
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func CreateBackupWithCRValidation(backupName string, clusterName string, bLocati
 		return err
 	}
 
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return err
 	}
@@ -484,7 +484,7 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	if err != nil {
 		return err
 	}
-	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return err
 	}
@@ -1696,7 +1696,7 @@ func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]str
 }
 
 // backupSuccessCheck inspects backup task
-func backupSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
+func backupSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context, SizeCheck bool) error {
 	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
@@ -1731,6 +1731,19 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 				return "", false, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 			}
 		}
+
+		// Check size of backup taken is non-zero
+		if SizeCheck {
+			Volumes := resp.GetBackup().GetVolumes()
+			for _, volume := range Volumes {
+				size := volume.GetTotalSize()
+				actualSize := volume.GetActualSize()
+				if !(size > 0 || actualSize > 0) {
+					return "", false, fmt.Errorf("backup size for [%s] is [%d] and actual size is [%d] which is not greater than 0 ", backupName, size, actualSize)
+				}
+			}
+		}
+
 		return "", true, fmt.Errorf("backup status for [%s] expected was [%s] but got [%s] because of [%s]", backupName, statusesExpected, actual, reason)
 
 	}
@@ -1743,7 +1756,7 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 
 // backupSuccessCheckWithValidation checks if backup is Success and then validates the backup
 func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...string) error {
-	err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+	err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx, true)
 	if err != nil {
 		return err
 	}
@@ -2969,7 +2982,7 @@ func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLo
 	if err != nil {
 		return err
 	}
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return err
 	}
@@ -2998,7 +3011,7 @@ func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName str
 		return err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return err
 	}
@@ -3500,7 +3513,7 @@ func GetNextCompletedScheduleBackupName(ctx context.Context, scheduleName string
 		return "", err
 	}
 	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
-	err = backupSuccessCheck(nextScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(nextScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return "", err
 	}
@@ -3545,7 +3558,7 @@ func GetNextPeriodicScheduleBackupName(scheduleName string, scheduleInterval tim
 		return "", err
 	}
 	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
-	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
 	if err != nil {
 		return "", err
 	}
