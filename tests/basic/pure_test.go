@@ -2336,7 +2336,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
 			for j := 0; j < NumberOfDeployments; j++ {
-				taskName := fmt.Sprintf("nginx-fada-deploy-test-%v", j)
+				taskName := fmt.Sprintf("test-%v", j)
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys: Inst().AppList,
 				})
