@@ -1681,12 +1681,17 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
-					deployments[ds] = deployment
-				})
+				if ds.Name == postgresql {
+					Step("Deploy and validate data service", func() {
+						isDeploymentsDeleted = false
+						deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+					})
+				} else {
+					log.InfoD("This testcase is valid only for SQL databases, Skipping this testcase as DB is- %v", ds.Name)
+				}
+
 			}
 		})
 
