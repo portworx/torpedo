@@ -2398,15 +2398,15 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			var wg sync.WaitGroup
 			for j := 0; j < NumberOfDeployments; j++ {
 				wg.Add(1)
-				go func() {
+				go func(index int) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					nsName := fmt.Sprintf("nginx-fada-deploy-test-%v", j)
+					nsName := fmt.Sprintf("nginx-fada-deploy-test-%v", index)
 					//delete namespace
 					err = core.Instance().DeleteNamespace(nsName)
 					log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nsName))
 					log.Infof("Deleted namespace %v", nsName)
-				}()
+				}(j)
 			}
 			wg.Wait()
 		})
