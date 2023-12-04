@@ -2395,8 +2395,11 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		stepLog = "Destroy applications"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			var wg sync.WaitGroup
 			for j := 0; j < NumberOfDeployments; j++ {
 				go func() {
+					wg.Add(1)
+					defer wg.Done()
 					nsName := fmt.Sprintf("nginx-fada-deploy-test-%v", j)
 					//delete namespace
 					err = core.Instance().DeleteNamespace(nsName)
@@ -2404,6 +2407,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 					log.Infof("Deleted namespace %v", nsName)
 				}()
 			}
+			wg.Wait()
 		})
 
 	})
