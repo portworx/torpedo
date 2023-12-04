@@ -2396,9 +2396,10 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
-			for j := 0; j < NumberOfDeployments; j++ {
+			for j := 0; j < NumberOfDeployments-1; j++ {
 				go func() {
 					wg.Add(1)
+					defer GinkgoRecover()
 					defer wg.Done()
 					nsName := fmt.Sprintf("nginx-fada-deploy-test-%v", j)
 					//delete namespace
