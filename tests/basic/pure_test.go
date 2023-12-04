@@ -2342,6 +2342,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				})
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 				contexts = append(contexts, context...)
+				taskName = fmt.Sprintf("nginx-fada-deploy-test-%v", j)
 				err = createPodNodeMap(podNodeMap, taskName)
 				log.FailOnError(err, "Could not create pod node map")
 			}
