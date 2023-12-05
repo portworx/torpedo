@@ -1,4 +1,4 @@
-FROM golang:1.19.5-alpine AS build
+FROM golang:1.19.5-buster AS build
 LABEL maintainer="harsh@portworx.com"
 ARG MAKE_TARGET
 
