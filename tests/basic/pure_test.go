@@ -2289,6 +2289,8 @@ func faLUNExists(faVolList []string, pvc string) bool {
 
 var _ = Describe("{ReDistributeFADAVol}", func() {
 	var contexts []*scheduler.Context
+	var nodeToCordon string
+
 	JustBeforeEach(func() {
 		StartTorpedoTest("ReDistributeFADAVol", "Create apps with FADA vol and check if they are distributed to other nodes", nil, 0)
 	})
@@ -2298,7 +2300,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		NumberOfDeployments := 10
 		//Map of "pod" -> {"node":nodename,"namespace":ns}
 		podNodeMap := make(map[string]map[string]string)
-		// createPodNodeMap creates a map of pods and nodes
+		// createPodNodeMap returns podNodeMap which maps pod to its scheduled node and namespace
 		createPodNodeMap := func(podNodeMap map[string]map[string]string, namespace string) error {
 			pods, err := core.Instance().GetPods(namespace, nil)
 			log.Infof("Number of pods in namespace [%s] : %v", namespace, len(pods.Items))
@@ -2317,14 +2319,12 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		//select the node where highest number of pods are created
 		selectNode := func(podNodeMap map[string]map[string]string) (string, error) {
 			nodeMap := make(map[string]int)
-			for pod, node := range podNodeMap {
-				log.Infof("node name:%v , pod name:%v", node["node"], pod)
+			for _, node := range podNodeMap {
 				nodeMap[node["node"]]++
 			}
 			var max_count int
 			var node string
 			for k, v := range nodeMap {
-				log.Infof("Node: %v, Number of pods: %v", k, v)
 				if v > max_count {
 					max_count = v
 					node = k
@@ -2349,20 +2349,16 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			}
 			ValidateApplications(contexts)
 		})
-		//select the node with highest number of pods
-		nodeToCordon, err := selectNode(podNodeMap)
-		log.FailOnError(err, "Failed to select node with highest number of pods")
-		log.InfoD("Node with highest number of pods: %v", nodeToCordon)
-
-		stepLog = "Cordon the node with highest number of pods and delete pods from that node"
+		stepLog = "select the node with highest number of pods and cordon that node"
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
-
-			log.FailOnError(err, "Failed to create podNodeMap")
-			//cordon node with highest number of pods
+			nodeToCordon, err = selectNode(podNodeMap)
+			log.FailOnError(err, "Failed to select node with highest number of pods")
+			log.InfoD("Node with highest number of pods: %v", nodeToCordon)
+			//cordon node with the highest number of pods
 			defer func() {
 				err = core.Instance().UnCordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
 				log.FailOnError(err, "Failed to uncordon node %v", nodeToCordon)
+				log.Infof("uncordoned node %v", nodeToCordon)
 			}()
 			err = core.Instance().CordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
 			log.FailOnError(err, "Failed to cordon node %v", nodeToCordon)
@@ -2377,6 +2373,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				}
 			}
 		})
+
 		stepLog = "Verify if pods are scheduled on other nodes"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
