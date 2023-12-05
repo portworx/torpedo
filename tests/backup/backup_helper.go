@@ -6076,10 +6076,15 @@ func CreateNestedDirectoriesWithFilesInPod(pod corev1.Pod, directoryConfig PodDi
 		wg.Wait()
 		close(errChan)
 	}()
+
+	var errs []error
 	for err := range errChan {
 		if err != nil {
-			return fmt.Errorf("error creating nested directories: %s", err.Error())
+			errs = append(errs, err)
 		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("error creating nested directories: %v", errs)
 	}
 
 	return nil
@@ -6094,14 +6099,14 @@ func CreateDirectoryStructureInPod(pod corev1.Pod, directoryConfig PodDirectoryC
 		}
 		err := CreateDirectoryInPod(pod, podConfig)
 		if err != nil {
-			log.Infof(fmt.Sprintf("Error creating directory %s: %s\n", dirPath, err.Error()))
+			log.Errorf(fmt.Sprintf("Error creating directory %s: %s\n", dirPath, err.Error()))
 			continue
 		}
+
 		fileConfig := PodDirectoryConfig{
 			BasePath:          dirPath,
 			FilesPerDirectory: directoryConfig.FilesPerDirectory,
 		}
-
 		err = CreateFilesInPodDirectory(pod, fileConfig)
 		if err != nil {
 			return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
@@ -6158,21 +6163,6 @@ func CreateFilesInPodDirectory(pod corev1.Pod, fileConfig PodDirectoryConfig) er
 		}
 	}
 	return nil
-}
-
-// GetRandomSubset generates a random subset of elements from a given list.
-func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
-	if subsetSize > len(elements) {
-		return nil, fmt.Errorf("subset size exceeds the length of the input list")
-	}
-
-	shuffledElements := make([]string, len(elements))
-	copy(shuffledElements, elements)
-	rand.Shuffle(len(shuffledElements), func(i, j int) {
-		shuffledElements[i], shuffledElements[j] = shuffledElements[j], shuffledElements[i]
-	})
-
-	return shuffledElements[:subsetSize], nil
 }
 
 // GenerateStorageClassFormattedString generates a formatted string representation

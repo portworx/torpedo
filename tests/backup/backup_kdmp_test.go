@@ -67,7 +67,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 	JustBeforeEach(func() {
 		backupNames = make([]string, 0)
 		restoreNames = make([]string, 0)
-		//scheduleNames = make([]string, 0)
+		scheduleNames = make([]string, 0)
 		bkpNamespaces = make([]string, 0)
 		restoredNamespaces = make([]string, 0)
 		backupLocationMap = make(map[string]string)
@@ -86,7 +86,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 		numDeployments = 1
 		providers = getProviders()
 
-		StartPxBackupTorpedoTest("ExcludeDirectoryFileBackup", "Excludes mentioned directories or files from backed-up apps and restores them", nil, 0, Ak, Q4FY24)
+		StartPxBackupTorpedoTest("ExcludeDirectoryFileBackup", "Excludes mentioned directories or files from backed-up apps and restores them", nil, 93691, Ak, Q4FY24)
 
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -112,8 +112,8 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 			ValidateApplications(scheduledAppContexts)
 		})
 
-		Step("Getting mountpath and associated stoargeClass for containers in deployed application", func() {
-			log.InfoD("Getting mountpath associated stoargeClass for containers in deployed application")
+		Step("Getting mountpath and associated storageClass for containers in deployed application", func() {
+			log.InfoD("Getting mountpath associated storageClass for containers in deployed application")
 			for _, namespace := range bkpNamespaces {
 				pods, err := core.Instance().GetPods(namespace, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
@@ -166,9 +166,9 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							scName := scMountPathMap[mountPath]
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
-								Depth:             100,
-								Levels:            1,
-								FilesPerDirectory: 100,
+								Depth:             10,
+								Levels:            3,
+								FilesPerDirectory: 1000,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
 							err = CreateNestedDirectoriesWithFilesInPod(pod, DirectoryConfig)
@@ -217,7 +217,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							fileConfig = PodDirectoryConfig{
 								BasePath:          mountPath,
 								FilesPerDirectory: 1,
-								FileName:          "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopq.txt",
+								FileName:          fmt.Sprintf("%s.txt", RandomString(251)),
 							}
 							err = CreateFilesInPodDirectory(pod, fileConfig)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("creating files within mountPath [%s] with maximum name length (255 characters and add to exclude list)", mountPath))
@@ -239,11 +239,11 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 						for _, mountPath := range podMountPathMap[pod.Name] {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 2)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 100)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 2)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 100)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
@@ -368,13 +368,13 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 					{
 						"test-custom-restore-single-ns",
 						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("custom1-%s-%d", backupNamespaceMap[backupName], index)},
-						make(map[string]string, 0),
+						make(map[string]string),
 						ReplacePolicyRetain,
 					},
 					{
 						"test-replace-restore-single-ns",
 						map[string]string{backupNamespaceMap[backupName]: fmt.Sprintf("custom1-rep-%s-%d", backupNamespaceMap[backupName], index)},
-						make(map[string]string, 0),
+						make(map[string]string),
 						ReplacePolicyDelete,
 					},
 				}
@@ -454,11 +454,10 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 				for _, pod := range pods.Items {
 					if len(podMountPathMap[pod.Name]) > 0 {
 						for _, mountPath := range podMountPathMap[pod.Name] {
-							// Creating a PodDirectoryConfig object with test values
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
-								Depth:             20,
-								Levels:            2,
+								Depth:             50,
+								Levels:            1,
 								FilesPerDirectory: 50,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
@@ -479,8 +478,8 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 			}
 		})
 
-		Step("Update KDMP config map by selecting random files and directories from the second iternation", func() {
-			log.InfoD("Update KDMP config map by selecting random files and directories from the second iternation")
+		Step("Update KDMP config map by selecting random files and directories from the second iteration", func() {
+			log.InfoD("Update KDMP config map by selecting random files and directories from the second iteration")
 			for _, namespace := range bkpNamespaces {
 				pods, err := core.Instance().GetPods(namespace, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
@@ -493,7 +492,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 5)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 10)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
@@ -701,9 +700,9 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 				defer wg.Done()
 				backupUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 				_, err = DeleteBackup(backupName, backupUid, orgID, ctx)
-				log.FailOnError(err, "Failed to delete the backup %s ", backupName)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Failed to delete the backup %s ", backupName))
 				err = DeleteBackupAndWait(backupName, ctx)
-				log.FailOnError(err, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
+				dash.VerifySafely(err, nil, fmt.Sprintf("waiting for backup [%s] deletion", backupName))
 			}(backupName)
 		}
 		wg.Wait()
