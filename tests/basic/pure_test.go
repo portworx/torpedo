@@ -2333,6 +2333,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			log.Infof("Node with highest number of pods: %v", node)
 			return node, nil
 		}
+
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
 			for j := 0; j < NumberOfDeployments; j++ {
@@ -2342,13 +2343,19 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				})
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 				contexts = append(contexts, context...)
-				nameSpace := context[0].App.NameSpace
-				log.Infof("Namespace of the application: %v", nameSpace)
-				err = createPodNodeMap(podNodeMap, nameSpace)
-				log.FailOnError(err, "Could not create pod node map")
 			}
 			ValidateApplications(contexts)
 		})
+
+		stepLog = "Get the pods from the created namespaces"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, context := range contexts {
+				err := createPodNodeMap(podNodeMap, context.App.NameSpace)
+				log.FailOnError(err, "Failed to create podNodeMap")
+			}
+		})
+
 		stepLog = "select the node with highest number of pods and cordon that node"
 		Step(stepLog, func() {
 			nodeToCordon, err = selectNode(podNodeMap)
