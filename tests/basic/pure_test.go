@@ -2304,7 +2304,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			log.Infof("Number of pods in namespace [%s] : %v", namespace, len(pods.Items))
 			nodeAndNsList := make(map[string]string, 0)
 			if err != nil {
-				return fmt.Errorf("failed to get pods in namespace [%s]", namespace)
+				return fmt.Errorf("failed to get pods in namespace [%s] or the namespace doesn't exist", namespace)
 			}
 			for _, pod := range pods.Items {
 				log.Infof("Pod name: %v, Node name: %v", pod.Name, pod.Spec.NodeName)
@@ -2342,8 +2342,8 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				})
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 				contexts = append(contexts, context...)
-				taskName = fmt.Sprintf("nginx-fada-deploy-test-%v", j)
-				err = createPodNodeMap(podNodeMap, taskName)
+				nameSpace := context[0].App.NameSpace
+				err = createPodNodeMap(podNodeMap, nameSpace)
 				log.FailOnError(err, "Could not create pod node map")
 			}
 			ValidateApplications(contexts)
@@ -2396,17 +2396,17 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
-			for j := 0; j < NumberOfDeployments; j++ {
+			for _, node := range podNodeMap {
 				wg.Add(1)
-				go func(index int) {
+				go func(node map[string]string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					nsName := fmt.Sprintf("nginx-fada-deploy-test-%v", index)
+					nameSpace := node["namespace"]
 					//delete namespace
-					err = core.Instance().DeleteNamespace(nsName)
-					log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nsName))
-					log.Infof("Deleted namespace %v", nsName)
-				}(j)
+					err = core.Instance().DeleteNamespace(nameSpace)
+					log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nameSpace))
+					log.Infof("Deleted namespace %v", nameSpace)
+				}(node)
 			}
 			wg.Wait()
 		})
