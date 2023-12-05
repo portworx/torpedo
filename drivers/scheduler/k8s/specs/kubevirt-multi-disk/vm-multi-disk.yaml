@@ -68,12 +68,6 @@ spec:
             - name: datavolume3
               disk:
                 bus: virtio
-            - name: datavolume4
-              disk:
-                bus: virtio
-            - name: datavolume5
-              disk:
-                bus: virtio
             - name: cloudinitvolume
               disk:
                 bus: virtio
