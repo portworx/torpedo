@@ -19,7 +19,7 @@ RUN mkdir bin && \
 # Install aws CLI
 RUN curl -fsSLo awscliv2.zip https://nexus.pwx.dev.purestorage.com/repository/store/aws/awscli-exe-linux-x86_64.zip && \
     unzip awscliv2.zip && \
-	./aws/install -i /usr/local/aws-cli -b /usr/local/bin && \
+	/aws/install -i /usr/local/aws-cli -b /usr/local/bin && \
     rm awscliv2.zip
 
 # Install IBM Cloud SDK
