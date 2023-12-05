@@ -2343,6 +2343,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
 				contexts = append(contexts, context...)
 				nameSpace := context[0].App.NameSpace
+				log.Infof("Namespace of the application: %v", nameSpace)
 				err = createPodNodeMap(podNodeMap, nameSpace)
 				log.FailOnError(err, "Could not create pod node map")
 			}
