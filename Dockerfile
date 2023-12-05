@@ -19,6 +19,7 @@ RUN mkdir bin && \
 # Install AWS CLI
 RUN curl -fsSLo awscliv2.zip https://nexus.pwx.dev.purestorage.com/repository/store/aws/awscli-exe-linux-x86_64.zip && \
     unzip awscliv2.zip && \
+    ls -al ./aws && \
     ./aws/install -i /usr/local/aws-cli -b /usr/local/bin && \
     rm -rf aws awscliv2.zip
 
