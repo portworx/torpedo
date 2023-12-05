@@ -16,11 +16,11 @@ RUN mkdir bin && \
     chmod a+x aws-iam-authenticator && \
     mv aws-iam-authenticator bin
 
-# Install aws CLI
+# Install AWS CLI
 RUN curl -fsSLo awscliv2.zip https://nexus.pwx.dev.purestorage.com/repository/store/aws/awscli-exe-linux-x86_64.zip && \
     unzip awscliv2.zip && \
-	/aws/install -i /usr/local/aws-cli -b /usr/local/bin && \
-    rm awscliv2.zip
+    ./aws/install -i /usr/local/aws-cli -b /usr/local/bin && \
+    rm -rf aws awscliv2.zip
 
 # Install IBM Cloud SDK
 RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
