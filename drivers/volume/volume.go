@@ -185,6 +185,9 @@ type Driver interface {
 	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
 	StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error
 
+	// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+	KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error
+
 	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
 
@@ -214,6 +217,9 @@ type Driver interface {
 
 	// RandomizeVolumeName randomizes the volume name from the given name
 	RandomizeVolumeName(name string) string
+
+	// InspectCurrentCluster inspects the current cluster
+	InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error)
 
 	// RecoverDriver will recover a volume driver from a failure/storage down state.
 	// This could be used by a volume driver to recover itself from any underlying storage

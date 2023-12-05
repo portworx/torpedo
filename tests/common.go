@@ -297,6 +297,7 @@ const (
 const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
+	StorkNamePrefix                   = "stork-namespace"
 	BackupRestoreCompletionTimeoutMin = 20
 	clusterDeleteTimeout              = 60 * time.Minute
 	clusterDeleteRetryTime            = 30 * time.Second
@@ -1981,6 +1982,33 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	})
 }
 
+// CrashPXDaemonAndWait crashes px daemon service on given app nodes and waits till driver is back up
+func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	context(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.KillPXDaemon(appNodes, nil)
+			processError(err, errChan...)
+		})
+
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				processError(err, errChan...)
+			}
+		})
+
+	})
+}
+
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
@@ -2184,6 +2212,44 @@ func ToggleAutopilotInStc() error {
 	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
 	expect(err).NotTo(haveOccurred())
 	log.InfoD("Update STC, is AutopilotEnabled Now?: %t", stc.Spec.Autopilot.Enabled)
+	return nil
+}
+
+func TogglePrometheusInStc() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	log.Infof("is prometheus enabled?: %t", stc.Spec.Monitoring.Prometheus.Enabled)
+	stc.Spec.Monitoring.Prometheus.Enabled = !stc.Spec.Monitoring.Prometheus.Enabled
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating prometheus pod is deleted")
+	checkPodIsDeleted := func() (interface{}, bool, error) {
+		prometheusLabels := make(map[string]string)
+		prometheusLabels["app.kubernetes.io/name"] = "prometheus"
+		pods, err := k8sCore.GetPods(pxNamespace, prometheusLabels)
+		expect(err).NotTo(haveOccurred())
+		if stc.Spec.Monitoring.Prometheus.Enabled {
+			log.Infof("prometheus is active, checking is pod is present.")
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("prometheus pod is still not deployed")
+			}
+			return "prometheus pod deployed", false, nil
+		} else {
+			log.Infof("prometheus is inactive, checking if pod is deleted.")
+			if len(pods.Items) > 0 {
+				return "", true, fmt.Errorf("prometheus pod is still present")
+			}
+			return "prometheus pod is deleted", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+	log.InfoD("Update STC, is PrometheusEnabled Now?: %t", stc.Spec.Monitoring.Prometheus.Enabled)
 	return nil
 }
 
@@ -7091,6 +7157,9 @@ func EndTorpedoTest() {
 
 // StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
 func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	instanceIDString := strconv.Itoa(testRepoID)
+	timestamp := time.Now().Format("01-02-15h04m05s")
+	Inst().InstanceID = fmt.Sprintf("%s-%s", instanceIDString, timestamp)
 	StartTorpedoTest(testName, testDescription, tags, testRepoID)
 }
 
