@@ -27,6 +27,7 @@ RUN curl -fsSLo awscliv2.zip https://nexus.pwx.dev.purestorage.com/repository/st
     ls -al && \
     ls -al aws && \
     ls -al aws/dist && \
+    ls -al aws/dist/aws && \
     ./aws/install -i /usr/local/aws-cli -b /usr/local/bin > /dev/null && \
     rm -rf awscliv2.zip
 
