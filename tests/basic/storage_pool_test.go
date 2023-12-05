@@ -10081,7 +10081,7 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 		Migrated from px-test: PoolDeleteFunctionality
 			1. Delete pools till total availble pool is 1 and verify for each delete that the right pool was deleted.
 			2. Delete the last pool and verify node transitions to storageless.
-			3. Randomly pick a drive which got freeed up because of pool delete and add it back.
+			3. Randomly pick a drive which got freed up because of pool delete and add it back.
 	*/
 
 	JustBeforeEach(func() {
@@ -10118,10 +10118,10 @@ var _ = Describe("{PoolDeleteFunctionality}", func() {
 			log.FailOnError(err, "error getting pool drive from the node [%s]", selectedNode.Name)
 			dash.VerifyFatal(len(poolsMap) == 0, true, "verify all pools deleted")
 
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
 			found := false
-			storagelessNodes, err := Inst().V.GetStoragelessNodes()
-			log.FailOnError(err, "failed to get storageless nodes")
-			for _, n := range storagelessNodes {
+			for _, n := range node.GetStorageLessNodes() {
 				if n.Id == selectedNode.Id {
 					found = true
 					break
