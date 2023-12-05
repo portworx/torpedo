@@ -2316,7 +2316,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			}
 			return nil
 		}
-		//select the node where highest number of pods are created
+		//select the node where the highest number of pods are created
 		selectNode := func(podNodeMap map[string]map[string]string) (string, error) {
 			nodeMap := make(map[string]int)
 			for _, node := range podNodeMap {
