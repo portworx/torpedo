@@ -1271,11 +1271,10 @@ var _ = Describe("{DeployMultipleKubevirtApps}", func() {
 		StartTorpedoTest("DeployMultipleKubevirtApps", "Create, Connect and run Multiple Kubevirt VMs", nil, 0)
 	})
 	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
-		Inst().AppList = []string{"kubevirt-ssie-io"}
+		Inst().AppList = []string{"kubevirt-cloudsnap", "kubevirt-localsnap", "kubevirt-multi-disk", "kubevirt-ssie-vm"}
 		for i := 1; i <= 2; i++ {
 			taskName := fmt.Sprintf("ssie-load-%d", i)
 			_ = ScheduleApplications(taskName)
-			time.Sleep(2 * time.Minute)
 		}
 	})
 })
