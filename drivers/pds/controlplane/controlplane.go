@@ -1,6 +1,8 @@
 package controlplane
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -8,6 +10,8 @@ import (
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net"
 	"net/url"
 	"strings"
@@ -394,6 +398,51 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 		return "", err
 	}
 	return token.GetToken(), nil
+}
+
+func (cp *ControlPlane) CreateMongoDBClient(connectionString string) (*mongo.Client, error) {
+	clientOptions := options.Client().ApplyURI(connectionString)
+
+	// Create a new TLS configuration
+	tlsConfig := &tls.Config{}
+	clientOptions.SetTLSConfig(tlsConfig)
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(context.Background(), clientOptions)
+	if err != nil {
+		return nil, fmt.Errorf("Error while connecting to mongoDB")
+	}
+	// Ping the MongoDB server to ensure connectivity
+	err = client.Ping(context.Background(), nil)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Connected to MongoDB!")
+
+	// Close the client when done
+	err = client.Disconnect(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+func (cp *ControlPlane) ValidateIfTLSEnabled(username, password, dnsEndPoint, port string) error {
+	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s", username, password, dnsEndPoint, port)
+
+	_, err := cp.CreateMongoDBClient(connectionString)
+	if err != nil {
+		return err
+	}
+
+	//tlsEnabled := client.Database("admin").RunCommand(context.TODO(), bson.D{{"tlsVersion", 1}})
+	//var result bson.M
+	//err = tlsEnabled.Decode(&result)
+	//fmt.Println("TLS version:", result["tlsVersion"])
+
+	return nil
 }
 
 // ValidateDNSEndpoint
