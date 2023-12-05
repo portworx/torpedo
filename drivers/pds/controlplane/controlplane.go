@@ -401,6 +401,7 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 }
 
 func (cp *ControlPlane) CreateMongoDBClient(connectionString string) (*mongo.Client, error) {
+	log.Debugf("Connection string %s", connectionString)
 	clientOptions := options.Client().ApplyURI(connectionString)
 
 	// Create a new TLS configuration
@@ -410,7 +411,7 @@ func (cp *ControlPlane) CreateMongoDBClient(connectionString string) (*mongo.Cli
 	// Create a MongoDB client
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
-		return nil, fmt.Errorf("Error while connecting to mongoDB")
+		return nil, fmt.Errorf("error while connecting to mongoDB: [%v]", err)
 	}
 	// Ping the MongoDB server to ensure connectivity
 	err = client.Ping(context.Background(), nil)
@@ -430,7 +431,7 @@ func (cp *ControlPlane) CreateMongoDBClient(connectionString string) (*mongo.Cli
 
 func (cp *ControlPlane) ValidateIfTLSEnabled(username, password, dnsEndPoint, port string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
-	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s/%s", username, password, dnsEndPoint, port)
+	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s", username, password, dnsEndPoint, port)
 
 	_, err := cp.CreateMongoDBClient(connectionString)
 	if err != nil {
