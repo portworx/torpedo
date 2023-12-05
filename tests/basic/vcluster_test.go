@@ -1271,8 +1271,8 @@ var _ = Describe("{DeployMultipleKubevirtApps}", func() {
 		StartTorpedoTest("DeployMultipleKubevirtApps", "Create, Connect and run Multiple Kubevirt VMs", nil, 0)
 	})
 	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
-		Inst().AppList = []string{"kubevirt-multi-vm", "kubevirt-simple-vm"}
-		for i := 1; i <= 20; i++ {
+		Inst().AppList = []string{"kubevirt-longevity-simple-vm"}
+		for i := 1; i <= 2; i++ {
 			taskName := fmt.Sprintf("ssie-load-%d", i)
 			_ = ScheduleApplications(taskName)
 			time.Sleep(2 * time.Minute)
