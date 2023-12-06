@@ -1272,7 +1272,7 @@ var _ = Describe("{DeployMultipleKubevirtApps}", func() {
 	})
 	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
 		Inst().AppList = []string{"kubevirt-cloudsnap", "kubevirt-localsnap", "kubevirt-multi-disk", "kubevirt-ssie-vm", "kubevirt-ssie-io", "kubevirt-vm-pvc"}
-		for i := 1; i <= 3; i++ {
+		for i := 1; i <= 7; i++ {
 			taskName := fmt.Sprintf("ssie-load-%d", i)
 			_ = ScheduleApplications(taskName)
 		}
