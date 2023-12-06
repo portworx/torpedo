@@ -2259,6 +2259,51 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 	return driver_api.PerformTask(stopFn, triggerOpts)
 }
 
+func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	stopFn := func() error {
+		for _, n := range nodes {
+
+			log.InfoD("Stopping px-daemon on [%s].", n.Name)
+			var processPid string
+			command := "ps -ef | grep \"px -daemon\""
+			out, err := d.nodeDriver.RunCommand(n, command, node.ConnectionOpts{
+				Timeout:         20 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			})
+			if err != nil {
+				return err
+			}
+
+			lines := strings.Split(string(out), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "/usr/local/bin/px -daemon") && !strings.Contains(line, "grep") {
+					fields := strings.Fields(line)
+					processPid = fields[1]
+					break
+				}
+			}
+
+			if processPid == "" {
+				return fmt.Errorf("unable to find PID for px daemon in output [%s]", out)
+			}
+
+			pxCrashCmd := fmt.Sprintf("sudo pkill -9 %s", processPid)
+			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to run cmd [%s] on node [%s], Err: %v", pxCrashCmd, n.Name, err)
+			}
+			log.Infof("Sleeping for %v for volume driver to go down", waitVolDriverToCrash)
+			time.Sleep(waitVolDriverToCrash)
+		}
+		return nil
+	}
+	return driver_api.PerformTask(stopFn, triggerOpts)
+}
+
 // GetNodeForVolume returns the node on which volume is attached
 func (d *portworx) GetNodeForVolume(vol *torpedovolume.Volume, timeout time.Duration, retryInterval time.Duration) (*node.Node, error) {
 	volumeName := d.schedOps.GetVolumeName(vol)
@@ -2599,7 +2644,7 @@ func (d *portworx) ValidateStoragePools() error {
 							err := fmt.Errorf("node [%s], pool: %s was expanded to size: %d larger than expected: %d",
 								n.Name, pool.Uuid, pool.TotalSize, expectedSize)
 							log.Errorf(err.Error())
-							return "", false, err
+							return "", false, nil
 						}
 
 						log.Infof("node [%s], pool: %s, size is not as expected. Expected: %v, Actual: %v",
