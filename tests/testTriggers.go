@@ -2048,6 +2048,9 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, appNode := range driverNodesToRestart {
+			dashStats := make(map[string]string)
+			dashStats["node"] = appNode.Name
+			updateLongevityStats(RestartManyVolDriver, stats.PXRestartEventName, dashStats)
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
@@ -2064,9 +2067,6 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 						appNode.MgmtIp)
 					event.Event.Type += "<br>" + taskStep
 					errorChan := make(chan error, errorChannelSize)
-					dashStats := make(map[string]string)
-					dashStats["node"] = appNode.Name
-					updateLongevityStats(RestartManyVolDriver, stats.PXRestartEventName, dashStats)
 					StopVolDriverAndWait([]node.Node{appNode}, &errorChan)
 					for err := range errorChan {
 						UpdateOutcome(event, err)
@@ -2363,6 +2363,9 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
 			for _, n := range nodesToReboot {
+				dashStats := make(map[string]string)
+				dashStats["node"] = n.Name
+				updateLongevityStats(RebootManyNodes, stats.NodeRebootEventName, dashStats)
 				wg.Add(1)
 				go func(n node.Node) {
 					defer wg.Done()
@@ -2376,9 +2379,6 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 						log.InfoD(stepLog)
 						taskStep := fmt.Sprintf("reboot node: %s.", n.MgmtIp)
 						event.Event.Type += "<br>" + taskStep
-						dashStats := make(map[string]string)
-						dashStats["node"] = n.Name
-						updateLongevityStats(RebootManyNodes, stats.NodeRebootEventName, dashStats)
 						err := Inst().N.RebootNode(n, node.RebootNodeOpts{
 							Force: true,
 							ConnectionOpts: node.ConnectionOpts{
