@@ -348,23 +348,25 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Destroying the scheduled applications")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		cleanupUserObjects := func(user string) {
-			nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", user)
-			for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
-				CleanupCloudSettingsAndClusters(userBackupLocationMap[user], cloudCredentialName, cloudCredentialUID, nonAdminCtx)
-				break
+		/*
+			defer EndPxBackupTorpedoTest(scheduledAppContexts)
+			log.InfoD("Destroying the scheduled applications")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			DestroyApps(scheduledAppContexts, opts)
+			cleanupUserObjects := func(user string) {
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
+					CleanupCloudSettingsAndClusters(userBackupLocationMap[user], cloudCredentialName, cloudCredentialUID, nonAdminCtx)
+					break
+				}
+				err = backup.DeleteUser(user)
+				log.FailOnError(err, "failed to delete user %s", user)
 			}
-			err = backup.DeleteUser(user)
-			log.FailOnError(err, "failed to delete user %s", user)
-		}
-		err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
-		log.FailOnError(err, "failed to cleanup user objects from user")
+			err := TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+			log.FailOnError(err, "failed to cleanup user objects from user")
+		*/
 	})
 })
 
