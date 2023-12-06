@@ -2288,6 +2288,12 @@ func faLUNExists(faVolList []string, pvc string) bool {
 }
 
 var _ = Describe("{ReDistributeFADAVol}", func() {
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20638
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/87945
+	*/
 	var contexts []*scheduler.Context
 	var nodeToCordon string
 
