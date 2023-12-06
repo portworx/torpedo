@@ -2,7 +2,6 @@ package controlplane
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
@@ -406,8 +405,8 @@ func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (
 	clientOptions := options.Client().ApplyURI(connectionString)
 
 	// Create a new TLS configuration
-	tlsConfig := &tls.Config{}
-	clientOptions.SetTLSConfig(tlsConfig)
+	//tlsConfig := &tls.Config{}
+	//clientOptions.SetTLSConfig(tlsConfig)
 
 	// Create a MongoDB client
 	client, err := mongo.Connect(context.Background(), clientOptions)
@@ -417,7 +416,7 @@ func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (
 	// Ping the MongoDB server to ensure connectivity
 	err = client.Ping(context.Background(), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error occured during ping: [%v]", err)
 	}
 	fmt.Println("Connected to MongoDB!")
 
