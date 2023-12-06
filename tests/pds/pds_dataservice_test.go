@@ -56,6 +56,7 @@ var _ = Describe("{TestTLS}", func() {
 							log.FailOnError(err, "error occured while getting dns endpoints")
 						}
 						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, deployment.GetClusterResourceName()+"-0", port)
+						log.Debugf("error occured %v", err.Error())
 						if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), CertificateErrorCode) {
 							log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
 						} else {
