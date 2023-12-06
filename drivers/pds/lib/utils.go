@@ -524,8 +524,8 @@ type StorageClassConfig struct {
 		PriorityIo                 string `yaml:"priority_io"`
 		Repl                       string `yaml:"repl"`
 	} `yaml:"parameters"`
-	Replicas  int      `yaml:"replicas"`
-	Version   string   `yaml:"version"`
+	Replicas  int    `yaml:"replicas"`
+	Version   string `yaml:"version"`
 	Resources struct { //custom struct
 		Limits struct {
 			CPU              string `yaml:"cpu"`
@@ -1196,6 +1196,21 @@ func DeleteDeploymentTargets(projectID string) error {
 		}
 	}
 	return nil
+}
+
+func GetMongoDBConnectionString(deployemnt *pds.ModelsDeployment, dataServiceName, namespace string) (string, string, string, error) {
+	depPassword, err := GetDeploymentCredentials(deployment.GetId())
+	if err != nil {
+		return "", "", "", fmt.Errorf("error occured while getting creds %v", err)
+	}
+
+	_, port, err := GetDeploymentConnectionInfo(deployment.GetId(), dataServiceName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("error occured while getting dns endpoints %v", err)
+	}
+	connectionString := fmt.Sprintf("%s-%s.%s", deployemnt.GetClusterResourceName(), namespace, namespace)
+
+	return connectionString, depPassword, port, nil
 }
 
 // GetDeploymentConnectionInfo returns the dns endpoint

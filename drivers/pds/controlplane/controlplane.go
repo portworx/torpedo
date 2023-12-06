@@ -414,7 +414,7 @@ func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (
 	if err != nil {
 		return nil, fmt.Errorf("error occured during ping: [%v]", err)
 	}
-	fmt.Println("Connected to MongoDB!")
+	log.Infof("Connected to MongoDB!")
 
 	// Close the client when done
 	err = client.Disconnect(context.Background())

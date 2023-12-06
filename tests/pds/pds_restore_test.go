@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
+	"strings"
 	"sync"
 )
 
@@ -234,6 +235,26 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 						Deployment: deployment,
 					}
 				})
+
+				stepLog = "Verify if ds is tls enabled"
+				Step(stepLog, func() {
+					if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+						connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(deployment, ds.Name, namespace)
+						log.FailOnError(err, "error occured while getting connection string")
+
+						//Validate if TLS is enabled for the data service
+						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+						if err != nil {
+							log.Debugf("error occured %v", err.Error())
+							if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
+								log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
+							} else {
+								log.FailOnError(err, "error while validating if TLS enabled")
+							}
+						}
+					}
+				})
+
 				stepLog = "Running Workloads before taking backups"
 				Step(stepLog, func() {
 					ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
@@ -284,6 +305,26 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 					}
 				})
+
+				stepLog = "Verify if restored ds is tls enabled"
+				Step(stepLog, func() {
+					if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+						connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDeployment, ds.Name, namespace)
+						log.FailOnError(err, "error occured while getting connection string")
+
+						//Validate if TLS is enabled for the data service
+						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+						if err != nil {
+							log.Debugf("error occured %v", err.Error())
+							if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
+								log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
+							} else {
+								log.FailOnError(err, "error while validating if TLS enabled")
+							}
+						}
+					}
+				})
+
 				stepLog = "Validate md5hash for the restored deployments"
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -1328,6 +1369,25 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 						Deployment: deployment,
 					}
 
+					stepLog = "Verify ds is tls enabled"
+					Step(stepLog, func() {
+						if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+							connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDeployment, ds.Name, namespace)
+							log.FailOnError(err, "error occured while getting connection string")
+
+							//Validate if TLS is enabled for the data service
+							err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+							if err != nil {
+								log.Debugf("error occured %v", err.Error())
+								if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
+									log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
+								} else {
+									log.FailOnError(err, "error while validating if TLS enabled")
+								}
+							}
+						}
+					})
+
 					stepLog = "Running Workloads before taking backups"
 					Step(stepLog, func() {
 						ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
@@ -1426,6 +1486,26 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							err = DeleteAllDsBackupEntities(updatedDeployment)
 							log.FailOnError(err, "error while deleting backup job")
 						})
+
+						stepLog = "Verify ds is tls enabled after ds update operation"
+						Step(stepLog, func() {
+							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+								connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDepPostResourceTempUpdate[0], ds.Name, namespace)
+								log.FailOnError(err, "error occured while getting connection string")
+
+								//Validate if TLS is enabled for the data service
+								err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+								if err != nil {
+									log.Debugf("error occured %v", err.Error())
+									if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
+										log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
+									} else {
+										log.FailOnError(err, "error while validating if TLS enabled")
+									}
+								}
+							}
+						})
+
 						stepLog = "Validate md5hash for the restored deployments"
 						Step(stepLog, func() {
 							log.InfoD(stepLog)

@@ -68,7 +68,7 @@ const (
 	couchbase                           = "Couchbase"
 	redis                               = "Redis"
 	rabbitmq                            = "RabbitMQ"
-	mongodb                             = "MongoDB"
+	mongodb                             = "MongoDB Enterprise"
 	mysql                               = "MySQL"
 	kafka                               = "Kafka"
 	zookeeper                           = "ZooKeeper"
@@ -77,7 +77,7 @@ const (
 	timeOut                             = 30 * time.Minute
 	maxtimeInterval                     = 30 * time.Second
 	timeInterval                        = 1 * time.Second
-	CertificateErrorCode                = "x509"
+	SocketError                         = "socket was unexpectedly"
 	ServerSelectionError                = "server selection timeout"
 	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
 	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"

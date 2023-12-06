@@ -33,55 +33,6 @@ const (
 	defaultTestConnectionTimeout = 15 * time.Minute
 )
 
-var _ = Describe("{TestTLS}", func() {
-	steplog := "Added TLS Support"
-	JustBeforeEach(func() {
-		StartTorpedoTest("TestTLS", "Added TLS", pdsLabels, 0)
-	})
-	Step(steplog, func() {
-		It("Test TLS", func() {
-
-			Step("Deploy, Validate and Delete Data Services", func() {
-				for _, ds := range params.DataServiceToTest {
-					Step("Deploy and validate data service", func() {
-						isDeploymentsDeleted = false
-						deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-						log.FailOnError(err, "Error while deploying data services")
-						depPassword, err := pdslib.GetDeploymentCredentials(deployment.GetId())
-						if err != nil {
-							log.FailOnError(err, "error occured while getting creds")
-						}
-						_, port, err := pdslib.GetDeploymentConnectionInfo(deployment.GetId(), ds.Name)
-						if err != nil {
-							log.FailOnError(err, "error occured while getting dns endpoints")
-						}
-						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, deployment.GetClusterResourceName()+"-"+namespace+"."+namespace, port)
-						if err != nil {
-							log.Debugf("error occured %v", err.Error())
-							if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), CertificateErrorCode) {
-								log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
-							} else {
-								log.FailOnError(err, "error while validating if TLS enabled")
-							}
-						}
-					})
-
-					//Step("Delete Deployments", func() {
-					//	log.InfoD("Deleting DataService %v ", ds.Name)
-					//	resp, err := pdslib.DeleteDeployment(deployment.GetId())
-					//	log.FailOnError(err, "Error while deleting data services")
-					//	dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					//	log.InfoD("Getting all PV and associated PVCs and deleting them")
-					//	err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-					//	log.FailOnError(err, "Error while deleting PV and PVCs")
-					//})
-				}
-			})
-
-		})
-	})
-})
-
 var _ = Describe("{ValidateDNSEndpoint}", func() {
 	steplog := "Deploy dataservice, delete and validate pds pods"
 	JustBeforeEach(func() {
