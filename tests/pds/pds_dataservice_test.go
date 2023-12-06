@@ -51,12 +51,16 @@ var _ = Describe("{TestTLS}", func() {
 						if err != nil {
 							log.FailOnError(err, "error occured while getting creds")
 						}
-						dnsEndpoint, port, err := pdslib.GetDeploymentConnectionInfo(deployment.GetId(), ds.Name)
+						_, port, err := pdslib.GetDeploymentConnectionInfo(deployment.GetId(), ds.Name)
 						if err != nil {
 							log.FailOnError(err, "error occured while getting dns endpoints")
 						}
-						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, dnsEndpoint, port)
-						log.FailOnError(err, "error while validating if TLS enabled")
+						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, deployment.GetClusterResourceName()+"-0", port)
+						if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), CertificateErrorCode) {
+							log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
+						} else {
+							log.FailOnError(err, "error while validating if TLS enabled")
+						}
 					})
 
 					Step("Delete Deployments", func() {

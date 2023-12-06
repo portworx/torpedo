@@ -400,7 +400,8 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	return token.GetToken(), nil
 }
 
-func (cp *ControlPlane) CreateMongoDBClient(connectionString string) (*mongo.Client, error) {
+// CreateMongoDBClientAndConnect takes connectionString as parameter and does a ping then returns client
+func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (*mongo.Client, error) {
 	log.Debugf("Connection string %s", connectionString)
 	clientOptions := options.Client().ApplyURI(connectionString)
 
@@ -429,19 +430,15 @@ func (cp *ControlPlane) CreateMongoDBClient(connectionString string) (*mongo.Cli
 	return client, nil
 }
 
+// ValidateIfTLSEnabled takes db related parameters to establish connection and returns error if connection is unsuccessful
 func (cp *ControlPlane) ValidateIfTLSEnabled(username, password, dnsEndPoint, port string) error {
-	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	log.Infof("Data service endpoint is: [%s]", dnsEndPoint)
 	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s", username, password, dnsEndPoint, port)
 
-	_, err := cp.CreateMongoDBClient(connectionString)
+	_, err := cp.CreateMongoDBClientAndConnect(connectionString)
 	if err != nil {
 		return err
 	}
-
-	//tlsEnabled := client.Database("admin").RunCommand(context.TODO(), bson.D{{"tlsVersion", 1}})
-	//var result bson.M
-	//err = tlsEnabled.Decode(&result)
-	//fmt.Println("TLS version:", result["tlsVersion"])
 
 	return nil
 }
