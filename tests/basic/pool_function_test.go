@@ -2,17 +2,17 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 	"github.com/libopenstorage/openstorage/api"
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
@@ -170,232 +170,231 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 
 })
 
-//var _ = Describe("{PoolExpandRejectConcurrent}", func() {
-//	BeforeEach(func() {
-//		contexts = scheduleApps()
-//	})
-//
-//	JustBeforeEach(func() {
-//		poolIDToResize = pickPoolToResize()
-//		log.Infof("Picked pool %s to resize", poolIDToResize)
-//		poolToResize = getStoragePool(poolIDToResize)
-//		resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-//		dash.VerifyFatal(resizeErr, nil, "Previous pool expansion(s) should not result in error")
-//		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
-//		log.FailOnError(err, "Failed to get node with given pool ID")
-//	})
-//
-//	JustAfterEach(func() {
-//		AfterEachTest(contexts)
-//	})
-//
-//	AfterEach(func() {
-//		appsValidateAndDestroy(contexts)
-//		EndTorpedoTest()
-//	})
-//
-//	// test resizing all pools on one storage node concurrently and ensure only the first one makes progress
-//	It("Select all pools on a storage node and expand them concurrently. ", func() {
-//		// TestRail:https://portworx.testrail.net/index.php?/tests/view/34542836&group_by=cases:custom_automated&group_order=desc&group_id=2
-//		StartTorpedoTest("PoolExpandRejectConcurrent",
-//			"Validate storage pool expansion rejects concurrent requests", nil, 34542836)
-//		var pools []*api.StoragePool
-//		Step("Verify multiple pools are present on this node", func() {
-//			// collect all pools available
-//			for _, p := range storageNode.Pools {
-//				pools = append(pools, p)
-//			}
-//			dash.VerifyFatal(len(pools) > 1, true, "This test requires more than 1 pool.")
+//	var _ = Describe("{PoolExpandRejectConcurrent}", func() {
+//		BeforeEach(func() {
+//			contexts = scheduleApps()
 //		})
 //
-//		Step("Expand all pools concurrently. ", func() {
-//			expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
-//			var wg sync.WaitGroup
-//			for _, p := range pools {
-//				wg.Add(1)
-//				go func(p *api.StoragePool) {
-//					defer wg.Done()
-//					err = Inst().V.ExpandPool(p.Uuid, expandType, p.TotalSize/units.GiB+100, true)
-//				}(p)
-//			}
-//			wg.Wait()
-//		})
-//
-//		Step("Verify only one expansion is making progress at any given time", func() {
-//			inProgressCount := 0
-//			startTime := time.Now()
-//			for time.Since(startTime) < 1*time.Minute {
-//				inProgressCount = 0
-//				time.Sleep(5)
-//				storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
-//				for _, p := range storageNode.Pools {
-//					if p.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
-//						inProgressCount++
-//					}
-//					dash.VerifyFatal(inProgressCount <= 1, true, "Only one pool expansion should be in progress at any given time.")
-//				}
-//			}
-//		})
-//	})
-//
-//	// test expansion request on a pool while a previous expansion is in progress is rejected
-//	It("Expand a pool while a previous expansion is in progress", func() {
-//		expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
-//		targetSize := poolToResize.TotalSize/units.GiB + 100
-//		err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
-//		// wait for expansion to start
-//		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
-//		// when the expansion has already completed.
-//		time.Sleep(1)
-//		// verify pool expansion is in progress
-//		isExpandInProgress, expandErr := poolResizeIsInProgress(poolToResize)
-//		if expandErr != nil {
-//			log.Fatalf("Error checking if pool expansion is in progress: %v", expandErr)
-//		}
-//		if !isExpandInProgress {
-//			log.Warnf("Pool expansion already finished. Skipping this test. Using a testing app that writes " +
-//				"more data which may slow down add-disk type expansion. ")
-//			return
-//		}
-//		expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToResize.Uuid, expandType, targetSize+100, true)
-//		dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
-//		dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
-//			"Pool expansion failure reason should be communicated to the user	")
-//	})
-//})
-//
-//var _ = Describe("{PoolExpandWithReboot}", func() {
-//	BeforeEach(func() {
-//		contexts = scheduleApps()
-//	})
-//
-//	JustBeforeEach(func() {
-//		poolIDToResize = pickPoolToResize()
-//		log.Infof("Picked pool %s to resize", poolIDToResize)
-//		poolToResize = getStoragePool(poolIDToResize)
-//		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
-//		log.FailOnError(err, "Failed to get node with given pool ID")
-//	})
-//
-//	JustAfterEach(func() {
-//		AfterEachTest(contexts)
-//	})
-//
-//	AfterEach(func() {
-//		appsValidateAndDestroy(contexts)
-//		EndTorpedoTest()
-//	})
-//
-//	It("Initiate pool expansion using add-disk and reboot node", func() {
-//		StartTorpedoTest("PoolExpandDiskAddWithReboot", "Initiate pool expansion using add-disk and reboot node", nil, 51309)
-//		runID = testrailuttils.AddRunsToMilestone(testrailID)
-//		Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
-//			originalSizeInBytes = poolToResize.TotalSize
-//			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-//			targetSizeGiB = targetSizeInBytes / units.GiB
-//			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-//				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-//			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-//		})
-//
-//		Step("Wait for expansion to start and reboot node", func() {
-//			err := WaitForExpansionToStart(poolIDToResize)
-//			log.FailOnError(err, "Timed out waiting for expansion to start")
-//			err = RebootNodeAndWait(*storageNode)
-//			log.FailOnError(err, "Failed to reboot node and wait till it is up")
-//		})
-//
-//		Step("Ensure pool has been expanded to the expected size", func() {
-//			err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
-//			dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
-//			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-//		})
-//	})
-//})
-//
-//var _ = Describe("{PoolExpandWithPXRestart}", func() {
-//	BeforeEach(func() {
-//		contexts = scheduleApps()
-//	})
-//
-//	JustBeforeEach(func() {
-//		poolIDToResize = pickPoolToResize()
-//		log.Infof("Picked pool %s to resize", poolIDToResize)
-//		poolToResize = getStoragePool(poolIDToResize)
-//		storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
-//		log.FailOnError(err, "Failed to get node with given pool ID")
-//	})
-//
-//	JustAfterEach(func() {
-//		AfterEachTest(contexts)
-//	})
-//
-//	AfterEach(func() {
-//		appsValidateAndDestroy(contexts)
-//		EndTorpedoTest()
-//	})
-//
-//	It("Restart PX after pool expansion", func() {
-//		StartTorpedoTest("RestartAfterPoolExpansion",
-//			"Restart PX after pool expansion", nil, testrailID)
-//
-//		Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
-//			originalSizeInBytes = poolToResize.TotalSize
-//			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-//			targetSizeGiB = targetSizeInBytes / units.GiB
-//			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-//				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-//			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-//		})
-//
-//		Step("Wait for expansion to finish and restart PX", func() {
-//			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-//			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-//			log.FailOnError(Inst().V.RestartDriver(*storageNode, nil),
-//				fmt.Sprintf("Error restarting px on node [%s]", storageNode.Name))
-//			log.FailOnError(Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut),
-//				fmt.Sprintf("Timed out waiting for px to come up on node [%s]", storageNode.Name))
-//		})
-//
-//		Step("Ensure pool is up and running", func() {
-//			// Ensure pool is up and running
+//		JustBeforeEach(func() {
+//			poolIDToResize = pickPoolToResize()
+//			log.Infof("Picked pool %s to resize", poolIDToResize)
 //			poolToResize = getStoragePool(poolIDToResize)
-//			// Ensure poolToResize is not nil
-//			dash.VerifyFatal(poolToResize != nil, true, "Pool is up and running after restart")
-//			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-//		})
-//	})
-//
-//	It("Initiate pool expansion using add-drive and restart PX", func() {
-//		StartTorpedoTest("PoolExpandAddDiskAndPXRestart",
-//			"Initiate pool expansion using add-drive and restart PX", nil, testrailID)
-//
-//		Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
-//			originalSizeInBytes = poolToResize.TotalSize
-//			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
-//			targetSizeGiB = targetSizeInBytes / units.GiB
-//			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
-//				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-//			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
-//		})
-//
-//		Step("Wait for expansion to start and reboot node", func() {
-//			err := WaitForExpansionToStart(poolIDToResize)
-//			log.FailOnError(err, "Timed out waiting for expansion to start")
-//			err = Inst().V.RestartDriver(*storageNode, nil)
-//			log.FailOnError(err, fmt.Sprintf("Error restarting px on node [%s]", storageNode.Name))
-//			err = Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut)
-//			log.FailOnError(err, fmt.Sprintf("Timed out waiting for px to come up on node [%s]", storageNode.Name))
-//		})
-//
-//		Step("Ensure pool has been expanded to the expected size", func() {
 //			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-//			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-//			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+//			dash.VerifyFatal(resizeErr, nil, "Previous pool expansion(s) should not result in error")
+//			storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+//			log.FailOnError(err, "Failed to get node with given pool ID")
+//		})
+//
+//		JustAfterEach(func() {
+//			AfterEachTest(contexts)
+//		})
+//
+//		AfterEach(func() {
+//			appsValidateAndDestroy(contexts)
+//			EndTorpedoTest()
+//		})
+//
+//		// test resizing all pools on one storage node concurrently and ensure only the first one makes progress
+//		It("Select all pools on a storage node and expand them concurrently. ", func() {
+//			// TestRail:https://portworx.testrail.net/index.php?/tests/view/34542836&group_by=cases:custom_automated&group_order=desc&group_id=2
+//			StartTorpedoTest("PoolExpandRejectConcurrent",
+//				"Validate storage pool expansion rejects concurrent requests", nil, 34542836)
+//			var pools []*api.StoragePool
+//			Step("Verify multiple pools are present on this node", func() {
+//				// collect all pools available
+//				for _, p := range storageNode.Pools {
+//					pools = append(pools, p)
+//				}
+//				dash.VerifyFatal(len(pools) > 1, true, "This test requires more than 1 pool.")
+//			})
+//
+//			Step("Expand all pools concurrently. ", func() {
+//				expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+//				var wg sync.WaitGroup
+//				for _, p := range pools {
+//					wg.Add(1)
+//					go func(p *api.StoragePool) {
+//						defer wg.Done()
+//						err = Inst().V.ExpandPool(p.Uuid, expandType, p.TotalSize/units.GiB+100, true)
+//					}(p)
+//				}
+//				wg.Wait()
+//			})
+//
+//			Step("Verify only one expansion is making progress at any given time", func() {
+//				inProgressCount := 0
+//				startTime := time.Now()
+//				for time.Since(startTime) < 1*time.Minute {
+//					inProgressCount = 0
+//					time.Sleep(5)
+//					storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+//					for _, p := range storageNode.Pools {
+//						if p.LastOperation.Status == api.SdkStoragePool_OPERATION_IN_PROGRESS {
+//							inProgressCount++
+//						}
+//						dash.VerifyFatal(inProgressCount <= 1, true, "Only one pool expansion should be in progress at any given time.")
+//					}
+//				}
+//			})
+//		})
+//
+//		// test expansion request on a pool while a previous expansion is in progress is rejected
+//		It("Expand a pool while a previous expansion is in progress", func() {
+//			expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
+//			targetSize := poolToResize.TotalSize/units.GiB + 100
+//			err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
+//			// wait for expansion to start
+//			// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
+//			// when the expansion has already completed.
+//			time.Sleep(1)
+//			// verify pool expansion is in progress
+//			isExpandInProgress, expandErr := poolResizeIsInProgress(poolToResize)
+//			if expandErr != nil {
+//				log.Fatalf("Error checking if pool expansion is in progress: %v", expandErr)
+//			}
+//			if !isExpandInProgress {
+//				log.Warnf("Pool expansion already finished. Skipping this test. Using a testing app that writes " +
+//					"more data which may slow down add-disk type expansion. ")
+//				return
+//			}
+//			expandResponse := Inst().V.ExpandPoolUsingPxctlCmd(*storageNode, poolToResize.Uuid, expandType, targetSize+100, true)
+//			dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
+//			dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
+//				"Pool expansion failure reason should be communicated to the user	")
 //		})
 //	})
-//})
 //
+//	var _ = Describe("{PoolExpandWithReboot}", func() {
+//		BeforeEach(func() {
+//			contexts = scheduleApps()
+//		})
+//
+//		JustBeforeEach(func() {
+//			poolIDToResize = pickPoolToResize()
+//			log.Infof("Picked pool %s to resize", poolIDToResize)
+//			poolToResize = getStoragePool(poolIDToResize)
+//			storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+//			log.FailOnError(err, "Failed to get node with given pool ID")
+//		})
+//
+//		JustAfterEach(func() {
+//			AfterEachTest(contexts)
+//		})
+//
+//		AfterEach(func() {
+//			appsValidateAndDestroy(contexts)
+//			EndTorpedoTest()
+//		})
+//
+//		It("Initiate pool expansion using add-disk and reboot node", func() {
+//			StartTorpedoTest("PoolExpandDiskAddWithReboot", "Initiate pool expansion using add-disk and reboot node", nil, 51309)
+//			runID = testrailuttils.AddRunsToMilestone(testrailID)
+//			Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+//				originalSizeInBytes = poolToResize.TotalSize
+//				targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+//				targetSizeGiB = targetSizeInBytes / units.GiB
+//				log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+//					poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+//				triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+//			})
+//
+//			Step("Wait for expansion to start and reboot node", func() {
+//				err := WaitForExpansionToStart(poolIDToResize)
+//				log.FailOnError(err, "Timed out waiting for expansion to start")
+//				err = RebootNodeAndWait(*storageNode)
+//				log.FailOnError(err, "Failed to reboot node and wait till it is up")
+//			})
+//
+//			Step("Ensure pool has been expanded to the expected size", func() {
+//				err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
+//				dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
+//				verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+//			})
+//		})
+//	})
+//
+//	var _ = Describe("{PoolExpandWithPXRestart}", func() {
+//		BeforeEach(func() {
+//			contexts = scheduleApps()
+//		})
+//
+//		JustBeforeEach(func() {
+//			poolIDToResize = pickPoolToResize()
+//			log.Infof("Picked pool %s to resize", poolIDToResize)
+//			poolToResize = getStoragePool(poolIDToResize)
+//			storageNode, err = GetNodeWithGivenPoolID(poolIDToResize)
+//			log.FailOnError(err, "Failed to get node with given pool ID")
+//		})
+//
+//		JustAfterEach(func() {
+//			AfterEachTest(contexts)
+//		})
+//
+//		AfterEach(func() {
+//			appsValidateAndDestroy(contexts)
+//			EndTorpedoTest()
+//		})
+//
+//		It("Restart PX after pool expansion", func() {
+//			StartTorpedoTest("RestartAfterPoolExpansion",
+//				"Restart PX after pool expansion", nil, testrailID)
+//
+//			Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+//				originalSizeInBytes = poolToResize.TotalSize
+//				targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+//				targetSizeGiB = targetSizeInBytes / units.GiB
+//				log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+//					poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+//				triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+//			})
+//
+//			Step("Wait for expansion to finish and restart PX", func() {
+//				resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+//				dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+//				log.FailOnError(Inst().V.RestartDriver(*storageNode, nil),
+//					fmt.Sprintf("Error restarting px on node [%s]", storageNode.Name))
+//				log.FailOnError(Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut),
+//					fmt.Sprintf("Timed out waiting for px to come up on node [%s]", storageNode.Name))
+//			})
+//
+//			Step("Ensure pool is up and running", func() {
+//				// Ensure pool is up and running
+//				poolToResize = getStoragePool(poolIDToResize)
+//				// Ensure poolToResize is not nil
+//				dash.VerifyFatal(poolToResize != nil, true, "Pool is up and running after restart")
+//				verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+//			})
+//		})
+//
+//		It("Initiate pool expansion using add-drive and restart PX", func() {
+//			StartTorpedoTest("PoolExpandAddDiskAndPXRestart",
+//				"Initiate pool expansion using add-drive and restart PX", nil, testrailID)
+//
+//			Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
+//				originalSizeInBytes = poolToResize.TotalSize
+//				targetSizeInBytes = originalSizeInBytes + 100*units.GiB
+//				targetSizeGiB = targetSizeInBytes / units.GiB
+//				log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+//					poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+//				triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
+//			})
+//
+//			Step("Wait for expansion to start and reboot node", func() {
+//				err := WaitForExpansionToStart(poolIDToResize)
+//				log.FailOnError(err, "Timed out waiting for expansion to start")
+//				err = Inst().V.RestartDriver(*storageNode, nil)
+//				log.FailOnError(err, fmt.Sprintf("Error restarting px on node [%s]", storageNode.Name))
+//				err = Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut)
+//				log.FailOnError(err, fmt.Sprintf("Timed out waiting for px to come up on node [%s]", storageNode.Name))
+//			})
+//
+//			Step("Ensure pool has been expanded to the expected size", func() {
+//				resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+//				dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+//				verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+//			})
+//		})
+//	})
 var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 
 	var testrailID = 34542946
@@ -433,8 +432,8 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 	})
 
 })
-//
-//var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
+
+// var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 //
 //	var testrailID = 34542840
 //	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542840
@@ -511,8 +510,7 @@ var _ = Describe("{PoolExpandResizeInvalidPoolID}", func() {
 //
 //	})
 //
-//})
-//
+// })
 var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 
 	var testrailID = 34542945
@@ -1248,7 +1246,6 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 
 //})
 
-
 // var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 
 // 	var testrailID = 34542894
@@ -1338,3 +1335,71 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 
 //})
 
+var _ = Describe("{StorageFullPoolExpansionUtilizeSize}", func() {
+	var (
+		appList      []string
+		selectedNode *node.Node
+	)
+
+	BeforeEach(func() {
+		Inst().AppList = []string{"fio-fastpath-repl1"}
+		contexts = ScheduleApplications("storagefull-resize")
+		ValidateApplications(contexts)
+		appList = Inst().AppList
+	})
+
+	JustBeforeEach(func() {
+		selectedNode = GetNodeWithLeastSize()
+		_ = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+		log.FailOnError(err, fmt.Sprintf("Failed to add fastpath label on node %v", selectedNode.Name))
+	})
+
+	AfterEach(func() {
+		Inst().AppList = appList
+		appsValidateAndDestroy(contexts)
+		_ = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+	})
+
+	It("Expand pool with resize-disk type after pool is down due to storage full", func() {
+		// https://portworx.testrail.net/index.php?/cases/view/xxxxx
+		StartTorpedoTest("StorageFullPoolExpansionUtilizeSize", "Feed a pool full, then expand the pool in type resize-disk then again make pool full", nil, 0)
+		Step("Prepare a full pool to expand", func() {
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Timed out waiting to load a pool and bring node %s storage down", selectedNode.Name))
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+			for i, s := range poolsStatus {
+				if s == "Offline" {
+					poolIDToResize = i
+					poolToResize, err = GetStoragePoolByUUID(poolIDToResize)
+					log.FailOnError(err, "error getting pool with UUID [%s]", poolIDToResize)
+					break
+				}
+			}
+		})
+
+		Step("Expand the full pool in type resize-disk", func() {
+			targetSizeGiB = (poolToResize.TotalSize / units.GiB) * 2
+			log.InfoD("Current Size of the pool %s is %d, trying to expand it to double the size", poolToResize.Uuid, poolToResize.TotalSize/units.GiB)
+			err = Inst().V.ExpandPool(poolToResize.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+			dash.VerifyFatal(err, nil, "Pool expansion init should be successful.")
+		})
+
+		Step("Verify that pool expansion is successful", func() {
+			err = waitForOngoingPoolExpansionToComplete(poolToResize.Uuid)
+			log.FailOnError(err, fmt.Sprintf("Error waiting for pool %s resize", poolToResize.Uuid))
+			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			status, err := Inst().V.GetNodeStatus(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Error getting PX status of node %s", selectedNode.Name))
+			dash.VerifySafely(*status, api.Status_STATUS_OK, fmt.Sprintf("validate PX status on node %s", selectedNode.Name))
+		})
+
+		Step("Prepare a full pool after expand", func() {
+			err = WaitForPoolOffline(*selectedNode)
+			log.FailOnError(err, fmt.Sprintf("Timed out waiting to load a pool and bring node %s storage down", selectedNode.Name))
+			poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+			log.FailOnError(err, "error getting pool status on node %s", selectedNode.Name)
+			dash.VerifyFatal(poolsStatus[poolIDToResize], "Offline", "Pool should be offline after expand")
+		})
+	})
+})
