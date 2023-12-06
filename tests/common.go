@@ -2005,11 +2005,11 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 
 	strExpansionEnabled, err := Inst().V.IsStorageExpansionEnabled()
 	expect(err).NotTo(haveOccurred())
-	log.Infof("Strexpansion flag :%v and length of context:%v", strExpansionEnabled, len(contexts))
+
 	if strExpansionEnabled {
 		var wSize uint64
 		var workloadSizesByPool = make(map[string]uint64)
-		log.Infof("storage expansion enabled on at least one storage pool")
+		log.Debugf("storage expansion enabled on at least one storage pool")
 		// for each replica set add the workloadSize of app workload to each storage pool where replica resides on
 		for _, ctx := range contexts {
 			Step(fmt.Sprintf("get replica sets for app: %s's volumes", ctx.App.Key), func() {
@@ -2025,7 +2025,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 							wSize, err = Inst().S.GetWorkloadSizeFromAppSpec(ctx)
 							expect(err).NotTo(haveOccurred())
 							workloadSizesByPool[poolUUID] += wSize
-							log.Infof("pool: %s workloadSize increased by: %d total now: %d", poolUUID, wSize, workloadSizesByPool[poolUUID])
+							log.Debugf("pool: %s workloadSize increased by: %d total now: %d", poolUUID, wSize, workloadSizesByPool[poolUUID])
 						}
 					}
 				}
@@ -2041,7 +2041,7 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 					n.StoragePools[id].WorkloadSize = workloadSizeForPool
 				}
 
-				log.Infof("pool: %s InitialSize: %d WorkloadSize: %d", sPool.Uuid, sPool.StoragePoolAtInit.TotalSize, n.StoragePools[id].WorkloadSize)
+				log.Debugf("pool: %s InitialSize: %d WorkloadSize: %d", sPool.Uuid, sPool.StoragePoolAtInit.TotalSize, n.StoragePools[id].WorkloadSize)
 			}
 			err = node.UpdateNode(n)
 			expect(err).NotTo(haveOccurred())
