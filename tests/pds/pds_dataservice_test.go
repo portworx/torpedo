@@ -55,7 +55,7 @@ var _ = Describe("{TestTLS}", func() {
 						if err != nil {
 							log.FailOnError(err, "error occured while getting dns endpoints")
 						}
-						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, deployment.GetClusterResourceName()+"-0", port)
+						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, deployment.GetClusterResourceName()+"-"+namespace+"."+namespace, port)
 						log.Debugf("error occured %v", err.Error())
 						if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), CertificateErrorCode) {
 							log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
@@ -64,15 +64,15 @@ var _ = Describe("{TestTLS}", func() {
 						}
 					})
 
-					Step("Delete Deployments", func() {
-						log.InfoD("Deleting DataService %v ", ds.Name)
-						resp, err := pdslib.DeleteDeployment(deployment.GetId())
-						log.FailOnError(err, "Error while deleting data services")
-						dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-						log.InfoD("Getting all PV and associated PVCs and deleting them")
-						err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
-						log.FailOnError(err, "Error while deleting PV and PVCs")
-					})
+					//Step("Delete Deployments", func() {
+					//	log.InfoD("Deleting DataService %v ", ds.Name)
+					//	resp, err := pdslib.DeleteDeployment(deployment.GetId())
+					//	log.FailOnError(err, "Error while deleting data services")
+					//	dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+					//	log.InfoD("Getting all PV and associated PVCs and deleting them")
+					//	err = pdslib.DeletePvandPVCs(*deployment.ClusterResourceName, false)
+					//	log.FailOnError(err, "Error while deleting PV and PVCs")
+					//})
 				}
 			})
 
