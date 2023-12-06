@@ -2065,7 +2065,6 @@ var _ = Describe("{AutoPoolExpandCrashTest}", func() {
 				}
 			}
 		})
-
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
