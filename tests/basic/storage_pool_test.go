@@ -9983,8 +9983,8 @@ func isMaintenanceModeRequiredForAddDisk() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !dmThin {
-		return false, nil
+	if dmThin {
+		return true, nil
 	}
 	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
 		cmd := "uname -r"
