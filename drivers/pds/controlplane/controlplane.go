@@ -404,10 +404,6 @@ func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (
 	log.Debugf("Connection string %s", connectionString)
 	clientOptions := options.Client().ApplyURI(connectionString)
 
-	// Create a new TLS configuration
-	//tlsConfig := &tls.Config{}
-	//clientOptions.SetTLSConfig(tlsConfig)
-
 	// Create a MongoDB client
 	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
