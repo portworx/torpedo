@@ -617,6 +617,68 @@ func (v *VCluster) CreateNginxDeployment(pvcName string, appNS string, deploymen
 	return nil
 }
 
+func (v *VCluster) CreateFileOperationAppVcluster(pvcName string, appNS string, deploymentName string) error {
+	fileOperationDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: appNS,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": deploymentName,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": deploymentName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "file-operation-container",
+							Image:   "alpine",
+							Command: []string{"/bin/sh", "-c"},
+							Args: []string{
+								"while true; do " +
+									"dd if=/dev/zero of=/mnt/data/testfile bs=1M count=200; " +
+									"sleep 30; " +
+									"rm -f /mnt/data/testfile; " +
+									"sleep 60; " +
+									"done",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/mnt/data",
+									Name:      "data-volume",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "data-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Going ahead to deploy File Operation Application on VCluster %v", v.Name)
+	if _, err := v.Clientset.AppsV1().Deployments(appNS).Create(context.TODO(), fileOperationDeployment, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+	return nil
+}
+
 // ScaleVclusterDeployment Scales a deployment on VCluster to set replicas
 func (v *VCluster) ScaleVclusterDeployment(appNS string, deploymentName string, replicas int32) error {
 	deployment, err := v.Clientset.AppsV1().Deployments(appNS).Get(context.TODO(), deploymentName, metav1.GetOptions{})

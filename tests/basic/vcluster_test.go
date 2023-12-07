@@ -1272,7 +1272,7 @@ var _ = Describe("{DeployMultipleKubevirtApps}", func() {
 	})
 	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
 		Inst().AppList = []string{"kubevirt-cloudsnap", "kubevirt-localsnap", "kubevirt-multi-disk", "kubevirt-ssie-vm", "kubevirt-ssie-io", "kubevirt-vm-pvc"}
-		for i := 1; i <= 7; i++ {
+		for i := 1; i <= 20; i++ {
 			taskName := fmt.Sprintf("ssie-load-%d", i)
 			_ = ScheduleApplications(taskName)
 		}
@@ -1280,16 +1280,17 @@ var _ = Describe("{DeployMultipleKubevirtApps}", func() {
 })
 
 var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
-	totalVclusters := 25
-	nginxAppCount := 10
+	totalVclusters := 10
+	nginxAppCount := 9
 	fioAppCount := 0
+	newApp := 1
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployMultipleAppsOnVclusters", "Create, Connect and run Multiple Nginx and FIO Applications on Many Vclusters in Parallel", nil, 0)
 		for i := 0; i < totalVclusters; i++ {
-			vClusterName := fmt.Sprintf("my-vcluster%d", i+25)
+			vClusterName := fmt.Sprintf("my-vcluster%d", i+31)
 			vc, err := vcluster.NewVCluster(vClusterName)
 			log.FailOnError(err, "Failed to initialise VCluster")
 			vClusters = append(vClusters, vc)
@@ -1307,7 +1308,7 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 
 		for _, vc := range vClusters {
 			for i := 0; i < nginxAppCount; i++ {
-				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(10000))
+				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(100000))
 				deploymentName := fmt.Sprintf("nginx-deployment-%d", i)
 				pvcName, _ := vc.CreatePVC("", scName, appNS, "RWX")
 				err := vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
@@ -1315,7 +1316,7 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 			}
 
 			for i := 0; i < fioAppCount; i++ {
-				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(10000))
+				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(100000))
 				fioOptions := vcluster.FIOOptions{
 					Name:      "mytest",
 					IOEngine:  "libaio",
@@ -1331,6 +1332,14 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 				pvcName, _ := vc.CreatePVC(scName+"-pvc-"+strconv.Itoa(i), scName, appNS, "")
 				err := vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, false)
 				log.FailOnError(err, "Failed in creating FIO Application")
+			}
+
+			for i := 0; i < newApp; i++ {
+				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(100000))
+				deploymentName := fmt.Sprintf("simple-deployment-%d", i)
+				pvcName, _ := vc.CreatePVC("", scName, appNS, "RWX")
+				err := vc.CreateFileOperationAppVcluster(pvcName, appNS, deploymentName)
+				log.FailOnError(err, "Error in creating Nginx deployment")
 			}
 		}
 	})
