@@ -201,7 +201,7 @@ func (d *DataserviceType) UpdateDataServicesWithTLS(deploymentID string, appConf
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
 		log.Debugf("Updating deployment [%s]", deploymentID)
-		deployment, err = components.DataServiceDeployment.UpdateDeploymentWithTls(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, nil, enableTLS)
+		deployment, err = components.DataServiceDeployment.UpdateDeploymentWithTls(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, enableTLS)
 		if err != nil {
 			return false, err
 		}

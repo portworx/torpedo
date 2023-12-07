@@ -1324,14 +1324,14 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 	})
 	It("Update DataService and perform backup and restore", func() {
 		var (
-			deploymentsToClean                []*pds.ModelsDeployment
-			restoredOriginalDep               []*pds.ModelsDeployment
-			restoredDepPostResourceTempUpdate []*pds.ModelsDeployment
-			originalDsEntity                  restoreBkp.DSEntity
-			resourceTempUpdatedDsEntity       restoreBkp.DSEntity
-			wlDeploymentsToBeCleanedinSrc     []*v1.Deployment
-			pdsdeploymentsmd5Hash             = make(map[string]string)
-			restoreClient                     restoreBkp.RestoreClient
+			deploymentsToClean            []*pds.ModelsDeployment
+			restoredOriginalDep           []*pds.ModelsDeployment
+			restoredDepPostTLSUpdate      []*pds.ModelsDeployment
+			originalDsEntity              restoreBkp.DSEntity
+			resourceTempUpdatedDsEntity   restoreBkp.DSEntity
+			wlDeploymentsToBeCleanedinSrc []*v1.Deployment
+			pdsdeploymentsmd5Hash         = make(map[string]string)
+			restoreClient                 restoreBkp.RestoreClient
 		)
 		stepLog := "Deploy data service and take adhoc backup."
 		Step(stepLog, func() {
@@ -1409,6 +1409,19 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 						log.InfoD("Deleting the backup job")
 						err = DeleteAllDsBackupEntities(deployment)
 						log.FailOnError(err, "error while deleting backup job")
+
+						stepLog = "Verify ds is tls enabled post ds update"
+						Step(stepLog, func() {
+							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+								connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredOriginalDep[0], ds.Name, namespace)
+								log.FailOnError(err, "error occured while getting connection string")
+
+								//Validate if TLS is enabled for the data service
+								err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+								dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+									"validating if ds is TLS enabled")
+							}
+						})
 					})
 					stepLog = "Validate md5hash for the restored deployments"
 					Step(stepLog, func() {
@@ -1430,6 +1443,7 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 						log.FailOnError(err, "Error while getting resource setting template")
 						dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultAppConfigID")
 
+						ds.DataServiceEnabledTLS = true
 						updatedDeployment, err := dsTest.UpdateDataServicesWithTLS(deployment.GetId(),
 							dataServiceDefaultAppConfigID, deployment.GetImageId(),
 							int32(ds.Replicas), dataServiceDefaultResourceTemplateID, namespace, ds.DataServiceEnabledTLS)
@@ -1477,8 +1491,8 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 								RestoreTargetCluster: restoreTarget,
 							}
 
-							restoredDepPostResourceTempUpdate = PerformRestore(restoreClient, resourceTempUpdatedDsEntity, projectID, updatedDeployment)
-							deploymentsToClean = append(deploymentsToClean, restoredDepPostResourceTempUpdate...)
+							restoredDepPostTLSUpdate = PerformRestore(restoreClient, resourceTempUpdatedDsEntity, projectID, updatedDeployment)
+							deploymentsToClean = append(deploymentsToClean, restoredDepPostTLSUpdate...)
 
 							//Delete the backupJob
 							log.InfoD("Deleting the backup job")
@@ -1488,25 +1502,16 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 
 						stepLog = "Verify tls is enabled after ds update operation on restored ds"
 						Step(stepLog, func() {
-							count := 2
 							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
-								for _, restoredDep := range restoredDepPostResourceTempUpdate {
+								for _, restoredDep := range restoredDepPostTLSUpdate {
 									connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDep, ds.Name, namespace)
 									log.FailOnError(err, "error occured while getting connection string")
 
 									//Validate if TLS is enabled for the data service
 									err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
-									if err != nil {
-										dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
-											"validating if ds is TLS enabled")
-										count -= 1
-									} else if err == nil {
-										count -= 1
-									}
+									dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+										"validating if ds is TLS enabled")
 								}
-							}
-							if count != 0 {
-								log.FailOnError(fmt.Errorf("error while validating the restored deployment"), "validating restored deployment")
 							}
 						})
 
@@ -1514,7 +1519,7 @@ var _ = Describe("{PerformRestoreAfterEnablingTLSOnDataService}", func() {
 						Step(stepLog, func() {
 							if ds.Name != mongodb {
 								log.InfoD(stepLog)
-								wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostResourceTempUpdate, pdsdeploymentsmd5Hash)
+								wlDeploymentsToBeCleaned := ValidateDataIntegrityPostRestore(restoredDepPostTLSUpdate, pdsdeploymentsmd5Hash)
 								wlDeploymentsToBeCleanedinSrc = append(wlDeploymentsToBeCleanedinSrc, wlDeploymentsToBeCleaned...)
 							}
 						})

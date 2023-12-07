@@ -175,15 +175,14 @@ func (ds *DataServiceDeployment) GetDeploymentCredentials(deploymentID string) (
 }
 
 // UpdateDeploymentWithTls updates the deployment with TLS
-func (ds *DataServiceDeployment) UpdateDeploymentWithTls(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID string,
-	appConfigOverride map[string]string, enableTLS bool) (*pds.ModelsDeployment, error) {
+func (ds *DataServiceDeployment) UpdateDeploymentWithTls(deploymentID string, appConfigID string, imageID string,
+	nodeCount int32, resourceTemplateID string, enableTLS bool) (*pds.ModelsDeployment, error) {
 	dsClient := ds.apiClient.DeploymentsApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	createRequest := pds.RequestsUpdateDeploymentRequest{
-		ApplicationConfigurationOverrides:  &appConfigOverride,
 		ApplicationConfigurationTemplateId: &appConfigID,
 		ImageId:                            &imageID,
 		NodeCount:                          &nodeCount,
