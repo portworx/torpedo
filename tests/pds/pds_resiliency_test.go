@@ -1681,7 +1681,7 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == postgresql {
+				if (ds.Name == postgresql) || (ds.Name == mysql) {
 					Step("Deploy and validate data service", func() {
 						isDeploymentsDeleted = false
 						deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
