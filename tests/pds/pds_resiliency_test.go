@@ -1683,21 +1683,17 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 				//This test is applicable only for SQL dbs
 				if (ds.Name == postgresql) || (ds.Name == mysql) {
 					//This test requires minimum of 3 replicas to be deployed
-					if ds.Replicas >= 3 {
-						Step("Deploy and validate data service", func() {
-							isDeploymentsDeleted = false
-							deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-							log.FailOnError(err, "Error while deploying data services")
-							deployments[ds] = deployment
-						})
-					} else {
-						log.InfoD("Please deploy a SQL db with more than or equal to 3 replica pods. Current replica is set to- [%v]", ds.Replicas)
-
-					}
+					ds.Replicas = 3
+					ds.ScaleReplicas = 4
+					Step("Deploy and validate data service", func() {
+						isDeploymentsDeleted = false
+						deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+					})
 				} else {
 					log.InfoD("This testcase is valid only for SQL databases, Skipping this testcase as DB is- [%v]", ds.Name)
 				}
-
 			}
 		})
 
