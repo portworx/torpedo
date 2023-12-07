@@ -471,13 +471,13 @@ func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDe
 	}
 
 	//validate the statefulset deployed in the k8s namespace
-	err = k8sApps.ValidateStatefulSet(ss, validateDeploymenttimeOut)
+	err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
 	if err != nil {
 		log.Errorf("An Error Occured while validating statefulsets %v", err)
 		return err
 	}
 
-	err = wait.Poll(maxtimeInterval, validateDeploymenttimeOut, func() (bool, error) {
+	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {
