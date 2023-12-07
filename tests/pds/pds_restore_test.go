@@ -243,14 +243,8 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 
 							//Validate if TLS is enabled for the data service
 							err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
-							if err != nil {
-								log.Debugf("error occured %v", err.Error())
-								if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
-									log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
-								} else {
-									log.FailOnError(err, "error while validating if TLS enabled")
-								}
-							}
+							dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+								"validating if ds is TLS enabled")
 						}
 					})
 				})
@@ -316,14 +310,8 @@ var _ = Describe("{PerformRestoreToDifferentCluster}", func() {
 
 						//Validate if TLS is enabled for the data service
 						err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
-						if err != nil {
-							log.Debugf("error occured %v", err.Error())
-							if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
-								log.InfoD("Deployment [%s] is TLS enabled", restoredDeployment.GetClusterResourceName())
-							} else {
-								log.FailOnError(err, "error while validating if TLS enabled")
-							}
-						}
+						dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+							"validating if ds is TLS enabled")
 					}
 				})
 
@@ -1376,21 +1364,13 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 					stepLog = "Verify ds is tls enabled"
 					Step(stepLog, func() {
 						if ds.Name == mongodb && ds.DataServiceEnabledTLS {
-							connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDeployment, ds.Name, namespace)
+							connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(deployment, ds.Name, namespace)
 							log.FailOnError(err, "error occured while getting connection string")
 
 							//Validate if TLS is enabled for the data service
 							err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
-							dash.VerifyFatal(err.Error(), strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
-								"error occured while validating if ds is TLS enabled")
-							//if err != nil {
-							//	log.Debugf("error occured %v", err.Error())
-							//	if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
-							//		log.InfoD("Deployment [%s] is TLS enabled", deployment.GetClusterResourceName())
-							//	} else {
-							//		log.FailOnError(err, "error while validating if TLS enabled")
-							//	}
-							//}
+							dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+								"validating if ds is TLS enabled")
 						}
 					})
 
@@ -1466,6 +1446,19 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							Deployment: updatedDeployment,
 						}
 
+						stepLog = "Verify ds is tls enabled post ds update"
+						Step(stepLog, func() {
+							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
+								connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(updatedDeployment, ds.Name, namespace)
+								log.FailOnError(err, "error occured while getting connection string")
+
+								//Validate if TLS is enabled for the data service
+								err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+								dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+									"validating if ds is TLS enabled")
+							}
+						})
+
 						stepLog = "Perform backup and restore of the resource template updated deployment "
 						Step(stepLog, func() {
 							log.InfoD(stepLog)
@@ -1497,24 +1490,18 @@ var _ = Describe("{PerformRestoreAfterDataServiceUpdate}", func() {
 							log.FailOnError(err, "error while deleting backup job")
 						})
 
-						stepLog = "Verify ds is tls enabled after ds update operation"
+						stepLog = "Verify tls is enabled after ds update operation on restored ds"
 						Step(stepLog, func() {
 							if ds.Name == mongodb && ds.DataServiceEnabledTLS {
-								connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDepPostResourceTempUpdate[0], ds.Name, namespace)
-								log.FailOnError(err, "error occured while getting connection string")
+								for _, restoredDep := range restoredDepPostResourceTempUpdate {
+									connectionString, depPassword, port, err := pdslib.GetMongoDBConnectionString(restoredDep, ds.Name, namespace)
+									log.FailOnError(err, "error occured while getting connection string")
 
-								//Validate if TLS is enabled for the data service
-								err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
-								dash.VerifyFatal(err.Error(), strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
-									"error occured while validating if ds is TLS enabled")
-								//if err != nil {
-								//	log.Debugf("error occured %v", err.Error())
-								//	if strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError) {
-								//		log.InfoD("Deployment [%s] is TLS enabled", restoredDepPostResourceTempUpdate[0].GetClusterResourceName())
-								//	} else {
-								//		log.FailOnError(err, "error while validating if TLS enabled")
-								//	}
-								//}
+									//Validate if TLS is enabled for the data service
+									err = controlPlane.ValidateIfTLSEnabled("pds", depPassword, connectionString, port)
+									dash.VerifyFatal(err != nil, strings.Contains(err.Error(), ServerSelectionError) || strings.Contains(err.Error(), SocketError),
+										"validating if ds is TLS enabled")
+								}
 							}
 						})
 

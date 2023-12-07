@@ -77,7 +77,7 @@ const (
 	timeOut                             = 30 * time.Minute
 	maxtimeInterval                     = 30 * time.Second
 	timeInterval                        = 1 * time.Second
-	SocketError                         = "socket was unexpectedly"
+	SocketError                         = "socket was unexpectedly closed"
 	ServerSelectionError                = "server selection timeout"
 	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
 	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
