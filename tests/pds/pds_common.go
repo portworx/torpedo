@@ -642,6 +642,7 @@ func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deploym
 	err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
 	log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
 	log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
+	time.Sleep(30 * time.Second)
 	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
 	if dbMaster == newDbMaster {
 		log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
