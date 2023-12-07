@@ -67,7 +67,7 @@ const (
 	couchbase                           = "Couchbase"
 	redis                               = "Redis"
 	rabbitmq                            = "RabbitMQ"
-	mongodb                             = "MongoDB"
+	mongodb                             = "MongoDB Enterprise"
 	mysql                               = "MySQL"
 	kafka                               = "Kafka"
 	zookeeper                           = "ZooKeeper"
