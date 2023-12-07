@@ -2286,3 +2286,75 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20621
+	*/
+	var contexts []*scheduler.Context
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ReplIncWithNodeNotInReplicaSet", "Create multiple volumes, increase the replication factor with pxctl using the --source option. It should throw an error if the node provided is not in the replication set of the volume.", nil, 0)
+	})
+	stepLog = "Create multiple volumes, increase the replication factor with pxctl using the --source option. It should throw an error if the node provided is not in the replication set of the volume."
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		numberOfVolumes := 5
+		stepLog = "Create multiple volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for vol := 0; vol < numberOfVolumes; vol++ {
+				volName := fmt.Sprintf("vol-%d", vol)
+				log.InfoD("Creating volume [%s]", volName)
+				_, err := Inst().V.CreateVolume(volName, 2, 1)
+				log.FailOnError(err, "Failed to create volume [%s]", volName)
+			}
+		})
+		stepLog = "Increase repl factor with pxctl using the --source option"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for vol := 0; vol < numberOfVolumes; vol++ {
+				volName := fmt.Sprintf("vol-%d", vol)
+				log.InfoD("Increasing repl factor for volume [%s]", volName)
+				vol, err := Inst().V.InspectVolume(volName)
+				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
+				//First try increase replication factor with node not present in replica set
+				var sourceNode string
+				storageNode := node.GetStorageNodes()
+				for _, node := range storageNode {
+					for index, replica := range vol.Spec.ReplicaSet.Nodes {
+						//Find a node which is not in the replicaset
+						log.Infof("Node [%s] Replica [%s]", node.Name, replica)
+						if node.Name == replica {
+							continue
+						} else if index == len(vol.Spec.ReplicaSet.Nodes)-1 {
+							sourceNode = node.Name
+							break
+						}
+					}
+				}
+				log.Infof("Source node [%s]", sourceNode)
+				//Pick any node to run pxctl command
+				selectedNode := storageNode[0]
+
+				//Create a volume named repl-vol with replication factor 1 and use invalid replication source
+				cmd := fmt.Sprintf("volume create repl-vol")
+				output, err := runPxctlCommand(cmd, selectedNode, nil)
+				log.FailOnError(err, "Failed to run pxctl command [%s] on node [%s]. Output: [%s]", cmd, selectedNode.Name, output)
+				log.Infof("Output: [%s]", output)
+				cmd = fmt.Sprintf("volume update --repl 3 --source %s repl-vol", sourceNode)
+				output, err = runPxctlCommand(cmd, selectedNode, nil)
+				log.FailOnError(err, "Failed to run pxctl command [%s] on node [%s]. Output: [%s]", cmd, selectedNode.Name, output)
+				log.Infof("Output: [%s]", output)
+				dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
+			}
+		})
+
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
