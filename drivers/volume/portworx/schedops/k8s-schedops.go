@@ -24,6 +24,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -896,8 +897,8 @@ func GetContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 }
 
 // GetContainerPVCMountMapWithSC fetches storage class along with mount paths for containers using PVCs
-func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]string, error) {
-	scMountPathsMap := make(map[string]string)
+func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]*storagev1.StorageClass, error) {
+	scMountPathsMap := make(map[string]*storagev1.StorageClass)
 	pvcNamesInSpec := make(map[string]string)
 	for _, v := range pod.Spec.Volumes {
 		if v.PersistentVolumeClaim != nil {
@@ -916,7 +917,7 @@ func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]string, error) {
 				if err != nil {
 					return nil, err
 				}
-				scMountPathsMap[cMount.MountPath] = storageClass.Name
+				scMountPathsMap[cMount.MountPath] = storageClass
 			}
 		}
 
@@ -930,7 +931,7 @@ func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]string, error) {
 				if err != nil {
 					return nil, err
 				}
-				scMountPathsMap[cDevice.DevicePath] = storageClass.Name
+				scMountPathsMap[cDevice.DevicePath] = storageClass
 			}
 		}
 	}

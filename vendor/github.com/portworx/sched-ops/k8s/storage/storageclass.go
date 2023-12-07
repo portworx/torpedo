@@ -10,6 +10,8 @@ import (
 
 // ScOps is an interface to perform k8s storage class operations
 type ScOps interface {
+	// GetAllStorageClasses returns all storageClasses.
+	GetAllStorageClasses() (*storagev1.StorageClassList, error)
 	// GetStorageClasses returns all storageClasses that match given optional label selector
 	GetStorageClasses(labelSelector map[string]string) (*storagev1.StorageClassList, error)
 	// GetStorageClass returns the storage class for the give namme
@@ -33,6 +35,14 @@ type ScOps interface {
 const (
 	defaultStorageclassAnnotationKey = "storageclass.kubernetes.io/is-default-class"
 )
+
+// GetAllStorageClasses returns all storageClasses.
+func (c *Client) GetAllStorageClasses() (*storagev1.StorageClassList, error) {
+	if err := c.initClient(); err != nil {
+		return nil, err
+	}
+	return c.storage.StorageClasses().List(context.TODO(), metav1.ListOptions{})
+}
 
 // GetStorageClasses returns all storageClasses that match given optional label selector
 func (c *Client) GetStorageClasses(labelSelector map[string]string) (*storagev1.StorageClassList, error) {
