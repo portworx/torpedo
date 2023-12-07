@@ -27,7 +27,6 @@ import (
 	"github.com/portworx/sched-ops/task"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
@@ -68,7 +67,7 @@ const (
 	couchbase                           = "Couchbase"
 	redis                               = "Redis"
 	rabbitmq                            = "RabbitMQ"
-	mongodb                             = "MongoDB Enterprise"
+	mongodb                             = "MongoDB"
 	mysql                               = "MySQL"
 	kafka                               = "Kafka"
 	zookeeper                           = "ZooKeeper"
@@ -77,8 +76,6 @@ const (
 	timeOut                             = 30 * time.Minute
 	maxtimeInterval                     = 30 * time.Second
 	timeInterval                        = 1 * time.Second
-	SocketError                         = "socket was unexpectedly closed"
-	ServerSelectionError                = "server selection timeout"
 	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
 	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
 	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
@@ -606,12 +603,12 @@ func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 	return nil
 }
 
-func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDeployment, targetCluster *tc.TargetCluster) (string, bool) {
+func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDeployment, sourceTarget *targetcluster.TargetCluster) (string, bool) {
 	var command, dbMaster string
 	switch dsName {
 	case dataservices.Postgresql:
 		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
-		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		dbMaster, err = sourceTarget.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
 		log.FailOnError(err, "Failed while fetching db master pods=.")
 		log.Infof("Deployment %v of type %v have the master "+
 			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
@@ -632,18 +629,17 @@ func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDepl
 }
 
 func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deployment *pds.ModelsDeployment, sourceTarget *targetcluster.TargetCluster) error {
-	log.Debugf("I HAVE ENTERED INTO KILL FUNC")
+	log.InfoD("source target is - %v", sourceTarget)
 	dbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
-	log.InfoD("dbMaster Node is %v-", dbMaster)
+	log.InfoD("dbMaster Node is - %v", dbMaster)
 	log.FailOnError(err, "Failed while fetching db master node.")
 
 	err = sourceTarget.DeleteK8sPods(dbMaster, nsName)
 	log.FailOnError(err, "Failed while deleting db master pod.")
+	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
 	err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
 	log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
 	log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
-	time.Sleep(30 * time.Second)
-	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
 	if dbMaster == newDbMaster {
 		log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
 	}
