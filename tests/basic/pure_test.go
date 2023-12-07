@@ -2335,16 +2335,11 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 					}
 				}
 				log.Infof("Source node [%s]", sourceNode)
+
 				//Pick any node to run pxctl command
 				selectedNode := storageNode[0]
-
-				//Create a volume named repl-vol with replication factor 1 and use invalid replication source
-				cmd := fmt.Sprintf("volume create repl-vol")
+				cmd := fmt.Sprintf("volume update --repl 3 --source %s %s", sourceNode, volName)
 				output, err := runPxctlCommand(cmd, selectedNode, nil)
-				log.FailOnError(err, "Failed to run pxctl command [%s] on node [%s]. Output: [%s]", cmd, selectedNode.Name, output)
-				log.Infof("Output: [%s]", output)
-				cmd = fmt.Sprintf("volume update --repl 3 --source %s repl-vol", sourceNode)
-				output, err = runPxctlCommand(cmd, selectedNode, nil)
 				log.FailOnError(err, "Failed to run pxctl command [%s] on node [%s]. Output: [%s]", cmd, selectedNode.Name, output)
 				log.Infof("Output: [%s]", output)
 				dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
