@@ -281,15 +281,13 @@ func getPXNamespace() string {
 }
 
 // CreateBackup creates backup and checks for success
-func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
-	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context) error {
+func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context.Context, SizeCheck bool) error {
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
 
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, true)
+	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx, SizeCheck)
 	if err != nil {
 		return err
 	}
@@ -385,7 +383,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, true)
 	if err != nil {
 		return err
 	}

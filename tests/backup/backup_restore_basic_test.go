@@ -2524,7 +2524,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 				scheduledNamespace := appCtx.ScheduleOptions.Namespace
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, scheduledNamespace, time.Now().Unix())
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, orgID, scheduledNamespace, backupLocationName)
-				err := CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{scheduledNamespace}, labelSelectors, orgID, sourceClusterUid, "", "", "", "", ctx)
+				err := CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{scheduledNamespace}, labelSelectors, orgID, sourceClusterUid, "", "", "", "", ctx, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 
@@ -3699,7 +3699,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			destinationClusterUid, err := Inst().Backup.GetClusterUID(ctx, orgID, destinationClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", destinationClusterName))
 
-			err = CreateBackup(backupName, destinationClusterName, backupLocationName, backupLocationUID, namespaces, labelSelectors, orgID, destinationClusterUid, "", "", "", "", ctx)
+			err = CreateBackup(backupName, destinationClusterName, backupLocationName, backupLocationUID, namespaces, labelSelectors, orgID, destinationClusterUid, "", "", "", "", ctx, true)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 
