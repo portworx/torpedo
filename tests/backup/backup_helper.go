@@ -6024,13 +6024,15 @@ func UpdateKDMPConfigMap(dataKey string, dataValue string) error {
 }
 
 type PodDirectoryConfig struct {
-	BasePath          string
-	Depth             int
-	Levels            int
-	FilesPerDirectory int
-	FileSizeInMB      int
-	FileName          string
-	DirName           string
+	BasePath           string
+	Depth              int
+	Levels             int
+	FilesPerDirectory  int
+	FileSizeInMB       int
+	FileName           string
+	DirName            string
+	CreateSymbolicLink bool
+	CreateHardLink     bool
 }
 
 // CreateNestedDirectoriesWithFilesInPod creates a nested directory structure with files within a specified Pod.
@@ -6041,7 +6043,7 @@ func CreateNestedDirectoriesWithFilesInPod(pod corev1.Pod, containerName string,
 		BasePath:          directoryConfig.BasePath,
 		FilesPerDirectory: directoryConfig.FilesPerDirectory,
 	}
-	err := CreateFilesInPodDirectory(pod, containerName, fileConfig)
+	_, err := CreateFilesInPodDirectory(pod, containerName, fileConfig)
 	if err != nil {
 		return fmt.Errorf("error creating files in %s: %s", directoryConfig.BasePath, err.Error())
 	}
@@ -6062,7 +6064,7 @@ func CreateNestedDirectoriesWithFilesInPod(pod corev1.Pod, containerName string,
 				FilesPerDirectory: directoryConfig.FilesPerDirectory,
 			}
 
-			err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+			_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
 			if err != nil {
 				return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
 			}
@@ -6117,7 +6119,7 @@ func CreateDirectoryStructureInPod(pod corev1.Pod, containerName string, directo
 			FilesPerDirectory: directoryConfig.FilesPerDirectory,
 		}
 
-		err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+		_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
 		if err != nil {
 			return fmt.Errorf("error creating files in %s: %s", dirPath, err.Error())
 		}
@@ -6150,9 +6152,10 @@ func CreateDirectoryInPod(pod corev1.Pod, containerName string, directoryConfig 
 }
 
 // CreateFilesInPodDirectory creates a specified number of files per directory level in a Pod.
-func CreateFilesInPodDirectory(pod corev1.Pod, containerName string, fileConfig PodDirectoryConfig) error {
+func CreateFilesInPodDirectory(pod corev1.Pod, containerName string, fileConfig PodDirectoryConfig) ([]string, error) {
 	var cmd string
 	var fileName string
+	var filesCreated []string
 	for i := 1; i <= fileConfig.FilesPerDirectory; i++ {
 		if len(fileConfig.FileName) > 0 {
 			fileName = fileConfig.FileName
@@ -6169,10 +6172,34 @@ func CreateFilesInPodDirectory(pod corev1.Pod, containerName string, fileConfig 
 		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", cmd)}
 		_, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
 		if err != nil {
-			return fmt.Errorf("error creating file %s: %s", filePath, err.Error())
+			return nil, fmt.Errorf("error creating file %s: %s", filePath, err.Error())
+		}
+		filesCreated = append(filesCreated, strings.TrimPrefix(fileName, fileConfig.BasePath))
+		// Check if symbolic link needs to be created inside the pod using ln command
+		if fileConfig.CreateSymbolicLink {
+			symlinkPath := filePath + ".symlink"
+			lnCmd := fmt.Sprintf("ln -s %s %s", filePath, symlinkPath)
+			lnCmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", lnCmd)}
+			_, err := core.Instance().RunCommandInPod(lnCmdArgs, pod.Name, containerName, pod.Namespace)
+			if err != nil {
+				return nil, fmt.Errorf("error creating symbolic link %s: %s", symlinkPath, err.Error())
+			}
+			filesCreated = append(filesCreated, strings.TrimPrefix(symlinkPath, fileConfig.BasePath+"/"))
+		}
+
+		// Check if hard link needs to be created inside the pod using ln command
+		if fileConfig.CreateHardLink {
+			hardlinkPath := filePath + ".hardlink"
+			lnCmd := fmt.Sprintf("ln %s %s", filePath, hardlinkPath)
+			lnCmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("%s", lnCmd)}
+			_, err := core.Instance().RunCommandInPod(lnCmdArgs, pod.Name, containerName, pod.Namespace)
+			if err != nil {
+				return nil, fmt.Errorf("error creating hard link %s: %s", hardlinkPath, err.Error())
+			}
+			filesCreated = append(filesCreated, strings.TrimPrefix(hardlinkPath, fileConfig.BasePath+"/"))
 		}
 	}
-	return nil
+	return filesCreated, nil
 }
 
 // GetExcludeFileListValue generates a formatted string representation
@@ -6202,7 +6229,7 @@ func GetExcludeFileListValue(storageClassesMap map[*storagev1.StorageClass][]str
 // and directories of specified file types ('f' for files and 'd' for directories).
 func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path string, excludeFileDirectoryList []string) ([]string, []string, error) {
 	fileList := make(map[string][]string)
-	var fileTypes = [2]string{"f", "d"}
+	var fileTypes = [2]string{"f,l", "d"}
 	for _, fileType := range fileTypes {
 		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user root", path, fileType)}
 		output, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
@@ -6232,7 +6259,7 @@ func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path 
 			}
 		}
 	}
-	return fileList["f"], fileList["d"], nil
+	return fileList["f,l"], fileList["d"], nil
 }
 
 // isFBDAVolume check if storageClass is of FBDA volume.

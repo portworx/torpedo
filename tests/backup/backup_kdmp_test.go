@@ -20,6 +20,7 @@ import (
 	storagev1 "k8s.io/api/storage/v1"
 )
 
+// This testcase verifies backup and restore of applications by excluding files and directories from mountPath.
 var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 	var (
 		backupName           string
@@ -52,7 +53,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 		dirListMountMap               map[string][]string
 		masterDirFileList             map[string][]string
 		finalFileList                 map[string][]string
-		scMountPathMap                map[string]*storagev1.StorageClass
+		podScMountPathMap             map[string]map[string]*storagev1.StorageClass
 		backupNamespaceMap            map[string]string
 		excludeList                   string
 		fileList                      []string
@@ -83,7 +84,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 		masterDirFileList = make(map[string][]string)
 		finalFileList = make(map[string][]string)
 		dirListMountMap = make(map[string][]string)
-		scMountPathMap = make(map[string]*storagev1.StorageClass)
+		podScMountPathMap = make(map[string]map[string]*storagev1.StorageClass)
 		backupNamespaceMap = make(map[string]string)
 		numDeployments = 1
 		providers = getProviders()
@@ -120,8 +121,9 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 				pods, err := core.Instance().GetPods(namespace, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
 				for _, pod := range pods.Items {
-					scMountPathMap, err = schedops.GetContainerPVCMountMapWithSC(pod)
+					scMountPathMap, err := schedops.GetContainerPVCMountMapWithSC(pod)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("getting storage class and mountpath mapping for pod [%s] ", pod.Name))
+					podScMountPathMap[pod.Name] = scMountPathMap
 				}
 			}
 		})
@@ -157,7 +159,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 					containerPaths := schedops.GetContainerPVCMountMap(pod)
 					for containerName, mountPaths := range containerPaths {
 						for _, mountPath := range mountPaths {
-							sc := scMountPathMap[mountPath]
+							sc := podScMountPathMap[pod.Name][mountPath]
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
 								Depth:             10,
@@ -182,7 +184,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 								FilesPerDirectory: 1,
 								FileName:          "test.yaml",
 							}
-							err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+							_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("creating files within mountPath [%s] with extensions and add to exclude list", mountPath))
 							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], fileConfig.FileName)
 							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], fileConfig.FileName)
@@ -192,7 +194,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 								FilesPerDirectory: 1,
 								FileName:          ".hiddenfile",
 							}
-							err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+							_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("creating files within mountPath [%s] with hidden type and add to exclude list", mountPath))
 							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], fileConfig.FileName)
 							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], fileConfig.FileName)
@@ -202,7 +204,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 								FilesPerDirectory: 1,
 								FileName:          "myn@meisunkn*wn",
 							}
-							err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+							_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("creating files within mountPath [%s] valid special chars and add to exclude list", mountPath))
 							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], fileConfig.FileName)
 							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], fileConfig.FileName)
@@ -213,11 +215,22 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 								FilesPerDirectory: 1,
 								FileName:          fmt.Sprintf("%s.txt", RandomString(251)),
 							}
-							err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
+							_, err = CreateFilesInPodDirectory(pod, containerName, fileConfig)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("creating files within mountPath [%s] with maximum name length (255 characters and add to exclude list)", mountPath))
 							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], fileConfig.FileName)
 							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], fileConfig.FileName)
-
+							log.Infof(fmt.Sprintf("creating file within mountPath [%s] with hardlink and symbolic link and add to exclude list", mountPath))
+							fileConfig = PodDirectoryConfig{
+								BasePath:           mountPath,
+								FilesPerDirectory:  1,
+								FileName:           "linkFile.txt",
+								CreateSymbolicLink: true,
+								CreateHardLink:     true,
+							}
+							files, err := CreateFilesInPodDirectory(pod, containerName, fileConfig)
+							dash.VerifyFatal(err, nil, fmt.Sprintf("creating file within mountPath [%s] with hardlink and symbolic link and add to exclude list", mountPath))
+							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], files...)
+							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], files...)
 						}
 					}
 				}
@@ -243,7 +256,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
 							excludeFileDirList = append(excludeFileDirList, randomFiles...)
-							sc := scMountPathMap[mountPath]
+							sc := podScMountPathMap[pod.Name][mountPath]
 							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], excludeFileDirList...)
 							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], excludeFileDirList...)
 						}
@@ -295,29 +308,30 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Failed to set destination kubeconfig")
 
-			for _, storageClass := range scMountPathMap {
-				isScpresent, err := isStorageClassPresent(storageClass.Name)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Checking storageClass %s present on cluster", storageClass.Name))
-				if !isScpresent {
-					v1obj := metaV1.ObjectMeta{
-						Name: storageClass.Name,
+			for _, scMountPathMap := range podScMountPathMap {
+				for _, storageClass := range scMountPathMap {
+					isScpresent, err := isStorageClassPresent(storageClass.Name)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Checking storageClass %s present on cluster", storageClass.Name))
+					if !isScpresent {
+						v1obj := metaV1.ObjectMeta{
+							Name: storageClass.Name,
+						}
+						scObj := storagev1.StorageClass{
+							ObjectMeta:           v1obj,
+							Provisioner:          storageClass.Provisioner,
+							Parameters:           storageClass.Parameters,
+							ReclaimPolicy:        storageClass.ReclaimPolicy,
+							VolumeBindingMode:    storageClass.VolumeBindingMode,
+							MountOptions:         storageClass.MountOptions,
+							AllowVolumeExpansion: storageClass.AllowVolumeExpansion,
+						}
+						_, err = storage.Instance().CreateStorageClass(&scObj)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", storageClass.Name, destinationClusterName))
+					} else {
+						log.Infof(fmt.Sprintf("storageClass %s already present on cluster , hence skipping creation", storageClass.Name))
 					}
-					scObj := storagev1.StorageClass{
-						ObjectMeta:           v1obj,
-						Provisioner:          storageClass.Provisioner,
-						Parameters:           storageClass.Parameters,
-						ReclaimPolicy:        storageClass.ReclaimPolicy,
-						VolumeBindingMode:    storageClass.VolumeBindingMode,
-						MountOptions:         storageClass.MountOptions,
-						AllowVolumeExpansion: storageClass.AllowVolumeExpansion,
-					}
-					_, err = storage.Instance().CreateStorageClass(&scObj)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", storageClass.Name, destinationClusterName))
-				} else {
-					log.Infof(fmt.Sprintf("storageClass %s already present on cluster , hence skipping creation", storageClass.Name))
 				}
 			}
-
 		})
 
 		Step(fmt.Sprintf("Verify creation of pre and post exec rules for applications "), func() {
@@ -522,7 +536,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
 							excludeFileDirList = append(excludeFileDirList, randomFiles...)
-							sc := scMountPathMap[mountPath]
+							sc := podScMountPathMap[pod.Name][mountPath]
 							storageClassExcludeFileDirMap[sc] = append(storageClassExcludeFileDirMap[sc], excludeFileDirList...)
 							mountPathExcludeFileDirMap[mountPath] = append(mountPathExcludeFileDirMap[mountPath], excludeFileDirList...)
 						}
