@@ -2319,7 +2319,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				log.InfoD("Increasing repl factor for volume [%s]", volName)
 				vol, err := Inst().V.InspectVolume(volName)
 				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
-				log.Infof("Volume [%s] spec: [%v] nodes: [%v]", volName, vol.Spec, vol.Spec.ReplicaSet.Nodes)
+				log.Infof("Volume [%s] spec: [%v] nodes: [%v]", volName, vol.Spec, vol.Spec.ReplicaSet)
 				//First try increase replication factor with node not present in replica set
 				var sourceNode string
 				storageNode := node.GetStorageNodes()
