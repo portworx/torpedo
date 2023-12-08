@@ -13,7 +13,7 @@ spec:
       labels:
         app: fio
     spec:
-      schedulerName: stork
+      # schedulerName: stork
       containers:
       - name: fio
         image: portworx/fio_drv
