@@ -36,7 +36,7 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/portworx/pds-api-go-client v0.0.0-20230831092707-4faacf005c6b
+	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20231109202231-f601f9891b01
 	github.com/portworx/talisman v1.1.3
@@ -71,8 +71,20 @@ require (
 	github.com/coreos/prometheus-operator v0.38.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
+	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
+	github.com/jackc/pgconn v1.11.0 // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgproto3/v2 v2.2.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
+	github.com/jackc/pgtype v1.10.0 // indirect
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
+	github.com/montanaflynn/stats v0.0.0-20180911141734-db72e6cae808 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
+	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
+	github.com/xdg-go/scram v1.1.2 // indirect
+	github.com/xdg-go/stringprep v1.0.4 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	kubevirt.io/client-go v0.59.2 // indirect
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
 	kubevirt.io/controller-lifecycle-operator-sdk/api v0.0.0-20220329064328-f3cc58c6ed90 // indirect
@@ -80,7 +92,9 @@ require (
 
 require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
+	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
+	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.7.0
 )
 
@@ -212,7 +226,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.14.1 // indirect
+	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v4 v4.2.0
 	github.com/kubernetes-sigs/aws-ebs-csi-driver v0.9.0 // indirect
