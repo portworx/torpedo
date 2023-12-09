@@ -27,7 +27,7 @@ spec:
     spec:
       domain:
         cpu:
-          cores: 2
+          cores: 1
         devices:
           disks:
             - name: containervolume
@@ -44,7 +44,7 @@ spec:
               masquerade: {}
         resources:
           requests:
-            memory: 2048M
+            memory: 1024M
       networks:
         - name: default
           pod: {}

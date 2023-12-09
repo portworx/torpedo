@@ -108,7 +108,7 @@ spec:
               masquerade: {}
         resources:
           requests:
-            memory: 2048M
+            memory: 1024M
       networks:
         - name: default
           pod: {}
@@ -142,9 +142,8 @@ spec:
                 expire: False
               runcmd:
                 - while true; do
-                    sysbench cpu --cpu-max-prime=20000 run
                     for i in $(seq 1 5); do
-                      sysbench fileio --file-total-size=1G --file-num=10 --file-test-mode=rndrw --time=300 --max-requests=0 --file-extra-flags=direct run --file-fsync-freq=0 --file-fsync-end=false --file-fsync-mode=fsync --file-fsync-all=false --file-fsync-on-close=false --file-io-mode=sync --file-flags=direct --file-block-size=4K --filename=/data$i/test_file
+                      sysbench fileio --file-total-size=1G --file-num=1 --file-test-mode=rndrw --time=300 --max-requests=0 --file-extra-flags=direct run --file-fsync-freq=0 --file-fsync-end=false --file-fsync-mode=fsync --file-fsync-all=false --file-fsync-on-close=false --file-io-mode=sync --file-flags=direct --file-block-size=4K --filename=/data$i/test_file
                       sysbench fileio --file-total-size=1G cleanup --filename=/data$i/test_file
                     done
                   done

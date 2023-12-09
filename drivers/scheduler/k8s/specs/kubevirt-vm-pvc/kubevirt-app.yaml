@@ -17,7 +17,7 @@ spec:
     spec:
       domain:
         cpu:
-          cores: 2
+          cores: 1
         devices:
           disks:
             - disk:
