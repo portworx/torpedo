@@ -68,7 +68,7 @@ const (
 	couchbase                           = "Couchbase"
 	redis                               = "Redis"
 	rabbitmq                            = "RabbitMQ"
-	mongodb                             = "MongoDB"
+	mongodb                             = "MongoDB Enterprise"
 	mysql                               = "MySQL"
 	kafka                               = "Kafka"
 	zookeeper                           = "ZooKeeper"
@@ -77,6 +77,8 @@ const (
 	timeOut                             = 30 * time.Minute
 	maxtimeInterval                     = 30 * time.Second
 	timeInterval                        = 1 * time.Second
+	SocketError                         = "socket was unexpectedly closed"
+	ServerSelectionError                = "server selection timeout"
 	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
 	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
 	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
@@ -630,17 +632,15 @@ func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDepl
 }
 
 func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deployment *pds.ModelsDeployment, sourceTarget *targetcluster.TargetCluster) error {
-	log.Debugf("I HAVE ENTERED INTO KILL FUNC")
 	dbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
-	log.InfoD("dbMaster Node is %v-", dbMaster)
+	log.InfoD("dbMaster Node is - %v", dbMaster)
 	log.FailOnError(err, "Failed while fetching db master node.")
-
 	err = sourceTarget.DeleteK8sPods(dbMaster, nsName)
 	log.FailOnError(err, "Failed while deleting db master pod.")
+	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+	log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
 	err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
 	log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
-	log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
-	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
 	if dbMaster == newDbMaster {
 		log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
 	}
