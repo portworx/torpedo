@@ -374,12 +374,16 @@ func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string
 func int32Ptr(i int32) *int32 { return &i }
 
 // CreateFIODeployment creates a FIO Batch Job on single PVC
-func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string) error {
-	return v.CreateFIOMultiPvcDeployment([]string{pvcName}, appNS, fioOpts, jobName)
+func (v *VCluster) CreateFIODeployment(pvcName string, appNS string, fioOpts FIOOptions, jobName string, opts ...bool) error {
+	waitForCompletion := true
+	if len(opts) > 0 {
+		waitForCompletion = opts[0]
+	}
+	return v.CreateFIOMultiPvcDeployment([]string{pvcName}, appNS, fioOpts, jobName, waitForCompletion)
 }
 
 // CreateFIOMultiPvcDeployment runs FIO Job on multiple PVCs
-func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, fioOpts FIOOptions, jobName string) error {
+func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, fioOpts FIOOptions, jobName string, waitForCompletion bool) error {
 	fioCmd := []string{
 		"fio",
 		"--name=" + fioOpts.Name,
@@ -457,26 +461,90 @@ func (v *VCluster) CreateFIOMultiPvcDeployment(pvcNames []string, appNS string, 
 	if _, err := v.Clientset.BatchV1().Jobs(appNS).Create(context.TODO(), fioJob, metav1.CreateOptions{}); err != nil {
 		return err
 	}
-	if err := v.WaitForFIOCompletion(appNS, jobName); err != nil {
+	if waitForCompletion {
+		if err := v.WaitForFIOCompletion(appNS, jobName); err != nil {
+			return err
+		}
+		// Hard sleep to let fio pod finish up
+		time.Sleep(10 * time.Second)
+		pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: labels.Set{"app": "fio"}.AsSelector().String(),
+		})
+		if err != nil {
+			return err
+		}
+		if len(pods.Items) == 0 {
+			return fmt.Errorf("no FIO pods found")
+		}
+		podName := pods.Items[0].Name
+		logs, err := v.FetchFIOLogs(podName, appNS)
+		if err != nil {
+			return err
+		}
+		log.Infof("Fio Output is: %v", logs)
+	}
+	return nil
+}
+
+func (v *VCluster) CreateFileOperationAppVcluster(pvcName string, appNS string, deploymentName string) error {
+	fileOperationDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: appNS,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": deploymentName,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": deploymentName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "file-operation-container",
+							Image:   "alpine",
+							Command: []string{"/bin/sh", "-c"},
+							Args: []string{
+								"while true; do " +
+									"dd if=/dev/urandom of=/mnt/data/testfile bs=1M count=200; " +
+									"sleep 5; " +
+									"rm -f /mnt/data/testfile; " +
+									"sleep 10; " +
+									"done",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/mnt/data",
+									Name:      "data-volume",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "data-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Going ahead to deploy File Operation Application on VCluster %v", v.Name)
+	if _, err := v.Clientset.AppsV1().Deployments(appNS).Create(context.TODO(), fileOperationDeployment, metav1.CreateOptions{}); err != nil {
 		return err
 	}
-	// Hard sleep to let fio pod finish up
-	time.Sleep(10 * time.Second)
-	pods, err := v.Clientset.CoreV1().Pods(appNS).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: labels.Set{"app": "fio"}.AsSelector().String(),
-	})
-	if err != nil {
-		return err
-	}
-	if len(pods.Items) == 0 {
-		return fmt.Errorf("no FIO pods found")
-	}
-	podName := pods.Items[0].Name
-	logs, err := v.FetchFIOLogs(podName, appNS)
-	if err != nil {
-		return err
-	}
-	log.Infof("Fio Output is: %v", logs)
 	return nil
 }
 
