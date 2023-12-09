@@ -170,6 +170,7 @@ func (s *SSH) updateDriver() error {
 		execPodNamespace = "kube-system"
 	}
 	s.execPodNamespace = execPodNamespace
+	execPodNamespace = "portworx"
 	log.InfoD("UpdateDriver: ssh driver's namespace (the 'portworx-service' namespace) is updated to [%s]", execPodNamespace)
 
 	nodes := node.GetWorkerNodes()
