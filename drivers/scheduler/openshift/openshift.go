@@ -152,7 +152,6 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 			options.Namespace = appNamespace
 		}
 		appNamespace = fmt.Sprintf("%v-%v", appNamespace, time.Now().Unix())
-
 		// Update security context for namespace and user
 		if err := k.updateSecurityContextConstraints(appNamespace); err != nil {
 			return nil, err

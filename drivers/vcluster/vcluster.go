@@ -217,7 +217,8 @@ func (v *VCluster) CreateAndWaitVCluster() error {
 		}
 	}
 	log.Infof("Control Node IP: %v", ControlNodeIP)
-	sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
+	//sampleVclusterConfig := filepath.Join(currentDir, "..", "drivers", "vcluster", "vcluster.yaml")
+	sampleVclusterConfig := filepath.Join(currentDir, "..", "..", "drivers", "vcluster", "vcluster.yaml")
 	sampleVclusterConfigAbsPath, err := filepath.Abs(sampleVclusterConfig)
 	if err != nil {
 		return err
