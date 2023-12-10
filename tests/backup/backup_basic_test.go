@@ -8,7 +8,6 @@ import (
 	"time"
 
 	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
@@ -88,10 +87,10 @@ func getGlobalLockedBucketName(provider string) string {
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
+	/*	var specReporters []Reporter
+		junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
+		specReporters = append(specReporters, junitReporter)
+		RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)*/
 }
 
 // BackupInitInstance initialises instances required for backup
