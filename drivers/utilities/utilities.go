@@ -40,7 +40,7 @@ func RandomString(length int) string {
 	return randomString
 }
 
-func GenerateRandomSQLCommands(count int) map[string][]string {
+func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 	var randomSqlCommands = make(map[string][]string)
 	var tableName string
 	var insertCommands []string
@@ -50,10 +50,17 @@ func GenerateRandomSQLCommands(count int) map[string][]string {
 
 	tableName = "pg_validation_" + RandomString(5)
 
-	insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+	if appType == "postgres" {
+		insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		key varchar(45) NOT NULL,
 		value varchar(45) NOT NULL
 	  )`, tableName))
+	} else if appType == "mysql" {
+		insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+			`+"`key` "+`VARCHAR(45) NOT NULL ,
+			value VARCHAR(255)
+		  )`, tableName))
+	}
 
 	for counter := 0; counter < count; counter++ {
 		currentCounter := strconv.Itoa(counter)

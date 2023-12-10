@@ -122,9 +122,8 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	var tableName = "table_" + RandomString(4)
 
 	createTableQuery := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		key varchar(45) NOT NULL,
-		value varchar(45) NOT NULL,
-		
+		`+"`key` "+`VARCHAR(45) NOT NULL ,
+		value VARCHAR(255)
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
