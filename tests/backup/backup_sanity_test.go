@@ -2,17 +2,112 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
-	"github.com/pborman/uuid"
-	api "github.com/portworx/px-backup-api/pkg/apis/v1"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/pkg/log"
 	"strings"
 	"time"
 
+	. "github.com/onsi/ginkgo"
+	"github.com/pborman/uuid"
+	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
+
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
+
+var _ = Describe("{DummyTest}", func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
+		namespaceHandlerMap  map[string][]*appDriver.ApplicationDriver
+	)
+	JustBeforeEach(func() {
+		log.Infof("No pre-setup required for this testcase")
+		StartPxBackupTorpedoTest("BackupClusterVerification", "Validating backup cluster pods", nil, 0, Sagrawal, Q4FY23)
+
+		numDeployments := 3
+		log.InfoD("Starting to deploy applications")
+		for i := 0; i < numDeployments; i++ {
+			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = appReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+	})
+	It("Just tetsing out drivers", func() {
+		Step("Validating deployed applications", func() {
+			log.InfoD("Validating deployed applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+
+			controlChannel, errorGroup, namespaceHandlerMap = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			log.Infof("All apps validated successfully")
+
+			log.Infof("Namespace App Map - [%+v]", namespaceHandlerMap)
+		})
+
+		Step("Cleaning up all deployed applications", func() {
+			log.InfoD("Cleaning up all deployed applications")
+
+			log.Infof("Sleeping for 30 seconds for data population")
+			time.Sleep(30 * time.Second)
+
+			err := DestroyAppsWithData(scheduledAppContexts, make(map[string]bool), controlChannel, errorGroup)
+			log.FailOnError(err, "Apps continous data validation failed")
+
+		})
+		// Step("Testing", func() {
+		// 	ctx, _ := backup.GetAdminCtxFromSecret()
+		// 	log.InfoD("Testing out something")
+
+		// 	postgres, _ := appdriver.GetApplicationDriver(
+		// 		"postgres",
+		// 		"postgres",
+		// 		"postgres-backup-pxb-0-0-12-07-19h29m42s",
+		// 		"pgbench",
+		// 		"superpostgres",
+		// 		5432,
+		// 		"postgres",
+		// 		ctx)
+
+		// 	group := errgroup.Group{}
+
+		// 	ch := make(chan string)
+
+		// 	log.Infof("Starting the go routine")
+		// 	group.Go(func() error {
+		// 		err := postgres.StartData(ch, ctx)
+		// 		return err
+		// 	})
+
+		// 	log.Infof("Sleeping for 30 seconds")
+		// 	time.Sleep(30 * time.Second)
+		// 	ch <- "Pause"
+
+		// 	log.Infof("Sleeping for 10 seconds")
+		// 	time.Sleep(10 * time.Second)
+
+		// 	log.Infof("Stopping the routine")
+		// 	ch <- "Stop"
+
+		// 	if err := group.Wait(); err != nil {
+		// 		fmt.Printf("errgroup tasks ended up with an error: %v\n", err)
+		// 	} else {
+		// 		fmt.Println("all works done successfully")
+		// 	}
+		// 	close(ch)
+		// })
+	})
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(make([]*scheduler.Context, 0))
+		log.Infof("No cleanup required for this testcase")
+	})
+
+})
 
 // This testcase verifies if the backup pods are in Ready state or not
 var _ = Describe("{BackupClusterVerification}", func() {
