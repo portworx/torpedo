@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/onsi/ginkgo/reporters"
 	"os"
 	"strings"
 	"testing"
@@ -87,10 +88,10 @@ func getGlobalLockedBucketName(provider string) string {
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	/*	var specReporters []Reporter
-		junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-		specReporters = append(specReporters, junitReporter)
-		RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)*/
+	var specReporters []Reporter
+	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
+	specReporters = append(specReporters, junitReporter)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
 // BackupInitInstance initialises instances required for backup
