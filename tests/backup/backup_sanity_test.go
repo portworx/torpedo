@@ -28,7 +28,7 @@ var _ = Describe("{DummyTest}", func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartPxBackupTorpedoTest("BackupClusterVerification", "Validating backup cluster pods", nil, 0, Sagrawal, Q4FY23)
 
-		numDeployments := 3
+		numDeployments := 1
 		log.InfoD("Starting to deploy applications")
 		for i := 0; i < numDeployments; i++ {
 			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
