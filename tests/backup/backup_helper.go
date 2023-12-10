@@ -2648,9 +2648,9 @@ func GetPxBackupBuildDate() (string, error) {
 	return backupVersion.GetBuildDate(), nil
 }
 
-// UpgradePxBackup will perform the upgrade tasks for Px Backup to the version passed as string
+// UpgradePxBackupWithHelm will perform the upgrade tasks for Px Backup to the version passed as string
 // Eg: versionToUpgrade := "2.4.0"
-func UpgradePxBackup(versionToUpgrade string) error {
+func UpgradePxBackupWithHelm(versionToUpgrade string) error {
 	var cmd string
 
 	// Compare and validate the upgrade path

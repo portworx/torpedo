@@ -415,8 +415,8 @@ const (
 	BackupSpecificResourceOnCluster = "backupSpecificResourceOnCluster"
 	//BackupUsingLabelOnCluster backs up resources on a cluster using a specific label
 	BackupUsingLabelOnCluster = "backupUsingLabelOnCluster"
-	//BackupRestartPX restarts Portworx during a backup
-	BackupRestartPX = "backupRestartPX"
+	//BackupRestartPXService restarts Portworx during a backup
+	BackupRestartPXService = "backupRestartPX"
 	//BackupRestartNode restarts a node with PX during a backup
 	BackupRestartNode = "backupRestartNode"
 	// BackupDeleteBackupPod deletes px-backup pod during a backup
@@ -3894,7 +3894,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: BackupRestartPX,
+			Type: BackupRestartPXService,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},

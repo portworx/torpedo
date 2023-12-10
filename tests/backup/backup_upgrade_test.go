@@ -17,15 +17,15 @@ import (
 )
 
 // This testcase verifies Px Backup upgrade
-var _ = Describe("{UpgradePxBackup}", func() {
+var _ = Describe("{UpgradePxBackupWithHelm}", func() {
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("UpgradePxBackup", "Upgrading backup", nil, 0, Mkoppal, Q1FY24)
+		StartPxBackupTorpedoTest("UpgradePxBackupWithHelm", "Upgrading backup", nil, 0, Mkoppal, Q1FY24)
 	})
 	It("Upgrade Px Backup", func() {
 		Step("Upgrade Px Backup", func() {
 			log.InfoD("Upgrade Px Backup to version %s", latestPxBackupVersion)
-			err := UpgradePxBackup(latestPxBackupVersion)
+			err := UpgradePxBackupWithHelm(latestPxBackupVersion)
 			dash.VerifyFatal(err, nil, "Verifying Px Backup upgrade completion")
 		})
 	})
@@ -477,7 +477,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				latestPxBackupVersionFromEnv = latestPxBackupVersion
 			}
 			log.InfoD("Upgrading px-backup to latest version [%s]", latestPxBackupVersionFromEnv)
-			err := UpgradePxBackup(latestPxBackupVersionFromEnv)
+			err := UpgradePxBackupWithHelm(latestPxBackupVersionFromEnv)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying completion of px-backup upgrade to latest version [%s]", latestPxBackupVersionFromEnv))
 			// Stork Version will be upgraded on both source and destination if env variable TARGET_STORK_VERSION is defined.
 			targetStorkVersion := os.Getenv("TARGET_STORK_VERSION")

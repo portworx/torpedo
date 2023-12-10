@@ -76,8 +76,8 @@ fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
-    FOCUS_ARG="--focus={$focusRegex}"
+    focusRegex="$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')"
+    FOCUS_ARG="--label-filter=$focusRegex"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then

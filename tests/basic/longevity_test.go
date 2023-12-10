@@ -574,7 +574,7 @@ func populateDisruptiveTriggers() {
 		TestDeleteBackup:                false,
 		RestoreNamespace:                false,
 		BackupUsingLabelOnCluster:       false,
-		BackupRestartPX:                 false,
+		BackupRestartPXService:          false,
 		BackupRestartNode:               false,
 		BackupDeleteBackupPod:           false,
 		BackupScaleMongo:                false,
@@ -857,7 +857,7 @@ func populateIntervals() {
 	triggerInterval[TestDeleteBackup] = map[int]time.Duration{}
 	triggerInterval[RestoreNamespace] = map[int]time.Duration{}
 	triggerInterval[BackupUsingLabelOnCluster] = map[int]time.Duration{}
-	triggerInterval[BackupRestartPX] = map[int]time.Duration{}
+	triggerInterval[BackupRestartPXService] = map[int]time.Duration{}
 	triggerInterval[BackupRestartNode] = map[int]time.Duration{}
 	triggerInterval[BackupDeleteBackupPod] = map[int]time.Duration{}
 	triggerInterval[BackupScaleMongo] = map[int]time.Duration{}
@@ -1021,12 +1021,12 @@ func populateIntervals() {
 	triggerInterval[BackupUsingLabelOnCluster][6] = 5 * baseInterval
 	triggerInterval[BackupUsingLabelOnCluster][5] = 6 * baseInterval
 
-	triggerInterval[BackupRestartPX][10] = 1 * baseInterval
-	triggerInterval[BackupRestartPX][9] = 2 * baseInterval
-	triggerInterval[BackupRestartPX][8] = 3 * baseInterval
-	triggerInterval[BackupRestartPX][7] = 4 * baseInterval
-	triggerInterval[BackupRestartPX][6] = 5 * baseInterval
-	triggerInterval[BackupRestartPX][5] = 6 * baseInterval
+	triggerInterval[BackupRestartPXService][10] = 1 * baseInterval
+	triggerInterval[BackupRestartPXService][9] = 2 * baseInterval
+	triggerInterval[BackupRestartPXService][8] = 3 * baseInterval
+	triggerInterval[BackupRestartPXService][7] = 4 * baseInterval
+	triggerInterval[BackupRestartPXService][6] = 5 * baseInterval
+	triggerInterval[BackupRestartPXService][5] = 6 * baseInterval
 
 	triggerInterval[BackupRestartNode][10] = 1 * baseInterval
 	triggerInterval[BackupRestartNode][9] = 2 * baseInterval
@@ -1769,7 +1769,7 @@ func populateIntervals() {
 	triggerInterval[TestDeleteBackup][0] = 0
 	triggerInterval[RestoreNamespace][0] = 0
 	triggerInterval[BackupUsingLabelOnCluster][0] = 0
-	triggerInterval[BackupRestartPX][0] = 0
+	triggerInterval[BackupRestartPXService][0] = 0
 	triggerInterval[BackupRestartNode][0] = 0
 	triggerInterval[BackupDeleteBackupPod][0] = 0
 	triggerInterval[BackupScaleMongo][0] = 0

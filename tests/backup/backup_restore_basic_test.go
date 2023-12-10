@@ -29,7 +29,7 @@ import (
 )
 
 // BasicSelectiveRestore selects random backed-up apps and restores them
-var _ = Describe("{BasicSelectiveRestore}", func() {
+var _ = Describe("{BasicSelectiveRestore}", Label(TestCaseLabelsMap[BasicSelectiveRestore]...), func() {
 	var (
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
