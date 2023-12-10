@@ -1277,7 +1277,7 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployMultipleAppsOnVclusters", "Create, Connect and run Multiple Nginx and FIO Applications on Many Vclusters in Parallel", nil, 0)
 		for i := 0; i < totalVclusters; i++ {
-			vClusterName := fmt.Sprintf("ssie-vcluster%d", i+20)
+			vClusterName := fmt.Sprintf("ssie-vcluster%d", i)
 			vc, err := vcluster.NewVCluster(vClusterName)
 			log.FailOnError(err, "Failed to initialise VCluster")
 			vClusters = append(vClusters, vc)
