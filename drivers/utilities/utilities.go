@@ -86,14 +86,18 @@ func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 
 }
 
-func GenerateSQLCommandPair(tableName string) map[string][]string {
+func GenerateSQLCommandPair(tableName string, appType string) map[string][]string {
 	var sqlCommandMap = make(map[string][]string)
-
+	var selectQuery string
 	randomKey := "key-" + RandomString(10)
 	randomValue := "value-" + RandomString(10)
 
 	insertQuery := fmt.Sprintf("INSERT INTO %s VALUES('%s', '%s')", tableName, randomKey, randomValue)
-	selectQuery := fmt.Sprintf("SELECT * FROM %s WHERE key='%s'", tableName, randomKey)
+	if appType == "postgres" {
+		selectQuery = fmt.Sprintf("SELECT * FROM %s WHERE key='%s'", tableName, randomKey)
+	} else if appType == "mysql" {
+		selectQuery = fmt.Sprintf("SELECT * FROM %s WHERE `key`='%s'", tableName, randomKey)
+	}
 
 	sqlCommandMap["insert"] = append(sqlCommandMap["insert"], insertQuery)
 	sqlCommandMap["select"] = append(sqlCommandMap["select"], selectQuery)

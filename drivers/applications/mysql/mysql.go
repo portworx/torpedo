@@ -54,7 +54,6 @@ func (app *MySqlConfig) ExecuteCommand(commads []string, ctx context.Context) er
 	}
 	for _, eachCommand := range commads {
 		_, err = conn.ExecContext(ctx, eachCommand)
-		log.Infof("[%v]", err)
 		if err != nil {
 			return err
 		}
@@ -158,7 +157,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 
 func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context) (map[string][]string, error) {
 
-	commandPair := GenerateSQLCommandPair(tableName)
+	commandPair := GenerateSQLCommandPair(tableName, "mysql")
 
 	err := app.ExecuteCommand(commandPair["insert"], ctx)
 	if err != nil {

@@ -155,7 +155,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 
 func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Context) (map[string][]string, error) {
 
-	commandPair := GenerateSQLCommandPair(tableName)
+	commandPair := GenerateSQLCommandPair(tableName, "postgres")
 
 	err := app.ExecuteCommand(commandPair["insert"], ctx)
 	if err != nil {
