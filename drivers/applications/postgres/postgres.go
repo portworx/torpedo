@@ -52,7 +52,6 @@ func (app *PostgresConfig) ExecuteCommand(commads []string, ctx context.Context)
 	}
 	for _, eachCommand := range commads {
 		_, err = conn.Exec(ctx, eachCommand)
-		log.Infof("[%v]", err)
 		if err != nil {
 			return err
 		}
