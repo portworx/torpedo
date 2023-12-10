@@ -28,7 +28,6 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -41,6 +40,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -80,9 +80,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -185,10 +187,22 @@ const (
 	pdsDriveCliFlag   = "pds-driver"
 )
 
+// Application Params
+const (
+	applicationWithDriver = `
+		postgres
+		mysql
+	`
+)
+
 var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
 	GlobalGkeSecretString  string
+)
+
+var (
+	namespaceAppWithDataMap = make(map[string][]*appDriver.ApplicationDriver)
 )
 
 type OwnershipAccessType int32
@@ -1904,6 +1918,51 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	})
 }
 
+// ValidateApplications validates applications
+func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group, map[string][]*appDriver.ApplicationDriver) {
+
+	var allHandlers []appDriver.ApplicationDriver
+	Step("validate applications", func() {
+		log.InfoD("Validate applications")
+		for _, ctx := range contexts {
+			ValidateContext(ctx)
+			appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+			if err != nil {
+				log.InfoD("Some error occurred - [%s]", err)
+			}
+			log.Infof("App Info - [%+v]", appInfo)
+			if appInfo.StartDataSupport {
+				appHandler, _ := appDriver.GetApplicationDriver(
+					appInfo.AppType,
+					appInfo.Hostname,
+					appInfo.User,
+					appInfo.Password,
+					appInfo.Port,
+					appInfo.DBName,
+					appContext)
+				log.InfoD("App handler created for [%s]", appInfo.Hostname)
+				namespaceAppWithDataMap[appInfo.Namespace] = append(namespaceAppWithDataMap[appInfo.Namespace], &appHandler)
+				allHandlers = append(allHandlers, appHandler)
+			}
+		}
+	})
+
+	controlChannel := make(chan string)
+	errGroup := errgroup.Group{}
+
+	for _, handler := range allHandlers {
+		currentHandler := handler
+		errGroup.Go(func() error {
+			err := currentHandler.StartData(controlChannel, appContext)
+			return err
+		})
+	}
+
+	log.Infof("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
+
+	return controlChannel, &errGroup, namespaceAppWithDataMap
+}
+
 // StartVolDriverAndWait starts volume driver on given app nodes
 func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	defer func() {
@@ -2040,6 +2099,43 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// DestroyApps destroy applications with data validation
+func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
+
+	var allErrors string
+
+	Step("Validating apps data continuity", func() {
+		log.InfoD("Validating apps data continuity")
+
+		// Stopping all data flow to apps
+
+		for _, appList := range namespaceAppWithDataMap {
+			for range appList {
+				controlChannel <- "Stop"
+			}
+		}
+
+		if err := errGroup.Wait(); err != nil {
+			allErrors += err.Error()
+		}
+
+		close(controlChannel)
+	})
+
+	Step("destroy apps", func() {
+		log.InfoD("Destroying apps")
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+
+	if allErrors != "" {
+		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+	}
+
+	return nil
 }
 
 // AddLabelsOnNode adds labels on the node
