@@ -31,7 +31,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			Password:    password,
 			Port:        port,
 			DBName:      dbname,
-			SQLCommands: GenerateRandomSQLCommands(20),
+			SQLCommands: GenerateRandomSQLCommands(20, appType),
 		}, nil
 	case "mysql":
 		return &MySqlConfig{
@@ -40,7 +40,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			Password:    password,
 			Port:        port,
 			DBName:      dbname,
-			SQLCommands: GenerateRandomSQLCommands(20),
+			SQLCommands: GenerateRandomSQLCommands(20, appType),
 		}, nil
 	default:
 		return &PostgresConfig{
@@ -49,7 +49,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			Password:    password,
 			Port:        port,
 			DBName:      dbname,
-			SQLCommands: GenerateRandomSQLCommands(20),
+			SQLCommands: GenerateRandomSQLCommands(20, appType),
 		}, nil
 
 	}
