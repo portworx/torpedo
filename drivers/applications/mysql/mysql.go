@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	. "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 )
@@ -41,9 +42,9 @@ func (app *MySqlConfig) GetConnection(ctx context.Context) (*sql.DB, error) {
 	return conn, nil
 }
 
-func (app *MySqlConfig) DefaultPort() int { return 5432 }
+func (app *MySqlConfig) DefaultPort() int { return 3306 }
 
-func (app *MySqlConfig) DefaultDBName() string { return "postgres" }
+func (app *MySqlConfig) DefaultDBName() string { return "mysql" }
 
 func (app *MySqlConfig) ExecuteCommand(commads []string, ctx context.Context) error {
 
@@ -122,10 +123,12 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 
 	createTableQuery := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		key varchar(45) NOT NULL,
-		value varchar(45) NOT NULL
+		value varchar(45) NOT NULL,
+		
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
+		log.Infof("Error while creating table - [%s]", err.Error())
 		return err
 	}
 	for {
