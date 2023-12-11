@@ -126,22 +126,26 @@ func (app *PostgresConfig) DeleteBackupData(ctx context.Context) error {
 func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context) error {
 	var status = "Start"
 	var allSelectCommands []string
+	var allErrors []string
 	var tableName = "table_" + RandomString(4)
 
 	createTableQuery := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		key varchar(45) NOT NULL,
-		value varchar(45) NOT NULL
+		`+"`key` "+`VARCHAR(45) NOT NULL ,
+		value VARCHAR(255)
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
-		return err
+		log.Infof("Error while creating table - [%s]", err.Error())
+		allErrors = append(allErrors, err.Error())
 	}
 	for {
 		select {
 		case cmd := <-command:
 			switch cmd {
 			case "Stop":
-				log.Infof("All select command [%v] for [%s]", allSelectCommands, app.Hostname)
+				if len(allErrors) != 0 {
+					return fmt.Errorf(strings.Join(allErrors, "\n"))
+				}
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -154,7 +158,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 			if status == "Start" {
 				commandPair, err := app.startInsertingData(tableName, ctx)
 				if err != nil {
-					return err
+					allErrors = append(allErrors, err.Error())
 				}
 				allSelectCommands = append(allSelectCommands, commandPair["select"]...)
 				time.Sleep(2 * time.Second)
