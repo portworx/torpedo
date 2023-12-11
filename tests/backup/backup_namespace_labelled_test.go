@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,6 +32,8 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		scheduledAppContexts     []*scheduler.Context
 		srcClusterStatus         api.ClusterInfo_StatusInfo_Status
 		destClusterStatus        api.ClusterInfo_StatusInfo_Status
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	numberOfUsers := 3
 	bkpNamespaces := make([]string, 0)
@@ -63,7 +66,8 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generating multiple labels", func() {
 			log.InfoD("Generating multiple labels")
@@ -176,7 +180,8 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] to namespaces [%v]", labels, listOfLabelledNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.Infof("Generating user context")
 		for _, userName := range users {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)
@@ -232,6 +237,8 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		nsLabelsMap            map[string]string
 		contexts               []*scheduler.Context
 		appContexts            []*scheduler.Context
+		controlChannel         chan string
+		errorGroup             *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	backupLocationMap := make(map[string]string)
@@ -258,7 +265,8 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(contexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Adding labels to namespaces", func() {
 			log.InfoD("Adding labels to namespaces")
@@ -377,7 +385,8 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		})
 		Step("Validate new namespaces", func() {
 			log.InfoD("Validating new namespaces")
-			ValidateApplications(contexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Apply same namespace labels to new namespaces", func() {
 			log.InfoD("Apply same namespace labels to new namespaces")
@@ -427,7 +436,8 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		DestroyApps(contexts, opts)
+		err = DestroyAppsWithData(contexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
@@ -455,6 +465,8 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		nsLabels                map[string]string
 		labelSelector           map[string]string
 		scheduledAppContexts    []*scheduler.Context
+		controlChannel          chan string
+		errorGroup              *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
@@ -478,7 +490,8 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generate and add labels to namespaces", func() {
 			log.InfoD("Generate and add labels to namespaces")
@@ -620,7 +633,8 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
@@ -650,6 +664,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		restoreNames             []string
 		nsLabelsMap              map[string]string
 		scheduledAppContexts     []*scheduler.Context
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	namespaceMapping := make(map[string]string)
@@ -674,7 +690,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generate and add labels to namespaces", func() {
 			log.InfoD("Generate and add labels to namespaces")
@@ -793,7 +810,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		})
 		Step("Validate new namespaces", func() {
 			log.InfoD("Validating new namespaces")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Apply same namespace labels to new namespace", func() {
 			log.InfoD("Apply same namespace labels to new namespace")
@@ -849,7 +867,8 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
@@ -894,6 +913,8 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		nsLabelsGroup2                 map[string]string
 		nsLabelsGroup3                 map[string]string
 		scheduledAppContexts           []*scheduler.Context
+		controlChannel                 chan string
+		errorGroup                     *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -918,7 +939,8 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding labels to resources", func() {
 			log.InfoD("Adding labels to resources")
@@ -1212,7 +1234,8 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.InfoD("Deleting deployed namespaces - %v", bkpNamespaces)
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
@@ -1240,6 +1263,8 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 		scheduleBackupList          []string
 		nsLabels                    map[string]string
 		scheduledAppContexts        []*scheduler.Context
+		controlChannel              chan string
+		errorGroup                  *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	bkpNamespaces = make([]string, 0)
@@ -1264,7 +1289,8 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Generating namespace label string from label map ", func() {
@@ -1389,7 +1415,8 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		log.InfoD("Deleting the restores taken")
 		err = DeleteRestore(restoreWithNamespaces, orgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreWithNamespaces))
