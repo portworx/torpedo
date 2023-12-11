@@ -8,6 +8,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	. "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 )
@@ -167,7 +168,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 // startInsertingData is helper to insert generate rows and insert data parallely for mysql app
 func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context) (map[string][]string, error) {
 
-	commandPair := GenerateSQLCommandPair(tableName, "mysql")
+	commandPair := GenerateSQLCommandPair(tableName, MySql)
 
 	err := app.ExecuteCommand(commandPair["insert"], ctx)
 	if err != nil {
