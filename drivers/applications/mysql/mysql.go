@@ -57,6 +57,9 @@ func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) e
 	if err != nil {
 		return err
 	}
+
+	defer conn.Close()
+
 	for _, eachCommand := range commands {
 		_, err = conn.ExecContext(ctx, eachCommand)
 		if err != nil {
@@ -85,6 +88,8 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 		return err
 	}
 
+	defer conn.Close()
+
 	var key string
 	var value string
 	var queryNotFoundList []string
@@ -103,6 +108,7 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 		errorMessage := strings.Join(queryNotFoundList, "\n")
 		return fmt.Errorf("Below results not found in the table:\n %s", errorMessage)
 	}
+
 	return nil
 }
 
@@ -132,7 +138,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	var tableName = "table_" + RandomString(4)
 
 	createTableQuery := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		`+"`key` "+`VARCHAR(45) NOT NULL ,
+		`+"`key` "+`VARCHAR(45) NOT NULL,
 		value VARCHAR(255)
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
