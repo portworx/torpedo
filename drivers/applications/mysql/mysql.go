@@ -154,6 +154,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
+				log.Infof("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -165,6 +166,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 		default:
 			if status == "Start" {
 				commandPair, err := app.startInsertingData(tableName, ctx)
+				log.Infof("Running insert command for app")
 				if err != nil {
 					allErrors = append(allErrors, err.Error())
 				}
