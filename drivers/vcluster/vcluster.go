@@ -513,7 +513,7 @@ func (v *VCluster) CreateFileOperationAppVcluster(pvcName string, appNS string, 
 							Command: []string{"/bin/sh", "-c"},
 							Args: []string{
 								"while true; do " +
-									"dd if=/dev/urandom of=/mnt/data/testfile bs=1M count=200; " +
+									"dd if=/dev/random of=/mnt/data/testfile bs=1M count=200; " +
 									"sleep 5; " +
 									"rm -f /mnt/data/testfile; " +
 									"sleep 10; " +

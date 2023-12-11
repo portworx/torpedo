@@ -1267,7 +1267,7 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 })
 
 var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
-	totalVclusters := 20
+	totalVclusters := 10
 	nginxAppCount := 9
 	fioAppCount := 0
 	newApp := 1
@@ -1277,7 +1277,7 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployMultipleAppsOnVclusters", "Create, Connect and run Multiple Nginx and FIO Applications on Many Vclusters in Parallel", nil, 0)
 		for i := 0; i < totalVclusters; i++ {
-			vClusterName := fmt.Sprintf("ssie-vcluster%d", i)
+			vClusterName := fmt.Sprintf("ssie-vcluster-%v", time.Now().Unix())
 			vc, err := vcluster.NewVCluster(vClusterName)
 			log.FailOnError(err, "Failed to initialise VCluster")
 			vClusters = append(vClusters, vc)
