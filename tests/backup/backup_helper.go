@@ -6390,7 +6390,7 @@ func validateCRCleanup(resourceName string, clusterName string, orgID string,
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 5*time.Minute, 30*time.Second)
+	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 5*time.Minute, 5*time.Second)
 
 	return err
 
