@@ -130,12 +130,11 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 	var tableName = "table_" + RandomString(4)
 
 	createTableQuery := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
-		`+"`key` "+`VARCHAR(45) NOT NULL ,
-		value VARCHAR(255)
+		key varchar(45) NOT NULL,
+		value varchar(45) NOT NULL
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
-		log.Infof("Error while creating table - [%s]", err.Error())
 		allErrors = append(allErrors, err.Error())
 	}
 	for {
