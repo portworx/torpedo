@@ -116,8 +116,6 @@ import (
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	_ "github.com/portworx/torpedo/drivers/node/ibm"
 
-	//_ "github.com/portworx/torpedo/drivers/node/ocp"
-
 	// import oracle driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/oracle"
 
