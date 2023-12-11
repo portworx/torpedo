@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/portworx/torpedo/drivers"
+	"golang.org/x/sync/errgroup"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
@@ -35,6 +36,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		namespaceMapping         map[string]string
 		scheduledAppContexts     []*scheduler.Context
 		clusterStatus            api.ClusterInfo_StatusInfo_Status
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	backupNames := make([]string, 0)
@@ -65,7 +68,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -183,7 +187,8 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		// Cleaning up applications created
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		// Remove all the restores created
 		log.Info("Deleting restored namespaces")
@@ -209,6 +214,10 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	incrementalBackupNamesRecreated := make([]string, 0)
 	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
+	var (
+		controlChannel chan string
+		errorGroup     *errgroup.Group
+	)
 	var backupLocationUID string
 	var cloudCredUID string
 	var cloudCredUidList []string
@@ -243,7 +252,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -341,7 +351,8 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		// Cleaning up applications created
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		// Cleaning up px-backup cluster
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -367,6 +378,8 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		scheduleNames              []string
 		backupNames                []string
 		localBucketNameMap         map[string]string
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 
 	providers := getProviders()
@@ -392,7 +405,9 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 
 	It("Delete bucket and Validates the backup state", func() {
 		Step("Validate deployed applications", func() {
-			ValidateApplications(scheduledAppContexts)
+			log.InfoD("Validate applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding cloud path/bucket", func() {
@@ -561,7 +576,8 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		for _, scheduleName := range scheduleNames {
 			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
@@ -590,6 +606,8 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		customBackupLocationName string
 		credName                 string
 		customBucketName         string
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	timeBetweenConsecutiveBackups := 10 * time.Second
 	backupNames := make([]string, 0)
@@ -635,7 +653,8 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding Credentials and Backup Location", func() {
@@ -733,7 +752,8 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
