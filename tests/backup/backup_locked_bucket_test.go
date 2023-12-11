@@ -2,10 +2,12 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
+	"golang.org/x/sync/errgroup"
 
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
@@ -23,9 +25,11 @@ import (
 // This testcase verifies alternating backups between locked and unlocked bucket
 var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 	var (
-		appList      = Inst().AppList
-		credName     string
-		restoreNames []string
+		appList        = Inst().AppList
+		credName       string
+		restoreNames   []string
+		controlChannel chan string
+		errorGroup     *errgroup.Group
 	)
 	var preRuleNameList []string
 	var postRuleNameList []string
@@ -71,7 +75,8 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validating apps")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -182,7 +187,8 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -230,6 +236,8 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		volumeMounts         []string
 		podList              []v1.Pod
 		restoreNames         []string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -275,7 +283,8 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -442,7 +451,8 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -477,6 +487,8 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		clusterStatus              api.ClusterInfo_StatusInfo_Status
 		volumeMounts               []string
 		podList                    []v1.Pod
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 	labelSelectors := make(map[string]string)
 	cloudCredUIDMap := make(map[string]string)
@@ -520,7 +532,8 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating pre and post rule for deployed apps", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")
@@ -657,7 +670,8 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 			})
 			Step("Validate applications before taking backup", func() {
 				log.InfoD("Validate applications")
-				ValidateApplications(scheduledAppContexts)
+				ctx, _ := backup.GetAdminCtxFromSecret()
+				controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 			})
 			Step("Create schedule backup after initializing volume resize", func() {
 				log.InfoD("Create schedule backup after initializing volume resize")
@@ -704,7 +718,8 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{periodicSchedulePolicyName}))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
 	})
 })
@@ -728,6 +743,8 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		numberOfBackups                                = 1
 		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
 		restoreNames               []string
+		controlChannel             chan string
+		errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -750,7 +767,8 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
 			log.InfoD(fmt.Sprintf("Creating %d users with %s role", numberOfUsers, infraAdminRole))
@@ -1049,7 +1067,8 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		log.InfoD("Destroying the scheduled applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
+		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
