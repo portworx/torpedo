@@ -20,7 +20,7 @@ const (
 	DriverName = "aws"
 )
 
-type aws struct {
+type Aws struct {
 	node.Driver
 	session     *session.Session
 	credentials *credentials.Credentials
@@ -31,11 +31,11 @@ type aws struct {
 	instances   []*ec2.Instance
 }
 
-func (a *aws) String() string {
+func (a *Aws) String() string {
 	return DriverName
 }
 
-func (a *aws) Init(nodeOpts node.InitOptions) error {
+func (a *Aws) Init(nodeOpts node.InitOptions) error {
 	var err error
 	sess := session.Must(session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
@@ -73,7 +73,7 @@ func (a *aws) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
+func (a *Aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
 	log.Infof("Got Insatacne id:%v", instanceID)
@@ -125,7 +125,7 @@ func (a *aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	return err
 }
 
-func (a *aws) connect(n node.Node, listCmdsInput *ssm.ListCommandInvocationsInput) error {
+func (a *Aws) connect(n node.Node, listCmdsInput *ssm.ListCommandInvocationsInput) error {
 	var status string
 	listCmdInvsOutput, _ := a.svcSsm.ListCommandInvocations(listCmdsInput)
 	for _, cmd := range listCmdInvsOutput.CommandInvocations {
@@ -140,7 +140,7 @@ func (a *aws) connect(n node.Node, listCmdsInput *ssm.ListCommandInvocationsInpu
 	}
 }
 
-func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
+func (a *Aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
 	if err != nil {
@@ -166,7 +166,7 @@ func (a *aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	return nil
 }
 
-func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
+func (a *Aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
 	if err != nil {
@@ -192,7 +192,7 @@ func (a *aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (a *aws) DeleteNode(n node.Node, timeout time.Duration) error {
+func (a *Aws) DeleteNode(n node.Node, timeout time.Duration) error {
 	var err error
 	instanceID, err := a.getNodeIDByPrivAddr(n)
 	if err != nil {
@@ -219,16 +219,16 @@ func (a *aws) DeleteNode(n node.Node, timeout time.Duration) error {
 }
 
 // TODO add AWS implementation for this
-func (a *aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
+func (a *Aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
 	return "", nil
 }
 
 // TODO implement for AWS
-func (a *aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
+func (a *Aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
 	return nil
 }
 
-func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
+func (a *Aws) getAllInstances() ([]*ec2.Instance, error) {
 	instances := []*ec2.Instance{}
 	params := &ec2.DescribeInstancesInput{}
 	resp, err := a.svc.DescribeInstances(params)
@@ -244,7 +244,7 @@ func (a *aws) getAllInstances() ([]*ec2.Instance, error) {
 	return instances, err
 }
 
-func (a *aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
+func (a *Aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
 	for _, i := range a.instances {
 		for _, addr := range n.Addresses {
 			if aws_pkg.StringValue(i.PrivateIpAddress) == addr {
@@ -256,7 +256,7 @@ func (a *aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
 }
 
 func init() {
-	a := &aws{
+	a := &Aws{
 		Driver: node.NotSupportedDriver,
 	}
 	node.Register(DriverName, a)
