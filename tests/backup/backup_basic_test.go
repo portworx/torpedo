@@ -19,6 +19,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
 )
 
@@ -177,51 +178,51 @@ var _ = BeforeSuite(func() {
 	GlobalCredentialConfig, err = GetConfigObj()
 	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
-	// providers := getProviders()
-	// bucketNameSuffix := getBucketNameSuffix()
-	// for _, provider := range providers {
-	// 	switch provider {
-	// 	case drivers.ProviderAws:
-	// 		globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
-	// 		CreateBucket(provider, globalAWSBucketName)
-	// 		log.Infof("Bucket created with name - %s", globalAWSBucketName)
-	// 		s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
-	// 		if s3EncryptionPolicy != "" {
-	// 			sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
-	// 			log.FailOnError(err, "Failed to get sse details form environment")
-	// 			policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
-	// 			log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
-	// 			err = UpdateS3BucketPolicy(globalAWSBucketName, policy)
-	// 			log.FailOnError(err, "Failed to apply bucket policy")
-	// 			log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
-	// 		}
-	// 	case drivers.ProviderAzure:
-	// 		globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
-	// 		CreateBucket(provider, globalAzureBucketName)
-	// 		log.Infof("Bucket created with name - %s", globalAzureBucketName)
-	// 	case drivers.ProviderGke:
-	// 		globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
-	// 		CreateBucket(provider, globalGCPBucketName)
-	// 		log.Infof("Bucket created with name - %s", globalGCPBucketName)
-	// 	case drivers.ProviderNfs:
-	// 		globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, RandomString(6))
-	// 	}
-	// }
-	// lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")
-	// if present {
-	// 	for _, provider := range providers {
-	// 		switch provider {
-	// 		case drivers.ProviderAws:
-	// 			globalAWSLockedBucketName = fmt.Sprintf("%s-%s", globalAWSLockedBucketPrefix, lockedBucketNameSuffix)
-	// 		case drivers.ProviderAzure:
-	// 			globalAzureLockedBucketName = fmt.Sprintf("%s-%s", globalAzureLockedBucketPrefix, lockedBucketNameSuffix)
-	// 		case drivers.ProviderGke:
-	// 			globalGCPLockedBucketName = fmt.Sprintf("%s-%s", globalGCPLockedBucketPrefix, lockedBucketNameSuffix)
-	// 		}
-	// 	}
-	// } else {
-	// 	log.Infof("Locked bucket name not provided")
-	// }
+	providers := getProviders()
+	bucketNameSuffix := getBucketNameSuffix()
+	for _, provider := range providers {
+		switch provider {
+		case drivers.ProviderAws:
+			globalAWSBucketName = fmt.Sprintf("%s-%s", globalAWSBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, globalAWSBucketName)
+			log.Infof("Bucket created with name - %s", globalAWSBucketName)
+			s3EncryptionPolicy := os.Getenv("S3_ENCRYPTION_POLICY")
+			if s3EncryptionPolicy != "" {
+				sseDetails, err := s3utils.GetS3SSEDetailsFromEnv()
+				log.FailOnError(err, "Failed to get sse details form environment")
+				policy, err := GenerateS3BucketPolicy(string(sseDetails.SseType), string(sseDetails.SseEncryptionPolicy), globalAWSBucketName)
+				log.FailOnError(err, "Failed to generate s3 bucket policy check for the correctness of policy parameters")
+				err = UpdateS3BucketPolicy(globalAWSBucketName, policy)
+				log.FailOnError(err, "Failed to apply bucket policy")
+				log.Infof("Updated S3 bucket policy - %s", globalAWSBucketName)
+			}
+		case drivers.ProviderAzure:
+			globalAzureBucketName = fmt.Sprintf("%s-%s", globalAzureBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, globalAzureBucketName)
+			log.Infof("Bucket created with name - %s", globalAzureBucketName)
+		case drivers.ProviderGke:
+			globalGCPBucketName = fmt.Sprintf("%s-%s", globalGCPBucketPrefix, bucketNameSuffix)
+			CreateBucket(provider, globalGCPBucketName)
+			log.Infof("Bucket created with name - %s", globalGCPBucketName)
+		case drivers.ProviderNfs:
+			globalNFSBucketName = fmt.Sprintf("%s-%s", globalNFSBucketPrefix, RandomString(6))
+		}
+	}
+	lockedBucketNameSuffix, present := os.LookupEnv("LOCKED_BUCKET_NAME")
+	if present {
+		for _, provider := range providers {
+			switch provider {
+			case drivers.ProviderAws:
+				globalAWSLockedBucketName = fmt.Sprintf("%s-%s", globalAWSLockedBucketPrefix, lockedBucketNameSuffix)
+			case drivers.ProviderAzure:
+				globalAzureLockedBucketName = fmt.Sprintf("%s-%s", globalAzureLockedBucketPrefix, lockedBucketNameSuffix)
+			case drivers.ProviderGke:
+				globalGCPLockedBucketName = fmt.Sprintf("%s-%s", globalGCPLockedBucketPrefix, lockedBucketNameSuffix)
+			}
+		}
+	} else {
+		log.Infof("Locked bucket name not provided")
+	}
 })
 
 var _ = AfterSuite(func() {
