@@ -254,6 +254,9 @@ github.com/bytedance/sonic/loader
 github.com/bytedance/sonic/option
 github.com/bytedance/sonic/unquote
 github.com/bytedance/sonic/utf8
+# github.com/cenkalti/backoff v2.2.1+incompatible
+## explicit
+github.com/cenkalti/backoff
 # github.com/cenkalti/backoff/v3 v3.2.2
 ## explicit; go 1.12
 github.com/cenkalti/backoff/v3
@@ -894,6 +897,7 @@ github.com/libopenstorage/openstorage/cluster
 github.com/libopenstorage/openstorage/objectstore
 github.com/libopenstorage/openstorage/osdconfig
 github.com/libopenstorage/openstorage/pkg/auth
+github.com/libopenstorage/openstorage/pkg/chattr
 github.com/libopenstorage/openstorage/pkg/clusterdomain
 github.com/libopenstorage/openstorage/pkg/correlation
 github.com/libopenstorage/openstorage/pkg/dbg
@@ -902,13 +906,17 @@ github.com/libopenstorage/openstorage/pkg/diags
 github.com/libopenstorage/openstorage/pkg/grpcserver
 github.com/libopenstorage/openstorage/pkg/grpcutil
 github.com/libopenstorage/openstorage/pkg/job
+github.com/libopenstorage/openstorage/pkg/keylock
+github.com/libopenstorage/openstorage/pkg/mount
 github.com/libopenstorage/openstorage/pkg/nodedrain
+github.com/libopenstorage/openstorage/pkg/options
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/pkg/sched
 github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
+github.com/libopenstorage/openstorage/volume
 # github.com/libopenstorage/operator v0.0.0-20231004002935-494c2edc384a
 ## explicit; go 1.19
 github.com/libopenstorage/operator/drivers/storage
