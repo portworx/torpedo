@@ -16,6 +16,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/gambol99/go-marathon v0.7.1
 	github.com/gin-gonic/gin v1.9.1
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gofrs/flock v0.8.1
 	github.com/golang/protobuf v1.5.3
 	github.com/google/gnostic v0.6.9
@@ -92,7 +93,6 @@ require (
 
 require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
-	github.com/go-sql-driver/mysql v1.6.0
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
 	go.mongodb.org/mongo-driver v1.13.0
@@ -133,6 +133,7 @@ require (
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
