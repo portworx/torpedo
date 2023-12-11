@@ -128,6 +128,7 @@ func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) error {
 	var status = "Start"
 	var allSelectCommands []string
+	var allErrors []string
 	var tableName = "table_" + RandomString(4)
 
 	createTableQuery := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
@@ -137,13 +138,16 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
 		log.Infof("Error while creating table - [%s]", err.Error())
-		return err
+		allErrors = append(allErrors, err.Error())
 	}
 	for {
 		select {
 		case cmd := <-command:
 			switch cmd {
 			case "Stop":
+				if len(allErrors) != 0 {
+					return fmt.Errorf(strings.Join(allErrors, "\n"))
+				}
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -156,7 +160,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 			if status == "Start" {
 				commandPair, err := app.startInsertingData(tableName, ctx)
 				if err != nil {
-					return err
+					allErrors = append(allErrors, err.Error())
 				}
 				allSelectCommands = append(allSelectCommands, commandPair["select"]...)
 				time.Sleep(2 * time.Second)
