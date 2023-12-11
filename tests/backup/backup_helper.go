@@ -6364,28 +6364,34 @@ func validateCRCleanup(resourceName string, clusterName string, orgID string,
 	}
 	clusterObj := clusterResp.GetCluster()
 
-	if crType == "restore" {
-		allCRs, err = GetRestoreCRs(currentAdminNamespace, clusterObj)
-	} else if crType == "backup" {
-		allCRs, err = GetBackupCRs(currentAdminNamespace, clusterObj)
-	} else {
-		return fmt.Errorf("Please specify a valid option for CR validation. Options available - [backup, restore]")
-	}
-
-	if err != nil {
-		return err
-	}
-
-	log.Infof("Validating CR cleanup")
-	log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
-
-	for _, eachCR := range allCRs {
-		if strings.Contains(eachCR, resourceName) {
-			log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
-			return fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
+	validateCRCleanupInNamespace := func() (interface{}, bool, error) {
+		if crType == "restore" {
+			allCRs, err = GetRestoreCRs(currentAdminNamespace, clusterObj)
+		} else if crType == "backup" {
+			allCRs, err = GetBackupCRs(currentAdminNamespace, clusterObj)
+		} else {
+			return nil, true, fmt.Errorf("Please specify a valid option for CR validation. Options available - [backup, restore]")
 		}
+
+		if err != nil {
+			return nil, true, err
+		}
+
+		log.Infof("Validating CR cleanup")
+		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
+
+		for _, eachCR := range allCRs {
+			if strings.Contains(eachCR, resourceName) {
+				log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
+				return nil, true, fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
+			}
+		}
+
+		return nil, false, nil
 	}
 
-	return nil
+	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 5*time.Minute, 30*time.Second)
+
+	return err
 
 }
