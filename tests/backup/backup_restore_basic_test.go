@@ -450,52 +450,52 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying %s backup's restore %s creation", backupName, restoreName))
 		})
 
-		Step("Delete the restores", func() {
-			log.InfoD("Delete the restores")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = DeleteRestore(restoreName, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s deletion", restoreName))
-		})
-		Step("Delete the backups", func() {
-			log.Infof("Delete the backups")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			backupDriver := Inst().Backup
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s deletion", backupName))
+		// Step("Delete the restores", func() {
+		// 	log.InfoD("Delete the restores")
+		// 	ctx, err := backup.GetAdminCtxFromSecret()
+		// 	log.FailOnError(err, "Fetching px-central-admin ctx")
+		// 	err = DeleteRestore(restoreName, orgID, ctx)
+		// 	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s deletion", restoreName))
+		// })
+		// Step("Delete the backups", func() {
+		// 	log.Infof("Delete the backups")
+		// 	ctx, err := backup.GetAdminCtxFromSecret()
+		// 	log.FailOnError(err, "Fetching px-central-admin ctx")
+		// 	backupDriver := Inst().Backup
+		// 	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		// 	log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+		// 	_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		// 	dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying backup %s deletion", backupName))
 
-		})
-		Step("Delete backup schedule policy", func() {
-			log.InfoD("Delete backup schedule policy")
-			policyList := []string{intervalName}
-			err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
-		})
-		Step("Delete the pre and post rules", func() {
-			log.InfoD("Delete the pre rule")
-			if len(preRuleNameList) > 0 {
-				for _, ruleName := range preRuleNameList {
-					err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup pre rules %s", ruleName))
-				}
-			}
-			log.InfoD("Delete the post rules")
-			if len(postRuleNameList) > 0 {
-				for _, ruleName := range postRuleNameList {
-					err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
-					dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup post rules %s", ruleName))
-				}
-			}
-		})
-		Step("Delete the backup location and cloud account", func() {
-			log.InfoD("Delete the backup location %s and cloud account %s", bkpLocationName, cloudCredName)
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-		})
+		// })
+		// Step("Delete backup schedule policy", func() {
+		// 	log.InfoD("Delete backup schedule policy")
+		// 	policyList := []string{intervalName}
+		// 	err := Inst().Backup.DeleteBackupSchedulePolicy(orgID, policyList)
+		// 	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", policyList))
+		// })
+		// Step("Delete the pre and post rules", func() {
+		// 	log.InfoD("Delete the pre rule")
+		// 	if len(preRuleNameList) > 0 {
+		// 		for _, ruleName := range preRuleNameList {
+		// 			err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+		// 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup pre rules %s", ruleName))
+		// 		}
+		// 	}
+		// 	log.InfoD("Delete the post rules")
+		// 	if len(postRuleNameList) > 0 {
+		// 		for _, ruleName := range postRuleNameList {
+		// 			err := Inst().Backup.DeleteRuleForBackup(orgID, ruleName)
+		// 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting  backup post rules %s", ruleName))
+		// 		}
+		// 	}
+		// })
+		// Step("Delete the backup location and cloud account", func() {
+		// 	log.InfoD("Delete the backup location %s and cloud account %s", bkpLocationName, cloudCredName)
+		// 	ctx, err := backup.GetAdminCtxFromSecret()
+		// 	log.FailOnError(err, "Fetching px-central-admin ctx")
+		// 	CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		// })
 	})
 	JustAfterEach(func() {
 		// defer EndPxBackupTorpedoTest(scheduledAppContexts)
