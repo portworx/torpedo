@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v4"
+	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	. "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 )
@@ -165,7 +166,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 // startInsertingData is helper to insert generate rows and insert data parallely for postgres app
 func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Context) (map[string][]string, error) {
 
-	commandPair := GenerateSQLCommandPair(tableName, "postgres")
+	commandPair := GenerateSQLCommandPair(tableName, Postgres)
 
 	err := app.ExecuteCommand(commandPair["insert"], ctx)
 	if err != nil {

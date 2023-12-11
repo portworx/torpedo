@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strconv"
 
+	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -51,12 +52,12 @@ func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 
 	tableName = "pg_validation_" + RandomString(5)
 
-	if appType == "postgres" {
+	if appType == Postgres {
 		insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		key varchar(45) NOT NULL,
 		value varchar(45) NOT NULL
 	  )`, tableName))
-	} else if appType == "mysql" {
+	} else if appType == MySql {
 		insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			`+"`key` "+`VARCHAR(45) NOT NULL ,
 			value VARCHAR(255)
@@ -95,9 +96,9 @@ func GenerateSQLCommandPair(tableName string, appType string) map[string][]strin
 	randomValue := "value-" + RandomString(10)
 
 	insertQuery := fmt.Sprintf("INSERT INTO %s VALUES('%s', '%s')", tableName, randomKey, randomValue)
-	if appType == "postgres" {
+	if appType == Postgres {
 		selectQuery = fmt.Sprintf("SELECT * FROM %s WHERE key='%s'", tableName, randomKey)
-	} else if appType == "mysql" {
+	} else if appType == MySql {
 		selectQuery = fmt.Sprintf("SELECT * FROM %s WHERE `key`='%s'", tableName, randomKey)
 	}
 

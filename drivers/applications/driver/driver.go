@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 
+	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	. "github.com/portworx/torpedo/drivers/applications/mysql"
 	. "github.com/portworx/torpedo/drivers/applications/postgres"
 	. "github.com/portworx/torpedo/drivers/utilities"
@@ -25,7 +26,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 	password string, port int, dbname string, ctx context.Context) (ApplicationDriver, error) {
 
 	switch appType {
-	case "postgres":
+	case Postgres:
 		return &PostgresConfig{
 			Hostname:    hostname,
 			User:        user,
@@ -34,7 +35,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			DBName:      dbname,
 			SQLCommands: GenerateRandomSQLCommands(20, appType),
 		}, nil
-	case "mysql":
+	case MySql:
 		return &MySqlConfig{
 			Hostname:    hostname,
 			User:        user,
