@@ -498,10 +498,10 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		// defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		log.Infof(" Deleting deployed applications")
+		// log.Infof(" Deleting deployed applications")
 		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
 		log.FailOnError(err, "Data validation failed for apps")
 	})
