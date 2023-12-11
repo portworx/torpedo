@@ -20,6 +20,7 @@ type PostgresConfig struct {
 	SQLCommands map[string][]string
 }
 
+// GetConnection returns a connection object for postgres database
 func (app *PostgresConfig) GetConnection(ctx context.Context) (*pgx.Conn, error) {
 
 	if app.Port == 0 {
@@ -40,17 +41,20 @@ func (app *PostgresConfig) GetConnection(ctx context.Context) (*pgx.Conn, error)
 	return conn, nil
 }
 
+// DefaultPort returns default port for postgres
 func (app *PostgresConfig) DefaultPort() int { return 5432 }
 
+// DefaultDBName returns default database name
 func (app *PostgresConfig) DefaultDBName() string { return "postgres" }
 
-func (app *PostgresConfig) ExecuteCommand(commads []string, ctx context.Context) error {
+// ExecuteCommand executes a SQL command for postgres database
+func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context) error {
 
 	conn, err := app.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
-	for _, eachCommand := range commads {
+	for _, eachCommand := range commands {
 		_, err = conn.Exec(ctx, eachCommand)
 		if err != nil {
 			return err
@@ -59,6 +63,7 @@ func (app *PostgresConfig) ExecuteCommand(commads []string, ctx context.Context)
 	return nil
 }
 
+// InsertBackupData inserts the rows generated initially by utilities
 func (app *PostgresConfig) InsertBackupData(ctx context.Context) error {
 
 	log.Infof("Inserting data")
@@ -67,6 +72,7 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context) error {
 	return err
 }
 
+// CheckDataPresent checks if the mentioned entry is present or not in the database
 func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
 
 	log.Infof("Running Select Queries")
@@ -97,6 +103,7 @@ func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.
 	return nil
 }
 
+// UpdateBackupData updates the rows generated initially by utilities
 func (app *PostgresConfig) UpdateBackupData(ctx context.Context) error {
 
 	log.Infof("Running Update Queries")
@@ -105,6 +112,7 @@ func (app *PostgresConfig) UpdateBackupData(ctx context.Context) error {
 	return err
 }
 
+// DeleteBackupData deletes the rows generated initially by utilities
 func (app *PostgresConfig) DeleteBackupData(ctx context.Context) error {
 
 	log.Infof("Running Delete Queries")
@@ -113,6 +121,7 @@ func (app *PostgresConfig) DeleteBackupData(ctx context.Context) error {
 	return err
 }
 
+// StartData - Go routine to run parallal with app to keep injecting data every 2 seconds
 func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context) error {
 	var status = "Start"
 	var allSelectCommands []string
@@ -153,6 +162,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 	}
 }
 
+// startInsertingData is helper to insert generate rows and insert data parallely for postgres app
 func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Context) (map[string][]string, error) {
 
 	commandPair := GenerateSQLCommandPair(tableName, "postgres")

@@ -20,6 +20,7 @@ type ApplicationDriver interface {
 	CheckDataPresent(selectQueries []string, ctx context.Context) error
 }
 
+// Returns struct of appType provided as input
 func GetApplicationDriver(appType string, hostname string, user string,
 	password string, port int, dbname string, ctx context.Context) (ApplicationDriver, error) {
 

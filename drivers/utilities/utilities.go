@@ -40,6 +40,7 @@ func RandomString(length int) string {
 	return randomString
 }
 
+// GenerateRandomSQLCommands generates pairs of INSERT, UPDATE, SELECT and DELETE queries for a database
 func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 	var randomSqlCommands = make(map[string][]string)
 	var tableName string
@@ -86,6 +87,7 @@ func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 
 }
 
+// GenerateRandomSQLCommands generates pairs of INSERT and SELECT queries for a database
 func GenerateSQLCommandPair(tableName string, appType string) map[string][]string {
 	var sqlCommandMap = make(map[string][]string)
 	var selectQuery string
@@ -105,10 +107,12 @@ func GenerateSQLCommandPair(tableName string, appType string) map[string][]strin
 	return sqlCommandMap
 }
 
+// CreateHostNameForApp creates a hostname using service name and namespace
 func CreateHostNameForApp(serviceName string, namespace string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
 }
 
+// ExtractConnectionInfo Extracts the connection information from the service yaml
 func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 
 	// TODO: This needs to be enhanced to support multiple application in one ctx

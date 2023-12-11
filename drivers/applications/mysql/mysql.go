@@ -21,6 +21,7 @@ type MySqlConfig struct {
 	SQLCommands map[string][]string
 }
 
+// GetConnection returns a connection object for mysql database
 func (app *MySqlConfig) GetConnection(ctx context.Context) (*sql.DB, error) {
 
 	if app.Port == 0 {
@@ -42,17 +43,20 @@ func (app *MySqlConfig) GetConnection(ctx context.Context) (*sql.DB, error) {
 	return conn, nil
 }
 
+// DefaultPort returns default port for mysql
 func (app *MySqlConfig) DefaultPort() int { return 3306 }
 
+// DefaultDBName returns default database name
 func (app *MySqlConfig) DefaultDBName() string { return "mysql" }
 
-func (app *MySqlConfig) ExecuteCommand(commads []string, ctx context.Context) error {
+// ExecuteCommand executes a SQL command for mysql database
+func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) error {
 
 	conn, err := app.GetConnection(ctx)
 	if err != nil {
 		return err
 	}
-	for _, eachCommand := range commads {
+	for _, eachCommand := range commands {
 		_, err = conn.ExecContext(ctx, eachCommand)
 		if err != nil {
 			return err
@@ -61,6 +65,7 @@ func (app *MySqlConfig) ExecuteCommand(commads []string, ctx context.Context) er
 	return nil
 }
 
+// InsertBackupData inserts the rows generated initially by utilities
 func (app *MySqlConfig) InsertBackupData(ctx context.Context) error {
 
 	log.Infof("Inserting data")
@@ -69,6 +74,7 @@ func (app *MySqlConfig) InsertBackupData(ctx context.Context) error {
 	return err
 }
 
+// CheckDataPresent checks if the mentioned entry is present or not in the database
 func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
 
 	log.Infof("Running Select Queries")
@@ -99,6 +105,7 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 	return nil
 }
 
+// UpdateBackupData updates the rows generated initially by utilities
 func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 
 	log.Infof("Running Update Queries")
@@ -107,6 +114,7 @@ func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 	return err
 }
 
+// DeleteBackupData deletes the rows generated initially by utilities
 func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 
 	log.Infof("Running Delete Queries")
@@ -115,6 +123,7 @@ func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 	return err
 }
 
+// StartData - Go routine to run parallal with app to keep injecting data every 2 seconds
 func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) error {
 	var status = "Start"
 	var allSelectCommands []string
@@ -155,6 +164,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	}
 }
 
+// startInsertingData is helper to insert generate rows and insert data parallely for mysql app
 func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context) (map[string][]string, error) {
 
 	commandPair := GenerateSQLCommandPair(tableName, "mysql")
