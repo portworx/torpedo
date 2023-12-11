@@ -103,7 +103,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 			createBackup := func(backupName string, namespace string, index int) {
 				defer GinkgoRecover()
 				defer wg.Done()
-				err := CreateBackup(backupName, SourceClusterName, backupLocationNameMap[index], backupLocationUIDMap[index], []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx, true)
+				err := CreateBackup(backupName, SourceClusterName, backupLocationNameMap[index], backupLocationUIDMap[index], []string{namespace}, labelSelectors, orgID, clusterUid, "", "", "", "", ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 			}
 			semaphore := make(chan int, 4)
