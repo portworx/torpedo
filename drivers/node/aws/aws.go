@@ -1,7 +1,11 @@
 package aws
 
 import (
+	"context"
 	"fmt"
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	configv2 "github.com/aws/aws-sdk-go-v2/config"
+	eksv2 "github.com/aws/aws-sdk-go-v2/service/eks"
 	aws_pkg "github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -253,6 +257,35 @@ func (a *Aws) getNodeIDByPrivAddr(n node.Node) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("Failed to get instanceID of %s by privateIP", n.Name)
+}
+
+func (a *Aws) SetClusterVersion(version string, timeout time.Duration) error {
+	log.Infof("Aws SetClusterVersion to %s", version)
+	clusterName := os.Getenv("AWS_CLUSTER_NAME")
+	if clusterName == "" {
+		return fmt.Errorf("env AWS_CLUSTER_NAME not found")
+	}
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		return fmt.Errorf("env AWS_REGION not found")
+	}
+	cfg, err := configv2.LoadDefaultConfig(context.TODO(),
+		configv2.WithRegion(region),
+	)
+	if err != nil {
+		return fmt.Errorf("unable to load SDK config, %v", err)
+	}
+	eksClient := eksv2.NewFromConfig(cfg)
+	input := &eksv2.UpdateClusterVersionInput{
+		Name:    awsv2.String(clusterName),
+		Version: awsv2.String(version),
+	}
+	result, err := eksClient.UpdateClusterVersion(context.TODO(), input)
+	if err != nil {
+		return fmt.Errorf("error updating cluster version: %v", err)
+	}
+	log.Infof("UpdateClusterVersion Result: %v", result)
+	return nil
 }
 
 func init() {

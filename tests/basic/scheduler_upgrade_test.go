@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/node/aks"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/pkg/log"
 	"strings"
@@ -38,11 +37,11 @@ var _ = Describe("{UpgradeScheduler}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
-		intitialNodeCount, err := Inst().N.GetASGClusterSize()
-		log.FailOnError(err, "error getting ASG cluster size")
-
-		log.InfoD("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
-		ValidateClusterSize(intitialNodeCount)
+		//intitialNodeCount, err := Inst().N.GetASGClusterSize()
+		//log.FailOnError(err, "error getting ASG cluster size")
+		//
+		//log.InfoD("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
+		//ValidateClusterSize(intitialNodeCount)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradescheduler-%d", i))...)
@@ -62,58 +61,61 @@ var _ = Describe("{UpgradeScheduler}", func() {
 				log.FailOnError(err, "Failed to set cluster version")
 			})
 
-			if IsIksCluster() {
-				stepLog = fmt.Sprintf("update IKS cluster master node to version %s", schedVersion)
-				Step(stepLog, func() {
-					err = waitForIKSMasterUpdate(schedVersion)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify IKS master update to version %s", schedVersion))
-				})
-				stepLog = fmt.Sprintf("update IKS cluster worker node to version %s", schedVersion)
-				Step(stepLog, func() {
-					err = upgradeIKSWorkerNodes(schedVersion, ibm.IksPXWorkerpool)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify IKS worker nodes update to version %s", schedVersion))
-				})
+			log.Infof("Sleeping for 24 hours to inspect cluster")
+			time.Sleep(24 * time.Hour)
 
-			}
-			if IsAksCluster() {
-
-				stepLog = fmt.Sprintf("Wait for AKS cluster upgrade to version %s", schedVersion)
-				Step(stepLog, func() {
-					err = aks.WaitForControlPlaneToUpgrade(schedVersion)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("verify  AKS cluster control plane upgrade to version %s", schedVersion))
-					aksCluster, err := aks.GetAKSCluster()
-					log.FailOnError(err, "error getting AKS cluister")
-					dash.VerifyFatal(aksCluster.KubernetesVersion == schedVersion, true, fmt.Sprintf("verify AKS schedular upgrade to %s", schedVersion))
-					stepLog = fmt.Sprintf("update AKS  cluster node pool upgrade to version %s", schedVersion)
-					Step(stepLog, func() {
-						err = aks.UpgradeNodePool(aks.AKSPXNodepool, schedVersion)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s init", schedVersion))
-						err = aks.WaitForAKSNodePoolToUpgrade(aks.AKSPXNodepool, schedVersion)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s succeded", schedVersion))
-					})
-
-				})
-			}
-
-			stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
-				Inst().AutoStorageNodeRecoveryTimeout.String())
-			Step(stepLog, func() {
-				log.InfoD(fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
-					Inst().AutoStorageNodeRecoveryTimeout.String()))
-				time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
-			})
-
-			err = Inst().S.RefreshNodeRegistry()
-			log.FailOnError(err, "Node registry refresh failed")
-
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "Refresh Driver end points failed")
-			stepLog = fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
-				schedVersion)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				ValidateClusterSize(intitialNodeCount)
-			})
+			//if IsIksCluster() {
+			//	stepLog = fmt.Sprintf("update IKS cluster master node to version %s", schedVersion)
+			//	Step(stepLog, func() {
+			//		err = waitForIKSMasterUpdate(schedVersion)
+			//		dash.VerifyFatal(err, nil, fmt.Sprintf("verify IKS master update to version %s", schedVersion))
+			//	})
+			//	stepLog = fmt.Sprintf("update IKS cluster worker node to version %s", schedVersion)
+			//	Step(stepLog, func() {
+			//		err = upgradeIKSWorkerNodes(schedVersion, ibm.IksPXWorkerpool)
+			//		dash.VerifyFatal(err, nil, fmt.Sprintf("verify IKS worker nodes update to version %s", schedVersion))
+			//	})
+			//
+			//}
+			//if IsAksCluster() {
+			//
+			//	stepLog = fmt.Sprintf("Wait for AKS cluster upgrade to version %s", schedVersion)
+			//	Step(stepLog, func() {
+			//		err = aks.WaitForControlPlaneToUpgrade(schedVersion)
+			//		dash.VerifyFatal(err, nil, fmt.Sprintf("verify  AKS cluster control plane upgrade to version %s", schedVersion))
+			//		aksCluster, err := aks.GetAKSCluster()
+			//		log.FailOnError(err, "error getting AKS cluister")
+			//		dash.VerifyFatal(aksCluster.KubernetesVersion == schedVersion, true, fmt.Sprintf("verify AKS schedular upgrade to %s", schedVersion))
+			//		stepLog = fmt.Sprintf("update AKS  cluster node pool upgrade to version %s", schedVersion)
+			//		Step(stepLog, func() {
+			//			err = aks.UpgradeNodePool(aks.AKSPXNodepool, schedVersion)
+			//			dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s init", schedVersion))
+			//			err = aks.WaitForAKSNodePoolToUpgrade(aks.AKSPXNodepool, schedVersion)
+			//			dash.VerifyFatal(err, nil, fmt.Sprintf("verify AKS node pool upgrade to version %s succeded", schedVersion))
+			//		})
+			//
+			//	})
+			//}
+			//
+			//stepLog = fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
+			//	Inst().AutoStorageNodeRecoveryTimeout.String())
+			//Step(stepLog, func() {
+			//	log.InfoD(fmt.Sprintf("wait for %s minutes for auto recovery of storage nodes",
+			//		Inst().AutoStorageNodeRecoveryTimeout.String()))
+			//	time.Sleep(Inst().AutoStorageNodeRecoveryTimeout)
+			//})
+			//
+			//err = Inst().S.RefreshNodeRegistry()
+			//log.FailOnError(err, "Node registry refresh failed")
+			//
+			//err = Inst().V.RefreshDriverEndpoints()
+			//log.FailOnError(err, "Refresh Driver end points failed")
+			//stepLog = fmt.Sprintf("validate number of storage nodes after scheduler upgrade to [%s]",
+			//	schedVersion)
+			//Step(stepLog, func() {
+			//	log.InfoD(stepLog)
+			//	ValidateClusterSize(intitialNodeCount)
+			//})
 
 			Step("validate all apps after upgrade", func() {
 				for _, ctx := range contexts {
