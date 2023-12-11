@@ -13,6 +13,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/portworx/torpedo/tests"
+	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies if the backup pods are in Ready state or not
@@ -108,6 +109,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
+		controlChannel       chan string
+		errorGroup           *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -143,7 +146,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -292,7 +296,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
