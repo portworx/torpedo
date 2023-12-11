@@ -2,13 +2,13 @@ package tests
 
 import (
 	"fmt"
-	"github.com/onsi/ginkgo/reporters"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	_ "github.com/portworx/px-backup-api/pkg/kubeauth/gcp"
