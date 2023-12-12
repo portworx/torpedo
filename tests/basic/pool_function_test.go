@@ -1456,10 +1456,8 @@ var _ = Describe("{DriveAddDifferentTypes}", func() {
 
 	It("creating pools with different drive types", func() {
 		var driveTypes []string
-		driveSpecs, err := GetCloudDriveDeviceSpecs()
-		log.FailOnError(err, "Error getting cloud drive specs")
 
-		driveSpec := driveSpecs[0]
+		driveSize := "100"
 		driveTypes, err = Inst().N.GetSupportedDriveTypes()
 		log.FailOnError(err, "Error getting drive types for the provider")
 		for i := 0; i < len(driveTypes); i++ {
@@ -1467,7 +1465,7 @@ var _ = Describe("{DriveAddDifferentTypes}", func() {
 			poolsBfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 			log.FailOnError(err, "Failed to list storage pools")
 
-			newDriveSpec := fmt.Sprintf("%s,type=%s", driveSpec, driveTypes[i])
+			newDriveSpec := fmt.Sprintf("size=%s,type=%s", driveSize, driveTypes[i])
 			err = Inst().V.AddCloudDrive(storageNode, newDriveSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", storageNode.Name))
 
