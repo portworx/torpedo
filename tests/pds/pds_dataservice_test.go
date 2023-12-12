@@ -1823,26 +1823,15 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      params.LoadGen.TableName,
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
-		}
 	})
 
 	It("Deploy Dataservices", func() {
 		var (
-			wlDeploymentsToBeCleaned []*v1.Deployment
-			deploymentsToBeCleaned   []*pds.ModelsDeployment
-			depList                  []*pds.ModelsDeployment
-			stIDs                    []string
-			resIds                   []string
-			deployments              = make(map[PDSDataService]*pds.ModelsDeployment)
+			deploymentsToBeCleaned []*pds.ModelsDeployment
+			depList                []*pds.ModelsDeployment
+			stIDs                  []string
+			resIds                 []string
+			deployments            = make(map[PDSDataService]*pds.ModelsDeployment)
 		)
 
 		Step("Deploy Data Services", func() {
@@ -1866,11 +1855,24 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 					log.InfoD("Initial storage capacity is- [%v]", initialCapacity)
 
-					//Trigger workload on the deployed DS
-					ckSum2, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-					log.FailOnError(err, "Error while Running workloads-%v", wlDep)
-					log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+					Step("Running Workloads before scaling up of dataservices ", func() {
+						var params pdslib.WorkloadGenerationParams
+						pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+						log.FailOnError(err, "Error while genearating workloads")
+					})
+
+					defer func() {
+						Step("Delete the workload generating deployments", func() {
+							if !(ds.Name == mysql || ds.Name == kafka || ds.Name == zookeeper || ds.Name == mongodb) {
+								if ds.Name == cassandra || ds.Name == postgresql {
+									err = pdslib.DeleteK8sDeployments(dep.Name, namespace)
+								} else {
+									err = pdslib.DeleteK8sPods(pod.Name, namespace)
+								}
+								log.FailOnError(err, "Error while deleting workloads")
+							}
+						})
+					}()
 				})
 
 				Step("Checking the PVC usage", func() {
@@ -1888,13 +1890,6 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						log.FailOnError(err, "Error while validating dataservices")
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 					}
-				})
-				Step("Clean up workload deployments", func() {
-					for _, wlDeps := range wlDeploymentsToBeCleaned {
-						err := k8sApps.DeleteDeployment(wlDeps.Name, wlDeps.Namespace)
-						log.FailOnError(err, "Failed while deleting the workload deployment")
-					}
-
 				})
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
