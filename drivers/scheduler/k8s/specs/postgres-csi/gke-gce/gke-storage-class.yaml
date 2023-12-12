@@ -6,7 +6,7 @@ metadata:
     components.gke.io/component-name: pdcsi
   labels:
     addonmanager.kubernetes.io/mode: EnsureExists
-  name: postgres-gce
+  name: postgres-sc
 parameters:
   type: pd-standard
 provisioner: kubernetes.io/gce-pd
