@@ -10,7 +10,7 @@ metadata:
     port: "3306"
     appType: "mysql"
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: mysql
   ports:

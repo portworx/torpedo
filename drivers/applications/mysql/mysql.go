@@ -18,6 +18,7 @@ type MySqlConfig struct {
 	User        string
 	Password    string
 	Port        int
+	NodePort    int
 	DBName      string
 	SQLCommands map[string][]string
 }
@@ -33,8 +34,18 @@ func (app *MySqlConfig) GetConnection(ctx context.Context) (*sql.DB, error) {
 		app.DBName = app.DefaultDBName()
 	}
 
-	url := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-		app.User, app.Password, app.Hostname, app.Port, app.DBName)
+	var url string
+
+	if app.NodePort != 0 {
+		// Connect with NodePort Service
+		url = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+			app.User, app.Password, app.Hostname, app.NodePort, app.DBName)
+	} else {
+		// Connect with Cluster Service
+		url = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+			app.User, app.Password, app.Hostname, app.Port, app.DBName)
+	}
+	log.InfoD("Url for connection - [%s]", url)
 
 	conn, err := sql.Open("mysql", url)
 	if err != nil {
@@ -166,7 +177,6 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 		default:
 			if status == "Start" {
 				commandPair, err := app.startInsertingData(tableName, ctx)
-				log.Infof("Running insert command for app")
 				if err != nil {
 					allErrors = append(allErrors, err.Error())
 				}
