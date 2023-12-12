@@ -3,10 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	"github.com/portworx/torpedo/pkg/stats"
 	"math"
 	"math/rand"
 	"os"
@@ -19,6 +15,11 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/stats"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 
@@ -598,7 +599,7 @@ func updateLongevityStats(name, eventStatName string, dashStats map[string]strin
 		DashStats: dashStats,
 	}
 
-	stats.PushStatsToAetos(name, "px-enterprise", "Longevity", eventStat)
+	stats.PushStatsToAetos(dash, name, "px-enterprise", "Longevity", eventStat)
 
 }
 

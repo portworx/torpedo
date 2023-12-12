@@ -8,8 +8,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
-var dash *aetosutil.Dashboard
-
 const (
 	NodeRebootEventName          = "Node Reboot"
 	PXRestartEventName           = "PX Restart"
@@ -68,8 +66,7 @@ func getRebootStats(rebootTime, nodeID, pxVersion string) (map[string]string, er
 	return rebootExportable, nil
 }
 
-func PushStats(eventType interface{}) error {
-	dash = aetosutil.Get()
+func PushStats(dashUtils *aetosutil.Dashboard, eventType interface{}) error {
 	var exportableData map[string]string
 	var err error
 	// TODO: implement this for all eventTypes not just reboots
@@ -80,16 +77,16 @@ func PushStats(eventType interface{}) error {
 		if err != nil {
 			return err
 		}
-		dash.IsEnabled = true
-		fmt.Printf("Pushing stats: %v", dash.IsEnabled)
-		dash.UpdateStats("longevity", "SSIE", "reboot", pxVersion, exportableData)
+		dashUtils.IsEnabled = true
+		fmt.Printf("Pushing stats: %v", dashUtils.IsEnabled)
+		dashUtils.UpdateStats("longevity", "SSIE", "reboot", pxVersion, exportableData)
 	} else {
 		fmt.Printf("Object not identified")
 	}
 	return nil
 }
 
-func PushStatsToAetos(name, product, statsType string, eventStat *EventStat) {
+func PushStatsToAetos(dashUtils *aetosutil.Dashboard, name, product, statsType string, eventStat *EventStat) {
 	data, err := json.Marshal(flattenDashStats(eventStat))
 	if err != nil {
 		log.Errorf("error marshalling event stat: %v ", err)
@@ -102,7 +99,7 @@ func PushStatsToAetos(name, product, statsType string, eventStat *EventStat) {
 		return
 	}
 	log.Infof("Stats are: %v", statsMap)
-	dash.UpdateStats(name, product, statsType, eventStat.Version, statsMap)
+	dashUtils.UpdateStats(name, product, statsType, eventStat.Version, statsMap)
 }
 
 func flattenDashStats(eventStat *EventStat) map[string]string {
