@@ -10,7 +10,7 @@ metadata:
     port: "5432"
     appType: "postgres"
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: postgres
   ports:

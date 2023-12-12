@@ -23,7 +23,7 @@ type ApplicationDriver interface {
 
 // Returns struct of appType provided as input
 func GetApplicationDriver(appType string, hostname string, user string,
-	password string, port int, dbname string, ctx context.Context) (ApplicationDriver, error) {
+	password string, port int, dbname string, ctx context.Context, nodePort int) (ApplicationDriver, error) {
 
 	switch appType {
 	case Postgres:
@@ -34,6 +34,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			Port:        port,
 			DBName:      dbname,
 			SQLCommands: GenerateRandomSQLCommands(20, appType),
+			NodePort:    nodePort,
 		}, nil
 	case MySql:
 		return &MySqlConfig{
@@ -43,6 +44,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			Port:        port,
 			DBName:      dbname,
 			SQLCommands: GenerateRandomSQLCommands(20, appType),
+			NodePort:    nodePort,
 		}, nil
 	default:
 		return &PostgresConfig{
@@ -52,6 +54,7 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			Port:        port,
 			DBName:      dbname,
 			SQLCommands: GenerateRandomSQLCommands(20, appType),
+			NodePort:    nodePort,
 		}, nil
 
 	}

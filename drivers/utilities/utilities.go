@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strconv"
 
+	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +16,7 @@ type AppInfo struct {
 	User             string
 	Password         string
 	Port             int
+	NodePort         int
 	DBName           string
 	Hostname         string
 	AppType          string
@@ -116,8 +118,21 @@ func GenerateSQLCommandPair(tableName string, appType string) map[string][]strin
 }
 
 // CreateHostNameForApp creates a hostname using service name and namespace
-func CreateHostNameForApp(serviceName string, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
+func CreateHostNameForApp(serviceName string, nodePort int32, namespace string) (string, error) {
+	var hostname string
+
+	if nodePort != 0 {
+		k8sCore := core.Instance()
+		nodes, err := k8sCore.GetNodes()
+		if err != nil {
+			return "", err
+		}
+		hostname = nodes.Items[0].Name
+	} else {
+		hostname = fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
+	}
+
+	return hostname, nil
 }
 
 // ExtractConnectionInfo Extracts the connection information from the service yaml
@@ -129,7 +144,13 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.Service); ok {
 			appInfo.Namespace = obj.Namespace
-			appInfo.Hostname = CreateHostNameForApp(obj.Name, obj.Namespace)
+			nodePort := obj.Spec.Ports[0].NodePort
+			hostname, err := CreateHostNameForApp(obj.Name, nodePort, obj.Namespace)
+			if err != nil {
+				return appInfo, fmt.Errorf("Some error occurred while generating hostname")
+			}
+			appInfo.Hostname = hostname
+			appInfo.NodePort = int(nodePort)
 			if svcAnnotationValue, ok := obj.Annotations[svcAnnotationKey]; ok {
 				appInfo.StartDataSupport = (svcAnnotationValue == "true")
 				if !appInfo.StartDataSupport {

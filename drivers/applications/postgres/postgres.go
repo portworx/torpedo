@@ -17,6 +17,7 @@ type PostgresConfig struct {
 	User        string
 	Password    string
 	Port        int
+	NodePort    int
 	DBName      string
 	SQLCommands map[string][]string
 }
@@ -32,8 +33,20 @@ func (app *PostgresConfig) GetConnection(ctx context.Context) (*pgx.Conn, error)
 		app.DBName = app.DefaultDBName()
 	}
 
-	url := fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		app.User, app.Password, app.Hostname, app.Port, app.DBName)
+	var url string
+
+	if app.NodePort != 0 {
+		// Connect with NodePort Service
+		url = fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
+			app.User, app.Password, app.Hostname, app.NodePort, app.DBName)
+	} else {
+		// Connect with Cluster Service
+		url = fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
+			app.User, app.Password, app.Hostname, app.Port, app.DBName)
+	}
+
+	log.InfoD("Url for connection - [%s]", url)
+
 	conn, err := pgx.Connect(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %s, Conn String - [%s]", err, url)
@@ -145,6 +158,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
+				log.Infof("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 

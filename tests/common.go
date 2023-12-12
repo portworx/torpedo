@@ -1933,7 +1933,8 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 					appInfo.Password,
 					appInfo.Port,
 					appInfo.DBName,
-					appContext)
+					appContext,
+					appInfo.NodePort)
 				log.InfoD("App handler created for [%s]", appInfo.Hostname)
 				namespaceAppWithDataMap[appInfo.Namespace] = append(namespaceAppWithDataMap[appInfo.Namespace], &appHandler)
 				allHandlers = append(allHandlers, appHandler)
