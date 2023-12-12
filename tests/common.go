@@ -1921,7 +1921,13 @@ func ValidateApplications(contexts []*scheduler.Context) {
 // ValidateApplications validates applications
 func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group, map[string][]*appDriver.ApplicationDriver) {
 
+	//Printing existing namespaceAppWithDataMap for debug verification
+	log.InfoD("Namespace Map for Debugging - [%+v]", namespaceAppWithDataMap)
+	// Resetting the global map before starting the new App Validations
+	namespaceAppWithDataMap = make(map[string][]*appDriver.ApplicationDriver)
+
 	var allHandlers []appDriver.ApplicationDriver
+
 	Step("validate applications", func() {
 		log.InfoD("Validate applications")
 		for _, ctx := range contexts {
