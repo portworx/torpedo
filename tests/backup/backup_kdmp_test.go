@@ -527,11 +527,11 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 10)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 100)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 100)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 500)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
