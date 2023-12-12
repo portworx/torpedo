@@ -22,6 +22,13 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
+type awsCompatibleStorageClient struct {
+	endpoint  string
+	accessKey string
+	secretKey string
+	region    string
+}
+
 type awsStorageClient struct {
 	accessKey string
 	secretKey string
@@ -35,6 +42,42 @@ type azureStorageClient struct {
 
 type gcpStorageClient struct {
 	projectId string
+}
+
+func (awsObj *awsCompatibleStorageClient) createBucket(bucketName string) error {
+	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Endpoint:         aws.String(awsObj.endpoint),
+			Region:           aws.String(awsObj.region),
+			Credentials:      credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			S3ForcePathStyle: aws.Bool(true),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	bucketObj, err := client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if (aerr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou) || (aerr.Code() == s3.ErrCodeBucketAlreadyExists) {
+				log.Infof("Bucket: %v ,already exist.", bucketName)
+				return nil
+			} else {
+				return fmt.Errorf("couldn't create bucket: %v", err)
+			}
+
+		}
+	}
+
+	log.Infof("[AWS]Successfully created the bucket. Info: %v", bucketObj)
+	return nil
 }
 
 func (awsObj *awsStorageClient) createBucket(bucketName string) error {
