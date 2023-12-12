@@ -6012,3 +6012,26 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context.Context, namespace
 
 	return ruleStatus, ruleName, nil
 }
+
+//dumpMongodbCollectionOnConsole Dump the collection mentioned on the console for debugging
+func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string, mongodbusername string, password string) error {
+	// Getting Px Backup Namespace
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	// Getting the mongodb collection objects
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it pxc-backup-mongodb-0 -n ", pxBackupNamespace, " -- mongo --host localhost --port 27017 --username ", mongodbusername, " --password ", password, " --authenticationDatabase admin px-backup  --eval \"db.", collectionName, ".find()\""})
+	if err != nil {
+		return err
+	}
+
+	// Dumping the collection
+	log.InfoD(fmt.Sprintf(
+		"Collection dump for %s collection",
+		collectionName,
+	))
+	log.InfoD(output)
+
+	return nil
+}
