@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,15 +15,15 @@ import (
 
 	"github.com/portworx/torpedo/drivers/pds/dataservice"
 
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -1835,67 +1836,42 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 	})
 
 	It("Deploy Dataservices", func() {
-		var generateWorkloads = make(map[string]string)
-		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		var dsVersions = make(map[string]map[string][]string)
-		var depList []*pds.ModelsDeployment
-		var dsName string
+		var (
+			wlDeploymentsToBeCleaned []*v1.Deployment
+			deploymentsToBeCleaned   []*pds.ModelsDeployment
+			depList                  []*pds.ModelsDeployment
+			stIDs                    []string
+			resIds                   []string
+			deployments              = make(map[PDSDataService]*pds.ModelsDeployment)
+		)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == postgresql {
-					Step("Deploy and validate data service", func() {
-						isDeploymentsDeleted = false
-						controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
-						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-						log.FailOnError(err, "Error while deploying data services")
-						deployments[ds] = deployment
-						dsVersions[ds.Name] = dataServiceVersionBuildMap
-						depList = append(depList, deployment)
-						dsName = ds.Name
-
+				Step("Deploy and validate data service", func() {
+					deployment, initialCapacity, resConfigModel, stConfigModel, _, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
+						CpuLimit:       params.StorageConfigurations.CpuLimit,
+						CpuRequest:     params.StorageConfigurations.CpuRequest,
+						MemoryLimit:    params.StorageConfigurations.MemoryLimit,
+						MemoryRequest:  params.StorageConfigurations.MemoryRequest,
+						StorageRequest: params.StorageConfigurations.MemoryRequest,
+						FsType:         "xfs",
+						ReplFactor:     2,
+						Provisioner:    "pxd.portworx.com",
+						Secure:         false,
+						VolGroups:      false,
 					})
-				}
-			}
-			defer func() {
-				for _, newDeployment := range deployments {
-					Step("Delete created deployments")
-					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
-					log.FailOnError(err, "Error while deleting data services")
-					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				}
-			}()
+					stIDs = append(stIDs, stConfigModel.GetId())
+					resIds = append(resIds, resConfigModel.GetId())
+					depList = append(depList, deployment)
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					log.InfoD("Initial storage capacity is- [%v]", initialCapacity)
 
-			// This testcase is currently applicable only for postgresql ds deployments
-			if dsName == postgresql {
-				Step("Running Workloads before scaling up PVC ", func() {
-					for ds, deployment := range deployments {
-						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
-							log.InfoD("Running Workloads on DataService %v ", ds.Name)
-							_, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-							log.FailOnError(err, "Error while genearating workloads")
-							generateWorkloads[ds.Name] = wlDep.Name
-							for dsName, workloadContainer := range generateWorkloads {
-								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
-							}
-						}
-					}
+					//Trigger workload on the deployed DS
+					ckSum2, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+					log.FailOnError(err, "Error while Running workloads-%v", wlDep)
+					log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
+					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 				})
-
-				defer func() {
-					for dsName, workloadContainer := range generateWorkloads {
-						Step("Delete the workload generating deployments", func() {
-							if Contains(dataServiceDeploymentWorkloads, dsName) {
-								log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
-								err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
-							} else if Contains(dataServicePodWorkloads, dsName) {
-								log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
-								err = pdslib.DeleteK8sPods(workloadContainer, namespace)
-							}
-							log.FailOnError(err, "error deleting workload generating pods")
-						})
-					}
-				}()
 
 				Step("Checking the PVC usage", func() {
 					log.FailOnError(err, "Unable to create scheduler context")
@@ -1913,8 +1889,19 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 					}
 				})
-			}
+				Step("Clean up workload deployments", func() {
+					for _, wlDeps := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wlDeps.Name, wlDeps.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
 
+				})
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					err := controlPlane.CleanupCustomTemplates(stIDs, resIds)
+					log.FailOnError(err, "Failed to delete custom templates")
+				})
+			}
 		})
 	})
 	JustAfterEach(func() {
