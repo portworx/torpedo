@@ -1835,11 +1835,13 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 	})
 
 	It("Deploy Dataservices", func() {
-		var generateWorkloads = make(map[string]string)
-		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		var stIDs []string
-		var resIds []string
-		var depList []*pds.ModelsDeployment
+		var (
+			generateWorkloads = make(map[string]string)
+			deployments       = make(map[PDSDataService]*pds.ModelsDeployment)
+			stIds             []string
+			resIds            []string
+			depList           []*pds.ModelsDeployment
+		)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -1857,7 +1859,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						Secure:         false,
 						VolGroups:      false,
 					})
-					stIDs = append(stIDs, stConfigModel.GetId())
+					stIds = append(stIds, stConfigModel.GetId())
 					resIds = append(resIds, resConfigModel.GetId())
 					depList = append(depList, deployment)
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
@@ -1903,7 +1905,6 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 				_, err = IncreasePVCby1Gig(namespace, deployment, 1)
 				log.FailOnError(err, "Failing while Increasing the PVC name...")
-				controlPlane.UpdateResourceTemplateName("Small")
 			})
 			Step("Validate Deployments after PVC Resize", func() {
 				for ds, deployment := range deployments {
@@ -1911,6 +1912,11 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					log.FailOnError(err, "Error while validating dataservices")
 					log.InfoD("Data-service: %v is up and healthy", ds.Name)
 				}
+			})
+			Step("Delete Deployments", func() {
+				CleanupDeployments(deploymentsToBeCleaned)
+				err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+				log.FailOnError(err, "Failed to delete custom templates")
 			})
 		})
 	})
