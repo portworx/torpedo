@@ -114,10 +114,12 @@ type StorageClusterSpec struct {
 	// Nodes node level configurations that will override the ones at cluster
 	// level. These configurations can be grouped based on label selectors.
 	Nodes []NodeSpec `json:"nodes,omitempty"`
-	// Resource requirements for portworx container in a storage cluster pod, e.g. CPU and memory requests or limits
+	// Resource requirements for portworx container in  a storage cluster pod, e.g. CPU and memory requests or limits
 	Resources *v1.ResourceRequirements `json:"resources,omitempty"`
 	// CSI configurations for setting up CSI
 	CSI *CSISpec `json:"csi,omitempty"`
+	// Priority Class Name to be passed to Podspec of px pods for it to be scheduled accordingly
+	PriorityClassName string `json:"priorityClassName,omitempty"`
 }
 
 // VolumeSpec describes a volume that needs to be mounted inside a container

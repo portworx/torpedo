@@ -28,7 +28,7 @@ require (
 	github.com/libopenstorage/autopilot-api v1.3.0
 	github.com/libopenstorage/cloudops v0.0.0-20230220114907-3e63dce1b413
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
-	github.com/libopenstorage/operator v0.0.0-20231004002935-494c2edc384a
+	github.com/libopenstorage/operator v0.0.0-20231212053318-ed7ecf726cad
 	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.24.1
@@ -137,8 +137,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
-	github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 // indirect
-	github.com/codeskyblue/go-sh v0.0.0-20170112005953-b097669b1569 // indirect
 	github.com/container-storage-interface/spec v1.7.0 // indirect
 	github.com/containerd/containerd v1.6.6 // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
