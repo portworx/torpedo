@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -3815,6 +3816,17 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "failed to switch context to source cluster")
 		}()
+
+		// Debug code to check if we see failures seen in PB-4863 and dump restoreobjects collection
+		mongodbusername := os.Getenv("PX_BACKUP_MONGODB_USERNAME")
+		mongodbpasswd := os.Getenv("PX_BACKUP_MONGODB_PASSWORD")
+		if mongodbusername != "" && mongodbpasswd != "" {
+			collectionName := "restoreobjects"
+			srcClusterConfigPath, err := GetSourceClusterConfigPath()
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
+			err = dumpMongodbCollectionOnConsole(srcClusterConfigPath, collectionName, mongodbusername, mongodbpasswd)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Dump mongodb collection Colletion name %s", collectionName))
+		}
 
 		err := SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
