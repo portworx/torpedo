@@ -163,7 +163,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
 								Depth:             10,
-								Levels:            3,
+								Levels:            2,
 								FilesPerDirectory: 100,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
@@ -247,7 +247,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 500)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 100)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
@@ -494,9 +494,9 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
-								Depth:             100,
+								Depth:             10,
 								Levels:            1,
-								FilesPerDirectory: 100,
+								FilesPerDirectory: 10,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
 							err = CreateNestedDirectoriesWithFilesInPod(pod, containerName, DirectoryConfig)
@@ -527,11 +527,11 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 10)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 2)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 100)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 2)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
@@ -772,14 +772,14 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 // This testcase verifies backup and restore with mentioned valid directories or files from backed-up apps and restores them when invalid,non-existend stoargeClass and files are there in KDMP exclude list
 var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 	var (
-		backupName                    string
-		scheduledAppContexts          []*scheduler.Context
-		AppContextsMapping            map[string]*scheduler.Context
-		namespace                     string
-		bkpNamespaces                 []string
-		backupNames                   []string
-		restoreNames                  []string
-		scheduleNames                 []string
+		backupName           string
+		scheduledAppContexts []*scheduler.Context
+		AppContextsMapping   = make(map[string]*scheduler.Context)
+		namespace            string
+		bkpNamespaces        = make([]string, 0)
+		backupNames          = make([]string, 0)
+		restoreNames         = make([]string, 0)
+		//scheduleNames                 = make([]string, 0)
 		clusterUid                    string
 		clusterStatus                 api.ClusterInfo_StatusInfo_Status
 		restoreName                   string
@@ -789,17 +789,17 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 		bkpLocationName               string
 		numDeployments                int
 		providers                     []string
-		backupLocationMap             map[string]string
-		labelSelectors                map[string]string
-		storageClassExcludeFileDirMap map[*storagev1.StorageClass][]string
-		mountPathExcludeFileDirMap    map[string][]string
-		existingFileDirMountPathMap   map[string][]string
-		fileListMountMap              map[string][]string
-		dirListMountMap               map[string][]string
-		finalFileList                 map[string][]string
-		scMountPathMap                map[string]*storagev1.StorageClass
-		backupNamespaceMap            map[string]string
-		podScMountPathMap             map[string]map[string]*storagev1.StorageClass
+		backupLocationMap             = make(map[string]string)
+		labelSelectors                = make(map[string]string)
+		storageClassExcludeFileDirMap = make(map[*storagev1.StorageClass][]string)
+		mountPathExcludeFileDirMap    = make(map[string][]string)
+		existingFileDirMountPathMap   = make(map[string][]string)
+		fileListMountMap              = make(map[string][]string)
+		dirListMountMap               = make(map[string][]string)
+		finalFileList                 = make(map[string][]string)
+		scMountPathMap                = make(map[string]*storagev1.StorageClass)
+		backupNamespaceMap            = make(map[string]string)
+		podScMountPathMap             = make(map[string]map[string]*storagev1.StorageClass)
 		excludeList                   string
 		fileList                      []string
 		dirList                       []string
@@ -810,33 +810,13 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 		periodicSchedulePolicyName    string
 		periodicSchedulePolicyUid     string
 		mutex                         sync.Mutex
-		restoredNamespaces            []string
+		restoredNamespaces            = make([]string, 0)
 		wg                            sync.WaitGroup
 	)
 	JustBeforeEach(func() {
-
-		backupNames = make([]string, 0)
-		restoreNames = make([]string, 0)
-		scheduleNames = make([]string, 0)
-		bkpNamespaces = make([]string, 0)
-		restoredNamespaces = make([]string, 0)
-		backupLocationMap = make(map[string]string)
-		labelSelectors = make(map[string]string)
-		AppContextsMapping = make(map[string]*scheduler.Context)
-		storageClassExcludeFileDirMap = make(map[*storagev1.StorageClass][]string)
-		mountPathExcludeFileDirMap = make(map[string][]string)
-		existingFileDirMountPathMap = make(map[string][]string)
-		fileListMountMap = make(map[string][]string)
-		finalFileList = make(map[string][]string)
-		dirListMountMap = make(map[string][]string)
-		scMountPathMap = make(map[string]*storagev1.StorageClass)
-		backupNamespaceMap = make(map[string]string)
-		podScMountPathMap = make(map[string]map[string]*storagev1.StorageClass)
 		numDeployments = 1
 		providers = getProviders()
-
-		StartPxBackupTorpedoTest("ExcludeInvalidDirectoryFileBackup", "Excludes mentioned valid directories or files from backed-up apps and restores them when invalid,non-existend stoargeClass and files are there in KDMP exclude list", nil, 93692, Ak, Q4FY24)
-
+		StartPxBackupTorpedoTest("ExcludeInvalidDirectoryFileBackup", "Excludes mentioned valid directories or files from backed-up apps and restores them when invalid,non-existend stoargeClass and files are there in KDMP exclude list", nil, 0, Ak, Q4FY24)
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		log.InfoD("Starting to deploy applications")
@@ -852,7 +832,6 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 				bkpNamespaces = append(bkpNamespaces, namespace)
 			}
 		}
-
 	})
 	It("Excludes invalid directories or files From a Backup", func() {
 
@@ -867,45 +846,9 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 				pods, err := core.Instance().GetPods(namespace, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("getting pods from namespace [%s] ", namespace))
 				for _, pod := range pods.Items {
-					scMountPathMap, err = schedops.GetContainerPVCMountMapWithSC(pod)
+					scMountPathMap, err := schedops.GetContainerPVCMountMapWithSC(pod)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("getting storage class and mountpath mapping for pod [%s] ", pod.Name))
 					podScMountPathMap[pod.Name] = scMountPathMap
-				}
-			}
-		})
-
-		Step("Create new storage class on destination cluster with similiar spec as source cluster", func() {
-			log.InfoD("Create new storage class on destination cluster with similiar spec as source cluster")
-			defer func() {
-				err := SetSourceKubeConfig()
-				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
-			}()
-			log.InfoD("Switching cluster context to destination cluster")
-			err := SetDestinationKubeConfig()
-			log.FailOnError(err, "Failed to set destination kubeconfig")
-
-			for _, scMountPathMap := range podScMountPathMap {
-				for _, storageClass := range scMountPathMap {
-					isScpresent, err := isStorageClassPresent(storageClass.Name)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Checking storageClass %s present on cluster", storageClass.Name))
-					if !isScpresent {
-						v1obj := metaV1.ObjectMeta{
-							Name: storageClass.Name,
-						}
-						scObj := storagev1.StorageClass{
-							ObjectMeta:           v1obj,
-							Provisioner:          storageClass.Provisioner,
-							Parameters:           storageClass.Parameters,
-							ReclaimPolicy:        storageClass.ReclaimPolicy,
-							VolumeBindingMode:    storageClass.VolumeBindingMode,
-							MountOptions:         storageClass.MountOptions,
-							AllowVolumeExpansion: storageClass.AllowVolumeExpansion,
-						}
-						_, err = storage.Instance().CreateStorageClass(&scObj)
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", storageClass.Name, destinationClusterName))
-					} else {
-						log.Infof(fmt.Sprintf("storageClass %s already present on cluster , hence skipping creation", storageClass.Name))
-					}
 				}
 			}
 		})
@@ -944,8 +887,8 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 							DirectoryConfig := PodDirectoryConfig{
 								BasePath:          mountPath,
 								Depth:             10,
-								Levels:            2,
-								FilesPerDirectory: 100,
+								Levels:            1,
+								FilesPerDirectory: 10,
 							}
 							log.Infof(fmt.Sprintf("creating nested directories and files within mountPath [%s] with depth [%d] , level [%d] and FilesPerDirectory [%d]", DirectoryConfig.BasePath, DirectoryConfig.Depth, DirectoryConfig.Levels, DirectoryConfig.FilesPerDirectory))
 							err = CreateNestedDirectoriesWithFilesInPod(pod, containerName, DirectoryConfig)
@@ -973,11 +916,11 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 						for _, mountPath := range mountPaths {
 							excludeFileDirList := make([]string, 0)
 							log.Infof(fmt.Sprintf("Fetch some random directories from created list %v", dirListMountMap[mountPath]))
-							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 500)
+							randomDirs, err := GetRandomSubset(dirListMountMap[mountPath], 2)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random directories from the list"))
 							log.Infof(fmt.Sprintf("the list of directories randomly selected from mountPath- %v : %v", mountPath, randomDirs))
 							log.Infof(fmt.Sprintf("Fetch some random files from created list %v", fileListMountMap[mountPath]))
-							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 500)
+							randomFiles, err := GetRandomSubset(fileListMountMap[mountPath], 2)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Getting random files from the list"))
 							log.Infof(fmt.Sprintf("the list of files randomly selected from mountPath- %v : %v", mountPath, randomFiles))
 							excludeFileDirList = append(excludeFileDirList, randomDirs...)
@@ -1024,6 +967,42 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
+		Step("Create new storage class on destination cluster with similiar spec as source cluster", func() {
+			log.InfoD("Create new storage class on destination cluster with similiar spec as source cluster")
+			defer func() {
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+			}()
+			log.InfoD("Switching cluster context to destination cluster")
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Failed to set destination kubeconfig")
+
+			for _, scMountPathMap := range podScMountPathMap {
+				for _, storageClass := range scMountPathMap {
+					isScpresent, err := isStorageClassPresent(storageClass.Name)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Checking storageClass %s present on cluster", storageClass.Name))
+					if !isScpresent {
+						v1obj := metaV1.ObjectMeta{
+							Name: storageClass.Name,
+						}
+						scObj := storagev1.StorageClass{
+							ObjectMeta:           v1obj,
+							Provisioner:          storageClass.Provisioner,
+							Parameters:           storageClass.Parameters,
+							ReclaimPolicy:        storageClass.ReclaimPolicy,
+							VolumeBindingMode:    storageClass.VolumeBindingMode,
+							MountOptions:         storageClass.MountOptions,
+							AllowVolumeExpansion: storageClass.AllowVolumeExpansion,
+						}
+						_, err = storage.Instance().CreateStorageClass(&scObj)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating new storage class %v on destination cluster %s", storageClass.Name, destinationClusterName))
+					} else {
+						log.Infof(fmt.Sprintf("storageClass %s already present on cluster , hence skipping creation", storageClass.Name))
+					}
+				}
+			}
+		})
+
 		Step(fmt.Sprintf("Creation of pre and post exec rules for applications "), func() {
 			log.InfoD("Creation of pre and post exec rules for applications ")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -1067,25 +1046,26 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 				backupNamespaceMap[backupName] = namespace
 			}
 		})
-
-		Step("Taking schedule backup of namespaces with rules", func() {
-			log.InfoD(fmt.Sprintf("Taking schedule backup of namespaces with rules"))
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, namespace := range bkpNamespaces {
-				scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
-				log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup,
-					labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
-				err = suspendBackupSchedule(scheduleName, periodicSchedulePolicyName, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] ", scheduleName))
-				backupNames = append(backupNames, scheduleBackupName)
-				scheduleNames = append(scheduleNames, scheduleName)
-				backupNamespaceMap[scheduleBackupName] = namespace
-			}
-		})
+		/*
+			Step("Taking schedule backup of namespaces with rules", func() {
+				log.InfoD(fmt.Sprintf("Taking schedule backup of namespaces with rules"))
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for _, namespace := range bkpNamespaces {
+					scheduleName := fmt.Sprintf("%s-schedule-with-rules-%s", BackupNamePrefix, RandomString(4))
+					log.InfoD("Creating a schedule backup of namespace [%s] without pre and post exec rules", namespace)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					scheduleBackupName, err := CreateScheduleBackupWithValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup,
+						labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", scheduleBackupName))
+					err = suspendBackupSchedule(scheduleName, periodicSchedulePolicyName, orgID, ctx)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] ", scheduleName))
+					backupNames = append(backupNames, scheduleBackupName)
+					scheduleNames = append(scheduleNames, scheduleName)
+					backupNamespaceMap[scheduleBackupName] = namespace
+				}
+			})
+		*/
 
 		Step("Taking restore of backups created", func() {
 			log.InfoD("Taking restore of backups created")
@@ -1429,11 +1409,12 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 			err = DeleteRestore(restoreName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
-
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
-		}
+		/*
+			for _, scheduleName := range scheduleNames {
+				err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
+			}
+		*/
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 

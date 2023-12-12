@@ -1,11 +1,15 @@
 ##### FA Direct access storage class
-kind: StorageClass
 apiVersion: storage.k8s.io/v1
+kind: StorageClass
 metadata:
   name: postgres-sc
-provisioner: pxd.portworx.com
+mountOptions:
+- nfsvers=4.1
+- tcp
 parameters:
-  backend: "pure_block"
-  csi.storage.k8s.io/fstype: ext4
-volumeBindingMode: WaitForFirstConsumer
+  backend: pure_file
+  pure_export_rules: '*(no_root_squash,rw)'
+provisioner: pxd.portworx.com
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
 allowVolumeExpansion: true
