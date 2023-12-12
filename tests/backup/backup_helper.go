@@ -344,6 +344,18 @@ func ValidateBackupCR(backupInspectResponse *api.BackupInspectResponse, ctx cont
 
 }
 
+// ValidateBackupCR validates the CR cleanup for backups
+func ValidateBackupCRCleanup(backupObject *api.BackupObject, ctx context.Context) error {
+
+	return validateCRCleanup(
+		backupObject.Name,
+		backupObject.Cluster,
+		backupObject.OrgId,
+		backupObject.Namespaces,
+		ctx,
+		"backup")
+}
+
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class based on the env variable - VOLUME_SNAPSHOT_CLASS
 func GetCsiSnapshotClassName() (string, error) {
 	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
@@ -544,6 +556,7 @@ func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName stri
 	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
+// ValidateScheduleBackupCR validates creation of backup CR
 func ValidateScheduleBackupCR(backupName string, backupScheduleInspectReponse *api.BackupScheduleInspectResponse, ctx context.Context) error {
 
 	// Getting the backup schedule object from backupScheduleInspectReponse
@@ -1988,7 +2001,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
 
-	err = validateCRCleanup(backupName, theBackup.Cluster, theBackup.OrgId, theBackup.Namespaces, ctx, "backup")
+	err = ValidateBackupCRCleanup(theBackup, ctx)
 
 	return err
 }
@@ -2293,9 +2306,27 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	for _, value := range theRestore.RestoreInfo.NamespaceMapping {
 		allRestoreNamespaces = append(allRestoreNamespaces, value)
 	}
-	err = validateCRCleanup(restoreName, theRestore.RestoreInfo.Cluster, orgID, allRestoreNamespaces, ctx, "restore")
+	err = ValidateRestoreCRCleanup(theRestore, ctx)
 
 	return err
+}
+
+// Validates the restore CR cleanup
+func ValidateRestoreCRCleanup(restoreObject *api.RestoreObject, ctx context.Context) error {
+	var allRestoreNamespaces []string
+
+	for _, value := range restoreObject.RestoreInfo.NamespaceMapping {
+		allRestoreNamespaces = append(allRestoreNamespaces, value)
+	}
+
+	return validateCRCleanup(
+		restoreObject.Name,
+		restoreObject.RestoreInfo.Cluster,
+		restoreObject.OrgId,
+		allRestoreNamespaces,
+		ctx,
+		"restore")
+
 }
 
 // CloneAppContextAndTransformWithMappings clones an appContext and transforms it according to the maps provided. Set `forRestore` to true when the transformation is for namespaces restored by px-backup. To be used after switching to k8s context (cluster) which has the restored namespace.
