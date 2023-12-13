@@ -2110,7 +2110,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
-func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context) error {
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreObject *api.RestoreObject) error {
 
 	var allRestoreHandlers []appDriver.ApplicationDriver
 	var allErrors []string
@@ -2152,11 +2152,15 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context) 
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
 
-			log.InfoD("Validating data inserted after backup")
-			log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
-			err = eachHandler.CheckDataPresent(dataAfterBackup, appContext)
-			if err == nil {
-				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+			if restoreObject.ReplacePolicy == api.ReplacePolicy_Retain {
+				log.InfoD("Validating data inserted after backup")
+				log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
+				err = eachHandler.CheckDataPresent(dataAfterBackup, appContext)
+				if err == nil {
+					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+				}
+			} else {
+				log.Infof("Skipping data validation for data added after backup as restore policy is set to [%s]", restoreObject.ReplacePolicy.String())
 			}
 		}
 	})
@@ -2384,7 +2388,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
 
-	err = ValidateDataAfterRestore(expectedRestoredAppContexts)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, theRestore)
 
 	return err
 }
