@@ -13,13 +13,14 @@ import (
 )
 
 type PostgresConfig struct {
-	Hostname    string
-	User        string
-	Password    string
-	Port        int
-	NodePort    int
-	DBName      string
-	SQLCommands map[string][]string
+	Hostname              string
+	User                  string
+	Password              string
+	Port                  int
+	NodePort              int
+	DBName                string
+	SQLCommands           map[string][]string
+	SQLCommandsPostBackup map[string][]string // SQL Commands to be run after backup is successful and SELECT command to be run in restore to ensure that the data is not present
 }
 
 // GetConnection returns a connection object for postgres database
@@ -84,6 +85,25 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context) error {
 	err := app.ExecuteCommand(app.SQLCommands["insert"], ctx)
 
 	return err
+}
+
+// InsertPostBackupData inserts the rows generated initially by utilities to be inserted after backup
+func (app *PostgresConfig) InsertPostBackupData(ctx context.Context) error {
+
+	log.Infof("Inserting data")
+	err := app.ExecuteCommand(app.SQLCommandsPostBackup["insert"], ctx)
+
+	return err
+}
+
+// Return data inserted before backup
+func (app *PostgresConfig) GetPreBackupData() []string {
+	return app.SQLCommands["select"]
+}
+
+// Return data inserted after backup
+func (app *PostgresConfig) GetPostBackupData() []string {
+	return app.SQLCommandsPostBackup["select"]
 }
 
 // CheckDataPresent checks if the mentioned entry is present or not in the database
@@ -191,4 +211,11 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 	}
 
 	return commandPair, nil
+}
+
+// Update the existing SQL commands
+func (app *PostgresConfig) UpdateSQLCommands(count int) {
+	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
+	app.SQLCommandsPostBackup = GenerateRandomSQLCommands(count, Postgres)
+	log.Info("SQL Commands updated")
 }
