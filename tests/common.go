@@ -196,7 +196,7 @@ var (
 )
 
 var (
-	namespaceAppWithDataMap = make(map[string][]*appDriver.ApplicationDriver)
+	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
 )
 
 type OwnershipAccessType int32
@@ -1913,10 +1913,10 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplications validates applications
-func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group, map[string][]*appDriver.ApplicationDriver) {
+func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group, map[string][]appDriver.ApplicationDriver) {
 
 	// Resetting the global map before starting the new App Validations
-	namespaceAppWithDataMap = make(map[string][]*appDriver.ApplicationDriver)
+	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
 
 	var allHandlers []appDriver.ApplicationDriver
 
@@ -1940,7 +1940,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 					appContext,
 					appInfo.NodePort)
 				log.InfoD("App handler created for [%s]", appInfo.Hostname)
-				namespaceAppWithDataMap[appInfo.Namespace] = append(namespaceAppWithDataMap[appInfo.Namespace], &appHandler)
+				NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 				allHandlers = append(allHandlers, appHandler)
 			}
 		}
@@ -1959,7 +1959,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 
 	log.Infof("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
 
-	return controlChannel, &errGroup, namespaceAppWithDataMap
+	return controlChannel, &errGroup, NamespaceAppWithDataMap
 }
 
 // StartVolDriverAndWait starts volume driver on given app nodes
@@ -2110,7 +2110,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 
 		// Stopping all data flow to apps
 
-		for _, appList := range namespaceAppWithDataMap {
+		for _, appList := range NamespaceAppWithDataMap {
 			for range appList {
 				controlChannel <- "Stop"
 			}
