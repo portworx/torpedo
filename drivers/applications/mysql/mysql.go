@@ -14,14 +14,13 @@ import (
 )
 
 type MySqlConfig struct {
-	Hostname              string
-	User                  string
-	Password              string
-	Port                  int
-	NodePort              int
-	DBName                string
-	SQLCommands           map[string][]string
-	SQLCommandsPostBackup map[string][]string // SQL Commands to be run after backup is successful and SELECT command to be run in restore to ensure that the data is not present
+	Hostname    string
+	User        string
+	Password    string
+	Port        int
+	NodePort    int
+	DBName      string
+	SQLCommands map[string][]string
 }
 
 // GetConnection returns a connection object for mysql database
@@ -90,23 +89,9 @@ func (app *MySqlConfig) InsertBackupData(ctx context.Context) error {
 	return err
 }
 
-// InsertPostBackupData inserts the rows generated initially by utilities to be inserted after backup
-func (app *MySqlConfig) InsertPostBackupData(ctx context.Context) error {
-
-	log.Infof("Inserting data")
-	err := app.ExecuteCommand(app.SQLCommandsPostBackup["insert"], ctx)
-
-	return err
-}
-
 // Return data inserted before backup
-func (app *MySqlConfig) GetPreBackupData() []string {
+func (app *MySqlConfig) GetBackupData() []string {
 	return app.SQLCommands["select"]
-}
-
-// Return data inserted after backup
-func (app *MySqlConfig) GetPostBackupData() []string {
-	return app.SQLCommandsPostBackup["select"]
 }
 
 // CheckDataPresent checks if the mentioned entry is present or not in the database
@@ -223,6 +208,5 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 // Update the existing SQL commands
 func (app *MySqlConfig) UpdateSQLCommands(count int) {
 	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
-	app.SQLCommandsPostBackup = GenerateRandomSQLCommands(count, Postgres)
 	log.Info("SQL Commands updated")
 }

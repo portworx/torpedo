@@ -24,6 +24,8 @@ import (
 	appsapi "k8s.io/api/apps/v1"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
 
 	"github.com/pborman/uuid"
 	"github.com/portworx/sched-ops/k8s/batch"
@@ -150,6 +152,11 @@ var (
 	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
 	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+)
+
+var (
+	dataBeforeBackup []string
+	dataAfterBackup  []string
 )
 
 type userRoleAccess struct {
@@ -376,6 +383,43 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
+func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
+
+	// afterBackup - Check if the data is being inserted before or after backup
+
+	// Getting app handlers for deployed apps in the namespace and inserting data to same
+	var err error
+	var allHandlers []appDriver.ApplicationDriver
+
+	if len(existingAppHandler) == 0 {
+		for _, eachNamespace := range namespaces {
+			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
+				log.InfoD("App with data support found under - [%s]", eachNamespace)
+				for _, eachHandler := range handler {
+					eachHandler.UpdateSQLCommands(10)
+					dataBeforeBackup = eachHandler.GetBackupData()
+					err = eachHandler.InsertBackupData(ctx)
+					if err != nil {
+						return nil, err
+					}
+					allHandlers = append(allHandlers, eachHandler)
+				}
+			}
+		}
+	} else {
+		for _, eachHandler := range existingAppHandler {
+			eachHandler.UpdateSQLCommands(10)
+			dataAfterBackup = eachHandler.GetBackupData()
+			err = eachHandler.InsertBackupData(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return allHandlers, nil
+}
+
 // CreateBackupWithValidation creates backup, checks for success, and validates the backup
 func CreateBackupWithValidation(ctx context.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) error {
 	namespaces := make([]string, 0)
@@ -385,10 +429,22 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	err := CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+
+	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{})
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	}
+
+	err = CreateBackup(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
 	}
+
+	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
+	}
+
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
@@ -2054,6 +2110,64 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context) error {
+
+	var allRestoreHandlers []appDriver.ApplicationDriver
+	var allErrors []string
+
+	var appContext context.Context
+
+	appContext, _ = backup.GetAdminCtxFromSecret()
+
+	Step("Creating all restore app handlers", func() {
+		log.InfoD("Creating all restore app handlers")
+		for _, ctx := range expectedRestoredAppContexts {
+			appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+			if err != nil {
+				allErrors = append(allErrors, err.Error())
+			}
+			log.Infof("App Info - [%+v]", appInfo)
+			if appInfo.StartDataSupport {
+				appHandler, _ := appDriver.GetApplicationDriver(
+					appInfo.AppType,
+					appInfo.Hostname,
+					appInfo.User,
+					appInfo.Password,
+					appInfo.Port,
+					appInfo.DBName,
+					appContext,
+					appInfo.NodePort)
+				log.InfoD("App handler created for [%s]", appInfo.Hostname)
+				allRestoreHandlers = append(allRestoreHandlers, appHandler)
+			}
+		}
+	})
+
+	Step("Validating if backup data in restore", func() {
+		for _, eachHandler := range allRestoreHandlers {
+			log.InfoD("Validating data inserted before backup")
+			log.InfoD("Expected rows to be present:\n %s", strings.Join(dataBeforeBackup, "\n"))
+			err := eachHandler.CheckDataPresent(dataBeforeBackup, appContext)
+			if err != nil {
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
+			}
+
+			log.InfoD("Validating data inserted after backup")
+			log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
+			err = eachHandler.CheckDataPresent(dataAfterBackup, appContext)
+			if err == nil {
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+			}
+		}
+	})
+
+	if len(allErrors) != 0 {
+		return fmt.Errorf("Restore data validation failed - [%s]", strings.Join(allErrors, "\n"))
+	}
+
+	return nil
+}
+
 // ValidateRestore validates a restore's spec's objects (resources) and volumes using expectedRestoredAppContexts (generated by transforming scheduledAppContexts using TransformAppContextWithMappings). This function must be called after switching to the context on which `expectedRestoredAppContexts` exists. Cluster level resources aren't validated.
 func ValidateRestore(ctx context.Context, restoreName string, orgID string, expectedRestoredAppContexts []*scheduler.Context, resourceTypesFilter []string) error {
 	log.InfoD("Validating restore [%s] in org [%s]", restoreName, orgID)
@@ -2268,9 +2382,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
-	} else {
-		return nil
 	}
+
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts)
+
+	return err
 }
 
 // CloneAppContextAndTransformWithMappings clones an appContext and transforms it according to the maps provided. Set `forRestore` to true when the transformation is for namespaces restored by px-backup. To be used after switching to k8s context (cluster) which has the restored namespace.

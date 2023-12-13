@@ -24,11 +24,7 @@ type ApplicationDriver interface {
 
 	InsertBackupData(ctx context.Context) error
 
-	InsertPostBackupData(ctx context.Context) error
-
-	GetPreBackupData() []string
-
-	GetPostBackupData() []string
+	GetBackupData() []string
 }
 
 // Returns struct of appType provided as input
@@ -38,36 +34,33 @@ func GetApplicationDriver(appType string, hostname string, user string,
 	switch appType {
 	case Postgres:
 		return &PostgresConfig{
-			Hostname:              hostname,
-			User:                  user,
-			Password:              password,
-			Port:                  port,
-			DBName:                dbname,
-			SQLCommands:           GenerateRandomSQLCommands(20, appType),
-			SQLCommandsPostBackup: GenerateRandomSQLCommands(20, appType),
-			NodePort:              nodePort,
+			Hostname:    hostname,
+			User:        user,
+			Password:    password,
+			Port:        port,
+			DBName:      dbname,
+			SQLCommands: GenerateRandomSQLCommands(20, appType),
+			NodePort:    nodePort,
 		}, nil
 	case MySql:
 		return &MySqlConfig{
-			Hostname:              hostname,
-			User:                  user,
-			Password:              password,
-			Port:                  port,
-			DBName:                dbname,
-			SQLCommands:           GenerateRandomSQLCommands(20, appType),
-			SQLCommandsPostBackup: GenerateRandomSQLCommands(20, appType),
-			NodePort:              nodePort,
+			Hostname:    hostname,
+			User:        user,
+			Password:    password,
+			Port:        port,
+			DBName:      dbname,
+			SQLCommands: GenerateRandomSQLCommands(20, appType),
+			NodePort:    nodePort,
 		}, nil
 	default:
 		return &PostgresConfig{
-			Hostname:              hostname,
-			User:                  user,
-			Password:              password,
-			Port:                  port,
-			DBName:                dbname,
-			SQLCommands:           GenerateRandomSQLCommands(20, appType),
-			SQLCommandsPostBackup: GenerateRandomSQLCommands(20, appType),
-			NodePort:              nodePort,
+			Hostname:    hostname,
+			User:        user,
+			Password:    password,
+			Port:        port,
+			DBName:      dbname,
+			SQLCommands: GenerateRandomSQLCommands(20, appType),
+			NodePort:    nodePort,
 		}, nil
 
 	}
