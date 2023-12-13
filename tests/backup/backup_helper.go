@@ -6021,7 +6021,8 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 		return err
 	}
 	// Getting the mongodb collection objects
-	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it pxc-backup-mongodb-0 -n ", pxBackupNamespace, " -- mongo --host localhost --port 27017 --username ", mongodbusername, " --password ", password, " --authenticationDatabase admin px-backup  --eval \"db.", collectionName, ".find()\""})
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it pxc-backup-mongodb-0 -n ", pxBackupNamespace, " -- mongo --host localhost --port 27017 --username ", mongodbusername, " --password ", password, " --authenticationDatabase admin px-backup", fmt.Sprintf("--eval \"db.%s.find()\"", collectionName)})
+	log.InfoD(output)
 	if err != nil {
 		return err
 	}
