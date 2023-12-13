@@ -342,7 +342,7 @@ func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeploymen
 		threshold := thresholdPercentage * (floatCapacity / 100)
 		log.InfoD("threshold value calculated is- [%v]", threshold)
 		if consumedCapacity >= threshold {
-			log.Infof("The PVC capacity was %vGB , the consumed PVC is %vGB", initialCapacity, consumedCapacity)
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
 			return nil, false, nil
 		}
 		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
