@@ -3856,10 +3856,9 @@ var _ = Describe("{kiyertest}", func() {
 			mongodbusername := os.Getenv("PX_BACKUP_MONGODB_USERNAME")
 			mongodbpasswd := os.Getenv("PX_BACKUP_MONGODB_PASSWORD")
 			if mongodbusername != "" && mongodbpasswd != "" {
-				collectionName := "restoreobjects"
+				collectionName := "schedulepolicyobjects"
 				srcClusterConfigPath, err := GetSourceClusterConfigPath()
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				time.Sleep(15 * time.Minute)
 				err = dumpMongodbCollectionOnConsole(srcClusterConfigPath, collectionName, mongodbusername, mongodbpasswd)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Dump mongodb collection Colletion name %s", collectionName))
 			}
