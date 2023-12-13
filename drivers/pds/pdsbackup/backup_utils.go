@@ -16,12 +16,15 @@ import (
 )
 
 const (
-	bucketName           = "pds-automation"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
 	bkpTimeInterval      = 60 * time.Second
 	bkpMaxtimeInterval   = 10 * time.Minute
 	BACKUP_JOB_SUCCEEDED = "Succeeded"
+)
+
+var (
+	bucketName = "pds-automation-"
 )
 
 // BackupClient struct
@@ -39,6 +42,7 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	akid := backupClient.AWSStorageClient.accessKey
 	skid := backupClient.AWSStorageClient.secretKey
 	region := backupClient.AWSStorageClient.region
+	bucketName = strings.ToLower(bucketName + RandString(5))
 	log.Debugf("Creating backup %s credentials", name)
 	backupCred, err := backupClient.Components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
 	if err != nil {
@@ -46,7 +50,7 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 	}
 	log.Infof("Backup Credential %v created successfully.", backupCred.GetName())
 	log.Info("Create S3 bucket on AWS cloud.")
-	err = backupClient.AWSStorageClient.createBucket()
+	err = backupClient.AWSStorageClient.createBucket(bucketName)
 	if err != nil {
 		return nil, fmt.Errorf("Failed while creating S3 bucket, Err: %v ", err)
 	}
@@ -158,7 +162,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	if err != nil {
 		return fmt.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 	}
-	waitErr := wait.Poll(bkpTimeInterval, 1*time.Minute, func() (bool, error) {
+	waitErr := wait.Poll(bkpTimeInterval, 15*time.Minute, func() (bool, error) {
 		model, bkpErr := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())
