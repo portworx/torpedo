@@ -344,18 +344,6 @@ func ValidateBackupCR(backupInspectResponse *api.BackupInspectResponse, ctx cont
 
 }
 
-// ValidateBackupCR validates the CR cleanup for backups
-func ValidateBackupCRCleanup(backupObject *api.BackupObject, ctx context.Context) error {
-
-	return validateCRCleanup(
-		backupObject.Name,
-		backupObject.Cluster,
-		backupObject.OrgId,
-		backupObject.Namespaces,
-		ctx,
-		"backup")
-}
-
 // GetCsiSnapshotClassName returns the name of CSI Volume Snapshot class based on the env variable - VOLUME_SNAPSHOT_CLASS
 func GetCsiSnapshotClassName() (string, error) {
 	var snapShotClasses *volsnapv1.VolumeSnapshotClassList
@@ -2001,7 +1989,8 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
 
-	err = ValidateBackupCRCleanup(theBackup, ctx)
+	log.InfoD("Adding debug statement")
+	err = validateCRCleanup(theBackup, ctx)
 
 	return err
 }
@@ -2306,27 +2295,9 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	for _, value := range theRestore.RestoreInfo.NamespaceMapping {
 		allRestoreNamespaces = append(allRestoreNamespaces, value)
 	}
-	err = ValidateRestoreCRCleanup(theRestore, ctx)
+	err = validateCRCleanup(theRestore, ctx)
 
 	return err
-}
-
-// Validates the restore CR cleanup
-func ValidateRestoreCRCleanup(restoreObject *api.RestoreObject, ctx context.Context) error {
-	var allRestoreNamespaces []string
-
-	for _, value := range restoreObject.RestoreInfo.NamespaceMapping {
-		allRestoreNamespaces = append(allRestoreNamespaces, value)
-	}
-
-	return validateCRCleanup(
-		restoreObject.Name,
-		restoreObject.RestoreInfo.Cluster,
-		restoreObject.OrgId,
-		allRestoreNamespaces,
-		ctx,
-		"restore")
-
 }
 
 // CloneAppContextAndTransformWithMappings clones an appContext and transforms it according to the maps provided. Set `forRestore` to true when the transformation is for namespaces restored by px-backup. To be used after switching to k8s context (cluster) which has the restored namespace.
@@ -6371,10 +6342,39 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 	return nil
 }
 
-func validateCRCleanup(resourceName string, clusterName string, orgID string,
-	resourceNamespace []string, ctx context.Context, crType string) error {
+func validateCRCleanup(resourceInterface interface{},
+	ctx context.Context) error {
+	log.InfoD("Inside validateCRCleanup")
+	log.Infof("Resource Interface - [%+v]", resourceInterface)
 	var allCRs []string
 	var err error
+	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
+	var clusterName string
+	var resourceNamespaces []string
+	var resourceName string
+	var orgID string
+
+	log.Infof("Resource Interface - [%+v]", resourceInterface)
+
+	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
+		// Creating object and variables from backup object
+		getCRMethod = GetBackupCRs
+		clusterName = currentObject.Cluster
+		orgID = currentObject.OrgId
+		resourceNamespaces = currentObject.Namespaces
+		resourceName = currentObject.Name
+		log.Infof("Backup object - [%+v]", currentObject)
+	} else if currentObject, ok := resourceInterface.(*api.RestoreObject); ok {
+		// Creating object and variables from Restore object
+		getCRMethod = GetRestoreCRs
+		clusterName = currentObject.Cluster
+		for _, value := range currentObject.RestoreInfo.NamespaceMapping {
+			resourceNamespaces = append(resourceNamespaces, value)
+		}
+		orgID = currentObject.OrgId
+		resourceName = currentObject.Name
+		log.Infof("Restore object - [%+v]", currentObject)
+	}
 
 	backupDriver := Inst().Backup
 	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
@@ -6383,8 +6383,8 @@ func validateCRCleanup(resourceName string, clusterName string, orgID string,
 	}
 
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
-	if len(resourceNamespace) == 1 {
-		currentAdminNamespace = resourceNamespace[0]
+	if len(resourceNamespaces) == 1 {
+		currentAdminNamespace = resourceNamespaces[0]
 	}
 
 	driveName := Inst().Backup
@@ -6396,14 +6396,7 @@ func validateCRCleanup(resourceName string, clusterName string, orgID string,
 	clusterObj := clusterResp.GetCluster()
 
 	validateCRCleanupInNamespace := func() (interface{}, bool, error) {
-		if crType == "restore" {
-			allCRs, err = GetRestoreCRs(currentAdminNamespace, clusterObj)
-		} else if crType == "backup" {
-			allCRs, err = GetBackupCRs(currentAdminNamespace, clusterObj)
-		} else {
-			return nil, true, fmt.Errorf("Please specify a valid option for CR validation. Options available - [backup, restore]")
-		}
-
+		allCRs, err = getCRMethod(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
 		}
