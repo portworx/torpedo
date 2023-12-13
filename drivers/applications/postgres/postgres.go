@@ -45,8 +45,6 @@ func (app *PostgresConfig) GetConnection(ctx context.Context) (*pgx.Conn, error)
 			app.User, app.Password, app.Hostname, app.Port, app.DBName)
 	}
 
-	log.InfoD("Url for connection - [%s]", url)
-
 	conn, err := pgx.Connect(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to database: %s, Conn String - [%s]", err, url)

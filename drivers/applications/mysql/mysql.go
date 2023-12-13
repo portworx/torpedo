@@ -45,7 +45,6 @@ func (app *MySqlConfig) GetConnection(ctx context.Context) (*sql.DB, error) {
 		url = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
 			app.User, app.Password, app.Hostname, app.Port, app.DBName)
 	}
-	log.InfoD("Url for connection - [%s]", url)
 
 	conn, err := sql.Open("mysql", url)
 	if err != nil {
