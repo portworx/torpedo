@@ -19,6 +19,12 @@ type ApplicationDriver interface {
 	StartData(command <-chan string, ctx context.Context) error
 
 	CheckDataPresent(selectQueries []string, ctx context.Context) error
+
+	UpdateSQLCommands(count int)
+
+	InsertBackupData(ctx context.Context) error
+
+	GetBackupData() []string
 }
 
 // Returns struct of appType provided as input

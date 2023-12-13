@@ -88,6 +88,11 @@ func (app *MySqlConfig) InsertBackupData(ctx context.Context) error {
 	return err
 }
 
+// Return data inserted before backup
+func (app *MySqlConfig) GetBackupData() []string {
+	return app.SQLCommands["select"]
+}
+
 // CheckDataPresent checks if the mentioned entry is present or not in the database
 func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
 
@@ -197,4 +202,10 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 	}
 
 	return commandPair, nil
+}
+
+// Update the existing SQL commands
+func (app *MySqlConfig) UpdateSQLCommands(count int) {
+	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
+	log.Info("SQL Commands updated")
 }

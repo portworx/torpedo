@@ -79,9 +79,15 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 func (app *PostgresConfig) InsertBackupData(ctx context.Context) error {
 
 	log.Infof("Inserting data")
+	log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands["insert"], "\n"))
 	err := app.ExecuteCommand(app.SQLCommands["insert"], ctx)
 
 	return err
+}
+
+// Return data inserted before backup
+func (app *PostgresConfig) GetBackupData() []string {
+	return app.SQLCommands["select"]
 }
 
 // CheckDataPresent checks if the mentioned entry is present or not in the database
@@ -189,4 +195,10 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 	}
 
 	return commandPair, nil
+}
+
+// Update the existing SQL commands
+func (app *PostgresConfig) UpdateSQLCommands(count int) {
+	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
+	log.Info("SQL Commands updated")
 }
