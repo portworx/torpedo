@@ -753,10 +753,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 
 	var namespace string
 	var err error
-	if namespace, err = k.GetPortworxNamespace(); err != nil {
-		log.Errorf("Failed to get portworx namespace. Error : %v", err)
-		return false
-	}
+	namespace = "portworx"
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, namespace)
 	if err != nil {
 		log.Errorf("Failed to get apps on node %s. Error : %v", n.Name, err)
