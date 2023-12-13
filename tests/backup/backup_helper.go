@@ -2052,6 +2052,10 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		}
 		actual := resp.GetRestore().GetStatus().Status
 		reason := resp.GetRestore().GetStatus().Reason
+
+		if resp.GetRestore().ReplacePolicy == api.ReplacePolicy_Delete {
+			IsReplacePolicySetToDelete = true
+		}
 		for _, status := range statusesExpected {
 			if actual == status {
 				return "", false, nil

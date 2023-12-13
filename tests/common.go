@@ -196,7 +196,8 @@ var (
 )
 
 var (
-	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
+	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
 )
 
 type OwnershipAccessType int32
@@ -2131,7 +2132,13 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 	// })
 
 	if allErrors != "" {
-		return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+		if IsReplacePolicySetToDelete {
+			log.InfoD("Skipping data conitnuity check as the replace policy was set to delete in this scenario")
+			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+			return nil
+		} else {
+			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+		}
 	}
 
 	return nil
