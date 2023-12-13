@@ -3861,6 +3861,7 @@ var _ = Describe("{kiyertest}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
 				err = dumpMongodbCollectionOnConsole(srcClusterConfigPath, collectionName, mongodbusername, mongodbpasswd)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Dump mongodb collection Colletion name %s", collectionName))
+				time.Sleep(15 * time.Minute)
 			}
 		})
 	})
