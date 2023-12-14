@@ -3,7 +3,6 @@ package tests
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -3595,7 +3594,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858, Ak, Q3FY24)
+		StartPxBackupTorpedoTest("KubeAndPxNamespacesSkipOnAllNSBackup", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858, Kshithijiyer, Q3FY24)
 
 		var err error
 		ctx, err = backup.GetAdminCtxFromSecret()
@@ -3841,30 +3840,5 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 		}
 
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
-	})
-})
-
-var _ = Describe("{kiyertest}", func() {
-
-	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("kiyertest", "Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", nil, 92858, Ak, Q3FY24)
-	})
-
-	It("Verify if kube-system, kube-node-lease, kube-public and Px Namespace is skipped on all namespace backup", func() {
-		Step("Check if kube-system and px namespace was backed up or not", func() {
-			// Debug code to check if we see failures seen in PB-4863 and dump restoreobjects collection
-			mongodbusername := os.Getenv("PX_BACKUP_MONGODB_USERNAME")
-			mongodbpasswd := os.Getenv("PX_BACKUP_MONGODB_PASSWORD")
-			if mongodbusername != "" && mongodbpasswd != "" {
-				collectionName := "schedulepolicyobjects"
-				srcClusterConfigPath, err := GetSourceClusterConfigPath()
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting kubeconfig path for source cluster %v", srcClusterConfigPath))
-				err = dumpMongodbCollectionOnConsole(srcClusterConfigPath, collectionName, mongodbusername, mongodbpasswd)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Dump mongodb collection Colletion name %s", collectionName))
-			}
-		})
-	})
-
-	JustAfterEach(func() {
 	})
 })
