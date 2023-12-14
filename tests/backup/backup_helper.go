@@ -1989,7 +1989,6 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
 
-	log.InfoD("Adding debug statement")
 	err = validateCRCleanup(theBackup, ctx)
 
 	return err
@@ -6342,6 +6341,7 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 	return nil
 }
 
+// validateCRCleanup validates CR cleanup created during backup or restore
 func validateCRCleanup(resourceInterface interface{},
 	ctx context.Context) error {
 	log.InfoD("Inside validateCRCleanup")
