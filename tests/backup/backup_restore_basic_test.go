@@ -671,8 +671,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 					errors = append(errors, fmt.Sprintf("Failed while validating restore [%s]. Error - [%s]", defaultRestoreName, err.Error()))
 					mutex.Unlock()
 				}
+				dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while validating restores with replace existing resources -\n%s", strings.Join(errors, "}\n{")))
 			}(scheduledAppContexts)
-			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while validating restores with replace existing resources -\n%s", strings.Join(errors, "}\n{")))
 		})
 
 		Step(fmt.Sprintf("Take a new backup of applications whose resources were replaced"), func() {
