@@ -6303,7 +6303,7 @@ func isStorageClassPresent(storageClassName string) (bool, error) {
 	return false, nil
 }
 
-//dumpMongodbCollectionOnConsole Dump the collection mentioned on the console for debugging
+// dumpMongodbCollectionOnConsole Dumps the collection mentioned on the console for debugging
 func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string, mongodbusername string, password string) error {
 	// Getting Px Backup Namespace
 	pxBackupNamespace, err := backup.GetPxBackupNamespace()
