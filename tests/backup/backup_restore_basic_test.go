@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -643,6 +644,35 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			err = CreateRestoreWithReplacePolicy(defaultRestoreName, manualBackupName, make(map[string]string), SourceClusterName, orgID, ctx, make(map[string]string), 2)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating default restore for manual backup with replace policy [%s]", defaultRestoreName))
 			restoreNames = append(restoreNames, defaultRestoreName)
+		})
+
+		Step("Validating the restore after replace existing resources", func() {
+			log.InfoD("Validating the restore after replace existing resources")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var mutex sync.Mutex
+			errors := make([]string, 0)
+			go func(scheduledAppContexts []*scheduler.Context) {
+				defer GinkgoRecover()
+				log.InfoD("Validating restore with replace policy [%s]", defaultRestoreName)
+				restoredAppContextsInSourceCluster := make([]*scheduler.Context, 0)
+				for _, scheduledAppContext := range scheduledAppContexts {
+					restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", defaultRestoreName, err.Error()))
+						mutex.Unlock()
+					}
+					restoredAppContextsInSourceCluster = append(restoredAppContextsInSourceCluster, restoredAppContext)
+				}
+				err = ValidateRestore(ctx, defaultRestoreName, orgID, restoredAppContextsInSourceCluster, make([]string, 0))
+				if err != nil {
+					mutex.Lock()
+					errors = append(errors, fmt.Sprintf("Failed while validating restore [%s]. Error - [%s]", defaultRestoreName, err.Error()))
+					mutex.Unlock()
+				}
+			}(scheduledAppContexts)
+			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while validating restores with replace existing resources -\n%s", strings.Join(errors, "}\n{")))
 		})
 
 		Step(fmt.Sprintf("Take a new backup of applications whose resources were replaced"), func() {
