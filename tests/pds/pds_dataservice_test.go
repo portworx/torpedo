@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	"math/rand"
 	"net/http"
@@ -1821,6 +1822,16 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once threshold is met", pdsLabels, 0)
+		wkloadParams = pdsdriver.LoadGenParams{
+			LoadGenDepName: params.LoadGen.LoadGenDepName,
+			Namespace:      params.InfraToTest.Namespace,
+			NumOfRows:      params.LoadGen.NumOfRows,
+			Timeout:        params.LoadGen.Timeout,
+			Replicas:       params.LoadGen.Replicas,
+			TableName:      params.LoadGen.TableName,
+			Iterations:     params.LoadGen.Iterations,
+			FailOnError:    params.LoadGen.FailOnError,
+		}
 	})
 
 	It("Deploy Dataservices", func() {
@@ -1877,22 +1888,31 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					}
 				}()
 				Step("Running Workloads to fill up the PVC ", func() {
-					for ds, deployment := range deployments {
-						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
-							log.InfoD("Running Workloads on DataService %v ", ds.Name)
-							var params pdslib.WorkloadGenerationParams
-							pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-							log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
-							if dep == nil {
-								generateWorkloads[ds.Name] = pod.Name
-							} else {
-								generateWorkloads[ds.Name] = dep.Name
-							}
-							for dsName, workloadContainer := range generateWorkloads {
-								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
-							}
+					//for ds, deployment := range deployments {
+					//	if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
+					//		log.InfoD("Running Workloads on DataService %v ", ds.Name)
+					//		var params pdslib.WorkloadGenerationParams
+					//		pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+					//		log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+					//		if dep == nil {
+					//			generateWorkloads[ds.Name] = pod.Name
+					//		} else {
+					//			generateWorkloads[ds.Name] = dep.Name
+					//		}
+					//		for dsName, workloadContainer := range generateWorkloads {
+					//			log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+					//		}
+					//	}
+					//}
+					for _, deployment := range deployments {
+						wkloadParams.Mode = "write"
+						_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
+						if err != nil {
+							log.FailOnError(err, "Unable to run workloads")
 						}
+						generateWorkloads[ds.Name] = wldep.Name
 					}
+
 				})
 				defer func() {
 					for dsName, workloadContainer := range generateWorkloads {
