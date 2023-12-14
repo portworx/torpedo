@@ -9,6 +9,6 @@ metadata:
   name: postgres-sc
 parameters:
   type: pd-standard
-provisioner: kubernetes.io/gce-pd
+provisioner: pd.csi.storage.gke.io
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
