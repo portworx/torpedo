@@ -114,7 +114,7 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsStorageClient) DeleteBucket() error {
+func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
 			Region:      aws.String(awsObj.region),
