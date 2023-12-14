@@ -114,22 +114,9 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
-	sess, err := session.NewSessionWithOptions(session.Options{
-		Config: aws.Config{
-			Region:      aws.String(awsObj.region),
-			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
-		},
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to initialize new session: %v", err)
-	}
-
-	client := s3.New(sess)
-
+func DeleteAndValidateBucketDeletion(client *s3.S3) error {
 	// Delete all objects and versions in the bucket
-	err = client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
+	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
 	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
 		// Iterate through the objects in the bucket and delete them
@@ -174,6 +161,40 @@ func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
 
 	log.Infof("[AWS] Successfully deleted the bucket: %v", bucketName)
 	return nil
+}
+
+func (awsObj *awsCompatibleStorageClient) DeleteS3MinioBucket(bucketName string) error {
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(awsObj.region),
+			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	err = DeleteAndValidateBucketDeletion(client)
+	return err
+}
+
+func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(awsObj.region),
+			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	err = DeleteAndValidateBucketDeletion(client)
+	return err
 }
 
 func (awsObj *awsStorageClient) ListFolders(after time.Time) ([]string, error) {

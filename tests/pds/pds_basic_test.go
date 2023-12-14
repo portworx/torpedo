@@ -150,10 +150,19 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	if params.BackUpAndRestore.RunBkpAndRestrTest {
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket(bucketName)
-		log.FailOnError(err, "Failed while deleting the bucket")
+		switch params.BackUpAndRestore.TargetLocation {
+		case "s3":
+			err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			log.FailOnError(err, "error while deleting backup targets and creds")
+			err = bkpClient.AWSStorageClient.DeleteBucket(bucketName)
+			log.FailOnError(err, "Failed while deleting the s3 bucket")
+
+		case "s3-comp":
+			err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			log.FailOnError(err, "error while deleting backup targets and creds")
+			err = bkpClient.S3MinioStorageClient.DeleteS3MinioBucket(bucketName)
+			log.FailOnError(err, "Failed while deleting the s3-minio bucket")
+		}
 	}
 })
 
