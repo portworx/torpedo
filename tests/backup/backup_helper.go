@@ -5813,6 +5813,9 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
+	// Sleeping for the deployment to be updated
+	time.Sleep(30 * time.Second)
+
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
 		return nil, err
