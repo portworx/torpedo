@@ -1888,22 +1888,6 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					}
 				}()
 				Step("Running Workloads to fill up the PVC ", func() {
-					//for ds, deployment := range deployments {
-					//	if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
-					//		log.InfoD("Running Workloads on DataService %v ", ds.Name)
-					//		var params pdslib.WorkloadGenerationParams
-					//		pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
-					//		log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
-					//		if dep == nil {
-					//			generateWorkloads[ds.Name] = pod.Name
-					//		} else {
-					//			generateWorkloads[ds.Name] = dep.Name
-					//		}
-					//		for dsName, workloadContainer := range generateWorkloads {
-					//			log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
-					//		}
-					//	}
-					//}
 					for _, deployment := range deployments {
 						wkloadParams.Mode = "write"
 						_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
@@ -1912,7 +1896,6 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						}
 						generateWorkloads[ds.Name] = wldep.Name
 					}
-
 				})
 				defer func() {
 					for dsName, workloadContainer := range generateWorkloads {
