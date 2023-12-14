@@ -2182,22 +2182,26 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 
 	// Verifying data on restored pods
 	for _, eachHandler := range allRestoreHandlers {
-		log.InfoD("Validating data inserted before backup")
-		log.InfoD("Expected rows to be present:\n %s", strings.Join(dataBeforeBackup, "\n"))
-		err := eachHandler.CheckDataPresent(dataBeforeBackup, appContext)
-		if err != nil {
-			allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
+		if len(dataBeforeBackup) != 0 {
+			log.InfoD("Validating data inserted before backup")
+			log.InfoD("Expected rows to be present:\n %s", strings.Join(dataBeforeBackup, "\n"))
+			err := eachHandler.CheckDataPresent(dataBeforeBackup, appContext)
+			if err != nil {
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
+			}
 		}
 
 		if restoreObject.ReplacePolicy == api.ReplacePolicy_Delete {
-			log.InfoD("Validating data inserted after backup")
-			log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
-			err = eachHandler.CheckDataPresent(dataAfterBackup, appContext)
-			if err == nil {
-				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+			if len(dataAfterBackup) != 0 {
+				log.InfoD("Validating data inserted after backup")
+				log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
+				err := eachHandler.CheckDataPresent(dataAfterBackup, appContext)
+				if err == nil {
+					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
+				}
+			} else {
+				log.Infof("Skipping data validation for data added after backup as restore policy is set to [%s]", restoreObject.ReplacePolicy.String())
 			}
-		} else {
-			log.Infof("Skipping data validation for data added after backup as restore policy is set to [%s]", restoreObject.ReplacePolicy.String())
 		}
 	}
 
