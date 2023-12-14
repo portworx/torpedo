@@ -1922,13 +1922,13 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 					}
 				})
-				Step("Delete Deployments", func() {
-					CleanupDeployments(deploymentsToBeCleaned)
-					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
-					log.FailOnError(err, "Failed to delete custom templates")
-					controlPlane.UpdateResourceTemplateName("Small")
-				})
 			}
+			Step("Delete Deployments", func() {
+				CleanupDeployments(deploymentsToBeCleaned)
+				err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+				log.FailOnError(err, "Failed to delete custom templates")
+				controlPlane.UpdateResourceTemplateName("Small")
+			})
 		})
 	})
 	JustAfterEach(func() {
