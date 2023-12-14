@@ -6354,8 +6354,6 @@ func validateCRCleanup(resourceInterface interface{},
 	var resourceName string
 	var orgID string
 
-	log.Infof("Resource Interface - [%+v]", resourceInterface)
-
 	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
 		// Creating object and variables from backup object
 		getCRMethod = GetBackupCRs
@@ -6363,7 +6361,6 @@ func validateCRCleanup(resourceInterface interface{},
 		orgID = currentObject.OrgId
 		resourceNamespaces = currentObject.Namespaces
 		resourceName = currentObject.Name
-		log.Infof("Backup object - [%+v]", currentObject)
 	} else if currentObject, ok := resourceInterface.(*api.RestoreObject); ok {
 		// Creating object and variables from Restore object
 		getCRMethod = GetRestoreCRs
@@ -6373,7 +6370,6 @@ func validateCRCleanup(resourceInterface interface{},
 		}
 		orgID = currentObject.OrgId
 		resourceName = currentObject.Name
-		log.Infof("Restore object - [%+v]", currentObject)
 	}
 
 	backupDriver := Inst().Backup
