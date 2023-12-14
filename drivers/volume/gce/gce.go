@@ -15,12 +15,14 @@ const (
 	// DriverName is the name of the gce driver implementation
 	DriverName = "gce"
 	// GceStorage GCE storage driver name
-	GceStorage torpedovolume.StorageProvisionerType = "gce"
+	GceStorage         torpedovolume.StorageProvisionerType = "gce"
+	GceStandardStorage torpedovolume.StorageProvisionerType = "srow"
 )
 
 // Provisioners types of supported provisioners
 var provisioners = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	GceStorage: "kubernetes.io/gce-pd",
+	GceStorage:         "kubernetes.io/gce-pd",
+	GceStandardStorage: "pd.csi.storage.gke.io",
 }
 
 type gce struct {
