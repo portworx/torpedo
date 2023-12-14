@@ -10458,7 +10458,7 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 		})
 
 		numVolSnaps := 3
-		numVols := 20
+		numVols := 25
 		stepLog = fmt.Sprintf("2. Verify pool deletion after creating vols and each with %v snaps %v", numVols, numVolSnaps)
 
 		Step(stepLog, func() {
@@ -10490,12 +10490,14 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 				}
 			}
 
+			log.Infof("Deletable pools %+v", deletablePools)
 			// select a pool with volume on it to delete
 			poolIDToDelete := ""
 			for _, vol := range snapshotList {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
 				replPools := appVol.ReplicaSets[0].PoolUuids 
+				log.Infof("vol %+v, replPools %+v", vol, appVol, replPools)
 				for _, p := range replPools {
 					if id, ok := deletablePools[p]; ok {
 						poolIDToDelete = id
@@ -10557,19 +10559,20 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	var err error
 
 	itLog := "PoolDeleteServiceDisruption"
  	It(itLog, func() {
 		testNode := selectPoolDeletableNode(true)
  		poolIDToDelete := ""
-		for _, p := range testNode.Pools {
-			poolID := fmt.Sprintf("%v",p.GetID())
+
+		drvMap, err := Inst().V.GetPoolDrives(testNode)
+		log.FailOnError(err, "error getting pool drives from node [%s]", testNode.Name)
+		for poolID := range drvMap {
 			poolIDToDelete = poolID
 			break
 		}
-		log.InfoD("deletable pools %+v", testNode.Pools)
- 		log.InfoD("select pool id %v to delete", poolIDToDelete)
+
+		dash.VerifyFatal(poolIDToDelete != "", true, fmt.Sprintf("check deltable pool on node %s: poolIDToDelete %v", testNode.Name, poolIDToDelete))
 
 		deletePoolAndValidate(*testNode, poolIDToDelete)
 
