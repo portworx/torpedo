@@ -194,6 +194,32 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				// Validate Apps after volume driver upgrade
 				ValidateApplications(contexts)
 			}
+
+			Step("Schedule Validate and Destroy apps after upgrade", func() {
+				log.Infof("Scheduling apps after upgrade")
+				contexts = make([]*scheduler.Context, 0)
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("afterupgradevoldriver-%d", i))...)
+				}
+				log.Infof("Validating apps after upgrade")
+				ValidateApplications(contexts)
+				for _, ctx := range contexts {
+					vols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "failed to get volumes for app [%s]", ctx.App.Key)
+					for _, vol := range vols {
+						apiVol, err := Inst().V.InspectVolume(vol.ID)
+						log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.ID, vol.Name)
+						log.Infof("apiVol Inspect Resonse: [%+v]", apiVol)
+						log.Infof("The IO Profile of the app [%s] volume [%s/%s] is [%s]", ctx.App.Key, vol.ID, vol.Name, apiVol.Spec.GetIoProfile().SimpleString())
+					}
+				}
+				log.Infof("Destroying apps after upgrade")
+				opts := make(map[string]bool)
+				opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+				for _, ctx := range contexts {
+					TearDownContext(ctx, opts)
+				}
+			})
 		})
 
 		Step("Destroy apps", func() {
