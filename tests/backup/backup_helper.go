@@ -157,6 +157,7 @@ var (
 	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
 	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+	queryCountForValidation    = 10
 )
 
 var (
@@ -413,7 +414,7 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
 				log.InfoD("App with data support found under - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
-					eachHandler.UpdateSQLCommands(10)
+					eachHandler.UpdateSQLCommands(queryCountForValidation)
 					dataBeforeBackup = eachHandler.GetBackupData()
 					err = eachHandler.InsertBackupData(ctx)
 					if err != nil {
@@ -425,7 +426,7 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 		}
 	} else {
 		for _, eachHandler := range existingAppHandler {
-			eachHandler.UpdateSQLCommands(10)
+			eachHandler.UpdateSQLCommands(queryCountForValidation)
 			dataAfterBackup = eachHandler.GetBackupData()
 			err = eachHandler.InsertBackupData(ctx)
 			if err != nil {
