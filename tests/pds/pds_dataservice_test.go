@@ -3,7 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	"math/rand"
 	"net/http"
@@ -1822,34 +1821,48 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once threshold is met", pdsLabels, 0)
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      params.LoadGen.TableName,
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
-		}
 	})
 
 	It("Deploy Dataservices", func() {
 		var (
-			generateWorkloads = make(map[string]string)
-			deployments       = make(map[PDSDataService]*pds.ModelsDeployment)
-			stIds             []string
-			resIds            []string
-			depList           []*pds.ModelsDeployment
+			generateWorkloads     = make(map[string]string)
+			deployments           = make(map[PDSDataService]*pds.ModelsDeployment)
+			stIds                 []string
+			resIds                []string
+			stIDs                 []string
+			resConfigModel        *pds.ModelsResourceSettingsTemplate
+			stConfigModel         *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID string
+			newStorageTemplateID  string
 		)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-
 				Step("Deploy and validate data service", func() {
-					deployment, _, resConfigModel, stConfigModel, _, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
+					//deployment, _, resConfigModel, stConfigModel, _, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
+					//	CpuLimit:       params.StorageConfigurations.CpuLimit,
+					//	CpuRequest:     params.StorageConfigurations.CpuRequest,
+					//	MemoryLimit:    "2G",
+					//	MemoryRequest:  "1G",
+					//	StorageRequest: "2G",
+					//	FsType:         "xfs",
+					//	ReplFactor:     1,
+					//	Provisioner:    "pxd.portworx.com",
+					//	Secure:         false,
+					//	VolGroups:      false,
+					//})
+					//stIds = append(stIds, stConfigModel.GetId())
+					//resIds = append(resIds, resConfigModel.GetId())
+					//depList = append(depList, deployment)
+					//deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+					//log.FailOnError(err, "failed to create deployment with custom templates")
+					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+					newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
+					newTemplateConfig := controlplane.Templates{
+						Name:           newTemplateName,
 						CpuLimit:       params.StorageConfigurations.CpuLimit,
 						CpuRequest:     params.StorageConfigurations.CpuRequest,
+						DataServiceID:  dataserviceID,
 						MemoryLimit:    "2G",
 						MemoryRequest:  "1G",
 						StorageRequest: "2G",
@@ -1858,14 +1871,19 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						Provisioner:    "pxd.portworx.com",
 						Secure:         false,
 						VolGroups:      false,
-					})
-					stIds = append(stIds, stConfigModel.GetId())
-					resIds = append(resIds, resConfigModel.GetId())
-					depList = append(depList, deployment)
-					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-					log.FailOnError(err, "failed to create deployment with custom templates")
+					}
+					stConfigModel, resConfigModel, err = controlPlane.CreateCustomResourceTemplate(tenantID, newTemplateConfig)
+					log.FailOnError(err, "Unable to update template")
+					log.InfoD("Successfully updated the template with ID- %v", resConfigModel.GetId())
+					newResourceTemplateID = resConfigModel.GetId()
+					newStorageTemplateID = stConfigModel.GetId()
+					stIDs = append(stIDs, newStorageTemplateID)
+					resIds = append(resIds, newResourceTemplateID)
+					controlPlane.UpdateResourceTemplateName(newTemplateName)
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
 				})
-
 			}
 			defer func() {
 				for _, newDeployment := range deployments {
@@ -1875,13 +1893,21 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
 				}
 			}()
-			Step("Running Workloads to fill-up the PVC ", func() {
+			Step("Running Workloads to fill up the PVC ", func() {
 				for ds, deployment := range deployments {
 					if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
 						log.InfoD("Running Workloads on DataService %v ", ds.Name)
-						_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
-						log.FailOnError(err, "Error while genearating workloads")
-						generateWorkloads[ds.Name] = wldep.Name
+						var params pdslib.WorkloadGenerationParams
+						pod, dep, err = RunWorkloads(params, ds, deployment, namespace)
+						log.FailOnError(err, fmt.Sprintf("Error while genearating workloads for dataservice [%s]", ds.Name))
+						if dep == nil {
+							generateWorkloads[ds.Name] = pod.Name
+						} else {
+							generateWorkloads[ds.Name] = dep.Name
+						}
+						for dsName, workloadContainer := range generateWorkloads {
+							log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
+						}
 					}
 				}
 			})
@@ -1917,6 +1943,7 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 				CleanupDeployments(deploymentsToBeCleaned)
 				err := controlPlane.CleanupCustomTemplates(stIds, resIds)
 				log.FailOnError(err, "Failed to delete custom templates")
+				controlPlane.UpdateResourceTemplateName("Small")
 			})
 		})
 	})
