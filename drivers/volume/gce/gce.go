@@ -13,7 +13,7 @@ import (
 
 const (
 	// DriverName is the name of the gce driver implementation
-	DriverName = "gce"
+	DriverName = "gce-standard"
 	// GceStorage GCE storage driver name
 	GceStorage         torpedovolume.StorageProvisionerType = "gce"
 	GceStandardStorage torpedovolume.StorageProvisionerType = "srow"
