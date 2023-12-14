@@ -14,6 +14,7 @@ const (
 	envMinioAccessKey          = "AWS_MINIO_ACCESS_KEY_ID"
 	envMinioSecretKey          = "AWS_MINIO_SECRET_ACCESS_KEY"
 	envMinioRegion             = "AWS_MINIO_REGION"
+	envMinioEndPoint           = "AWS_MINIO_ENDPOINT"
 	envAzureStorageAccountName = "AZURE_ACCOUNT_NAME"
 	envAzurePrimaryAccountKey  = "AZURE_ACCOUNT_KEY"
 	envGcpProjectId            = "GCP_PROJECT_ID"
@@ -82,6 +83,7 @@ func BackupEnvVariables() Environment {
 		PDSMinioAccessKey:          mustGetEnvVariable(envMinioAccessKey),
 		PDSMinioSecretKey:          mustGetEnvVariable(envMinioSecretKey),
 		PDSMinioRegion:             mustGetEnvVariable(envMinioRegion),
+		PDSMinioEndpoint:           mustGetEnvVariable(envMinioEndPoint),
 	}
 }
 

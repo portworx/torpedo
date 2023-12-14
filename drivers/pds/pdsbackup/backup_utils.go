@@ -21,7 +21,6 @@ const (
 	bkpTimeInterval      = 60 * time.Second
 	bkpMaxtimeInterval   = 10 * time.Minute
 	BACKUP_JOB_SUCCEEDED = "Succeeded"
-	minioEndpoint        = "minio.pwx.dev.purestorage.com"
 )
 
 var (
@@ -70,8 +69,9 @@ func (backupClient *BackupClient) CreateAwsS3MinioBackupCredsAndTarget(tenantId,
 	akid := backupClient.S3MinioStorageClient.accessKey
 	skid := backupClient.S3MinioStorageClient.secretKey
 	region := backupClient.S3MinioStorageClient.region
+	endpoint := backupClient.S3MinioStorageClient.endpoint
 	log.Debugf("Creating backup %s credentials", name)
-	backupCred, err := backupClient.Components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, minioEndpoint, skid)
+	backupCred, err := backupClient.Components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, endpoint, skid)
 	if err != nil {
 		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
 	}
@@ -361,7 +361,7 @@ func InitializePdsBackup() (*BackupClient, error) {
 		Components:      Components,
 		AWSStorageClient: &awsStorageClient{accessKey: envVars.PDSAwsAccessKey,
 			secretKey: envVars.PDSAwsSecretKey, region: envVars.PDSAwsRegion},
-		S3MinioStorageClient: &awsCompatibleStorageClient{endpoint: minioEndpoint,
+		S3MinioStorageClient: &awsCompatibleStorageClient{endpoint: envVars.PDSMinioEndpoint,
 			accessKey: envVars.PDSMinioAccessKey,
 			secretKey: envVars.PDSMinioSecretKey, region: envVars.PDSMinioRegion},
 		AzureStorageClient: &azureStorageClient{accountName: envVars.PDSAzureStorageAccountName,
