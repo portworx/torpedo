@@ -114,8 +114,9 @@ func (awsObj *awsStorageClient) createBucket(bucketName string) error {
 	return nil
 }
 
-func DeleteAndValidateBucketDeletion(client *s3.S3) error {
+func DeleteAndValidateBucketDeletion(client *s3.S3, bucketName string) error {
 	// Delete all objects and versions in the bucket
+	log.Debugf("Deleting bucket [%s]", bucketName)
 	err := client.ListObjectsV2Pages(&s3.ListObjectsV2Input{
 		Bucket: aws.String(bucketName),
 	}, func(page *s3.ListObjectsV2Output, lastPage bool) bool {
@@ -166,8 +167,10 @@ func DeleteAndValidateBucketDeletion(client *s3.S3) error {
 func (awsObj *awsCompatibleStorageClient) DeleteS3MinioBucket(bucketName string) error {
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
-			Region:      aws.String(awsObj.region),
-			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			Endpoint:         aws.String(awsObj.endpoint),
+			Region:           aws.String(awsObj.region),
+			Credentials:      credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			S3ForcePathStyle: aws.Bool(true),
 		},
 	})
 
@@ -176,7 +179,7 @@ func (awsObj *awsCompatibleStorageClient) DeleteS3MinioBucket(bucketName string)
 	}
 
 	client := s3.New(sess)
-	err = DeleteAndValidateBucketDeletion(client)
+	err = DeleteAndValidateBucketDeletion(client, bucketName)
 	return err
 }
 
@@ -193,7 +196,7 @@ func (awsObj *awsStorageClient) DeleteBucket(bucketName string) error {
 	}
 
 	client := s3.New(sess)
-	err = DeleteAndValidateBucketDeletion(client)
+	err = DeleteAndValidateBucketDeletion(client, bucketName)
 	return err
 }
 
