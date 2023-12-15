@@ -7,26 +7,12 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
 )
-
-var (
-	bkpClient                                     *pdsbkp.BackupClient
-	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
-	bkpTargetName                                 = "automation--"
-)
-
-// const (
-// 	defaultWaitRebootRetry       = 10 * time.Second
-// 	defaultCommandRetry          = 5 * time.Second
-// 	defaultCommandTimeout        = 1 * time.Minute
-// 	defaultTestConnectionTimeout = 15 * time.Minute
-// )
 
 var _ = Describe("{PerformPDSWorkflowMultipleIterations}", func() {
 	JustBeforeEach(func() {
@@ -56,7 +42,6 @@ var _ = Describe("{PerformPDSWorkflowMultipleIterations}", func() {
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
-				p
 				log.FailOnError(err, "Error while fetching the backup supported ds.")
 				for _, ds := range params.DataServiceToTest {
 					deploymentsToBeCleaned := []*pds.ModelsDeployment{}
