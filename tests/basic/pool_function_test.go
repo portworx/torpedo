@@ -1481,6 +1481,7 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("sfullrz-%d", i))...)
 		}
+		ValidateApplications(contexts)
 		defer appsValidateAndDestroy(contexts)
 
 		err = WaitForPoolOffline(*selectedNode)
@@ -1503,9 +1504,6 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			expandedExpectedPoolSize = (selectedPool.TotalSize / units.GiB) * 2
-
-			log.FailOnError(err, "Failed to check if Journal enabled")
-
 			log.InfoD("Current Size of the pool %s is %d", selectedPool.Uuid, selectedPool.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expandedExpectedPoolSize, true)
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
