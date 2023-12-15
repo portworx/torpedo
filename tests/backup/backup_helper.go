@@ -544,6 +544,7 @@ func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName stri
 	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
+// ValidateScheduleBackupCR validates creation of backup CR
 func ValidateScheduleBackupCR(backupName string, backupScheduleInspectReponse *api.BackupScheduleInspectResponse, ctx context.Context) error {
 
 	// Getting the backup schedule object from backupScheduleInspectReponse
@@ -972,7 +973,7 @@ func CreateRestoreWithCRValidation(restoreName string, backupName string, namesp
 	if err != nil {
 		return err
 	}
-	err = ValidateRestoreCRs(restoreName, clusterName, orgID, clusterUID, ctx, namespaceMapping)
+	err = ValidateRestoreCRs(restoreName, clusterName, orgID, clusterUID, namespaceMapping, ctx)
 	if err != nil {
 		log.Warnf(err.Error())
 	}
@@ -1986,9 +1987,11 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateBackup Errors: {%s}", strings.Join(errStrings, "}\n{"))
-	} else {
-		return nil
 	}
+
+	err = validateCRCleanup(theBackup, ctx)
+
+	return err
 }
 
 // restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
@@ -2285,9 +2288,11 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
-	} else {
-		return nil
 	}
+
+	err = validateCRCleanup(theRestore, ctx)
+
+	return err
 }
 
 // CloneAppContextAndTransformWithMappings clones an appContext and transforms it according to the maps provided. Set `forRestore` to true when the transformation is for namespaces restored by px-backup. To be used after switching to k8s context (cluster) which has the restored namespace.
@@ -5905,8 +5910,8 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 }
 
 // Validates Restore CRs created
-func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, clusterUID string, ctx context.Context,
-	restoreNameSpaces map[string]string) error {
+func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, clusterUID string,
+	restoreNameSpaces map[string]string, ctx context.Context) error {
 	currentAdminNamespace, _ := getCurrentAdminNamespace()
 	if len(restoreNameSpaces) == 1 {
 		for _, val := range restoreNameSpaces {
@@ -6246,8 +6251,14 @@ func GetExcludeFileListValue(storageClassesMap map[*storagev1.StorageClass][]str
 func FetchFilesAndDirectoriesFromPod(pod corev1.Pod, containerName string, path string, excludeFileDirectoryList []string) ([]string, []string, error) {
 	fileList := make(map[string][]string)
 	var fileTypes = [2]string{"f,l", "d"}
+	//Fetch the user ID associated with the command execution.
+	cmdArgs := []string{"/bin/sh", "-c", "whoami"}
+	user, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch user-id , error : %v", err)
+	}
 	for _, fileType := range fileTypes {
-		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user root", path, fileType)}
+		cmdArgs := []string{"/bin/sh", "-c", fmt.Sprintf("find %s/ -type %s -user %s", path, fileType, user)}
 		output, err := core.Instance().RunCommandInPod(cmdArgs, pod.Name, containerName, pod.Namespace)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to fetch file and directories from pod: %s. Output: %s", err, output)
@@ -6301,4 +6312,102 @@ func isStorageClassPresent(storageClassName string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// dumpMongodbCollectionOnConsole Dumps the collection mentioned on the console for debugging
+func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string, mongodbusername string, password string) error {
+	// Getting Px Backup Namespace
+	pxBackupNamespace, err := backup.GetPxBackupNamespace()
+	if err != nil {
+		return err
+	}
+	// Getting the mongodb collection objects
+	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", "pxc-backup-mongodb-0", "-n", pxBackupNamespace, "--", "mongo", "--host", "localhost", "--port", "27017", "--username", mongodbusername, "--password", password, "--authenticationDatabase", "admin", "px-backup", "--eval", fmt.Sprintf("\"db.%s.find()\"", collectionName)})
+	if err != nil {
+		return err
+	}
+
+	// Dumping the collection
+	log.InfoD(fmt.Sprintf(
+		"Collection dump for %s collection",
+		collectionName,
+	))
+	log.InfoD(output)
+
+	return nil
+}
+
+// validateCRCleanup validates CR cleanup created during backup or restore
+func validateCRCleanup(resourceInterface interface{},
+	ctx context.Context) error {
+	log.InfoD("Inside validateCRCleanup")
+	log.Infof("Resource Interface - [%+v]", resourceInterface)
+	var allCRs []string
+	var err error
+	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
+	var clusterName string
+	var resourceNamespaces []string
+	var resourceName string
+	var orgID string
+
+	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
+		// Creating object and variables from backup object
+		getCRMethod = GetBackupCRs
+		clusterName = currentObject.Cluster
+		orgID = currentObject.OrgId
+		resourceNamespaces = currentObject.Namespaces
+		resourceName = currentObject.Name
+	} else if currentObject, ok := resourceInterface.(*api.RestoreObject); ok {
+		// Creating object and variables from Restore object
+		getCRMethod = GetRestoreCRs
+		clusterName = currentObject.Cluster
+		for _, value := range currentObject.RestoreInfo.NamespaceMapping {
+			resourceNamespaces = append(resourceNamespaces, value)
+		}
+		orgID = currentObject.OrgId
+		resourceName = currentObject.Name
+	}
+
+	backupDriver := Inst().Backup
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+
+	currentAdminNamespace, _ := getCurrentAdminNamespace()
+	if len(resourceNamespaces) == 1 {
+		currentAdminNamespace = resourceNamespaces[0]
+	}
+
+	driveName := Inst().Backup
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := driveName.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+
+	validateCRCleanupInNamespace := func() (interface{}, bool, error) {
+		allCRs, err = getCRMethod(currentAdminNamespace, clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
+
+		log.Infof("Validating CR cleanup")
+		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
+
+		for _, eachCR := range allCRs {
+			if strings.Contains(eachCR, resourceName) {
+				log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
+				return nil, true, fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
+			}
+		}
+
+		return nil, false, nil
+	}
+
+	_, err = task.DoRetryWithTimeout(validateCRCleanupInNamespace, 5*time.Minute, 5*time.Second)
+
+	return err
+
 }
