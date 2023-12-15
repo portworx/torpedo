@@ -2,7 +2,7 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   annotations:
-    description: Provides Object Bucket Claims (OBCs)
+    description: Provides Object Bucket Claims
   name: postgres-sc
 parameters:
   objectStoreName: ocs-storagecluster-cephobjectstore
