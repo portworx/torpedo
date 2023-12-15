@@ -80,10 +80,10 @@ func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) e
 }
 
 // InsertBackupData inserts the rows generated initially by utilities
-func (app *MySqlConfig) InsertBackupData(ctx context.Context) error {
+func (app *MySqlConfig) InsertData(commands []string, ctx context.Context) error {
 
 	log.Infof("Inserting data")
-	err := app.ExecuteCommand(app.SQLCommands["insert"], ctx)
+	err := app.ExecuteCommand(commands, ctx)
 
 	return err
 }
@@ -208,4 +208,9 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 func (app *MySqlConfig) UpdateSQLCommands(count int) {
 	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
 	log.Info("SQL Commands updated")
+}
+
+// Function to get the App Type
+func (app *MySqlConfig) GetAppType() string {
+	return MySql
 }
