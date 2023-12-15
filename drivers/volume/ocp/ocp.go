@@ -26,7 +26,7 @@ type ocp struct {
 	torpedovolume.DefaultDriver
 }
 
-func (i *ocp) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
+func (o *ocp) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the OCP volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	torpedovolume.StorageDriver = OcpDriverName
 	// Set provisioner for torpedo
@@ -42,54 +42,54 @@ func (i *ocp) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDrive
 	return nil
 }
 
-func (i *ocp) String() string {
+func (o *ocp) String() string {
 	return OcpDriverName
 }
 
-func (i *ocp) ValidateCreateVolume(name string, params map[string]string) error {
+func (o *ocp) ValidateCreateVolume(name string, params map[string]string) error {
 	// TODO: Implementation of ValidateCreateVolume will be provided in the coming PRs
-	log.Warnf("ValidateCreateVolume function has not been implemented for volume driver - %s", i.String())
+	log.Warnf("ValidateCreateVolume function has not been implemented for volume driver - %s", o.String())
 	return nil
 }
 
-func (i *ocp) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
+func (o *ocp) ValidateVolumeSetup(vol *torpedovolume.Volume) error {
 	// TODO: Implementation of ValidateVolumeSetup will be provided in the coming PRs
-	log.Warnf("ValidateVolumeSetup function has not been implemented for volume driver - %s", i.String())
+	log.Warnf("ValidateVolumeSetup function has not been implemented for volume driver - %s", o.String())
 	return nil
 }
 
-func (i *ocp) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
+func (o *ocp) ValidateDeleteVolume(vol *torpedovolume.Volume) error {
 	// TODO: Implementation of ValidateDeleteVolume will be provided in the coming PRs
-	log.Warnf("ValidateDeleteVolume function has not been implemented for volume driver - %s", i.String())
+	log.Warnf("ValidateDeleteVolume function has not been implemented for volume driver - %s", o.String())
 	return nil
 }
 
-func (i *ocp) GetDriverVersion() (string, error) {
+func (o *ocp) GetDriverVersion() (string, error) {
 	// TODO: Implementation of ValidateDeleteVolume will be provided in the coming PRs
-	log.Warnf("GetDriverVersion function has not been implemented for volume driver - %s", i.String())
+	log.Warnf("GetDriverVersion function has not been implemented for volume driver - %s", o.String())
 	return "", nil
 }
 
 // RefreshDriverEndpoints get the updated driver endpoints for the cluster
-func (i *ocp) RefreshDriverEndpoints() error {
+func (o *ocp) RefreshDriverEndpoints() error {
 
-	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", i.String())
+	log.Warnf("RefreshDriverEndpoints function has not been implemented for volume driver - %s", o.String())
 	return nil
 }
 
-func (i *ocp) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
-	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", i.String())
+func (o *ocp) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
+	log.Warnf("GetProxySpecForAVolume function has not been implemented for volume driver - %s", o.String())
 	return nil, nil
 }
 
-func (i *ocp) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
-	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", i.String())
+func (o *ocp) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", o.String())
 	return nil, nil
 }
 
 // InspectVolume inspects the volume with the given name
-func (i *ocp) InspectVolume(name string) (*api.Volume, error) {
-	log.Warnf("InspectVolume function has not been implemented for volume driver - %s", i.String())
+func (o *ocp) InspectVolume(name string) (*api.Volume, error) {
+	log.Warnf("InspectVolume function has not been implemented for volume driver - %s", o.String())
 	return nil, &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "InspectVolume()",
