@@ -10462,10 +10462,10 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 		stepLog = fmt.Sprintf("2. Verify pool deletion after creating vols and each with %v snaps %v", numVols, numVolSnaps)
 
 		Step(stepLog, func() {
-			deletablePools := make (map[string]string) // poolUUID to ID
-			for _, p := range testNode.Pools {
-				deletablePools[p.Uuid] = fmt.Sprintf("%v",p.GetID())
-			}
+			deletablePools, err := Inst().V.GetNodePools(*testNode)
+			log.FailOnError(err, "failed to get node pool info")
+			log.Infof("Deletable pools %+v", deletablePools)
+
 			volIDs := []string{}
 			for i:=0; i<numVols; i++ {
 				uuidObj := uuid.New()
@@ -10490,14 +10490,13 @@ var _ = Describe("{PoolDeleteVariations}", func() {
 				}
 			}
 
-			log.Infof("Deletable pools %+v", deletablePools)
 			// select a pool with volume on it to delete
 			poolIDToDelete := ""
 			for _, vol := range snapshotList {
 				appVol, err := Inst().V.InspectVolume(vol)
 				log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", vol))
 				replPools := appVol.ReplicaSets[0].PoolUuids 
-				log.Infof("vol %+v, replPools %+v", vol, appVol, replPools)
+				log.Infof("vol %+v, replPools %+v", vol, replPools)
 				for _, p := range replPools {
 					if id, ok := deletablePools[p]; ok {
 						poolIDToDelete = id
