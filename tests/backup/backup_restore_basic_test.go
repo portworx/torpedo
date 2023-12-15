@@ -646,8 +646,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			restoreNames = append(restoreNames, defaultRestoreName)
 		})
 
-		Step("Validating the restore after replace existing resources", func() {
-			log.InfoD("Validating the restore after replace existing resources")
+		Step("Validating the restore after replacing the existing resources", func() {
+			log.InfoD("Validating the restore after replacing the existing resources")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var mutex sync.Mutex
@@ -656,6 +656,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			wg.Add(1)
 			go func(scheduledAppContexts []*scheduler.Context) {
 				defer GinkgoRecover()
+				defer wg.Done()
 				log.InfoD("Validating restore with replace policy [%s]", defaultRestoreName)
 				restoredAppContextsInSourceCluster := make([]*scheduler.Context, 0)
 				for _, scheduledAppContext := range scheduledAppContexts {
