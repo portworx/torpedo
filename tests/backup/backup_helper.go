@@ -401,14 +401,13 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-func InsertDataForBackupValidation(namespaces []string, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
+func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
 	// Getting app handlers for deployed apps in the namespace and inserting data to same
 	var err error
 	var allHandlers []appDriver.ApplicationDriver
-	ctx, _ := backup.GetAdminCtxFromSecret()
 
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
@@ -449,7 +448,8 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		}
 	}
 
-	appHandlers, err := InsertDataForBackupValidation(namespaces, []appDriver.ApplicationDriver{})
+	log.Infof("CTX - [%+v]", ctx)
+	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{})
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -459,7 +459,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		return err
 	}
 
-	_, err = InsertDataForBackupValidation(namespaces, appHandlers)
+	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
 	}
@@ -2150,14 +2150,10 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
-func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreObject *api.RestoreObject) error {
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreObject *api.RestoreObject, appContext context.Context) error {
 
 	var allRestoreHandlers []appDriver.ApplicationDriver
 	var allErrors []string
-
-	var appContext context.Context
-
-	appContext, _ = backup.GetAdminCtxFromSecret()
 
 	// Creating restore handlers
 	log.InfoD("Creating all restore app handlers")
@@ -2453,7 +2449,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 		return err
 	}
 
-	err = ValidateDataAfterRestore(expectedRestoredAppContexts, theRestore)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, theRestore, ctx)
 
 	return err
 }
