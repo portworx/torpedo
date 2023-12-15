@@ -9,8 +9,6 @@ import (
 	. "github.com/portworx/torpedo/drivers/utilities"
 )
 
-var AllSupportedAppForData = []string{MySql, Postgres}
-
 type ApplicationDriver interface {
 	DefaultPort() int
 
@@ -24,11 +22,9 @@ type ApplicationDriver interface {
 
 	UpdateSQLCommands(count int)
 
-	InsertData(commands []string, ctx context.Context) error
+	InsertBackupData(ctx context.Context) error
 
 	GetBackupData() []string
-
-	GetAppType() string
 }
 
 // Returns struct of appType provided as input

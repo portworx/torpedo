@@ -187,6 +187,14 @@ const (
 	pdsDriveCliFlag   = "pds-driver"
 )
 
+// Application Params
+const (
+	applicationWithDriver = `
+		postgres
+		mysql
+	`
+)
+
 var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig

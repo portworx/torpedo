@@ -76,11 +76,11 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 }
 
 // InsertBackupData inserts the rows generated initially by utilities
-func (app *PostgresConfig) InsertData(commands []string, ctx context.Context) error {
+func (app *PostgresConfig) InsertBackupData(ctx context.Context) error {
 
 	log.Infof("Inserting data")
-	log.InfoD("Inserting below data : %s", strings.Join(commands, "\n"))
-	err := app.ExecuteCommand(commands, ctx)
+	log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands["insert"], "\n"))
+	err := app.ExecuteCommand(app.SQLCommands["insert"], ctx)
 
 	return err
 }
@@ -201,9 +201,4 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 func (app *PostgresConfig) UpdateSQLCommands(count int) {
 	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
 	log.Info("SQL Commands updated")
-}
-
-// Function to get the App Type
-func (app *PostgresConfig) GetAppType() string {
-	return Postgres
 }

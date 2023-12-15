@@ -161,8 +161,8 @@ var (
 )
 
 var (
-	dataBeforeBackup = make(map[string]map[string][]string)
-	dataAfterBackup  = make(map[string]map[string][]string)
+	dataBeforeBackup []string
+	dataAfterBackup  []string
 )
 
 type userRoleAccess struct {
@@ -401,7 +401,7 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-func InsertDataForBackupValidation(commands map[string]map[string][]string, namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
+func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
@@ -414,7 +414,9 @@ func InsertDataForBackupValidation(commands map[string]map[string][]string, name
 			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
 				log.InfoD("App with data support found under - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
-					err = eachHandler.InsertData(commands[eachHandler.GetAppType()]["insert"], ctx)
+					eachHandler.UpdateSQLCommands(queryCountForValidation)
+					dataBeforeBackup = eachHandler.GetBackupData()
+					err = eachHandler.InsertBackupData(ctx)
 					if err != nil {
 						return nil, err
 					}
@@ -424,7 +426,9 @@ func InsertDataForBackupValidation(commands map[string]map[string][]string, name
 		}
 	} else {
 		for _, eachHandler := range existingAppHandler {
-			err = eachHandler.InsertData(commands[eachHandler.GetAppType()]["insert"], ctx)
+			eachHandler.UpdateSQLCommands(queryCountForValidation)
+			dataAfterBackup = eachHandler.GetBackupData()
+			err = eachHandler.InsertBackupData(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -432,13 +436,6 @@ func InsertDataForBackupValidation(commands map[string]map[string][]string, name
 	}
 
 	return allHandlers, nil
-}
-
-func PopulateCommandsForApps(queryCountForValidation int) {
-	for _, eachSupportedApp := range appDriver.AllSupportedAppForData {
-		dataBeforeBackup[eachSupportedApp] = appUtils.GenerateRandomSQLCommands(queryCountForValidation, eachSupportedApp)
-		dataAfterBackup[eachSupportedApp] = appUtils.GenerateRandomSQLCommands(queryCountForValidation, eachSupportedApp)
-	}
 }
 
 // CreateBackupWithValidation creates backup, checks for success, and validates the backup
@@ -452,8 +449,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 	}
 
 	log.Infof("CTX - [%+v]", ctx)
-
-	appHandlers, err := InsertDataForBackupValidation(dataBeforeBackup, namespaces, ctx, []appDriver.ApplicationDriver{})
+	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{})
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -463,7 +459,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		return err
 	}
 
-	_, err = InsertDataForBackupValidation(dataAfterBackup, namespaces, ctx, appHandlers)
+	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
 	}
@@ -2186,8 +2182,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	for _, eachHandler := range allRestoreHandlers {
 		if len(dataBeforeBackup) != 0 {
 			log.InfoD("Validating data inserted before backup")
-			log.InfoD("Expected rows to be present:\n %s", strings.Join(dataBeforeBackup[eachHandler.GetAppType()]["select"], "\n"))
-			err := eachHandler.CheckDataPresent(dataBeforeBackup[eachHandler.GetAppType()]["select"], appContext)
+			log.InfoD("Expected rows to be present:\n %s", strings.Join(dataBeforeBackup, "\n"))
+			err := eachHandler.CheckDataPresent(dataBeforeBackup, appContext)
 			if err != nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
@@ -2196,8 +2192,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		if restoreObject.ReplacePolicy == api.ReplacePolicy_Delete {
 			if len(dataAfterBackup) != 0 {
 				log.InfoD("Validating data inserted after backup")
-				log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup[eachHandler.GetAppType()]["select"], "\n"))
-				err := eachHandler.CheckDataPresent(dataAfterBackup[eachHandler.GetAppType()]["select"], appContext)
+				log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
+				err := eachHandler.CheckDataPresent(dataAfterBackup, appContext)
 				if err == nil {
 					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
 				}
