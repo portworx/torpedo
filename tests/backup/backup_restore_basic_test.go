@@ -652,6 +652,8 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var mutex sync.Mutex
 			errors := make([]string, 0)
+			var wg sync.WaitGroup
+			wg.Add(1)
 			go func(scheduledAppContexts []*scheduler.Context) {
 				defer GinkgoRecover()
 				log.InfoD("Validating restore with replace policy [%s]", defaultRestoreName)
@@ -673,6 +675,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 				}
 				dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Errors generated while validating restores with replace existing resources -\n%s", strings.Join(errors, "}\n{")))
 			}(scheduledAppContexts)
+			wg.Wait()
 		})
 
 		Step(fmt.Sprintf("Take a new backup of applications whose resources were replaced"), func() {
