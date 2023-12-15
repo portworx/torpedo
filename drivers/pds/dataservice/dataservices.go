@@ -377,7 +377,10 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 	testparams.DnsZone = dnsZone
 
 	err = targetCluster.RegisterClusterToControlPlane(params, tenantID, false)
-	log.FailOnError(err, "Target Cluster Registeration failed")
+	if err != nil {
+		return nil, fmt.Errorf("Failed to Register Target Cluster %v", err)
+	}
+	//log.FailOnError(err, "Target Cluster Registeration failed")
 
 	deploymentTargetID, err = targetCluster.GetDeploymentTargetID(clusterID, tenantID)
 	if err != nil {
@@ -407,7 +410,10 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 		}
 
 		err = d.ValidateDataServiceDeployment(deployment, namespace)
-		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+		if err != nil {
+			return nil, fmt.Errorf("Error while validating dataservice deployment %v", err)
+		}
+		//log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
 
 		deployments[ds] = deployment
 		pdsApps = append(pdsApps, deployment)
