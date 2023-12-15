@@ -11,14 +11,17 @@ import (
 )
 
 const (
-	OcpDriverName = "ocp"
+	OcpDriverName        = "ocp"
+	OcpRbdCephDriverName = "rbd-csi"
+	OcpCephfsDriverName  = "cephfs-csi"
 	// OcpServiceName is the name of the ocp storage driver implementation
 	OcpServiceName = ""
 )
 
 // Provisioners types of supported provisioners
 var provisionersForOcp = map[torpedovolume.StorageProvisionerType]torpedovolume.StorageProvisionerType{
-	OcpDriverName: "openshift-storage.rbd.csi.ceph.com",
+	OcpRbdCephDriverName: "openshift-storage.rbd.csi.ceph.com",
+	OcpCephfsDriverName:  "openshift-storage.cephfs.csi.ceph.com",
 }
 
 type ocp struct {
