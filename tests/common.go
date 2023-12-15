@@ -503,10 +503,12 @@ func ValidateCleanup() {
 }
 
 func processError(err error, errChan ...*chan error) {
+	log.Infof("Inside Process Error")
 	// if errChan is provided then just push err to on channel
 	// Useful for frameworks like longevity that must continue
 	// execution and must not fail immediately
 	if len(errChan) > 0 {
+		log.Infof("Going to call update channel")
 		updateChannel(err, errChan...)
 	} else {
 		log.FailOnError(err, "processError")
@@ -514,7 +516,9 @@ func processError(err error, errChan ...*chan error) {
 }
 
 func updateChannel(err error, errChan ...*chan error) {
+	log.Infof("Inside Update Channel")
 	if len(errChan) > 0 && err != nil {
+		log.Infof("Updating Error channel")
 		log.Errorf(fmt.Sprintf("%v", err))
 		*errChan[0] <- err
 	}

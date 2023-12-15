@@ -287,6 +287,7 @@ func GenerateUUID() string {
 func UpdateOutcome(event *EventRecord, err error) {
 
 	if err != nil && event != nil {
+		log.Infof("Inside update outcome")
 		Inst().M.IncrementCounterMetric(TestFailedCount, event.Event.Type)
 		log.Errorf("Event [%s] failed with error: %v", event.Event.Type, err)
 		dash.VerifySafely(err, nil, fmt.Sprintf("verify if error occured for event %s", event.Event.Type))
@@ -557,7 +558,7 @@ func TriggerDeployNewApps(contexts *[]*scheduler.Context, recordChan *chan *Even
 			// BUG: Execution doesn't resume here after ValidateContext called
 			// Below code is never executed
 			for err := range errorChan {
-				log.Infof("Error: %v", err)
+				log.Infof("PDS Error: %v", err)
 				UpdateOutcome(event, err)
 			}
 		}
