@@ -24,6 +24,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	corev1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -1836,22 +1837,22 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	It("Deploy Dataservices", func() {
 		var (
-			generateWorkloads     = make(map[string]string)
-			deployments           = make(map[PDSDataService]*pds.ModelsDeployment)
-			stIds                 []string
-			resIds                []string
-			stIDs                 []string
-			resConfigModel        *pds.ModelsResourceSettingsTemplate
-			stConfigModel         *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID string
-			newStorageTemplateID  string
+			wlDeploymentsToBeCleaned []*v1.Deployment
+			deployments              = make(map[PDSDataService]*pds.ModelsDeployment)
+			stIds                    []string
+			resIds                   []string
+			stIDs                    []string
+			resConfigModel           *pds.ModelsResourceSettingsTemplate
+			stConfigModel            *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID    string
+			newStorageTemplateID     string
 		)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
 				stIDs, resIds = nil, nil
 				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
-				CleanMapEntries(generateWorkloads)
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
 				Step("Deploy and validate data service", func() {
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
@@ -1881,37 +1882,14 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					log.FailOnError(err, "Error while deploying data services")
 					deployments[ds] = deployment
 				})
-
-				defer func() {
-					for _, newDeployment := range deployments {
-						Step("Delete created deployments")
-						resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
-						log.FailOnError(err, "Error while deleting data services")
-						dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-					}
-				}()
 				Step("Running Workloads to fill up the PVC ", func() {
 					wkloadParams.Mode = "write"
 					_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
 					if err != nil {
 						log.FailOnError(err, "Unable to run workloads")
 					}
-					generateWorkloads[ds.Name] = wldep.Name
+					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wldep)
 				})
-				defer func() {
-					for dsName, workloadContainer := range generateWorkloads {
-						Step("Delete the workload generating deployments", func() {
-							if Contains(dataServiceDeploymentWorkloads, dsName) {
-								log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
-								err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
-							} else if Contains(dataServicePodWorkloads, dsName) {
-								log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
-								err = pdslib.DeleteK8sPods(workloadContainer, namespace)
-							}
-							log.FailOnError(err, "error deleting workload generating pods")
-						})
-					}
-				}()
 				Step("Checking the PVC usage", func() {
 					log.FailOnError(err, "Unable to create scheduler context")
 					err = CheckStorageFullCondition(namespace, deployment, 85)
@@ -1925,6 +1903,13 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						log.FailOnError(err, "Error while validating dataservices")
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 					}
+				})
+				Step("Clean up workload deployments", func() {
+					for _, wlDep := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
+
 				})
 				Step("Delete Deployments", func() {
 					CleanupDeployments(deploymentsToBeCleaned)
@@ -1940,7 +1925,6 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 		defer EndTorpedoTest()
 	})
 })
-
 
 var _ = Describe("{ResizePVCBy1GB}", func() {
 
