@@ -160,11 +160,6 @@ var (
 	queryCountForValidation    = 10
 )
 
-var (
-	dataBeforeBackup []string
-	dataAfterBackup  []string
-)
-
 type userRoleAccess struct {
 	user     string
 	roles    backup.PxBackupRole
@@ -401,7 +396,7 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
+func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver, backupName string) ([]appDriver.ApplicationDriver, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
@@ -414,9 +409,8 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
 				log.InfoD("App with data support found under - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
-					eachHandler.UpdateSQLCommands(queryCountForValidation)
-					dataBeforeBackup = eachHandler.GetBackupData()
-					err = eachHandler.InsertBackupData(ctx)
+					eachHandler.UpdateSQLCommands(queryCountForValidation, backupName)
+					err = eachHandler.InsertBackupData(ctx, backupName)
 					if err != nil {
 						return nil, err
 					}
@@ -426,9 +420,9 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 		}
 	} else {
 		for _, eachHandler := range existingAppHandler {
-			eachHandler.UpdateSQLCommands(queryCountForValidation)
-			dataAfterBackup = eachHandler.GetBackupData()
-			err = eachHandler.InsertBackupData(ctx)
+			restoreIdentifier := fmt.Sprintf("%s-after-backup", backupName)
+			eachHandler.UpdateSQLCommands(queryCountForValidation, restoreIdentifier)
+			err = eachHandler.InsertBackupData(ctx, restoreIdentifier)
 			if err != nil {
 				return nil, err
 			}
@@ -449,7 +443,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 	}
 
 	log.Infof("CTX - [%+v]", ctx)
-	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{})
+	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -459,7 +453,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		return err
 	}
 
-	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers)
+	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
 	}
@@ -1217,6 +1211,12 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 	}
 	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+	if err != nil {
+		return err
+	}
+
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName)
+
 	return err
 }
 
@@ -2150,10 +2150,22 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
-func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreObject *api.RestoreObject, appContext context.Context) error {
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, appContext context.Context, backupName string) error {
 
 	var allRestoreHandlers []appDriver.ApplicationDriver
 	var allErrors []string
+
+	backupDriver := Inst().Backup
+	restoreInspectRequest := &api.RestoreInspectRequest{
+		Name:  restoreName,
+		OrgId: orgID,
+	}
+	restoreInspectResponse, err := backupDriver.InspectRestore(appContext, restoreInspectRequest)
+	if err != nil {
+		return err
+	}
+
+	theRestore := restoreInspectResponse.GetRestore()
 
 	// Creating restore handlers
 	log.InfoD("Creating all restore app handlers")
@@ -2180,17 +2192,23 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 
 	// Verifying data on restored pods
 	for _, eachHandler := range allRestoreHandlers {
-		if len(dataBeforeBackup) != 0 {
+
+		dataBeforeBackup := eachHandler.GetBackupData(backupName)
+		dataAfterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s-after-backup", backupName))
+
+		if dataBeforeBackup != nil {
 			log.InfoD("Validating data inserted before backup")
 			log.InfoD("Expected rows to be present:\n %s", strings.Join(dataBeforeBackup, "\n"))
 			err := eachHandler.CheckDataPresent(dataBeforeBackup, appContext)
 			if err != nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
+		} else {
+			log.Infof("Skipping data validation added before backup as no data was found")
 		}
 
-		if restoreObject.ReplacePolicy == api.ReplacePolicy_Delete {
-			if len(dataAfterBackup) != 0 {
+		if theRestore.ReplacePolicy == api.ReplacePolicy_Delete {
+			if dataAfterBackup != nil {
 				log.InfoD("Validating data inserted after backup")
 				log.InfoD("Expected rows NOT to be present:\n %s", strings.Join(dataAfterBackup, "\n"))
 				err := eachHandler.CheckDataPresent(dataAfterBackup, appContext)
@@ -2198,8 +2216,10 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
 				}
 			} else {
-				log.Infof("Skipping data validation for data added after backup as restore policy is set to [%s]", restoreObject.ReplacePolicy.String())
+				log.Infof("Skipping data validation added after backup as no data was found")
 			}
+		} else {
+			log.Infof("Skipping data validation for data added after backup as restore policy is set to [%s]", theRestore.ReplacePolicy.String())
 		}
 	}
 
@@ -2445,11 +2465,6 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 	}
 
 	err = validateCRCleanup(theRestore, ctx)
-	if err != nil {
-		return err
-	}
-
-	err = ValidateDataAfterRestore(expectedRestoredAppContexts, theRestore, ctx)
 
 	return err
 }

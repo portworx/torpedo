@@ -20,11 +20,11 @@ type ApplicationDriver interface {
 
 	CheckDataPresent(selectQueries []string, ctx context.Context) error
 
-	UpdateSQLCommands(count int)
+	UpdateSQLCommands(count int, identifier string)
 
-	InsertBackupData(ctx context.Context) error
+	InsertBackupData(ctx context.Context, identifier string) error
 
-	GetBackupData() []string
+	GetBackupData(identifier string) []string
 }
 
 // Returns struct of appType provided as input
@@ -34,33 +34,39 @@ func GetApplicationDriver(appType string, hostname string, user string,
 	switch appType {
 	case Postgres:
 		return &PostgresConfig{
-			Hostname:    hostname,
-			User:        user,
-			Password:    password,
-			Port:        port,
-			DBName:      dbname,
-			SQLCommands: GenerateRandomSQLCommands(20, appType),
-			NodePort:    nodePort,
+			Hostname: hostname,
+			User:     user,
+			Password: password,
+			Port:     port,
+			DBName:   dbname,
+			SQLCommands: map[string]map[string][]string{
+				"default": GenerateRandomSQLCommands(20, appType),
+			},
+			NodePort: nodePort,
 		}, nil
 	case MySql:
 		return &MySqlConfig{
-			Hostname:    hostname,
-			User:        user,
-			Password:    password,
-			Port:        port,
-			DBName:      dbname,
-			SQLCommands: GenerateRandomSQLCommands(20, appType),
-			NodePort:    nodePort,
+			Hostname: hostname,
+			User:     user,
+			Password: password,
+			Port:     port,
+			DBName:   dbname,
+			SQLCommands: map[string]map[string][]string{
+				"default": GenerateRandomSQLCommands(20, appType),
+			},
+			NodePort: nodePort,
 		}, nil
 	default:
 		return &PostgresConfig{
-			Hostname:    hostname,
-			User:        user,
-			Password:    password,
-			Port:        port,
-			DBName:      dbname,
-			SQLCommands: GenerateRandomSQLCommands(20, appType),
-			NodePort:    nodePort,
+			Hostname: hostname,
+			User:     user,
+			Password: password,
+			Port:     port,
+			DBName:   dbname,
+			SQLCommands: map[string]map[string][]string{
+				"default": GenerateRandomSQLCommands(20, appType),
+			},
+			NodePort: nodePort,
 		}, nil
 
 	}

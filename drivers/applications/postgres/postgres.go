@@ -19,7 +19,7 @@ type PostgresConfig struct {
 	Port        int
 	NodePort    int
 	DBName      string
-	SQLCommands map[string][]string
+	SQLCommands map[string]map[string][]string
 }
 
 // GetConnection returns a connection object for postgres database
@@ -76,18 +76,22 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 }
 
 // InsertBackupData inserts the rows generated initially by utilities
-func (app *PostgresConfig) InsertBackupData(ctx context.Context) error {
+func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier string) error {
 
 	log.Infof("Inserting data")
-	log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands["insert"], "\n"))
-	err := app.ExecuteCommand(app.SQLCommands["insert"], ctx)
+	log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
+	err := app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
 
 	return err
 }
 
 // Return data inserted before backup
-func (app *PostgresConfig) GetBackupData() []string {
-	return app.SQLCommands["select"]
+func (app *PostgresConfig) GetBackupData(identifier string) []string {
+	if _, ok := app.SQLCommands[identifier]; ok {
+		return app.SQLCommands[identifier]["select"]
+	} else {
+		return nil
+	}
 }
 
 // CheckDataPresent checks if the mentioned entry is present or not in the database
@@ -122,19 +126,19 @@ func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.
 }
 
 // UpdateBackupData updates the rows generated initially by utilities
-func (app *PostgresConfig) UpdateBackupData(ctx context.Context) error {
+func (app *PostgresConfig) UpdateBackupData(ctx context.Context, identifier string) error {
 
 	log.Infof("Running Update Queries")
-	err := app.ExecuteCommand(app.SQLCommands["update"], ctx)
+	err := app.ExecuteCommand(app.SQLCommands[identifier]["update"], ctx)
 
 	return err
 }
 
 // DeleteBackupData deletes the rows generated initially by utilities
-func (app *PostgresConfig) DeleteBackupData(ctx context.Context) error {
+func (app *PostgresConfig) DeleteBackupData(ctx context.Context, identifier string) error {
 
 	log.Infof("Running Delete Queries")
-	err := app.ExecuteCommand(app.SQLCommands["delete"], ctx)
+	err := app.ExecuteCommand(app.SQLCommands[identifier]["delete"], ctx)
 
 	return err
 }
@@ -198,7 +202,7 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 }
 
 // Update the existing SQL commands
-func (app *PostgresConfig) UpdateSQLCommands(count int) {
-	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
+func (app *PostgresConfig) UpdateSQLCommands(count int, identifier string) {
+	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, Postgres)
 	log.Info("SQL Commands updated")
 }

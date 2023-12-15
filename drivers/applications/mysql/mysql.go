@@ -20,7 +20,7 @@ type MySqlConfig struct {
 	Port        int
 	NodePort    int
 	DBName      string
-	SQLCommands map[string][]string
+	SQLCommands map[string]map[string][]string
 }
 
 // GetConnection returns a connection object for mysql database
@@ -80,17 +80,21 @@ func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) e
 }
 
 // InsertBackupData inserts the rows generated initially by utilities
-func (app *MySqlConfig) InsertBackupData(ctx context.Context) error {
+func (app *MySqlConfig) InsertBackupData(ctx context.Context, identifier string) error {
 
 	log.Infof("Inserting data")
-	err := app.ExecuteCommand(app.SQLCommands["insert"], ctx)
+	err := app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
 
 	return err
 }
 
 // Return data inserted before backup
-func (app *MySqlConfig) GetBackupData() []string {
-	return app.SQLCommands["select"]
+func (app *MySqlConfig) GetBackupData(identifier string) []string {
+	if _, ok := app.SQLCommands[identifier]; ok {
+		return app.SQLCommands[identifier]["select"]
+	} else {
+		return nil
+	}
 }
 
 // CheckDataPresent checks if the mentioned entry is present or not in the database
@@ -131,7 +135,7 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 
 	log.Infof("Running Update Queries")
-	err := app.ExecuteCommand(app.SQLCommands["update"], ctx)
+	err := app.ExecuteCommand(app.SQLCommands["default"]["update"], ctx)
 
 	return err
 }
@@ -140,7 +144,7 @@ func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 
 	log.Infof("Running Delete Queries")
-	err := app.ExecuteCommand(app.SQLCommands["delete"], ctx)
+	err := app.ExecuteCommand(app.SQLCommands["default"]["delete"], ctx)
 
 	return err
 }
@@ -205,7 +209,7 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 }
 
 // Update the existing SQL commands
-func (app *MySqlConfig) UpdateSQLCommands(count int) {
-	app.SQLCommands = GenerateRandomSQLCommands(count, Postgres)
+func (app *MySqlConfig) UpdateSQLCommands(count int, identifier string) {
+	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, Postgres)
 	log.Info("SQL Commands updated")
 }
