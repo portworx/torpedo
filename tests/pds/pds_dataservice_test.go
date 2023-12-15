@@ -1888,14 +1888,12 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 					}
 				}()
 				Step("Running Workloads to fill up the PVC ", func() {
-					for _, deployment := range deployments {
-						wkloadParams.Mode = "write"
-						_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
-						if err != nil {
-							log.FailOnError(err, "Unable to run workloads")
-						}
-						generateWorkloads[ds.Name] = wldep.Name
+					wkloadParams.Mode = "write"
+					_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
+					if err != nil {
+						log.FailOnError(err, "Unable to run workloads")
 					}
+					generateWorkloads[ds.Name] = wldep.Name
 				})
 				defer func() {
 					for dsName, workloadContainer := range generateWorkloads {
@@ -1925,19 +1923,21 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 					}
 				})
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+					log.FailOnError(err, "Failed to delete custom templates")
+					controlPlane.UpdateResourceTemplateName("Small")
+				})
 			}
-			Step("Delete Deployments", func() {
-				CleanupDeployments(deploymentsToBeCleaned)
-				err := controlPlane.CleanupCustomTemplates(stIds, resIds)
-				log.FailOnError(err, "Failed to delete custom templates")
-				controlPlane.UpdateResourceTemplateName("Small")
-			})
+
 		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 	})
 })
+
 
 var _ = Describe("{ResizePVCBy1GB}", func() {
 
