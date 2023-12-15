@@ -1849,6 +1849,9 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
+				stIDs, resIds = nil, nil
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+				CleanMapEntries(generateWorkloads)
 				Step("Deploy and validate data service", func() {
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
 					newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
