@@ -12,7 +12,7 @@ import (
 
 const (
 	OcpDriverName = "ocp"
-	// OcpServiceName is the name of the ibm storage driver implementation
+	// OcpServiceName is the name of the ocp storage driver implementation
 	OcpServiceName = ""
 )
 
