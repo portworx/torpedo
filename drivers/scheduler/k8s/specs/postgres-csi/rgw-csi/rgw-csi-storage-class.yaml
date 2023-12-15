@@ -3,11 +3,10 @@ kind: StorageClass
 metadata:
   annotations:
     description: Provides Object Bucket Claims (OBCs)
-  name: ocs-storagecluster-ceph-rgw
+  name: postgres-sc
 parameters:
   objectStoreName: ocs-storagecluster-cephobjectstore
   objectStoreNamespace: openshift-storage
-  region: us-east-1
 provisioner: openshift-storage.ceph.rook.io/bucket
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
