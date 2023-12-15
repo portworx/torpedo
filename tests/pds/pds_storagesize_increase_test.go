@@ -360,6 +360,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 					stepLog = "Increase the storage size again after Scale-UP"
 					Step(stepLog, func() {
 						newTemplateName2 := "autoTemp-" + strconv.Itoa(rand.Int())
+						storageSize := params.StorageConfigurations.NewStorageSize + "5"
 						updatedTemplateConfig2 := controlplane.Templates{
 							CpuLimit:       *resConfigModelUpdated1.CpuLimit,
 							CpuRequest:     *resConfigModelUpdated1.CpuRequest,
@@ -367,7 +368,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							MemoryLimit:    *resConfigModelUpdated1.MemoryLimit,
 							MemoryRequest:  *resConfigModelUpdated1.MemoryRequest,
 							Name:           newTemplateName2,
-							StorageRequest: params.StorageConfigurations.NewStorageSize,
+							StorageRequest: storageSize,
 							FsType:         *stConfigModel.Fs,
 							ReplFactor:     *stConfigModel.Repl,
 							Provisioner:    *stConfigModelUpdated1.Provisioner,
