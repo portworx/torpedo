@@ -6391,6 +6391,10 @@ func validateCRCleanup(resourceInterface interface{},
 		resourceName = currentObject.Name
 	}
 
+	// Below code is added to skip the CR cleanup validation in case of synced backup
+	// For synced backup the cluster name has uuid suffix which is not supported/handled
+	// While creating the cluster object
+
 	// Fetching all clusters
 	enumerateClusterRequest := &api.ClusterEnumerateRequest{
 		OrgId: orgID,
@@ -6406,7 +6410,7 @@ func validateCRCleanup(resourceInterface interface{},
 	}
 
 	if !isValidCluster {
-		log.Infof("%s is not a valid cluster for CR cleanup validation", clusterName)
+		log.Infof("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
 		return nil
 	}
 
