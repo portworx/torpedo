@@ -6364,8 +6364,6 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 // validateCRCleanup validates CR cleanup created during backup or restore
 func validateCRCleanup(resourceInterface interface{},
 	ctx context.Context) error {
-	log.InfoD("Inside validateCRCleanup")
-	log.Infof("Resource Interface - [%+v]", resourceInterface)
 	var allCRs []string
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
@@ -6373,6 +6371,7 @@ func validateCRCleanup(resourceInterface interface{},
 	var resourceNamespaces []string
 	var resourceName string
 	var orgID string
+	var isValidCluster = false
 
 	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
 		// Creating object and variables from backup object
@@ -6390,6 +6389,25 @@ func validateCRCleanup(resourceInterface interface{},
 		}
 		orgID = currentObject.OrgId
 		resourceName = currentObject.Name
+	}
+
+	// Fetching all clusters
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+
+	// Comparing cluster names to the name from backup inspect response
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		if clusterObj.Name == clusterName {
+			isValidCluster = true
+			break
+		}
+	}
+
+	if !isValidCluster {
+		log.Infof("%s is not a valid cluster for CR cleanup validation", clusterName)
+		return nil
 	}
 
 	backupDriver := Inst().Backup
