@@ -401,13 +401,14 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
+func InsertDataForBackupValidation(namespaces []string, existingAppHandler []appDriver.ApplicationDriver) ([]appDriver.ApplicationDriver, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
 	// Getting app handlers for deployed apps in the namespace and inserting data to same
 	var err error
 	var allHandlers []appDriver.ApplicationDriver
+	ctx, _ := backup.GetAdminCtxFromSecret()
 
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
@@ -448,7 +449,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		}
 	}
 
-	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{})
+	appHandlers, err := InsertDataForBackupValidation(namespaces, []appDriver.ApplicationDriver{})
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -458,7 +459,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		return err
 	}
 
-	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers)
+	_, err = InsertDataForBackupValidation(namespaces, appHandlers)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
 	}
