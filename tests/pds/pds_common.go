@@ -658,8 +658,31 @@ func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deploym
 	return nil
 }
 
+func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace string) (int32, error) {
+	var restartCount int32
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	pdsPodRestartCountMap, err := Inst().S.GetPodsRestartCount(namespace, labelSelector)
+	log.FailOnError(err, "unable to get pod restart count from the deployment")
+	log.InfoD("pdsPodRestartCountMap is- [%v]", pdsPodRestartCountMap)
+	if err != nil {
+		log.Fatalf(fmt.Sprintf("%v", err))
+	}
+	for pod, value := range pdsPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("%v", err))
+		}
+		n.PxPodRestartCount = value
+		log.InfoD("n.PxPodRestartCount is- [%v] and value is- [%v]", n.PxPodRestartCount, value)
+		restartCount = n.PxPodRestartCount
+	}
+	log.InfoD("restartCount calculated is- [%v]", restartCount)
+	return restartCount, nil
+}
+
 // ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
-func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64) error {
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64, beforeResizePodRestartCount int32) error {
 	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
 	newResourceTemplateID := resConfigUpdated.GetId()
 	newStorageTemplateID := stConfigUpdated.GetId()
@@ -676,6 +699,12 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedPvcSize)
 	} else {
 		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
+	}
+	afterResizePodRestartCount, err := GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
+	log.FailOnError(err, "unable to get pods restart count before PVC resize")
+	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]", afterResizePodRestartCount)
+	if afterResizePodRestartCount > beforeResizePodRestartCount {
+		log.FailOnError(err, "Pods restarted after storage resize, Please check the logs manually")
 	}
 	return nil
 }
