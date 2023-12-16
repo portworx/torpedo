@@ -370,7 +370,9 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 					stepLog = "Increase the storage size again after Scale-UP"
 					Step(stepLog, func() {
 						newTemplateName2 := "autoTemp-" + strconv.Itoa(rand.Int())
-						storageSize := params.StorageConfigurations.NewStorageSize + "5G"
+						currStorageSize := *resConfigModelUpdated1.StorageRequest
+						newStorageSize, _ := strconv.Atoi(currStorageSize[:len(currStorageSize)-1])
+						updatedStorage := strconv.Itoa(newStorageSize+10) + "G"
 						updatedTemplateConfig2 := controlplane.Templates{
 							CpuLimit:       *resConfigModelUpdated1.CpuLimit,
 							CpuRequest:     *resConfigModelUpdated1.CpuRequest,
@@ -378,7 +380,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							MemoryLimit:    *resConfigModelUpdated1.MemoryLimit,
 							MemoryRequest:  *resConfigModelUpdated1.MemoryRequest,
 							Name:           newTemplateName2,
-							StorageRequest: storageSize,
+							StorageRequest: updatedStorage,
 							FsType:         *stConfigModel.Fs,
 							ReplFactor:     *stConfigModel.Repl,
 							Provisioner:    *stConfigModelUpdated1.Provisioner,
@@ -392,7 +394,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						newStorageTemplateID2 = stConfigModelUpdated2.GetId()
 						stIds = append(stIds, newStorageTemplateID2)
 						resIds = append(resIds, newResourceTemplateID2)
-						beforeResizePodRestartCount1, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
+						beforeResizePodRestartCount1, err = GetDeploymentsPodRestartCount(updatedDeployment, params.InfraToTest.Namespace)
 						log.FailOnError(err, "unable to get pods restart count before Storage resize")
 						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount1)
 
@@ -404,8 +406,8 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
 							log.FailOnError(err, "Error while fetching AppConfigID")
 						}
-						updatedDeployment1, err = dsTest.UpdateDataServices(deployment.GetId(),
-							appConfigID, deployment.GetImageId(),
+						updatedDeployment1, err = dsTest.UpdateDataServices(updatedDeployment.GetId(),
+							appConfigID, updatedDeployment.GetImageId(),
 							int32(ds.ScaleReplicas), newResourceTemplateID2, params.InfraToTest.Namespace)
 						log.FailOnError(err, "Error while updating dataservices")
 						Step("Validate Deployments after template update", func() {
@@ -413,12 +415,12 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							log.FailOnError(err, "Error while validating dataservices")
 							log.InfoD("Data-service: %v is up and healthy", ds.Name)
 							updatedDepList1 = append(updatedDepList1, updatedDeployment1)
-							updatedPvcSize1, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
+							updatedPvcSize1, err = GetVolumeCapacityInGB(namespace, updatedDeployment1)
 							log.InfoD("Updated Storage Size is- %v", updatedPvcSize1)
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1, beforeResizePodRestartCount1)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment1, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1, beforeResizePodRestartCount1)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
