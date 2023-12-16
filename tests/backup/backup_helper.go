@@ -1227,7 +1227,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	}
 
 	log.Infof("Namespace mapping from CreateRestoreWithValidation [%v]", namespaceMapping)
-	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping)
 
 	return err
 }
@@ -2101,9 +2101,6 @@ func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Du
 		actual := resp.GetRestore().GetStatus().Status
 		reason := resp.GetRestore().GetStatus().Reason
 
-		if resp.GetRestore().ReplacePolicy == api.ReplacePolicy_Delete {
-			IsReplacePolicySetToDelete = true
-		}
 		for _, status := range statusesExpected {
 			if actual == status {
 				return "", false, nil
@@ -2163,7 +2160,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 }
 
 func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, appContext context.Context,
-	backupName string) error {
+	backupName string, namespaceMapping map[string]string) error {
 
 	var allBackupNamespaces []string
 	var dataBeforeBackup = make(map[string][][]string)
@@ -2192,6 +2189,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	backupInspectResponse, _ := backupDriver.InspectBackup(appContext, backupInspectRequest)
 	theBackup := backupInspectResponse.GetBackup()
 	allBackupNamespaces = theBackup.Namespaces
+	theRestore := restoreInspectResponse.GetRestore()
 
 	log.InfoD("Backup UUID - [%s]", backupUid)
 	// Fetching the Data commands from Source
@@ -2212,8 +2210,6 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			}
 		}
 	}
-
-	theRestore := restoreInspectResponse.GetRestore()
 
 	// Creating restore handlers
 	log.InfoD("Creating all restore app handlers")
@@ -2252,7 +2248,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			log.InfoD("Skipping data validation added before backup as no data was found")
 		}
 
-		if theRestore.ReplacePolicy != api.ReplacePolicy_Delete {
+		if theRestore.ReplacePolicy == api.ReplacePolicy_Delete && (theBackup.Cluster != theRestore.Cluster || (len(namespaceMapping) != 0)) {
 			if len(dataAfterBackup) != 0 {
 				log.InfoD("Validating data inserted after backup")
 				err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetApplicationType()], appContext)
@@ -2263,7 +2259,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				log.InfoD("Skipping data validation added after backup as no data was found")
 			}
 		} else {
-			log.InfoD("Skipping data validation for data added after backup as restore policy is set to [%s]", theRestore.ReplacePolicy.String())
+			IsReplacePolicySetToDelete = true
+			log.InfoD("Skipping data validation for data added after backup as restore policy is set to [%s] and source and destination clusters are same", theRestore.ReplacePolicy.String())
 		}
 	}
 

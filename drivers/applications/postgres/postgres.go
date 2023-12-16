@@ -93,7 +93,6 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier stri
 
 // Return data inserted before backup
 func (app *PostgresConfig) GetBackupData(identifier string) []string {
-	log.InfoD("All data - [%+v]", app.SQLCommands)
 	if _, ok := app.SQLCommands[identifier]; ok {
 		return app.SQLCommands[identifier]["select"]
 	} else {
