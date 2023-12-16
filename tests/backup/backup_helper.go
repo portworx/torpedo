@@ -2252,7 +2252,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			log.InfoD("Skipping data validation added before backup as no data was found")
 		}
 
-		if theRestore.ReplacePolicy == api.ReplacePolicy_Delete {
+		if theRestore.ReplacePolicy != api.ReplacePolicy_Delete {
 			if len(dataAfterBackup) != 0 {
 				log.InfoD("Validating data inserted after backup")
 				err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetApplicationType()], appContext)
