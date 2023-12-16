@@ -116,7 +116,7 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 							stIDs = append(stIDs, newStorageTemplateID)
 							resIds = append(resIds, newResourceTemplateID)
 							beforeResizePodRestartCount, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-							log.FailOnError(err, "unable to get pods restart count before PVC resize")
+							log.FailOnError(err, "unable to get pods restart count before Storage resize")
 							log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount)
 						})
 						stepLog = "Apply updated template to the dataservice deployment"
@@ -329,7 +329,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						stIds = append(stIds, newStorageTemplateID1)
 						resIds = append(resIds, newResourceTemplateID1)
 						beforeResizePodRestartCount, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods restart count before PVC resize")
+						log.FailOnError(err, "unable to get pods restart count before Storage resize")
 						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount)
 
 					})
@@ -393,7 +393,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						stIds = append(stIds, newStorageTemplateID2)
 						resIds = append(resIds, newResourceTemplateID2)
 						beforeResizePodRestartCount1, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods restart count before PVC resize")
+						log.FailOnError(err, "unable to get pods restart count before Storage resize")
 						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount1)
 
 					})
@@ -522,7 +522,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 						tempstIds = append(tempstIds, newStorageTemplateID)
 						tempresIds = append(tempresIds, newResourceTemplateID)
 						beforeResizePodRestartCount, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods restart count before PVC resize")
+						log.FailOnError(err, "unable to get pods restart count before Storage resize")
 						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount)
 
 					})

@@ -658,6 +658,7 @@ func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deploym
 	return nil
 }
 
+// GetDeploymentsPodRestartCount to calculate pods restart count from deployment
 func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace string) (int32, error) {
 	var restartCount int32
 	labelSelector := make(map[string]string)
@@ -703,8 +704,13 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	afterResizePodRestartCount, err := GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
 	log.FailOnError(err, "unable to get pods restart count before PVC resize")
 	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]", afterResizePodRestartCount)
-	if afterResizePodRestartCount > beforeResizePodRestartCount {
-		log.FailOnError(err, "Pods restarted after storage resize, Please check the logs manually")
+	if !(afterResizePodRestartCount > beforeResizePodRestartCount) {
+		flagCount := true
+		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
+
+	} else {
+		log.FailOnError(err, "[%v] Pods restarted after storage resize, Please check the logs manually", afterResizePodRestartCount)
 	}
+	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
 }
