@@ -83,7 +83,7 @@ func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) e
 func (app *MySqlConfig) InsertBackupData(ctx context.Context, identifier string, commnads []string) error {
 
 	var err error
-	log.Infof("Inserting data")
+	log.InfoD("Inserting data")
 	if len(commnads) == 0 {
 		log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
 		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
@@ -107,7 +107,7 @@ func (app *MySqlConfig) GetBackupData(identifier string) []string {
 // CheckDataPresent checks if the mentioned entry is present or not in the database
 func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
 
-	log.Infof("Running Select Queries")
+	log.InfoD("Running Select Queries")
 
 	conn, err := app.GetConnection(ctx)
 	if err != nil {
@@ -125,7 +125,7 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 		err := currentRow.Scan(&key, &value)
 
 		if err != nil {
-			log.Infof("Select query failed - [%s] Error - [%s]", eachQuery, err.Error())
+			log.InfoD("Select query failed - [%s] Error - [%s]", eachQuery, err.Error())
 			queryNotFoundList = append(queryNotFoundList, eachQuery)
 		}
 	}
@@ -141,7 +141,7 @@ func (app *MySqlConfig) CheckDataPresent(selectQueries []string, ctx context.Con
 // UpdateBackupData updates the rows generated initially by utilities
 func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 
-	log.Infof("Running Update Queries")
+	log.InfoD("Running Update Queries")
 	err := app.ExecuteCommand(app.SQLCommands["default"]["update"], ctx)
 
 	return err
@@ -150,7 +150,7 @@ func (app *MySqlConfig) UpdateBackupData(ctx context.Context) error {
 // DeleteBackupData deletes the rows generated initially by utilities
 func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 
-	log.Infof("Running Delete Queries")
+	log.InfoD("Running Delete Queries")
 	err := app.ExecuteCommand(app.SQLCommands["default"]["delete"], ctx)
 
 	return err
@@ -169,7 +169,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
-		log.Infof("Error while creating table - [%s]", err.Error())
+		log.InfoD("Error while creating table - [%s]", err.Error())
 		allErrors = append(allErrors, err.Error())
 	}
 	for {
@@ -180,7 +180,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
-				log.Infof("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
+				log.InfoD("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -218,13 +218,13 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 // Update the existing SQL commands
 func (app *MySqlConfig) UpdateDataCommands(count int, identifier string) {
 	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, MySql)
-	log.Info("SQL Commands updated")
+	log.InfoD("SQL Commands updated")
 }
 
 // Add SQL commands
 func (app *MySqlConfig) AddDataCommands(identifier string, commands map[string][]string) {
 	app.SQLCommands[identifier] = commands
-	log.Infof("Sql commands added")
+	log.InfoD("Sql commands added")
 }
 
 // Generate and return random SQL commands

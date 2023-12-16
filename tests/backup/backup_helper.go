@@ -430,7 +430,7 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 		backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 
 		for _, eachHandler := range existingAppHandler {
-			log.InfoD("Backup UUID while adding data- [%s]", backupUid)
+			log.InfoD("Backup UUID while adding data - [%s]", backupUid)
 			eachHandler.AddDataCommands(backupUid, commandBeforeBackup)
 			restoreIdentifier := fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix)
 			eachHandler.UpdateDataCommands(queryCountForValidation, restoreIdentifier)
@@ -2194,10 +2194,9 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	allBackupNamespaces = theBackup.Namespaces
 
 	log.InfoD("Backup UUID - [%s]", backupUid)
-	log.InfoD("All backed up namespaces - [%s]", allBackupNamespaces)
 	// Fetching the Data commands from Source
 	for _, eachBackupNamespace := range allBackupNamespaces {
-		log.Infof("All Handler Namespaces - [%+v]", NamespaceAppWithDataMap)
+		log.InfoD("All Handler Namespaces - [%+v]", NamespaceAppWithDataMap)
 		for _, eachHandler := range NamespaceAppWithDataMap[eachBackupNamespace] {
 			beforeBackup := eachHandler.GetBackupData(backupUid)
 			afterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix))
@@ -2223,7 +2222,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		if err != nil {
 			allErrors = append(allErrors, err.Error())
 		}
-		log.Infof("App Info - [%+v]", appInfo)
+		log.InfoD("App Info - [%+v]", appInfo)
 		if appInfo.StartDataSupport {
 			appHandler, _ := appDriver.GetApplicationDriver(
 				appInfo.AppType,
@@ -2250,7 +2249,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
 		} else {
-			log.Infof("Skipping data validation added before backup as no data was found")
+			log.InfoD("Skipping data validation added before backup as no data was found")
 		}
 
 		if theRestore.ReplacePolicy == api.ReplacePolicy_Delete {
@@ -2261,10 +2260,10 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
 				}
 			} else {
-				log.Infof("Skipping data validation added after backup as no data was found")
+				log.InfoD("Skipping data validation added after backup as no data was found")
 			}
 		} else {
-			log.Infof("Skipping data validation for data added after backup as restore policy is set to [%s]", theRestore.ReplacePolicy.String())
+			log.InfoD("Skipping data validation for data added after backup as restore policy is set to [%s]", theRestore.ReplacePolicy.String())
 		}
 	}
 
@@ -6019,11 +6018,11 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Is op based deployment %v", isOpBased)
+	log.InfoD("Is op based deployment %v", isOpBased)
 
 	if isOpBased {
 		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 		}
 		// Setting the new admin namespace
 		if namespace != "" {
@@ -6036,12 +6035,12 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 			return nil, err
 		}
 		if namespace != "" {
-			log.Infof("Configured admin namespace to %s", namespace)
+			log.InfoD("Configured admin namespace to %s", namespace)
 		} else {
-			log.Infof("Removed admin namespace") // Removing admin namespace is not supported - https://docs.portworx.com/portworx-backup-on-prem/configure/admin-namespace.html
+			log.InfoD("Removed admin namespace") // Removing admin namespace is not supported - https://docs.portworx.com/portworx-backup-on-prem/configure/admin-namespace.html
 		}
 	} else {
-		log.Infof("Updating stork deployment as it's pxe is not present")
+		log.InfoD("Updating stork deployment as it's pxe is not present")
 		storkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 		if err != nil {
 			return nil, err
@@ -6114,14 +6113,14 @@ func getCurrentAdminNamespace() (string, error) {
 			return "", err
 		}
 		if adminNamespace, ok := stc.Spec.Stork.Args["admin-namespace"]; ok {
-			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		} else {
 			adminNamespace, err := k8sutils.GetStorkPodNamespace()
 			if err != nil {
 				return "", err
 			}
-			log.Infof("Current admin namespace - [%s]", adminNamespace)
+			log.InfoD("Current admin namespace - [%s]", adminNamespace)
 			return adminNamespace, nil
 		}
 
@@ -6130,7 +6129,7 @@ func getCurrentAdminNamespace() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		log.Infof("Current admin namespace - [%s]", adminNamespace)
+		log.InfoD("Current admin namespace - [%s]", adminNamespace)
 		return adminNamespace, nil
 	}
 }
@@ -6143,7 +6142,7 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 	if len(backupNameSpaces) == 1 {
 		currentAdminNamespace = backupNameSpaces[0]
 	}
-	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
+	log.InfoD("Current CR Namespace: [%s]", currentAdminNamespace)
 
 	backupDriver := Inst().Backup
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
@@ -6162,7 +6161,7 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 
 		for _, eachCR := range allBackupCrs {
 			if strings.Contains(eachCR, backupName) {
-				log.Infof("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
+				log.InfoD("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
 				return nil, false, nil
 			}
 		}
@@ -6183,7 +6182,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 			currentAdminNamespace = val
 		}
 	}
-	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
+	log.InfoD("Current CR Namespace: [%s]", currentAdminNamespace)
 
 	backupDriver := Inst().Backup
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
@@ -6202,7 +6201,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 
 		for _, eachCR := range allRestoreCrs {
 			if strings.Contains(eachCR, restoreName) {
-				log.Infof("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+				log.InfoD("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
 				return nil, false, nil
 			}
 		}
@@ -6660,7 +6659,7 @@ func validateCRCleanup(resourceInterface interface{},
 	}
 
 	if !isValidCluster {
-		log.Infof("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
+		log.InfoD("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
 		return nil
 	}
 
@@ -6689,6 +6688,10 @@ func validateCRCleanup(resourceInterface interface{},
 			return nil, true, err
 		}
 
+<<<<<<< HEAD
+=======
+		log.InfoD("Validating CR cleanup")
+>>>>>>> bf8afbcda (Changeing Infof to InfoD)
 		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
 
 		for _, eachCR := range allCRs {

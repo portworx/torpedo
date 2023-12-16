@@ -1935,7 +1935,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 			if err != nil {
 				log.InfoD("Some error occurred - [%s]", err)
 			}
-			log.Infof("App Info - [%+v]", appInfo)
+			log.InfoD("App Info - [%+v]", appInfo)
 			if appInfo.StartDataSupport {
 				appHandler, _ := appDriver.GetApplicationDriver(
 					appInfo.AppType,
@@ -1964,7 +1964,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 		})
 	}
 
-	log.Infof("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
+	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
 
 	return controlChannel, &errGroup, NamespaceAppWithDataMap
 }
@@ -2139,7 +2139,7 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 
 	if allErrors != "" {
 		if IsReplacePolicySetToDelete {
-			log.InfoD("Skipping data conitnuity check as the replace policy was set to delete in this scenario")
+			log.Infof("Skipping data conitnuity check as the replace policy was set to delete in this scenario")
 			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
 			return nil
 		} else {

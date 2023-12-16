@@ -79,7 +79,7 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier string, commnads []string) error {
 
 	var err error
-	log.Infof("Inserting data")
+	log.InfoD("Inserting data")
 	if len(commnads) == 0 {
 		log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
 		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
@@ -106,7 +106,7 @@ func (app *PostgresConfig) GetBackupData(identifier string) []string {
 // CheckDataPresent checks if the mentioned entry is present or not in the database
 func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
 
-	log.Infof("Running Select Queries")
+	log.InfoD("Running Select Queries")
 
 	conn, err := app.GetConnection(ctx)
 	if err != nil {
@@ -122,7 +122,7 @@ func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.
 		err := currentRow.Scan(&key, &value)
 
 		if err != nil {
-			log.Infof("Select query failed - [%s] Error - [%s]", eachQuery, err.Error())
+			log.InfoD("Select query failed - [%s] Error - [%s]", eachQuery, err.Error())
 			queryNotFoundList = append(queryNotFoundList, eachQuery)
 		}
 	}
@@ -137,7 +137,7 @@ func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.
 // UpdateBackupData updates the rows generated initially by utilities
 func (app *PostgresConfig) UpdateBackupData(ctx context.Context, identifier string) error {
 
-	log.Infof("Running Update Queries")
+	log.InfoD("Running Update Queries")
 	err := app.ExecuteCommand(app.SQLCommands[identifier]["update"], ctx)
 
 	return err
@@ -146,7 +146,7 @@ func (app *PostgresConfig) UpdateBackupData(ctx context.Context, identifier stri
 // DeleteBackupData deletes the rows generated initially by utilities
 func (app *PostgresConfig) DeleteBackupData(ctx context.Context, identifier string) error {
 
-	log.Infof("Running Delete Queries")
+	log.InfoD("Running Delete Queries")
 	err := app.ExecuteCommand(app.SQLCommands[identifier]["delete"], ctx)
 
 	return err
@@ -175,7 +175,7 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
-				log.Infof("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
+				log.InfoD("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -213,14 +213,13 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 // Update the existing SQL commands
 func (app *PostgresConfig) UpdateDataCommands(count int, identifier string) {
 	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, Postgres)
-	log.Info("SQL Commands updated")
-	log.InfoD("Data Map: [%+v]", app.SQLCommands)
+	log.InfoD("SQL Commands updated")
 }
 
 // Update the existing SQL commands
 func (app *PostgresConfig) AddDataCommands(identifier string, commands map[string][]string) {
 	app.SQLCommands[identifier] = commands
-	log.Infof("Sql commands added")
+	log.InfoD("Sql commands added")
 }
 
 // Generate and return random SQL commands
