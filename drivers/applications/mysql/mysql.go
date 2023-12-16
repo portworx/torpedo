@@ -231,3 +231,8 @@ func (app *MySqlConfig) AddDataCommands(identifier string, commands map[string][
 func (app *MySqlConfig) GetRandomDataCommands(count int) map[string][]string {
 	return GenerateRandomSQLCommands(count, MySql)
 }
+
+// Get the application type
+func (app *MySqlConfig) GetApplicationType() string {
+	return MySql
+}

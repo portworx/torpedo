@@ -93,6 +93,7 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier stri
 
 // Return data inserted before backup
 func (app *PostgresConfig) GetBackupData(identifier string) []string {
+	log.InfoD("All data - [%+v]", app.SQLCommands)
 	if _, ok := app.SQLCommands[identifier]; ok {
 		return app.SQLCommands[identifier]["select"]
 	} else {
@@ -225,4 +226,9 @@ func (app *PostgresConfig) AddDataCommands(identifier string, commands map[strin
 // Generate and return random SQL commands
 func (app *PostgresConfig) GetRandomDataCommands(count int) map[string][]string {
 	return GenerateRandomSQLCommands(count, Postgres)
+}
+
+// Get the application type
+func (app *PostgresConfig) GetApplicationType() string {
+	return Postgres
 }

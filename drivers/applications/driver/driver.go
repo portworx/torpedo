@@ -29,6 +29,8 @@ type ApplicationDriver interface {
 	GetRandomDataCommands(count int) map[string][]string
 
 	AddDataCommands(identifier string, commands map[string][]string)
+
+	GetApplicationType() string
 }
 
 // Returns struct of appType provided as input
