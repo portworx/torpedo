@@ -20,11 +20,15 @@ type ApplicationDriver interface {
 
 	CheckDataPresent(selectQueries []string, ctx context.Context) error
 
-	UpdateSQLCommands(count int, identifier string)
+	UpdateDataCommands(count int, identifier string)
 
-	InsertBackupData(ctx context.Context, identifier string) error
+	InsertBackupData(ctx context.Context, identifier string, commnads []string) error
 
 	GetBackupData(identifier string) []string
+
+	GetRandomDataCommands(count int) map[string][]string
+
+	AddDataCommands(identifier string, commands map[string][]string)
 }
 
 // Returns struct of appType provided as input

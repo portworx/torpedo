@@ -282,6 +282,10 @@ var (
 	}
 )
 
+var (
+	dataAfterBackupSuffix = "-after-backup"
+)
+
 // Set default provider as aws
 func getProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
@@ -396,40 +400,47 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 	return
 }
 
-func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver, backupName string) ([]appDriver.ApplicationDriver, error) {
+func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver, backupName string,
+	commandBeforeBackup map[string][]string) ([]appDriver.ApplicationDriver, map[string][]string, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
 	// Getting app handlers for deployed apps in the namespace and inserting data to same
 	var err error
 	var allHandlers []appDriver.ApplicationDriver
+	var dataCommands = make(map[string][]string)
 
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
 			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
 				log.InfoD("App with data support found under - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
-					eachHandler.UpdateSQLCommands(queryCountForValidation, backupName)
-					err = eachHandler.InsertBackupData(ctx, backupName)
+					dataCommands = eachHandler.GetRandomDataCommands(queryCountForValidation)
+					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands["insert"])
 					if err != nil {
-						return nil, err
+						return nil, nil, err
 					}
 					allHandlers = append(allHandlers, eachHandler)
 				}
 			}
 		}
 	} else {
+
+		backupDriver := Inst().Backup
+		backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+
 		for _, eachHandler := range existingAppHandler {
-			restoreIdentifier := fmt.Sprintf("%s-after-backup", backupName)
-			eachHandler.UpdateSQLCommands(queryCountForValidation, restoreIdentifier)
-			err = eachHandler.InsertBackupData(ctx, restoreIdentifier)
+			eachHandler.AddDataCommands(backupUid, commandBeforeBackup)
+			restoreIdentifier := fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix)
+			eachHandler.UpdateDataCommands(queryCountForValidation, restoreIdentifier)
+			err = eachHandler.InsertBackupData(ctx, restoreIdentifier, []string{})
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
 
-	return allHandlers, nil
+	return allHandlers, dataCommands, nil
 }
 
 // CreateBackupWithValidation creates backup, checks for success, and validates the backup
@@ -442,8 +453,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		}
 	}
 
-	log.Infof("CTX - [%+v]", ctx)
-	appHandlers, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName)
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
@@ -453,7 +463,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		return err
 	}
 
-	_, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName)
+	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
 	}
@@ -2165,6 +2175,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		return err
 	}
 
+	backupUid, err := backupDriver.GetBackupUID(appContext, backupName, orgID)
 	theRestore := restoreInspectResponse.GetRestore()
 
 	// Creating restore handlers
@@ -2193,8 +2204,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	// Verifying data on restored pods
 	for _, eachHandler := range allRestoreHandlers {
 
-		dataBeforeBackup := eachHandler.GetBackupData(backupName)
-		dataAfterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s-after-backup", backupName))
+		dataBeforeBackup := eachHandler.GetBackupData(backupUid)
+		dataAfterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix))
 
 		if dataBeforeBackup != nil {
 			log.InfoD("Validating data inserted before backup")

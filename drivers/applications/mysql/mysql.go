@@ -79,11 +79,18 @@ func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) e
 	return nil
 }
 
-// InsertBackupData inserts the rows generated initially by utilities
-func (app *MySqlConfig) InsertBackupData(ctx context.Context, identifier string) error {
+// InsertBackupData inserts the rows generated initially by utilities or rows passed
+func (app *MySqlConfig) InsertBackupData(ctx context.Context, identifier string, commnads []string) error {
 
+	var err error
 	log.Infof("Inserting data")
-	err := app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
+	if len(commnads) == 0 {
+		log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
+		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
+	} else {
+		log.InfoD("Inserting below data : %s", strings.Join(commnads, "\n"))
+		err = app.ExecuteCommand(commnads, ctx)
+	}
 
 	return err
 }
@@ -209,7 +216,18 @@ func (app *MySqlConfig) startInsertingData(tableName string, ctx context.Context
 }
 
 // Update the existing SQL commands
-func (app *MySqlConfig) UpdateSQLCommands(count int, identifier string) {
-	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, Postgres)
+func (app *MySqlConfig) UpdateDataCommands(count int, identifier string) {
+	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, MySql)
 	log.Info("SQL Commands updated")
+}
+
+// Add SQL commands
+func (app *MySqlConfig) AddDataCommands(identifier string, commands map[string][]string) {
+	app.SQLCommands[identifier] = commands
+	log.Infof("Sql commands added")
+}
+
+// Generate and return random SQL commands
+func (app *MySqlConfig) GetRandomDataCommands(count int) map[string][]string {
+	return GenerateRandomSQLCommands(count, MySql)
 }

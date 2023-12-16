@@ -75,12 +75,18 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 	return nil
 }
 
-// InsertBackupData inserts the rows generated initially by utilities
-func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier string) error {
+// InsertBackupData inserts the rows generated initially by utilities or rows passed
+func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier string, commnads []string) error {
 
+	var err error
 	log.Infof("Inserting data")
-	log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
-	err := app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
+	if len(commnads) == 0 {
+		log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
+		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
+	} else {
+		log.InfoD("Inserting below data : %s", strings.Join(commnads, "\n"))
+		err = app.ExecuteCommand(commnads, ctx)
+	}
 
 	return err
 }
@@ -90,6 +96,8 @@ func (app *PostgresConfig) GetBackupData(identifier string) []string {
 	if _, ok := app.SQLCommands[identifier]; ok {
 		return app.SQLCommands[identifier]["select"]
 	} else {
+		log.InfoD("%s not found in app sql command", identifier)
+		log.InfoD("All current SQL commands - %+v", app.SQLCommands)
 		return nil
 	}
 }
@@ -202,7 +210,19 @@ func (app *PostgresConfig) startInsertingData(tableName string, ctx context.Cont
 }
 
 // Update the existing SQL commands
-func (app *PostgresConfig) UpdateSQLCommands(count int, identifier string) {
+func (app *PostgresConfig) UpdateDataCommands(count int, identifier string) {
 	app.SQLCommands[identifier] = GenerateRandomSQLCommands(count, Postgres)
 	log.Info("SQL Commands updated")
+	log.InfoD("Data Map: [%+v]", app.SQLCommands)
+}
+
+// Update the existing SQL commands
+func (app *PostgresConfig) AddDataCommands(identifier string, commands map[string][]string) {
+	app.SQLCommands[identifier] = commands
+	log.Infof("Sql commands added")
+}
+
+// Generate and return random SQL commands
+func (app *PostgresConfig) GetRandomDataCommands(count int) map[string][]string {
+	return GenerateRandomSQLCommands(count, Postgres)
 }
