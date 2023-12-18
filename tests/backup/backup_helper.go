@@ -6369,7 +6369,7 @@ func validateCRCleanup(resourceInterface interface{},
 		log.Infof("Skipping CR cleanup validation in case of GKE")
 		return nil
 	}
-	
+
 	var allCRs []string
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
