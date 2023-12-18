@@ -15,8 +15,8 @@ const (
 	// DriverName is the name of the gce driver implementation
 	DriverName = "gce"
 	// GceStorage GCE storage driver name
-	GceStorage         torpedovolume.StorageProvisionerType = "gce"
-	GceStandardStorage torpedovolume.StorageProvisionerType = "gce-standard"
+	GceStorage         torpedovolume.StorageProvisionerType = "gce-pd"
+	GceStandardStorage torpedovolume.StorageProvisionerType = "pd-csi-storage-gke"
 )
 
 // Provisioners types of supported provisioners
