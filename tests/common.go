@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/gke"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
@@ -159,6 +160,9 @@ import (
 
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
+	// import ocp driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 
 	context1 "context"
 
@@ -3114,6 +3118,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		}
 	} else if ibmNodeDriver, ok := Inst().N.(*ibm.Ibm); ok {
 		err = ssh.RefreshDriver(&ibmNodeDriver.SSH)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
