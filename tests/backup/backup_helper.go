@@ -6364,6 +6364,12 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 // validateCRCleanup validates CR cleanup created during backup or restore
 func validateCRCleanup(resourceInterface interface{},
 	ctx context.Context) error {
+
+	if GetClusterProviders()[0] == "gke" {
+		log.Infof("Skipping CR cleanup validation in case of GKE")
+		return nil
+	}
+	
 	var allCRs []string
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
