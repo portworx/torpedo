@@ -20,6 +20,7 @@ type MySqlConfig struct {
 	Port        int
 	NodePort    int
 	DBName      string
+	Namespace   string
 	SQLCommands map[string]map[string][]string
 }
 
@@ -180,7 +181,6 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
-				log.InfoD("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -235,4 +235,9 @@ func (app *MySqlConfig) GetRandomDataCommands(count int) map[string][]string {
 // Get the application type
 func (app *MySqlConfig) GetApplicationType() string {
 	return MySql
+}
+
+// Get Namespace of the app
+func (app *MySqlConfig) GetNamespace() string {
+	return app.Namespace
 }

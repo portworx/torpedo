@@ -401,14 +401,14 @@ func FilterAppContextsByNamespace(appContexts []*scheduler.Context, namespaces [
 }
 
 func InsertDataForBackupValidation(namespaces []string, ctx context.Context, existingAppHandler []appDriver.ApplicationDriver, backupName string,
-	commandBeforeBackup map[string][]string) ([]appDriver.ApplicationDriver, map[string][]string, error) {
+	commandBeforeBackup map[appDriver.ApplicationDriver]map[string][]string) ([]appDriver.ApplicationDriver, map[appDriver.ApplicationDriver]map[string][]string, error) {
 
 	// afterBackup - Check if the data is being inserted before or after backup
 
 	// Getting app handlers for deployed apps in the namespace and inserting data to same
 	var err error
 	var allHandlers []appDriver.ApplicationDriver
-	var dataCommands = make(map[string][]string)
+	var dataCommands = make(map[appDriver.ApplicationDriver]map[string][]string)
 
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
@@ -416,8 +416,8 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 				log.InfoD("App with data support found under namespace - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
 					log.InfoD("Adding data to app in namespace  - [%s]", eachNamespace)
-					dataCommands = eachHandler.GetRandomDataCommands(queryCountForValidation)
-					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands["insert"])
+					dataCommands[eachHandler] = eachHandler.GetRandomDataCommands(queryCountForValidation)
+					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands[eachHandler]["insert"])
 					if err != nil {
 						return nil, nil, err
 					}
@@ -432,7 +432,7 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 
 		for _, eachHandler := range existingAppHandler {
 			log.InfoD("Backup UUID while adding data - [%s]", backupUid)
-			eachHandler.AddDataCommands(backupUid, commandBeforeBackup)
+			eachHandler.AddDataCommands(backupUid, commandBeforeBackup[eachHandler])
 			restoreIdentifier := fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix)
 			eachHandler.UpdateDataCommands(queryCountForValidation, restoreIdentifier)
 			err = eachHandler.InsertBackupData(ctx, restoreIdentifier, []string{})
@@ -2164,8 +2164,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	backupName string, namespaceMapping map[string]string) error {
 
 	var allBackupNamespaces []string
-	var dataBeforeBackup = make(map[string][][]string)
-	var dataAfterBackup = make(map[string][][]string)
+	var dataBeforeBackup = make(map[string]map[string][][]string)
+	var dataAfterBackup = make(map[string]map[string][][]string)
 
 	var allRestoreHandlers []appDriver.ApplicationDriver
 	var allErrors []string
@@ -2200,14 +2200,38 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			beforeBackup := eachHandler.GetBackupData(backupUid)
 			afterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix))
 
-			if beforeBackup != nil {
-				log.InfoD("Data inserted before backup added for validation")
-				dataBeforeBackup[eachHandler.GetApplicationType()] = append(dataAfterBackup[eachHandler.GetApplicationType()], beforeBackup)
-			}
+			if restoreNamespace, ok := namespaceMapping[eachBackupNamespace]; ok {
+				if beforeBackup != nil {
+					log.InfoD("Data inserted before backup added for validation")
+					if _, ok := dataBeforeBackup[restoreNamespace]; !ok {
+						dataBeforeBackup[restoreNamespace] = make(map[string][][]string)
+					}
+					dataBeforeBackup[restoreNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], beforeBackup)
+				}
 
-			if afterBackup != nil {
-				log.InfoD("Data inserted after backup added for validation")
-				dataAfterBackup[eachHandler.GetApplicationType()] = append(dataAfterBackup[eachHandler.GetApplicationType()], afterBackup)
+				if afterBackup != nil {
+					log.InfoD("Data inserted after backup added for validation")
+					if _, ok := dataAfterBackup[restoreNamespace]; !ok {
+						dataAfterBackup[restoreNamespace] = make(map[string][][]string)
+					}
+					dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], afterBackup)
+				}
+			} else {
+				if beforeBackup != nil {
+					log.InfoD("Data inserted before backup added for validation")
+					if _, ok := dataBeforeBackup[eachBackupNamespace]; !ok {
+						dataBeforeBackup[eachBackupNamespace] = make(map[string][][]string)
+					}
+					dataBeforeBackup[eachBackupNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], beforeBackup)
+				}
+
+				if afterBackup != nil {
+					log.InfoD("Data inserted after backup added for validation")
+					if _, ok := dataAfterBackup[eachBackupNamespace]; !ok {
+						dataAfterBackup[eachBackupNamespace] = make(map[string][][]string)
+					}
+					dataAfterBackup[eachBackupNamespace][eachHandler.GetApplicationType()] = append(dataAfterBackup[restoreNamespace][eachHandler.GetApplicationType()], afterBackup)
+				}
 			}
 		}
 	}
@@ -2229,7 +2253,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.Port,
 				appInfo.DBName,
 				appContext,
-				appInfo.NodePort)
+				appInfo.NodePort,
+				appInfo.Namespace)
 			log.InfoD("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
 			allRestoreHandlers = append(allRestoreHandlers, appHandler)
 		}
@@ -2240,8 +2265,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		// TODO: This needs to be fixed later in case of multiple apps in one namsespace
 		if len(dataBeforeBackup) != 0 {
 			log.InfoD("Validating data inserted before backup")
-			log.InfoD("Rows to be validated [%v]", dataBeforeBackup[eachHandler.GetApplicationType()])
-			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetApplicationType()], appContext)
+			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
 			if err != nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
@@ -2253,7 +2277,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			(theBackup.Cluster == theRestore.Cluster && (len(namespaceMapping) != 0)) {
 			if len(dataAfterBackup) != 0 {
 				log.InfoD("Validating data inserted after backup")
-				err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetApplicationType()], appContext)
+				err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
 				if err == nil {
 					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
 				}

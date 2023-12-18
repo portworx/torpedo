@@ -19,6 +19,7 @@ type PostgresConfig struct {
 	Port        int
 	NodePort    int
 	DBName      string
+	Namespace   string
 	SQLCommands map[string]map[string][]string
 }
 
@@ -174,7 +175,6 @@ func (app *PostgresConfig) StartData(command <-chan string, ctx context.Context)
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
-				log.InfoD("All select commands - [%s]", strings.Join(allSelectCommands, "\n"))
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
@@ -229,4 +229,9 @@ func (app *PostgresConfig) GetRandomDataCommands(count int) map[string][]string 
 // Get the application type
 func (app *PostgresConfig) GetApplicationType() string {
 	return Postgres
+}
+
+// Get Namespace of the app
+func (app *PostgresConfig) GetNamespace() string {
+	return app.Namespace
 }

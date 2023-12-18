@@ -31,11 +31,13 @@ type ApplicationDriver interface {
 	AddDataCommands(identifier string, commands map[string][]string)
 
 	GetApplicationType() string
+
+	GetNamespace() string
 }
 
 // Returns struct of appType provided as input
 func GetApplicationDriver(appType string, hostname string, user string,
-	password string, port int, dbname string, ctx context.Context, nodePort int) (ApplicationDriver, error) {
+	password string, port int, dbname string, ctx context.Context, nodePort int, namespace string) (ApplicationDriver, error) {
 
 	switch appType {
 	case Postgres:
@@ -48,7 +50,8 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			SQLCommands: map[string]map[string][]string{
 				"default": GenerateRandomSQLCommands(20, appType),
 			},
-			NodePort: nodePort,
+			NodePort:  nodePort,
+			Namespace: namespace,
 		}, nil
 	case MySql:
 		return &MySqlConfig{
@@ -60,7 +63,8 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			SQLCommands: map[string]map[string][]string{
 				"default": GenerateRandomSQLCommands(20, appType),
 			},
-			NodePort: nodePort,
+			NodePort:  nodePort,
+			Namespace: namespace,
 		}, nil
 	default:
 		return &PostgresConfig{
@@ -72,7 +76,8 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			SQLCommands: map[string]map[string][]string{
 				"default": GenerateRandomSQLCommands(20, appType),
 			},
-			NodePort: nodePort,
+			NodePort:  nodePort,
+			Namespace: namespace,
 		}, nil
 
 	}

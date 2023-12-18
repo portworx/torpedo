@@ -52,14 +52,14 @@ func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 	var deleteCommands []string
 	var updateCommands []string
 
-	tableName = "pg_validation_" + RandomString(5)
-
 	if appType == Postgres {
+		tableName = "pg_validation_" + RandomString(5)
 		insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		key varchar(45) NOT NULL,
 		value varchar(45) NOT NULL
 	  )`, tableName))
 	} else if appType == MySql {
+		tableName = "mysql_validation_" + RandomString(5)
 		insertCommands = append(insertCommands, fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 			`+"`key` "+`VARCHAR(45) NOT NULL ,
 			value VARCHAR(255)
