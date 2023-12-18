@@ -31,7 +31,7 @@ type gce struct {
 }
 
 func (d *gce) String() string {
-	return string(GceStorage)
+	return string(DriverName)
 }
 
 func (d *gce) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySpec, error) {
