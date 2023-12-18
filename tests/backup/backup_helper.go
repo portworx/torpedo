@@ -413,8 +413,9 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
 			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
-				log.InfoD("App with data support found under - [%s]", eachNamespace)
+				log.InfoD("App with data support found under namespace - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
+					log.InfoD("Adding data to app in namespace  - [%s]", eachNamespace)
 					dataCommands = eachHandler.GetRandomDataCommands(queryCountForValidation)
 					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands["insert"])
 					if err != nil {
@@ -2213,12 +2214,12 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 
 	// Creating restore handlers
 	log.InfoD("Creating all restore app handlers")
+	log.InfoD("Namespace Mapping - [%+v]", namespaceMapping)
 	for _, ctx := range expectedRestoredAppContexts {
 		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
 		if err != nil {
 			allErrors = append(allErrors, err.Error())
 		}
-		log.InfoD("App Info - [%+v]", appInfo)
 		if appInfo.StartDataSupport {
 			appHandler, _ := appDriver.GetApplicationDriver(
 				appInfo.AppType,
@@ -2229,7 +2230,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.DBName,
 				appContext,
 				appInfo.NodePort)
-			log.InfoD("App handler created for [%s]", appInfo.Hostname)
+			log.InfoD("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
 			allRestoreHandlers = append(allRestoreHandlers, appHandler)
 		}
 	}
@@ -2248,7 +2249,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			log.InfoD("Skipping data validation added before backup as no data was found")
 		}
 
-		if theRestore.ReplacePolicy == api.ReplacePolicy_Delete && (theBackup.Cluster != theRestore.Cluster || (len(namespaceMapping) != 0)) {
+		if (theRestore.ReplacePolicy == api.ReplacePolicy_Delete || theBackup.Cluster != theRestore.Cluster) ||
+			(theBackup.Cluster == theRestore.Cluster && (len(namespaceMapping) != 0)) {
 			if len(dataAfterBackup) != 0 {
 				log.InfoD("Validating data inserted after backup")
 				err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetApplicationType()], appContext)
