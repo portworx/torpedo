@@ -5813,6 +5813,30 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 		}
 	}
 
+	// Explicit wait for the deployment to be updated
+	time.Sleep(30 * time.Second)
+
+	checkCurrentAdminNamespace := func() (interface{}, bool, error) {
+		currentAdminNamespace, err := getCurrentAdminNamespace()
+		if err != nil {
+			return nil, true, fmt.Errorf("Error occurred while checking admin namespace - [%s]", err.Error())
+		}
+
+		if currentAdminNamespace == namespace {
+			return nil, false, nil
+		} else if namespace == "" && currentAdminNamespace == defaultStorkDeploymentNamespace {
+			return nil, false, nil
+		} else {
+			return nil, true, fmt.Errorf("Admin namespace not updated")
+		}
+	}
+
+	// Waiting for all pods admin namespace to be updated
+	_, err = task.DoRetryWithTimeout(checkCurrentAdminNamespace, 10*time.Minute, 30*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
 	updatedStorkDeployment, err := apps.Instance().GetDeployment(storkDeploymentName, storkDeploymentNamespace)
 	if err != nil {
 		return nil, err
@@ -6340,8 +6364,6 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 // validateCRCleanup validates CR cleanup created during backup or restore
 func validateCRCleanup(resourceInterface interface{},
 	ctx context.Context) error {
-	log.InfoD("Inside validateCRCleanup")
-	log.Infof("Resource Interface - [%+v]", resourceInterface)
 	var allCRs []string
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
@@ -6349,6 +6371,7 @@ func validateCRCleanup(resourceInterface interface{},
 	var resourceNamespaces []string
 	var resourceName string
 	var orgID string
+	var isValidCluster = false
 
 	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
 		// Creating object and variables from backup object
@@ -6366,6 +6389,29 @@ func validateCRCleanup(resourceInterface interface{},
 		}
 		orgID = currentObject.OrgId
 		resourceName = currentObject.Name
+	}
+
+	// Below code is added to skip the CR cleanup validation in case of synced backup
+	// For synced backup the cluster name has uuid suffix which is not supported/handled
+	// While creating the cluster object
+
+	// Fetching all clusters
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+
+	// Comparing cluster names to the name from backup inspect response
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		if clusterObj.Name == clusterName {
+			isValidCluster = true
+			break
+		}
+	}
+
+	if !isValidCluster {
+		log.Infof("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
+		return nil
 	}
 
 	backupDriver := Inst().Backup
