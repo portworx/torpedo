@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -144,7 +145,10 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.Service); ok {
 			appInfo.Namespace = obj.Namespace
-			nodePort := obj.Spec.Ports[0].NodePort
+			svc, _ := core.Instance().GetService(obj.Name, obj.Namespace)
+			nodePort := svc.Spec.Ports[0].NodePort
+			nodePort_old := obj.Spec.Ports[0].NodePort
+			log.Infof("Nodeport from service - [%d], Node port from spec - [%d]", nodePort, nodePort_old)
 			hostname, err := CreateHostNameForApp(obj.Name, nodePort, obj.Namespace)
 			if err != nil {
 				return appInfo, fmt.Errorf("Some error occurred while generating hostname")

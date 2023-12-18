@@ -95,6 +95,7 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier stri
 // Return data inserted before backup
 func (app *PostgresConfig) GetBackupData(identifier string) []string {
 	if _, ok := app.SQLCommands[identifier]; ok {
+		log.InfoD("All sql commands - [%+v]", app.SQLCommands)
 		return app.SQLCommands[identifier]["select"]
 	} else {
 		log.InfoD("%s not found in app sql command", identifier)

@@ -2131,12 +2131,12 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 		close(controlChannel)
 	})
 
-	Step("destroy apps", func() {
-		log.InfoD("Destroying apps")
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
-	})
+	// Step("destroy apps", func() {
+	// 	log.InfoD("Destroying apps")
+	// 	for _, ctx := range contexts {
+	// 		TearDownContext(ctx, opts)
+	// 	}
+	// })
 
 	if allErrors != "" {
 		if IsReplacePolicySetToDelete {

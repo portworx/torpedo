@@ -2236,6 +2236,11 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		}
 	}
 
+	log.InfoD("Data before Backup")
+	log.InfoD("%+v", dataBeforeBackup)
+	log.InfoD("Data after Backup")
+	log.InfoD("%+v", dataAfterBackup)
+
 	// Creating restore handlers
 	log.InfoD("Creating all restore app handlers")
 	log.InfoD("Namespace Mapping - [%+v]", namespaceMapping)
@@ -2255,10 +2260,13 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appContext,
 				appInfo.NodePort,
 				appInfo.Namespace)
-			log.InfoD("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
+			log.InfoD("All APP Info - [%+v]", appInfo)
+			log.InfoD("App handler created for [%s] in namespace [%s] Nodeport [%d]", appInfo.Hostname, appInfo.Namespace, appInfo.NodePort)
 			allRestoreHandlers = append(allRestoreHandlers, appHandler)
 		}
 	}
+
+	time.Sleep(30)
 
 	// Verifying data on restored pods
 	for _, eachHandler := range allRestoreHandlers {
