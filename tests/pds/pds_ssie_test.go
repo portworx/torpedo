@@ -36,13 +36,13 @@ var _ = Describe("{PerformPDSWorkflowMultipleIterations}", func() {
 		var deps []*pds.ModelsDeployment
 		pdsdeploymentsmd5Hash := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
-		for index := 1; index <= params.SSIE.NumIterations; index++ {
+		backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+		log.FailOnError(err, "Error while fetching the backup supported ds.")
 
+		for index := 1; index <= params.SSIE.NumIterations; index++ {
 			stepLog := "Deploy data services"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
-				log.FailOnError(err, "Error while fetching the backup supported ds.")
 				for _, ds := range params.DataServiceToTest {
 					deploymentsToBeCleaned := []*pds.ModelsDeployment{}
 					restoredDeployments := []*pds.ModelsDeployment{}
