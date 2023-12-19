@@ -6711,15 +6711,10 @@ func validateCRCleanup(resourceInterface interface{},
 			return nil, true, err
 		}
 
-<<<<<<< HEAD
-=======
-		log.InfoD("Validating CR cleanup")
->>>>>>> bf8afbcda (Changeing Infof to InfoD)
-		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
-
+		log.Infof("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
 		for _, eachCR := range allCRs {
 			if strings.Contains(eachCR, resourceName) {
-				log.InfoD("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
+				log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
 				return nil, true, fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
 			}
 		}
