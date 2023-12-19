@@ -1375,6 +1375,8 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 			log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
 			appName := fmt.Sprintf("querying-app-%d", i)
 			deployment.Metadata.Name = appName
+			deployment.Spec.Selector.MatchLabels = map[string]string{"app": appName}
+			deployment.Spec.Template.Metadata.Labels = map[string]string{"app": appName}
 			for j := range deployment.Spec.Template.Spec.Containers {
 				for k := range deployment.Spec.Template.Spec.Containers[j].Env {
 					if deployment.Spec.Template.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
