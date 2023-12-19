@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/gke"
 
 	"github.com/portworx/torpedo/pkg/stats"
 

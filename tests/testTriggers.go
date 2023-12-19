@@ -520,6 +520,9 @@ const (
 
 	// HAIncreaseWithPVCResize performs repl-add and resize PVC at same time
 	HAIncreaseWithPVCResize = "haIncreaseWithPVCResize"
+
+	// ReallocateSharedMount reallocated shared mount volumes
+	ReallocateSharedMount = "reallocateSharedMount"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -9170,6 +9173,131 @@ func TriggerOCPStorageNodeRecycle(contexts *[]*scheduler.Context, recordChan *ch
 	validateContexts(event, contexts)
 	updateMetrics(*event)
 
+}
+
+// TriggerReallocSharedMount peforms sharedv4 and sharedv4_svc volumes reallocation
+func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(ReallocateSharedMount)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: ReallocateSharedMount,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	setMetrics(*event)
+	stepLog := "get nodes with shared mount and reboot them"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		for _, ctx := range *contexts {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
+
+			for _, vol := range vols {
+				if vol.Shared {
+
+					n, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+					if err != nil {
+						UpdateOutcome(event, err)
+						continue
+					}
+
+					log.InfoD("volume %s is attached on node %s [%s]", vol.ID, n.SchedulerNodeName, n.Addresses[0])
+
+					// Workaround to avoid PWX-24277 for now.
+					Step(fmt.Sprintf("wait until volume %v status is Up", vol.ID), func() {
+						log.InfoD("wait until volume %v status is Up", vol.ID)
+
+						t := func() (interface{}, bool, error) {
+							connOpts := node.ConnectionOpts{
+								Timeout:         1 * time.Minute,
+								TimeBeforeRetry: 5 * time.Second,
+								Sudo:            true,
+							}
+							cmd := fmt.Sprintf("pxctl volume inspect %s | grep \"Replication Status\"", vol.ID)
+							volStatus, err := Inst().N.RunCommandWithNoRetry(*n, cmd, connOpts)
+							if err != nil {
+								log.Warnf("failed to get replication state of volume %v: %v", vol.ID, err)
+								return nil, true, err
+							}
+
+							if strings.Contains(volStatus, "Up") {
+								log.InfoD("volume %v: %v", vol.ID, volStatus)
+								return nil, false, nil
+							}
+							return nil, true, fmt.Errorf("volum status is not Up, Curr status: %s", volStatus)
+						}
+
+						_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
+						UpdateOutcome(event, err)
+					})
+
+					dashStats := make(map[string]string)
+					dashStats["node"] = n.Name
+					dashStats["volume"] = vol.Name
+					updateLongevityStats(ReallocateSharedMount, stats.PXRestartEventName, dashStats)
+
+					err = Inst().S.DisableSchedulingOnNode(*n)
+					dash.VerifySafely(err == nil, true, fmt.Sprintf("Disable sceduling on node : %s", n.Name))
+
+					err = Inst().V.StopDriver([]node.Node{*n}, false, nil)
+					dash.VerifySafely(err == nil, true, fmt.Sprintf("Stop volume driver on node : %s success ?", n.Name))
+
+					err = Inst().N.RebootNode(*n, node.RebootNodeOpts{
+						Force: true,
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         1 * time.Minute,
+							TimeBeforeRetry: 1 * time.Second,
+						},
+					})
+					UpdateOutcome(event, err)
+
+					// as we keep the storage driver down on node until we check if the volume, we wait a minute for
+					// reboot to occur then we force driver to refresh endpoint to pick another storage node which is up
+					log.InfoD("wait for %v for node reboot", 1*time.Minute)
+					time.Sleep(1 * time.Minute)
+
+					// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
+					err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
+						Action: "start",
+						ConnectionOpts: node.ConnectionOpts{
+							Timeout:         5 * time.Minute,
+							TimeBeforeRetry: 10 * time.Second,
+						}})
+					UpdateOutcome(event, err)
+
+					ctx.RefreshStorageEndpoint = true
+					n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 10*time.Second)
+
+					UpdateOutcome(event, err)
+					if n2 != nil {
+						// the mount should move to another node otherwise fail
+						log.InfoD("volume %s is now attached on node %s [%s]", vol.ID, n2.SchedulerNodeName, n2.Addresses[0])
+						dash.VerifySafely(n.SchedulerNodeName != n2.SchedulerNodeName, true, "Volume is scheduled on different nodes?")
+
+						StartVolDriverAndWait([]node.Node{*n})
+						err = Inst().S.EnableSchedulingOnNode(*n)
+						UpdateOutcome(event, err)
+
+					}
+				}
+			}
+			log.InfoD("validating applications")
+			ValidateApplications(*contexts)
+		}
+		updateMetrics(*event)
+	})
 }
 
 // GetContextPVCs returns pvc from the given context
