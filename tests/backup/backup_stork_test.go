@@ -127,9 +127,9 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
 			scheduleNameBeforeUpdate := fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			scheduleNames = append(scheduleNames, scheduleNameBeforeUpdate)
 			scheduleBackupNameBeforeUpdate, err = CreateScheduleBackupWithCRValidation(ctx, scheduleNameBeforeUpdate, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyName, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleNameBeforeUpdate))
+			scheduleNames = append(scheduleNames, scheduleNameBeforeUpdate)
 			scheduleAndBackup[scheduleNameBeforeUpdate] = periodicSchedulePolicyName
 		})
 		Step("Creating new admin namespaces", func() {
@@ -175,9 +175,9 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyNameAfterUpdate)
 			scheduleNameAfterUpdate := fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			scheduleNames = append(scheduleNames, scheduleNameAfterUpdate)
 			scheduleBackupNameAfterUpdate, err = CreateScheduleBackupWithCRValidation(ctx, scheduleNameAfterUpdate, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyNameAfterUpdate, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleNameAfterUpdate))
+			scheduleNames = append(scheduleNames, scheduleNameAfterUpdate)
 			scheduleAndBackup[scheduleNameAfterUpdate] = periodicSchedulePolicyNameAfterUpdate
 		})
 		Step("Restoring backup of from before admin namespace update", func() {
@@ -329,9 +329,9 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			schPolicyUid, _ = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyNameAfterUpdate)
 			scheduleName = fmt.Sprintf("%s-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			scheduleNames = append(scheduleNames, scheduleName)
 			scheduleBackupName, err = CreateScheduleBackupWithCRValidation(ctx, scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, orgID, "", "", "", "", periodicSchedulePolicyNameAfterUpdate, schPolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of schedule backup with schedule name [%s]", scheduleName))
+			scheduleNames = append(scheduleNames, scheduleName)
 		})
 		Step("Restoring scheduled backups", func() {
 			log.InfoD("Restoring scheduled backups")
@@ -359,9 +359,10 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		err = DeleteAppNamespace(newAdminNamespace)
 		log.FailOnError(err, "Unable to delete custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		schedulePolicyNames, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+		for _, schedulePolicyName := range schedulePolicyNames {
+			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
 		}
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
