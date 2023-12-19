@@ -2,659 +2,742 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
-	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
-	"github.com/portworx/torpedo/drivers/pds/controlplane"
+	"github.com/portworx/sched-ops/k8s/apiextensions"
+	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/node"
+	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
+	"github.com/portworx/torpedo/drivers/volume"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/pds/api"
+	"github.com/portworx/torpedo/drivers/pds/controlplane"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
+	"github.com/portworx/torpedo/drivers/pds/targetcluster"
+	"k8s.io/apimachinery/pkg/util/wait"
+
+	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/task"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	"github.com/portworx/torpedo/drivers/pds/parameters"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/apps/v1"
-	"math/rand"
-	"strconv"
+	corev1 "k8s.io/api/core/v1"
 )
 
-var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ResizeStorageAndRestoreWithVariousFSandRepl", "Perform PVC Resize and validate the updated vol in the storage config also perform restore of the ds", pdsLabels, 0)
+type PDSDataService struct {
+	Name                  string "json:\"Name\""
+	Version               string "json:\"Version\""
+	Image                 string "json:\"Image\""
+	Replicas              int    "json:\"Replicas\""
+	ScaleReplicas         int    "json:\"ScaleReplicas\""
+	OldVersion            string "json:\"OldVersion\""
+	OldImage              string "json:\"OldImage\""
+	DataServiceEnabledTLS bool   "json:\"DataServiceEnabledTLS\""
+}
 
-		//Initializing the parameters required for workload generation
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      "wltestingnew",
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
+type TestParams struct {
+	DeploymentTargetId string
+	DnsZone            string
+	StorageTemplateId  string
+	NamespaceId        string
+	TenantId           string
+	ProjectId          string
+	ServiceType        string
+}
+
+const (
+	pdsNamespace                        = "pds-system"
+	deploymentName                      = "qa"
+	envDeployAllDataService             = "DEPLOY_ALL_DATASERVICE"
+	postgresql                          = "PostgreSQL"
+	cassandra                           = "Cassandra"
+	elasticSearch                       = "Elasticsearch"
+	couchbase                           = "Couchbase"
+	redis                               = "Redis"
+	rabbitmq                            = "RabbitMQ"
+	mongodb                             = "MongoDB Enterprise"
+	mysql                               = "MySQL"
+	kafka                               = "Kafka"
+	zookeeper                           = "ZooKeeper"
+	consul                              = "Consul"
+	pdsNamespaceLabel                   = "pds.portworx.com/available"
+	timeOut                             = 30 * time.Minute
+	maxtimeInterval                     = 30 * time.Second
+	timeInterval                        = 1 * time.Second
+	SocketError                         = "socket was unexpectedly closed"
+	ServerSelectionError                = "server selection timeout"
+	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
+	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
+	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp            = "restart-portworx-during-ds-scaleup"
+	RestartAppDuringResourceUpdate      = "restart-app-during-resource-update"
+	BackUpCRD                           = "backups.pds.io"
+	DeploymentCRD                       = "deployments.pds.io"
+	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
+	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
+	RestoreDSDuringPXPoolExpansion      = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
+	StopPXDuringStorageResize           = "stop-px-during-storage-resize"
+	KillDbMasterNodeDuringStorageResize = "kill-db-master-node-during-storage-resize"
+	RestoreDuringAllNodesReboot         = "restore-ds-during-node-reboot"
+)
+
+var (
+	namespace                               string
+	pxnamespace                             string
+	tenantID                                string
+	dnsZone                                 string
+	clusterID                               string
+	projectID                               string
+	serviceType                             string
+	deploymentTargetID                      string
+	replicas                                int32
+	err                                     error
+	supportedDataServices                   []string
+	dataServiceNameDefaultAppConfigMap      map[string]string
+	namespaceID                             string
+	storageTemplateID                       string
+	dataServiceDefaultResourceTemplateIDMap map[string]string
+	dataServiceNameIDMap                    map[string]string
+	supportedDataServicesNameIDMap          map[string]string
+	backupSupportedDataServiceNameIDMap     map[string]string
+	DeployAllVersions                       bool
+	DataService                             string
+	DeployAllImages                         bool
+	dataServiceDefaultResourceTemplateID    string
+	dataServiceDefaultAppConfigID           string
+	dataServiceVersionBuildMap              map[string][]string
+	dataServiceImageMap                     map[string][]string
+	dep                                     *v1.Deployment
+	pod                                     *corev1.Pod
+	params                                  *parameters.Parameter
+	podList                                 *corev1.PodList
+	isDeploymentsDeleted                    bool
+	isNamespacesDeleted                     bool
+	dash                                    *aetosutil.Dashboard
+	deployment                              *pds.ModelsDeployment
+	k8sCore                                 = core.Instance()
+	k8sApps                                 = apps.Instance()
+	pdsLabels                               = make(map[string]string)
+	accountID                               string
+)
+
+// imports based on functionalities
+var (
+	dsTest        *dataservices.DataserviceType
+	dsWithRbac    *dataservices.DsWithRBAC
+	customParams  *parameters.Customparams
+	targetCluster *targetcluster.TargetCluster
+	controlPlane  *controlplane.ControlPlane
+	components    *api.Components
+	wkloadParams  pdsdriver.LoadGenParams
+)
+
+var (
+	k8sStorage    = storage.Instance()
+	apiExtentions = apiextensions.Instance()
+)
+
+var dataServiceDeploymentWorkloads = []string{cassandra, elasticSearch, postgresql, consul, mysql}
+var dataServicePodWorkloads = []string{redis, rabbitmq, couchbase}
+
+func DeployandValidateDataServicesWithSiAndTls(ds PDSDataService, namespaceName string, namespaceid, projectID string, resourceTemplateID string, appConfigID string, dsVersion string, dsImage string, dsID string, enableTls bool) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+
+	log.InfoD("Data Service Deployment Triggered")
+	log.InfoD("Deploying ds in namespace %v and servicetype is %v", namespaceName, serviceType)
+
+	deployment, dataServiceImageMap, dataServiceVersionBuildMap, err := dsWithRbac.TriggerDeployDSWithSiAndTls(dataservices.PDSDataService(ds), namespaceName, projectID, enableTls, resourceTemplateID, appConfigID, namespaceid, dsVersion, dsImage, dsID, dataservices.TestParams(TestParams{StorageTemplateId: storageTemplateID, DeploymentTargetId: deploymentTargetID, DnsZone: dnsZone, ServiceType: serviceType}))
+	log.FailOnError(err, "Error occured while deploying data service %s", ds.Name)
+
+	Step("Validate Data Service Deployments", func() {
+		err = dsTest.ValidateDataServiceDeployment(deployment, namespaceName)
+		log.FailOnError(err, fmt.Sprintf("Error while validating dataservice deployment %v", *deployment.ClusterResourceName))
+	})
+	return deployment, dataServiceImageMap, dataServiceVersionBuildMap, err
+}
+
+func RunWorkloads(params pdslib.WorkloadGenerationParams, ds PDSDataService, deployment *pds.ModelsDeployment, namespace string) (*corev1.Pod, *v1.Deployment, error) {
+	params.DataServiceName = ds.Name
+	params.DeploymentID = deployment.GetId()
+	params.Namespace = namespace
+	log.Infof("Dataservice Name : %s", ds.Name)
+
+	if ds.Name == postgresql {
+		params.DeploymentName = "pgload"
+		params.ScaleFactor = "100"
+		params.Iterations = "1"
+
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+
+	}
+	if ds.Name == rabbitmq {
+		params.DeploymentName = "rmq"
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+
+	}
+	if ds.Name == redis {
+		params.DeploymentName = "redisbench"
+		params.Replicas = ds.Replicas
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+
+	}
+	if ds.Name == cassandra {
+		params.DeploymentName = "cassandra-stress"
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+
+	}
+	if ds.Name == elasticSearch {
+		params.DeploymentName = "es-rally"
+		params.User = "elastic"
+		params.UseSSL = "false"
+		params.VerifyCerts = "false"
+		params.TimeOut = "60"
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+
+	}
+	if ds.Name == couchbase {
+		params.DeploymentName = "cb-load"
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+
+	}
+	if ds.Name == consul {
+		params.DeploymentName = *deployment.ClusterResourceName
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+	}
+	if ds.Name == mysql {
+		params.DeploymentName = *deployment.ClusterResourceName
+		log.Infof("Running Workloads on DataService %v ", ds.Name)
+		pod, dep, err = pdslib.CreateDataServiceWorkloads(params)
+	}
+
+	return pod, dep, err
+
+}
+
+// Check the DS related PV usage and resize in case of 90% full
+func CheckPVCtoFullCondition(context []*scheduler.Context) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		for _, ctx := range context {
+			vols, err := Inst().S.GetVolumes(ctx)
+			if err != nil {
+				return nil, true, err
+			}
+			for _, vol := range vols {
+				appVol, err := Inst().V.InspectVolume(vol.ID)
+				if err != nil {
+					return nil, true, err
+				}
+				pvcCapacity := appVol.Spec.Size / units.GiB
+				usedGiB := appVol.GetUsage() / units.GiB
+				threshold := pvcCapacity - 1
+				if usedGiB >= threshold {
+					log.Infof("The PVC capacity was %vGB , the consumed PVC is %vGB", pvcCapacity, usedGiB)
+					return nil, false, nil
+				}
+			}
 		}
-	})
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
 
-	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
+	return err
+}
 
-		var (
-			resDeployments           []*pds.ModelsDeployment
-			updatedDeployment        *pds.ModelsDeployment
-			wlDeploymentsToBeCleaned []*v1.Deployment
-			deploymentsToBeCleaned   []*pds.ModelsDeployment
-			updatedDepList           []*pds.ModelsDeployment
-			depList                  []*pds.ModelsDeployment
-			stIDs                    []string
-			resIds                   []string
-			resConfigModelUpdated    *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated     *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID    string
-			newStorageTemplateID     string
-			updatedPvcSize           uint64
-			beforeResizePodAge       float64
-		)
-		pdsdeploymentsmd5Hash2 := make(map[string]string)
-		restoredDeploymentsmd5Hash := make(map[string]string)
-		restoredDeploymentsmd5Hash2 := make(map[string]string)
-		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
-		Step(stepLog, func() {
-			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
-			log.FailOnError(err, "Error while fetching the backup supported ds.")
-			for _, ds := range params.DataServiceToTest {
-				for _, fs := range params.StorageConfigurations.FSType {
-					for _, repl := range params.StorageConfigurations.ReplFactor {
-						log.InfoD(stepLog)
-						log.InfoD("The test will run with following storage/resource template configurations- FilesystemType is - [%v] and RepelFactor is- [%v] ", fs, repl)
-						CleanMapEntries(restoredDeploymentsmd5Hash)
-						CleanMapEntries(restoredDeploymentsmd5Hash2)
-						CleanMapEntries(pdsdeploymentsmd5Hash2)
-						stIDs, resIds = nil, nil
-						depList, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-						wlDeploymentsToBeCleaned = []*v1.Deployment{}
-						_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
-						if !supported {
-							log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
-							continue
-						}
-						deployment, initialCapacity, resConfigModel, stConfigModel, appConfigID, _, pdsDeploymentHash, wkloadParamsold, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
-							CpuLimit:       params.StorageConfigurations.CpuLimit,
-							CpuRequest:     params.StorageConfigurations.CpuRequest,
-							MemoryLimit:    params.StorageConfigurations.MemoryLimit,
-							MemoryRequest:  params.StorageConfigurations.MemoryRequest,
-							StorageRequest: params.StorageConfigurations.StorageRequest,
-							FsType:         fs,
-							ReplFactor:     repl,
-							Provisioner:    "pxd.portworx.com",
-							Secure:         false,
-							VolGroups:      false,
-						})
-						stIDs = append(stIDs, stConfigModel.GetId())
-						resIds = append(resIds, resConfigModel.GetId())
-						depList = append(depList, deployment)
-						deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-						log.InfoD("Initial deployment ID- %v", deployment.GetId())
-						dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
-						beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods AGE before Storage resize")
-						log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
-						stepLog = "Update the resource/storage template with increased storage size"
-						Step(stepLog, func() {
-							newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
-							updatedTemplateConfig := controlplane.Templates{
-								CpuLimit:       *resConfigModel.CpuLimit,
-								CpuRequest:     *resConfigModel.CpuRequest,
-								DataServiceID:  dataserviceID,
-								MemoryLimit:    *resConfigModel.MemoryLimit,
-								MemoryRequest:  *resConfigModel.MemoryRequest,
-								Name:           newTemplateName,
-								StorageRequest: params.StorageConfigurations.NewStorageSize,
-								FsType:         *stConfigModel.Fs,
-								ReplFactor:     *stConfigModel.Repl,
-								Provisioner:    *stConfigModel.Provisioner,
-								Secure:         false,
-								VolGroups:      false,
-							}
-							stConfigModelUpdated, resConfigModelUpdated, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig)
-							log.FailOnError(err, "Unable to update template")
-							log.InfoD("Successfully updated the template with ID- %v", resConfigModelUpdated.GetId())
-							newResourceTemplateID = resConfigModelUpdated.GetId()
-							newStorageTemplateID = stConfigModelUpdated.GetId()
-							stIDs = append(stIDs, newStorageTemplateID)
-							resIds = append(resIds, newResourceTemplateID)
-						})
-						stepLog = "Apply updated template to the dataservice deployment"
-						Step(stepLog, func() {
-							log.InfoD(stepLog)
-							if appConfigID == "" {
-								appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
-								log.FailOnError(err, "Error while fetching AppConfigID")
-							}
-							updatedDeployment, err = dsTest.UpdateDataServices(deployment.GetId(),
-								appConfigID, deployment.GetImageId(),
-								int32(ds.Replicas), newResourceTemplateID, params.InfraToTest.Namespace)
-							log.FailOnError(err, "Error while updating dataservices")
-							Step("Validate Deployments after template update", func() {
-								err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
-								log.FailOnError(err, "Error while validating dataservices")
-								log.InfoD("Data-service: %v is up and healthy", ds.Name)
-								updatedDepList = append(updatedDepList, updatedDeployment)
-								updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-								log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
-								dsEntity = restoreBkp.DSEntity{
-									Deployment: updatedDeployment,
-								}
-							})
-							stepLog = "Validate Workload is running after storage resize by creating new workload"
-							Step(stepLog, func() {
-								ckSum2, wlDep2, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-								log.FailOnError(err, "Error while Running workloads-%v", wlDep2)
-								log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-								pdsdeploymentsmd5Hash2[*deployment.ClusterResourceName] = ckSum2
-								wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep2)
-							})
-							stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
-							Step(stepLog, func() {
-								err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize, beforeResizePodAge)
-								log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
-							})
-						})
-						stepLog = "Perform backup after PVC Resize"
-						Step(stepLog, func() {
-							log.InfoD(stepLog)
-							log.Infof("Updated Deployment ID: %v, backup target ID: %v", updatedDeployment.GetId(), bkpTarget.GetId())
-							err = bkpClient.TriggerAndValidateAdhocBackup(updatedDeployment.GetId(), bkpTarget.GetId(), "s3")
-							log.FailOnError(err, "Failed while performing adhoc backup.")
-						})
-						stepLog = "Perform Restore after PVC Resize"
-						Step(stepLog, func() {
-							log.InfoD(stepLog)
-							ctx, err := GetSourceClusterConfigPath()
-							log.FailOnError(err, "failed while getting src cluster path")
-							restoreTarget := tc.NewTargetCluster(ctx)
-							restoreClient := restoreBkp.RestoreClient{
-								TenantId:             tenantID,
-								ProjectId:            projectID,
-								Components:           components,
-								Deployment:           updatedDeployment,
-								RestoreTargetCluster: restoreTarget,
-							}
-							backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, updatedDeployment.GetId())
-							log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", updatedDeployment.GetClusterResourceName())
-							for _, backupJob := range backupJobs {
-								log.InfoD("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-								restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
-								log.FailOnError(err, "Failed during restore.")
-								restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-								log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-								resDeployments = append(restoredDeployments, restoredDeployment)
-								deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-								log.InfoD("Restored successfully. Deployment- %v", restoredModel.GetClusterResourceName())
-							}
-						})
+func ScaleUpDeployments(tenantID string, deployments map[PDSDataService]*pds.ModelsDeployment) {
+	for ds, deployment := range deployments {
+		log.InfoD("Scaling up DataService %v ", ds.Name)
 
-						stepLog = "Validate md5hash for the restored deployments"
-						Step(stepLog, func() {
-							log.InfoD(stepLog)
-							for _, pdsDeployment := range resDeployments {
-								err := dsTest.ValidateDataServiceDeployment(pdsDeployment, params.InfraToTest.Namespace)
-								log.FailOnError(err, "Error while validating deployment before validating checksum")
-								ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParamsold)
-								ckSum2, wlDep2, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
-								wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep, wlDep2)
-								log.FailOnError(err, "Error while Running workloads")
-								log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
-								log.Debugf("Checksum for the deployment2 %s is %s", *pdsDeployment.ClusterResourceName, ckSum2)
-								restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-								restoredDeploymentsmd5Hash2[*pdsDeployment.ClusterResourceName] = ckSum2
-							}
-							dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsDeploymentHash, restoredDeploymentsmd5Hash),
-								true, "Validate md5 hash1 after restore")
-							dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash2, restoredDeploymentsmd5Hash2),
-								true, "Validate md5 hash2 after restore")
-						})
+		dataServiceDefaultAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting app configuration template")
+		dash.VerifyFatal(dataServiceDefaultAppConfigID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						Step("Clean up workload deployments", func() {
-							for _, wlDep := range wlDeploymentsToBeCleaned {
-								err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-								log.FailOnError(err, "Failed while deleting the workload deployment")
-							}
+		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, ds.Name)
+		log.FailOnError(err, "Error while getting resource setting template")
+		dash.VerifyFatal(dataServiceDefaultResourceTemplateID != "", true, "Validating dataServiceDefaultAppConfigID")
 
-						})
+		updatedDeployment, err := dsTest.UpdateDataServices(deployment.GetId(),
+			dataServiceDefaultAppConfigID, deployment.GetImageId(),
+			int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, namespace)
+		log.FailOnError(err, "Error while updating dataservices")
 
-						Step("Delete Deployments", func() {
-							CleanupDeployments(deploymentsToBeCleaned)
-							err := controlPlane.CleanupCustomTemplates(stIDs, resIds)
-							log.FailOnError(err, "Failed to delete custom templates")
-						})
-					}
-				}
-			}
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
+		err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
+		log.FailOnError(err, "Error while validating data service deployment")
 
-var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("ScaleUpDsPostStorageSizeIncreaseVariousRepl", "Scale up the DS and Perform PVC Resize, validate the updated vol in the storage config.", pdsLabels, 0)
-		//Initializing the parameters required for workload generation
-		wkloadParams = pdsdriver.LoadGenParams{
-			LoadGenDepName: params.LoadGen.LoadGenDepName,
-			Namespace:      params.InfraToTest.Namespace,
-			NumOfRows:      params.LoadGen.NumOfRows,
-			Timeout:        params.LoadGen.Timeout,
-			Replicas:       params.LoadGen.Replicas,
-			TableName:      "wltestingnew",
-			Iterations:     params.LoadGen.Iterations,
-			FailOnError:    params.LoadGen.FailOnError,
+		_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
+		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
+	}
+}
+
+func CleanMapEntries(deleteMapEntries map[string]string) {
+	for hash := range deleteMapEntries {
+		delete(deleteMapEntries, hash)
+	}
+	log.Debugf("size of map post deletion %d", len(deleteMapEntries))
+}
+
+// CleanupWorkloadDeployments will clean up the wldeployment based on the kubeconfigs
+func CleanupWorkloadDeployments(wlDeploymentsToBeCleaned []*v1.Deployment, isSrc bool) error {
+	if isSrc {
+		SetSourceKubeConfig()
+	} else {
+		SetDestinationKubeConfig()
+	}
+	for _, wlDep := range wlDeploymentsToBeCleaned {
+		err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+		if err != nil {
+			return err
 		}
-	})
+	}
+	return nil
+}
 
-	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
-
-		var (
-			updatedDeployment        *pds.ModelsDeployment
-			updatedDeployment1       *pds.ModelsDeployment
-			wlDeploymentsToBeCleaned []*v1.Deployment
-			deploymentsToBeCleaned   []*pds.ModelsDeployment
-			updatedDepList           []*pds.ModelsDeployment
-			depList                  []*pds.ModelsDeployment
-			updatedDepList1          []*pds.ModelsDeployment
-			stIds                    []string
-			resIds                   []string
-			resConfigModelUpdated1   *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated1    *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID1   string
-			newStorageTemplateID1    string
-			resConfigModelUpdated2   *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated2    *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID2   string
-			newStorageTemplateID2    string
-			updatedPvcSize           uint64
-			updatedPvcSize1          uint64
-			beforeResizePodAge       float64
-		)
-
-		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
-		Step(stepLog, func() {
-			pdsdeploymentsmd5Hash2 := make(map[string]string)
-			for _, ds := range params.DataServiceToTest {
-				for _, repl := range params.StorageConfigurations.ReplFactor {
-					log.InfoD(stepLog)
-					CleanMapEntries(pdsdeploymentsmd5Hash2)
-					stIds, resIds = nil, nil
-					depList, updatedDepList, updatedDepList1, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-					wlDeploymentsToBeCleaned = []*v1.Deployment{}
-					log.InfoD("The test will run with following storage/resource template configurations- FilesystemType is - [%v] and RepelFactor is- [%v] ", "xfs", repl)
-					deployment, initialCapacity, resConfigModel, stConfigModel, appConfigID, _, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
-						CpuLimit:       params.StorageConfigurations.CpuLimit,
-						CpuRequest:     params.StorageConfigurations.CpuRequest,
-						MemoryLimit:    params.StorageConfigurations.MemoryLimit,
-						MemoryRequest:  params.StorageConfigurations.MemoryRequest,
-						StorageRequest: params.StorageConfigurations.StorageRequest,
-						FsType:         "xfs",
-						ReplFactor:     repl,
-						Provisioner:    "pxd.portworx.com",
-						Secure:         false,
-						VolGroups:      false,
-					})
-					stIds = append(stIds, stConfigModel.GetId())
-					resIds = append(resIds, resConfigModel.GetId())
-					depList = append(depList, deployment)
-					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
-					beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
-					log.FailOnError(err, "unable to get pods AGE before Storage resize")
-					log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
-					stepLog = "Scale up the DS with increased storage size and Repl factor as 2 "
-					Step(stepLog, func() {
-						newTemplateName1 := "autoTemp-" + strconv.Itoa(rand.Int())
-						updatedTemplateConfig1 := controlplane.Templates{
-							CpuLimit:       *resConfigModel.CpuLimit,
-							CpuRequest:     *resConfigModel.CpuRequest,
-							DataServiceID:  dataserviceID,
-							MemoryLimit:    *resConfigModel.MemoryLimit,
-							MemoryRequest:  *resConfigModel.MemoryRequest,
-							Name:           newTemplateName1,
-							StorageRequest: params.StorageConfigurations.NewStorageSize,
-							FsType:         *stConfigModel.Fs,
-							ReplFactor:     *stConfigModel.Repl,
-							Provisioner:    *stConfigModel.Provisioner,
-							Secure:         false,
-							VolGroups:      false,
-						}
-						stConfigModelUpdated1, resConfigModelUpdated1, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig1)
-						log.FailOnError(err, "Unable to update template")
-						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated1.GetId(), updatedTemplateConfig1.ReplFactor)
-						newResourceTemplateID1 = resConfigModelUpdated1.GetId()
-						newStorageTemplateID1 = stConfigModelUpdated1.GetId()
-						stIds = append(stIds, newStorageTemplateID1)
-						resIds = append(resIds, newResourceTemplateID1)
-					})
-					stepLog = "Apply updated template to the dataservice deployment"
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						if appConfigID == "" {
-							appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
-							log.FailOnError(err, "Error while fetching AppConfigID")
-						}
-						updatedDeployment, err = dsTest.UpdateDataServices(deployment.GetId(),
-							appConfigID, deployment.GetImageId(),
-							int32(ds.ScaleReplicas), newResourceTemplateID1, params.InfraToTest.Namespace)
-						log.FailOnError(err, "Error while updating dataservices")
-						Step("Validate Deployments after template update", func() {
-							err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
-							log.FailOnError(err, "Error while validating dataservices")
-							log.InfoD("Data-service: %v is up and healthy", ds.Name)
-							updatedDepList = append(updatedDepList, updatedDeployment)
-							updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-							log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
-						})
-						stepLog = "Validate Workload is running after storage resize by creating new workload"
-						Step(stepLog, func() {
-
-							ckSum2, wlDep2, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-							log.FailOnError(err, "Error while Running workloads-%v", wlDep2)
-							log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-							pdsdeploymentsmd5Hash2[*deployment.ClusterResourceName] = ckSum2
-							wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep2)
-						})
-						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
-						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated1, resConfigModelUpdated1, initialCapacity, updatedPvcSize, beforeResizePodAge)
-							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
-						})
-					})
-					stepLog = "Increase the storage size again after Scale-UP"
-					Step(stepLog, func() {
-						newTemplateName2 := "autoTemp-" + strconv.Itoa(rand.Int())
-						currStorageSize := *resConfigModelUpdated1.StorageRequest
-						newStorageSize, _ := strconv.Atoi(currStorageSize[:len(currStorageSize)-1])
-						updatedStorage := strconv.Itoa(newStorageSize+10) + "G"
-						updatedTemplateConfig2 := controlplane.Templates{
-							CpuLimit:       *resConfigModelUpdated1.CpuLimit,
-							CpuRequest:     *resConfigModelUpdated1.CpuRequest,
-							DataServiceID:  dataserviceID,
-							MemoryLimit:    *resConfigModelUpdated1.MemoryLimit,
-							MemoryRequest:  *resConfigModelUpdated1.MemoryRequest,
-							Name:           newTemplateName2,
-							StorageRequest: updatedStorage,
-							FsType:         *stConfigModel.Fs,
-							ReplFactor:     *stConfigModel.Repl,
-							Provisioner:    *stConfigModelUpdated1.Provisioner,
-							Secure:         false,
-							VolGroups:      false,
-						}
-						stConfigModelUpdated2, resConfigModelUpdated2, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig2)
-						log.FailOnError(err, "Unable to update template")
-						log.InfoD("Successfully updated the template with ID- %v and ReplicationFactor- %v", resConfigModelUpdated1.GetId(), updatedTemplateConfig2.ReplFactor)
-						newResourceTemplateID2 = resConfigModelUpdated2.GetId()
-						newStorageTemplateID2 = stConfigModelUpdated2.GetId()
-						stIds = append(stIds, newStorageTemplateID2)
-						resIds = append(resIds, newResourceTemplateID2)
-					})
-					stepLog = "Apply updated template to the dataservice deployment"
-					Step(stepLog, func() {
-						log.InfoD(stepLog)
-						if appConfigID == "" {
-							appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
-							log.FailOnError(err, "Error while fetching AppConfigID")
-						}
-						updatedDeployment1, err = dsTest.UpdateDataServices(updatedDeployment.GetId(),
-							appConfigID, updatedDeployment.GetImageId(),
-							int32(ds.ScaleReplicas), newResourceTemplateID2, params.InfraToTest.Namespace)
-						log.FailOnError(err, "Error while updating dataservices")
-						Step("Validate Deployments after template update", func() {
-							err = dsTest.ValidateDataServiceDeployment(updatedDeployment1, namespace)
-							log.FailOnError(err, "Error while validating dataservices")
-							log.InfoD("Data-service: %v is up and healthy", ds.Name)
-							updatedDepList1 = append(updatedDepList1, updatedDeployment1)
-							updatedPvcSize1, err = GetVolumeCapacityInGB(namespace, updatedDeployment1)
-							log.InfoD("Updated Storage Size is- %v", updatedPvcSize1)
-						})
-						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
-						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment1, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1, beforeResizePodAge)
-							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
-						})
-					})
-					Step("Clean up workload deployments", func() {
-						for _, wlDep := range wlDeploymentsToBeCleaned {
-							err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-							log.FailOnError(err, "Failed while deleting the workload deployment")
-						}
-					})
-
-					Step("Delete Deployments", func() {
-						CleanupDeployments(deploymentsToBeCleaned)
-						err := controlPlane.CleanupCustomTemplates(stIds, resIds)
-						log.FailOnError(err, "Failed to delete custom templates")
-					})
-				}
-			}
+func GetPvsAndPVCsfromDeployment(namespace string, deployment *pds.ModelsDeployment) (*corev1.PersistentVolumeClaimList, []*volume.Volume) {
+	log.Infof("Get PVC List based on namespace and deployment")
+	k8sOps := k8sCore
+	var vols []*volume.Volume
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	pvcList, _ := k8sOps.GetPersistentVolumeClaims(namespace, labelSelector)
+	for _, pvc := range pvcList.Items {
+		vols = append(vols, &volume.Volume{
+			ID: pvc.Spec.VolumeName,
 		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
+	}
+	return pvcList, vols
+}
 
-var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("PerformStorageResizeBy1Gb100TimesAllDs", "Perform PVC Resize by 1GB for 100 times in a loop and validate the updated vol in the storage config.", pdsLabels, 0)
-	})
+// Check the DS related PV usage and resize in case of 90% full
+func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeployment, thresholdPercentage float64) error {
+	log.Infof("Check PVC Usage")
+	f := func() (interface{}, bool, error) {
+		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deployment)
+		floatCapacity := float64(initialCapacity)
+		log.FailOnError(err, "unable to calculate vol capacity")
+		consumedCapacity, err := GetVolumeUsage(namespace, deployment)
+		log.FailOnError(err, "unable to calculate vol usage")
+		threshold := thresholdPercentage * (floatCapacity / 100)
+		log.InfoD("threshold value calculated is- [%v]", threshold)
+		if consumedCapacity >= threshold {
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
+	}
+	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
+	return err
+}
 
-	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
+// Increase PVC by 1 gb
+func IncreasePVCby1Gig(namespace string, deployment *pds.ModelsDeployment, sizeInGb uint64) (*volume.Volume, error) {
+	log.Info("Resizing of the PVC begins")
+	var vol *volume.Volume
+	pvcList, _ := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	initialCapacity, err := GetVolumeCapacityInGB(namespace, deployment)
+	log.Debugf("Initial volume storage size is : %v", initialCapacity)
+	if err != nil {
+		return nil, err
+	}
+	for _, pvc := range pvcList.Items {
+		k8sOps := k8sCore
+		storageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		extraAmount, _ := resource.ParseQuantity(fmt.Sprintf("%dGi", sizeInGb))
+		storageSize.Add(extraAmount)
+		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = storageSize
+		_, err := k8sOps.UpdatePersistentVolumeClaim(&pvc)
+		if err != nil {
+			return nil, err
+		}
+		sizeInt64, _ := storageSize.AsInt64()
+		vol = &volume.Volume{
+			Name:          pvc.Name,
+			RequestedSize: uint64(sizeInt64),
+		}
+	}
 
-		var (
-			updatedDeployment     *pds.ModelsDeployment
-			resConfigModelUpdated *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated  *pds.ModelsStorageOptionsTemplate
-			stIds                 []string
-			resIds                []string
-			tempstIds             []string
-			tempresIds            []string
-			newResourceTemplateID string
-			newStorageTemplateID  string
-			updatedPvcSize        uint64
-			beforeResizePodAge    float64
-		)
-		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			for _, ds := range params.DataServiceToTest {
-				stIds, resIds = nil, nil
-				wlDeploymentsToBeCleaned := []*v1.Deployment{}
-				deploymentsToBeCleaned := []*pds.ModelsDeployment{}
-				deployment, initialCapacity, resConfigModel, stConfigModel, appConfigID, wlDep, _, _, err := DeployDSWithCustomTemplatesRunWorkloads(ds, tenantID, controlplane.Templates{
-					CpuLimit:       params.StorageConfigurations.CpuLimit,
-					CpuRequest:     params.StorageConfigurations.CpuRequest,
-					MemoryLimit:    params.StorageConfigurations.MemoryLimit,
-					MemoryRequest:  params.StorageConfigurations.MemoryRequest,
-					StorageRequest: params.StorageConfigurations.StorageRequest,
-					FsType:         "xfs",
-					ReplFactor:     2,
-					Provisioner:    "pxd.portworx.com",
-					Secure:         false,
-					VolGroups:      false,
-				})
-				stIds = append(stIds, stConfigModel.GetId())
-				resIds = append(resIds, resConfigModel.GetId())
-				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
-				log.InfoD("workload deployment is- %v", wlDep.Name)
-				beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
-				log.FailOnError(err, "unable to get pods AGE before Storage resize")
-				log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
-				stepLog = "Check PVC for full condition based upto 90% full"
-				storageSizeCounter := 0
-				for i := 2; i <= params.StorageConfigurations.Iterations; i++ {
-					tempstIds, tempresIds = nil, nil
-					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
-					log.InfoD("The test is executing for the [%v] iteration", i)
-					storageSizeCounter = i
-					log.InfoD("Current Storage Size is- %v", strconv.Itoa(storageSizeCounter-1)+"G")
-					storageSize := fmt.Sprint(storageSizeCounter, "G")
-					log.InfoD("StorageSize calculated for Update is- %v", storageSize)
-					stepLog = "Update the resource/storage template with increased storage size"
-					Step(stepLog, func() {
-						newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
-						updatedTemplateConfig := controlplane.Templates{
-							CpuLimit:       *resConfigModel.CpuLimit,
-							CpuRequest:     *resConfigModel.CpuRequest,
-							DataServiceID:  dataserviceID,
-							MemoryLimit:    *resConfigModel.MemoryLimit,
-							MemoryRequest:  *resConfigModel.MemoryRequest,
-							Name:           newTemplateName,
-							StorageRequest: storageSize,
-							FsType:         *stConfigModel.Fs,
-							ReplFactor:     *stConfigModel.Repl,
-							Provisioner:    *stConfigModel.Provisioner,
-							Secure:         false,
-							VolGroups:      false,
-						}
-						stConfigModelUpdated, resConfigModelUpdated, err = controlPlane.CreateCustomResourceTemplate(tenantID, updatedTemplateConfig)
-						log.FailOnError(err, "Unable to update template")
-						log.InfoD("Successfully updated the template with ID- %v", resConfigModelUpdated.GetId())
-						newResourceTemplateID = resConfigModelUpdated.GetId()
-						newStorageTemplateID = stConfigModelUpdated.GetId()
-						tempstIds = append(tempstIds, newStorageTemplateID)
-						tempresIds = append(tempresIds, newResourceTemplateID)
-						beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods AGE before Storage resize")
-						log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
-					})
-					stepLog = "Apply updated template to the dataservice deployment"
-					Step(stepLog, func() {
-						if appConfigID == "" {
-							appConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
-							log.FailOnError(err, "Error while fetching AppConfigID")
-						}
-						updatedDeployment, err = dsTest.UpdateDataServices(deployment.GetId(),
-							appConfigID, deployment.GetImageId(),
-							int32(ds.Replicas), newResourceTemplateID, params.InfraToTest.Namespace)
-						log.FailOnError(err, "Error while updating dataservices")
-						Step("Validate Deployments after template update", func() {
-							err = dsTest.ValidateDataServiceDeployment(updatedDeployment, namespace)
-							log.FailOnError(err, "Error while validating dataservices")
-							log.InfoD("Data-service: %v is up and healthy", ds.Name)
-							updatedPvcSize, err = GetVolumeCapacityInGB(namespace, updatedDeployment)
-							log.InfoD("Updated Storage Size is- %v", updatedPvcSize)
-						})
-						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
-						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize, beforeResizePodAge)
-							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
-						})
-						//ToDo: Re-run  Workload to check if I/O is running post update
-						//ToDo: Perform backup restores on updated dep
-					})
-					log.InfoD("Cleanup up custom templates created by iterations")
-					err := controlPlane.CleanupCustomTemplates(tempstIds, tempresIds)
-					log.FailOnError(err, "Failed to delete custom templates")
-				}
-				Step("Clean up workload deployments", func() {
-					log.Debugf("Deleting Workload Deployment %v in the namespace %v ", wlDep.Name, wlDep.Namespace)
-					err := k8sApps.DeleteDeployment(wlDep.Name, params.InfraToTest.Namespace)
-					log.FailOnError(err, "Failed while deleting the workload deployment")
-				})
-				Step("Delete Deployments", func() {
-					CleanupDeployments(deploymentsToBeCleaned)
-					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
-					log.FailOnError(err, "Failed to delete custom templates")
-				})
+	// wait for the resize to take effect
+	time.Sleep(30 * time.Second)
+	newcapacity, err := GetVolumeCapacityInGB(namespace, deployment)
+	log.Infof("Resized volume storage size is : %v", newcapacity)
+	if err != nil {
+		return nil, err
+	}
+
+	if newcapacity > initialCapacity {
+		log.InfoD("Successfully resized the pvc by 1gb")
+		return vol, nil
+	} else {
+		return vol, err
+	}
+}
+
+// Get volume capacity
+func GetVolumeCapacityInGB(namespace string, deployment *pds.ModelsDeployment) (uint64, error) {
+	var pvcCapacity uint64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcCapacity = appVol.Spec.Size / units.GiB
+	}
+	return pvcCapacity, err
+}
+
+func GetVolumeUsage(namespace string, deployment *pds.ModelsDeployment) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, err
+}
+
+func CleanUpBackUpTargets(projectID, objectStore, prefix string) error {
+	bkpClient, err := pdsbkp.InitializePdsBackup()
+	if err != nil {
+		return err
+	}
+	bkpTargets, err := bkpClient.GetAllBackUpTargets(projectID, prefix)
+	for _, bkpTarget := range bkpTargets {
+		log.Debugf("Deleting bkptarget %s", bkpTarget.GetName())
+		if objectStore == "s3" {
+			err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			if err != nil {
+				return err
 			}
-		})
-	})
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
+		}
+	}
+	return nil
+}
 
-// DeployDSWithCustomTemplatesRunWorkloads Deploy dataservice with custom templates and run workloads on them
-func DeployDSWithCustomTemplatesRunWorkloads(ds PDSDataService, tenantId string, templates controlplane.Templates) (*pds.ModelsDeployment, uint64, *pds.ModelsResourceSettingsTemplate, *pds.ModelsStorageOptionsTemplate, string, *v1.Deployment, map[string]string, pdsdriver.LoadGenParams, error) {
+// ValidateDataIntegrityPostRestore validates the md5hash for the given deployments and returns the workload pods
+func ValidateDataIntegrityPostRestore(dataServiceDeployments []*pds.ModelsDeployment,
+	pdsdeploymentsmd5Hash map[string]string) []*v1.Deployment {
 	var (
-		dsVersions             = make(map[string]map[string][]string)
-		depList                []*pds.ModelsDeployment
-		initialCapacity        uint64
-		dataServiceAppConfigID string
-		workloadDep            *v1.Deployment
-		stConfigModel          *pds.ModelsStorageOptionsTemplate
-		resConfigModel         *pds.ModelsResourceSettingsTemplate
+		wlDeploymentsToBeCleanedinDest []*v1.Deployment
+		restoredDeploymentsmd5Hash     = make(map[string]string)
 	)
-	//Initializing the parameters required for workload generation
-	wkloadParams = pdsdriver.LoadGenParams{
-		LoadGenDepName: params.LoadGen.LoadGenDepName,
-		Namespace:      params.InfraToTest.Namespace,
-		NumOfRows:      params.LoadGen.NumOfRows,
-		Timeout:        params.LoadGen.Timeout,
-		Replicas:       params.LoadGen.Replicas,
-		TableName:      params.LoadGen.TableName,
-		Iterations:     params.LoadGen.Iterations,
-		FailOnError:    params.LoadGen.FailOnError,
+	for _, pdsDeployment := range dataServiceDeployments {
+		ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
+		wlDeploymentsToBeCleanedinDest = append(wlDeploymentsToBeCleanedinDest, wlDep)
+		log.FailOnError(err, "Error while Running workloads")
+		log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+		restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
 	}
 
-	pdsdeploymentsmd5Hash1 := make(map[string]string)
-	cusTempName := "autoTemp-" + strconv.Itoa(rand.Int())
+	dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
+		true, "Validate md5 hash after restore")
 
-	dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
-	stConfigModel, resConfigModel, err = controlPlane.CreateCustomResourceTemplate(tenantId, controlplane.Templates{
-		CpuLimit:       templates.CpuLimit,
-		CpuRequest:     templates.CpuRequest,
-		DataServiceID:  dataserviceID,
-		MemoryLimit:    templates.MemoryLimit,
-		MemoryRequest:  templates.MemoryRequest,
-		Name:           cusTempName,
-		StorageRequest: templates.StorageRequest,
-		FsType:         templates.FsType,
-		ReplFactor:     templates.ReplFactor,
-		Provisioner:    templates.Provisioner,
-		Secure:         templates.Secure,
-		VolGroups:      templates.VolGroups})
-	log.FailOnError(err, "Unable to create custom templates")
-	customStorageTemplateID := stConfigModel.GetId()
-	log.InfoD("created storageTemplateName is- %v and ID fetched is- %v ", *stConfigModel.Name, customStorageTemplateID)
-	customResourceTemplateID := resConfigModel.GetId()
-	log.InfoD("created resourceTemplateName is- %v and ID fetched is- %v ", *resConfigModel.Name, customResourceTemplateID)
+	return wlDeploymentsToBeCleanedinDest
+}
 
-	dataServiceAppConfigID, err = controlPlane.GetAppConfTemplate(tenantID, ds.Name)
-	log.FailOnError(err, "error while getting app configuration template")
-	log.InfoD("ds App config ID is- %v ", dataServiceAppConfigID)
-
-	deploymentsToBeCleaned = []*pds.ModelsDeployment{}
-	isDeploymentsDeleted = false
-	log.InfoD("Starting to deploy DataService- %v", ds.Name)
-	deployment, _, dataServiceVersionBuildMap, err = dsTest.DeployDS(ds.Name, projectID,
-		deploymentTargetID,
-		dnsZone,
-		deploymentName,
-		namespaceID,
-		dataServiceAppConfigID,
-		int32(ds.Replicas),
-		serviceType,
-		customResourceTemplateID,
-		customStorageTemplateID,
-		ds.Version,
-		ds.Image,
-		namespace,
-		ds.DataServiceEnabledTLS)
-	log.FailOnError(err, "Error while deploying data services")
-	err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
-	log.FailOnError(err, "Error while validating dataservices")
-	log.InfoD("Data-service: %v is up and healthy", ds.Name)
-	depList = append(depList, deployment)
-	dsVersions[ds.Name] = dataServiceVersionBuildMap
-	log.FailOnError(err, "Error while deploying data services")
-	initialCapacity, err = GetVolumeCapacityInGB(namespace, deployment)
-	log.FailOnError(err, "Error while fetching pvc size for the ds")
-	log.InfoD("Initial volume storage size is : %v", initialCapacity)
-	dsEntity = restoreBkp.DSEntity{
-		Deployment: deployment,
+func PerformRestore(restoreClient restoreBkp.RestoreClient, dsEntity restoreBkp.DSEntity, projectID string, deployment *pds.ModelsDeployment) []*pds.ModelsDeployment {
+	var restoredDeployments []*pds.ModelsDeployment
+	backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+	log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+	for _, backupJob := range backupJobs {
+		log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+		restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+		log.FailOnError(err, "Failed during restore.")
+		restoredDeployment, err := restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+		log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+		restoredDeployments = append(restoredDeployments, restoredDeployment)
+		log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
 	}
-	CleanMapEntries(pdsdeploymentsmd5Hash1)
-	ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-	workloadDep = wlDep
-	log.FailOnError(err, "Error while Running workloads")
-	log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
-	pdsdeploymentsmd5Hash1[*deployment.ClusterResourceName] = ckSum
-	return deployment, initialCapacity, resConfigModel, stConfigModel, dataServiceAppConfigID, workloadDep, pdsdeploymentsmd5Hash1, wkloadParams, nil
+	return restoredDeployments
+}
+
+func CleanupDeployments(dsInstances []*pds.ModelsDeployment) {
+	if len(dsInstances) < 1 {
+		log.Info("No DS left for deletion as part of this test run.")
+	}
+	log.InfoD("Deleting all the ds instances.")
+	for _, dsInstance := range dsInstances {
+		log.InfoD("Deleting Deployment %v ", *dsInstance.ClusterResourceName)
+		dsId := *dsInstance.Id
+		components.DataServiceDeployment.GetDeployment(dsId)
+		log.Infof("Deleting Deployment %v ", dsInstance.GetClusterResourceName())
+		resp, err := pdslib.DeleteDeployment(dsInstance.GetId())
+		if err != nil {
+			log.Infof("The deployment %v is associated with the backup jobs.", dsInstance.GetClusterResourceName())
+			err = DeleteAllDsBackupEntities(dsInstance)
+			log.FailOnError(err, "Failed during deleting the backup entities for deployment %v",
+				dsInstance.GetClusterResourceName())
+			resp, err = pdslib.DeleteDeployment(dsInstance.GetId())
+			log.FailOnError(err, "Error while deleting deployment.")
+		}
+		log.FailOnError(err, "Error while deleting deployment.")
+		dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
+
+		log.InfoD("Getting all PV and associated PVCs and deleting them")
+		err = pdslib.DeletePvandPVCs(*dsInstance.ClusterResourceName, false)
+		log.FailOnError(err, "Error while deleting PV and PVCs")
+	}
+}
+
+// GetReplicaNodes return the volume replicated nodes and its pool id's
+func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
+	replicaSets, err := Inst().V.GetReplicaSets(appVolume)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.FailOnError(err, "error while getting replicasets")
+	replicaNodes := replicaSets[0].Nodes
+	for _, node := range replicaNodes {
+		log.Debugf("replica node [%s] of volume [%s]", node, appVolume.Name)
+	}
+	replPools := replicaSets[0].PoolUuids
+
+	return replPools, replicaNodes, nil
+}
+
+// GetVolumeNodesOnWhichPxIsRunning fetches the lit of Volnodes on which PX is running
+func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
+	var (
+		nodesToStopPx []node.Node
+		stopPxNode    []node.Node
+	)
+	stopPxNode = node.GetStorageNodes()
+	if err != nil {
+		log.FailOnError(err, "Error while getting PX Node to Restart")
+	}
+	log.InfoD("PX the node with vol running found is-  %v ", stopPxNode)
+	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
+	return nodesToStopPx
+}
+
+// StopPxOnReplicaVolumeNode is used to STOP PX on the given list of nodes
+func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
+	err = Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if err != nil {
+		log.FailOnError(err, "Error while trying to STOP PX on the volNode- [%v]", nodesToStopPx)
+	}
+	log.InfoD("PX stopped successfully on node %v", nodesToStopPx)
+	return nil
+}
+
+// StartPxOnReplicaVolumeNode is used to START PX on the given list of nodes
+func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
+	for _, nodeName := range nodesToStartPx {
+		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
+		err = Inst().V.StartDriver(nodeName)
+		if err != nil {
+			log.FailOnError(err, "Error while trying to Start PX on the volNode- [%v]", nodeName)
+			return err
+		}
+		log.InfoD("PX ReStarted successfully on node %v", nodeName)
+	}
+	return nil
+}
+
+func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
+	log.InfoD("Starting to delete the Iam Roles first...")
+	for _, iam := range iamRolesToBeCleaned {
+		resp, err := components.IamRoleBindings.DeleteIamRoleBinding(accountID, actorID)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting IamRoles")
+		}
+		log.InfoD("Successfully deleted IAMRoles with ID- %v and ResponseStatus is- %v", iam, resp.StatusCode)
+	}
+	log.InfoD("Starting to delete the Service Identities...")
+	for _, si := range siToBeCleaned {
+		resp, err := components.ServiceIdentity.DeleteServiceIdentity(si)
+		if err != nil {
+			log.FailOnError(err, "Error while deleting ServiceIdentities")
+		}
+		log.InfoD("Successfully deleted ServiceIdentities- %v", resp.StatusCode)
+	}
+
+}
+
+func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
+	log.Infof("Fetch backups associated to the deployment %v ",
+		dsInstance.GetClusterResourceName())
+
+	//ListBackup api uses older way of finding the backups
+	//we need to delete backup jobs
+	backups, err := components.Backup.ListBackup(dsInstance.GetId())
+	if err != nil {
+		return fmt.Errorf("failed while fetching the backup objects.Err - %v", err)
+	}
+	for _, backup := range backups {
+		log.Infof("Delete backup.Details: Name - %v, Id - %v", backup.GetClusterResourceName(), backup.GetId())
+		backupId := backup.GetId()
+		resp, err := components.Backup.DeleteBackup(backupId)
+		waitErr := wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+			model, bkpErr := components.Backup.GetBackup(backupId)
+			if model != nil {
+				log.Info(model.GetId())
+				return false, bkpErr
+			}
+			if bkpErr != nil && strings.Contains(bkpErr.Error(), "not found") {
+				return true, nil
+			}
+			return false, bkpErr
+		})
+		if waitErr != nil {
+			return fmt.Errorf("error occured while polling for deleting backup : %v", err)
+		}
+		if err != nil {
+			return fmt.Errorf("backup object %v deletion failed.Err - %v, Response status - %v",
+				backup.GetClusterResourceName(), err, resp.StatusCode)
+		}
+	}
+	return nil
+}
+
+func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDeployment, targetCluster *tc.TargetCluster) (string, bool) {
+	var command, dbMaster string
+	switch dsName {
+	case dataservices.Postgresql:
+		command = fmt.Sprintf("patronictl list | grep -i leader | awk '{print $2}'")
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.FailOnError(err, "Failed while fetching db master pods=.")
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	case dataservices.Mysql:
+		_, connectionDetails, err := pdslib.ApiComponents.DataServiceDeployment.GetConnectionDetails(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching connection details.")
+		cred, err := pdslib.ApiComponents.DataServiceDeployment.GetDeploymentCredentials(deployment.GetId())
+		log.FailOnError(err, "Failed while fetching credentials.")
+		command = fmt.Sprintf("mysqlsh --host=%v --port %v --user=innodb-config "+
+			" --password=%v -- cluster status", connectionDetails["host"], connectionDetails["port"], cred.GetPassword())
+		dbMaster, err = targetCluster.ExecuteCommandInStatefulSetPod(deployment.GetClusterResourceName(), namespace, command)
+		log.Infof("Deployment %v of type %v have the master "+
+			"running at %v pod.", deployment.GetClusterResourceName(), dsName, dbMaster)
+	default:
+		return "", false
+	}
+	return dbMaster, true
+}
+
+func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deployment *pds.ModelsDeployment, sourceTarget *targetcluster.TargetCluster) error {
+	dbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+	log.InfoD("dbMaster Node is - %v", dbMaster)
+	log.FailOnError(err, "Failed while fetching db master node.")
+	err = sourceTarget.DeleteK8sPods(dbMaster, nsName)
+	log.FailOnError(err, "Failed while deleting db master pod.")
+	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+	log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
+	err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
+	log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
+	if dbMaster == newDbMaster {
+		log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
+	}
+	log.InfoD("New DB MasterNode- [%v] is created.", newDbMaster)
+	return nil
+}
+
+// GetDeploymentsPodRestartCount to calculate pods restart count from deployment
+func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace string) (int32, error) {
+	var restartCount int32
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	pdsPodRestartCountMap, err := Inst().S.GetPodsRestartCount(namespace, labelSelector)
+	log.FailOnError(err, "unable to get pod restart count from the deployment")
+	for pod, value := range pdsPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		log.FailOnError(err, "unable to get node from nodeIP")
+		n.PxPodRestartCount = value
+		restartCount = n.PxPodRestartCount
+	}
+	return restartCount, nil
+}
+
+type nsPodAge map[string]time.Time
+
+func GetDeploymentPods(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	depPods := make([]corev1.Pod, 0)
+	pods, err := pdslib.GetPods(namespace)
+	if err != nil {
+		log.FailOnError(err, "failed to get deployment pods")
+	}
+	for _, pod := range pods.Items {
+		log.Infof("%v", pod.Name)
+		if strings.Contains(pod.Name, *deployment.Name) {
+			depPods = append(depPods, pod)
+		}
+
+	}
+	return depPods, nil
+}
+
+// GetPodAge gets the pod age of all pods on all the namespaces on the cluster
+func GetPodAge(deployment *pds.ModelsDeployment, namespace string) (float64, error) {
+	var podAge time.Duration
+	pods, err := GetDeploymentPods(deployment, namespace)
+	log.FailOnError(err, "Unable to fetch deployment pods")
+	for _, pod := range pods {
+		currentTime := metav1.Now()
+		podCreationTime := pod.GetCreationTimestamp().Time
+		podAge = currentTime.Time.Sub(podCreationTime)
+	}
+	podAgeInt := podAge.Minutes()
+	return podAgeInt, nil
+}
+
+// ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64, beforeResizePodAge float64) error {
+	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
+	newResourceTemplateID := resConfigUpdated.GetId()
+	newStorageTemplateID := stConfigUpdated.GetId()
+	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
+	log.InfoD("Original resConfigModel.StorageRequest val is- [%v] and Updated resConfigModel.StorageRequest val is- [%v]", *resConfigUpdated.StorageRequest, config.Resources.Requests.EphemeralStorage)
+	dash.VerifyFatal(config.Resources.Requests.EphemeralStorage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+	dash.VerifyFatal(config.Parameters.Fs, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
+	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
+	dash.VerifyFatal(config.Parameters.Repl, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
+	if updatedPvcSize > initialCapacity {
+		flag := true
+		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
+		log.InfoD("Initial PVC Capacity is- [%v] and Updated PVC Capacity is- [%v]", initialCapacity, updatedPvcSize)
+	} else {
+		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
+	}
+	afterResizePodAge, err := GetPodAge(deployment, params.InfraToTest.Namespace)
+	log.FailOnError(err, "unable to get pods restart count before PVC resize")
+	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]Min", afterResizePodAge)
+	if beforeResizePodAge > afterResizePodAge {
+		flagCount := true
+		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
+
+	} else {
+		log.FailOnError(err, "Pods restarted after storage resize, Please check the logs manually")
+	}
+	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
+	return nil
 }
