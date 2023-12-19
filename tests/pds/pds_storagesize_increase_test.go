@@ -35,20 +35,20 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
 
 		var (
-			resDeployments              []*pds.ModelsDeployment
-			updatedDeployment           *pds.ModelsDeployment
-			wlDeploymentsToBeCleaned    []*v1.Deployment
-			deploymentsToBeCleaned      []*pds.ModelsDeployment
-			updatedDepList              []*pds.ModelsDeployment
-			depList                     []*pds.ModelsDeployment
-			stIDs                       []string
-			resIds                      []string
-			resConfigModelUpdated       *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated        *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID       string
-			newStorageTemplateID        string
-			updatedPvcSize              uint64
-			beforeResizePodRestartCount int32
+			resDeployments           []*pds.ModelsDeployment
+			updatedDeployment        *pds.ModelsDeployment
+			wlDeploymentsToBeCleaned []*v1.Deployment
+			deploymentsToBeCleaned   []*pds.ModelsDeployment
+			updatedDepList           []*pds.ModelsDeployment
+			depList                  []*pds.ModelsDeployment
+			stIDs                    []string
+			resIds                   []string
+			resConfigModelUpdated    *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated     *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID    string
+			newStorageTemplateID     string
+			updatedPvcSize           uint64
+			beforeResizePodAge       float64
 		)
 		pdsdeploymentsmd5Hash2 := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
@@ -91,6 +91,9 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 						deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 						log.InfoD("Initial deployment ID- %v", deployment.GetId())
 						dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+						beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+						log.FailOnError(err, "unable to get pods AGE before Storage resize")
+						log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
 						stepLog = "Update the resource/storage template with increased storage size"
 						Step(stepLog, func() {
 							newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
@@ -115,9 +118,6 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 							newStorageTemplateID = stConfigModelUpdated.GetId()
 							stIDs = append(stIDs, newStorageTemplateID)
 							resIds = append(resIds, newResourceTemplateID)
-							beforeResizePodRestartCount, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-							log.FailOnError(err, "unable to get pods restart count before Storage resize")
-							log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount)
 						})
 						stepLog = "Apply updated template to the dataservice deployment"
 						Step(stepLog, func() {
@@ -151,7 +151,7 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 							})
 							stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 							Step(stepLog, func() {
-								err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize, beforeResizePodRestartCount)
+								err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize, beforeResizePodAge)
 								log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 							})
 						})
@@ -252,27 +252,26 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
 
 		var (
-			updatedDeployment            *pds.ModelsDeployment
-			updatedDeployment1           *pds.ModelsDeployment
-			wlDeploymentsToBeCleaned     []*v1.Deployment
-			deploymentsToBeCleaned       []*pds.ModelsDeployment
-			updatedDepList               []*pds.ModelsDeployment
-			depList                      []*pds.ModelsDeployment
-			updatedDepList1              []*pds.ModelsDeployment
-			stIds                        []string
-			resIds                       []string
-			resConfigModelUpdated1       *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated1        *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID1       string
-			newStorageTemplateID1        string
-			resConfigModelUpdated2       *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated2        *pds.ModelsStorageOptionsTemplate
-			newResourceTemplateID2       string
-			newStorageTemplateID2        string
-			updatedPvcSize               uint64
-			updatedPvcSize1              uint64
-			beforeResizePodRestartCount  int32
-			beforeResizePodRestartCount1 int32
+			updatedDeployment        *pds.ModelsDeployment
+			updatedDeployment1       *pds.ModelsDeployment
+			wlDeploymentsToBeCleaned []*v1.Deployment
+			deploymentsToBeCleaned   []*pds.ModelsDeployment
+			updatedDepList           []*pds.ModelsDeployment
+			depList                  []*pds.ModelsDeployment
+			updatedDepList1          []*pds.ModelsDeployment
+			stIds                    []string
+			resIds                   []string
+			resConfigModelUpdated1   *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated1    *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID1   string
+			newStorageTemplateID1    string
+			resConfigModelUpdated2   *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated2    *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID2   string
+			newStorageTemplateID2    string
+			updatedPvcSize           uint64
+			updatedPvcSize1          uint64
+			beforeResizePodAge       float64
 		)
 
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
@@ -303,7 +302,9 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 					depList = append(depList, deployment)
 					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
-					stepLog = "Check PVC for full condition based upto 90% full"
+					beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+					log.FailOnError(err, "unable to get pods AGE before Storage resize")
+					log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
 					stepLog = "Scale up the DS with increased storage size and Repl factor as 2 "
 					Step(stepLog, func() {
 						newTemplateName1 := "autoTemp-" + strconv.Itoa(rand.Int())
@@ -328,10 +329,6 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						newStorageTemplateID1 = stConfigModelUpdated1.GetId()
 						stIds = append(stIds, newStorageTemplateID1)
 						resIds = append(resIds, newResourceTemplateID1)
-						beforeResizePodRestartCount, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods restart count before Storage resize")
-						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount)
-
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -363,7 +360,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated1, resConfigModelUpdated1, initialCapacity, updatedPvcSize, beforeResizePodRestartCount)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated1, resConfigModelUpdated1, initialCapacity, updatedPvcSize, beforeResizePodAge)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
@@ -394,10 +391,6 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						newStorageTemplateID2 = stConfigModelUpdated2.GetId()
 						stIds = append(stIds, newStorageTemplateID2)
 						resIds = append(resIds, newResourceTemplateID2)
-						beforeResizePodRestartCount1, err = GetDeploymentsPodRestartCount(updatedDeployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods restart count before Storage resize")
-						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount1)
-
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -420,7 +413,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment1, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1, beforeResizePodRestartCount1)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment1, stConfigModelUpdated2, resConfigModelUpdated2, updatedPvcSize, updatedPvcSize1, beforeResizePodAge)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 					})
@@ -453,17 +446,17 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 	It("Perform PVC Resize and validate the updated vol in the storage config", func() {
 
 		var (
-			updatedDeployment           *pds.ModelsDeployment
-			resConfigModelUpdated       *pds.ModelsResourceSettingsTemplate
-			stConfigModelUpdated        *pds.ModelsStorageOptionsTemplate
-			stIds                       []string
-			resIds                      []string
-			tempstIds                   []string
-			tempresIds                  []string
-			newResourceTemplateID       string
-			newStorageTemplateID        string
-			updatedPvcSize              uint64
-			beforeResizePodRestartCount int32
+			updatedDeployment     *pds.ModelsDeployment
+			resConfigModelUpdated *pds.ModelsResourceSettingsTemplate
+			stConfigModelUpdated  *pds.ModelsStorageOptionsTemplate
+			stIds                 []string
+			resIds                []string
+			tempstIds             []string
+			tempresIds            []string
+			newResourceTemplateID string
+			newStorageTemplateID  string
+			updatedPvcSize        uint64
+			beforeResizePodAge    float64
 		)
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
 		Step(stepLog, func() {
@@ -489,6 +482,9 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
 				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 				log.InfoD("workload deployment is- %v", wlDep.Name)
+				beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+				log.FailOnError(err, "unable to get pods AGE before Storage resize")
+				log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
 				stepLog = "Check PVC for full condition based upto 90% full"
 				storageSizeCounter := 0
 				for i := 2; i <= params.StorageConfigurations.Iterations; i++ {
@@ -523,10 +519,9 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 						newStorageTemplateID = stConfigModelUpdated.GetId()
 						tempstIds = append(tempstIds, newStorageTemplateID)
 						tempresIds = append(tempresIds, newResourceTemplateID)
-						beforeResizePodRestartCount, err = GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "unable to get pods restart count before Storage resize")
-						log.InfoD("Number of restarts the deployment's pods had before storage resize is- [%v]", beforeResizePodRestartCount)
-
+						beforeResizePodAge, err = GetPodAge(deployment, params.InfraToTest.Namespace)
+						log.FailOnError(err, "unable to get pods AGE before Storage resize")
+						log.InfoD("Pods Age before storage resize is- [%v]", beforeResizePodAge)
 					})
 					stepLog = "Apply updated template to the dataservice deployment"
 					Step(stepLog, func() {
@@ -547,7 +542,7 @@ var _ = Describe("{PerformStorageResizeBy1Gb100TimesAllDs}", func() {
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
 						Step(stepLog, func() {
-							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize, beforeResizePodRestartCount)
+							err := ValidateDepConfigPostStorageIncrease(ds, updatedDeployment, stConfigModelUpdated, resConfigModelUpdated, initialCapacity, updatedPvcSize, beforeResizePodAge)
 							log.FailOnError(err, "Failed to validate DS Volume configuration Post Storage resize")
 						})
 						//ToDo: Re-run  Workload to check if I/O is running post update
