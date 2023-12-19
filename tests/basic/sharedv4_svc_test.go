@@ -2,8 +2,10 @@ package tests
 
 import (
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -1304,6 +1306,98 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
+	ns := "ml-workload-ns"
+	contexts = make([]*scheduler.Context, 0)
+	taskName := "prepare-ml-workload"
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
+		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
+		ScheduleApplicationsOnNamespace(ns, taskName)
+		Inst().AppList = []string{"ml-workload-continuous-training"}
+		ScheduleApplicationsOnNamespace(ns, taskName)
+	})
+	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
+		type Deployment struct {
+			APIVersion string `yaml:"apiVersion"`
+			Kind       string
+			Metadata   struct {
+				Name string
+			}
+			Spec struct {
+				Replicas int
+				Selector struct {
+					MatchLabels map[string]string
+				}
+				Template struct {
+					Metadata struct {
+						Labels map[string]string
+					}
+					Spec struct {
+						Containers []struct {
+							Name    string
+							Image   string
+							Command []string
+							Args    []string `yaml:"args"`
+							Env     []struct {
+								Name  string
+								Value string
+							}
+							VolumeMounts []struct {
+								Name      string
+								MountPath string `yaml:"mountPath"`
+							} `yaml:"volumeMounts"`
+						}
+						Volumes []struct {
+							Name                  string
+							PersistentVolumeClaim struct {
+								ClaimName string `yaml:"claimName"`
+							} `yaml:"persistentVolumeClaim"`
+						}
+						ImagePullSecrets []struct {
+							Name string
+						} `yaml:"imagePullSecrets"`
+					}
+				}
+			}
+		}
+		currentDir, err := os.Getwd()
+		log.FailOnError(err, "Failed to find current directory")
+		filePath := filepath.Join(currentDir, "..", "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+		for i := 1; i <= 20; i++ {
+			data, err := os.ReadFile(filePath)
+			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
+			var deployment Deployment
+			err = yaml.Unmarshal(data, &deployment)
+			log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
+			appName := fmt.Sprintf("querying-app-%d", i)
+			deployment.Metadata.Name = appName
+			for j := range deployment.Spec.Template.Spec.Containers {
+				for k := range deployment.Spec.Template.Spec.Containers[j].Env {
+					if deployment.Spec.Template.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
+						deployment.Spec.Template.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", i)
+					}
+				}
+			}
+			modifiedData, err := yaml.Marshal(&deployment)
+			log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
+			err = os.WriteFile(filePath, modifiedData, 0644)
+			log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
+			Inst().AppList = []string{"ml-workload-rwx"}
+			contexts = append(contexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+			log.Infof("Successfully created App %v")
+			//ValidateApplications(contexts)
+		}
+	})
+	JustAfterEach(func() {
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
 	})
 })
 
