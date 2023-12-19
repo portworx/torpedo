@@ -1366,7 +1366,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		}
 		currentDir, err := os.Getwd()
 		log.FailOnError(err, "Failed to find current directory")
-		filePath := filepath.Join(currentDir, "..", "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
 		for i := 1; i <= 20; i++ {
 			data, err := os.ReadFile(filePath)
 			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
