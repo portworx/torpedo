@@ -359,9 +359,10 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		err = DeleteAppNamespace(newAdminNamespace)
 		log.FailOnError(err, "Unable to delete custom admin namespace")
 		log.Infof("Deleting backup schedule policy")
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		schedulePolicyNames, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+		for _, schedulePolicyName := range schedulePolicyNames {
+			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
 		}
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
