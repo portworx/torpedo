@@ -9,6 +9,7 @@ import (
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	"github.com/portworx/torpedo/drivers/volume"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strconv"
 	"strings"
@@ -674,8 +675,42 @@ func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace s
 	return restartCount, nil
 }
 
+type nsPodAge map[string]time.Time
+
+func GetDeploymentPods(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	depPods := make([]corev1.Pod, 0)
+	pods, err := pdslib.GetPods(namespace)
+	if err != nil {
+		log.FailOnError(err, "failed to get deployment pods")
+	}
+	for _, pod := range pods.Items {
+		log.Infof("%v", pod.Name)
+		if strings.Contains(pod.Name, *deployment.Name) {
+			depPods = append(depPods, pod)
+		}
+
+	}
+	return depPods, nil
+}
+
+// GetPodAge gets the pod age of all pods on all the namespaces on the cluster
+func GetPodAge(deployment *pds.ModelsDeployment, namespace string) (float64, error) {
+	var podAge time.Duration
+	pods, err := GetDeploymentPods(deployment, namespace)
+	log.FailOnError(err, "Unable to fetch deployment pods")
+	for _, pod := range pods {
+		currentTime := metav1.Now()
+		podCreationTime := pod.GetCreationTimestamp().Time
+		podAge = currentTime.Time.Sub(podCreationTime)
+	}
+	podAgeInt := podAge.Minutes()
+	return podAgeInt, nil
+}
+
 // ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
-func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64, beforeResizePodRestartCount int32) error {
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64, beforeResizePodAge float64) error {
 	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
 	newResourceTemplateID := resConfigUpdated.GetId()
 	newStorageTemplateID := stConfigUpdated.GetId()
@@ -693,15 +728,15 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	} else {
 		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
 	}
-	afterResizePodRestartCount, err := GetDeploymentsPodRestartCount(deployment, params.InfraToTest.Namespace)
+	afterResizePodAge, err := GetPodAge(deployment, params.InfraToTest.Namespace)
 	log.FailOnError(err, "unable to get pods restart count before PVC resize")
-	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]", afterResizePodRestartCount)
-	if !(afterResizePodRestartCount > beforeResizePodRestartCount) {
+	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]", afterResizePodAge)
+	if beforeResizePodAge > afterResizePodAge {
 		flagCount := true
 		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
 
 	} else {
-		log.FailOnError(err, "[%v] Pods restarted after storage resize, Please check the logs manually", afterResizePodRestartCount)
+		log.FailOnError(err, "[%v] Pods restarted after storage resize, Please check the logs manually", afterResizePodAge)
 	}
 	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
