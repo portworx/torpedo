@@ -730,14 +730,15 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	}
 	afterResizePodAge, err := GetPodAge(deployment, params.InfraToTest.Namespace)
 	log.FailOnError(err, "unable to get pods restart count before PVC resize")
-	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]", afterResizePodAge)
+	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]Min", afterResizePodAge)
 	if beforeResizePodAge > afterResizePodAge {
 		flagCount := true
 		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
 
 	} else {
-		log.FailOnError(err, "[%v] Pods restarted after storage resize, Please check the logs manually", afterResizePodAge)
+		log.FailOnError(err, "Pods restarted after storage resize, Please check the logs manually")
 	}
 	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
 }
+
