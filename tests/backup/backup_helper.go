@@ -6367,6 +6367,7 @@ func validateCRCleanup(resourceInterface interface{},
 
 	log.InfoD("Validating CR cleanup")
 
+	// TODO : This needs to be removed in future once stork client is integrated for GKE in automation
 	if GetClusterProviders()[0] == "gke" {
 		log.Infof("Skipping CR cleanup validation in case of GKE")
 		return nil
