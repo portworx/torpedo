@@ -144,7 +144,12 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.Service); ok {
 			appInfo.Namespace = obj.Namespace
-			nodePort := obj.Spec.Ports[0].NodePort
+			// TODO: This needs to be fetched from spec once CloneAppContextAndTransformWithMappings is fixed
+			svc, err := core.Instance().GetService(obj.Name, obj.Namespace)
+			if err != nil {
+				return appInfo, err
+			}
+			nodePort := svc.Spec.Ports[0].NodePort
 			hostname, err := CreateHostNameForApp(obj.Name, nodePort, obj.Namespace)
 			if err != nil {
 				return appInfo, fmt.Errorf("Some error occurred while generating hostname")
