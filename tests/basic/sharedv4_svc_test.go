@@ -1309,6 +1309,11 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 	})
 })
 
+// This test runs a ML Workload that predicts Housing rents. It contains one pod that preprocesses model
+// and prepares training data. One pod runs continuously and keeps on retraining the model every 5 mins.
+// The other pods that are deployments run once every 5 mins and read the model, do some prediction and
+// writes their predictions to shared volume on which model is saved. Retraining pod picks this data up
+// and again retrains the model. This is a simple feed-forward neural network model.
 var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	ns := "ml-workload-ns"
 	appContexts := make([]*scheduler.Context, 0)
@@ -1326,12 +1331,17 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	}
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
+		// Runs Preprocess Workload to prepare the model
 		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
 		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+		// Runs Continuous Retraining module
 		Inst().AppList = []string{"ml-workload-continuous-training"}
 		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
 	})
 	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
+		// Defining deployment of querying ML Workload apps. This is necessary otherwise Torpedo
+		// not create multiple same apps in same namespace. With this, we are changing the name of
+		// ML App Deployment everytime it runs
 		type Deployment struct {
 			APIVersion string `yaml:"apiVersion"`
 			Kind       string
@@ -1375,6 +1385,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 				}
 			}
 		}
+		// Editing the original yaml file and bringing in new file with new name and OUTPUT_PARAMS
 		currentDir, err := os.Getwd()
 		log.FailOnError(err, "Failed to find current directory")
 		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
@@ -1403,6 +1414,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 			provider := Inst().V.String()
 			err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
 			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
+			// Running Several Workload pods that read the model, make some predictions and write them to shared vol
 			Inst().AppList = []string{"ml-workload-rwx"}
 			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
 			log.Infof("Successfully created App querying-app-%d", i)
