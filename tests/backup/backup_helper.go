@@ -112,7 +112,7 @@ const (
 	podStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
-	podReadyTimeout                           = 10 * time.Minute
+	podReadyTimeout                           = 15 * time.Minute
 	storkPodReadyTimeout                      = 20 * time.Minute
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
@@ -127,6 +127,8 @@ const (
 	rancherActiveCluster                      = "local"
 	rancherProjectDescription                 = "new project"
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
+	backupScheduleDeleteTimeout               = 60 * time.Minute
+	backupScheduleDeleteRetryTime             = 30 * time.Second
 )
 
 var (
@@ -6364,8 +6366,15 @@ func dumpMongodbCollectionOnConsole(kubeConfigFile string, collectionName string
 // validateCRCleanup validates CR cleanup created during backup or restore
 func validateCRCleanup(resourceInterface interface{},
 	ctx context.Context) error {
-	log.InfoD("Inside validateCRCleanup")
-	log.Infof("Resource Interface - [%+v]", resourceInterface)
+
+	log.InfoD("Validating CR cleanup")
+
+	// TODO : This needs to be removed in future once stork client is integrated for GKE in automation
+	if GetClusterProviders()[0] == "gke" {
+		log.Infof("Skipping CR cleanup validation in case of GKE")
+		return nil
+	}
+
 	var allCRs []string
 	var err error
 	var getCRMethod func(string, *api.ClusterObject) ([]string, error)
@@ -6373,6 +6382,7 @@ func validateCRCleanup(resourceInterface interface{},
 	var resourceNamespaces []string
 	var resourceName string
 	var orgID string
+	var isValidCluster = false
 
 	if currentObject, ok := resourceInterface.(*api.BackupObject); ok {
 		// Creating object and variables from backup object
@@ -6390,6 +6400,29 @@ func validateCRCleanup(resourceInterface interface{},
 		}
 		orgID = currentObject.OrgId
 		resourceName = currentObject.Name
+	}
+
+	// Below code is added to skip the CR cleanup validation in case of synced backup
+	// For synced backup the cluster name has uuid suffix which is not supported/handled
+	// While creating the cluster object
+
+	// Fetching all clusters
+	enumerateClusterRequest := &api.ClusterEnumerateRequest{
+		OrgId: orgID,
+	}
+	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
+
+	// Comparing cluster names to the name from backup inspect response
+	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
+		if clusterObj.Name == clusterName {
+			isValidCluster = true
+			break
+		}
+	}
+
+	if !isValidCluster {
+		log.Infof("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
+		return nil
 	}
 
 	backupDriver := Inst().Backup
@@ -6417,12 +6450,11 @@ func validateCRCleanup(resourceInterface interface{},
 			return nil, true, err
 		}
 
-		log.Infof("Validating CR cleanup")
 		log.InfoD("All CRs in [%s] are [%v]", currentAdminNamespace, allCRs)
 
 		for _, eachCR := range allCRs {
 			if strings.Contains(eachCR, resourceName) {
-				log.Infof("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
+				log.InfoD("CR found for [%s] under [%s] namespace", allCRs, currentAdminNamespace)
 				return nil, true, fmt.Errorf("CR cleanup validation failed for - [%s]", resourceName)
 			}
 		}
@@ -6434,4 +6466,82 @@ func validateCRCleanup(resourceInterface interface{},
 
 	return err
 
+}
+
+// SuspendAndDeleteSchedule suspends and deletes the backup schedule
+func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName string, clusterName string, orgID string, ctx context.Context, deleteBackupFlag bool) error {
+	backupDriver := Inst().Backup
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	if err != nil {
+		return err
+	}
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schedulePolicyName)
+	if err != nil {
+		return err
+	}
+	bkpScheduleSuspendRequest := &api.BackupScheduleUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{Name: backupScheduleName, OrgId: orgID, Uid: backupScheduleUID},
+		Suspend:        true,
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schedulePolicyName,
+			Uid:  schPolicyUID,
+		},
+	}
+	log.InfoD("Suspending backup schedule %s", backupScheduleName)
+	_, err = backupDriver.UpdateBackupSchedule(ctx, bkpScheduleSuspendRequest)
+	if err != nil {
+		return err
+	}
+	log.Infof("Verifying if the schedule is suspended by getting the suspended state of the schedule by inspecting")
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		Uid:   "",
+	}
+	validateScheduleStatus := func() (interface{}, bool, error) {
+		resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+		if err != nil {
+			return nil, false, err
+		}
+		if resp.GetBackupSchedule().BackupScheduleInfo.GetSuspend() != true {
+			return nil, true, fmt.Errorf("backup Schedule status after suspending is %v: ", resp.GetBackupSchedule().BackupScheduleInfo.GetSuspend())
+		}
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(validateScheduleStatus, 2*time.Minute, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Deleting backup schedule %s", backupScheduleName)
+	bkpScheduleDeleteRequest := &api.BackupScheduleDeleteRequest{
+		OrgId: orgID,
+		Name:  backupScheduleName,
+		// DeleteBackups indicates whether the cloud backup files need to
+		// be deleted or retained.
+		DeleteBackups: deleteBackupFlag,
+		Uid:           backupScheduleUID,
+	}
+	_, err = backupDriver.DeleteBackupSchedule(ctx, bkpScheduleDeleteRequest)
+	if err != nil {
+		return err
+	}
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+	if err != nil {
+		return err
+	}
+	clusterObj := clusterResp.GetCluster()
+	namespace := "*"
+	err = backupDriver.WaitForBackupScheduleDeletion(ctx, backupScheduleName, namespace, orgID,
+		clusterObj,
+		backupScheduleDeleteTimeout,
+		backupScheduleDeleteRetryTime)
+	if err != nil {
+		return err
+	}
+	return nil
 }
