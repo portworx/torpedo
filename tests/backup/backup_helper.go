@@ -5773,10 +5773,6 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	}
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
 	storkOldPods, err := core.Instance().GetPods(storkDeploymentNamespace, map[string]string{"name": "stork"})
-	log.Infof("Old Stork pods")
-	for _, storkPod := range storkOldPods.Items {
-		log.Infof("%s - %s", storkPod.Name, storkPod.Status)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -5820,7 +5816,7 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	}
 
 	// Explicit wait for the deployment to be updated
-	time.Sleep(30 * time.Second)
+	time.Sleep(5 * time.Minute)
 
 	checkCurrentAdminNamespace := func() (interface{}, bool, error) {
 		currentAdminNamespace, err := getCurrentAdminNamespace()
@@ -5866,19 +5862,6 @@ func ChangeStorkAdminNamespace(namespace string) (*v1.StorageCluster, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	storkNewPods, err := core.Instance().GetPods(storkDeploymentNamespace, map[string]string{"name": "stork"})
-
-	log.Infof("New Stork pods")
-	for _, storkPod := range storkNewPods.Items {
-		log.Infof("%s - %s", storkPod.Name, storkPod.Status)
-	}
-
-	cm, _ := core.Instance().GetConfigMap(k8sutils.StorkControllerConfigMapName, defaultStorkDeploymentNamespace)
-
-	log.Infof("Config Map - [%s]", k8sutils.StorkControllerConfigMapName)
-	log.Infof("Config Map Details all - [%+v]", cm)
-	log.Infof("Config Map Data - [%+v] at [%s]", cm.Data, time.Now().Format("01-02-15-04-05"))
 
 	return stc, nil
 }
