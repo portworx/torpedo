@@ -675,6 +675,7 @@ func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace s
 	return restartCount, nil
 }
 
+// GetDeploymentPods returns the pods list for a given deployment and given namespace
 func GetDeploymentPods(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
 	labelSelector := make(map[string]string)
 	labelSelector["name"] = deployment.GetClusterResourceName()
@@ -693,7 +694,7 @@ func GetDeploymentPods(deployment *pds.ModelsDeployment, namespace string) ([]co
 	return depPods, nil
 }
 
-// GetPodAge gets the pod age of all pods on all the namespaces on the cluster
+// GetPodAge gets the pod age of pods of a given deployment and namespace
 func GetPodAge(deployment *pds.ModelsDeployment, namespace string) (float64, error) {
 	var podAge time.Duration
 	pods, err := GetDeploymentPods(deployment, namespace)
@@ -728,8 +729,8 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	}
 	afterResizePodAge, err := GetPodAge(deployment, params.InfraToTest.Namespace)
 	log.FailOnError(err, "unable to get pods restart count before PVC resize")
-	log.InfoD("Number of restarts the deployment's pods had after storage resize is- [%v]Min", afterResizePodAge)
-	if beforeResizePodAge > afterResizePodAge {
+	log.InfoD("Pods Age after storage resize is- [%v]Min", afterResizePodAge)
+	if beforeResizePodAge < afterResizePodAge {
 		flagCount := true
 		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
 
@@ -739,4 +740,5 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
 }
+
 
