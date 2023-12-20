@@ -1311,14 +1311,15 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 
 var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	ns := "ml-workload-ns"
-	contexts = make([]*scheduler.Context, 0)
+	appContexts := make([]*scheduler.Context, 0)
+	prereqContexts := make([]*scheduler.Context, 0)
 	taskName := "prepare-ml-workload"
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
 		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
-		ScheduleApplicationsOnNamespace(ns, taskName)
+		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
 		Inst().AppList = []string{"ml-workload-continuous-training"}
-		ScheduleApplicationsOnNamespace(ns, taskName)
+		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
 	})
 	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
 		type Deployment struct {
@@ -1330,11 +1331,11 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 			Spec struct {
 				Replicas int
 				Selector struct {
-					MatchLabels map[string]string
+					MatchLabels map[string]string `yaml:"matchLabels"`
 				}
 				Template struct {
 					Metadata struct {
-						Labels map[string]string
+						Labels map[string]string `yaml:"labels"`
 					}
 					Spec struct {
 						Containers []struct {
@@ -1384,20 +1385,27 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 					}
 				}
 			}
+			opFilePath := filepath.Join("/specs", "ml-workload-rwx", "query-ml-workload.yaml")
 			modifiedData, err := yaml.Marshal(&deployment)
 			log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
-			err = os.WriteFile(filePath, modifiedData, 0644)
+			err = os.WriteFile(opFilePath, modifiedData, 0644)
 			log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
+			provider := Inst().V.String()
+			err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
+			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
 			Inst().AppList = []string{"ml-workload-rwx"}
-			contexts = append(contexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
-			log.Infof("Successfully created App %v")
+			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+			log.Infof("Successfully created App querying-app-%d", i)
 			//ValidateApplications(contexts)
 		}
 	})
 	JustAfterEach(func() {
 		opts := make(map[string]bool)
 		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-		for _, ctx := range contexts {
+		for _, ctx := range appContexts {
+			TearDownContext(ctx, opts)
+		}
+		for _, ctx := range prereqContexts {
 			TearDownContext(ctx, opts)
 		}
 	})
