@@ -1314,6 +1314,16 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	appContexts := make([]*scheduler.Context, 0)
 	prereqContexts := make([]*scheduler.Context, 0)
 	taskName := "prepare-ml-workload"
+	totalMlDeps := 5
+	totalMlWorkloads := ReadEnvVariable("NUM_ML_WORKLOADS")
+	if totalMlWorkloads != "" {
+		var err error
+		totalMlDeps, err = strconv.Atoi(totalMlWorkloads)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", totalMlWorkloads, err)
+			totalMlDeps = 5
+		}
+	}
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
 		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
@@ -1368,7 +1378,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		currentDir, err := os.Getwd()
 		log.FailOnError(err, "Failed to find current directory")
 		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
-		for i := 1; i <= 20; i++ {
+		for i := 1; i <= totalMlDeps; i++ {
 			data, err := os.ReadFile(filePath)
 			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
 			var deployment Deployment
@@ -1396,7 +1406,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 			Inst().AppList = []string{"ml-workload-rwx"}
 			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
 			log.Infof("Successfully created App querying-app-%d", i)
-			//ValidateApplications(contexts)
+			ValidateApplications(appContexts)
 		}
 	})
 	JustAfterEach(func() {
@@ -1410,6 +1420,14 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		}
 	})
 })
+
+func ReadEnvVariable(envVar string) string {
+	envValue, present := os.LookupEnv(envVar)
+	if present {
+		return envValue
+	}
+	return ""
+}
 
 // returns the contexts that are running test-sv4-svc* apps
 func getTestSv4Contexts(contexts []*scheduler.Context) []*scheduler.Context {
