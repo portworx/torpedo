@@ -152,6 +152,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		})
 		Step("Taking backup of multiple namespaces", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			log.Infof("Backup Started at [%s]", time.Now().Format("01-02-15-04-05"))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
