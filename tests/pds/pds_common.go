@@ -675,8 +675,6 @@ func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace s
 	return restartCount, nil
 }
 
-type nsPodAge map[string]time.Time
-
 func GetDeploymentPods(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
 	labelSelector := make(map[string]string)
 	labelSelector["name"] = deployment.GetClusterResourceName()
