@@ -1385,7 +1385,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 					}
 				}
 			}
-			opFilePath := filepath.Join("/specs", "ml-workload-rwx", "query-ml-workload.yaml")
+			opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
 			modifiedData, err := yaml.Marshal(&deployment)
 			log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
 			err = os.WriteFile(opFilePath, modifiedData, 0644)
