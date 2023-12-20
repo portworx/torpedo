@@ -106,6 +106,7 @@ var (
 	projectID                               string
 	serviceType                             string
 	deploymentTargetID                      string
+	bucketName                              string
 	replicas                                int32
 	err                                     error
 	supportedDataServices                   []string
