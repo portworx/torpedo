@@ -727,6 +727,8 @@ spec:
       value: "${VCLUSTER_TOTAL_ITERATIONS}"
     - name: NUM_ML_WORKLOADS
       value: "${NUM_ML_WORKLOADS}"
+    - name: ML_WORKLOAD_RUNTIME
+      value: "${ML_WORKLOAD_RUNTIME}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
     - name: PX_BACKUP_MONGODB_USERNAME

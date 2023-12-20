@@ -1329,6 +1329,16 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 			totalMlDeps = 5
 		}
 	}
+	totalRunTime := 5
+	mlWorkloadRuntime := ReadEnvVariable("ML_WORKLOAD_RUNTIME")
+	if mlWorkloadRuntime != "" {
+		var err error
+		totalRunTime, err = strconv.Atoi(mlWorkloadRuntime)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", mlWorkloadRuntime, err)
+			totalRunTime = 5
+		}
+	}
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
 		// Runs Preprocess Workload to prepare the model
@@ -1389,6 +1399,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		currentDir, err := os.Getwd()
 		log.FailOnError(err, "Failed to find current directory")
 		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+		flag := false
 		for i := 1; i <= totalMlDeps; i++ {
 			data, err := os.ReadFile(filePath)
 			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
@@ -1419,6 +1430,15 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
 			log.Infof("Successfully created App querying-app-%d", i)
 			ValidateApplications(appContexts)
+			if i == totalMlDeps {
+				flag = true
+			}
+		}
+		if flag {
+			log.Infof("All Workload apps are now up. Will let them run for %d minutes", totalRunTime)
+			time.Sleep(time.Duration(totalRunTime) * time.Minute)
+		} else {
+			log.Infof("Error happened with one of the workload apps. Validate from above logs.")
 		}
 	})
 	JustAfterEach(func() {
