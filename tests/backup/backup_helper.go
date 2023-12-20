@@ -5919,7 +5919,12 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 		if err != nil {
 			return nil, true, err
 		}
-		log.InfoD("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
+		log.Infof("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
+		allBackupCrsInKubeSystem, err := GetBackupCRs(defaultStorkDeploymentNamespace, clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
+		log.Infof("All backup CRs in [%s] are [%v]", defaultStorkDeploymentNamespace, allBackupCrsInKubeSystem)
 
 		for _, eachCR := range allBackupCrs {
 			if strings.Contains(eachCR, backupName) {
@@ -5960,6 +5965,11 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 			return nil, true, err
 		}
 		log.InfoD("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
+		allBackupCrsInKubeSystem, err := GetRestoreCRs(defaultStorkDeploymentNamespace, clusterObj)
+		if err != nil {
+			return nil, true, err
+		}
+		log.Infof("All restore CRs in [%s] are [%v]", defaultStorkDeploymentNamespace, allBackupCrsInKubeSystem)
 
 		for _, eachCR := range allRestoreCrs {
 			if strings.Contains(eachCR, restoreName) {
