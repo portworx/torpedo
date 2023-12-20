@@ -358,15 +358,11 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		log.FailOnError(err, "Unable to remove stork custom admin namespace")
 		err = DeleteAppNamespace(newAdminNamespace)
 		log.FailOnError(err, "Unable to delete custom admin namespace")
-		log.Infof("Deleting backup schedule")
-		bkpScheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-			OrgId: orgID,
-		}
-		allSchedules, err := Inst().Backup.EnumerateBackupSchedule(ctx, bkpScheduleEnumerateReq)
-		log.FailOnError(err, "Getting list of all schedules")
-		for _, sch := range allSchedules.GetBackupSchedules() {
-			err = DeleteSchedule(sch.Name, sch.Cluster, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s]", sch.Name))
+		log.Infof("Deleting backup schedule policy")
+		schedulePolicyNames, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+		for _, schedulePolicyName := range schedulePolicyNames {
+			err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
 		}
 		log.InfoD("Deleting deployed applications")
 		DestroyApps(scheduledAppContexts, opts)
