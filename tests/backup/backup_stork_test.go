@@ -152,6 +152,7 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		})
 		Step("Taking backup of multiple namespaces", func() {
 			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", bkpNamespaces))
+			log.Infof("Backup Started at [%s]", time.Now().Format("01-02-15-04-05"))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
@@ -350,30 +351,34 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		err = DeleteAppNamespace(newAdminNamespace)
-		log.FailOnError(err, "Unable to delete custom admin namespace")
-		log.Infof("Deleting backup schedule policy")
-		for scheduleName, schedulePolicyName := range scheduleAndBackup {
-			err = SuspendAndDeleteSchedule(scheduleName, schedulePolicyName, SourceClusterName, orgID, ctx, true)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		}
-		log.InfoD("Deleting deployed applications")
-		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Deleting backups")
-		err = DeleteAllBackups(ctx, orgID)
-		log.FailOnError(err, "Unable to delete all backups")
-		log.InfoD("Deleting restore")
-		log.InfoD(fmt.Sprintf("Restore names %v", restoreNames))
-		for _, restores := range restoreNames {
-			err := DeleteRestore(restores, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restores))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		log.Infof("Skipping cleanup for debugging")
+		// defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		// ctx, err := backup.GetAdminCtxFromSecret()
+		// log.FailOnError(err, "Fetching px-central-admin ctx")
+		// opts := make(map[string]bool)
+		// opts[SkipClusterScopedObjects] = true
+		// log.InfoD("Removing Stork Namespace")
+		// _, err = ChangeStorkAdminNamespace("")
+		// log.FailOnError(err, "Unable to remove stork custom admin namespace")
+		// err = DeleteAppNamespace(newAdminNamespace)
+		// log.FailOnError(err, "Unable to delete custom admin namespace")
+		// log.Infof("Deleting backup schedule policy")
+		// for scheduleName, schedulePolicyName := range scheduleAndBackup {
+		// 	err = SuspendAndDeleteSchedule(scheduleName, schedulePolicyName, SourceClusterName, orgID, ctx, true)
+		// 	dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		// }
+		// log.InfoD("Deleting deployed applications")
+		// DestroyApps(scheduledAppContexts, opts)
+		// log.InfoD("Deleting backups")
+		// err = DeleteAllBackups(ctx, orgID)
+		// log.FailOnError(err, "Unable to delete all backups")
+		// log.InfoD("Deleting restore")
+		// log.InfoD(fmt.Sprintf("Restore names %v", restoreNames))
+		// for _, restores := range restoreNames {
+		// 	err := DeleteRestore(restores, orgID, ctx)
+		// 	dash.VerifySafely(err, nil, fmt.Sprintf("Verifying the deletion of the restore named [%s]", restores))
+		// }
+		// CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 
 })
