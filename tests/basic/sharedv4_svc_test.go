@@ -1319,12 +1319,13 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	appContexts := make([]*scheduler.Context, 0)
 	prereqContexts := make([]*scheduler.Context, 0)
 	taskName := "prepare-ml-workload"
+	var origAppList []string
 	totalMlDeps := 5
 	totalRunTime := 5
-	log.Infof("Original App list : %v", Inst().AppList)
-	origAppList := Inst().AppList
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
+		log.Infof("Original App list : %v", Inst().AppList)
+		origAppList = Inst().AppList
 		// Runs Preprocess Workload to prepare the model
 		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
 		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
