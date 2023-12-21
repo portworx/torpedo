@@ -1191,6 +1191,7 @@ func CreateRestoreWithoutCheck(restoreName string, backupName string,
 
 // CreateRestoreWithValidation creates restore, waits and checks for success and validates the backup
 func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName string, namespaceMapping, storageClassMapping map[string]string, clusterName string, orgID string, scheduledAppContexts []*scheduler.Context) error {
+	startTime := time.Now()
 	err := CreateRestore(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping)
 	if err != nil {
 		return err
@@ -1228,7 +1229,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	}
 
 	log.Infof("Namespace mapping from CreateRestoreWithValidation [%v]", namespaceMapping)
-	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping, startTime)
 
 	return err
 }
@@ -2161,8 +2162,8 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 }
 
 func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, appContext context.Context,
-	backupName string, namespaceMapping map[string]string) error {
-
+	backupName string, namespaceMapping map[string]string, startTime time.Time) error {
+	var k8sCore = core.Instance()
 	var allBackupNamespaces []string
 	var dataBeforeBackup = make(map[string]map[string][][]string)
 	var dataAfterBackup = make(map[string]map[string][][]string)
@@ -2236,10 +2237,16 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		}
 	}
 
+	currentPodAge, err := getPodAge()
+	if err != nil {
+		return err
+	}
+
 	// Creating restore handlers
 	log.InfoD("Creating all restore app handlers")
 	log.InfoD("Namespace Mapping - [%+v]", namespaceMapping)
 	for _, ctx := range expectedRestoredAppContexts {
+
 		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
 		if err != nil {
 			allErrors = append(allErrors, err.Error())
@@ -2255,8 +2262,21 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appContext,
 				appInfo.NodePort,
 				appInfo.Namespace)
-			log.InfoD("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
-			allRestoreHandlers = append(allRestoreHandlers, appHandler)
+
+			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
+			if err != nil {
+				return err
+			}
+			for _, eachPod := range pods.Items {
+				if currentPodAge[appInfo.Namespace][eachPod.ObjectMeta.GetGenerateName()].Before(startTime) {
+					log.Infof("Skipping %s from validation as the pod is not changed", eachPod.ObjectMeta.GetGenerateName())
+					log.Infof("Current Restore Policy - [%s]", theRestore.ReplacePolicy.String())
+					continue
+				} else {
+					log.InfoD("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
+					allRestoreHandlers = append(allRestoreHandlers, appHandler)
+				}
+			}
 		}
 	}
 
@@ -2273,20 +2293,14 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 			log.InfoD("Skipping data validation added before backup as no data was found")
 		}
 
-		if (theRestore.ReplacePolicy == api.ReplacePolicy_Delete || theBackup.Cluster != theRestore.Cluster) ||
-			(theBackup.Cluster == theRestore.Cluster && (len(namespaceMapping) != 0)) {
-			if len(dataAfterBackup) != 0 {
-				log.InfoD("Validating data inserted after backup")
-				err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
-				if err == nil {
-					allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
-				}
-			} else {
-				log.InfoD("Skipping data validation added after backup as no data was found")
+		if len(dataAfterBackup) != 0 {
+			log.InfoD("Validating data inserted after backup")
+			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			if err == nil {
+				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Error - [%s]", err.Error()))
 			}
 		} else {
-			IsReplacePolicySetToDelete = true
-			log.InfoD("Skipping data validation for data added after backup as restore policy is set to [%s] and source and destination clusters are same", theRestore.ReplacePolicy.String())
+			log.InfoD("Skipping data validation added after backup as no data was found")
 		}
 	}
 
