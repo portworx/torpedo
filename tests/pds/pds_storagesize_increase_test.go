@@ -285,11 +285,11 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 
 		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
 		Step(stepLog, func() {
-			pdsdeploymentsmd5Hash2 := make(map[string]string)
+			pdsdeploymentsmd5HashAfterResize := make(map[string]string)
 			for _, ds := range params.DataServiceToTest {
 				for _, repl := range params.StorageConfigurations.ReplFactor {
 					log.InfoD(stepLog)
-					CleanMapEntries(pdsdeploymentsmd5Hash2)
+					CleanMapEntries(pdsdeploymentsmd5HashAfterResize)
 					stIds, resIds = nil, nil
 					depList, updatedDepList, scaledUpdatedDepList, deploymentsToBeCleaned, restoredDeployments = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
 					wlDeploymentsToBeCleaned = []*v1.Deployment{}
@@ -365,7 +365,7 @@ var _ = Describe("{ScaleUpDsPostStorageSizeIncreaseVariousRepl}", func() {
 							ckSum2, wlDep2, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
 							log.FailOnError(err, "Error while Running workloads-%v", wlDep2)
 							log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum2)
-							pdsdeploymentsmd5Hash2[*deployment.ClusterResourceName] = ckSum2
+							pdsdeploymentsmd5HashAfterResize[*deployment.ClusterResourceName] = ckSum2
 							wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep2)
 						})
 						stepLog = "Verify storage size before and after storage resize - Verify at STS, PV,PVC level"
