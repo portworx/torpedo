@@ -51,21 +51,10 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 			updatedPvcSize           uint64
 			beforeResizePodAge       float64
 		)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		stepLog := "Create AWS S3 Backup target."
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-			log.FailOnError(err, "Failed to create AWS backup target.")
-			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-			bkpTargets = append(bkpTargets, bkpTarget)
-		})
 		pdsdeploymentsmd5Hash2 := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
 		restoredDeploymentsmd5Hash2 := make(map[string]string)
-		stepLog = "Create Custom Templates , Deploy ds and Trigger Workload"
+		stepLog := "Create Custom Templates , Deploy ds and Trigger Workload"
 		Step(stepLog, func() {
 			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 			log.FailOnError(err, "Error while fetching the backup supported ds.")
@@ -242,10 +231,6 @@ var _ = Describe("{ResizeStorageAndRestoreWithVariousFSandRepl}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
