@@ -59,6 +59,15 @@ type TestParams struct {
 	ServiceType        string
 }
 
+type validateStorageIncrease struct {
+	UpdatedDeployment    *pds.ModelsDeployment
+	StConfigUpdated      *pds.ModelsStorageOptionsTemplate
+	ResConfigUpdated     *pds.ModelsResourceSettingsTemplate
+	InitialCapacity      uint64
+	IncreasedStorageSize uint64
+	BeforeResizePodAge   float64
+}
+
 const (
 	pdsNamespace                        = "pds-system"
 	deploymentName                      = "qa"
@@ -710,28 +719,28 @@ func GetPodAge(deployment *pds.ModelsDeployment, namespace string) (float64, err
 }
 
 // ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
-func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64, beforeResizePodAge float64) error {
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, stIncrease *validateStorageIncrease) error {
 	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
-	newResourceTemplateID := resConfigUpdated.GetId()
-	newStorageTemplateID := stConfigUpdated.GetId()
-	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+	newResourceTemplateID := stIncrease.ResConfigUpdated.GetId()
+	newStorageTemplateID := stIncrease.StConfigUpdated.GetId()
+	_, _, config, err := pdslib.ValidateDataServiceVolumes(stIncrease.UpdatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
 	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-	log.InfoD("Original resConfigModel.StorageRequest val is- [%v] and Updated resConfigModel.StorageRequest val is- [%v]", *resConfigUpdated.StorageRequest, config.Resources.Requests.EphemeralStorage)
-	dash.VerifyFatal(config.Resources.Requests.EphemeralStorage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
-	dash.VerifyFatal(config.Parameters.Fs, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
-	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
+	log.InfoD("Original resConfigModel.StorageRequest val is- [%v] and Updated resConfigModel.StorageRequest val is- [%v]", *stIncrease.ResConfigUpdated.StorageRequest, config.Resources.Requests.EphemeralStorage)
+	dash.VerifyFatal(config.Resources.Requests.EphemeralStorage, *stIncrease.ResConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+	dash.VerifyFatal(config.Parameters.Fs, *stIncrease.StConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
+	stringRelFactor := strconv.Itoa(int(*stIncrease.StConfigUpdated.Repl))
 	dash.VerifyFatal(config.Parameters.Repl, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
-	if updatedPvcSize > initialCapacity {
+	if stIncrease.IncreasedStorageSize > stIncrease.InitialCapacity {
 		flag := true
 		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
-		log.InfoD("Initial PVC Capacity is- [%v] and Updated PVC Capacity is- [%v]", initialCapacity, updatedPvcSize)
+		log.InfoD("Initial PVC Capacity is- [%v] and Updated PVC Capacity is- [%v]", stIncrease.InitialCapacity, stIncrease.IncreasedStorageSize)
 	} else {
 		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
 	}
 	afterResizePodAge, err := GetPodAge(deployment, params.InfraToTest.Namespace)
 	log.FailOnError(err, "unable to get pods restart count before PVC resize")
 	log.InfoD("Pods Age after storage resize is- [%v]Min", afterResizePodAge)
-	if beforeResizePodAge < afterResizePodAge {
+	if stIncrease.BeforeResizePodAge < afterResizePodAge {
 		flagCount := true
 		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
 
@@ -741,5 +750,3 @@ func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *
 	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
 }
-
-
