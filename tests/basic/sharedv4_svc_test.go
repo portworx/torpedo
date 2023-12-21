@@ -1320,25 +1320,9 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	prereqContexts := make([]*scheduler.Context, 0)
 	taskName := "prepare-ml-workload"
 	totalMlDeps := 5
-	totalMlWorkloads := ReadEnvVariable("NUM_ML_WORKLOADS")
-	if totalMlWorkloads != "" {
-		var err error
-		totalMlDeps, err = strconv.Atoi(totalMlWorkloads)
-		if err != nil {
-			log.Errorf("Failed to convert value %v to int with error: %v", totalMlWorkloads, err)
-			totalMlDeps = 5
-		}
-	}
 	totalRunTime := 5
-	mlWorkloadRuntime := ReadEnvVariable("ML_WORKLOAD_RUNTIME")
-	if mlWorkloadRuntime != "" {
-		var err error
-		totalRunTime, err = strconv.Atoi(mlWorkloadRuntime)
-		if err != nil {
-			log.Errorf("Failed to convert value %v to int with error: %v", mlWorkloadRuntime, err)
-			totalRunTime = 5
-		}
-	}
+	log.Infof("Original App list : %v", Inst().AppList)
+	orig_app_list := Inst().AppList
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
 		// Runs Preprocess Workload to prepare the model
@@ -1347,6 +1331,25 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		// Runs Continuous Retraining module
 		Inst().AppList = []string{"ml-workload-continuous-training"}
 		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+		// Read Test Parameters
+		totalMlWorkloads := ReadEnvVariable("NUM_ML_WORKLOADS")
+		if totalMlWorkloads != "" {
+			var err error
+			totalMlDeps, err = strconv.Atoi(totalMlWorkloads)
+			if err != nil {
+				log.Errorf("Failed to convert value %v to int with error: %v", totalMlWorkloads, err)
+				totalMlDeps = 5
+			}
+		}
+		mlWorkloadRuntime := ReadEnvVariable("ML_WORKLOAD_RUNTIME")
+		if mlWorkloadRuntime != "" {
+			var err error
+			totalRunTime, err = strconv.Atoi(mlWorkloadRuntime)
+			if err != nil {
+				log.Errorf("Failed to convert value %v to int with error: %v", mlWorkloadRuntime, err)
+				totalRunTime = 5
+			}
+		}
 	})
 	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
 		// Defining deployment of querying ML Workload apps. This is necessary otherwise Torpedo
@@ -1450,6 +1453,8 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		for _, ctx := range prereqContexts {
 			TearDownContext(ctx, opts)
 		}
+		Inst().AppList = orig_app_list
+		log.Infof("Restored original App list : %v", Inst().AppList)
 	})
 })
 
