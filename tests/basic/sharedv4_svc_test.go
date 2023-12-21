@@ -1322,7 +1322,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	totalMlDeps := 5
 	totalRunTime := 5
 	log.Infof("Original App list : %v", Inst().AppList)
-	orig_app_list := Inst().AppList
+	origAppList := Inst().AppList
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
 		// Runs Preprocess Workload to prepare the model
@@ -1453,7 +1453,7 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		for _, ctx := range prereqContexts {
 			TearDownContext(ctx, opts)
 		}
-		Inst().AppList = orig_app_list
+		Inst().AppList = origAppList
 		log.Infof("Restored original App list : %v", Inst().AppList)
 	})
 })
