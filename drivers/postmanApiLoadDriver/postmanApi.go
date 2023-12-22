@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	postmanCentosImage          = "18jyotikagliwal/newmanshort:v2"
+	postmanCentosImage          = "portworx/torpedo-postman:v1"
 	deploymentName              = "postman-newman"
 	defaultCollectionPath       = "../drivers/postmanApiLoadDriver/collections/collection.json"
 	timeOut                     = 30 * time.Minute
