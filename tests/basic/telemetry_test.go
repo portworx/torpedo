@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,10 +16,13 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/dbg"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/osutils"
 	. "github.com/portworx/torpedo/tests"
+	//	 v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -35,6 +39,7 @@ var (
 	}
 	isTelemetryOperatorEnabled = false
 	oneTimeInitDone            = false
+	stcNameSpace               string
 )
 
 // Taken from SharedV4 tests...
@@ -84,6 +89,7 @@ func oneTimeInit() {
 			log.Infof("Telemetry is operator enabled.")
 			isTelemetryOperatorEnabled = true
 		}
+		stcNameSpace = spec.Namespace
 	}
 	if !isTelemetryOperatorEnabled {
 		log.Infof("Telemetry is not enabled.")
@@ -738,5 +744,108 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+// This test telemetry health via pxctl
+var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
+	//	var contexts []*scheduler.Context
+	//	var runID int
+
+	//	testrailID := 54907
+
+	const (
+		OsdBaseLogDir = "/var/lib/osd/log"
+		coStateDir    = OsdBaseLogDir + "/coState"
+	)
+
+	BeforeEach(func() {
+		oneTimeInit()
+	})
+
+	JustBeforeEach(func() {
+		//		runID = testrailuttils.AddRunsToMilestone(testrailID)
+		//		StartTorpedoTest("TelemetryCheckContainerOrchestrator", "Validate container orchestrator", nil, testrailID)
+		StartTorpedoTest("DiagsTelemetryCheckContainerOrchestrator", "Validate container orchestrator", nil, 0)
+		if !isTelemetryOperatorEnabled {
+			Skip("Skip test because telemetry is not enabled...")
+		}
+		configMap, err := core.Instance().GetConfigMap("px-telemetry-register", stcNameSpace)
+		Expect(err).NotTo(HaveOccurred())
+		isCOenabled := strings.Contains(configMap.Data["config_properties_px.yaml"], "certStoreType: \"kvstore\"")
+		if !isCOenabled {
+			Skip("Skip test because telemetry container orchestrator is not enabled...")
+		}
+	})
+
+	It("Validate container orchestrator usage", func() {
+		var (
+			clusterNodes map[string]node.Node
+			regNode      string
+		)
+
+		getCoStateTimeStamp := func(tsFileName string) (int64, error) {
+			tmData, err := telemetryRunCmd("cat "+tsFileName, clusterNodes[regNode], nil)
+			if err != nil {
+				return 0, err
+			}
+
+			tm, terr := strconv.ParseInt(string(tmData), 10, 64)
+			if terr != nil {
+				return 0, terr
+			}
+			return tm, nil
+		}
+
+		log.Infof("stc namespace: %s", stcNameSpace)
+		cmd := fmt.Sprintf("kubectl -n %s get pods -l role=px-telemetry-registration -o custom-columns=\":spec.nodeName\"", stcNameSpace)
+		output, _, err := osutils.ExecShell(cmd)
+		Expect(err).NotTo(HaveOccurred())
+		regNode = strings.TrimSpace(output)
+		if len(regNode) <= 0 {
+			log.FailOnError(fmt.Errorf("node is empty"), "Unable to determine telemetry registration node")
+		}
+		clusterNodes = node.GetNodesByName()
+		log.Infof("telemetry registration node: %s", regNode)
+		coStartTime, startErr := getCoStateTimeStamp(coStateDir + "/kvStart.ts")
+		if startErr != nil {
+			log.FailOnError(startErr, "error obtaining start time from costate file")
+		}
+		log.Infof("container orchestrater server start time: %v", time.Unix(coStartTime, 0))
+
+		coSetTime, setErr := getCoStateTimeStamp(coStateDir + "/kvSet.ts")
+		coGetTime, getErr := getCoStateTimeStamp(coStateDir + "/kvGet.ts")
+
+		if setErr == nil {
+			log.Infof("container orchestrater set time: %v\n", time.Unix(coSetTime, 0))
+			if coSetTime > coStartTime {
+				log.Infof("container orchestrator validated via set time")
+				return
+			}
+			setErr = fmt.Errorf("set time is less than start time, check for upgrade...")
+			log.Infof("%s", setErr.Error())
+		}
+
+		if setErr != nil && getErr != nil {
+			log.Infof("error obtaining set time from costate file: %v\n", setErr)
+			log.Infof("error obtaining get time from costate file: %v\n", getErr)
+			log.FailOnError(fmt.Errorf("error obtaining costate file"), "container orchestrator validated failed")
+			return
+		}
+
+		log.Infof("container orchestrater get time: %v\n", time.Unix(coGetTime, 0))
+		if coGetTime < coStartTime {
+			log.FailOnError(fmt.Errorf("get time is less than start time"), "container orchestrator validated failed")
+			return
+		}
+
+		log.Infof("container orchestrator validated via get time")
+		//	        Step(fmt.Sprintf("Find out STC Namespace"), func() {
+		//	        })
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		//		AfterEachTest(contexts, testrailID, runID)
 	})
 })
