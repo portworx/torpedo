@@ -5269,6 +5269,42 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
+//DeleteJSONFilesFromNFSLocation deletes the JSON files from backup location
+func DeleteJSONFilesFromNFSLocation(backupPath string) {
+	// Getting NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+	workerNode := node.GetWorkerNodes()[0]
+
+	// Mounting the NFS share to the worker node.
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+	}
+
+	for _, cmd := range mountCmds {
+		err := runCmd(cmd, workerNode)
+		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
+	}
+
+	defer func() {
+		// Unmounting the NFS share from the worker node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			err := runCmd(cmd, workerNode)
+			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
+		}
+	}()
+
+	// Remove the JSON files from the backup path.
+	rmCmd := fmt.Sprintf("cd %s/%s && rm -rf *.json", mountDir, backupPath)
+	err := runCmd(rmCmd, workerNode)
+	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
+}
+
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
