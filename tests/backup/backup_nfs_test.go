@@ -214,6 +214,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 		clusterUid               string
 		singleNamespaceBackup    string
 		multipleNamespaceBackup  string
+		newBackupName            string
 		appNamespaces            []string
 		appContexts              []*scheduler.Context
 		scheduledAppContexts     []*scheduler.Context
@@ -226,7 +227,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 
 	JustBeforeEach(func() {
 		labelSelectors = make(map[string]string)
-		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q4FY23)
+		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q1FY24)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -305,8 +306,8 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 			backupNames = append(backupNames, customResourceBackupName)
 		})
 
-		Step("Remove the JSON files from the NFS backup location", func() {
-			log.InfoD("Remove the JSON files from the NFS backup location")
+		Step("Remove the JSON files from the NFS backup location for all the backups", func() {
+			log.InfoD("Remove the JSON files from the NFS backup location for all the backups")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
@@ -325,8 +326,8 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 			}
 		})
 
-		Step("Verify the status of the backups taken", func() {
-			log.InfoD("Verify the status of the backups taken")
+		Step("Verify the status of the backups after deleting the JSON files", func() {
+			log.InfoD("Verify the status of the backups after deleting the JSON files")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
@@ -345,8 +346,8 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 			}
 		})
 
-		Step("Verify if the restores for the backups get failed", func() {
-			log.InfoD("Verify if the restores for the backups get failed")
+		Step("Verify if the restores for the above backups get failed", func() {
+			log.InfoD("Verify if the restores for the above backups get failed")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
@@ -356,6 +357,28 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				dash.VerifyFatal(strings.Contains(err.Error(), "Error creating CR"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
+		})
+
+		Step("Taking a new backup of namespaces", func() {
+			log.InfoD(fmt.Sprintf("Taking a new backup of namespaces [%v]", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newBackupName = fmt.Sprintf("new-backup-%v", RandomString(8))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, newBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", newBackupName))
+			backupNames = append(backupNames, newBackupName)
+		})
+
+		Step("Verify if the restores for the new backup is successful", func() {
+			log.InfoD("Verify if the restores for the new backup is successful")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newRestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, newBackupName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, newRestoreName, newBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
+			dash.VerifyFatal(err, true, fmt.Sprintf("Verifying if the restore [%s] is successful.", newRestoreName))
+			restoreNames = append(restoreNames, newRestoreName)
 		})
 	})
 
@@ -375,5 +398,12 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, "", "", ctx)
+		log.InfoD("Switching context to destination cluster for clean up")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Unable to switch context to destination cluster [%s]", destinationClusterName)
+		DestroyApps(scheduledAppContexts, opts)
+		log.InfoD("Switching back context to Source cluster")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
 	})
 })
