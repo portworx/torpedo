@@ -377,7 +377,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 			newRestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, newBackupName)
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
 			err = CreateRestoreWithValidation(ctx, newRestoreName, newBackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
-			dash.VerifyFatal(err, true, fmt.Sprintf("Verifying if the restore [%s] is successful.", newRestoreName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the restore [%s] is successful.", newRestoreName))
 			restoreNames = append(restoreNames, newRestoreName)
 		})
 	})
