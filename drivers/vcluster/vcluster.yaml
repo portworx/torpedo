@@ -1,5 +1,6 @@
 # Enable HA mode
-
+openshift:
+  enable: true
 sync:
   services:
     enabled: true
