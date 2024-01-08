@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -326,24 +327,40 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 			}
 		})
 
-		Step("Verify the status of the backups after deleting the JSON files", func() {
-			log.InfoD("Verify the status of the backups after deleting the JSON files")
+		Step("Verify if the backups are in CloudBackupMissing state after the JSON file deletion", func() {
+			log.InfoD("Verify if the backups are in CloudBackupMissing state after the JSON file deletion")
+			var wg sync.WaitGroup
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, backupName := range backupNames {
-				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-				log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
-				backupInspectRequest := &api.BackupInspectRequest{
-					Name:  backupName,
-					Uid:   backupUID,
-					OrgId: orgID,
-				}
-				resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
-				log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
-				backupStatus := resp.GetBackup().GetStatus().Status
-				backupStatusReason := resp.GetBackup().GetStatus().Reason
-				log.Infof("The status for the backup [%s] is [%s], and the reason is [%s]", backupName, backupStatus, backupStatusReason)
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+					log.FailOnError(err, "Fetching backup uid")
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   bkpUid,
+						OrgId: orgID,
+					}
+					requiredStatus := api.BackupInfo_StatusInfo_CloudBackupMissing
+					backupCloudBackupMissingCheckFunc := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						if err != nil {
+							return "", false, err
+						}
+						actual := resp.GetBackup().GetStatus().Status
+						if actual == requiredStatus {
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, requiredStatus, actual)
+					}
+					_, err = DoRetryWithTimeoutWithGinkgoRecover(backupCloudBackupMissingCheckFunc, 20*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verfiying backup %s is in CloudBackup missing state", backupName))
+				}(backupName)
 			}
+			wg.Wait()
 		})
 
 		Step("Verify if the restores for the above backups get failed", func() {
