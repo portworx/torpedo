@@ -249,13 +249,13 @@ if [ -z "${AUTOPILOT_UPGRADE_VERSION}" ]; then
 fi
 
 kubectl delete secret torpedo
-kubectl delete pod torpedo
-state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+kubectl delete deployment torpedo
+state=`kubectl get pod "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')" | grep -v NAME | awk '{print $3}'`
 timeout=0
 while [ "$state" == "Terminating" -a $timeout -le 600 ]; do
   echo "Terminating torpedo..."
   sleep 1
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
+  state=`kubectl get pod "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')" | grep -v NAME | awk '{print $3}'`
   timeout=$[$timeout+1]
 done
 
@@ -433,319 +433,329 @@ roleRef:
   name: torpedo-role
   apiGroup: rbac.authorization.k8s.io
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: torpedo
   labels:
     app: torpedo
 spec:
-  tolerations:
-  - key: node-role.kubernetes.io/master
-    operator: Equal
-    effect: NoSchedule
-  - key: node-role.kubernetes.io/controlplane
-    operator: Equal
-    value: "true"
-  - key: node-role.kubernetes.io/control-plane
-    operator: Exists
-  - key: node-role.kubernetes.io/etcd
-    operator: Equal
-    value: "true"
-  - key: apps
-    operator: Equal
-    value: "false"
-    effect: "NoSchedule"
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: node-role.kubernetes.io/master
-            operator: "Exists"
-        - matchExpressions:
-          - key: node-role.kubernetes.io/control-plane
-            operator: "Exists"
-        - matchExpressions:
-          - key: node-role.kubernetes.io/controlplane
-            operator: "In"
-            values: ["true"]
-        - matchExpressions:
-          - key: px/enabled
-            operator: "In"
-            values: ["false"]
-  initContainers:
-  - name: init-sysctl
-    image: ${BUSYBOX_IMG}
-    imagePullPolicy: IfNotPresent
-    securityContext:
-      privileged: true
-    command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
-  containers:
-  - name: torpedo
-    image: ${TORPEDO_IMG}
-    imagePullPolicy: Always
-    securityContext:
-      privileged: ${SECURITY_CONTEXT}
-    command: [ "ginkgo" ]
-    args: [ "--trace",
-            "--timeout", "${TIMEOUT}",
-            "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
-            "$FOCUS_ARG",
-            "$SKIP_ARG",
-            $TEST_SUITE,
-            "--",
-            "--spec-dir", $SPEC_DIR,
-            "--app-list", "$APP_LIST",
-            "--deploy-pds-apps=$DEPLOY_PDS_APPS",
-            "--pds-driver", "$PDS_DRIVER",
-            "--secure-apps", "$SECURE_APP_LIST",
-            "--repl1-apps", "$REPL1_APP_LIST",
-            "--csi-app-list", "$CSI_APP_LIST",
-            "--scheduler", "$SCHEDULER",
-            "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
-            "--backup-driver", "$BACKUP_DRIVER",
-            "--log-level", "$LOGLEVEL",
-            "--node-driver", "$NODE_DRIVER",
-            "--scale-factor", "$SCALE_FACTOR",
-            "--hyper-converged=$IS_HYPER_CONVERGED",
-            "--fail-on-px-pod-restartcount=$PX_POD_RESTART_CHECK",
-            "--minimun-runtime-mins", "$MIN_RUN_TIME",
-            "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
-            "--chaos-level", "$CHAOS_LEVEL",
-            "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
-            "--provisioner", "$PROVISIONER",
-            "--storage-driver", "$STORAGE_DRIVER",
-            "--config-map", "$CONFIGMAP",
-            "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
-            "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
-            "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
-            "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
-            "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
-            "--secret-type=$SECRET_TYPE",
-            "--pure-volumes=$IS_PURE_VOLUMES",
-            "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
-            "--pure-san-type=$PURE_SAN_TYPE",
-            "--vault-addr=$VAULT_ADDR",
-            "--vault-token=$VAULT_TOKEN",
-            "--px-runtime-opts=$PX_RUNTIME_OPTS",
-            "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
-            "--anthos-inst-path=$ANTHOS_INST_PATH",
-            "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
-            "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
-            "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
-            "--migration-hops=$MIGRATION_HOPS",
-            "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
-            "--metering_interval_mins=$METERING_INTERVAL_MINS",
-            "--testrail-milestone=$TESTRAIL_MILESTONE",
-            "--testrail-run-name=$TESTRAIL_RUN_NAME",
-            "--testrail-run-id=$TESTRAIL_RUN_ID",
-            "--testrail-jeknins-build-url=$TESTRAIL_JENKINS_BUILD_URL",
-            "--testrail-host=$TESTRAIL_HOST",
-            "--testrail-username=$TESTRAIL_USERNAME",
-            "--testrail-password=$TESTRAIL_PASSWORD",
-            "--jira-username=$JIRA_USERNAME",
-            "--jira-token=$JIRA_TOKEN",
-            "--jira-account-id=$JIRA_ACCOUNT_ID",
-            "--user=$USER",
-            "--enable-dash=$ENABLE_DASH",
-            "--data-integrity-validation-tests=$DATA_INTEGRITY_VALIDATION_TESTS",
-            "--test-desc=$TEST_DESCRIPTION",
-            "--test-type=$TEST_TYPE",
-            "--test-tags=$TEST_TAGS",
-            "--testset-id=$DASH_UID",
-            "--branch=$BRANCH",
-            "--product=$PRODUCT",
-            "--torpedo-job-name=$TORPEDO_JOB_NAME",
-            "--torpedo-job-type=$TORPEDO_JOB_TYPE",
-            "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
-            "$APP_DESTROY_TIMEOUT_ARG",
-    ]
-    tty: true
-    volumeMounts: [${VOLUME_MOUNTS}]
-    env:
-    - name: NODE_NAME
-      valueFrom:
-        fieldRef:
-          fieldPath: spec.nodeName
-    - name: K8S_VENDOR
-      value: "${K8S_VENDOR}"
-    - name: TORPEDO_SSH_USER
-      value: "${TORPEDO_SSH_USER}"
-    - name: TORPEDO_SSH_PASSWORD
-      value: "${TORPEDO_SSH_PASSWORD}"
-    - name: TORPEDO_SSH_KEY
-      value: "${TORPEDO_SSH_KEY}"
-    - name: AZURE_TENANT_ID
-      value: "${AZURE_TENANTID}"
-    - name: VOLUME_PROVIDER
-      value: "${VOLUME_PROVIDER}"
-    - name: OBJECT_STORE_PROVIDER
-      value: "${OBJECT_STORE_PROVIDER}"
-    - name: AZURE_CLIENT_ID
-      value: "${AZURE_CLIENTID}"
-    - name: AZURE_CLIENT_SECRET
-      value: "${AZURE_CLIENTSECRET}"
-    - name: AZURE_ACCOUNT_NAME
-      value: "${AZURE_ACCOUNT_NAME}"
-    - name: SOURCE_RKE_TOKEN
-      value: "${SOURCE_RKE_TOKEN}"
-    - name: DESTINATION_RKE_TOKEN
-      value: "${DESTINATION_RKE_TOKEN}"
-    - name: AZURE_ACCOUNT_KEY
-      value: "${AZURE_ACCOUNT_KEY}"
-    - name: AZURE_SUBSCRIPTION_ID
-      value: "${AZURE_SUBSCRIPTION_ID}"
-    - name: AZURE_CLUSTER_NAME
-      value: "${AZURE_CLUSTER_NAME}"
-    - name: AWS_ACCESS_KEY_ID
-      value: "${AWS_ACCESS_KEY_ID}"
-    - name: AWS_SECRET_ACCESS_KEY
-      value: "${AWS_SECRET_ACCESS_KEY}"
-    - name: AWS_REGION
-      value: "${AWS_REGION}"
-    - name: AWS_MINIO_ACCESS_KEY_ID
-      value: "${AWS_MINIO_ACCESS_KEY_ID}"
-    - name: AWS_MINIO_SECRET_ACCESS_KEY
-      value: "${AWS_MINIO_SECRET_ACCESS_KEY}"
-    - name: AWS_MINIO_REGION
-      value: "${AWS_MINIO_REGION}"
-    - name: AWS_MINIO_ENDPOINT
-      value: "${AWS_MINIO_ENDPOINT}"
-    - name: KUBECONFIGS
-      value: "${CLUSTER_CONFIGS}"
-    - name: S3_ENDPOINT
-      value: "${S3_ENDPOINT}"
-    - name: S3_AWS_ACCESS_KEY_ID
-      value: "${S3_AWS_ACCESS_KEY_ID}"
-    - name: S3_AWS_SECRET_ACCESS_KEY
-      value: "${S3_AWS_SECRET_ACCESS_KEY}"
-    - name: S3_REGION
-      value: "${S3_REGION}"
-    - name: BUCKET_NAME
-      value: "${BUCKET_NAME}"
-    - name: LOCKED_BUCKET_NAME
-      value: "${LOCKED_BUCKET_NAME}"
-    - name: S3_DISABLE_SSL
-      value: "${S3_DISABLE_SSL}"
-    - name: DIAGS_BUCKET
-      value: "${DIAGS_BUCKET}"
-    - name: PROVIDERS
-      value: "${PROVIDERS}"
-    - name: CLUSTER_PROVIDER
-      value: "${CLUSTER_PROVIDER}"
-    - name: INTERNAL_DOCKER_REGISTRY
-      value: "$INTERNAL_DOCKER_REGISTRY"
-    - name: IMAGE_PULL_SERVER
-      value: "$IMAGE_PULL_SERVER"
-    - name: IMAGE_PULL_USERNAME
-      value: "$IMAGE_PULL_USERNAME"
-    - name: IMAGE_PULL_PASSWORD
-      value: "$IMAGE_PULL_PASSWORD"
-    - name: VSPHERE_USER
-      value: "${VSPHERE_USER}"
-    - name: VSPHERE_PWD
-      value: "${VSPHERE_PWD}"
-    - name: VSPHERE_HOST_IP
-      value: "${VSPHERE_HOST_IP}"
-    - name: IBMCLOUD_API_KEY
-      value: "${IBMCLOUD_API_KEY}"
-    - name: CONTROL_PLANE_URL
-      value: "${CONTROL_PLANE_URL}"
-    - name: DS_VERSION
-      value: "${DS_VERSION}"
-    - name: DS_BUILD
-      value: "${DS_BUILD}"
-    - name: NAMESPACE
-      value: "${NAMESPACE}"
-    - name: NO_OF_NODES
-      value: "${NO_OF_NODES}"
-    - name: DATA_SERVICE
-      value: "${DATA_SERVICE}"
-    - name: DEPLOY_ALL_VERSIONS
-      value: "${DEPLOY_ALL_VERSIONS}"
-    - name: DEPLOY_ALL_IMAGES
-      value: "${DEPLOY_ALL_IMAGES}"
-    - name: DEPLOY_ALL_DATASERVICE
-      value: "${DEPLOY_ALL_DATASERVICE}"
-    - name: GCP_PROJECT_ID
-      value: "${GCP_PROJECT_ID}"
-    - name: PDS_USERNAME
-      value: "${PDS_USERNAME}"
-    - name: PDS_PASSWORD
-      value: "${PDS_PASSWORD}"
-    - name: PDS_CLIENT_SECRET
-      value: "${PDS_CLIENT_SECRET}"
-    - name: PDS_CLIENT_ID
-      value: "${PDS_CLIENT_ID}"
-    - name: PDS_PARAM_CM
-      value: "${PDS_PARAM_CM}"
-    - name: PDS_ISSUER_URL
-      value: "${PDS_ISSUER_URL}"
-    - name: CLUSTER_TYPE
-      value: "${CLUSTER_TYPE}"
-    - name: TARGET_KUBECONFIG
-      value: "${TARGET_KUBECONFIG}"
-    - name: TARGET_CLUSTER_NAME
-      value: "${TARGET_CLUSTER_NAME}"
-    - name: PX_ORACLE_user_ocid
-      value: "${PX_ORACLE_user_ocid}"
-    - name: PX_ORACLE_fingerprint
-      value: "${PX_ORACLE_fingerprint}"
-    - name: PX_ORACLE_private_key_path
-      value: "${ORACLE_API_KEY}"
-    - name: INSTANCE_GROUP
-      value: "${INSTANCE_GROUP}"
-    - name: LOGGLY_API_TOKEN
-      value: "${LOGGLY_API_TOKEN}"
-    - name: PODMETRIC_METERING_INTERVAL_MINUTES
-      value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
-    - name: TARGET_PXBACKUP_VERSION
-      value: "${TARGET_PXBACKUP_VERSION}"
-    - name: TARGET_STORK_VERSION
-      value: "${TARGET_STORK_VERSION}"
-    - name: PX_BACKUP_HELM_REPO_BRANCH
-      value: "${PX_BACKUP_HELM_REPO_BRANCH}"
-    - name: BACKUP_TYPE
-      value: "${BACKUP_TYPE}"
-    - name: NFS_SERVER_ADDR
-      value: "${NFS_SERVER_ADDR}"
-    - name: NFS_SUB_PATH
-      value: "${NFS_SUB_PATH}"
-    - name: NFS_MOUNT_OPTION
-      value: "${NFS_MOUNT_OPTION}"
-    - name: NFS_PATH
-      value: "${NFS_PATH}"
-    - name: SKIP_PX_OPERATOR_UPGRADE
-      value: "${SKIP_PX_OPERATOR_UPGRADE}"
-    - name: VOLUME_SNAPSHOT_CLASS
-      value: "${VOLUME_SNAPSHOT_CLASS}"
-    - name: S3_SSE_TYPE
-      value: "${S3_SSE_TYPE}"
-    - name: S3_POLICY_SID
-      value: "${S3_POLICY_SID}"
-    - name: S3_ENCRYPTION_POLICY
-      value: "${S3_ENCRYPTION_POLICY}"
-    - name: NUM_VCLUSTERS
-      value: "${NUM_VCLUSTERS}"
-    - name: VCLUSTER_PARALLEL_APPS
-      value: "${VCLUSTER_PARALLEL_APPS}"
-    - name: VCLUSTER_TOTAL_ITERATIONS
-      value: "${VCLUSTER_TOTAL_ITERATIONS}"
-    - name: NUM_ML_WORKLOADS
-      value: "${NUM_ML_WORKLOADS}"
-    - name: ML_WORKLOAD_RUNTIME
-      value: "${ML_WORKLOAD_RUNTIME}"
-    - name: KUBEVIRT_UPGRADE_VERSION
-      value: "${KUBEVIRT_UPGRADE_VERSION}"
-    - name: PX_BACKUP_MONGODB_USERNAME
-      value: "${PX_BACKUP_MONGODB_USERNAME}"
-    - name: PX_BACKUP_MONGODB_PASSWORD
-      value: "${PX_BACKUP_MONGODB_PASSWORD}"
-  volumes: [${VOLUMES}]
-  restartPolicy: Never
-  serviceAccountName: torpedo-account
+  replicas: 1
+  selector:
+    matchLabels:
+      app: torpedo
+  template:
+    metadata:
+      name: torpedo
+      labels:
+        app: torpedo
+    spec:
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Equal
+        effect: NoSchedule
+      - key: node-role.kubernetes.io/controlplane
+        operator: Equal
+        value: "true"
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+      - key: node-role.kubernetes.io/etcd
+        operator: Equal
+        value: "true"
+      - key: apps
+        operator: Equal
+        value: "false"
+        effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: "Exists"
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: "Exists"
+            - matchExpressions:
+              - key: node-role.kubernetes.io/controlplane
+                operator: "In"
+                values: ["true"]
+            - matchExpressions:
+              - key: px/enabled
+                operator: "In"
+                values: ["false"]
+      initContainers:
+      - name: init-sysctl
+        image: ${BUSYBOX_IMG}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        command: ["sh", "-c", "mkdir -p /mnt/testresults && chmod 777 /mnt/testresults/"]
+      containers:
+      - name: torpedo
+        image: ${TORPEDO_IMG}
+        imagePullPolicy: Always
+        securityContext:
+          privileged: ${SECURITY_CONTEXT}
+        command: [ "ginkgo" ]
+        args: [ "--trace",
+                "--timeout", "${TIMEOUT}",
+                "$FAIL_FAST",
+                "--slowSpecThreshold", "600",
+                "$FOCUS_ARG",
+                "$SKIP_ARG",
+                $TEST_SUITE,
+                "--",
+                "--spec-dir", $SPEC_DIR,
+                "--app-list", "$APP_LIST",
+                "--deploy-pds-apps=$DEPLOY_PDS_APPS",
+                "--pds-driver", "$PDS_DRIVER",
+                "--secure-apps", "$SECURE_APP_LIST",
+                "--repl1-apps", "$REPL1_APP_LIST",
+                "--csi-app-list", "$CSI_APP_LIST",
+                "--scheduler", "$SCHEDULER",
+                "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
+                "--backup-driver", "$BACKUP_DRIVER",
+                "--log-level", "$LOGLEVEL",
+                "--node-driver", "$NODE_DRIVER",
+                "--scale-factor", "$SCALE_FACTOR",
+                "--hyper-converged=$IS_HYPER_CONVERGED",
+                "--fail-on-px-pod-restartcount=$PX_POD_RESTART_CHECK",
+                "--minimun-runtime-mins", "$MIN_RUN_TIME",
+                "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
+                "--chaos-level", "$CHAOS_LEVEL",
+                "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
+                "--provisioner", "$PROVISIONER",
+                "--storage-driver", "$STORAGE_DRIVER",
+                "--config-map", "$CONFIGMAP",
+                "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
+                "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
+                "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
+                "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
+                "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
+                "--secret-type=$SECRET_TYPE",
+                "--pure-volumes=$IS_PURE_VOLUMES",
+                "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
+                "--pure-san-type=$PURE_SAN_TYPE",
+                "--vault-addr=$VAULT_ADDR",
+                "--vault-token=$VAULT_TOKEN",
+                "--px-runtime-opts=$PX_RUNTIME_OPTS",
+                "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
+                "--anthos-inst-path=$ANTHOS_INST_PATH",
+                "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
+                "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
+                "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
+                "--migration-hops=$MIGRATION_HOPS",
+                "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
+                "--metering_interval_mins=$METERING_INTERVAL_MINS",
+                "--testrail-milestone=$TESTRAIL_MILESTONE",
+                "--testrail-run-name=$TESTRAIL_RUN_NAME",
+                "--testrail-run-id=$TESTRAIL_RUN_ID",
+                "--testrail-jeknins-build-url=$TESTRAIL_JENKINS_BUILD_URL",
+                "--testrail-host=$TESTRAIL_HOST",
+                "--testrail-username=$TESTRAIL_USERNAME",
+                "--testrail-password=$TESTRAIL_PASSWORD",
+                "--jira-username=$JIRA_USERNAME",
+                "--jira-token=$JIRA_TOKEN",
+                "--jira-account-id=$JIRA_ACCOUNT_ID",
+                "--user=$USER",
+                "--enable-dash=$ENABLE_DASH",
+                "--data-integrity-validation-tests=$DATA_INTEGRITY_VALIDATION_TESTS",
+                "--test-desc=$TEST_DESCRIPTION",
+                "--test-type=$TEST_TYPE",
+                "--test-tags=$TEST_TAGS",
+                "--testset-id=$DASH_UID",
+                "--branch=$BRANCH",
+                "--product=$PRODUCT",
+                "--torpedo-job-name=$TORPEDO_JOB_NAME",
+                "--torpedo-job-type=$TORPEDO_JOB_TYPE",
+                "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
+                "$APP_DESTROY_TIMEOUT_ARG",
+        ]
+        tty: true
+        volumeMounts: [${VOLUME_MOUNTS}]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: K8S_VENDOR
+          value: "${K8S_VENDOR}"
+        - name: TORPEDO_SSH_USER
+          value: "${TORPEDO_SSH_USER}"
+        - name: TORPEDO_SSH_PASSWORD
+          value: "${TORPEDO_SSH_PASSWORD}"
+        - name: TORPEDO_SSH_KEY
+          value: "${TORPEDO_SSH_KEY}"
+        - name: AZURE_TENANT_ID
+          value: "${AZURE_TENANTID}"
+        - name: VOLUME_PROVIDER
+          value: "${VOLUME_PROVIDER}"
+        - name: OBJECT_STORE_PROVIDER
+          value: "${OBJECT_STORE_PROVIDER}"
+        - name: AZURE_CLIENT_ID
+          value: "${AZURE_CLIENTID}"
+        - name: AZURE_CLIENT_SECRET
+          value: "${AZURE_CLIENTSECRET}"
+        - name: AZURE_ACCOUNT_NAME
+          value: "${AZURE_ACCOUNT_NAME}"
+        - name: SOURCE_RKE_TOKEN
+          value: "${SOURCE_RKE_TOKEN}"
+        - name: DESTINATION_RKE_TOKEN
+          value: "${DESTINATION_RKE_TOKEN}"
+        - name: AZURE_ACCOUNT_KEY
+          value: "${AZURE_ACCOUNT_KEY}"
+        - name: AZURE_SUBSCRIPTION_ID
+          value: "${AZURE_SUBSCRIPTION_ID}"
+        - name: AZURE_CLUSTER_NAME
+          value: "${AZURE_CLUSTER_NAME}"
+        - name: AWS_ACCESS_KEY_ID
+          value: "${AWS_ACCESS_KEY_ID}"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "${AWS_SECRET_ACCESS_KEY}"
+        - name: AWS_REGION
+          value: "${AWS_REGION}"
+        - name: AWS_MINIO_ACCESS_KEY_ID
+          value: "${AWS_MINIO_ACCESS_KEY_ID}"
+        - name: AWS_MINIO_SECRET_ACCESS_KEY
+          value: "${AWS_MINIO_SECRET_ACCESS_KEY}"
+        - name: AWS_MINIO_REGION
+          value: "${AWS_MINIO_REGION}"
+        - name: AWS_MINIO_ENDPOINT
+          value: "${AWS_MINIO_ENDPOINT}"
+        - name: KUBECONFIGS
+          value: "${CLUSTER_CONFIGS}"
+        - name: S3_ENDPOINT
+          value: "${S3_ENDPOINT}"
+        - name: S3_AWS_ACCESS_KEY_ID
+          value: "${S3_AWS_ACCESS_KEY_ID}"
+        - name: S3_AWS_SECRET_ACCESS_KEY
+          value: "${S3_AWS_SECRET_ACCESS_KEY}"
+        - name: S3_REGION
+          value: "${S3_REGION}"
+        - name: BUCKET_NAME
+          value: "${BUCKET_NAME}"
+        - name: LOCKED_BUCKET_NAME
+          value: "${LOCKED_BUCKET_NAME}"
+        - name: S3_DISABLE_SSL
+          value: "${S3_DISABLE_SSL}"
+        - name: DIAGS_BUCKET
+          value: "${DIAGS_BUCKET}"
+        - name: PROVIDERS
+          value: "${PROVIDERS}"
+        - name: CLUSTER_PROVIDER
+          value: "${CLUSTER_PROVIDER}"
+        - name: INTERNAL_DOCKER_REGISTRY
+          value: "$INTERNAL_DOCKER_REGISTRY"
+        - name: IMAGE_PULL_SERVER
+          value: "$IMAGE_PULL_SERVER"
+        - name: IMAGE_PULL_USERNAME
+          value: "$IMAGE_PULL_USERNAME"
+        - name: IMAGE_PULL_PASSWORD
+          value: "$IMAGE_PULL_PASSWORD"
+        - name: VSPHERE_USER
+          value: "${VSPHERE_USER}"
+        - name: VSPHERE_PWD
+          value: "${VSPHERE_PWD}"
+        - name: VSPHERE_HOST_IP
+          value: "${VSPHERE_HOST_IP}"
+        - name: IBMCLOUD_API_KEY
+          value: "${IBMCLOUD_API_KEY}"
+        - name: CONTROL_PLANE_URL
+          value: "${CONTROL_PLANE_URL}"
+        - name: DS_VERSION
+          value: "${DS_VERSION}"
+        - name: DS_BUILD
+          value: "${DS_BUILD}"
+        - name: NAMESPACE
+          value: "${NAMESPACE}"
+        - name: NO_OF_NODES
+          value: "${NO_OF_NODES}"
+        - name: DATA_SERVICE
+          value: "${DATA_SERVICE}"
+        - name: DEPLOY_ALL_VERSIONS
+          value: "${DEPLOY_ALL_VERSIONS}"
+        - name: DEPLOY_ALL_IMAGES
+          value: "${DEPLOY_ALL_IMAGES}"
+        - name: DEPLOY_ALL_DATASERVICE
+          value: "${DEPLOY_ALL_DATASERVICE}"
+        - name: GCP_PROJECT_ID
+          value: "${GCP_PROJECT_ID}"
+        - name: PDS_USERNAME
+          value: "${PDS_USERNAME}"
+        - name: PDS_PASSWORD
+          value: "${PDS_PASSWORD}"
+        - name: PDS_CLIENT_SECRET
+          value: "${PDS_CLIENT_SECRET}"
+        - name: PDS_CLIENT_ID
+          value: "${PDS_CLIENT_ID}"
+        - name: PDS_PARAM_CM
+          value: "${PDS_PARAM_CM}"
+        - name: PDS_ISSUER_URL
+          value: "${PDS_ISSUER_URL}"
+        - name: CLUSTER_TYPE
+          value: "${CLUSTER_TYPE}"
+        - name: TARGET_KUBECONFIG
+          value: "${TARGET_KUBECONFIG}"
+        - name: TARGET_CLUSTER_NAME
+          value: "${TARGET_CLUSTER_NAME}"
+        - name: PX_ORACLE_user_ocid
+          value: "${PX_ORACLE_user_ocid}"
+        - name: PX_ORACLE_fingerprint
+          value: "${PX_ORACLE_fingerprint}"
+        - name: PX_ORACLE_private_key_path
+          value: "${ORACLE_API_KEY}"
+        - name: INSTANCE_GROUP
+          value: "${INSTANCE_GROUP}"
+        - name: LOGGLY_API_TOKEN
+          value: "${LOGGLY_API_TOKEN}"
+        - name: PODMETRIC_METERING_INTERVAL_MINUTES
+          value: "${PODMETRIC_METERING_INTERVAL_MINUTES}"
+        - name: TARGET_PXBACKUP_VERSION
+          value: "${TARGET_PXBACKUP_VERSION}"
+        - name: TARGET_STORK_VERSION
+          value: "${TARGET_STORK_VERSION}"
+        - name: PX_BACKUP_HELM_REPO_BRANCH
+          value: "${PX_BACKUP_HELM_REPO_BRANCH}"
+        - name: BACKUP_TYPE
+          value: "${BACKUP_TYPE}"
+        - name: NFS_SERVER_ADDR
+          value: "${NFS_SERVER_ADDR}"
+        - name: NFS_SUB_PATH
+          value: "${NFS_SUB_PATH}"
+        - name: NFS_MOUNT_OPTION
+          value: "${NFS_MOUNT_OPTION}"
+        - name: NFS_PATH
+          value: "${NFS_PATH}"
+        - name: SKIP_PX_OPERATOR_UPGRADE
+          value: "${SKIP_PX_OPERATOR_UPGRADE}"
+        - name: VOLUME_SNAPSHOT_CLASS
+          value: "${VOLUME_SNAPSHOT_CLASS}"
+        - name: S3_SSE_TYPE
+          value: "${S3_SSE_TYPE}"
+        - name: S3_POLICY_SID
+          value: "${S3_POLICY_SID}"
+        - name: S3_ENCRYPTION_POLICY
+          value: "${S3_ENCRYPTION_POLICY}"
+        - name: NUM_VCLUSTERS
+          value: "${NUM_VCLUSTERS}"
+        - name: VCLUSTER_PARALLEL_APPS
+          value: "${VCLUSTER_PARALLEL_APPS}"
+        - name: VCLUSTER_TOTAL_ITERATIONS
+          value: "${VCLUSTER_TOTAL_ITERATIONS}"
+        - name: NUM_ML_WORKLOADS
+          value: "${NUM_ML_WORKLOADS}"
+        - name: ML_WORKLOAD_RUNTIME
+          value: "${ML_WORKLOAD_RUNTIME}"
+        - name: KUBEVIRT_UPGRADE_VERSION
+          value: "${KUBEVIRT_UPGRADE_VERSION}"
+        - name: PX_BACKUP_MONGODB_USERNAME
+          value: "${PX_BACKUP_MONGODB_USERNAME}"
+        - name: PX_BACKUP_MONGODB_PASSWORD
+          value: "${PX_BACKUP_MONGODB_PASSWORD}"
+      volumes: [${VOLUMES}]
+      restartPolicy: Always
+      serviceAccountName: torpedo-account
 
 
 EOF
@@ -759,7 +769,7 @@ echo "Waiting for torpedo to start running"
 
 function describe_pod_then_exit {
   echo "Pod description:"
-  kubectl describe pod torpedo
+  kubectl describe pod "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')"
   exit 1
 }
 
@@ -767,13 +777,13 @@ function terminate_pod_then_exit {
     echo "Terminating Ginkgo test in Torpedo pod..."
     # Fetch the PID of the Ginkgo test process
     local test_pid
-    test_pid=$(kubectl exec torpedo -- pgrep -f 'torpedo/bin')
+    test_pid=$(kubectl exec "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')" -- pgrep -f 'torpedo/bin')
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
         # but the intention here is to stop the process immediately.
         echo "Sending SIGKILL to terminate Ginkgo test process with PID: $test_pid"
-        kubectl exec torpedo -- kill -SIGKILL "$test_pid"
+        kubectl exec "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')" -- kill -SIGKILL "$test_pid"
     fi
     exit 1
 }
@@ -786,7 +796,7 @@ trap terminate_pod_then_exit SIGTERM
     first_iteration=true
     for i in $(seq 1 900); do
         echo "Iteration: $i"
-        state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+        state=$(kubectl get pod -lapp=torpedo | grep -v NAME | awk '{print $3}')
 
         if [ "$state" == "Error" ]; then
             echo "Error: Torpedo finished with $state state"
@@ -795,11 +805,11 @@ trap terminate_pod_then_exit SIGTERM
             # For the first iteration, display all logs. Later, only from 1 minute ago
             if [ "$first_iteration" = true ]; then
                 echo "Logs from first iteration"
-                kubectl logs -f torpedo
+                kubectl logs "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')" -f
                 first_iteration=false
             else
                 echo "Logs from iteration: $i"
-                kubectl logs -f --since=1m torpedo
+                kubectl logs "$(kubectl get pods -lapp=torpedo --output jsonpath='{.items[0].metadata.name}')" -f --since=1m
             fi
         elif [ "$state" == "Completed" ]; then
             echo "Success: Torpedo finished with $state state"
