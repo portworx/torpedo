@@ -7184,7 +7184,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 	}
 	masterNodes := node.GetMasterNodes()
-	if masterNodes != nil && len(masterNodes) > 0 {
+	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
 		testCaseName := ginkgoTestDescr.FullTestText
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
