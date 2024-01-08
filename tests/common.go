@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node/gke"
 
 	"github.com/portworx/torpedo/pkg/stats"
@@ -1928,6 +1929,10 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 				log.InfoD("Some error occurred - [%s]", err)
 			}
 			log.InfoD("App Info - [%+v]", appInfo)
+			if appContext == nil {
+				log.Infof("App Context is not proper - [%v]", appContext)
+				continue
+			}
 			if appInfo.StartDataSupport {
 				appHandler, _ := appDriver.GetApplicationDriver(
 					appInfo.AppType,

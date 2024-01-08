@@ -265,7 +265,8 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			controlChannel, errorGroup, _ = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Adding labels to namespaces", func() {
