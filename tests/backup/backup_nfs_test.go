@@ -371,8 +371,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
-				log.InfoD("The error is %s", err)
-				dash.VerifyFatal(strings.Contains(err.Error(), "Error"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
+				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
