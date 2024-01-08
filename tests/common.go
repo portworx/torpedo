@@ -7183,14 +7183,15 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 	}
-	if Inst().Provisioner != "ibm" || Inst().Provisioner != "gke" {
+	masterNodes := node.GetMasterNodes()
+	if masterNodes != nil && len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
 		testCaseName := ginkgoTestDescr.FullTestText
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := masterNodes[0]
 		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
 		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
 		if err != nil {
