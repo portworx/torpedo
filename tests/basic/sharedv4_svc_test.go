@@ -1512,7 +1512,8 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 				Name string
 			}
 			Spec struct {
-				Containers []struct {
+				RestartPolicy string `yaml:"restartPolicy"`
+				Containers    []struct {
 					Name    string
 					Image   string
 					Command []string
@@ -1542,38 +1543,45 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		log.FailOnError(err, "Failed to find current directory")
 		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
 		flag := false
-		for i := 1; i <= totalMlDeps; i++ {
-			data, err := os.ReadFile(filePath)
-			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
-			var pod Pod
-			err = yaml.Unmarshal(data, &pod)
-			log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
-			appName := fmt.Sprintf("querying-app-%d", i)
-			pod.Metadata.Name = appName
-			for j := range pod.Spec.Containers {
-				for k := range pod.Spec.Containers[j].Env {
-					if pod.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
-						pod.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", i)
+		for iteration := 0; iteration <= 1000; iteration++ {
+			for i := 1; i <= totalMlDeps; i++ {
+				data, err := os.ReadFile(filePath)
+				log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
+				var pod Pod
+				err = yaml.Unmarshal(data, &pod)
+				log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
+				appNum := i + (iteration * totalMlDeps)
+				appName := fmt.Sprintf("querying-app-%d", appNum)
+				pod.Metadata.Name = appName
+				pod.Spec.RestartPolicy = "Never"
+				for j := range pod.Spec.Containers {
+					for k := range pod.Spec.Containers[j].Env {
+						if pod.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
+							pod.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", appNum)
+						}
 					}
 				}
+				opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+				modifiedData, err := yaml.Marshal(&pod)
+				log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
+				err = os.WriteFile(opFilePath, modifiedData, 0644)
+				log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
+				provider := Inst().V.String()
+				err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
+				log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
+				// Running Several Workload pods that read the model, make some predictions and write them to shared vol
+				Inst().AppList = []string{"ml-workload-rwx"}
+				appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+				log.Infof("Successfully created App querying-app-%d", appNum)
+				ValidateApplications(appContexts)
+				if i == totalMlDeps {
+					flag = true
+				}
 			}
-			opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
-			modifiedData, err := yaml.Marshal(&pod)
-			log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
-			err = os.WriteFile(opFilePath, modifiedData, 0644)
-			log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
-			provider := Inst().V.String()
-			err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
-			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
-			// Running Several Workload pods that read the model, make some predictions and write them to shared vol
-			Inst().AppList = []string{"ml-workload-rwx"}
-			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
-			log.Infof("Successfully created App querying-app-%d", i)
-			ValidateApplications(appContexts)
-			if i == totalMlDeps {
-				flag = true
-			}
+			log.Infof("Sleeping for 5 mins after iteration number %v", iteration)
+			time.Sleep(5 * time.Minute)
 		}
+
 		if flag {
 			log.Infof("All Workload apps are now up. Will let them run for %d minutes", totalRunTime)
 			time.Sleep(time.Duration(totalRunTime) * time.Minute)

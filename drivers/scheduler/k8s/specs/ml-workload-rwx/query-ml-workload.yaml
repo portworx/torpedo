@@ -3,6 +3,7 @@ kind: Pod
 metadata:
   name: querying-app-5
 spec:
+  restartPolicy: Never
   containers:
     - name: ml-workload
       image: portworx/ml-workload:v1
