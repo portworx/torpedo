@@ -19,7 +19,6 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 			var resultsFileName = "postman_results"
 			ctx, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
-			//collectionPath, err := postmanLib.GetPostmanCollectionPath(resultsFileName)
 			postmanParams := postmanLib.PostmanDriver{
 				ResultsFileName: resultsFileName,
 				ResultType:      "json, cli",
