@@ -10,16 +10,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/log"
-
 	. "github.com/onsi/ginkgo"
 	"github.com/portworx/sched-ops/k8s/core"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	k8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 const (
@@ -97,6 +97,7 @@ var _ = Describe("{Longevity}", func() {
 		ValidateDeviceMapper:     TriggerValidateDeviceMapperCleanup,
 		MetroDR:                  TriggerMetroDR,
 		AsyncDR:                  TriggerAsyncDR,
+		AsyncDRExcludeTypes:      TriggerAsyncDRExcludeTypes,
 		AsyncDRMigrationSchedule: TriggerAsyncDRMigrationSchedule,
 		ConfluentAsyncDR:         TriggerConfluentAsyncDR,
 		KafkaAsyncDR:             TriggerKafkaAsyncDR,
@@ -890,6 +891,7 @@ func populateIntervals() {
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[MetroDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRExcludeTypes] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[DeleteOldNamespaces] = make(map[int]time.Duration)
 	triggerInterval[AutoFsTrimAsyncDR] = make(map[int]time.Duration)
@@ -1076,6 +1078,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][3] = 21 * baseInterval
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRExcludeTypes][10] = 1 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][9] = 3 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][8] = 6 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][7] = 9 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][6] = 12 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][5] = 15 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][4] = 18 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][3] = 21 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][2] = 24 * baseInterval
+	triggerInterval[AsyncDRExcludeTypes][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRMigrationSchedule][10] = 1 * baseInterval
 	triggerInterval[AsyncDRMigrationSchedule][9] = 3 * baseInterval
@@ -1853,6 +1866,7 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[AsyncDRExcludeTypes][0] = 0
 	triggerInterval[MetroDR][0] = 0
 	triggerInterval[MetroDRMigrationSchedule][0] = 0
 	triggerInterval[AsyncDRMigrationSchedule][0] = 0
