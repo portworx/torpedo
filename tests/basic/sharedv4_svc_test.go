@@ -1329,6 +1329,8 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		// Runs Preprocess Workload to prepare the model
 		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
 		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+		log.Infof("Sleeping for 1 minute")
+		time.Sleep(1 * time.Minute)
 		// Runs Continuous Retraining module
 		Inst().AppList = []string{"ml-workload-continuous-training"}
 		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
