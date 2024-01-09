@@ -66,15 +66,17 @@ WORKDIR /torpedo
 COPY deployments deployments
 COPY scripts scripts
 
-WORKDIR /go/src/github.com/portworx/torpedo
-
-# Install docker
-RUN apk add --update --no-cache docker
-
 # Install Postman-Newman Dependencies
 RUN apk add --update nodejs npm
 RUN apk add --update npm
 RUN npm install newman
+
+RUN newman
+
+WORKDIR /go/src/github.com/portworx/torpedo
+
+# Install docker
+RUN apk add --update --no-cache docker
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
