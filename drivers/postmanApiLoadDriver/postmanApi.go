@@ -75,7 +75,7 @@ func CheckIfPostmanCollectionIsAvailable(postmanCollectionFile string) (bool, er
 	return true, nil
 }
 
-// Create MySql Workload (Non-TPCC)
+// Create Newman k8s Pod
 func (postman *PostmanDriver) RunNewmanWorkload(postmanParams *PostmanDriver) (*corev1.Pod, error) {
 	podSpec := &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
