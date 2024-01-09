@@ -2,13 +2,15 @@ package pxbackupworkflows
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/gosuri/uitable"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupevents"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytypes"
 )
 
-func OneSuccessOneFail() EventResponse {
+func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
+	defer wg.Done()
 	result := GetLongevityEventResponse()
 	result.Name = "OneSuccessOneFail"
 
@@ -24,7 +26,8 @@ func OneSuccessOneFail() EventResponse {
 	return result
 }
 
-func OneSuccessTwoFail() EventResponse {
+func OneSuccessTwoFail(wg *sync.WaitGroup) EventResponse {
+	defer wg.Done()
 	result := GetLongevityEventResponse()
 	result.Name = "OneSuccessTwoFail"
 
@@ -32,6 +35,25 @@ func OneSuccessTwoFail() EventResponse {
 	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
 
 	RunBuilder(EventBuilder1, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func DisruptiveEvent(wg *sync.WaitGroup) EventResponse {
+	defer wg.Done()
+	result := GetLongevityEventResponse()
+	result.Name = "DisruptiveEvent"
+
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
 
 	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
 

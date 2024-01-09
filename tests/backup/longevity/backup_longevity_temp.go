@@ -1,13 +1,18 @@
 package main
 
 import (
-	"fmt"
+	"sync"
+	"time"
 
-	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupworkflows"
+	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytriggers"
 )
 
 func main() {
-	OneSuccessOneFail()
-	fmt.Printf("\n\n\n---------------------\n\n\n")
-	OneSuccessTwoFail()
+	var wg sync.WaitGroup
+	var startTime = time.Now()
+
+	for {
+		startTime = TriggerLongevityWorkflows(startTime, &wg)
+		time.Sleep(2 * time.Second)
+	}
 }
