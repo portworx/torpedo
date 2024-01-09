@@ -169,9 +169,9 @@ func ExecutePostmanCommandInTorpedo() (bool, error) {
 
 	newmanCmd := "newman run " + collectionPath + " --verbose"
 	log.InfoD("Newman command formed is- [%v]", newmanCmd)
-	output, res, err := ExecuteCommandInShell(newmanCmd)
+	output, _, err := ExecuteCommandInShell(newmanCmd)
 	if err != nil {
-		return false, fmt.Errorf("there was some problem in executing Postman Newman container due to- [%v]", err)
+		return false, fmt.Errorf("there was some problem in executing Postman Newman container due to- [%v]", output)
 	}
 	log.InfoD("output from the newman execution is- %v", res)
 	if strings.Contains(output, "failure") {
