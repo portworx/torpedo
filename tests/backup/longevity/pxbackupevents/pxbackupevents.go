@@ -2,78 +2,47 @@ package pxbackupevents
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/gosuri/uitable"
-	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupeventbuilders"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytypes"
 )
 
-func OneSuccessOneFail() EventResponse {
-	result := GetLongevityEventResponse()
-	result.Name = "OneSuccessOneFail"
+const (
+	EventBuilder1     = "EventBuilder1"
+	EventBuilder1Fail = "EventBuilder1Fail"
+)
 
-	inputForBuilder := GetLongevityInputParams()
-	inputForBuilder.CustomData.Integers["timeToBlock"] = 3
+type PxBackupEventBuilder func(*PxBackupLongevity) (error, string)
 
-	RunBuilder(EventBuilder1, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	UpdateEventResponse(&result)
-
-	return result
+var AllBuilders = map[string]PxBackupEventBuilder{
+	EventBuilder1:     eventBuilder1,
+	EventBuilder1Fail: eventBuilder1Fail,
 }
 
-func OneSuccessTwoFail() EventResponse {
-	result := GetLongevityEventResponse()
-	result.Name = "OneSuccessTwoFail"
-
-	inputForBuilder := GetLongevityInputParams()
-	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
-
-	RunBuilder(EventBuilder1, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	UpdateEventResponse(&result)
-
-	return result
+func eventBuilder1(inputsForEventBuilder *PxBackupLongevity) (error, string) {
+	time.Sleep(time.Second * time.Duration(inputsForEventBuilder.CustomData.Integers["timeToBlock"]))
+	return nil, ""
 }
 
-func UpdateEventResponse(eventResponse *EventResponse) {
-	for _, builderResponse := range eventResponse.EventBuilders {
-		eventResponse.TimeTakenInMinutes += builderResponse.TimeTakenInMinutes
-		eventResponse.Errors = append(eventResponse.Errors, builderResponse.Error)
-		eventResponse.HighlightEvents = append(eventResponse.HighlightEvents, builderResponse.HighlightEvent)
-	}
-	LogEventData(eventResponse)
+func eventBuilder1Fail(inputsForEventBuilder *PxBackupLongevity) (error, string) {
+	time.Sleep(time.Second * time.Duration(inputsForEventBuilder.CustomData.Integers["timeToBlock"]))
+	return fmt.Errorf("This is the returned error"), "This is the highlight event from - EventBuilder1Fail"
 }
 
-func LogEventData(eventResponse *EventResponse) {
-	var allErrors []string
-	var allHighlightEvents []string
+func RunBuilder(eventBuilderName string, inputsForEventBuilder *PxBackupLongevity, eventResponse *EventResponse) {
+	eventBuilder := AllBuilders[eventBuilderName]
+	eventBuilderIdentifier := eventBuilderName + "-" + time.Now().Format("15:04:05.000")
+	eventResponse.EventBuilders[eventBuilderIdentifier] = &EventBuilderResponse{}
 
-	for _, err := range eventResponse.Errors {
-		if err != nil {
-			allErrors = append(allErrors, err.Error())
-		}
-	}
-	for _, hEvents := range eventResponse.HighlightEvents {
-		allHighlightEvents = append(allHighlightEvents, hEvents)
-	}
-	fmt.Printf("\n\n")
+	startTime := time.Now()
 
-	table := uitable.New()
-	table.MaxColWidth = 50
-	table.Wrap = false
-	table.AddRow("NAME", "ERROR", "HIGHLIGHT", "TimeTakenInMinutes")
-	for eventName, response := range eventResponse.EventBuilders {
-		table.AddRow(eventName, response.Error, response.HighlightEvent, response.TimeTakenInMinutes)
+	err, highlightEvent := eventBuilder(inputsForEventBuilder)
+	if err != nil {
+		eventResponse.EventBuilders[eventBuilderIdentifier].Error = err
 	}
-
-	fmt.Println(table)
-	fmt.Printf("\n\n\n")
+	if highlightEvent != "" {
+		eventResponse.EventBuilders[eventBuilderIdentifier].HighlightEvent = highlightEvent
+	}
+	eventResponse.EventBuilders[eventBuilderIdentifier].TimeTakenInMinutes = float32(time.Since(startTime).Minutes())
 
 }

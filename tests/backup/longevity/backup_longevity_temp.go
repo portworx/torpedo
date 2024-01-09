@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupevents"
+	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupworkflows"
 )
 
 func main() {
