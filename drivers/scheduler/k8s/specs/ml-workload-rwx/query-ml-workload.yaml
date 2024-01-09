@@ -1,25 +1,23 @@
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: querying-app-5
+  name: querying-app-1
 spec:
-  restartPolicy: Never
-  containers:
-    - name: ml-workload
-      image: portworx/ml-workload:v2
-      command:
-        - /bin/bash
-        - -c
-      args:
-        - python query.py && sleep 100
-      env:
-        - name: OUTPUT_FILE
-          value: query_output_5.csv
-      volumeMounts:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: ml-workload
+          image: portworx/ml-workload:v2
+          command: ["/bin/bash", "-c"]
+          args: ["python query.py && sleep 300"]
+          env:
+            - name: OUTPUT_FILE
+              value: query_output_1.csv
+          volumeMounts:
+            - name: ml-shared-data
+              mountPath: /mnt/data
+      volumes:
         - name: ml-shared-data
-          mountPath: /mnt/data
-  volumes:
-    - name: ml-shared-data
-      persistentVolumeClaim:
-        claimName: ml-workload-pvc
-  imagePullSecrets: []
+          persistentVolumeClaim:
+            claimName: ml-workload-pvc
