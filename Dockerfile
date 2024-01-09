@@ -25,8 +25,7 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
 # Install vCluster binary
 RUN curl -L -o vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64"  \
     && install -c -m 0755 vcluster /usr/local/bin  \
-    && rm -f vcluster \
-
+    && rm -f vcluster
 
 # No need to copy *everything*. This keeps the cache useful
 COPY vendor vendor
@@ -52,6 +51,11 @@ RUN --mount=type=cache,target=/root/.cache/go-build make $MAKE_TARGET
 FROM alpine:3.18.5
 
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
+
+# Install Postman-Newman Dependencies
+RUN apk add --update nodejs npm
+RUN apk add --update npm
+RUN npm install newman
 
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
@@ -81,11 +85,6 @@ COPY --from=build /usr/local/bin/ibmcloud /bin/ibmcloud
 COPY --from=build /usr/local/bin/vcluster /bin/vcluster
 COPY --from=build /root/.bluemix/plugins /root/.bluemix/plugins
 COPY drivers drivers
-
-# Install Postman-Newman Dependencies
-RUN apk add --update nodejs npm
-RUN apk add --update npm
-RUN npm install -g newman
 
 ENTRYPOINT ["ginkgo", "--failFast", "--slowSpecThreshold", "180", "-v", "-trace"]
 CMD []
