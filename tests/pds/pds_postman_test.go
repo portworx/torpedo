@@ -8,12 +8,9 @@ import (
 )
 
 var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
-
 	JustBeforeEach(func() {
 		StartTorpedoTest("RunPdsPostManApiLoadTests", "Run PDS Specific Api Load Tests using Postman-Newman ", pdsLabels, 0)
-
 	})
-
 	It("Deploy Dataservices", func() {
 		Step("Starting to execute Postman-Newman on PDS", func() {
 			var resultsFileName = "postman_results"
@@ -28,7 +25,6 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 				Kubeconfig:      ctx}
 			postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
