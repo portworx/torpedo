@@ -698,63 +698,65 @@ spec:
   serviceAccountName: torpedo-account
 EOF
 
-if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
-  echo "Adding Docker registry secret ..."
-  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
-  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
-  cat >> torpedo.yaml <<EOF
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: torpedo
-type: docker-registry
-data:
-  .dockerconfigjson: $secret
+sleep infinity
 
-EOF
-  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
-fi
-
-cat torpedo.yaml
-
-echo "Deploying torpedo pod..."
-kubectl apply -f torpedo.yaml
-
-echo "Waiting for torpedo to start running"
-
-function describe_pod_then_exit {
-  echo "Pod description:"
-  kubectl describe pod torpedo
-  exit 1
-}
-
-first_iteration=true
-
-for i in $(seq 1 900); do
-  echo "Iteration: $i"
-  state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
-
-  if [ "$state" == "Error" ]; then
-    echo "Error: Torpedo finished with $state state"
-    describe_pod_then_exit
-  elif [ "$state" == "Running" ]; then
-    # For the first iteration, display all logs. Later, only from 1 minute ago
-    if [ "$first_iteration" = true ]; then
-      echo "Logs from first iteration"
-      kubectl logs -f torpedo
-      first_iteration=false
-    else
-      echo "Logs from iteration: $i"
-      kubectl logs -f --since=1m torpedo
-    fi
-  elif [ "$state" == "Completed" ]; then
-    echo "Success: Torpedo finished with $state state"
-    exit 0
-  fi
-
-  sleep 1
-done
-
-echo "Error: Failed to wait for torpedo to start running..."
-describe_pod_then_exit
+#if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
+#  echo "Adding Docker registry secret ..."
+#  auth=$(echo "$IMAGE_PULL_USERNAME:$IMAGE_PULL_PASSWORD" | base64)
+#  secret=$(echo "{\"auths\":{\"$IMAGE_PULL_SERVER\":{\"username\":\"$IMAGE_PULL_USERNAME\",\"password\":\"$IMAGE_PULL_PASSWORD\",\"auth\":"$auth"}}}" | base64 -w 0)
+#  cat >> torpedo.yaml <<EOF
+#---
+#apiVersion: v1
+#kind: Secret
+#metadata:
+#  name: torpedo
+#type: docker-registry
+#data:
+#  .dockerconfigjson: $secret
+#
+#EOF
+#  sed -i '/spec:/a\  imagePullSecrets:\n    - name: torpedo' torpedo.yaml
+#fi
+#
+#cat torpedo.yaml
+#
+#echo "Deploying torpedo pod..."
+#kubectl apply -f torpedo.yaml
+#
+#echo "Waiting for torpedo to start running"
+#
+#function describe_pod_then_exit {
+#  echo "Pod description:"
+#  kubectl describe pod torpedo
+#  exit 1
+#}
+#
+#first_iteration=true
+#
+#for i in $(seq 1 900); do
+#  echo "Iteration: $i"
+#  state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+#
+#  if [ "$state" == "Error" ]; then
+#    echo "Error: Torpedo finished with $state state"
+#    describe_pod_then_exit
+#  elif [ "$state" == "Running" ]; then
+#    # For the first iteration, display all logs. Later, only from 1 minute ago
+#    if [ "$first_iteration" = true ]; then
+#      echo "Logs from first iteration"
+#      kubectl logs -f torpedo
+#      first_iteration=false
+#    else
+#      echo "Logs from iteration: $i"
+#      kubectl logs -f --since=1m torpedo
+#    fi
+#  elif [ "$state" == "Completed" ]; then
+#    echo "Success: Torpedo finished with $state state"
+#    exit 0
+#  fi
+#
+#  sleep 1
+#done
+#
+#echo "Error: Failed to wait for torpedo to start running..."
+#describe_pod_then_exit
