@@ -67,6 +67,8 @@ COPY deployments deployments
 COPY scripts scripts
 
 # Install Postman-Newman Dependencies
+RUN yum install epel-release -y
+RUN yum install npm -y
 RUN apk add --update nodejs npm
 RUN apk add --update npm
 RUN npm install newman
