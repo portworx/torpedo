@@ -4,7 +4,6 @@ ARG MAKE_TARGET
 
 WORKDIR /go/src/github.com/portworx/torpedo
 
-
 # Install setup dependencies
 RUN apk update && apk add --no-cache bash git gcc musl-dev make curl openssh-client
 
