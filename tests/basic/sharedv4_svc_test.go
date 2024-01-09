@@ -1314,153 +1314,6 @@ var _ = Describe("{Sharedv4SvcFunctional}", func() {
 // The other pods that are deployments run once every 5 mins and read the model, do some prediction and
 // writes their predictions to shared volume on which model is saved. Retraining pod picks this data up
 // and again retrains the model. This is a simple feed-forward neural network model.
-//var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
-//	ns := "ml-workload-ns"
-//	appContexts := make([]*scheduler.Context, 0)
-//	prereqContexts := make([]*scheduler.Context, 0)
-//	taskName := "prepare-ml-workload"
-//	var origAppList []string
-//	totalMlDeps := 5
-//	totalRunTime := 5
-//	JustBeforeEach(func() {
-//		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
-//		log.Infof("Original App list : %v", Inst().AppList)
-//		origAppList = Inst().AppList
-//		// Runs Preprocess Workload to prepare the model
-//		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
-//		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
-//		log.Infof("Sleeping for 1 minute")
-//		time.Sleep(1 * time.Minute)
-//		// Runs Continuous Retraining module
-//		Inst().AppList = []string{"ml-workload-continuous-training"}
-//		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
-//		// Read Test Parameters
-//		totalMlWorkloads := ReadEnvVariable("NUM_ML_WORKLOADS")
-//		if totalMlWorkloads != "" {
-//			var err error
-//			totalMlDeps, err = strconv.Atoi(totalMlWorkloads)
-//			if err != nil {
-//				log.Errorf("Failed to convert value %v to int with error: %v", totalMlWorkloads, err)
-//				totalMlDeps = 5
-//			}
-//		}
-//		mlWorkloadRuntime := ReadEnvVariable("ML_WORKLOAD_RUNTIME")
-//		if mlWorkloadRuntime != "" {
-//			var err error
-//			totalRunTime, err = strconv.Atoi(mlWorkloadRuntime)
-//			if err != nil {
-//				log.Errorf("Failed to convert value %v to int with error: %v", mlWorkloadRuntime, err)
-//				totalRunTime = 5
-//			}
-//		}
-//	})
-//	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
-//		// Defining deployment of querying ML Workload apps. This is necessary otherwise Torpedo
-//		// not create multiple same apps in same namespace. With this, we are changing the name of
-//		// ML App Deployment everytime it runs
-//		type Deployment struct {
-//			APIVersion string `yaml:"apiVersion"`
-//			Kind       string
-//			Metadata   struct {
-//				Name string
-//			}
-//			Spec struct {
-//				Replicas int
-//				Selector struct {
-//					MatchLabels map[string]string `yaml:"matchLabels"`
-//				}
-//				Template struct {
-//					Metadata struct {
-//						Labels map[string]string `yaml:"labels"`
-//					}
-//					Spec struct {
-//						Containers []struct {
-//							Name    string
-//							Image   string
-//							Command []string
-//							Args    []string `yaml:"args"`
-//							Env     []struct {
-//								Name  string
-//								Value string
-//							}
-//							VolumeMounts []struct {
-//								Name      string
-//								MountPath string `yaml:"mountPath"`
-//							} `yaml:"volumeMounts"`
-//						}
-//						Volumes []struct {
-//							Name                  string
-//							PersistentVolumeClaim struct {
-//								ClaimName string `yaml:"claimName"`
-//							} `yaml:"persistentVolumeClaim"`
-//						}
-//						ImagePullSecrets []struct {
-//							Name string
-//						} `yaml:"imagePullSecrets"`
-//					}
-//				}
-//			}
-//		}
-//		// Editing the original yaml file and bringing in new file with new name and OUTPUT_PARAMS
-//		currentDir, err := os.Getwd()
-//		log.FailOnError(err, "Failed to find current directory")
-//		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
-//		flag := false
-//		for i := 1; i <= totalMlDeps; i++ {
-//			data, err := os.ReadFile(filePath)
-//			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
-//			var deployment Deployment
-//			err = yaml.Unmarshal(data, &deployment)
-//			log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
-//			appName := fmt.Sprintf("querying-app-%d", i)
-//			deployment.Metadata.Name = appName
-//			deployment.Spec.Selector.MatchLabels = map[string]string{"app": appName}
-//			deployment.Spec.Template.Metadata.Labels = map[string]string{"app": appName}
-//			for j := range deployment.Spec.Template.Spec.Containers {
-//				for k := range deployment.Spec.Template.Spec.Containers[j].Env {
-//					if deployment.Spec.Template.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
-//						deployment.Spec.Template.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", i)
-//					}
-//				}
-//			}
-//			opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
-//			modifiedData, err := yaml.Marshal(&deployment)
-//			log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
-//			err = os.WriteFile(opFilePath, modifiedData, 0644)
-//			log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
-//			provider := Inst().V.String()
-//			err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
-//			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
-//			// Running Several Workload pods that read the model, make some predictions and write them to shared vol
-//			Inst().AppList = []string{"ml-workload-rwx"}
-//			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
-//			log.Infof("Successfully created App querying-app-%d", i)
-//			ValidateApplications(appContexts)
-//			if i == totalMlDeps {
-//				flag = true
-//			}
-//		}
-//		if flag {
-//			log.Infof("All Workload apps are now up. Will let them run for %d minutes", totalRunTime)
-//			time.Sleep(time.Duration(totalRunTime) * time.Minute)
-//		} else {
-//			log.Infof("Error happened with one of the workload apps. Validate from above logs.")
-//		}
-//	})
-//	JustAfterEach(func() {
-//		opts := make(map[string]bool)
-//		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
-//		for _, ctx := range appContexts {
-//			TearDownContext(ctx, opts)
-//		}
-//		for _, ctx := range prereqContexts {
-//			TearDownContext(ctx, opts)
-//		}
-//		Inst().AppList = origAppList
-//		log.Infof("Restored original App list : %v", Inst().AppList)
-//	})
-//})
-
 var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 	ns := "ml-workload-ns"
 	appContexts := make([]*scheduler.Context, 0)
@@ -1505,37 +1358,47 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		// Defining deployment of querying ML Workload apps. This is necessary otherwise Torpedo
 		// not create multiple same apps in same namespace. With this, we are changing the name of
 		// ML App Deployment everytime it runs
-		type Pod struct {
+		type Deployment struct {
 			APIVersion string `yaml:"apiVersion"`
 			Kind       string
 			Metadata   struct {
 				Name string
 			}
 			Spec struct {
-				RestartPolicy string `yaml:"restartPolicy"`
-				Containers    []struct {
-					Name    string
-					Image   string
-					Command []string
-					Args    []string `yaml:"args"`
-					Env     []struct {
-						Name  string
-						Value string
+				Replicas int
+				Selector struct {
+					MatchLabels map[string]string `yaml:"matchLabels"`
+				}
+				Template struct {
+					Metadata struct {
+						Labels map[string]string `yaml:"labels"`
 					}
-					VolumeMounts []struct {
-						Name      string
-						MountPath string `yaml:"mountPath"`
-					} `yaml:"volumeMounts"`
+					Spec struct {
+						Containers []struct {
+							Name    string
+							Image   string
+							Command []string
+							Args    []string `yaml:"args"`
+							Env     []struct {
+								Name  string
+								Value string
+							}
+							VolumeMounts []struct {
+								Name      string
+								MountPath string `yaml:"mountPath"`
+							} `yaml:"volumeMounts"`
+						}
+						Volumes []struct {
+							Name                  string
+							PersistentVolumeClaim struct {
+								ClaimName string `yaml:"claimName"`
+							} `yaml:"persistentVolumeClaim"`
+						}
+						ImagePullSecrets []struct {
+							Name string
+						} `yaml:"imagePullSecrets"`
+					}
 				}
-				Volumes []struct {
-					Name                  string
-					PersistentVolumeClaim struct {
-						ClaimName string `yaml:"claimName"`
-					} `yaml:"persistentVolumeClaim"`
-				}
-				ImagePullSecrets []struct {
-					Name string
-				} `yaml:"imagePullSecrets"`
 			}
 		}
 		// Editing the original yaml file and bringing in new file with new name and OUTPUT_PARAMS
@@ -1543,45 +1406,40 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		log.FailOnError(err, "Failed to find current directory")
 		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
 		flag := false
-		for iteration := 0; iteration <= 1000; iteration++ {
-			for i := 1; i <= totalMlDeps; i++ {
-				data, err := os.ReadFile(filePath)
-				log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
-				var pod Pod
-				err = yaml.Unmarshal(data, &pod)
-				log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
-				appNum := i + (iteration * totalMlDeps)
-				appName := fmt.Sprintf("querying-app-%d", appNum)
-				pod.Metadata.Name = appName
-				pod.Spec.RestartPolicy = "Never"
-				for j := range pod.Spec.Containers {
-					for k := range pod.Spec.Containers[j].Env {
-						if pod.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
-							pod.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", appNum)
-						}
+		for i := 1; i <= totalMlDeps; i++ {
+			data, err := os.ReadFile(filePath)
+			log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
+			var deployment Deployment
+			err = yaml.Unmarshal(data, &deployment)
+			log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
+			appName := fmt.Sprintf("querying-app-%d", i)
+			deployment.Metadata.Name = appName
+			deployment.Spec.Selector.MatchLabels = map[string]string{"app": appName}
+			deployment.Spec.Template.Metadata.Labels = map[string]string{"app": appName}
+			for j := range deployment.Spec.Template.Spec.Containers {
+				for k := range deployment.Spec.Template.Spec.Containers[j].Env {
+					if deployment.Spec.Template.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
+						deployment.Spec.Template.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", i)
 					}
 				}
-				opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
-				modifiedData, err := yaml.Marshal(&pod)
-				log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
-				err = os.WriteFile(opFilePath, modifiedData, 0644)
-				log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
-				provider := Inst().V.String()
-				err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
-				log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
-				// Running Several Workload pods that read the model, make some predictions and write them to shared vol
-				Inst().AppList = []string{"ml-workload-rwx"}
-				appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
-				log.Infof("Successfully created App querying-app-%d", appNum)
-				ValidateApplications(appContexts)
-				if i == totalMlDeps {
-					flag = true
-				}
 			}
-			log.Infof("Sleeping for 5 mins after iteration number %v", iteration)
-			time.Sleep(5 * time.Minute)
+			opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+			modifiedData, err := yaml.Marshal(&deployment)
+			log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
+			err = os.WriteFile(opFilePath, modifiedData, 0644)
+			log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
+			provider := Inst().V.String()
+			err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
+			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
+			// Running Several Workload pods that read the model, make some predictions and write them to shared vol
+			Inst().AppList = []string{"ml-workload-rwx"}
+			appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+			log.Infof("Successfully created App querying-app-%d", i)
+			ValidateApplications(appContexts)
+			if i == totalMlDeps {
+				flag = true
+			}
 		}
-
 		if flag {
 			log.Infof("All Workload apps are now up. Will let them run for %d minutes", totalRunTime)
 			time.Sleep(time.Duration(totalRunTime) * time.Minute)
@@ -1602,6 +1460,148 @@ var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
 		log.Infof("Restored original App list : %v", Inst().AppList)
 	})
 })
+
+//var _ = Describe("{CreateMlWorkloadOnSharedv4Svc}", func() {
+//	ns := "ml-workload-ns"
+//	appContexts := make([]*scheduler.Context, 0)
+//	prereqContexts := make([]*scheduler.Context, 0)
+//	taskName := "prepare-ml-workload"
+//	var origAppList []string
+//	totalMlDeps := 5
+//	totalRunTime := 5
+//	JustBeforeEach(func() {
+//		StartTorpedoTest("CreateMlWorkloadOnSharedv4Svc", "Create multiple pods coming and going and trying to edit/read a model on same volume", nil, 0)
+//		log.Infof("Original App list : %v", Inst().AppList)
+//		origAppList = Inst().AppList
+//		// Runs Preprocess Workload to prepare the model
+//		Inst().AppList = []string{"ml-workload-preprocess-rwx"}
+//		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+//		log.Infof("Sleeping for 1 minute")
+//		time.Sleep(1 * time.Minute)
+//		// Runs Continuous Retraining module
+//		Inst().AppList = []string{"ml-workload-continuous-training"}
+//		prereqContexts = append(prereqContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+//		// Read Test Parameters
+//		totalMlWorkloads := ReadEnvVariable("NUM_ML_WORKLOADS")
+//		if totalMlWorkloads != "" {
+//			var err error
+//			totalMlDeps, err = strconv.Atoi(totalMlWorkloads)
+//			if err != nil {
+//				log.Errorf("Failed to convert value %v to int with error: %v", totalMlWorkloads, err)
+//				totalMlDeps = 5
+//			}
+//		}
+//		mlWorkloadRuntime := ReadEnvVariable("ML_WORKLOAD_RUNTIME")
+//		if mlWorkloadRuntime != "" {
+//			var err error
+//			totalRunTime, err = strconv.Atoi(mlWorkloadRuntime)
+//			if err != nil {
+//				log.Errorf("Failed to convert value %v to int with error: %v", mlWorkloadRuntime, err)
+//				totalRunTime = 5
+//			}
+//		}
+//	})
+//	It("Create Multiple ML Apps going and reading from the Model created. Continuous Retraining Module is already running", func() {
+//		// Defining deployment of querying ML Workload apps. This is necessary otherwise Torpedo
+//		// not create multiple same apps in same namespace. With this, we are changing the name of
+//		// ML App Deployment everytime it runs
+//		type Pod struct {
+//			APIVersion string `yaml:"apiVersion"`
+//			Kind       string
+//			Metadata   struct {
+//				Name string
+//			}
+//			Spec struct {
+//				RestartPolicy string `yaml:"restartPolicy"`
+//				Containers    []struct {
+//					Name    string
+//					Image   string
+//					Command []string
+//					Args    []string `yaml:"args"`
+//					Env     []struct {
+//						Name  string
+//						Value string
+//					}
+//					VolumeMounts []struct {
+//						Name      string
+//						MountPath string `yaml:"mountPath"`
+//					} `yaml:"volumeMounts"`
+//				}
+//				Volumes []struct {
+//					Name                  string
+//					PersistentVolumeClaim struct {
+//						ClaimName string `yaml:"claimName"`
+//					} `yaml:"persistentVolumeClaim"`
+//				}
+//				ImagePullSecrets []struct {
+//					Name string
+//				} `yaml:"imagePullSecrets"`
+//			}
+//		}
+//		// Editing the original yaml file and bringing in new file with new name and OUTPUT_PARAMS
+//		currentDir, err := os.Getwd()
+//		log.FailOnError(err, "Failed to find current directory")
+//		filePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+//		flag := false
+//		for iteration := 0; iteration <= 1000; iteration++ {
+//			for i := 1; i <= totalMlDeps; i++ {
+//				data, err := os.ReadFile(filePath)
+//				log.FailOnError(err, fmt.Sprintf("Error Reading Yaml File: %v", filePath))
+//				var pod Pod
+//				err = yaml.Unmarshal(data, &pod)
+//				log.FailOnError(err, fmt.Sprintf("Error Unmarshaling Yaml File: %v", filePath))
+//				appNum := i + (iteration * totalMlDeps)
+//				appName := fmt.Sprintf("querying-app-%d", appNum)
+//				pod.Metadata.Name = appName
+//				pod.Spec.RestartPolicy = "Never"
+//				for j := range pod.Spec.Containers {
+//					for k := range pod.Spec.Containers[j].Env {
+//						if pod.Spec.Containers[j].Env[k].Name == "OUTPUT_FILE" {
+//							pod.Spec.Containers[j].Env[k].Value = fmt.Sprintf("query_output_%d.csv", appNum)
+//						}
+//					}
+//				}
+//				opFilePath := filepath.Join(currentDir, "..", "drivers", "scheduler", "k8s", "specs", "ml-workload-rwx", "query-ml-workload.yaml")
+//				modifiedData, err := yaml.Marshal(&pod)
+//				log.FailOnError(err, fmt.Sprintf("Error Marshaling back to Yaml File: %v", filePath))
+//				err = os.WriteFile(opFilePath, modifiedData, 0644)
+//				log.FailOnError(err, fmt.Sprintf("Error Writing to Yaml File: %v", filePath))
+//				provider := Inst().V.String()
+//				err = Inst().S.RescanSpecs(Inst().SpecDir, provider)
+//				log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, provider)
+//				// Running Several Workload pods that read the model, make some predictions and write them to shared vol
+//				Inst().AppList = []string{"ml-workload-rwx"}
+//				appContexts = append(appContexts, ScheduleApplicationsOnNamespace(ns, taskName)...)
+//				log.Infof("Successfully created App querying-app-%d", appNum)
+//				ValidateApplications(appContexts)
+//				if i == totalMlDeps {
+//					flag = true
+//				}
+//			}
+//			log.Infof("Sleeping for 5 mins after iteration number %v", iteration)
+//			time.Sleep(5 * time.Minute)
+//		}
+//
+//		if flag {
+//			log.Infof("All Workload apps are now up. Will let them run for %d minutes", totalRunTime)
+//			time.Sleep(time.Duration(totalRunTime) * time.Minute)
+//		} else {
+//			log.Infof("Error happened with one of the workload apps. Validate from above logs.")
+//		}
+//	})
+//	JustAfterEach(func() {
+//		opts := make(map[string]bool)
+//		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+//		for _, ctx := range appContexts {
+//			TearDownContext(ctx, opts)
+//		}
+//		for _, ctx := range prereqContexts {
+//			TearDownContext(ctx, opts)
+//		}
+//		Inst().AppList = origAppList
+//		log.Infof("Restored original App list : %v", Inst().AppList)
+//	})
+//})
 
 func ReadEnvVariable(envVar string) string {
 	envValue, present := os.LookupEnv(envVar)

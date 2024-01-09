@@ -6,7 +6,7 @@ spec:
   restartPolicy: Never
   containers:
     - name: ml-workload
-      image: portworx/ml-workload:v1
+      image: portworx/ml-workload:v2
       command:
         - /bin/bash
         - -c
