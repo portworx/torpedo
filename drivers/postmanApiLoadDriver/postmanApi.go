@@ -173,7 +173,7 @@ func ExecutePostmanCommandInTorpedo() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("there was some problem in executing Postman Newman container due to- [%v]", output)
 	}
-	log.InfoD("output from the newman execution is- %v", res)
+	log.InfoD("output from the newman execution is- %v", output)
 	if strings.Contains(output, "failure") {
 		log.FailOnError(err, "newman exited with a failure.. Please check logs for more details")
 	}
