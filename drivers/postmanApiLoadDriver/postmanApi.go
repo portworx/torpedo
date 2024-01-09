@@ -46,7 +46,7 @@ var k8sApps = apps.Instance()
 
 func GetProjectNameToExecutePostman(projectName string, driver *PostmanDriver) {
 	if projectName == PxDataServices {
-		_, _, err := ExecutePostmanForPds(driver)
+		_, err := ExecutePostmanCommandInTorpedo(driver)
 		if err != nil {
 			log.FailOnError(err, "Postman execution failed.. Please check the logs manually.")
 		}
@@ -158,4 +158,24 @@ func ExecutePostmanForPds(postmanParams *PostmanDriver) (*corev1.Pod, bool, erro
 	}
 	k8sCore.DeletePod(postDep.Name, postDep.Namespace, true)
 	return postDep, true, nil
+}
+
+func ExecutePostmanCommandInTorpedo(postmanParams *PostmanDriver) (bool, error) {
+	collectionPath, err := GetPostmanCollectionPath()
+	if err != nil {
+		log.FailOnError(err, "Postman Collection Json not found, Please create a Collection json manually and export to {%v} folder", defaultCollectionPath)
+	}
+	log.InfoD("Postman Collection found is- %v", collectionPath)
+
+	newmanCmd := "newman run " + collectionPath + " --verbose"
+	log.InfoD("Newman command formed is- [%v]", newmanCmd)
+	output, res, err := ExecuteCommandInShell(newmanCmd)
+	if err != nil {
+		return false, fmt.Errorf("there was some problem in executing Postman Newman container due to- [%v]", err)
+	}
+	log.InfoD("output from the newman execution is- %v", res)
+	if strings.Contains(output, "failure") {
+		log.FailOnError(err, "newman exited with a failure.. Please check logs for more details")
+	}
+	return true, nil
 }

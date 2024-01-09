@@ -40,7 +40,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "SAMPLE",
+							"value": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIiLCJlbWFpbCI6Im5pbCIsImV4cCI6MTcxODE3MzY5NywiaWF0IjoxNjg2NjM3Njk5LCJpc3MiOiJwZHMtdXNlckFQSUtleSIsIm5hbWUiOiJkNzYzZTE4Ny01MTc0LTQzY2ItOWJhZC0zMzI0MGNiYTJhNmIiLCJyb2xlcyI6bnVsbCwic3ViIjoiMWRlYjlmMjctNWEzMi00ODRlLTgyYzQtNzM5MGY1ODk4MGY1In0.-1T6nFIsz2V49V7dlAXety9Qlg59y4SSHhvvI45XMBLBknenRD4nDmYArkCYNRAiwLDd9DoJ2rhD2RSXsTbd9A",
 							"type": "string"
 						}
 					]
