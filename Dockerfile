@@ -76,8 +76,6 @@ RUN apk update && apk upgrade \
 # Install Newman globally using npm
 RUN npm install -g newman
 
-RUN newman
-
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install docker
