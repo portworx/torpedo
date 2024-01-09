@@ -51,11 +51,6 @@ FROM alpine:3.18.5
 
 RUN apk add --no-cache ca-certificates bash curl jq libc6-compat
 
-# Install Postman-Newman Dependencies
-RUN apk add --update nodejs npm
-RUN apk add --update npm
-RUN npm install newman
-
  # Install Azure Cli
 RUN apk add --no-cache --update python3 py3-pip
 RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && pip3 install "pyyaml<=5.3.1" && pip3 install --no-cache-dir --prefer-binary azure-cli && apk del build
@@ -75,6 +70,11 @@ WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install docker
 RUN apk add --update --no-cache docker
+
+# Install Postman-Newman Dependencies
+RUN apk add --update nodejs npm
+RUN apk add --update npm
+RUN npm install newman
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
