@@ -67,6 +67,9 @@ func (app *PostgresConfig) ExecuteCommand(commands []string, ctx context.Context
 	if err != nil {
 		return err
 	}
+
+	defer conn.Close(ctx)
+
 	for _, eachCommand := range commands {
 		_, err = conn.Exec(ctx, eachCommand)
 		if err != nil {
@@ -109,9 +112,12 @@ func (app *PostgresConfig) CheckDataPresent(selectQueries []string, ctx context.
 	log.InfoD("Running Select Queries")
 
 	conn, err := app.GetConnection(ctx)
+
 	if err != nil {
 		return err
 	}
+
+	defer conn.Close(ctx)
 
 	var key string
 	var value string

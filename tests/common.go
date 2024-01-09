@@ -1930,7 +1930,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 			}
 			log.InfoD("App Info - [%+v]", appInfo)
 			if appContext == nil {
-				log.Infof("App Context is not proper - [%v]", appContext)
+				log.Warnf("App Context is not proper - [%v]", appContext)
 				continue
 			}
 			if appInfo.StartDataSupport {

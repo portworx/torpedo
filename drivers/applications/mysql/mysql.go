@@ -65,6 +65,7 @@ func (app *MySqlConfig) DefaultDBName() string { return "mysql" }
 func (app *MySqlConfig) ExecuteCommand(commands []string, ctx context.Context) error {
 
 	conn, err := app.GetConnection(ctx)
+
 	if err != nil {
 		return err
 	}
