@@ -812,7 +812,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	kubeNode := node.(*corev1.Node)
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
-	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
+	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 2 {
 		log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
 	}
