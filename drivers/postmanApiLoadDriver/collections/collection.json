@@ -48,7 +48,7 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "https://staging.pds.portworx.com/api/user-api-key?name=TestPostmanAPIKey",
+					"raw": "https://staging.pds.portworx.com/api/user-api-key?name=testJmeter",
 					"host": [
 						"https://staging.pds.portworx.com"
 					],
@@ -59,7 +59,7 @@
 					"query": [
 						{
 							"key": "name",
-							"value": "TestPostmanAPIKey"
+							"value": "testJmeter"
 						}
 					]
 				}
