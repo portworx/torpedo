@@ -19,8 +19,6 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 			postmanParams := postmanLib.PostmanDriver{
 				ResultsFileName: resultsFileName,
 				ResultType:      "json, cli",
-				Namespace:       params.InfraToTest.Namespace,
-				Replicas:        2,
 				Iteration:       "2",
 				Kubeconfig:      ctx}
 			postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
