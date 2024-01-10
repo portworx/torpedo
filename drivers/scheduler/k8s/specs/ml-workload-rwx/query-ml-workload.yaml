@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: ml-workload
-          image: portworx/ml-workload:v2
+          image: portworx/ml-workload:v3
           command: ["/bin/bash", "-c"]
           args: ["python query.py && sleep 300"]
           env:
