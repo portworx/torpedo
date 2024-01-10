@@ -7213,10 +7213,36 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
+
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 	}
+
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId)
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+		return
+	}
+
+	err = DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId)
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetSourceKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting source kubeconfig. Err: %v", err.Error())
+		return
+	}
+	defer SetSourceKubeConfig()
+
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
@@ -10109,4 +10135,28 @@ func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
 	})
 
 	return shuffledElements[:subsetSize], nil
+}
+
+// DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
+func DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId int) error {
+
+	// Get all the namespaces on the cluster
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return fmt.Errorf("error in listing namespaces. Err: %v", err.Error())
+	}
+
+	// Iterate and remove all namespaces
+	for _, ns := range allNamespaces.Items {
+		if strings.Contains(ns.Name, fmt.Sprintf("%d", CurrentTestRailTestCaseId)) {
+			log.Infof("Deleting namespace [%s]", ns.Name)
+			err = k8sCore.DeleteNamespace(ns.Name)
+			if err != nil {
+				// Not returning anything as it's the best case effort
+				log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+			}
+		}
+	}
+	return nil
 }
