@@ -22,6 +22,7 @@ type EventResponse struct {
 	TimeTakenInMinutes float32
 	HighlightEvents    []string
 	DisruptiveEventRan []string
+	Status             bool
 }
 
 func GetLongevityInputParams() PxBackupLongevity {

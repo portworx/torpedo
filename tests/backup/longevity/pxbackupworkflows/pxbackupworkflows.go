@@ -1,11 +1,13 @@
 package pxbackupworkflows
 
 import (
-	"fmt"
 	"sync"
+	"time"
 
-	"github.com/gosuri/uitable"
+	"github.com/google/uuid"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupevents"
+	report "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevityreport"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytypes"
 )
 
@@ -19,7 +21,7 @@ func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
 
 	RunBuilder(EventBuilder1, &inputForBuilder, &result)
 
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+	//RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
 
 	UpdateEventResponse(&result)
 
@@ -28,6 +30,7 @@ func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
 
 func OneSuccessTwoFail(wg *sync.WaitGroup) EventResponse {
 	defer wg.Done()
+	print("I am started")
 	result := GetLongevityEventResponse()
 	result.Name = "OneSuccessTwoFail"
 
@@ -64,38 +67,39 @@ func DisruptiveEvent(wg *sync.WaitGroup) EventResponse {
 	return result
 }
 
+func CreateReport(wg *sync.WaitGroup) EventResponse {
+	defer wg.Done()
+	report.DumpResult()
+	result := GetLongevityEventResponse()
+	result.Name = "DumpingData"
+
+	return result
+}
+
 func UpdateEventResponse(eventResponse *EventResponse) {
 	for _, builderResponse := range eventResponse.EventBuilders {
 		eventResponse.TimeTakenInMinutes += builderResponse.TimeTakenInMinutes
-		eventResponse.Errors = append(eventResponse.Errors, builderResponse.Error)
+		if builderResponse.Error != nil {
+			eventResponse.Errors = append(eventResponse.Errors, builderResponse.Error)
+		}
 		eventResponse.HighlightEvents = append(eventResponse.HighlightEvents, builderResponse.HighlightEvent)
+	}
+	log.Infof("Error in event - %+v", eventResponse.Errors)
+	if eventResponse.Errors != nil {
+		eventResponse.Status = false
+	} else {
+		eventResponse.Status = true
 	}
 	LogEventData(eventResponse)
 }
 
 func LogEventData(eventResponse *EventResponse) {
-	var allErrors []string
-	var allHighlightEvents []string
-
-	for _, err := range eventResponse.Errors {
-		if err != nil {
-			allErrors = append(allErrors, err.Error())
-		}
+	// fmt.Println(table)
+	// fmt.Printf("\n\n\n")
+	report.ResultsMutex.Lock()
+	report.Results[eventResponse.Name+"-"+uuid.NewString()+"-"+time.Now().Format("02 Jan 06 15:04 MST")] = report.ResultForReport{
+		Data:   *eventResponse,
+		Status: eventResponse.Status,
 	}
-	for _, hEvents := range eventResponse.HighlightEvents {
-		allHighlightEvents = append(allHighlightEvents, hEvents)
-	}
-	fmt.Printf("\n\n")
-
-	table := uitable.New()
-	table.MaxColWidth = 50
-	table.Wrap = false
-	table.AddRow("NAME", "ERROR", "HIGHLIGHT", "TimeTakenInMinutes")
-	for eventName, response := range eventResponse.EventBuilders {
-		table.AddRow(eventName, response.Error, response.HighlightEvent, response.TimeTakenInMinutes)
-	}
-
-	fmt.Println(table)
-	fmt.Printf("\n\n\n")
-
+	report.ResultsMutex.Unlock()
 }

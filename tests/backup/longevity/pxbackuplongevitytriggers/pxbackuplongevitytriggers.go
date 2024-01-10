@@ -13,12 +13,14 @@ const (
 	OneSuccessOneFail = "OneSuccessOneFail"
 	OneSuccessTwoFail = "OneSuccessTwoFail"
 	DisruptiveEvent   = "DisruptiveEvent"
+	CreateReport      = "CreateReport"
 )
 
 // All these events will run in longevity
 var AllWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
 	OneSuccessOneFail: workflows.OneSuccessOneFail,
 	OneSuccessTwoFail: workflows.OneSuccessTwoFail,
+	CreateReport:      workflows.CreateReport,
 }
 
 var AllDisruptiveWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
@@ -29,6 +31,7 @@ var WorkflowFrequecy = map[string]int{
 	OneSuccessOneFail: 60,
 	OneSuccessTwoFail: 180,
 	DisruptiveEvent:   1,
+	CreateReport:      2,
 }
 
 var IsDisruptiveEvent = true
