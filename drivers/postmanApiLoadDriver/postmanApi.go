@@ -107,8 +107,6 @@ func (postman *PostmanDriver) RunNewmanWorkload(postmanParams *PostmanDriver) (*
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate pod [%s], Err: %v", pod.Name, err)
 	}
-
-	//TODO: Remove static sleep and verify the injected data
 	time.Sleep(1 * time.Minute)
 
 	return pod, nil
