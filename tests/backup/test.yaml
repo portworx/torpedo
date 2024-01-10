@@ -1,0 +1,242 @@
+package tests
+apiVersion: v1
+kind: Pod
+metadata:
+annotations:
+cni.projectcalico.org/containerID: 70d2a07e8b2e4e01955c27b628e3344bd1338dafb01e2ee73c6113184e450286
+cni.projectcalico.org/podIP: 172.22.247.77/32
+cni.projectcalico.org/podIPs: 172.22.247.77/32
+kubernetes.io/psp: global-restricted-psp
+creationTimestamp: "2023-12-21T12:55:55Z"
+finalizers:
+- batch.kubernetes.io/job-tracking
+generateName: nfs-validate-caf5287-
+labels:
+controller-uid: 6aa60c96-d7c4-4e3a-862c-21249930de1e
+job-name: nfs-validate-caf5287
+managedFields:
+- apiVersion: v1
+fieldsType: FieldsV1
+fieldsV1:
+f:metadata:
+f:finalizers:
+.: {}
+v:"batch.kubernetes.io/job-tracking": {}
+f:generateName: {}
+f:labels:
+.: {}
+f:controller-uid: {}
+f:job-name: {}
+f:ownerReferences:
+.: {}
+k:{"uid":"6aa60c96-d7c4-4e3a-862c-21249930de1e"}: {}
+f:spec:
+f:affinity:
+.: {}
+f:nodeAffinity:
+.: {}
+f:requiredDuringSchedulingIgnoredDuringExecution: {}
+f:containers:
+k:{"name":"nfs-validate-caf5287"}:
+.: {}
+f:command: {}
+f:env:
+.: {}
+k:{"name":"PX_BACKUP_NAMESPACE"}:
+.: {}
+f:name: {}
+f:value: {}
+f:image: {}
+f:imagePullPolicy: {}
+f:name: {}
+f:resources:
+.: {}
+f:limits:
+.: {}
+f:cpu: {}
+f:memory: {}
+f:requests:
+.: {}
+f:cpu: {}
+f:memory: {}
+f:terminationMessagePath: {}
+f:terminationMessagePolicy: {}
+f:volumeMounts:
+.: {}
+k:{"mountPath":"/mnt/nfs-validate-caf5287"}:
+.: {}
+f:mountPath: {}
+f:name: {}
+f:dnsPolicy: {}
+f:enableServiceLinks: {}
+f:restartPolicy: {}
+f:schedulerName: {}
+f:securityContext: {}
+f:serviceAccount: {}
+f:serviceAccountName: {}
+f:terminationGracePeriodSeconds: {}
+f:volumes:
+.: {}
+k:{"name":"caf52871-9e3f-475a-a4a6-95b366fafef4"}:
+.: {}
+f:name: {}
+f:persistentVolumeClaim:
+.: {}
+f:claimName: {}
+manager: kube-controller-manager
+operation: Update
+time: "2023-12-21T12:55:55Z"
+- apiVersion: v1
+fieldsType: FieldsV1
+fieldsV1:
+f:metadata:
+f:annotations:
+f:cni.projectcalico.org/containerID: {}
+f:cni.projectcalico.org/podIP: {}
+f:cni.projectcalico.org/podIPs: {}
+manager: Go-http-client
+operation: Update
+subresource: status
+time: "2023-12-21T12:55:56Z"
+- apiVersion: v1
+fieldsType: FieldsV1
+fieldsV1:
+f:status:
+f:conditions:
+k:{"type":"ContainersReady"}:
+.: {}
+f:lastProbeTime: {}
+f:lastTransitionTime: {}
+f:message: {}
+f:reason: {}
+f:status: {}
+f:type: {}
+k:{"type":"Initialized"}:
+.: {}
+f:lastProbeTime: {}
+f:lastTransitionTime: {}
+f:status: {}
+f:type: {}
+k:{"type":"Ready"}:
+.: {}
+f:lastProbeTime: {}
+f:lastTransitionTime: {}
+f:message: {}
+f:reason: {}
+f:status: {}
+f:type: {}
+f:containerStatuses: {}
+f:hostIP: {}
+f:podIP: {}
+f:podIPs:
+.: {}
+k:{"ip":"172.22.247.77"}:
+.: {}
+f:ip: {}
+f:startTime: {}
+manager: kubelet
+operation: Update
+subresource: status
+time: "2023-12-21T12:55:57Z"
+name: nfs-validate-caf5287-lhxcd
+namespace: central
+ownerReferences:
+- apiVersion: batch/v1
+blockOwnerDeletion: true
+controller: true
+kind: Job
+name: nfs-validate-caf5287
+uid: 6aa60c96-d7c4-4e3a-862c-21249930de1e
+resourceVersion: "432148681"
+uid: d67b3df1-8fe7-4f59-8505-20df41281dc1
+spec:
+affinity:
+nodeAffinity:
+requiredDuringSchedulingIgnoredDuringExecution:
+nodeSelectorTerms:
+- matchExpressions:
+- key: pxbackup/enabled
+operator: NotIn
+values:
+- "false"
+containers:
+- command:
+- /filesystemctl
+- validate
+- --fs-type=nfs
+- --ds-endpoint=mongodb://pxbackup:Password1@pxc-backup-mongodb-0.pxc-backup-mongodb-headless:27017,pxc-backup-mongodb-1.pxc-backup-mongodb-headless:27017,pxc-backup-mongodb-2.pxc-backup-mongodb-headless:27017/?authSource=px-backup&replicaSet=rs0
+- --orgid=default
+- --bl-name=k8s01bcknfs01
+- --bl-uid=caf52871-9e3f-475a-a4a6-95b366fafef4
+env:
+- name: PX_BACKUP_NAMESPACE
+value: central
+image: harbor.corp.det.gov.ae/docker.io/filesystemctl:1.2.9
+imagePullPolicy: Always
+name: nfs-validate-caf5287
+resources:
+limits:
+cpu: 200m
+memory: 1Gi
+requests:
+cpu: 100m
+memory: 700Mi
+securityContext:
+allowPrivilegeEscalation: false
+capabilities:
+drop:
+- ALL
+runAsNonRoot: true
+terminationMessagePath: /dev/termination-log
+terminationMessagePolicy: File
+volumeMounts:
+- mountPath: /mnt/nfs-validate-caf5287
+name: caf52871-9e3f-475a-a4a6-95b366fafef4
+- mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+name: kube-api-access-zpr2s
+readOnly: true
+dnsPolicy: ClusterFirst
+enableServiceLinks: true
+nodeName: k8s01utlw03
+preemptionPolicy: PreemptLowerPriority
+priority: 0
+restartPolicy: OnFailure
+schedulerName: default-scheduler
+securityContext:
+fsGroup: 1
+supplementalGroups:
+- 1
+serviceAccount: px-backup-account
+serviceAccountName: px-backup-account
+terminationGracePeriodSeconds: 30
+tolerations:
+- effect: NoExecute
+key: node.kubernetes.io/not-ready
+operator: Exists
+tolerationSeconds: 300
+- effect: NoExecute
+key: node.kubernetes.io/unreachable
+operator: Exists
+tolerationSeconds: 300
+volumes:
+- name: caf52871-9e3f-475a-a4a6-95b366fafef4
+persistentVolumeClaim:
+claimName: pvc-validate-caf5287
+- name: kube-api-access-zpr2s
+projected:
+defaultMode: 420
+sources:
+- serviceAccountToken:
+expirationSeconds: 3607
+path: token
+- configMap:
+items:
+- key: ca.crt
+path: ca.crt
+name: kube-root-ca.crt
+- downwardAPI:
+items:
+- fieldRef:
+apiVersion: v1
+fieldPath: metadata.namespace
+path: namespace
