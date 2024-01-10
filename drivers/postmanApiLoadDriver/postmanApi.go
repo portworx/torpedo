@@ -61,7 +61,7 @@ func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, e
 	log.InfoD("Postman Collection found is- %v", collectionPath)
 
 	iterations := postmanParams.Iteration
-	newmanCmd := "newman run " + collectionPath + "-n " + iterations + " --verbose"
+	newmanCmd := "newman run " + collectionPath + " -n " + iterations + " --verbose"
 	log.InfoD("Newman command formed is- [%v]", newmanCmd)
 	output, res, err := ExecuteCommandInShell(newmanCmd)
 	if err != nil {
