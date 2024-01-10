@@ -9100,7 +9100,7 @@ outer:
 				}
 				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
 			}
-			_, mError = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			_, mError = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Minute)
 			if mError != nil {
 				return mError
 			}

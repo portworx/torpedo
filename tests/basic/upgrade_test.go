@@ -193,6 +193,8 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 				// Validate Apps after volume driver upgrade
 				ValidateApplications(contexts)
+				err = ValidateDataIntegrity(&contexts)
+				log.FailOnError(err, "data integrity validation failed after upgrade")
 			}
 		})
 
