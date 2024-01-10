@@ -22,14 +22,15 @@ type PostmanDriver struct {
 }
 
 // GetProjectNameToExecutePostman MAIN driver function which will decide which project to run
-func GetProjectNameToExecutePostman(projectName string, driver *PostmanDriver) {
+func GetProjectNameToExecutePostman(projectName string, driver *PostmanDriver) error {
 	if projectName == PxDataServices {
 		_, err := ExecutePostmanCommandInTorpedoForPDS(driver)
 		if err != nil {
-			log.FailOnError(err, "Postman execution failed.. Please check the logs manually.")
+			return err
 		}
 	}
 	//ToDo: Add cases for other PX Projects
+	return nil
 }
 
 // GetPostmanCollectionPath to check if collection is present in the folder
@@ -55,7 +56,7 @@ func ExecuteCommandInShell(command string) (string, string, error) {
 func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, error) {
 	collectionPath, err := GetPostmanCollectionPath()
 	if err != nil {
-		log.FailOnError(err, "Postman Collection Json not found, Please create a Collection json manually and export to {%v} folder", defaultCollectionPath)
+		return false, fmt.Errorf("postman collection json not found- [%v], Please create a Collection json manually and export to defaultCollectionPath folder", err)
 	}
 	log.InfoD("Postman Collection found is- %v", collectionPath)
 
@@ -68,7 +69,7 @@ func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, e
 	}
 	log.InfoD("output from the newman execution is- %v", res)
 	if strings.Contains(output, "failure") {
-		log.FailOnError(err, "newman exited with a failure.. Please check logs for more details")
+		return false, fmt.Errorf("newman exited with a failure.. [%v], Please check logs for more details", err)
 	}
 	return true, nil
 }

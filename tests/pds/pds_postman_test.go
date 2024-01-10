@@ -21,7 +21,8 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 				ResultType:      "json, cli",
 				Iteration:       "2",
 				Kubeconfig:      ctx}
-			postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
+			err = postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
+			log.FailOnError(err, "Postman execution failed.. Please check the logs manually.")
 		})
 	})
 	JustAfterEach(func() {
