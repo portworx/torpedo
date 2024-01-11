@@ -7236,12 +7236,10 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
 
-	err = SetSourceKubeConfig()
-	if err != nil {
-		log.Errorf("Error in setting source kubeconfig. Err: %v", err.Error())
-		return
-	}
-	defer SetSourceKubeConfig()
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
 
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
