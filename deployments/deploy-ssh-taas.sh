@@ -698,8 +698,7 @@ for i in $(seq 1 600); do
     echo "Error: Torpedo finished with $state state"
     describe_pod_then_exit
   elif [ "$state" == "Running" ]; then
-    # for TaaS, we need to wait for the service to be up and running
-    echo "TaaS is up and running"
+    echo "Torpedo is up and running"
     exit 0
   fi
 
