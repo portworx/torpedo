@@ -160,7 +160,7 @@ func (app *MySqlConfig) DeleteBackupData(ctx context.Context) error {
 
 // StartData - Go routine to run parallal with app to keep injecting data every 2 seconds
 func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) error {
-	var status = "Start"
+	var status = DataStart
 	var allSelectCommands []string
 	var allErrors []string
 	var tableName = "table_" + RandomString(4)
@@ -178,20 +178,20 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 		select {
 		case cmd := <-command:
 			switch cmd {
-			case "Stop":
+			case DataStop:
 				if len(allErrors) != 0 {
 					return fmt.Errorf(strings.Join(allErrors, "\n"))
 				}
 				err := app.CheckDataPresent(allSelectCommands, ctx)
 				return err
 
-			case "Pause":
-				status = "Pause"
+			case DataPause:
+				status = DataPause
 			default:
-				status = "Start"
+				status = DataStart
 			}
 		default:
-			if status == "Start" {
+			if status == DataStart {
 				commandPair, err := app.startInsertingData(tableName, ctx)
 				if err != nil {
 					allErrors = append(allErrors, err.Error())
