@@ -97,7 +97,7 @@ func GenerateRandomSQLCommands(count int, appType string) map[string][]string {
 
 }
 
-// GenerateRandomSQLCommands generates pairs of INSERT and SELECT queries for a database
+// GenerateSQLCommandPair generates pairs of INSERT and SELECT queries for a database
 func GenerateSQLCommandPair(tableName string, appType string) map[string][]string {
 	var sqlCommandMap = make(map[string][]string)
 	var selectQuery string
@@ -157,7 +157,7 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 			appInfo.Hostname = hostname
 			appInfo.NodePort = int(nodePort)
 			if svcAnnotationValue, ok := obj.Annotations[svcAnnotationKey]; ok {
-				appInfo.StartDataSupport = (svcAnnotationValue == "true")
+				appInfo.StartDataSupport = svcAnnotationValue == "true"
 				if !appInfo.StartDataSupport {
 					break
 				}

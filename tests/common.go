@@ -1912,54 +1912,51 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	})
 }
 
-// ValidateApplications validates applications
+// ValidateApplicationsStartData validates applications and start continous data injection to the same
 func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group, map[string][]appDriver.ApplicationDriver) {
 
 	// Resetting the global map before starting the new App Validations
 	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
 
-	var allHandlers []appDriver.ApplicationDriver
-
-	Step("validate applications", func() {
-		log.InfoD("Validate applications")
-		for _, ctx := range contexts {
-			ValidateContext(ctx)
-			appInfo, err := appUtils.ExtractConnectionInfo(ctx)
-			if err != nil {
-				log.InfoD("Some error occurred - [%s]", err)
-			}
-			log.InfoD("App Info - [%+v]", appInfo)
-			if appContext == nil {
-				log.Warnf("App Context is not proper - [%v]", appContext)
-				continue
-			}
-			if appInfo.StartDataSupport {
-				appHandler, _ := appDriver.GetApplicationDriver(
-					appInfo.AppType,
-					appInfo.Hostname,
-					appInfo.User,
-					appInfo.Password,
-					appInfo.Port,
-					appInfo.DBName,
-					appContext,
-					appInfo.NodePort,
-					appInfo.Namespace)
-				log.InfoD("App handler created for [%s]", appInfo.Hostname)
-				NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
-				allHandlers = append(allHandlers, appHandler)
-			}
+	log.InfoD("Validate applications")
+	for _, ctx := range contexts {
+		ValidateContext(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		if err != nil {
+			log.InfoD("Some error occurred - [%s]", err)
 		}
-	})
+		log.InfoD("App Info - [%+v]", appInfo)
+		if appContext == nil {
+			log.Warnf("App Context is not proper - [%v]", appContext)
+			continue
+		}
+		if appInfo.StartDataSupport {
+			appHandler, _ := appDriver.GetApplicationDriver(
+				appInfo.AppType,
+				appInfo.Hostname,
+				appInfo.User,
+				appInfo.Password,
+				appInfo.Port,
+				appInfo.DBName,
+				appContext,
+				appInfo.NodePort,
+				appInfo.Namespace)
+			log.InfoD("App handler created for [%s]", appInfo.Hostname)
+			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
+		}
+	}
 
 	controlChannel := make(chan string)
 	errGroup := errgroup.Group{}
 
-	for _, handler := range allHandlers {
-		currentHandler := handler
-		errGroup.Go(func() error {
-			err := currentHandler.StartData(controlChannel, appContext)
-			return err
-		})
+	for _, allhandler := range NamespaceAppWithDataMap {
+		for _, handler := range allhandler {
+			currentHandler := handler
+			errGroup.Go(func() error {
+				err := currentHandler.StartData(controlChannel, appContext)
+				return err
+			})
+		}
 	}
 
 	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
