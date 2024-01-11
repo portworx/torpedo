@@ -1,12 +1,17 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	configv2 "github.com/aws/aws-sdk-go-v2/config"
+	eksv2 "github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/ibm"
 	"github.com/portworx/torpedo/pkg/log"
+	"os"
 	"strings"
 	"time"
 
@@ -51,13 +56,70 @@ var _ = Describe("{UpgradeScheduler}", func() {
 
 		upgradeHops := strings.Split(Inst().SchedUpgradeHops, ",")
 		dash.VerifyFatal(len(upgradeHops) > 0, true, "upgrade hops are provided?")
-
+		log.Infof("upgrade hops: %v", upgradeHops)
 		for _, schedVersion := range upgradeHops {
 			schedVersion = strings.TrimSpace(schedVersion)
+			schedVersion = "1.28"
 			stepLog = fmt.Sprintf("start the upgrade of scheduler to version [%v]", schedVersion)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
+				//err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
+				err := func(version string) error {
+					log.Infof("Aws SetClusterVersion to %s", version)
+					clusterName := os.Getenv("AWS_CLUSTER_NAME")
+					if clusterName == "" {
+						return fmt.Errorf("env AWS_CLUSTER_NAME not found")
+					}
+					region := os.Getenv("AWS_REGION")
+					if region == "" {
+						return fmt.Errorf("env AWS_REGION not found")
+					}
+					cfg, err := configv2.LoadDefaultConfig(context.TODO(),
+						configv2.WithRegion(region),
+					)
+					if err != nil {
+						return fmt.Errorf("unable to load SDK config, %v", err)
+					}
+					eksClient := eksv2.NewFromConfig(cfg)
+					//input := &eksv2.UpdateClusterVersionInput{
+					//	Name:    awsv2.String(clusterName),
+					//	Version: awsv2.String(version),
+					//}
+					//result, err := eksClient.UpdateClusterVersion(context.TODO(), input)
+					//if err != nil {
+					//	return fmt.Errorf("error updating cluster version: %v", err)
+					//}
+					//log.Infof("UpdateClusterVersion Result: %v", result)
+
+					return func(eksClient *eksv2.Client, clusterName, version string) error {
+						// List node groups
+						nodeGroupsInput := &eksv2.ListNodegroupsInput{
+							ClusterName: aws.String(clusterName),
+						}
+						nodeGroups, err := eksClient.ListNodegroups(context.TODO(), nodeGroupsInput)
+						if err != nil {
+							return fmt.Errorf("error listing node groups: %v", err)
+						}
+
+						// Upgrade each node group
+						for _, nodeGroupName := range nodeGroups.Nodegroups {
+							log.Infof("Upgrading node group %s to version %s", nodeGroupName, version)
+							updateInput := &eksv2.UpdateNodegroupVersionInput{
+								ClusterName:   aws.String(clusterName),
+								NodegroupName: aws.String(nodeGroupName),
+								Version:       aws.String(version),
+							}
+							_, err := eksClient.UpdateNodegroupVersion(context.TODO(), updateInput)
+							if err != nil {
+								return fmt.Errorf("error upgrading node group %s: %v", nodeGroupName, err)
+							}
+							log.Infof("Node group %s upgraded to version %s", nodeGroupName, version)
+						}
+
+						return nil
+					}(eksClient, clusterName, schedVersion)
+				}(schedVersion)
+
 				log.FailOnError(err, "Failed to set cluster version")
 			})
 
