@@ -7220,7 +7220,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	}
 
 	// Cleanup all the namespaces created by the testcase
-	err := DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId)
+	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
@@ -7231,7 +7231,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		return
 	}
 
-	err = DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId)
+	err = DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
 	}
@@ -10136,7 +10136,7 @@ func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
 }
 
 // DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
-func DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId int) error {
+func DeleteAllNamespacesCreatedByTestCase() error {
 
 	// Get all the namespaces on the cluster
 	k8sCore := core.Instance()
@@ -10147,7 +10147,7 @@ func DeleteAllNamespacesCreatedByTestCase(CurrentTestRailTestCaseId int) error {
 
 	// Iterate and remove all namespaces
 	for _, ns := range allNamespaces.Items {
-		if strings.Contains(ns.Name, fmt.Sprintf("%d", CurrentTestRailTestCaseId)) {
+		if strings.Contains(ns.Name, Inst().InstanceID) {
 			log.Infof("Deleting namespace [%s]", ns.Name)
 			err = k8sCore.DeleteNamespace(ns.Name)
 			if err != nil {
