@@ -10,17 +10,19 @@ import (
 )
 
 const (
-	OneSuccessOneFail = "OneSuccessOneFail"
-	OneSuccessTwoFail = "OneSuccessTwoFail"
-	DisruptiveEvent   = "DisruptiveEvent"
-	CreateReport      = "CreateReport"
+	OneSuccessOneFail              = "OneSuccessOneFail"
+	OneSuccessTwoFail              = "OneSuccessTwoFail"
+	DisruptiveEvent                = "DisruptiveEvent"
+	CreateReport                   = "CreateReport"
+	ScheduleAndValidateApplication = "ScheduleAndValidateApplication"
 )
 
 // All these events will run in longevity
 var AllWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
-	OneSuccessOneFail: workflows.OneSuccessOneFail,
-	OneSuccessTwoFail: workflows.OneSuccessTwoFail,
-	CreateReport:      workflows.CreateReport,
+	OneSuccessOneFail:              workflows.OneSuccessOneFail,
+	OneSuccessTwoFail:              workflows.OneSuccessTwoFail,
+	CreateReport:                   workflows.CreateReport,
+	ScheduleAndValidateApplication: workflows.ScheduleAndValidateApplication,
 }
 
 var AllDisruptiveWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
@@ -28,17 +30,17 @@ var AllDisruptiveWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
 }
 
 var WorkflowFrequecy = map[string]int{
-	OneSuccessOneFail: 60,
-	OneSuccessTwoFail: 180,
-	DisruptiveEvent:   1,
-	CreateReport:      2,
+	OneSuccessOneFail:              60,
+	OneSuccessTwoFail:              180,
+	DisruptiveEvent:                1,
+	ScheduleAndValidateApplication: 18,
 }
 
-var IsDisruptiveEvent = true
+var IsDisruptiveEvent = false
 
-var runInterval = 10 // Run Interval in seconds
+var runInterval = 30 // Run Interval in seconds
 
-var baseInterval = 30 // Base Interval in seconds
+var baseInterval = 180 // Base Interval in seconds
 
 var eventsOccurred = make(map[string]int)
 

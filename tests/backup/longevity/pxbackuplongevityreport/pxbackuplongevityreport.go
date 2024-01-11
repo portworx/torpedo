@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-echarts/go-echarts/v2/charts"
+	"github.com/go-echarts/go-echarts/v2/opts"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytypes"
 )
 
@@ -20,7 +23,40 @@ type ResultForReport struct {
 	Data   EventResponse
 }
 
-var reportHTMLStart = `
+type ResultForSuccessFailurePercentage struct {
+	Failed map[string]int
+	Passed map[string]int
+}
+
+var SuccessFailurePercentage = ResultForSuccessFailurePercentage{
+	Failed: make(map[string]int),
+	Passed: make(map[string]int),
+}
+
+type ResultForSuccessStatus struct {
+	TotalPass int
+	TotalFail int
+}
+
+var SuccessStatus = ResultForSuccessStatus{
+	TotalPass: 0,
+	TotalFail: 0,
+}
+
+type ResultTimeAnalysisForEvents struct {
+	TotalEvents          map[string]int
+	EventCompletionTimes map[string]map[time.Time]float32
+	TotalTimeTaken       map[string]float32
+}
+
+var TimeAnalysisForEvents = ResultTimeAnalysisForEvents{
+	TotalEvents:          make(map[string]int),
+	EventCompletionTimes: make(map[string]map[time.Time]float32),
+	TotalTimeTaken:       make(map[string]float32),
+}
+
+var (
+	reportHTMLStart = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -65,7 +101,7 @@ td, th {
 <body>
 `
 
-var reportHTMLEnd = `
+	reportHTMLEnd = `
 <script>
 var coll = document.getElementsByClassName("collapsible");
 var i;
@@ -87,14 +123,13 @@ for (i = 0; i < coll.length; i++) {
 </html>
 `
 
-var collapsibleTemplate = `
+	collapsibleTemplate = `
 <button type="button" class="collapsible" style="background-color: COLOROFBG">NAMEOFTHEEVENT</button>
 <div class="content">
   DATAFROMEVENT
 </div>
 `
 
-var (
 	tableStart = `
 <table>
 <tr style="background-color: grey">
@@ -136,6 +171,8 @@ func DumpResult() {
 		tempString = strings.Replace(tempString, "DATAFROMEVENT", eventDataToTables, 1)
 
 		allCollapsibles += tempString
+
+		UpdateDetailsForCharts(eventDetails.Data)
 	}
 
 	finalHtml := reportHTMLStart + logHeading + allCollapsibles + reportHTMLEnd
@@ -144,6 +181,15 @@ func DumpResult() {
 	if err != nil {
 		panic(err)
 	}
+
+	CreateGraphs()
+
+	log.Infof("[%+v] - [%+v]", SuccessFailurePercentage, SuccessStatus)
+}
+
+func CreateGraphs() {
+	createGraphForFailPass()
+	createGraphForFailurePercentage()
 }
 
 func createTableFromData(eventData EventResponse) string {
@@ -169,5 +215,82 @@ func createTableFromData(eventData EventResponse) string {
 	}
 
 	return tableStart + createdTable + tableEnd
+}
+
+func createGraphForFailPass() {
+	// initialize chart
+	pie := charts.NewPie()
+
+	// preformat data
+	pieData := []opts.PieData{
+		{Name: "Passed", Value: SuccessStatus.TotalPass},
+		{Name: "Failed", Value: SuccessStatus.TotalFail},
+	}
+
+	// put data into chart
+	pie.AddSeries("Overall Test Status", pieData).SetSeriesOptions(
+		charts.WithLabelOpts(opts.Label{Show: true, Formatter: "{b}: {c}"}),
+	)
+
+	// generate chart and write it to io.Writer
+	f, _ := os.Create("pie.html")
+	pie.Render(f)
+}
+
+func createGraphForFailurePercentage() {
+	pie := charts.NewPie()
+
+	pieData := []opts.PieData{}
+
+	for eventName, eventCount := range SuccessFailurePercentage.Failed {
+		pieData = append(pieData, opts.PieData{Name: eventName, Value: eventCount})
+	}
+
+	// put data into chart
+	pie.AddSeries("Failure Percentage", pieData).SetSeriesOptions(
+		charts.WithLabelOpts(opts.Label{Show: true, Formatter: "{b}: {c}"}),
+	)
+
+	// generate chart and write it to io.Writer
+	f, _ := os.Create("pie_fails.html")
+	pie.Render(f)
+}
+
+func UpdateDetailsForCharts(eventResponse EventResponse) {
+	if !eventResponse.Status {
+		if val, ok := SuccessFailurePercentage.Failed[eventResponse.Name]; ok {
+			SuccessFailurePercentage.Failed[eventResponse.Name] = 1 + val
+		} else {
+			SuccessFailurePercentage.Failed[eventResponse.Name] = 1
+		}
+		SuccessStatus.TotalFail += 1
+	} else {
+		if val, ok := SuccessFailurePercentage.Passed[eventResponse.Name]; ok {
+			SuccessFailurePercentage.Passed[eventResponse.Name] = 1 + val
+		} else {
+			SuccessFailurePercentage.Passed[eventResponse.Name] = 1
+		}
+
+		SuccessStatus.TotalPass += 1
+
+		if _, ok := TimeAnalysisForEvents.EventCompletionTimes[eventResponse.Name]; ok {
+			TimeAnalysisForEvents.EventCompletionTimes[eventResponse.Name][time.Now()] = eventResponse.TimeTakenInMinutes
+		} else {
+			TimeAnalysisForEvents.EventCompletionTimes[eventResponse.Name] = make(map[time.Time]float32)
+			TimeAnalysisForEvents.EventCompletionTimes[eventResponse.Name][time.Now()] = eventResponse.TimeTakenInMinutes
+		}
+
+		if _, ok := TimeAnalysisForEvents.TotalEvents[eventResponse.Name]; ok {
+			TimeAnalysisForEvents.TotalEvents[eventResponse.Name] += 1
+		} else {
+			TimeAnalysisForEvents.TotalEvents[eventResponse.Name] = 1
+		}
+
+		if _, ok := TimeAnalysisForEvents.TotalTimeTaken[eventResponse.Name]; ok {
+			TimeAnalysisForEvents.TotalTimeTaken[eventResponse.Name] += eventResponse.TimeTakenInMinutes
+		} else {
+			TimeAnalysisForEvents.TotalEvents[eventResponse.Name] = int(eventResponse.TimeTakenInMinutes)
+		}
+	}
 
 }

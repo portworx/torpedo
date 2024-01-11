@@ -5,11 +5,26 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupevents"
 	report "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevityreport"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytypes"
 )
+
+func ScheduleAndValidateApplication(wg *sync.WaitGroup) EventResponse {
+	defer wg.Done()
+	result := GetLongevityEventResponse()
+	result.Name = "Schedule And Validate App"
+	inputForBuilder := GetLongevityInputParams()
+
+	RunBuilder(EventScheduleApps, &inputForBuilder, &result)
+
+	RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+
+}
 
 func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
 	defer wg.Done()
@@ -30,7 +45,6 @@ func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
 
 func OneSuccessTwoFail(wg *sync.WaitGroup) EventResponse {
 	defer wg.Done()
-	print("I am started")
 	result := GetLongevityEventResponse()
 	result.Name = "OneSuccessTwoFail"
 
@@ -84,7 +98,6 @@ func UpdateEventResponse(eventResponse *EventResponse) {
 		}
 		eventResponse.HighlightEvents = append(eventResponse.HighlightEvents, builderResponse.HighlightEvent)
 	}
-	log.Infof("Error in event - %+v", eventResponse.Errors)
 	if eventResponse.Errors != nil {
 		eventResponse.Status = false
 	} else {

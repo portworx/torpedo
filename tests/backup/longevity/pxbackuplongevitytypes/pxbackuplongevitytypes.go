@@ -1,7 +1,14 @@
 package pxbackuplongevitytypes
 
+import (
+	"context"
+
+	"github.com/portworx/torpedo/drivers/scheduler"
+)
+
 type PxBackupLongevity struct {
-	CustomData *CustomData
+	CustomData      *CustomData
+	ApplicationData *ApplicationData
 }
 
 type CustomData struct {
@@ -9,10 +16,21 @@ type CustomData struct {
 	Strings  map[string]string
 }
 
+type ApplicationData struct {
+	SchedulerContext []*scheduler.Context
+}
+
+type EventData struct {
+	SchedulerContext []*scheduler.Context
+	AppContext       context.Context
+	BackupNamespaces []string
+}
+
 type EventBuilderResponse struct {
 	Error              error
 	TimeTakenInMinutes float32
 	HighlightEvent     string
+	EventData          EventData
 }
 
 type EventResponse struct {
@@ -32,7 +50,8 @@ func GetLongevityInputParams() PxBackupLongevity {
 	}
 
 	var longevityStruct = PxBackupLongevity{
-		CustomData: &customData,
+		CustomData:      &customData,
+		ApplicationData: &ApplicationData{},
 	}
 
 	return longevityStruct

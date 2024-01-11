@@ -443,6 +443,15 @@ github.com/gin-gonic/gin/binding
 github.com/gin-gonic/gin/internal/bytesconv
 github.com/gin-gonic/gin/internal/json
 github.com/gin-gonic/gin/render
+# github.com/go-echarts/go-echarts/v2 v2.3.2
+## explicit; go 1.18
+github.com/go-echarts/go-echarts/v2/actions
+github.com/go-echarts/go-echarts/v2/charts
+github.com/go-echarts/go-echarts/v2/datasets
+github.com/go-echarts/go-echarts/v2/opts
+github.com/go-echarts/go-echarts/v2/render
+github.com/go-echarts/go-echarts/v2/templates
+github.com/go-echarts/go-echarts/v2/types
 # github.com/go-errors/errors v1.4.1
 ## explicit; go 1.14
 github.com/go-errors/errors
