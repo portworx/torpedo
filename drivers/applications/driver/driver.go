@@ -29,7 +29,7 @@ type ApplicationDriver interface {
 	UpdateDataCommands(count int, identifier string)
 
 	// InsertBackupData inserts data before and after backup
-	InsertBackupData(ctx context.Context, identifier string, commnads []string) error
+	InsertBackupData(ctx context.Context, identifier string, commands []string) error
 
 	// GetBackupData gets the sql queries inserted before or after backup
 	GetBackupData(identifier string) []string
@@ -47,9 +47,9 @@ type ApplicationDriver interface {
 	GetNamespace() string
 }
 
-// Returns struct of appType provided as input
+// GetApplicationDriver returns struct of appType provided as input
 func GetApplicationDriver(appType string, hostname string, user string,
-	password string, port int, dbname string, ctx context.Context, nodePort int, namespace string) (ApplicationDriver, error) {
+	password string, port int, dbname string, nodePort int, namespace string) (ApplicationDriver, error) {
 
 	switch appType {
 	case Postgres:

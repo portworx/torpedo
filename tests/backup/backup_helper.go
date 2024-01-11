@@ -2259,7 +2259,6 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.Password,
 				appInfo.Port,
 				appInfo.DBName,
-				appContext,
 				appInfo.NodePort,
 				appInfo.Namespace)
 
@@ -2426,6 +2425,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 								if theRestore.ReplacePolicy != api.ReplacePolicy_Retain {
 									err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [Retained], with reason [%s], despite the replace policy being [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Reason, theRestore.ReplacePolicy)
 									errors = append(errors, err)
+									IsReplacePolicySetToDelete = true
 								}
 							} else {
 								err := fmt.Errorf("object (name: [%s], kind: [%s], namespace: [%s]) was found in the restore [%s] (as expected by presence in expectedRestoredAppContext [%s]), but status was [%s], with reason [%s]", name, kind, ns, restoreName, expectedRestoredAppContextNamespace, restoredObj.Status.Status, restoredObj.Status.Reason)
