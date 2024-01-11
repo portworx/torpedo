@@ -777,6 +777,8 @@ spec:
       value: "${PX_BACKUP_MONGODB_USERNAME}"
     - name: PX_BACKUP_MONGODB_PASSWORD
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
+    - name: AWS_CLUSTER_NAME
+      value: "${AWS_CLUSTER_NAME}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
