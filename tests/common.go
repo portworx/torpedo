@@ -9,6 +9,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node/gke"
+
+	"github.com/portworx/torpedo/pkg/stats"
 
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
@@ -160,6 +163,9 @@ import (
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 
+	// import ocp driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
@@ -297,6 +303,7 @@ const (
 const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
+	StorkNamePrefix                   = "stork-namespace"
 	BackupRestoreCompletionTimeoutMin = 20
 	clusterDeleteTimeout              = 60 * time.Minute
 	clusterDeleteRetryTime            = 30 * time.Second
@@ -1981,6 +1988,33 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	})
 }
 
+// CrashPXDaemonAndWait crashes px daemon service on given app nodes and waits till driver is back up
+func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	context(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.KillPXDaemon(appNodes, nil)
+			processError(err, errChan...)
+		})
+
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				processError(err, errChan...)
+			}
+		})
+
+	})
+}
+
 // ValidateAndDestroy validates application and then destroys them
 func ValidateAndDestroy(contexts []*scheduler.Context, opts map[string]bool) {
 	Step("validate apps", func() {
@@ -3086,6 +3120,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		}
 	} else if ibmNodeDriver, ok := Inst().N.(*ibm.Ibm); ok {
 		err = ssh.RefreshDriver(&ibmNodeDriver.SSH)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
@@ -5339,6 +5378,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -5353,6 +5397,9 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						} else if errInj == CRASH {
 							action = "crash px on"
 						}
+						dashStats := make(map[string]string)
+						dashStats["node"] = newReplNode.Name
+
 						stepLog = fmt.Sprintf("%s target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
@@ -5361,6 +5408,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
 								if errInj == PX_RESTART {
+									updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
 									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
 									if testError != nil {
 										log.Error(testError)
@@ -5377,6 +5425,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
 								} else if errInj == REBOOT {
+									updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5389,6 +5438,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 										UpdateOutcome(event, err)
 									}
 								} else if errInj == CRASH {
+									updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
 									errorChan := make(chan error, errorChannelSize)
 									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
 									for err := range errorChan {
@@ -5406,6 +5456,12 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
+									dashStats = make(map[string]string)
+									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+									dashStats["fastpath"] = "true"
+									dashStats["volume-name"] = v.Name
+									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
@@ -5472,6 +5528,11 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								UpdateOutcome(event, err)
 							}
+							dashStats := make(map[string]string)
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+							dashStats["volume-name"] = v.Name
+							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -5482,9 +5543,11 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
+									dashStats = make(map[string]string)
+									dashStats["node"] = replNodeToReboot.Name
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
 									if errInj == PX_RESTART {
-
+										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
 										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
 										if testError != nil {
 											log.Error(testError)
@@ -5502,6 +5565,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
 
 									} else if errInj == REBOOT {
+										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5514,6 +5578,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 											UpdateOutcome(event, err)
 										}
 									} else if errInj == CRASH {
+										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
 										errorChan := make(chan error, errorChannelSize)
 										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
 										for err := range errorChan {
@@ -5532,6 +5597,12 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
+									dashStats = make(map[string]string)
+									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+									dashStats["fastpath"] = "true"
+									dashStats["volume-name"] = v.Name
+									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 
@@ -7145,12 +7216,16 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+	}
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) > 0 {
+		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
 		testCaseName := ginkgoTestDescr.FullTestText
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := masterNodes[0]
 		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
 		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
 		if err != nil {
@@ -7375,6 +7450,17 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		}
 	}
 	return poolUuids, nil
+}
+
+func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
+	for _, n := range node.GetStorageNodes() {
+		for _, p := range n.StoragePools {
+			if p.Uuid == poolUUID {
+				return &n, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to find node for pool UUID %v", poolUUID)
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
@@ -7895,15 +7981,11 @@ func RandomString(length int) string {
 	return randomString
 }
 
-// DeleteGivenPoolInNode deletes pool with given ID in the given node
-func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
-
+func EnterPoolMaintenance(stNode node.Node) error {
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
-	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
+	if err := Inst().V.EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
-	//Waiting for cli to work
-	time.Sleep(2 * time.Minute)
 
 	status, err := Inst().V.GetNodeStatus(stNode)
 	if err != nil {
@@ -7915,48 +7997,62 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
 		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
 	}
-	defer func() {
-		var exitErr error
-		if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
-			log.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
 
-		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
-			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
-		//Adding wait as even PX is up it is taking some time for pool status to update
-		//when all pools are deleted
-		time.Sleep(1 * time.Minute)
-		cmd := "pxctl sv pool show"
-		var out string
-
-		// Execute the command and check if any pools exist
-		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
-		if exitErr != nil {
-			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
-		log.Infof("pool show: [%s]", out)
-
-		//skipping waitForPoolStatusToUpdate if there are no pools in the node
-		if strings.Contains(out, "No drives configured for this node") {
-			return
-		}
-
-		expectedStatus := "Online"
-		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
-			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
-		}
-
-	}()
-	err = Inst().V.DeletePool(stNode, poolIDToDelete, retry)
-	return err
+	return nil
 }
+
+func ExitPoolMaintenance(stNode node.Node) error {
+	var exitErr error
+	if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
+		return fmt.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+
+	if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
+		return fmt.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+
+	// wait as even PX is up it is taking some time for pool status to update when all pools are deleted
+	time.Sleep(1 * time.Minute)
+	cmd := "pxctl sv pool show"
+	var out string
+
+	// Execute the command and check if any pools exist
+	out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if exitErr != nil {
+		return fmt.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+	log.Infof("pool show: [%s]", out)
+
+	// skipping waitForPoolStatusToUpdate if there are no pools in the node
+	if strings.Contains(out, "No drives configured for this node") {
+		return nil
+	}
+
+	expectedStatus := "Online"
+	if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+		return fmt.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
+	}
+
+	return nil
+}
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
+	if err := EnterPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
+		return err
+	}
+	if err := ExitPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	return nil
+}
+
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
 
 	systemOpts := node.SystemctlOpts{
@@ -9998,4 +10094,19 @@ func GetKubevirtVersionToUpgrade() string {
 		return kubevirtVersion
 	}
 	return LatestKubevirtVersion
+}
+
+// GetRandomSubset generates a random subset of elements from a given list.
+func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
+	if subsetSize > len(elements) {
+		return nil, fmt.Errorf("subset size exceeds the length of the input list")
+	}
+
+	shuffledElements := make([]string, len(elements))
+	copy(shuffledElements, elements)
+	rand.Shuffle(len(shuffledElements), func(i, j int) {
+		shuffledElements[i], shuffledElements[j] = shuffledElements[j], shuffledElements[i]
+	})
+
+	return shuffledElements[:subsetSize], nil
 }

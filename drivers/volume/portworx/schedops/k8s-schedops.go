@@ -24,6 +24,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/version"
@@ -36,6 +37,10 @@ const (
 	PXDaemonSet = "portworx"
 	// PXServiceLabelKey is the label key used for px systemd service control
 	PXServiceLabelKey = "px/service"
+	//PXPodlabelKey is the label key used for portworx pods
+	PXPodlabelKey = "name"
+	//PXPodLabelValue is the label value used for portworx pods
+	PXPodLabelValue = "portworx"
 	// k8sServiceOperationStart is label value for starting Portworx service
 	k8sServiceOperationStart = "start"
 	// k8sServiceOperationStop is label value for stopping Portworx service
@@ -754,6 +759,7 @@ func (k *k8sSchedOps) IsPXReadyOnNode(n node.Node) bool {
 		log.Errorf("Failed to get portworx namespace. Error : %v", err)
 		return false
 	}
+
 	pxPods, err := k8sCore.GetPodsByNode(n.Name, namespace)
 	if err != nil {
 		log.Errorf("Failed to get apps on node %s. Error : %v", n.Name, err)
@@ -893,6 +899,48 @@ func GetContainerPVCMountMap(pod corev1.Pod) map[string][]string {
 	return containerPaths
 }
 
+// GetContainerPVCMountMapWithSC fetches storage class along with mount paths for containers using PVCs
+func GetContainerPVCMountMapWithSC(pod corev1.Pod) (map[string]*storagev1.StorageClass, error) {
+	scMountPathsMap := make(map[string]*storagev1.StorageClass)
+	pvcNamesInSpec := make(map[string]string)
+	for _, v := range pod.Spec.Volumes {
+		if v.PersistentVolumeClaim != nil {
+			pvcNamesInSpec[v.Name] = v.PersistentVolumeClaim.ClaimName
+		}
+	}
+	for _, c := range pod.Spec.Containers {
+
+		for _, cMount := range c.VolumeMounts {
+			if pvcName, ok := pvcNamesInSpec[cMount.Name]; ok {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
+				storageClass, err := k8sCore.GetStorageClassForPVC(pvc)
+				if err != nil {
+					return nil, err
+				}
+				scMountPathsMap[cMount.MountPath] = storageClass
+			}
+		}
+
+		for _, cDevice := range c.VolumeDevices {
+			if pvcName, ok := pvcNamesInSpec[cDevice.Name]; ok {
+				pvc, err := core.Instance().GetPersistentVolumeClaim(pvcName, pod.Namespace)
+				if err != nil {
+					return nil, err
+				}
+				storageClass, err := k8sCore.GetStorageClassForPVC(pvc)
+				if err != nil {
+					return nil, err
+				}
+				scMountPathsMap[cDevice.DevicePath] = storageClass
+			}
+		}
+	}
+	return scMountPathsMap, nil
+}
+
 func separateFilePaths(volDirList string) []string {
 	trimmedList := strings.TrimSpace(volDirList)
 	if trimmedList == "" {
@@ -974,18 +1022,25 @@ func (k *k8sSchedOps) ListAutopilotRules() (*apapi.AutopilotRuleList, error) {
 }
 
 func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
-	var allServices *corev1.ServiceList
+	var pods *corev1.PodList
 	var err error
+	var ns string
 
-	if allServices, err = k8sCore.ListServices("", metav1.ListOptions{}); err != nil {
-		return "", fmt.Errorf("Failed to get list of services. Err: %v", err)
+	pods, err = k8sCore.ListPods(map[string]string{
+		PXPodlabelKey: PXPodLabelValue,
+	})
+	if err != nil {
+		return ns, err
 	}
-	for _, svc := range allServices.Items {
-		if svc.Name == PXServiceName {
-			return svc.Namespace, nil
-		}
+
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
 	}
-	return "", fmt.Errorf("can't find %s Portworx service from list of services.", PXServiceName)
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("error: can't find portworx namespace using pods with label [%s=%s]", PXPodlabelKey, PXPodLabelValue)
+	}
+	return ns, nil
+
 }
 
 func printStatus(k *k8sSchedOps, pods ...corev1.Pod) {

@@ -801,7 +801,7 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 		return "", fmt.Errorf("failed to create volume, Err: %v", err)
 	}
 
-	log.Infof("Successfully created Portworx volume [%s]", resp.VolumeId)
+	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
 	return resp.VolumeId, nil
 }
 
@@ -1221,6 +1221,45 @@ func (d *portworx) GetNodePoolsStatus(n node.Node) (map[string]string, error) {
 			poolId = ""
 		}
 		status = ""
+	}
+	return poolsData, nil
+}
+
+// Return latest node PoolUUID -> ID
+func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
+	cmd := fmt.Sprintf("%s sv pool show | grep -e Pool -e UUID", d.getPxctlPath(n))
+	out, err := d.nodeDriver.RunCommand(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         validatePXStartTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return nil, fmt.Errorf("error getting pool info on node [%s], Err: %v", n.Name, err)
+	}
+	outLines := strings.Split(out, "\n")
+
+	poolsData := make(map[string]string)
+	var poolId string
+	var poolUUID string
+	for _, l := range outLines {
+		line := strings.Trim(l, " ")
+		if strings.Contains(line, "UUID") {
+			poolUUID = strings.Split(line, ":")[1]
+			poolUUID = strings.Trim(poolUUID, " ")
+		}
+		if strings.Contains(line, "Pool") {
+			poolId = strings.Split(line, ":")[1]
+			poolId = strings.Trim(poolId, " ")
+		}
+		if poolId != "" && poolUUID != "" {
+ 			if _, ok := poolsData[poolUUID]; !ok {
+				poolsData[poolUUID] = poolId
+			}
+			poolUUID = ""
+		}
+		poolId = ""
 	}
 	return poolsData, nil
 }
@@ -1800,7 +1839,7 @@ func GetSerialFromWWID(wwid string) (string, error) {
 		return strings.ToLower(fmt.Sprintf("%s%s", wwid[6:20], wwid[26:36])), nil
 	}
 	// SCSI
-	return strings.TrimPrefix(strings.ToLower(wwid), "36"+schedops.PureVolumeOUI), nil
+	return strings.TrimPrefix(strings.ToLower(wwid), fmt.Sprintf("36%s0", schedops.PureVolumeOUI)), nil
 }
 
 func parseLsblkOutput(out string) (map[string]pureLocalPathEntry, error) {
@@ -2245,6 +2284,51 @@ func (d *portworx) StopDriver(nodes []node.Node, force bool, triggerOpts *driver
 				time.Sleep(waitVolDriverToCrash / 6)
 			}
 
+		}
+		return nil
+	}
+	return driver_api.PerformTask(stopFn, triggerOpts)
+}
+
+func (d *portworx) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	stopFn := func() error {
+		for _, n := range nodes {
+
+			log.InfoD("Stopping px-daemon on [%s].", n.Name)
+			var processPid string
+			command := "ps -ef | grep \"px -daemon\""
+			out, err := d.nodeDriver.RunCommand(n, command, node.ConnectionOpts{
+				Timeout:         20 * time.Second,
+				TimeBeforeRetry: 5 * time.Second,
+				Sudo:            true,
+			})
+			if err != nil {
+				return err
+			}
+
+			lines := strings.Split(string(out), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "/usr/local/bin/px -daemon") && !strings.Contains(line, "grep") {
+					fields := strings.Fields(line)
+					processPid = fields[1]
+					break
+				}
+			}
+
+			if processPid == "" {
+				return fmt.Errorf("unable to find PID for px daemon in output [%s]", out)
+			}
+
+			pxCrashCmd := fmt.Sprintf("sudo pkill -9 %s", processPid)
+			_, err = d.nodeDriver.RunCommand(n, pxCrashCmd, node.ConnectionOpts{
+				Timeout:         crashDriverTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to run cmd [%s] on node [%s], Err: %v", pxCrashCmd, n.Name, err)
+			}
+			log.Infof("Sleeping for %v for volume driver to go down", waitVolDriverToCrash)
+			time.Sleep(waitVolDriverToCrash)
 		}
 		return nil
 	}

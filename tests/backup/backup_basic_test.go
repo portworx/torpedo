@@ -35,6 +35,7 @@ const (
 	Tthurlapati    TestcaseAuthor = "tthurlapati-px"
 	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
 	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
+	ATrivedi       TestcaseAuthor = "atrivedi-px"
 )
 
 // TestcaseQuarter List

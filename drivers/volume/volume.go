@@ -185,6 +185,9 @@ type Driver interface {
 	// StopDriver must cause the volume driver to exit on a given node. If force==true, the volume driver should get killed ungracefully
 	StopDriver(nodes []node.Node, force bool, triggerOpts *driver_api.TriggerOptions) error
 
+	// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+	KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error
+
 	// StartDriver must cause the volume driver to start on a given node.
 	StartDriver(n node.Node) error
 
@@ -245,6 +248,9 @@ type Driver interface {
 
 	//GetNodePoolsStatus returns map of pool UUID and status
 	GetNodePoolsStatus(n node.Node) (map[string]string, error)
+
+	//GetNodePools returns latest map of pool UUID and id
+	GetNodePools(n node.Node) (map[string]string, error)
 
 	//DeletePool deletes the pool with given poolID
 	DeletePool(n node.Node, poolID string, retry bool) error
