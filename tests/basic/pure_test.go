@@ -2403,7 +2403,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 			for pod, node := range podNodeMap {
 				podNameSpace = node["namespace"]
 				podName = pod
-				if _, err := task.DoRetryWithTimeout(t, 100, 20*time.Second); err != nil {
+				if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second); err != nil {
 					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", podName, err)
 				}
 			}
