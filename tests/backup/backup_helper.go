@@ -455,6 +455,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		}
 	}
 
+	// Insert data before backup which is expected to be present after restore
 	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
@@ -465,6 +466,7 @@ func CreateBackupWithValidation(ctx context.Context, backupName string, clusterN
 		return err
 	}
 
+	// Insert data after backup which is expected NOT to be present after restore
 	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
 	if err != nil {
 		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
@@ -2267,6 +2269,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				return err
 			}
 			for _, eachPod := range pods.Items {
+				// If the policy is set to retain and the pod is not modified we are skipping the data validation check
 				if currentPodAge[appInfo.Namespace][eachPod.ObjectMeta.GetGenerateName()].Before(startTime) {
 					log.Infof("Skipping %s from validation as the pod is not changed", eachPod.ObjectMeta.GetGenerateName())
 					log.Infof("Current Restore Policy - [%s]", theRestore.ReplacePolicy.String())
