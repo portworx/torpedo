@@ -2394,7 +2394,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 				log.FailOnError(err, "Failed to get pods from namespace: %v", podNameSpace)
 				for _, pod := range pods.Items {
 					if pod.Name == podName {
-						log.InfoD("pod : %s still present in the system")
+						log.InfoD("pod : %s still present in the system", podName)
 						return "", true, nil
 					}
 				}
