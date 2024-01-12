@@ -5,20 +5,70 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	. "github.com/onsi/ginkgo"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackupevents"
 	report "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevityreport"
 	. "github.com/portworx/torpedo/tests/backup/longevity/pxbackuplongevitytypes"
 )
 
-func ScheduleAndValidateApplication(wg *sync.WaitGroup) EventResponse {
+// Global variables to be used by all flows
+var (
+	BackupLocationName   string
+	BackupLocationUID    string
+	AllNamespaces        []string
+	ClusterUID           string
+	ScheduledAppContexts []*scheduler.Context
+)
+
+func SetupAddCloudBackupLocation(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
+	defer wg.Done()
+	result := GetLongevityEventResponse()
+	result.Name = "Add global cloud location for backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	eventData := RunBuilder(EventAddCredentialandBackupLocation, &inputForBuilder, &result)
+
+	// Setting global variables for backup
+	BackupLocationName = eventData.BackupLocationName
+	BackupLocationUID = eventData.BackupLocationUID
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func SetupAddClusters(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
+	defer wg.Done()
+	result := GetLongevityEventResponse()
+	result.Name = "Add global cloud location for backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	eventData := RunBuilder(EventAddSourceAndDestinationCluster, &inputForBuilder, &result)
+
+	// Setting global variables for backup
+	ClusterUID = eventData.ClusterUid
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func GlobalScheduleAndValidateApplication(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
 	defer wg.Done()
 	result := GetLongevityEventResponse()
 	result.Name = "Schedule And Validate App"
 	inputForBuilder := GetLongevityInputParams()
 
-	RunBuilder(EventScheduleApps, &inputForBuilder, &result)
+	eventData := RunBuilder(EventScheduleApps, &inputForBuilder, &result)
+	ScheduledAppContexts = append(ScheduledAppContexts, eventData.SchedulerContext...)
+	AllNamespaces = append(AllNamespaces, eventData.BackupNamespaces...)
 
-	RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
+	_ = RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
 
 	UpdateEventResponse(&result)
 
@@ -26,7 +76,29 @@ func ScheduleAndValidateApplication(wg *sync.WaitGroup) EventResponse {
 
 }
 
+func AppCreateBackup(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
+	defer wg.Done()
+	result := GetLongevityEventResponse()
+	result.Name = "Create Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Backup")
+	inputForBuilder.BackupData.BackupLocationName = BackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = BackupLocationUID
+	inputForBuilder.BackupData.ClusterUid = ClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = ScheduledAppContexts
+
+	_ = RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
 func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
 	defer wg.Done()
 	result := GetLongevityEventResponse()
 	result.Name = "OneSuccessOneFail"
@@ -44,6 +116,7 @@ func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
 }
 
 func OneSuccessTwoFail(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
 	defer wg.Done()
 	result := GetLongevityEventResponse()
 	result.Name = "OneSuccessTwoFail"
@@ -63,6 +136,7 @@ func OneSuccessTwoFail(wg *sync.WaitGroup) EventResponse {
 }
 
 func DisruptiveEvent(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
 	defer wg.Done()
 	result := GetLongevityEventResponse()
 	result.Name = "DisruptiveEvent"
@@ -82,6 +156,7 @@ func DisruptiveEvent(wg *sync.WaitGroup) EventResponse {
 }
 
 func CreateReport(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
 	defer wg.Done()
 	report.DumpResult()
 	result := GetLongevityEventResponse()

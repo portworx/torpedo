@@ -9,6 +9,7 @@ import (
 type PxBackupLongevity struct {
 	CustomData      *CustomData
 	ApplicationData *ApplicationData
+	BackupData      *BackupData
 }
 
 type CustomData struct {
@@ -16,14 +17,25 @@ type CustomData struct {
 	Strings  map[string]string
 }
 
+type BackupData struct {
+	Namespaces         []string
+	BackupLocationName string
+	BackupLocationUID  string
+	ClusterUid         string
+}
+
 type ApplicationData struct {
 	SchedulerContext []*scheduler.Context
 }
 
 type EventData struct {
-	SchedulerContext []*scheduler.Context
-	AppContext       context.Context
-	BackupNamespaces []string
+	SchedulerContext   []*scheduler.Context
+	AppContext         context.Context
+	BackupNamespaces   []string
+	BackupLocationName string
+	BackupLocationUID  string
+	ClusterUid         string
+	BackupNames        []string
 }
 
 type EventBuilderResponse struct {
@@ -49,9 +61,21 @@ func GetLongevityInputParams() PxBackupLongevity {
 		Strings:  make(map[string]string),
 	}
 
+	var backupData = BackupData{
+		Namespaces:         make([]string, 0),
+		BackupLocationName: "",
+		BackupLocationUID:  "",
+		ClusterUid:         "",
+	}
+
+	var applicationData = ApplicationData{
+		SchedulerContext: make([]*scheduler.Context, 0),
+	}
+
 	var longevityStruct = PxBackupLongevity{
 		CustomData:      &customData,
-		ApplicationData: &ApplicationData{},
+		ApplicationData: &applicationData,
+		BackupData:      &backupData,
 	}
 
 	return longevityStruct
