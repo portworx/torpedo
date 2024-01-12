@@ -78,7 +78,7 @@ var _ = Describe("{BackupRestartPX}", func() {
 	It("Restart PX when backup in progress", func() {
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -246,7 +246,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 	It("Kill Stork when backup and restore in-progress", func() {
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -338,7 +338,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		})
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Restoring the backups application", func() {
 			for _, backupName := range backupNames {
@@ -367,7 +367,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 		})
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 	})
 	JustAfterEach(func() {
@@ -437,7 +437,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	It("Restart backup pod during backup sharing", func() {
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -670,7 +670,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(contexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -865,7 +865,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1394,7 +1394,7 @@ var _ = Describe("{ScaleDownPxBackupPodWhileBackupAndRestoreIsInProgress}", func
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1658,7 +1658,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding cloud account and backup location", func() {
 			log.InfoD("Adding cloud account and backup location")

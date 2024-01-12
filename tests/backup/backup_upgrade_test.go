@@ -84,7 +84,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 	It("StorkUpgradeWithBackup", func() {
 		Step("Validate deployed applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		providers := getProviders()
 		Step("Adding Cloud Account", func() {
@@ -314,7 +314,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(srcClusterContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(srcClusterContexts, ctx)
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")

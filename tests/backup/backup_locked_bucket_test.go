@@ -76,7 +76,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating apps")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -281,7 +281,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -530,7 +530,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating pre and post rule for deployed apps", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")
@@ -668,7 +668,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 			Step("Validate applications before taking backup", func() {
 				log.InfoD("Validate applications")
 				ctx, _ := backup.GetAdminCtxFromSecret()
-				controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+				controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 			})
 			Step("Create schedule backup after initializing volume resize", func() {
 				log.InfoD("Create schedule backup after initializing volume resize")
@@ -765,7 +765,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
 			log.InfoD(fmt.Sprintf("Creating %d users with %s role", numberOfUsers, infraAdminRole))

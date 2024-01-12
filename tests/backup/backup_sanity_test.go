@@ -147,7 +147,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {

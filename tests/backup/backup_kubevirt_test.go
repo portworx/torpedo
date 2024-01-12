@@ -80,7 +80,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -511,7 +511,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {

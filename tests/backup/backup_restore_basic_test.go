@@ -372,7 +372,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre rule for deployed apps")

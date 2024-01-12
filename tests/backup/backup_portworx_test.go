@@ -69,7 +69,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
@@ -187,7 +187,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	It("Change replica while restoring backup", func() {
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -362,7 +362,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -563,7 +563,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Register cluster for backup", func() {
@@ -733,7 +733,7 @@ var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 		providers := getProviders()
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating pre and post rule for deployed apps")

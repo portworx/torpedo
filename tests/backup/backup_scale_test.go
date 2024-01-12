@@ -58,7 +58,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 	It("Create Backup and Restore for Multiple backup location added using same endpoint", func() {
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Creating a cloud credentials from px-admin"), func() {
 			log.InfoD(fmt.Sprintf("Creating a cloud credentials from px-admin"))

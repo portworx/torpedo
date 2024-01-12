@@ -69,7 +69,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -254,7 +254,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding Credentials and Registering Backup Location", func() {
@@ -408,7 +408,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		Step("Validate deployed applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding cloud path/bucket", func() {
@@ -655,7 +655,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Adding Credentials and Backup Location", func() {

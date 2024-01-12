@@ -67,7 +67,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generating multiple labels", func() {
 			log.InfoD("Generating multiple labels")
@@ -267,7 +267,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 			log.InfoD("Validate applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(contexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Adding labels to namespaces", func() {
 			log.InfoD("Adding labels to namespaces")
@@ -387,7 +387,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		Step("Validate new namespaces", func() {
 			log.InfoD("Validating new namespaces")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(contexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(contexts, ctx)
 		})
 		Step("Apply same namespace labels to new namespaces", func() {
 			log.InfoD("Apply same namespace labels to new namespaces")
@@ -492,7 +492,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generate and add labels to namespaces", func() {
 			log.InfoD("Generate and add labels to namespaces")
@@ -692,7 +692,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Generate and add labels to namespaces", func() {
 			log.InfoD("Generate and add labels to namespaces")
@@ -812,7 +812,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		Step("Validate new namespaces", func() {
 			log.InfoD("Validating new namespaces")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Apply same namespace labels to new namespace", func() {
 			log.InfoD("Apply same namespace labels to new namespace")
@@ -941,7 +941,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step("Adding labels to resources", func() {
 			log.InfoD("Adding labels to resources")
@@ -1291,7 +1291,7 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Generating namespace label string from label map ", func() {

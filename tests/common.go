@@ -1913,7 +1913,7 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group, map[string][]appDriver.ApplicationDriver) {
+func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
 
 	// Resetting the global map before starting the new App Validations
 	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
@@ -1960,7 +1960,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 
 	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
 
-	return controlChannel, &errGroup, NamespaceAppWithDataMap
+	return controlChannel, &errGroup
 }
 
 // StartVolDriverAndWait starts volume driver on given app nodes

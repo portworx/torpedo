@@ -95,7 +95,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 			Step("Validate applications", func() {
 				log.InfoD("Validate applications")
 				ctx, _ := backup.GetAdminCtxFromSecret()
-				controlChannel, errorGroup, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+				controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 			})
 			Step("Register cluster for backup", func() {
 				log.InfoD(fmt.Sprintf("Creating source and destination cluster"))
