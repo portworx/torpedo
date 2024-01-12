@@ -770,7 +770,7 @@ var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", func() {
         targetSizeInBytes = originalSizeInBytes + 100*units.GiB
         targetSizeGiB = targetSizeInBytes / units.GiB
 
-        log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
+        log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
             poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
         triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
@@ -790,7 +790,6 @@ var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", func() {
 
         err = waitForOngoingPoolExpansionToComplete(poolIDToResize)
         dash.VerifyFatal(err, nil, "Pool expansion does not result in error")
-        verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 
         // verify pool size after maintenance cycle
         verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
