@@ -2298,7 +2298,7 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 	var nodeToCordon string
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("ReDistributeFADAVol", "Create apps with FADA vol and check if they are distributed to other nodes", nil, 0)
+		StartTorpedoTest("ReDistributeFADAVol", "Create apps with FADA vol and check if they are distributed to other nodes", nil, 87495)
 	})
 	stepLog = "create apps with FADA vol and check if they are distributed to other nodes when the initial node is cordoned and pods are deleted from that node"
 	It(stepLog, func() {
@@ -2385,6 +2385,28 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 					log.Infof("deleted pod:%v and namespace:%v", pod, node["namespace"])
 				}
 			}
+			podNameSpace := ""
+			podName := ""
+			//Wait for pods to be deleted
+			t := func() (interface{}, bool, error) {
+				labelSelector := make(map[string]string, 0)
+				pods, err := core.Instance().GetPods(podNameSpace, labelSelector)
+				log.FailOnError(err, "Failed to get pods from namespace: %v", podNameSpace)
+				for _, pod := range pods.Items {
+					if pod.Name == podName {
+						log.InfoD("pod : %s still present in the system")
+						return "", true, nil
+					}
+				}
+				return "", false, nil
+			}
+			for pod, node := range podNodeMap {
+				podNameSpace = node["namespace"]
+				podName = pod
+				if _, err := task.DoRetryWithTimeout(t, 100, 20*time.Second); err != nil {
+					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", podName, err)
+				}
+			}
 		})
 
 		stepLog = "Verify if pods are scheduled on other nodes"
@@ -2407,21 +2429,20 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			var wg sync.WaitGroup
-			for _, node := range podNodeMap {
+			for _, ctx := range contexts {
 				wg.Add(1)
-				go func(node map[string]string) {
+				go func(ctx *scheduler.Context) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					nameSpace := node["namespace"]
+					nameSpace := ctx.App.NameSpace
 					//delete namespace
 					err = core.Instance().DeleteNamespace(nameSpace)
 					log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nameSpace))
 					log.Infof("Deleted namespace %v", nameSpace)
-				}(node)
+				}(ctx)
 			}
 			wg.Wait()
 		})
-
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
