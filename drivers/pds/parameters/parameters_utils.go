@@ -21,12 +21,21 @@ type Parameter struct {
 		DataServiceEnabledTLS bool   `json:"DataServiceEnabledTLS"`
 	} `json:"DataServiceToTest"`
 	ForceImageID bool
-	TLS          struct {
+
+	SSIE struct {
+		NumIterations int `json:"NumIterations"`
+	} `json:"SSIE"`
+
+	TLS struct {
 		EnableTLS              bool
 		RepoName               string
 		RepoURL                string
 		ClusterIssuerName      string
 		ClusterIssuerNamespace string
+	}
+	BackUpAndRestore struct {
+		RunBkpAndRestrTest bool
+		TargetLocation     string
 	}
 	InfraToTest struct {
 		ControlPlaneURL      string `json:"ControlPlaneURL"`
