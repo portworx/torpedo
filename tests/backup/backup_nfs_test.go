@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -252,15 +253,12 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 
 		Step("Creating NFS backup location", func() {
 			log.InfoD("Creating NFS backup location")
-			backupLocationProviders := getProviders()
-			for _, provider := range backupLocationProviders {
-				globalBucket = getGlobalBucketName(provider)
-				bkpLocationName = fmt.Sprintf("%s-%s-%s", provider, globalBucket, RandomString(10))
-				backupLocationUID = uuid.New()
-				backupLocationMap[backupLocationUID] = bkpLocationName
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, "", "", getGlobalBucketName(provider), orgID, "", true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
-			}
+			globalBucket = getGlobalBucketName(drivers.ProviderNfs)
+			bkpLocationName = fmt.Sprintf("%s-%s-%s", drivers.ProviderNfs, globalBucket, RandomString(10))
+			backupLocationUID = uuid.New()
+			backupLocationMap[backupLocationUID] = bkpLocationName
+			err := CreateBackupLocation(drivers.ProviderNfs, bkpLocationName, backupLocationUID, "", "", globalBucket, orgID, "", true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
 		})
 
 		Step("Registering application clusters for backup", func() {
@@ -323,7 +321,8 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
 				currentBackupPath := globalBucket + "/" + resp.Backup.BackupPath
 				log.Infof("Deleting the JSON files from the NFS backup location for backup %v", backupName)
-				DeleteJSONFilesFromNFSLocation(currentBackupPath)
+				err = DeleteFilesFromNFSLocation(currentBackupPath, "*.json")
+				log.FailOnError(err, fmt.Sprintf("Faced error while deleting the JSON files from path [%s]", currentBackupPath))
 			}
 		})
 
@@ -337,6 +336,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				go func(backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
+					log.Infof("Verifying the backup status for the backup %v", backupName)
 					bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 					log.FailOnError(err, "Fetching backup uid")
 					backupInspectRequest := &api.BackupInspectRequest{
@@ -372,6 +372,17 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
+				log.Infof("Checking restore status for the restore [%s]", restoreName)
+				backupDriver := Inst().Backup
+				restoreInspectRequest := &api.RestoreInspectRequest{
+					Name:  restoreName,
+					OrgId: orgID,
+				}
+				restoreInspectResponse, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
+				log.FailOnError(err, "Failed to inspect the restore")
+				theRestore := restoreInspectResponse.GetRestore()
+				actualStatus := theRestore.GetStatus().Status
+				log.Infof("The status of the restore [%s] is [%s]", restoreName, actualStatus)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
