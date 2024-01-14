@@ -5284,7 +5284,7 @@ func DeleteFilesFromNFSLocation(nfsPath string, fileName string) error {
 
 	for _, cmd := range mountCmds {
 		err := runCmd(cmd, workerNode)
-		log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
+		return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
 	}
 
 	defer func() {

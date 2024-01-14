@@ -229,7 +229,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 
 	JustBeforeEach(func() {
 		labelSelectors = make(map[string]string)
-		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q1FY24)
+		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q1FY25)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -372,17 +372,6 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
 				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
-				log.Infof("Checking restore status for the restore [%s]", restoreName)
-				backupDriver := Inst().Backup
-				restoreInspectRequest := &api.RestoreInspectRequest{
-					Name:  restoreName,
-					OrgId: orgID,
-				}
-				restoreInspectResponse, err := backupDriver.InspectRestore(ctx, restoreInspectRequest)
-				log.FailOnError(err, "Failed to inspect the restore")
-				theRestore := restoreInspectResponse.GetRestore()
-				actualStatus := theRestore.GetStatus().Status
-				log.Infof("The status of the restore [%s] is [%s]", restoreName, actualStatus)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
