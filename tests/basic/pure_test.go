@@ -2420,10 +2420,14 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 					log.Infof("Pod name: %v, Node name: %v, %v", pod.Name, pod.Spec.NodeName, nodeToCordon)
 					if pod.Spec.NodeName == nodeToCordon {
 						log.FailOnError(fmt.Errorf("pod %v is still running on node %v", pod.Name, nodeToCordon), "Pod should not be running on node %v", nodeToCordon)
-						log.InfoD("Pod :%v is running on node %v", pod.Name, pod.Spec.NodeName)
 					}
 				}
 			}
+		})
+		stepLog = "Validate application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
 		})
 		stepLog = "Destroy applications"
 		Step(stepLog, func() {
