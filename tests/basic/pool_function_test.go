@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -485,6 +486,78 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+
+		poolMaintenance := func(poolUUID string, task string) error {
+			dmThinEnabled := false
+			driver, err := Inst().V.GetDriver()
+			if err != nil {
+				return fmt.Errorf("failed to get driver, Err: [%v]", err)
+			}
+			argsList, err := util.MiscArgs(driver)
+			for _, args := range argsList {
+				if strings.Contains(strings.ToLower(args), "px-storev2") {
+					dmThinEnabled = true
+				}
+			}
+			log.Infof("In PoolExpandDiskAddAndVerifyFromOtherNode: Is Dm-Thin: [%v]", dmThinEnabled)
+			if dmThinEnabled {
+				if err = Inst().V.RefreshDriverEndpoints(); err != nil {
+					return fmt.Errorf("failed to refersh endpoints, Err: [%v]", err)
+				}
+				pxNodes, err := func() ([]node.Node, error) {
+					var storageNodes []node.Node
+					for _, n := range node.GetStorageDriverNodes() {
+						devices, err := Inst().V.GetStorageDevices(n)
+						if err != nil {
+							return nil, fmt.Errorf("failed to get storage devices, Err: [%v]", err)
+						}
+						if len(devices) > 0 {
+							storageNodes = append(storageNodes, n)
+						}
+					}
+					return storageNodes, nil
+
+				}()
+				if err != nil {
+					return fmt.Errorf("failed to get storage nodes, Err: [%v]", err)
+				}
+				nodeWithPoolUUID, err := func(pxNodes []node.Node) (*node.Node, error) {
+					for _, n := range pxNodes {
+						pools := n.Pools
+						for _, p := range pools {
+							if poolUUID == p.Uuid {
+								return &n, nil
+							}
+						}
+					}
+					return nil, fmt.Errorf("no storage node found with given Pool UUID : %s", poolUUID)
+				}(pxNodes)
+				switch task {
+				case "Exit":
+					log.Infof("Node with pool UUID [%s] is [%s]", poolUUID, nodeWithPoolUUID.Name)
+					log.Infof("Exiting pool maintenance on node [%s]", nodeWithPoolUUID.Name)
+					err = Inst().V.ExitPoolMaintenance(*nodeWithPoolUUID)
+					if err != nil {
+						return fmt.Errorf("failed to exit [%s] pool maintenance, Err: [%v]", poolUUID, err)
+					}
+				default:
+					log.Infof("Node with pool UUID [%s] is [%s]", poolUUID, nodeWithPoolUUID.Name)
+					log.Infof("Entering pool maintenance on node [%s]", nodeWithPoolUUID.Name)
+					err = Inst().V.EnterPoolMaintenance(*nodeWithPoolUUID)
+					if err != nil {
+						return fmt.Errorf("failed to enter [%s] pool maintenance, Err: [%v]", poolUUID, err)
+					}
+				}
+			}
+			return nil
+		}
+		err = poolMaintenance(poolIDToResize, "Enter")
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if [%s] pool has entered maintenance, Err: [%v]", poolIDToResize, err))
+		defer func() {
+			err = poolMaintenance(poolIDToResize, "Exit")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if [%s] pool has exited maintenance, Err: [%v]", poolIDToResize, err))
+		}()
+
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
 
 		Step("Ensure pool has been expanded to the expected size", func() {
@@ -506,16 +579,15 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 
 		// get final total size
 		provisionStatus, err = GetClusterProvisionStatusOnSpecificNode(verifyNode)
+		log.FailOnError(err, "failed to get cluster provision status on specific node. Err: [%v]", err)
 		var finalTotalSize float64
 		for _, pstatus := range provisionStatus {
 			if pstatus.NodeUUID == storageNode.Id {
 				finalTotalSize += pstatus.TotalSize
 			}
 		}
-		dash.VerifyFatal(finalTotalSize > orignalTotalSize, true, "Pool expansion failed, pool size is not greater than pool size before expansion")
-
+		dash.VerifyFatal(finalTotalSize > orignalTotalSize, true, fmt.Sprintf("Pool expansion failed, pool size [%v] is not greater than pool size [%v] before expansion", finalTotalSize, orignalTotalSize))
 	})
-
 })
 
 var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
