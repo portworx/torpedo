@@ -9596,7 +9596,10 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
 
 		getNodes := node.GetNodes()
 		for _, each := range getNodes {
-			if node.IsMasterNode(each) == false {
+			log.Infof("For loop GetNodes: Node [%v/%v]", each.Id, each.Name)
+			isMasterNode := node.IsMasterNode(each)
+			log.Infof("Node [%v/%v] is Master Node [%v]", each.Id, each.Name, isMasterNode)
+			if isMasterNode == false {
 				sPools, err := GetPoolsDetailsOnNode(each)
 				if err != nil {
 					fmt.Printf("[%v]", err)
@@ -9606,6 +9609,7 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
 				}
 			}
 		}
+		log.Infof("In CreateNewPoolsOnClusterInParallel: Nodes to use [%v-%v]", len(nodesToUse), nodesToUse)
 		err := CreateNewPoolsOnMultipleNodesInParallel(nodesToUse)
 		log.FailOnError(err, "error adding cloud drives in parallel")
 

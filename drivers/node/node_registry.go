@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/pborman/uuid"
+	"github.com/portworx/torpedo/pkg/log"
 	"sync"
 )
 
@@ -48,6 +49,7 @@ func DeleteNode(n Node) error {
 // GetNodes returns all the nodes from the node collection
 func GetNodes() []Node {
 	var nodeList []Node
+	log.Infof("Inside GetNodes: Node Registry: [%v]", nodeRegistry)
 	for _, n := range nodeRegistry {
 		nodeList = append(nodeList, n)
 	}
@@ -100,6 +102,9 @@ func GetStorageDriverNodes() []Node {
 
 // IsStorageNode returns true if the node is a storage node, false otherwise
 func IsStorageNode(n Node) bool {
+	log.Infof("Inside IsStorageNode: Node: [%v]", n)
+	log.Infof("Inside IsStorageNode: Node Pools: [%v]", n.Pools)
+	log.Infof("Inside IsStorageNode: Node Pools Length: [%v - %v]", len(n.Pools), len(n.Pools) > 0)
 	return len(n.Pools) > 0
 }
 

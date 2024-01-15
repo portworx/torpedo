@@ -7603,7 +7603,7 @@ func GetPoolsDetailsOnNode(n node.Node) ([]*opsapi.StoragePool, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	log.Infof("Inside GetPoolsDetailsOnNode: Node: [%v]", n)
 	if node.IsStorageNode(n) == false {
 		return nil, fmt.Errorf("Node [%s] is not Storage Node", n.Id)
 	}
