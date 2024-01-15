@@ -229,7 +229,7 @@ var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
 
 	JustBeforeEach(func() {
 		labelSelectors = make(map[string]string)
-		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q1FY25)
+		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q4FY23)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {

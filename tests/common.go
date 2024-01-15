@@ -5270,7 +5270,7 @@ func DeleteNfsSubPath(subPath string) {
 }
 
 //DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
-func DeleteFilesFromNFSLocation(nfsPath string, fileName string) error {
+func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
 	// Getting NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
 	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
@@ -5283,8 +5283,10 @@ func DeleteFilesFromNFSLocation(nfsPath string, fileName string) error {
 	}
 
 	for _, cmd := range mountCmds {
-		err := runCmd(cmd, workerNode)
-		return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
+		err = runCmd(cmd, workerNode)
+		if err != nil {
+			return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
+		}
 	}
 
 	defer func() {
@@ -5294,17 +5296,18 @@ func DeleteFilesFromNFSLocation(nfsPath string, fileName string) error {
 			fmt.Sprintf("rm -rf %s", mountDir),
 		}
 		for _, cmd := range umountCmds {
-			err := runCmd(cmd, workerNode)
-			log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err))
+			if e := runCmd(cmd, workerNode); e != nil {
+				err = fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, e)
+			}
 		}
 	}()
 
 	rmCmd := fmt.Sprintf("cd %s/%s && rm -rf %s", mountDir, nfsPath, fileName)
-	err := runCmd(rmCmd, workerNode)
+	err = runCmd(rmCmd, workerNode)
 	if err != nil {
 		return err
 	}
-	return nil
+	return
 }
 
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
