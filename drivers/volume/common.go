@@ -295,6 +295,14 @@ func (d *DefaultDriver) GetNodePoolsStatus(n node.Node) (map[string]string, erro
 	}
 }
 
+// GetNodePoolsStatus returns latest map of pool UUID and id
+func (d *DefaultDriver) GetNodePools(n node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePools()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -468,6 +476,14 @@ func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool, triggerOpts *d
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StopDriver()",
+	}
+}
+
+// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+func (d *DefaultDriver) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "KillPXDaemon()",
 	}
 }
 
