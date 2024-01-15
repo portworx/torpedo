@@ -10,7 +10,6 @@ import (
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	dss "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
@@ -1067,13 +1066,6 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestoreDSDuringPXPoolExpansion", "Restore DataService during the PX Pool expansion", pdsLabels, 0)
 		pdslib.MarkResiliencyTC(true)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
 			LoadGenDepName: params.LoadGen.LoadGenDepName,
@@ -1195,10 +1187,6 @@ var _ = Describe("{RestoreDSDuringPXPoolExpansion}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -1211,13 +1199,6 @@ var _ = Describe("{RestoreDuringNodesAreRebooted}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestoreDuringNodesAreRebooted", "Restore DataService during nodes are rebooted", pdsLabels, 0)
 		pdslib.MarkResiliencyTC(true)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
 			LoadGenDepName: params.LoadGen.LoadGenDepName,
@@ -1416,10 +1397,6 @@ var _ = Describe("{RestoreDuringNodesAreRebooted}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -1432,13 +1409,6 @@ var _ = Describe("{RestoreDSDuringKVDBFailOver}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("RestoreDSDuringKVDBFailOver", "Restore DataService during KVDB Pods are down", pdsLabels, 0)
 		pdslib.MarkResiliencyTC(true)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		credName := targetName + pdsbkp.RandString(8)
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
 			LoadGenDepName: params.LoadGen.LoadGenDepName,
@@ -1564,10 +1534,6 @@ var _ = Describe("{RestoreDSDuringKVDBFailOver}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		log.FailOnError(err, "error while deleting backup targets and creds")
-		err = bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -1676,17 +1642,24 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 
 	It("Deploy Dataservices and Restart PX During App scaleup", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		//var generateWorkloads = make(map[string]string)
 		var wlDeploymentsToBeCleaned []*v1.Deployment
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				Step("Deploy and validate data service", func() {
-					isDeploymentsDeleted = false
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					log.FailOnError(err, "Error while deploying data services")
-					deployments[ds] = deployment
-				})
+				//This test is applicable only for SQL dbs
+				if (ds.Name == postgresql) || (ds.Name == mysql) {
+					//This test requires minimum of 3 replicas to be deployed
+					ds.Replicas = 3
+					ds.ScaleReplicas = 4
+					Step("Deploy and validate data service", func() {
+						isDeploymentsDeleted = false
+						deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+						log.FailOnError(err, "Error while deploying data services")
+						deployments[ds] = deployment
+					})
+				} else {
+					log.InfoD("This testcase is valid only for SQL databases, Skipping this testcase as DB is- [%v]", ds.Name)
+				}
 			}
 		})
 
@@ -1704,7 +1677,9 @@ var _ = Describe("{KillDbMasterNodeDuringStorageResize}", func() {
 		Step("Kill DB Master node during application's storage is resized", func() {
 			for ds, deployment := range deployments {
 				ctx, err := GetSourceClusterConfigPath()
-				sourceTarget = tc.NewTargetCluster(ctx)
+				log.FailOnError(err, "failed while getting src cluster path")
+				sourceTarget := tc.NewTargetCluster(ctx)
+				log.InfoD("source target is - %v", sourceTarget)
 				failuretype := pdslib.TypeOfFailure{
 					Type: KillDbMasterNodeDuringStorageResize,
 					Method: func() error {

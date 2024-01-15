@@ -11,21 +11,31 @@ import (
 
 type Parameter struct {
 	DataServiceToTest []struct {
-		Name          string `json:"Name"`
-		Version       string `json:"Version"`
-		Image         string `json:"Image"`
-		Replicas      int    `json:"Replicas"`
-		ScaleReplicas int    `json:"ScaleReplicas"`
-		OldVersion    string `json:"OldVersion"`
-		OldImage      string `json:"OldImage"`
+		Name                  string `json:"Name"`
+		Version               string `json:"Version"`
+		Image                 string `json:"Image"`
+		Replicas              int    `json:"Replicas"`
+		ScaleReplicas         int    `json:"ScaleReplicas"`
+		OldVersion            string `json:"OldVersion"`
+		OldImage              string `json:"OldImage"`
+		DataServiceEnabledTLS bool   `json:"DataServiceEnabledTLS"`
 	} `json:"DataServiceToTest"`
 	ForceImageID bool
-	TLS          struct {
+
+	SSIE struct {
+		NumIterations int `json:"NumIterations"`
+	} `json:"SSIE"`
+
+	TLS struct {
 		EnableTLS              bool
 		RepoName               string
 		RepoURL                string
 		ClusterIssuerName      string
 		ClusterIssuerNamespace string
+	}
+	BackUpAndRestore struct {
+		RunBkpAndRestrTest bool
+		TargetLocation     string
 	}
 	InfraToTest struct {
 		ControlPlaneURL      string `json:"ControlPlaneURL"`
