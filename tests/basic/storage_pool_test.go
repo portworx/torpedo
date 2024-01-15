@@ -5613,8 +5613,8 @@ var _ = Describe("{PoolDelete}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDelete", "Initiate pool deletion", nil, 0)
-
 	})
+
 	var contexts []*scheduler.Context
 
 	stepLog := "Initiate pool delete, then add a new pool and expand the pool"
@@ -5626,8 +5626,24 @@ var _ = Describe("{PoolDelete}", func() {
 		var nodeSelected node.Node
 		var nodePools []node.StoragePool
 
-		randomIndex := rand.Intn(len(stNodes))
-		nodeSelected = stNodes[randomIndex]
+		allKVDBNodes, err := GetAllKvdbNodes()
+		log.FailOnError(err, "failed to get all KVDB nodes")
+		var nonKVDBNodes []node.Node
+		for _, node := range stNodes {
+			isKVDBNode := false
+			for _, kvdbNode := range allKVDBNodes {
+				if node.Id == kvdbNode.ID {
+					isKVDBNode = true
+					break
+				}
+			}
+			if !isKVDBNode {
+				nonKVDBNodes = append(nonKVDBNodes, node)
+			}
+		}
+		dash.VerifyFatal(len(nonKVDBNodes) > 0, true, "Verifying if non-kvdb nodes exist")
+		nodeSelected = nonKVDBNodes[rand.Intn(len(nonKVDBNodes))]
+		log.Infof("Selected [%s] non-kvdb node", nodeSelected.Id)
 		nodePools = nodeSelected.StoragePools
 
 		isjournal, err := IsJournalEnabled()
