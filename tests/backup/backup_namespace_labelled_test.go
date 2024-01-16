@@ -32,8 +32,6 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		scheduledAppContexts     []*scheduler.Context
 		srcClusterStatus         api.ClusterInfo_StatusInfo_Status
 		destClusterStatus        api.ClusterInfo_StatusInfo_Status
-		controlChannel           chan string
-		errorGroup               *errgroup.Group
 	)
 	numberOfUsers := 3
 	bkpNamespaces := make([]string, 0)
@@ -66,8 +64,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		providers := getProviders()
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Generating multiple labels", func() {
 			log.InfoD("Generating multiple labels")
@@ -180,8 +177,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting labels [%v] to namespaces [%v]", labels, listOfLabelledNamespaces))
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		DestroyApps(scheduledAppContexts, opts)
 		log.Infof("Generating user context")
 		for _, userName := range users {
 			ctxNonAdmin, err := backup.GetNonAdminCtx(userName, commonPassword)

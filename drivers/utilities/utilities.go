@@ -127,7 +127,8 @@ func CreateHostNameForApp(serviceName string, nodePort int32, namespace string) 
 		if err != nil {
 			return "", err
 		}
-		hostname = nodes.Items[0].Name
+		// hostname = nodes.Items[0].Name
+		hostname = nodes.Items[0].Status.Addresses[0].Address
 	} else {
 		hostname = fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, namespace)
 	}

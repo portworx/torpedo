@@ -833,8 +833,6 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		ctx                  context.Context
 		statefulSet          *appsV1.StatefulSet
 		originalReplicaCount int32
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	labelSelectors := make(map[string]string)
@@ -864,8 +862,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		var wg sync.WaitGroup
 		Step("Validating the deployed applications", func() {
 			log.InfoD("Validating the deployed applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
 		})
 		Step("Adding cloud credential and backup location", func() {
 			log.InfoD("Adding cloud credential and backup location")
@@ -1071,8 +1068,7 @@ var _ = Describe("{ScaleMongoDBWhileBackupAndRestore}", func() {
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
