@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/node/gke"
 
+	"github.com/portworx/torpedo/pkg/stats"
+
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -5417,6 +5419,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -5431,6 +5438,9 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 						} else if errInj == CRASH {
 							action = "crash px on"
 						}
+						dashStats := make(map[string]string)
+						dashStats["node"] = newReplNode.Name
+
 						stepLog = fmt.Sprintf("%s target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
@@ -5439,6 +5449,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
 								if errInj == PX_RESTART {
+									updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
 									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
 									if testError != nil {
 										log.Error(testError)
@@ -5455,6 +5466,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
 								} else if errInj == REBOOT {
+									updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5467,6 +5479,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 										UpdateOutcome(event, err)
 									}
 								} else if errInj == CRASH {
+									updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
 									errorChan := make(chan error, errorChannelSize)
 									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
 									for err := range errorChan {
@@ -5484,6 +5497,12 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
+									dashStats = make(map[string]string)
+									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+									dashStats["fastpath"] = "true"
+									dashStats["volume-name"] = v.Name
+									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
@@ -5550,6 +5569,11 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								UpdateOutcome(event, err)
 							}
+							dashStats := make(map[string]string)
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+							dashStats["volume-name"] = v.Name
+							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -5560,9 +5584,11 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
+									dashStats = make(map[string]string)
+									dashStats["node"] = replNodeToReboot.Name
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
 									if errInj == PX_RESTART {
-
+										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
 										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
 										if testError != nil {
 											log.Error(testError)
@@ -5580,6 +5606,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
 
 									} else if errInj == REBOOT {
+										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5592,6 +5619,7 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 											UpdateOutcome(event, err)
 										}
 									} else if errInj == CRASH {
+										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
 										errorChan := make(chan error, errorChannelSize)
 										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
 										for err := range errorChan {
@@ -5610,6 +5638,12 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
+									dashStats = make(map[string]string)
+									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+									dashStats["fastpath"] = "true"
+									dashStats["volume-name"] = v.Name
+									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 
@@ -7220,26 +7254,53 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
+
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 	}
-	log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
-	testCaseName := ginkgoTestDescr.FullTestText
-	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
-	if len(matches) > 1 {
-		testCaseName = matches[1]
-	}
-	masterNode := node.GetMasterNodes()[0]
-	log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
-	err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
-		log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
 		return
 	}
-	collectStorkLogs(testCaseName)
-	collectPxBackupLogs(testCaseName)
-	compressSubDirectories(pxbLogDirPath)
+
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) > 0 {
+		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
+		testCaseName := ginkgoTestDescr.FullTestText
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+		masterNode := masterNodes[0]
+		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+		if err != nil {
+			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+			return
+		}
+		collectStorkLogs(testCaseName)
+		collectPxBackupLogs(testCaseName)
+		compressSubDirectories(pxbLogDirPath)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
@@ -10113,4 +10174,28 @@ func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
 	})
 
 	return shuffledElements[:subsetSize], nil
+}
+
+// DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
+func DeleteAllNamespacesCreatedByTestCase() error {
+
+	// Get all the namespaces on the cluster
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return fmt.Errorf("error in listing namespaces. Err: %v", err.Error())
+	}
+
+	// Iterate and remove all namespaces
+	for _, ns := range allNamespaces.Items {
+		if strings.Contains(ns.Name, Inst().InstanceID) {
+			log.Infof("Deleting namespace [%s]", ns.Name)
+			err = k8sCore.DeleteNamespace(ns.Name)
+			if err != nil {
+				// Not returning anything as it's the best case effort
+				log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+			}
+		}
+	}
+	return nil
 }
