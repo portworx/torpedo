@@ -2328,10 +2328,10 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 					log.Infof("Node [%s] Replica %v", node.Name, replicaSet[0].Nodes)
 					for _, replicaNode := range replicaSet[0].Nodes {
 						if replicaNode == node.Id {
-							continue
-						} else {
 							sourceNode = node.Id
 							break
+						} else {
+							continue
 						}
 					}
 				}
@@ -2339,14 +2339,15 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 
 				//Pick any node to run pxctl command
 				selectedNode := storageNode[0]
-				opts := node.ConnectionOpts{
+				opts := &node.ConnectionOpts{
 					IgnoreError:     true,
 					TimeBeforeRetry: defaultRetryInterval,
 					Timeout:         defaultTimeout,
 					Sudo:            true,
 				}
+
 				cmd := fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNode, volName)
-				output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(selectedNode, cmd, opts, false)
+				output, err := runPxctlCommand(cmd, selectedNode, opts)
 				log.Infof("Output: [%v], %v", output, err)
 				//dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
 			}
