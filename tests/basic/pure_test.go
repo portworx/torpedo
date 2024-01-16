@@ -2328,10 +2328,10 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 					log.Infof("Node [%s] Replica %v", node.Name, replicaSet[0].Nodes)
 					for _, replicaNode := range replicaSet[0].Nodes {
 						if replicaNode == node.Id {
+							continue
+						} else {
 							sourceNode = node.Id
 							break
-						} else {
-							continue
 						}
 					}
 				}
