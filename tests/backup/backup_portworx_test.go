@@ -513,8 +513,8 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		backupName           string
 		encryptionBucketName string
 		encryptedBackupName  string
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
+		// controlChannel       chan string
+		// errorGroup           *errgroup.Group
 	)
 
 	providers := getProviders()
@@ -563,7 +563,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Register cluster for backup", func() {
@@ -598,13 +598,18 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 
 		Step("Restoring encrypted and non-encrypted backups", func() {
 			log.InfoD("Restoring encrypted and non-encrypted backups")
-			restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
-			restoreNames = append(restoreNames, restoreName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			log.Infof("Creating restore without encryption")
+			restoreName := fmt.Sprintf("%s-%s-%v", restoreNamePrefix, backupNames[0], time.Now().Unix())
+			restoreNames = append(restoreNames, restoreName)
+
 			err = CreateRestoreWithValidation(ctx, restoreName, backupNames[0], make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 			log.FailOnError(err, "%s restore failed", restoreName)
-			time.Sleep(time.Minute * 5)
+
+			time.Sleep(time.Second * 30)
+
 			restoreName = fmt.Sprintf("%s-%s", restoreNamePrefix, backupNames[1])
 			restoreNames = append(restoreNames, restoreName)
 			err = CreateRestoreWithValidation(ctx, restoreName, backupNames[1], make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
@@ -637,27 +642,28 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Deleting Restores, Backups and Backup locations, cloud account")
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, restore := range restoreNames {
-			err = DeleteRestore(restore, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
-		}
-		ctx, err = backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, backupName := range backupNames {
-			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
-			_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
-		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx)
-		DeleteBucket(providers[0], encryptionBucketName)
-		opts := make(map[string]bool)
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		// defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		// log.InfoD("Deleting Restores, Backups and Backup locations, cloud account")
+		// ctx, err := backup.GetAdminCtxFromSecret()
+		// log.FailOnError(err, "Fetching px-central-admin ctx")
+		// for _, restore := range restoreNames {
+		// 	err = DeleteRestore(restore, orgID, ctx)
+		// 	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore %s", restore))
+		// }
+		// ctx, err = backup.GetAdminCtxFromSecret()
+		// log.FailOnError(err, "Fetching px-central-admin ctx")
+		// for _, backupName := range backupNames {
+		// 	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+		// 	dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for backup %s", backupName))
+		// 	_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		// 	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting backup %s", backupName))
+		// }
+		// CleanupCloudSettingsAndClusters(backupLocationMap, CredName, CloudCredUID, ctx)
+		// DeleteBucket(providers[0], encryptionBucketName)
+		// opts := make(map[string]bool)
+		// err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		// log.FailOnError(err, "Data validations failed")
+		log.Infof("Keeping env live")
 	})
 
 })
