@@ -2358,16 +2358,22 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				output, err = runPxctlCommand(cmd, selectedNode, opts)
 				log.Infof("Output: [%v], %v", output, err)
 
-				//validate if replication factor is increased
-				vol, err = Inst().V.InspectVolume(volName)
-				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
-				log.Infof("replication factor:%v", vol.Spec.HaLevel)
-				dash.VerifyFatal(vol.Spec.HaLevel, 2, "Verify if replication factor is increased")
 			}
 		})
-		stepLog = "delete volumes"
+		stepLog = "verify if replication factor has increased"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			time.Sleep(15 * time.Second)
+			for vol := 0; vol < numberOfVolumes; vol++ {
+				volName := fmt.Sprintf("vol-%d", vol)
+				volInspect, err := Inst().V.InspectVolume(volName)
+				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
+				log.Infof("replication factor:%v", volInspect.Spec.HaLevel)
+				dash.VerifyFatal(volInspect.Spec.HaLevel, 2, "Verify if replication factor is increased")
+			}
+		})
+		stepLog = "Delete volumes"
+		Step(stepLog, func() {
 			for vol := 0; vol < numberOfVolumes; vol++ {
 				volName := fmt.Sprintf("vol-%d", vol)
 				log.InfoD("Deleting volume [%s]", volName)
