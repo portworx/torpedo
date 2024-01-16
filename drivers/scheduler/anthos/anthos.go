@@ -20,6 +20,8 @@ import (
 	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
@@ -79,6 +81,30 @@ type AdminWorkstation struct {
 	Gcp              Gcp         `yaml:"gcp"`
 	ProxyUrl         string      `yaml:"proxyUrl"`
 	VCenter          vCenter     `yaml:"vCenter"`
+}
+
+type NodeStats struct {
+	IP            string
+	UpgradeTime   string
+	k8sversion    string
+	osImage       string
+	kernelVersion string
+}
+
+type AnthosUpgradeStats struct {
+	UpgradeFromVersion                string
+	K8SBaseVersion                    string
+	K8SUpgradedVersion                string
+	UpgradeToVersion                  string
+	ElapsedTimeForUserClusterUpgrade  string
+	ElapsedTimeForAdminClusterUpgrade string
+	TotalNumberOfUserClusterNodes     string
+	BaseOSVersion                     string
+	BaseKernelVersion                 string
+	UpgradedOSVersion                 string
+	UpgradedKernelVersion             string
+	PortworxVersion                   string
+	UserNodeStats                     []NodeStats
 }
 
 const (
@@ -159,15 +185,21 @@ type AnthosInstance struct {
 }
 
 type anthos struct {
-	version string
 	kube.K8s
-	adminWsSSHInstance  *ssh.SSH
-	instances           []AnthosInstance
-	adminWsNode         *node.Node
-	adminWsKeyPath      string
-	instPath            string
-	confPath            string
-	adminClusterUpgrade bool
+	version                           string
+	adminWsSSHInstance                *ssh.SSH
+	instances                         []AnthosInstance
+	adminWsNode                       *node.Node
+	adminWsKeyPath                    string
+	instPath                          string
+	confPath                          string
+	adminClusterUpgrade               bool
+	elapsedTimeForUserClusterUpgrade  time.Duration
+	elapsedTimeForAdminClusterUpgrade time.Duration
+	k8sVersion                        string
+	kernelVersion                     string
+	osImage                           string
+	Upgradedk8sVersion                string
 }
 
 // Init Initialize the driver
@@ -201,8 +233,16 @@ func (anth *anthos) Init(schedOpts scheduler.InitOptions) error {
 	if err := anth.getVersion(); err != nil {
 		return err
 	}
+	k8sVersion, err := kube.ClusterVersion()
+	if err != nil {
+		return err
+	}
+	anth.k8sVersion = k8sVersion
 	if len(schedOpts.UpgradeHops) > 0 && len(strings.Split(schedOpts.UpgradeHops, ",")) > 1 {
 		anth.adminClusterUpgrade = true
+	}
+	if err := anth.updateSystemInfo(); err != nil {
+		return err
 	}
 	log.Infof("Skip admin cluster upgrade is: [%t]", anth.adminClusterUpgrade)
 	return nil
@@ -246,6 +286,8 @@ func (anth *anthos) getVersion() error {
 // UpgradeScheduler upgrade anthos scheduler and return time taken by user-cluster to upgrade
 func (anth *anthos) UpgradeScheduler(version string) error {
 	log.Info("Upgrading Anthos user cluster")
+	//upgradeStats := &AnthosUpgradeStats{}
+
 	if !versionReg.MatchString(version) {
 		return fmt.Errorf("incorrect upgrade version: [%s] is provided", version)
 	}
@@ -265,18 +307,22 @@ func (anth *anthos) UpgradeScheduler(version string) error {
 	if err := anth.upgradeUserCluster(version); err != nil {
 		return err
 	}
-	timeTaken := time.Since(startTime)
-	log.Infof("Anthos user cluster took: %v time to complete the upgrade", timeTaken)
+	anth.elapsedTimeForUserClusterUpgrade = time.Since(startTime)
+	log.Infof("Anthos user cluster took: %v time to complete the upgrade", anth.elapsedTimeForUserClusterUpgrade)
 	if err := anth.RefreshNodeRegistry(); err != nil {
 		return err
 	}
-	if err := anth.checkUserClusterNodesUpgradeTime(); err != nil {
+	nStats, err := anth.checkUserClusterNodesUpgradeTime()
+	if err != nil {
 		return err
 	}
 	if anth.adminClusterUpgrade {
 		if err := anth.invokeUpgradeAdminCluster(version); err != nil {
 			return err
 		}
+	}
+	if err := anth.createUpgradeStats(version, nStats); err != nil {
+		return err
 	}
 	return nil
 }
@@ -288,9 +334,9 @@ func (anth *anthos) invokeUpgradeAdminCluster(version string) error {
 	if err := anth.upgradeAdminCluster(version); err != nil {
 		return err
 	}
-	timeTaken := time.Since(initTime)
+	anth.elapsedTimeForAdminClusterUpgrade = time.Since(initTime)
 	log.Infof("Anthos upgrade took: %v time to complete upgrade from %s to %s version",
-		timeTaken, anth.version, version)
+		anth.elapsedTimeForAdminClusterUpgrade, anth.version, version)
 	if err := anth.updateNodeInstance(); err != nil {
 		return err
 	}
@@ -553,20 +599,21 @@ func (anth *anthos) unsetUserNameAndKey() error {
 }
 
 // checkUserClusterNodesUpgradeTime measure the time taken by each node and report error
-func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
+func (anth *anthos) checkUserClusterNodesUpgradeTime() ([]NodeStats, error) {
 	log.Info("Validating user cluster nodes upgrade time")
+	nstats := make([]NodeStats, 0)
 	userCluster, err := anth.getUserClusterName()
 	if err != nil {
-		return err
+		return nstats, err
 	}
 	initNodeUpgradeTime, err := anth.getStartTimeForNodePoolUpgrade(userCluster)
 	if err != nil {
-		return err
+		return nstats, err
 	}
 	log.Debugf("User cluster node pool upgrade started at: [%v]", initNodeUpgradeTime.Format(time.UnixDate))
 	sortedNodes, err := getNodesSortByAge()
 	if err != nil {
-		return err
+		return nstats, err
 	}
 
 	// As PX support one extra static IP across all node pool
@@ -575,13 +622,17 @@ func (anth *anthos) checkUserClusterNodesUpgradeTime() error {
 	for _, node := range sortedNodes {
 		diff := node.CreationTimestamp.Sub(startTime)
 		if diff > errorTimeDuration {
-			return fmt.Errorf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
+			return nstats, fmt.Errorf("[%s] node upgrade took: [%v] minutes which is longer than the expected timeout value: [%v]",
 				node.Name, diff, errorTimeDuration)
 		}
 		log.Infof("[%s] node took: [%v] time to upgrade the node", node.Name, diff)
+		if &node.Status.NodeInfo != nil && node.Status.Addresses != nil {
+			nodeStat := getNodeStats(node, diff)
+			nstats = append(nstats, nodeStat)
+		}
 		startTime = node.CreationTimestamp.Time
 	}
-	return nil
+	return nstats, nil
 }
 
 // getUserClusterName return Anthos user cluster name
@@ -630,6 +681,9 @@ func (anth *anthos) getStartTimeForNodePoolUpgrade(userClusterName string) (time
 		return time.Time{}, fmt.Errorf("failed to parse start time")
 	}
 	startTime, err := time.Parse(layout, matchTimeInMinute[0])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse start time")
+	}
 	log.Debugf("Successfully retrieved startTime for user cluster [%s] upgrade: %s", userClusterName, startTime)
 	return startTime, nil
 }
@@ -643,6 +697,61 @@ func (anth *anthos) updateFileOwnership(dirPath string) error {
 	return nil
 }
 
+// updateSystemInfo updates kernel and os version for anthos node
+func (anth *anthos) updateSystemInfo() error {
+	nodeList, err := k8sCore.GetNodes()
+	if err != nil {
+		return fmt.Errorf("update system info failing with error: %v", err)
+	}
+	if len(nodeList.Items) > 0 {
+		anth.kernelVersion = nodeList.Items[0].Status.NodeInfo.KernelVersion
+		anth.osImage = nodeList.Items[0].Status.NodeInfo.OSImage
+	}
+	return nil
+}
+
+// CreateUpgradeStats creates upgrade stats for anthos cluster upgrade
+func (anth *anthos) createUpgradeStats(version string, nStats []NodeStats) error {
+	var dash *aetosutil.Dashboard
+	upgradeStats := &AnthosUpgradeStats{}
+	upgradeStats.UpgradeFromVersion = anth.version
+	upgradeStats.UpgradeToVersion = version
+	upgradeStats.K8SBaseVersion = anth.k8sVersion
+	upgradeStats.K8SUpgradedVersion = nStats[0].k8sversion
+	upgradeStats.BaseKernelVersion = anth.kernelVersion
+	upgradeStats.UpgradedKernelVersion = nStats[0].kernelVersion
+	upgradeStats.BaseOSVersion = anth.osImage
+	upgradeStats.UpgradedOSVersion = nStats[0].osImage
+	upgradeStats.ElapsedTimeForUserClusterUpgrade = anth.elapsedTimeForUserClusterUpgrade.Abs().String()
+	upgradeStats.ElapsedTimeForAdminClusterUpgrade = anth.elapsedTimeForAdminClusterUpgrade.String()
+	upgradeStats.UserNodeStats = nStats
+	upgradeStats.TotalNumberOfUserClusterNodes = strconv.Itoa(len(nStats))
+	pxVersion, err := anth.getPxVersion()
+	if err != nil {
+		return err
+	}
+	upgradeStats.PortworxVersion = pxVersion
+	data, _ := json.Marshal(upgradeStats)
+	upgradeMap := make(map[string]string)
+	json.Unmarshal(data, &upgradeMap)
+	log.InfoD("Anthos upgrade Stats are: %v", upgradeMap)
+	dash.UpdateStats("anthos-upgrade-test", "Anthos", "upgrade", pxVersion, upgradeMap)
+	return nil
+}
+
+// getPxVersion return PX version
+func (anth *anthos) getPxVersion() (string, error) {
+	driver, err := volume.Get(anth.K8s.VolDriverName)
+	if err != nil {
+		return "", err
+	}
+	pxVersion, err := driver.GetDriverVersionOnNode(node.GetStorageNodes()[0])
+	if err != nil {
+		return "", fmt.Errorf("Couldn't get PX version. Err: %v", err)
+	}
+	return pxVersion, nil
+}
+
 // getNodesSortByAge return sorted node list by their age
 func getNodesSortByAge() ([]corev1.Node, error) {
 	nodeList, err := k8sCore.GetNodes()
@@ -654,7 +763,6 @@ func getNodesSortByAge() ([]corev1.Node, error) {
 		return nodeList.Items[i].CreationTimestamp.Before(&nodeList.Items[j].CreationTimestamp)
 	})
 
-	log.Infof("Successfully retrieved sorted nodes: [%v]", nodeList.Items)
 	return nodeList.Items, nil
 }
 
@@ -707,6 +815,17 @@ func getExecPath() (string, error) {
 	envPath := strings.TrimSpace(string(execPath))
 	return fmt.Sprintf("PATH=%s:%s:%s", curWkDir, envPath, gcloudExecPath), nil
 
+}
+
+// getNodeStats return NodeStat for a node
+func getNodeStats(userNode corev1.Node, upgradeTime time.Duration) NodeStats {
+	nodeStats := &NodeStats{}
+	nodeStats.k8sversion = userNode.Status.NodeInfo.KubeletVersion
+	nodeStats.kernelVersion = userNode.Status.NodeInfo.KernelVersion
+	nodeStats.osImage = userNode.Status.NodeInfo.OSImage
+	nodeStats.IP = userNode.Status.Addresses[0].Address
+	nodeStats.UpgradeTime = upgradeTime.String()
+	return *nodeStats
 }
 
 // init registering anthos sheduler
