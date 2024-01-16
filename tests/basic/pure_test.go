@@ -2340,7 +2340,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				//Pick any node to run pxctl command
 				selectedNode := storageNode[0]
 				opts := &node.ConnectionOpts{
-					IgnoreError:     true,
+					IgnoreError:     false,
 					TimeBeforeRetry: defaultRetryInterval,
 					Timeout:         defaultTimeout,
 					Sudo:            true,
