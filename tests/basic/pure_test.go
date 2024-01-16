@@ -2319,32 +2319,32 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				log.InfoD("Increasing repl factor for volume [%s]", volName)
 				vol, err := Inst().V.InspectVolume(volName)
 				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
-				log.Infof("Volume [%s] spec: [%v] nodes: [%v]", volName, vol.Spec, vol.GetReplicaSets()[0])
+				log.Infof("Volume [%s] spec: [%v] nodes: %v", volName, vol.Spec, vol.GetReplicaSets())
+				//First try increase replication factor with node not present in replica set
+				var sourceNode string
+				storageNode := node.GetStorageNodes()
+				replicaSet := vol.GetReplicaSets()
+				for _, node := range storageNode {
+					for _, replica := range replicaSet {
+						//Find a node which is not in the replicaset
+						log.Infof("Node [%s] Replica %v", node.Name, replica)
+						//if node.Name == replica. {
+						//	continue
+						//} else if index == len(vol.Spec.ReplicaSet.Nodes)-1 {
+						//	sourceNode = node.Name
+						//	break
+						//}
+					}
+				}
+				log.Infof("Source node [%s]", sourceNode)
 
-				////First try increase replication factor with node not present in replica set
-				//var sourceNode string
-				//storageNode := node.GetStorageNodes()
-				//for _, node := range storageNode {
-				//	for index, replica := range vol.GetReplicaSets() {
-				//		//Find a node which is not in the replicaset
-				//		log.Infof("Node [%s] Replica [%s]", node.Name, replica)
-				//		if node.Name == replica. {
-				//			continue
-				//		} else if index == len(vol.Spec.ReplicaSet.Nodes)-1 {
-				//			sourceNode = node.Name
-				//			break
-				//		}
-				//	}
-				//}
-				//log.Infof("Source node [%s]", sourceNode)
-				//
-				////Pick any node to run pxctl command
-				//selectedNode := storageNode[0]
-				//cmd := fmt.Sprintf("volume update --repl 3 --source %s %s", sourceNode, volName)
-				//output, err := runPxctlCommand(cmd, selectedNode, nil)
-				//log.FailOnError(err, "Failed to run pxctl command [%s] on node [%s]. Output: [%s]", cmd, selectedNode.Name, output)
-				//log.Infof("Output: [%s]", output)
-				//dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
+				//Pick any node to run pxctl command
+				selectedNode := storageNode[0]
+				cmd := fmt.Sprintf("volume update --repl 3 --source %s %s", sourceNode, volName)
+				output, err := runPxctlCommand(cmd, selectedNode, nil)
+				log.FailOnError(err, "Failed to run pxctl command [%s] on node [%s]. Output: [%s]", cmd, selectedNode.Name, output)
+				log.Infof("Output: [%s]", output)
+				dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
 			}
 		})
 
