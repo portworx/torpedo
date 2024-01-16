@@ -2327,7 +2327,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				for _, node := range storageNode {
 					for _, replica := range replicaSet {
 						//Find a node which is not in the replicaset
-						log.Infof("Node [%s] Replica %v", node.Name, replica)
+						log.Infof("Node [%s] Replica %v", node.Name, replica.Nodes)
 						//if node.Name == replica. {
 						//	continue
 						//} else if index == len(vol.Spec.ReplicaSet.Nodes)-1 {
