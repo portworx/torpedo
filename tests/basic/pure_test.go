@@ -2330,7 +2330,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 						if replicaNode == node.Id {
 							continue
 						} else {
-							sourceNode = node.Name
+							sourceNode = node.Id
 							break
 						}
 					}
