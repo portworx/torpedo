@@ -2307,7 +2307,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 			for vol := 0; vol < numberOfVolumes; vol++ {
 				volName := fmt.Sprintf("vol-%d", vol)
 				log.InfoD("Creating volume [%s]", volName)
-				_, err := Inst().V.CreateVolume(volName, 2, 1)
+				_, err := Inst().V.CreateVolume(volName, 2, 2)
 				log.FailOnError(err, "Failed to create volume [%s]", volName)
 			}
 		})
