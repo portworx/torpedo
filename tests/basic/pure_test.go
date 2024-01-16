@@ -2302,15 +2302,15 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 		log.InfoD(stepLog)
 		numberOfVolumes := 5
 		stepLog = "Create multiple volumes"
-		//Step(stepLog, func() {
-		//	log.InfoD(stepLog)
-		//	for vol := 0; vol < numberOfVolumes; vol++ {
-		//		volName := fmt.Sprintf("vol-%d", vol)
-		//		log.InfoD("Creating volume [%s]", volName)
-		//		_, err := Inst().V.CreateVolume(volName, 2, 1)
-		//		log.FailOnError(err, "Failed to create volume [%s]", volName)
-		//	}
-		//})
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for vol := 0; vol < numberOfVolumes; vol++ {
+				volName := fmt.Sprintf("vol-%d", vol)
+				log.InfoD("Creating volume [%s]", volName)
+				_, err := Inst().V.CreateVolume(volName, 2, 1)
+				log.FailOnError(err, "Failed to create volume [%s]", volName)
+			}
+		})
 		stepLog = "Increase repl factor with pxctl using the --source option"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2348,7 +2348,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 					Sudo:            true,
 				}
 
-				cmd := fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeNotInReplica, volName)
+				cmd := fmt.Sprintf("volme ha-update -r 2 --sources %s %s", sourceNodeNotInReplica, volName)
 				output, err := runPxctlCommand(cmd, selectedNode, opts)
 				log.Infof("Output: [%v], %v", output, err)
 				//dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
@@ -2357,9 +2357,24 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				cmd = fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeInReplica, volName)
 				output, err = runPxctlCommand(cmd, selectedNode, opts)
 				log.Infof("Output: [%v], %v", output, err)
+
+				//validate if replication factor is increased
+				vol, err = Inst().V.InspectVolume(volName)
+				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
+				log.Infof("replication factor:%v", vol.Spec.HaLevel)
+				dash.VerifyFatal(vol.Spec.HaLevel, 2, "Verify if replication factor is increased")
 			}
 		})
-
+		stepLog = "delete volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for vol := 0; vol < numberOfVolumes; vol++ {
+				volName := fmt.Sprintf("vol-%d", vol)
+				log.InfoD("Deleting volume [%s]", volName)
+				err := Inst().V.DeleteVolume(volName)
+				log.FailOnError(err, "Failed to delete volume [%s]", volName)
+			}
+		})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
