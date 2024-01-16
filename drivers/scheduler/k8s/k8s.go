@@ -857,9 +857,12 @@ func (k *K8s) parseK8SNode(n corev1.Node) node.Node {
 	var nodeType node.Type
 	var zone, region string
 
+	log.Infof("K8s Node: [%v]", n)
 	if k8sCore.IsNodeMaster(n) && k.NodeDriverName != "ibm" {
-		nodeType = node.TypeMaster
+		log.Infof("IsNodeMaster [%v] and NodeDriverName is [%v], so setting node type to [%v]", n.Name, k.NodeDriverName, node.TypeWorker)
+		nodeType = node.TypeWorker
 	} else {
+		log.Infof("IsNodeWorker [%v] and NodeDriverName is [%v], so setting node type to [%v]", n.Name, k.NodeDriverName, node.TypeWorker)
 		nodeType = node.TypeWorker
 	}
 
