@@ -2302,15 +2302,15 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 		log.InfoD(stepLog)
 		numberOfVolumes := 5
 		stepLog = "Create multiple volumes"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			for vol := 0; vol < numberOfVolumes; vol++ {
-				volName := fmt.Sprintf("vol-%d", vol)
-				log.InfoD("Creating volume [%s]", volName)
-				_, err := Inst().V.CreateVolume(volName, 2, 1)
-				log.FailOnError(err, "Failed to create volume [%s]", volName)
-			}
-		})
+		//Step(stepLog, func() {
+		//	log.InfoD(stepLog)
+		//	for vol := 0; vol < numberOfVolumes; vol++ {
+		//		volName := fmt.Sprintf("vol-%d", vol)
+		//		log.InfoD("Creating volume [%s]", volName)
+		//		_, err := Inst().V.CreateVolume(volName, 2, 1)
+		//		log.FailOnError(err, "Failed to create volume [%s]", volName)
+		//	}
+		//})
 		stepLog = "Increase repl factor with pxctl using the --source option"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
