@@ -23,6 +23,7 @@ const (
 	EventAddCredentialandBackupLocation = "EventAddCredentialandBackupLocation"
 	EventAddSourceAndDestinationCluster = "EventAddSourceAndDestinationCluster"
 	EventCreateBackup                   = "EventCreateBackup"
+	EventRestore                        = "EventRestore"
 )
 
 var ctx, _ = backup.GetAdminCtxFromSecret()
@@ -152,6 +153,23 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	return nil, "", *eventData
 }
 
+func eventRestore(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
+	defer GinkgoRecover()
+
+	eventData := &EventData{}
+
+	restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, inputsForEventBuilder.BackupData.BackupName)
+	appContextsExpectedInBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.BackupData.Namespaces)
+	err := CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsExpectedInBackup)
+	if err != nil {
+		return err, fmt.Sprintf("Restore failed for %s", restoreName), *eventData
+	}
+
+	eventData.RestoreName = restoreName
+
+	return err, "", *eventData
+}
+
 func eventBuilder1(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	eventData := &EventData{}
 	time.Sleep(time.Second * time.Duration(inputsForEventBuilder.CustomData.Integers["timeToBlock"]))
@@ -186,7 +204,6 @@ func RunBuilder(eventBuilderName string, inputsForEventBuilder *PxBackupLongevit
 }
 
 // Helpers for events
-
 func getGlobalBucketName(provider string) string {
 	var bucketName string
 	switch provider {

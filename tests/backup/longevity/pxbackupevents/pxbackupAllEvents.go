@@ -8,4 +8,5 @@ var AllBuilders = map[string]PxBackupEventBuilder{
 	EventAddCredentialandBackupLocation: eventAddCredentialandBackupLocation,
 	EventAddSourceAndDestinationCluster: eventAddSourceAndDestinationCluster,
 	EventCreateBackup:                   eventCreateBackup,
+	EventRestore:                        eventRestore,
 }

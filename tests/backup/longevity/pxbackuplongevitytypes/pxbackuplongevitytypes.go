@@ -10,6 +10,7 @@ type PxBackupLongevity struct {
 	CustomData      *CustomData
 	ApplicationData *ApplicationData
 	BackupData      *BackupData
+	RestoreData     *RestoreData
 }
 
 type CustomData struct {
@@ -22,6 +23,12 @@ type BackupData struct {
 	BackupLocationName string
 	BackupLocationUID  string
 	ClusterUid         string
+	BackupName         string
+}
+
+type RestoreData struct {
+	RestoreMap  map[string]string
+	RestoreName string
 }
 
 type ApplicationData struct {
@@ -36,6 +43,7 @@ type EventData struct {
 	BackupLocationUID  string
 	ClusterUid         string
 	BackupNames        []string
+	RestoreName        string
 }
 
 type EventBuilderResponse struct {
@@ -68,6 +76,11 @@ func GetLongevityInputParams() PxBackupLongevity {
 		ClusterUid:         "",
 	}
 
+	var restoreData = RestoreData{
+		RestoreMap:  make(map[string]string),
+		RestoreName: "",
+	}
+
 	var applicationData = ApplicationData{
 		SchedulerContext: make([]*scheduler.Context, 0),
 	}
@@ -76,6 +89,7 @@ func GetLongevityInputParams() PxBackupLongevity {
 		CustomData:      &customData,
 		ApplicationData: &applicationData,
 		BackupData:      &backupData,
+		RestoreData:     &restoreData,
 	}
 
 	return longevityStruct

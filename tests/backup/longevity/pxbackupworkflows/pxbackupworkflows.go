@@ -97,6 +97,31 @@ func AppCreateBackup(wg *sync.WaitGroup) EventResponse {
 	return result
 }
 
+func AppCreateBackupandRestore(wg *sync.WaitGroup) EventResponse {
+	defer GinkgoRecover()
+	defer wg.Done()
+	result := GetLongevityEventResponse()
+	result.Name = "Create Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Backup")
+	inputForBuilder.BackupData.BackupLocationName = BackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = BackupLocationUID
+	inputForBuilder.BackupData.ClusterUid = ClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = ScheduledAppContexts
+
+	eventData := RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	inputForBuilder.BackupData.BackupName = eventData.BackupNames[0]
+
+	_ = RunBuilder(EventRestore, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
 func OneSuccessOneFail(wg *sync.WaitGroup) EventResponse {
 	defer GinkgoRecover()
 	defer wg.Done()

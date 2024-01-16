@@ -18,13 +18,15 @@ const (
 	GlobalScheduleAndValidateApplication = "GlobalScheduleAndValidateApplication"
 	SetupAddClusters                     = "SetupAddClusters"
 	AppCreateBackup                      = "AppCreateBackup"
+	AppCreateBackupandRestore            = "AppCreateBackupandRestore"
 )
 
 // All these events will run in longevity
 var AppWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
 	// OneSuccessOneFail: workflows.OneSuccessOneFail,
 	// OneSuccessTwoFail: workflows.OneSuccessTwoFail,
-	AppCreateBackup: workflows.AppCreateBackup,
+	AppCreateBackup:           workflows.AppCreateBackup,
+	AppCreateBackupandRestore: workflows.AppCreateBackupandRestore,
 }
 
 var ReportingWorkflows = map[string]func(*sync.WaitGroup) EventResponse{
@@ -52,6 +54,7 @@ var WorkflowFrequecy = map[string]int{
 	SetupAddCloudBackupLocation:          1,
 	SetupAddClusters:                     1,
 	AppCreateBackup:                      120,
+	AppCreateBackupandRestore:            120,
 }
 
 var IsDisruptiveEvent = false
