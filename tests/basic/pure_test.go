@@ -2340,8 +2340,10 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				//Pick any node to run pxctl command
 				selectedNode := storageNode[0]
 				opts := node.ConnectionOpts{
-					IgnoreError: false,
-					Sudo:        true,
+					IgnoreError:     true,
+					TimeBeforeRetry: defaultRetryInterval,
+					Timeout:         defaultTimeout,
+					Sudo:            true,
 				}
 				cmd := fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNode, volName)
 				output, err := Inst().V.GetPxctlCmdOutputConnectionOpts(selectedNode, cmd, opts, false)
