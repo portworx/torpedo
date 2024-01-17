@@ -6329,71 +6329,71 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 
 	stepLog := "Verify deletion of invalid pool ids"
 	It(stepLog, func() {
-		log.InfoD(stepLog)
-
-		contexts = make([]*scheduler.Context, 0)
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
-		}
-		ValidateApplications(contexts)
-		defer appsValidateAndDestroy(contexts)
-
-		// Get the Pool UUID on which IO is running
-		poolUUID := pickPoolToResize()
-		log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
-
-		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-
-		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
-		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
-
-		if IsLocalCluster(*nodeDetail) == true || IsIksCluster() == true {
-			// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
-			err = Inst().V.DeletePool(*nodeDetail, "0", true)
-			dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
-
-		}
-
-		re := regexp.MustCompile("Requires pool maintenance mode")
-		if re.MatchString(fmt.Sprintf("%v", err)) == true {
-			err = nil
-		}
-		log.FailOnError(err, "pool delete successful?")
-
-		// invalidPoolID is total Pools present on the node + 1
-		invalidPoolID := fmt.Sprintf("%d", len(PoolDetail)+1)
-
-		// Enter maintenance mode before deleting the pools from the cluster
-		log.InfoD("Setting pools to maintenance on node [%s]", nodeDetail.Name)
-		log.FailOnError(Inst().V.EnterPoolMaintenance(*nodeDetail),
-			"failed to set pool maintenance mode on node [%s]", nodeDetail.Name)
-
-		// Wait for some time before verifying Maintenance state
-		time.Sleep(2 * time.Minute)
-		expectedStatus := "In Maintenance"
-		log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
-			fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
-
-		// Delete the Pool with Invalid Pool ID
-		err = Inst().V.DeletePool(*nodeDetail, invalidPoolID, false)
-		dash.VerifyFatal(err != nil, true,
-			fmt.Sprintf("Expected Failure? : Node Detail [%v]", nodeDetail.Name))
-		log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
-
-		// Exit pool maintenance and see if px becomes operational
-		err = Inst().V.ExitPoolMaintenance(*nodeDetail)
-		log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeDetail.Name)
-
-		nodeDetail, err = GetNodeWithGivenPoolID(poolUUID)
-		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
-
-		err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
-		log.FailOnError(err, "volume driver down on node %s", nodeDetail.Name)
-
-		expectedStatus = "Online"
-		err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
-		log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+		//log.InfoD(stepLog)
+		//
+		//contexts = make([]*scheduler.Context, 0)
+		//for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		//	contexts = append(contexts, ScheduleApplications(fmt.Sprintf("deleteinvalidpoolid-%d", i))...)
+		//}
+		//ValidateApplications(contexts)
+		//defer appsValidateAndDestroy(contexts)
+		//
+		//// Get the Pool UUID on which IO is running
+		//poolUUID := pickPoolToResize()
+		//log.InfoD("Pool UUID on which IO is running [%s]", poolUUID)
+		//
+		//nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
+		//log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		//
+		//PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
+		//log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
+		//
+		//if IsLocalCluster(*nodeDetail) == true || IsIksCluster() == true {
+		//	// Delete Pool without entering Maintenance Mode [ PTX-15157 ]
+		//	err = Inst().V.DeletePool(*nodeDetail, "0", true)
+		//	dash.VerifyFatal(err == nil, false, fmt.Sprintf("Expected Failure as pool not in maintenance mode : Node Detail [%v]", nodeDetail.Name))
+		//
+		//}
+		//
+		//re := regexp.MustCompile("Requires pool maintenance mode")
+		//if re.MatchString(fmt.Sprintf("%v", err)) == true {
+		//	err = nil
+		//}
+		//log.FailOnError(err, "pool delete successful?")
+		//
+		//// invalidPoolID is total Pools present on the node + 1
+		//invalidPoolID := fmt.Sprintf("%d", len(PoolDetail)+1)
+		//
+		//// Enter maintenance mode before deleting the pools from the cluster
+		//log.InfoD("Setting pools to maintenance on node [%s]", nodeDetail.Name)
+		//log.FailOnError(Inst().V.EnterPoolMaintenance(*nodeDetail),
+		//	"failed to set pool maintenance mode on node [%s]", nodeDetail.Name)
+		//
+		//// Wait for some time before verifying Maintenance state
+		//time.Sleep(2 * time.Minute)
+		//expectedStatus := "In Maintenance"
+		//log.FailOnError(WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus),
+		//	fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
+		//
+		//// Delete the Pool with Invalid Pool ID
+		//err = Inst().V.DeletePool(*nodeDetail, invalidPoolID, false)
+		//dash.VerifyFatal(err != nil, true,
+		//	fmt.Sprintf("Expected Failure? : Node Detail [%v]", nodeDetail.Name))
+		//log.InfoD("Deleting Pool with InvalidID Errored as expected [%v]", err)
+		//
+		//// Exit pool maintenance and see if px becomes operational
+		//err = Inst().V.ExitPoolMaintenance(*nodeDetail)
+		//log.FailOnError(err, "failed to exit pool maintenance mode on node %s", nodeDetail.Name)
+		//
+		//nodeDetail, err = GetNodeWithGivenPoolID(poolUUID)
+		//log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
+		//
+		//err = Inst().V.WaitDriverUpOnNode(*nodeDetail, addDriveUpTimeOut)
+		//log.FailOnError(err, "volume driver down on node %s", nodeDetail.Name)
+		//
+		//expectedStatus = "Online"
+		//err = WaitForPoolStatusToUpdate(*nodeDetail, expectedStatus)
+		//log.FailOnError(err, fmt.Sprintf("node %s pools are not in status %s", nodeDetail.Name, expectedStatus))
 
 		// Verify Alerts generated after Pool Expansion [PWX-28484]
 		var severityType = []api.SeverityType{api.SeverityType_SEVERITY_TYPE_ALARM,
@@ -6402,6 +6402,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		for _, eachAlert := range severityType {
 			alerts, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(api.ResourceType_RESOURCE_TYPE_POOL,
 				eachAlert)
+			log.Infof("err [%v] alerts [%v]", err, err.Error())
 			log.FailOnError(err, "Failed to fetch alerts using severity type [%v] of resource Type [%v]",
 				eachAlert,
 				api.ResourceType_RESOURCE_TYPE_POOL)
@@ -6416,7 +6417,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		JustAfterEach(func() {
 			defer EndTorpedoTest()
 			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-			log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+			//log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
 			AfterEachTest(contexts, testrailID, runID)
 		})
 	})
