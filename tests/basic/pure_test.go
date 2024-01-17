@@ -2287,7 +2287,7 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	return false
 }
 
-var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
+var _ = Describe("{ReplIncWithNodeSourceTag}", func() {
 	/*
 		PTX:
 			https://portworx.atlassian.net/browse/PTX-20621
