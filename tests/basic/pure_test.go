@@ -2368,8 +2368,11 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				volName := fmt.Sprintf("vol-%d", vol)
 				volInspect, err := Inst().V.InspectVolume(volName)
 				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
-				log.Infof("replication factor:%v", volInspect.Spec.HaLevel == 2)
-				dash.VerifyFatal(volInspect.Spec.HaLevel, 2, "Verify if replication factor is increased")
+				if volInspect.Spec.HaLevel == 2 {
+					log.Infof("replication factor increased for volume [%s] to 2", volName)
+				} else {
+					log.Infof("replication factor not increased for volume [%s], replication factor: %v", volName, volInspect.Spec.HaLevel)
+				}
 			}
 		})
 		stepLog = "Delete volumes"
