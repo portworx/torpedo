@@ -131,6 +131,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 			}
 		}
+
 	})
 
 	It("Basic Backup Creation", func() {
@@ -143,6 +144,26 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(orgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
 		Step("Creating rules for backup", func() {
@@ -205,26 +226,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			monthlySchedulePolicyInfo := Inst().Backup.CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
 			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), orgID, monthlySchedulePolicyInfo)
 			dash.VerifyFatal(monthlyPolicyStatus, nil, "Creating monthly schedule policy")
-		})
-
-		Step("Registering cluster for backup", func() {
-			log.InfoD("Registering cluster for backup")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-
-			err = CreateApplicationClusters(orgID, "", "", ctx)
-			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-
-			clusterStatus, err := Inst().Backup.GetClusterStatus(orgID, SourceClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
-
-			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
-
-			clusterStatus, err = Inst().Backup.GetClusterStatus(orgID, destinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", destinationClusterName))
-			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", destinationClusterName))
 		})
 
 		Step("Taking backup of application from source cluster", func() {

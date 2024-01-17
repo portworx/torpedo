@@ -5133,6 +5133,7 @@ func GetAzureCredsFromEnv() (tenantID, clientID, clientSecret, subscriptionID, a
 
 // GetIBMApiKey will return the IBM API Key from GlobalCredentialConfig
 func GetIBMApiKey(cluster string) (string, error) {
+	log.Infof(" Snigdha:  ", GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster))
 	return GlobalCredentialConfig.CloudProviders.GetIBMCredential(cluster).APIKey, nil
 }
 
@@ -5271,7 +5272,7 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
-//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
 func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
 	// Getting NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
