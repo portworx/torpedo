@@ -5271,6 +5271,47 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
+//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
+	// Getting NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+	workerNode := node.GetWorkerNodes()[0]
+
+	// Mounting the NFS share to the worker node.
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+	}
+
+	for _, cmd := range mountCmds {
+		err = runCmd(cmd, workerNode)
+		if err != nil {
+			return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
+		}
+	}
+
+	defer func() {
+		// Unmounting the NFS share from the worker node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			if e := runCmd(cmd, workerNode); e != nil {
+				err = fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, e)
+			}
+		}
+	}()
+
+	rmCmd := fmt.Sprintf("cd %s/%s && rm -rf %s", mountDir, nfsPath, fileName)
+	err = runCmd(rmCmd, workerNode)
+	if err != nil {
+		return err
+	}
+	return
+}
+
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
@@ -7213,10 +7254,34 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
+
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 	}
+
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+		return
+	}
+
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
@@ -10109,4 +10174,28 @@ func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
 	})
 
 	return shuffledElements[:subsetSize], nil
+}
+
+// DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
+func DeleteAllNamespacesCreatedByTestCase() error {
+
+	// Get all the namespaces on the cluster
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return fmt.Errorf("error in listing namespaces. Err: %v", err.Error())
+	}
+
+	// Iterate and remove all namespaces
+	for _, ns := range allNamespaces.Items {
+		if strings.Contains(ns.Name, Inst().InstanceID) {
+			log.Infof("Deleting namespace [%s]", ns.Name)
+			err = k8sCore.DeleteNamespace(ns.Name)
+			if err != nil {
+				// Not returning anything as it's the best case effort
+				log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+			}
+		}
+	}
+	return nil
 }
