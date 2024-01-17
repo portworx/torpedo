@@ -2362,7 +2362,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				output, err = runPxctlCommand(cmd, selectedNode, opts)
 				log.FailOnError(err, "Failed to run pxctl command: %v", cmd)
 				log.Infof("Output: %v", output)
-				successMsg := fmt.Sprintf("Replication update started successfully for volume  %s", volName)
+				successMsg := fmt.Sprintf("Replication update started successfully for volume %s", volName)
 				dash.VerifyFatal(strings.Contains(output, successMsg), true, "Verify if pxctl command has passed")
 
 			}
