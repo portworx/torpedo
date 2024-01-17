@@ -6318,7 +6318,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 	// Testrail Corresponds : https://portworx.testrail.net/index.php?/cases/view/55330
 	// Testrail Description : Delete pool when PX/Pool (2.6.0+) is not in maintenance mode and verify the error message
 
-	var runID int
+	//var runID int
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("VerifyPoolDeleteInvalidPoolID",
