@@ -5194,7 +5194,6 @@ func (d *portworx) GetPxctlCmdOutputConnectionOpts(n node.Node, command string, 
 		out, err = d.nodeDriver.RunCommand(n, cmd, opts)
 	} else {
 		out, err = d.nodeDriver.RunCommandWithNoRetry(n, cmd, opts)
-		log.Infof("------output------", out)
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)

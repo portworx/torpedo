@@ -2356,7 +2356,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				// Now try increase replication factor with node present in replica set
 				cmd = fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeInReplica, volName)
 				output, err = runPxctlCommand(cmd, selectedNode, opts)
-				log.Infof("Output: [%v], %v", output, err)
+				log.Infof("Output: [%v], %v", output, err.Error())
 
 			}
 		})
