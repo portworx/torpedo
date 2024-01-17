@@ -324,7 +324,7 @@ const (
 
 const (
 	oneMegabytes                          = 1024 * 1024
-	defaultScheduler                      = "k8s"
+	defaultScheduler                      = "rke"
 	defaultNodeDriver                     = "ssh"
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
@@ -5271,7 +5271,7 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
-//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
 func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
 	// Getting NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()

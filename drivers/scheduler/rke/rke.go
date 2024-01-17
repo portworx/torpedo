@@ -12,7 +12,6 @@ import (
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"os"
 	"strings"
 )
 
@@ -44,6 +43,7 @@ func (r *Rancher) String() string {
 
 // Init Initializes the driver
 func (r *Rancher) Init(scheduleOpts scheduler.InitOptions) error {
+	log.Infof("Snigdha: Inside rke")
 	var err error
 	err = r.K8s.Init(scheduleOpts)
 	if err != nil {
@@ -79,7 +79,7 @@ func (r *Rancher) GetRancherClusterParametersValue() (*RancherClusterParameters,
 	log.Infof("The master node here is %v", masterNodeName)
 	endpoint := "https://" + masterNodeName + "/v3"
 	rkeParameters.Endpoint = endpoint
-	rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+	rkeToken = "token-flbfh:k9gpdwwwt97xg6r7wzcwscmwr99qpnvhgvd6bmqvvknzmd9xjwdzsf"
 	if rkeToken == "" {
 		return nil, fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 	}
@@ -97,12 +97,12 @@ func (r *Rancher) UpdateRancherClient(clusterName string) error {
 	masterNodeName := node.GetMasterNodes()[0].Name
 	endpoint := "https://" + masterNodeName + "/v3"
 	if clusterName == "destination-config" {
-		rkeToken = os.Getenv("DESTINATION_RKE_TOKEN")
+		rkeToken = "token-flbfh:k9gpdwwwt97xg6r7wzcwscmwr99qpnvhgvd6bmqvvknzmd9xjwdzsf"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable DESTINATION_RKE_TOKEN should not be empty")
 		}
 	} else if clusterName == "source-config" {
-		rkeToken = os.Getenv("SOURCE_RKE_TOKEN")
+		rkeToken = "token-flbfh:k9gpdwwwt97xg6r7wzcwscmwr99qpnvhgvd6bmqvvknzmd9xjwdzsf"
 		if rkeToken == "" {
 			return fmt.Errorf("env variable SOURCE_RKE_TOKEN should not be empty")
 		}
@@ -338,6 +338,7 @@ func (r *Rancher) ChangeProjectForNamespace(projectName string, nsList []string)
 }
 
 func init() {
+	log.Infof("Snigdha: Inside rke")
 	r := &Rancher{}
 	scheduler.Register(schedulerName, r)
 }
