@@ -6417,12 +6417,12 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 					eachAlert))
 		}
 
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-			log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
-			//log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
-			AfterEachTest(contexts, testrailID, runID)
-		})
+		//JustAfterEach(func() {
+		//	defer EndTorpedoTest()
+		//	log.InfoD("Exit from Maintenance mode if Pool is still in Maintenance")
+		//	//log.FailOnError(ExitNodesFromMaintenanceMode(), "exit from maintenance mode failed?")
+		//	AfterEachTest(contexts, testrailID, runID)
+		//})
 	})
 })
 
