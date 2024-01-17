@@ -579,9 +579,8 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 				go func(backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					log.Infof("Verifying the backup status for the backup %v", backupName)
 					bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
-					log.FailOnError(err, "Fetching backup uid")
+					log.FailOnError(err, "Fetching backup uid for backup %s", backupName)
 					backupInspectRequest := &api.BackupInspectRequest{
 						Name:  backupName,
 						Uid:   bkpUid,
