@@ -2350,8 +2350,11 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 
 				cmd := fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeNotInReplica, volName)
 				output, err := runPxctlCommand(cmd, selectedNode, opts)
+				errorString := fmt.Sprintf("Failed to update volume: node %v does not belong to volume's replication set", sourceNodeNotInReplica)
+
 				log.Infof("Output: [%v], %v", output, err.Error())
-				//dash.VerifyFatal(strings.Contains(output, "Error: Node "+sourceNode+" is not in the replica set of volume repl-vol"), true, "Verify if pxctl command fails with error message")
+				log.Infof("condition %v", strings.Contains(err.Error(), errorString))
+				dash.VerifyFatal(strings.Contains(err.Error(), errorString), true, "Verify if pxctl command fails with error message")
 
 				// Now try increase replication factor with node present in replica set
 				cmd = fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeInReplica, volName)
