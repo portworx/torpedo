@@ -2320,7 +2320,7 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				vol, err := Inst().V.InspectVolume(volName)
 				log.FailOnError(err, "Failed to inspect volume [%s]", volName)
 				log.Infof("Volume [%s] spec: [%v] nodes: %v", volName, vol.Spec, vol.GetReplicaSets())
-				//First try increase replication factor with node not present in replica set
+				// First try increase replication factor with node not present in replica set
 				var sourceNodeNotInReplica string
 				var sourceNodeInReplica string
 				storageNode := node.GetStorageNodes()
@@ -2329,9 +2329,11 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 					log.Infof("Node [%s] Replica %v", node.Name, replicaSet[0].Nodes)
 					for _, replicaNode := range replicaSet[0].Nodes {
 						if replicaNode == node.Id {
+							// Pick a node which is present in replica set
 							sourceNodeInReplica = node.Id
 							continue
 						} else {
+							// Pick a node which is not present in replica set
 							sourceNodeNotInReplica = node.Id
 							break
 						}
@@ -2351,16 +2353,17 @@ var _ = Describe("{ReplIncWithNodeNotInReplicaSet}", func() {
 				cmd := fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeNotInReplica, volName)
 				output, err := runPxctlCommand(cmd, selectedNode, opts)
 				errorString := fmt.Sprintf("Failed to update volume: node %v does not belong to volume's replication set", sourceNodeNotInReplica)
-
-				log.Infof("Output: [%v], %v", output, err.Error())
-				log.Infof("condition %v", strings.Contains(err.Error(), errorString))
+				// Verify if pxctl command fails with error message
+				log.Infof("error message: %v", err.Error())
 				dash.VerifyFatal(strings.Contains(err.Error(), errorString), true, "Verify if pxctl command fails with error message")
 
 				// Now try increase replication factor with node present in replica set
 				cmd = fmt.Sprintf("volume ha-update -r 2 --sources %s %s", sourceNodeInReplica, volName)
 				output, err = runPxctlCommand(cmd, selectedNode, opts)
 				log.FailOnError(err, "Failed to run pxctl command: %v", cmd)
-				log.Infof("Output: [%v], %v", output)
+				log.Infof("Output: %v", output)
+				successMsg := fmt.Sprintf("Replication update started successfully for volume  %s", volName)
+				dash.VerifyFatal(strings.Contains(output, successMsg), true, "Verify if pxctl command has passed")
 
 			}
 		})
