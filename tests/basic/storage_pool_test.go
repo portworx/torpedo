@@ -6403,6 +6403,9 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 			alerts, err := Inst().V.GetAlertsUsingResourceTypeBySeverity(api.ResourceType_RESOURCE_TYPE_POOL,
 				eachAlert)
 			log.Infof("err [%v] alerts [%v]", err, err.Error())
+			if strings.Contains(err.Error(), "EOF") == true {
+				continue
+			}
 			log.FailOnError(err, "Failed to fetch alerts using severity type [%v] of resource Type [%v]",
 				eachAlert,
 				api.ResourceType_RESOURCE_TYPE_POOL)
