@@ -22,7 +22,6 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/osutils"
 	. "github.com/portworx/torpedo/tests"
-	//	 v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -747,13 +746,9 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 	})
 })
 
-// This test telemetry health via pxctl
+// This validates the telemetry container orchestrator usage.  Container orchestrator manages the telemetry registration certificate secret.
+// The container orchestrator is a server running in PX which handles gprc requests to save/retrieve/delete the registration certificate secret.
 var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
-	//	var contexts []*scheduler.Context
-	//	var runID int
-
-	//	testrailID := 54907
-
 	const (
 		OsdBaseLogDir = "/var/lib/osd/log"
 		coStateDir    = OsdBaseLogDir + "/coState"
@@ -764,8 +759,6 @@ var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
 	})
 
 	JustBeforeEach(func() {
-		//		runID = testrailuttils.AddRunsToMilestone(testrailID)
-		//		StartTorpedoTest("TelemetryCheckContainerOrchestrator", "Validate container orchestrator", nil, testrailID)
 		StartTorpedoTest("DiagsTelemetryCheckContainerOrchestrator", "Validate container orchestrator", nil, 0)
 		if !isTelemetryOperatorEnabled {
 			Skip("Skip test because telemetry is not enabled...")
@@ -779,6 +772,8 @@ var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
 	})
 
 	It("Validate container orchestrator usage", func() {
+		// Test validation is done by checking timestamp entries of when the container orchestrator operations were called (server start, secret set/get).
+		// The timestamps for secret set/get must be after the timestamp for the start.
 		var (
 			clusterNodes map[string]node.Node
 			regNode      string
@@ -817,6 +812,7 @@ var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
 		coGetTime, getErr := getCoStateTimeStamp(coStateDir + "/kvGet.ts")
 
 		if setErr == nil {
+			// secret set time exists, check it
 			log.Infof("container orchestrater set time: %v\n", time.Unix(coSetTime, 0))
 			if coSetTime > coStartTime {
 				log.Infof("container orchestrator validated via set time")
@@ -827,12 +823,14 @@ var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
 		}
 
 		if setErr != nil && getErr != nil {
+			// No secret handler timestamp exists
 			log.Infof("error obtaining set time from costate file: %v\n", setErr)
 			log.Infof("error obtaining get time from costate file: %v\n", getErr)
 			log.FailOnError(fmt.Errorf("error obtaining costate file"), "container orchestrator validated failed")
 			return
 		}
 
+		// secret get time stamp exists, check it
 		log.Infof("container orchestrater get time: %v\n", time.Unix(coGetTime, 0))
 		if coGetTime < coStartTime {
 			log.FailOnError(fmt.Errorf("get time is less than start time"), "container orchestrator validated failed")
@@ -840,12 +838,9 @@ var _ = Describe("{TelemetryCheckContainerOrchestrator}", func() {
 		}
 
 		log.Infof("container orchestrator validated via get time")
-		//	        Step(fmt.Sprintf("Find out STC Namespace"), func() {
-		//	        })
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		//		AfterEachTest(contexts, testrailID, runID)
 	})
 })
