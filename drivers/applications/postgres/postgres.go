@@ -85,10 +85,10 @@ func (app *PostgresConfig) InsertBackupData(ctx context.Context, identifier stri
 	var err error
 	log.InfoD("Inserting data")
 	if len(commnads) == 0 {
-		log.InfoD("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
+		log.Infof("Inserting below data : %s", strings.Join(app.SQLCommands[identifier]["insert"], "\n"))
 		err = app.ExecuteCommand(app.SQLCommands[identifier]["insert"], ctx)
 	} else {
-		log.InfoD("Inserting below data : %s", strings.Join(commnads, "\n"))
+		log.Infof("Inserting below data : %s", strings.Join(commnads, "\n"))
 		err = app.ExecuteCommand(commnads, ctx)
 	}
 
@@ -101,7 +101,7 @@ func (app *PostgresConfig) GetBackupData(identifier string) []string {
 		return app.SQLCommands[identifier]["select"]
 	} else {
 		log.InfoD("%s not found in app sql command", identifier)
-		log.InfoD("All current SQL commands - %+v", app.SQLCommands)
+		log.Infof("All current SQL commands - %+v", app.SQLCommands)
 		return nil
 	}
 }

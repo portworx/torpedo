@@ -413,9 +413,9 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 	if len(existingAppHandler) == 0 {
 		for _, eachNamespace := range namespaces {
 			if handler, ok := NamespaceAppWithDataMap[eachNamespace]; ok {
-				log.InfoD("App with data support found under namespace - [%s]", eachNamespace)
+				log.Infof("App with data support found under namespace - [%s]", eachNamespace)
 				for _, eachHandler := range handler {
-					log.InfoD("Adding data to app in namespace  - [%s]", eachNamespace)
+					log.Infof("Adding data to app in namespace  - [%s]", eachNamespace)
 					dataCommands[eachHandler] = eachHandler.GetRandomDataCommands(queryCountForValidation)
 					err = eachHandler.InsertBackupData(ctx, backupName, dataCommands[eachHandler]["insert"])
 					if err != nil {
@@ -431,7 +431,7 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 		backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
 
 		for _, eachHandler := range existingAppHandler {
-			log.InfoD("Backup UUID while adding data - [%s]", backupUid)
+			log.Infof("Backup UUID while adding data - [%s]", backupUid)
 			eachHandler.AddDataCommands(backupUid, commandBeforeBackup[eachHandler])
 			restoreIdentifier := fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix)
 			eachHandler.UpdateDataCommands(queryCountForValidation, restoreIdentifier)
@@ -2195,10 +2195,10 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	allBackupNamespaces = theBackup.Namespaces
 	theRestore := restoreInspectResponse.GetRestore()
 
-	log.InfoD("Backup UUID - [%s]", backupUid)
+	log.Infof("Backup UUID - [%s]", backupUid)
 	// Fetching the Data commands from Source
 	for _, eachBackupNamespace := range allBackupNamespaces {
-		log.InfoD("All Handler Namespaces - [%+v]", NamespaceAppWithDataMap)
+		log.Infof("All Handler Namespaces - [%+v]", NamespaceAppWithDataMap)
 		for _, eachHandler := range NamespaceAppWithDataMap[eachBackupNamespace] {
 			beforeBackup := eachHandler.GetBackupData(backupUid)
 			afterBackup := eachHandler.GetBackupData(fmt.Sprintf("%s%s", backupUid, dataAfterBackupSuffix))
@@ -2245,8 +2245,8 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	}
 
 	// Creating restore handlers
-	log.InfoD("Creating all restore app handlers")
-	log.InfoD("Namespace Mapping - [%+v]", namespaceMapping)
+	log.Infof("Creating all restore app handlers")
+	log.Infof("Namespace Mapping - [%+v]", namespaceMapping)
 	for _, ctx := range expectedRestoredAppContexts {
 
 		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
@@ -2275,7 +2275,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 					log.Infof("Current Restore Policy - [%s]", theRestore.ReplacePolicy.String())
 					continue
 				} else {
-					log.InfoD("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
+					log.Infof("App handler created for [%s] in namespace [%s]", appInfo.Hostname, appInfo.Namespace)
 					allRestoreHandlers = append(allRestoreHandlers, appHandler)
 				}
 			}
@@ -6182,7 +6182,7 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 	if len(backupNameSpaces) == 1 {
 		currentAdminNamespace = backupNameSpaces[0]
 	}
-	log.InfoD("Current CR Namespace: [%s]", currentAdminNamespace)
+	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
 
 	backupDriver := Inst().Backup
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
@@ -6197,11 +6197,11 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 		if err != nil {
 			return nil, true, err
 		}
-		log.InfoD("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
+		log.Infof("All backup CRs in [%s] are [%v]", currentAdminNamespace, allBackupCrs)
 
 		for _, eachCR := range allBackupCrs {
 			if strings.Contains(eachCR, backupName) {
-				log.InfoD("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
+				log.Infof("Backup CR found for [%s] under [%s] namespace", backupName, currentAdminNamespace)
 				return nil, false, nil
 			}
 		}
@@ -6222,7 +6222,7 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 			currentAdminNamespace = val
 		}
 	}
-	log.InfoD("Current CR Namespace: [%s]", currentAdminNamespace)
+	log.Infof("Current CR Namespace: [%s]", currentAdminNamespace)
 
 	backupDriver := Inst().Backup
 	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
@@ -6237,11 +6237,11 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 		if err != nil {
 			return nil, true, err
 		}
-		log.InfoD("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
+		log.Infof("All restore CRs in [%s] are [%v]", currentAdminNamespace, allRestoreCrs)
 
 		for _, eachCR := range allRestoreCrs {
 			if strings.Contains(eachCR, restoreName) {
-				log.InfoD("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
+				log.Infof("Restore CR found for [%s] under [%s] namespace", restoreName, currentAdminNamespace)
 				return nil, false, nil
 			}
 		}
@@ -6699,7 +6699,7 @@ func validateCRCleanup(resourceInterface interface{},
 	}
 
 	if !isValidCluster {
-		log.InfoD("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
+		log.Infof("%s looks to be a synced backup, skipping CR cleanup validation", clusterName)
 		return nil
 	}
 
