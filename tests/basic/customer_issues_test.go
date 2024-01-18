@@ -757,3 +757,185 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func getVolumeAttachedNodeAndKill(volName *volume.Volume) (string, *node.Node, error) {
+	appVol, err := Inst().V.InspectVolume(volName.ID)
+	if err != nil {
+		return "", nil, err
+	}
+	attachedNode := appVol.AttachedOn
+	log.InfoD("Volume [%v] is attached to Node [%v]", volName.Name, attachedNode)
+
+	nodeDetails, err := node.GetNodeByIP(attachedNode)
+	if err != nil {
+		return "", nil, err
+	}
+
+	killPxExecErr := KillPxExecUsingPid(nodeDetails)
+	if killPxExecErr != nil {
+		return "", nil, err
+	}
+
+	killPxStorageErr := KillPxStorageUsingPid(nodeDetails)
+	if killPxStorageErr != nil {
+		return "", nil, err
+	}
+
+	return attachedNode, &nodeDetails, nil
+}
+
+func isPodStuckNotRunning(nameSpace string) (bool, map[string]string, error) {
+	restartDetails := make(map[string]string)
+	isPodRestarting := false
+	pods, err := GetAllPodsInNameSpace(nameSpace)
+	if err != nil {
+		log.InfoD("Get all pods from Namespace returned error")
+		return false, nil, err
+	}
+	for _, eachPod := range pods {
+		if eachPod.Status.Phase != "Running" && eachPod.Status.Phase != "ContainerCreating" && eachPod.Status.Phase != "Terminating" {
+			restartDetails[eachPod.Name] = fmt.Sprintf("%v", eachPod.Status.Phase)
+			log.InfoD("Pod Status of Pod [%v] is [%v]", eachPod.Name, eachPod.Status.Phase)
+		}
+	}
+	if len(restartDetails) > 0 {
+		isPodRestarting = true
+	}
+	return isPodRestarting, restartDetails, nil
+}
+
+var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ContainerCreateDeviceRemoval",
+			"Test app stuck in Container Creation with Device exists",
+			nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	stepLog := "App Stuck in ContainerCreation State with Device Exists in the backend"
+	It(stepLog, func() {
+
+		var isPodRestarting bool = false
+		var terminateScript bool = false
+
+		Inst().AppList = []string{"vdbench-sv4-svc"}
+		contexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volwithdeviceexist-%d", i))...)
+		}
+		ValidateApplications(contexts)
+		//defer appsValidateAndDestroy(contexts)
+
+		allVolumes, err := GetAllVolumesWithIO(contexts)
+		log.FailOnError(err, "Failed to get volumes with IO Running")
+
+		log.InfoD("List of volumes with IO Running [%v]", allVolumes)
+
+		// Get Random Volume with IO running on the cluster
+		var randomVol *volume.Volume
+		for _, eachVol := range allVolumes {
+			log.InfoD("Trying volume [%s]", eachVol)
+			if strings.Contains(eachVol.Name, "vdbench-pvc-enc-sv4-svc") {
+				randomVol = eachVol
+				break
+			}
+		}
+		log.Infof("Volume picked for testing device exist issue [%v]", randomVol)
+
+		appVol, err := Inst().V.InspectVolume(randomVol.ID)
+		allNodesForVolume := appVol.ReplicaSets[0].Nodes
+		log.InfoD("List of nodes for the volume [%s] are [%v]", randomVol.Name, allNodesForVolume)
+
+		go func(nameSpace string) {
+			defer GinkgoRecover()
+			for {
+				podRestating, restartNode, err := isPodStuckNotRunning(nameSpace)
+				if podRestating && len(restartNode) > 1 {
+					isPodRestarting = true
+				}
+
+				if err != nil {
+					log.FailOnError(err, "failed with error")
+				}
+
+				// Wait for a few min and retry pod status to check if it is settled
+				time.Sleep(2 * time.Minute)
+				podRestatingAfter, restartNodeAfter, err := isPodStuckNotRunning(nameSpace)
+				if podRestating && len(restartNode) > 1 {
+					for key, value := range restartNodeAfter {
+						if restartNodeAfter[key] == restartNode[key] {
+							isPodRestarting = true
+							terminateScript = true
+						}
+					}
+				} else {
+					isPodRestarting = false
+					terminateScript = false
+				}
+			}
+		}(randomVol.Namespace)
+
+		// Kill Random nodes associated with the volume one co-ordinator node every time
+		for loopKill := 0; loopKill < 30; loopKill++ {
+			restartedNode := []node.Node{}
+			if terminateScript {
+				break
+			}
+			if isPodRestarting == false {
+				rand.Seed(time.Now().UnixNano())
+				randomNumber := rand.Intn(3) + 1
+
+				nodeIP, nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
+				log.FailOnError(err, "Failed to kill Px Daemons")
+				log.InfoD("Volume  is Attached on Node {%s}", nodeIP)
+				restartedNode = append(restartedNode, *nodeDetail)
+
+				if randomNumber == 3 {
+					for i := 0; i < 2; i++ {
+						nodeIP, nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
+						log.FailOnError(err, "Failed to kill Px Daemons")
+						log.InfoD("Volume  is Attached on Node {%s}", nodeIP)
+						restartedNode = append(restartedNode, *nodeDetail)
+					}
+				}
+
+				if randomNumber == 2 {
+					nodeIP, nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
+					log.FailOnError(err, "Failed to kill Px Daemons")
+					log.InfoD("Volume  is Attached on Node {%s}", nodeIP)
+					restartedNode = append(restartedNode, *nodeDetail)
+				}
+
+				if randomNumber == 1 {
+					appVol, err = Inst().V.InspectVolume(randomVol.ID)
+					log.FailOnError(err, "Failed to get volumes attachment details")
+					attachedNode := appVol.AttachedOn
+					log.InfoD("Volume [%v] is attached to Node [%v]", randomVol.Name, attachedNode)
+				}
+
+				appVol, err = Inst().V.InspectVolume(randomVol.ID)
+				log.FailOnError(err, "Failed to get volumes attachment details")
+				attachedNode := appVol.AttachedOn
+				log.InfoD("Volume [%v] is attached to Node [%v]", randomVol.Name, attachedNode)
+
+				for _, nodes := range restartedNode {
+					// Wait for Node to Come back online
+					err = Inst().V.WaitDriverUpOnNode(nodes, Inst().DriverStartTimeout)
+					log.FailOnError(err, "Failed Waiting for Node to Come Online")
+				}
+			} else {
+				// Waiting for 10 min before checking the details
+				time.Sleep(10 * time.Minute)
+			}
+		}
+		if !terminateScript {
+			appsValidateAndDestroy(contexts)
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
