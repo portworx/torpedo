@@ -131,8 +131,6 @@ const (
 	multiAppNfsPodDeploymentNamespace         = "kube-system"
 	backupScheduleDeleteTimeout               = 60 * time.Minute
 	backupScheduleDeleteRetryTime             = 30 * time.Second
-	validateDataAfterRestoreRetryTimeout      = 1 * time.Minute
-	validateDataAfterRestoreRetryTime         = 15 * time.Second
 )
 
 var (
@@ -1233,17 +1231,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	}
 
 	log.Infof("Namespace mapping from CreateRestoreWithValidation [%v]", namespaceMapping)
-
-	checkDataAfterRestore := func() (interface{}, bool, error) {
-		err := ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping, startTime)
-
-		if err != nil {
-			return "", true, err
-		}
-		return "", false, nil
-	}
-
-	_, err = task.DoRetryWithTimeout(checkDataAfterRestore, validateDataAfterRestoreRetryTimeout, validateDataAfterRestoreRetryTime)
+	err = ValidateDataAfterRestore(expectedRestoredAppContexts, restoreName, ctx, backupName, namespaceMapping, startTime)
 
 	return err
 }
