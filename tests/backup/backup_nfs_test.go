@@ -653,10 +653,17 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.Infof("Cleaning up schedules")
-		for _, sch := range scheduleNames {
-			err = DeleteSchedule(sch, SourceClusterName, orgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s]", sch))
+		var wg sync.WaitGroup
+		for _, schedule := range scheduleNames {
+			wg.Add(1)
+			go func(schedule string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = DeleteSchedule(schedule, SourceClusterName, orgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s]", schedule))
+			}(schedule)
 		}
+		wg.Wait()
 		log.Infof("Cleaning up restores")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, orgID, ctx)
