@@ -10189,6 +10189,10 @@ func KillPxExecUsingPid(memberNode node.Node) error {
 	if err != nil {
 		return err
 	}
+	if pid == "" {
+		log.InfoD("Procrss with PID doesnot exists !! ")
+		return nil
+	}
 	command := fmt.Sprintf("kill -9 %s", pid)
 	log.InfoD("killing PID using command [%s]", command)
 	err = runCmd(command, memberNode)
@@ -10203,6 +10207,10 @@ func KillPxStorageUsingPid(memberNode node.Node) error {
 	pid, err := GetProcessPID(memberNode, "px-storage")
 	if err != nil {
 		return err
+	}
+	if pid == "" {
+		log.InfoD("Procrss with PID doesnot exists !! ")
+		return nil
 	}
 	command := fmt.Sprintf("kill -9 %s", pid)
 	log.InfoD("killing PID using command [%s]", command)
