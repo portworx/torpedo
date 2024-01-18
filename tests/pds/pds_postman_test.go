@@ -13,16 +13,16 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 	})
 	It("Deploy Dataservices", func() {
 		Step("Starting to execute Postman-Newman on PDS", func() {
-			var resultsFileName = "postman_results"
+			var resultsFileName = "result_" + RandomString(5) + ".json"
 			ctx, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
 			postmanParams := postmanLib.PostmanDriver{
 				ResultsFileName: resultsFileName,
-				ResultType:      "json, cli",
+				ResultType:      "cli,json",
+				Namespace:       params.InfraToTest.Namespace,
 				Iteration:       "2",
 				Kubeconfig:      ctx}
-			err = postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
-			log.FailOnError(err, "Postman execution failed.. Please check the logs manually.")
+			postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
 		})
 	})
 	JustAfterEach(func() {
