@@ -64,7 +64,8 @@ func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, e
 
 	iterations := postmanParams.Iteration
 	resultsPath, err := filepath.Abs(defaultResultsPath)
-	newmanCmd := "newman run " + collectionPath + " -n " + iterations + " --verbose" + " -r " + postmanParams.ResultType + " --reporter-json-export " + resultsPath + "/" + postmanParams.ResultsFileName
+	resultsFilePath := resultsPath + "/" + postmanParams.ResultsFileName
+	newmanCmd := "newman run " + collectionPath + " -n " + iterations + " --verbose" + " -r " + postmanParams.ResultType + " --reporter-json-export " + resultsFilePath
 	log.InfoD("Newman command formed is- [%v]", newmanCmd)
 	output, res, err := ExecuteCommandInShell(newmanCmd)
 	if err != nil {
@@ -74,6 +75,6 @@ func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, e
 	if strings.Contains(output, "failure") {
 		return false, fmt.Errorf("newman exited with a failure..[%v] Please check logs for more details", err)
 	}
-	log.InfoD("Postman execution is completed and the results are exported to filepath - [%v]", resultsPath)
+	log.InfoD("Postman execution is completed and the results are exported to filepath - [%v]", resultsFilePath)
 	return true, nil
 }
