@@ -1254,7 +1254,7 @@ func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
 			poolId = strings.Trim(poolId, " ")
 		}
 		if poolId != "" && poolUUID != "" {
- 			if _, ok := poolsData[poolUUID]; !ok {
+			if _, ok := poolsData[poolUUID]; !ok {
 				poolsData[poolUUID] = poolId
 			}
 			poolUUID = ""
@@ -1307,6 +1307,8 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		// TODO: remove this retry once PWX-27773 is fixed
 		// It is noted that the DevicePath is intermittently empty.
 		// This check ensures the device path is not empty for attached volumes
+		log.Infof("inspect response for the volume [%s] is [%v]", volumeName, vol)
+		log.Infof("volume [%s] state [%v] and device path [%v]", volumeName, vol.State, vol.DevicePath)
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.DevicePath == "" {
 			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
 		}
