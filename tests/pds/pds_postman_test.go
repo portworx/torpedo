@@ -5,6 +5,7 @@ import (
 	postmanLib "github.com/portworx/torpedo/drivers/postmanApiLoadDriver"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"time"
 )
 
 var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
@@ -13,7 +14,7 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 	})
 	It("Deploy Dataservices", func() {
 		Step("Starting to execute Postman-Newman on PDS", func() {
-			var resultsFileName = "result_" + RandomString(5) + ".json"
+			var resultsFileName = "result_" + time.DateTime + ".json"
 			ctx, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
 			postmanParams := postmanLib.PostmanDriver{
