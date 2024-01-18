@@ -443,6 +443,9 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 		singleNSScheduledBackup    string
 		multipleNSScheduleName     string
 		multipleNSScheduledBackup  string
+		newScheduleName            string
+		newScheduledBackup         string
+		restoreNames               []string
 		scheduleNames              []string
 		periodicSchedulePolicyUid  string
 	)
@@ -604,6 +607,43 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 			}
 			wg.Wait()
 		})
+
+		Step("Verify if the restores for the above backups get failed", func() {
+			log.InfoD("Verify if the restores for the above backups get failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				restoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, backupName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
+				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+
+		Step(fmt.Sprintf("Taking a scheduled backup of multiple namespaces"), func() {
+			log.InfoD(fmt.Sprintf("Taking a scheduled backup of multiple namespaces [%v]", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newScheduleName = fmt.Sprintf("new-bkp-schedule-%v", RandomString(4))
+			newScheduledBackup, err = CreateScheduleBackupWithValidation(ctx, multipleNSScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", multipleNSScheduleName))
+			err = suspendBackupSchedule(multipleNSScheduleName, periodicSchedulePolicyName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", multipleNSScheduleName))
+			backupNames = append(backupNames, newScheduledBackup)
+			scheduleNames = append(scheduleNames, newScheduleName)
+		})
+
+		Step("Verify if the restores for the new scheduled backup is successful", func() {
+			log.InfoD("Verify if the restores for the new scheduled backup is successful")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newRestoreName := fmt.Sprintf("%s-%s", restoreNamePrefix, newScheduledBackup)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, newRestoreName, newScheduledBackup, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the restore [%s] is successful.", newRestoreName))
+			restoreNames = append(restoreNames, newRestoreName)
+		})
 	})
 
 	JustAfterEach(func() {
@@ -612,9 +652,15 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 		log.FailOnError(err, "Switching context to source cluster failed")
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Cleaning up schedules")
 		for _, sch := range scheduleNames {
 			err = DeleteSchedule(sch, SourceClusterName, orgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s]", sch))
+		}
+		log.Infof("Cleaning up restores")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, orgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
 		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
