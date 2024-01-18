@@ -621,15 +621,15 @@ var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
 			}
 		})
 
-		Step(fmt.Sprintf("Taking a scheduled backup of multiple namespaces"), func() {
-			log.InfoD(fmt.Sprintf("Taking a scheduled backup of multiple namespaces [%v]", appNamespaces))
+		Step(fmt.Sprintf("Taking a new scheduled backup of multiple namespaces"), func() {
+			log.InfoD(fmt.Sprintf("Taking a new scheduled backup of multiple namespaces [%v]", appNamespaces))
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			newScheduleName = fmt.Sprintf("new-bkp-schedule-%v", RandomString(4))
-			newScheduledBackup, err = CreateScheduleBackupWithValidation(ctx, multipleNSScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			newScheduledBackup, err = CreateScheduleBackupWithValidation(ctx, newScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", multipleNSScheduleName))
-			err = suspendBackupSchedule(multipleNSScheduleName, periodicSchedulePolicyName, orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", multipleNSScheduleName))
+			err = suspendBackupSchedule(newScheduleName, periodicSchedulePolicyName, orgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", newScheduleName))
 			backupNames = append(backupNames, newScheduledBackup)
 			scheduleNames = append(scheduleNames, newScheduleName)
 		})
