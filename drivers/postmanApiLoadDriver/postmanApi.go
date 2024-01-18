@@ -74,5 +74,6 @@ func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, e
 	if strings.Contains(output, "failure") {
 		return false, fmt.Errorf("newman exited with a failure..[%v] Please check logs for more details", err)
 	}
+	log.InfoD("Postman execution is completed and the results are exported to filepath - [%v]", resultsPath)
 	return true, nil
 }
