@@ -15,7 +15,9 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 	})
 	It("Deploy Dataservices", func() {
 		Step("Starting to execute Postman-Newman on PDS", func() {
-			var resultsFileName = "result_" + fmt.Sprint(time.Now().Unix()) + ".json"
+			currentTime := time.Now()
+			timeStamp := currentTime.Format("2006-01-02_15:04:05_MST")
+			resultsFileName := fmt.Sprintf("result_%s.json", timeStamp)
 			ctx, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "failed while getting dest cluster path")
 			postmanParams := postmanLib.PostmanDriver{
