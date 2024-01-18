@@ -861,9 +861,9 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 
 				// Wait for a few min and retry pod status to check if it is settled
 				time.Sleep(2 * time.Minute)
-				podRestatingAfter, restartNodeAfter, err := isPodStuckNotRunning(nameSpace)
+				_, restartNodeAfter, err := isPodStuckNotRunning(nameSpace)
 				if podRestating && len(restartNode) > 1 {
-					for key, value := range restartNodeAfter {
+					for key, _ := range restartNodeAfter {
 						if restartNodeAfter[key] == restartNode[key] {
 							isPodRestarting = true
 							terminateScript = true
