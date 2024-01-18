@@ -22,7 +22,8 @@ var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 				Namespace:       params.InfraToTest.Namespace,
 				Iteration:       "2",
 				Kubeconfig:      ctx}
-			postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
+			err = postmanLib.GetProjectNameToExecutePostman("pds", &postmanParams)
+			log.FailOnError(err, "Postman-Newman Execution has failed due to- ")
 		})
 	})
 	JustAfterEach(func() {
