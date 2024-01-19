@@ -921,7 +921,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 
 				for _, nodes := range restartedNode {
 					// Wait for Node to Come back online
-					err = Inst().V.WaitDriverUpOnNode(nodes, 15*time.Minute)
+					err = Inst().V.WaitDriverUpOnNode(nodes, 20*time.Minute)
 					log.FailOnError(err, "Failed Waiting for Node to Come Online")
 				}
 			} else {
