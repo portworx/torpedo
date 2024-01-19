@@ -4071,6 +4071,7 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 	ClusterConfigPathMap[destinationClusterName] = dstClusterConfigPath
 
 	clusterCreation := func(clusterCredName string, clusterCredUid string, clusterName string) error {
+		log.InfoD("SNigdha11: %v   %v    %v", clusterCredName, clusterCredUid, clusterName)
 		clusterStatus := func() (interface{}, bool, error) {
 			err = CreateCluster(clusterName, ClusterConfigPathMap[clusterName], orgID, clusterCredName, clusterCredUid, ctx)
 			if err != nil && !strings.Contains(err.Error(), "already exists with status: Online") {
@@ -4314,7 +4315,7 @@ func UpdateBackupLocation(provider string, name string, uid string, orgID string
 // CreateCluster creates/registers cluster with px-backup
 func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name string, uid string, ctx context1.Context) error {
 	var clusterCreateReq *api.ClusterCreateRequest
-
+	log.Infof(" Snigdha1: The cloud cred is %v", cloud_name)
 	log.InfoD("Create cluster [%s] in org [%s]", name, orgID)
 	backupDriver := Inst().Backup
 	kubeconfigRaw, err := ioutil.ReadFile(kubeconfigPath)
@@ -4322,8 +4323,10 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 		return err
 	}
 	if cloud_name != "" {
+		log.InfoD("Snigdha inside this get")
 		clusterProvider := GetClusterProviders()
 		for _, provider := range clusterProvider {
+			log.InfoD(" Snigdha: the provider is %v", provider)
 			switch provider {
 			case drivers.ProviderRke:
 				clusterCreateReq = &api.ClusterCreateRequest{
@@ -4350,6 +4353,8 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 					},
 				}
 			default:
+				log.InfoD("Snigdha inside this get1111")
+				log.Infof(" Snigdha: The cloud cred is %v", cloud_name)
 				clusterCreateReq = &api.ClusterCreateRequest{
 					CreateMetadata: &api.CreateMetadata{
 						Name:  name,
@@ -4365,6 +4370,7 @@ func CreateCluster(name string, kubeconfigPath string, orgID string, cloud_name 
 		}
 
 	} else {
+		log.InfoD("Snigdha inside this get111rfrefrf1")
 		clusterCreateReq = &api.ClusterCreateRequest{
 			CreateMetadata: &api.CreateMetadata{
 				Name:  name,
@@ -5271,7 +5277,7 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
-//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
 func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
 	// Getting NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
