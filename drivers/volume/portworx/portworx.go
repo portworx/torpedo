@@ -1264,6 +1264,80 @@ func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
 	return poolsData, nil
 }
 
+// ToString provides a string representation of the given value.
+// If the value is empty, it returns an empty string (""); for nil, it returns "nil"
+func ToString(value interface{}) string {
+	v := reflect.ValueOf(value)
+	if stringer, ok := value.(fmt.Stringer); ok {
+		return stringer.String()
+	}
+	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return "nil"
+		}
+		return ToString(v.Elem().Interface())
+	}
+	if v.Kind() != reflect.Struct {
+		return fmt.Sprintf("%v", value)
+	}
+	t := v.Type()
+	var fields []string
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.IsExported() {
+			fieldVal := v.Field(i)
+			var fieldString string
+			if stringer, ok := fieldVal.Interface().(fmt.Stringer); ok {
+				fieldString = fmt.Sprintf("%s: %s", field.Name, stringer.String())
+			} else {
+				switch fieldVal.Kind() {
+				case reflect.Ptr, reflect.Interface:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Elem().Interface()))
+					}
+				case reflect.Slice:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Struct:
+					fieldString = fmt.Sprintf("%s: %s", field.Name, ToString(fieldVal.Interface()))
+				case reflect.Chan, reflect.Func:
+					fieldString = fmt.Sprintf("%s: %T", field.Name, fieldVal.Interface())
+				case reflect.String:
+					if fieldVal.Len() == 0 {
+						fieldString = fmt.Sprintf("%s: \"\"", field.Name)
+					} else {
+						fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+					}
+				case reflect.Map:
+					if fieldVal.IsNil() {
+						fieldString = fmt.Sprintf("%s: nil", field.Name)
+					} else {
+						mapKeys := fieldVal.MapKeys()
+						var mapStrings []string
+						for _, key := range mapKeys {
+							keyItem := ToString(key.Interface())
+							valItem := ToString(fieldVal.MapIndex(key).Interface())
+							mapStrings = append(mapStrings, fmt.Sprintf("%s: %s", keyItem, valItem))
+						}
+						fieldString = fmt.Sprintf("%s: {%s}", field.Name, strings.Join(mapStrings, ","))
+					}
+				default:
+					fieldString = fmt.Sprintf("%s: %v", field.Name, fieldVal.Interface())
+				}
+			}
+			fields = append(fields, fieldString)
+		} else {
+			fields = append(fields, fmt.Sprintf("%s: unexported", field.Name))
+		}
+	}
+	return fmt.Sprintf("{%s}", strings.Join(fields, ", "))
+}
+
 func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]string) error {
 	var token string
 	token = d.getTokenForVolume(volumeName, params)
@@ -1307,8 +1381,22 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		// TODO: remove this retry once PWX-27773 is fixed
 		// It is noted that the DevicePath is intermittently empty.
 		// This check ensures the device path is not empty for attached volumes
-		log.Infof("inspect response for the volume [%s] is [%v]", volumeName, vol)
 		log.Infof("volume [%s] state [%v] and device path [%v]", volumeName, vol.State, vol.DevicePath)
+		log.Infof("api inspect response for the volume [%s] is [%v]", volumeName, vol)
+		nodeName := node.GetStorageNodes()[0]
+		cmd := fmt.Sprintf("%s v i %s -j", d.getPxctlPath(nodeName), vol.Id)
+		out, err := d.nodeDriver.RunCommand(
+			nodeName,
+			cmd,
+			node.ConnectionOpts{
+				Timeout:         validatePXStartTimeout,
+				TimeBeforeRetry: defaultRetryInterval,
+			})
+		if err != nil {
+			return nil, true, fmt.Errorf("error getting volume inspect info on node [%s], Err: %v", nodeName, err)
+		}
+		log.Infof("pxctl inspect response for the volume [%s] is [%v]", volumeName, out)
+
 		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.DevicePath == "" {
 			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
 		}
@@ -1457,6 +1545,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		case api.SpecGroup:
 			// TODO Check Px-backup labels not getting restored
 			if checkVolSpecGroup {
+				log.Infof("SpecGroup: [%v] [%v]", ToString(requestedSpec.Group), ToString(vol.Spec.Group))
 				if !reflect.DeepEqual(requestedSpec.Group, vol.Spec.Group) {
 					return errFailedToInspectVolume(volumeName, k, requestedSpec.Group, vol.Spec.Group)
 				}
