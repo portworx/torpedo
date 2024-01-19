@@ -2106,30 +2106,26 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 
 	var allErrors string
 
-	Step("Validating apps data continuity", func() {
-		log.InfoD("Validating apps data continuity")
+	log.InfoD("Validating apps data continuity")
 
-		// Stopping all data flow to apps
+	// Stopping all data flow to apps
 
-		for _, appList := range NamespaceAppWithDataMap {
-			for range appList {
-				controlChannel <- "Stop"
-			}
+	for _, appList := range NamespaceAppWithDataMap {
+		for range appList {
+			controlChannel <- "Stop"
 		}
+	}
 
-		if err := errGroup.Wait(); err != nil {
-			allErrors += err.Error()
-		}
+	if err := errGroup.Wait(); err != nil {
+		allErrors += err.Error()
+	}
 
-		close(controlChannel)
-	})
+	close(controlChannel)
 
-	Step("destroy apps", func() {
-		log.InfoD("Destroying apps")
-		for _, ctx := range contexts {
-			TearDownContext(ctx, opts)
-		}
-	})
+	log.InfoD("Destroying apps")
+	for _, ctx := range contexts {
+		TearDownContext(ctx, opts)
+	}
 
 	if allErrors != "" {
 		if IsReplacePolicySetToDelete {
