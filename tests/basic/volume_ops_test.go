@@ -2780,7 +2780,7 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 			contexts = make([]*scheduler.Context, 0)
 
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("purevolumestest-%d", i))...)
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsproxytest-%d", i))...)
 			}
 
 			for _, ctx := range contexts {
@@ -2821,6 +2821,111 @@ var _ = Describe("{NFSProxyVolumeValidation}", func() {
 				for _, ctx := range contexts {
 					log.InfoD("Validating application [%s]", ctx.App.Key)
 					ctx.SkipVolumeValidation = true //skipping as volume does not have the mount path inside the pod
+					ValidateContext(ctx)
+				}
+			})
+			PerformSystemCheck()
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{SharedVolFuseTest}", func() {
+	/*
+
+				https://portworx.atlassian.net/browse/PWX-35639
+			   https://portworx.atlassian.net/browse/PTX-21805
+
+
+		       	1. Deploy apps  with mix of sv4 service and sv4  using k8s
+		  		2.Get the list of coordinator nodes have sv4 volume attached
+				3.Stop/Start PX on the coordinator node
+				4.Check the failover has happened i.e. we  have new  coordinator node assigned after step 3
+		   		5.Repeat this in a loop for 10 iterations
+
+
+
+	*/
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("SharedVolFuseTest", "Validate PX operations after sharedv4 and sharedv4 svc volumes  failover multiple times", nil, 0)
+	})
+
+	It("schedule sharedv4 and sharedv4_svc volumes and perform failover of the coordinator node", func() {
+
+		stepLog = "create sharedv4 and sharedv4_svc apps "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appList := Inst().AppList
+
+			defer func() {
+				Inst().AppList = appList
+			}()
+
+			Inst().AppList = []string{"vdbench-sv4-svc", "fio-sharedv4"}
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pxfusetest-%d", i))...)
+			}
+
+			for _, ctx := range contexts {
+				log.InfoD("Validating application [%s]", ctx.App.Key)
+				ValidateContext(ctx)
+			}
+		})
+
+		stepLog = "restart PX on coordinator nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, ctx := range contexts {
+				vols, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes from the contexts")
+
+				for _, vol := range vols {
+					log.InfoD("Initiating failover iteration for volume [%s] of app [%s]", vol.Name, ctx.App.Key)
+					for i := 1; i <= 5; i++ {
+						log.Infof("Iteration: #%d for volume [%s]", i, vol.Name)
+						attachedNode, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+						log.FailOnError(err, "error getting attached node for volume [%s]", vol.Name)
+						log.Infof("vol [%s] is attached to node [%s]", vol.Name, attachedNode.Name)
+						StopVolDriverAndWait([]node.Node{*attachedNode})
+						log.Infof("waiting for 1 min before starting PX for volume corordinator to failover")
+						time.Sleep(1 * time.Second)
+						StartVolDriverAndWait([]node.Node{*attachedNode})
+						newAttachedNode, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 5*time.Second)
+						log.FailOnError(err, "error getting attached node for volume [%s]", vol.Name)
+						log.Infof("vol [%s] is now attached to node [%s]", vol.Name, newAttachedNode.Name)
+						ValidateContext(ctx)
+						for _, eachNode := range node.GetStorageDriverNodes() {
+							status, err := IsPxRunningOnNode(&eachNode)
+							log.FailOnError(err, "error checking px status on node [%s]", eachNode.Name)
+							dash.VerifyFatal(status, true, fmt.Sprintf("verfiy px is running on node [%s]", eachNode.Name))
+						}
+
+					}
+
+				}
+
+			}
+
+			Step("validate apps after all failovers", func() {
+				for _, ctx := range contexts {
+					log.InfoD("Validating application [%s]", ctx.App.Key)
 					ValidateContext(ctx)
 				}
 			})
