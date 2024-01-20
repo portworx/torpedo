@@ -14,6 +14,7 @@ import (
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -24,6 +25,7 @@ const (
 )
 
 var RancherMap = make(map[string]*RancherClusterParameters)
+var rancherUserPassword = "Password@123"
 
 type Rancher struct {
 	kube.K8s
@@ -182,6 +184,99 @@ func (r *Rancher) GetProjectID(projectName string) (string, error) {
 		}
 	}
 	return projectId, fmt.Errorf("no project matching the given projectName %s was found", projectName)
+}
+
+//CreateUsersForRancherProject Creates rancher users based on the supplied number and adds them to the project
+func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers int) ([]string, error) {
+	var userIDList []string
+	var principalIDList []string
+	userAnnotation := make(map[string]string)
+	userLabel := make(map[string]string)
+
+	projectId, err := r.GetProjectID(projectName)
+	if err != nil {
+		return nil, err
+	}
+	userAnnotation["field.cattle.io/projectId"] = projectId
+	userLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
+
+	for i := 1; i <= numberOfUsers; i++ {
+		userName := fmt.Sprintf("user%v-%v", i, time.Now().Unix())
+		displayName := fmt.Sprintf("Test " + userName)
+		userRequest := &rancherClient.User{
+			Username:    userName,
+			Password:    rancherUserPassword,
+			Name:        displayName,
+			Annotations: userAnnotation,
+			Labels:      userLabel,
+		}
+		newUser, err := r.client.User.Create(userRequest)
+		userIDList = append(userIDList, newUser.ID)
+		principalIDList = append(principalIDList, newUser.PrincipalIDs[0])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create user: %w", err)
+		}
+		//adding a sleep of 1sec because almost all users are getting created in the same second
+		time.Sleep(1 * time.Second)
+	}
+	for _, principalID := range principalIDList {
+		roleRequest := &rancherClient.ProjectRoleTemplateBinding{
+			ProjectID:       projectId,
+			UserPrincipalID: principalID,
+			RoleTemplateID:  "project-member",
+		}
+		_, err := r.client.ProjectRoleTemplateBinding.Create(roleRequest)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return userIDList, nil
+}
+
+//ValidateUsersInProject Validates the rancher users for a project by comparing the project members and the supplied list of users
+func (r *Rancher) ValidateUsersInProject(projectName string, userList []string) error {
+	var actualUserListForProject []string
+	projectId, err := r.GetProjectID(projectName)
+	if err != nil {
+		return err
+	}
+	roleMapping, err := r.client.ProjectRoleTemplateBinding.List(nil)
+	if err != nil {
+		return err
+	}
+	for _, role := range roleMapping.Data {
+		if role.ProjectID == projectId && role.Name != "creator-project-owner" {
+			actualUserListForProject = append(actualUserListForProject, role.UserID)
+		}
+	}
+	for _, user := range userList {
+		userFound := false
+		for _, actualUser := range actualUserListForProject {
+			if user == actualUser {
+				userFound = true
+				break
+			}
+		}
+		if !userFound {
+			return fmt.Errorf("user %s is not part of the actual user list for the project", user)
+		}
+	}
+	return nil
+}
+
+//DeleteRancherUsers Deletes all the users who are a part of the supplied list
+func (r *Rancher) DeleteRancherUsers(userIDList []string) error {
+	for _, userID := range userIDList {
+		userObj, err := r.client.User.ByID(userID)
+		if err != nil {
+			return err
+		}
+		err = r.client.User.Delete(userObj)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //Reason for updating the namespace with label and annotation for moving it to any project instead of using the inbuilt function:
