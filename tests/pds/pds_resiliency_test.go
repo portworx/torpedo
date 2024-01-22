@@ -373,7 +373,6 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 				log.FailOnError(err, "error on ValidateDataServiceVolumes method")
 				ValidateDeployments(resourceTemp, storageOp, config, ds.ScaleReplicas, dsVersionBuildMap)
 				dash.VerifyFatal(ds.ScaleReplicas, config.Replicas, "Validating replicas after scaling up of dataservice")
-
 			}
 		})
 		Step("Running Workloads", func() {
@@ -389,12 +388,10 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 				err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
 				log.FailOnError(err, "Failed while deleting the workload deployment")
 			}
-
 		})
 	})
 	JustAfterEach(func() {
 		EndTorpedoTest()
-
 	})
 })
 
