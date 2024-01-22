@@ -315,7 +315,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.InfoD("Kill stork when backup in progress")
 			pxNamespace, err := ssh.GetExecPodNamespace()
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-			err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxNamespace, storkLabel, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Killing stork while backups %s is in progress", backupNames))
 		})
 
@@ -343,7 +343,7 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 			log.InfoD("Kill stork when restore in-progress")
 			pxNamespace, err := ssh.GetExecPodNamespace()
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching PX namespace %s", pxNamespace))
-			err = DeletePodWithLabelInNamespace(pxNamespace, storkLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxNamespace, storkLabel, false)
 			dash.VerifyFatal(err, nil, "Killing stork while all the restores are in progress")
 		})
 		Step("Check if restore is successful when the stork restart happened", func() {
@@ -388,7 +388,6 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	var scheduledAppContexts []*scheduler.Context
 	userContexts := make([]context.Context, 0)
 	CloudCredUIDMap := make(map[string]string)
-	backupMap := make(map[string]string, 0)
 	var backupLocation string
 	var backupLocationUID string
 	var cloudCredUID string
@@ -399,6 +398,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	var backupName string
 	var clusterUid string
 	var cloudCredName string
+	var backupUID string
 	var clusterStatus api.ClusterInfo_StatusInfo_Status
 	timeStamp := time.Now().Unix()
 	bkpNamespaces = make([]string, 0)
@@ -466,9 +466,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		Step("Start backup of application to bucket", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
-			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, orgID, clusterUid, "", "", "", "")
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
@@ -494,7 +493,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			backupPodLabel["app"] = "px-backup"
 			pxbNamespace, err := backup.GetPxBackupNamespace()
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, backupPodLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, backupPodLabel, false)
 			dash.VerifyFatal(err, nil, "Restart backup pod when backup sharing is in-progress")
 			err = ValidatePodByLabel(backupPodLabel, pxbNamespace, 5*time.Minute, 30*time.Second)
 			log.FailOnError(err, "Checking if px-backup pod is in running state")
@@ -515,22 +514,17 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 				err = CreateApplicationClusters(orgID, "", "", ctxNonAdmin)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating source and destination cluster for user %s", user))
 
-				for _, backup := range backupNames {
-					// Get Backup UID
-					backupDriver := Inst().Backup
-					backupUID, err := backupDriver.GetBackupUID(ctx, backup, orgID)
-					log.FailOnError(err, "Failed while trying to get backup UID for - %s", backup)
-					backupMap[backup] = backupUID
+				// Get Backup UID
+				backupDriver := Inst().Backup
+				backupUID, err = backupDriver.GetBackupUID(ctx, backupName, orgID)
+				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
 
-					// Start Restore
-					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin, nil)
-
-					// Restore validation to make sure that the user with cannot restore
-					dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
-						fmt.Sprintf("Verifying backup restore [%s] is not possible for backup [%s] with user [%s]", restoreName, backup, user))
-
-				}
+				// Start Restore. Here the restore is expected to fail as the backup is shared with ViewOnlyAccess
+				restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
+				err = CreateRestore(restoreName, backupName, nil, destinationClusterName, orgID, ctxNonAdmin, nil)
+				// Restore validation to make sure that the user with cannot restore
+				dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true,
+					fmt.Sprintf("Verifying backup restore [%s] is not possible for backup [%s] with user [%s]", restoreName, backupName, user))
 			}
 		})
 
@@ -548,23 +542,23 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			mongoDBPodLabel["app.kubernetes.io/component"] = mongodbStatefulset
 			pxbNamespace, err := backup.GetPxBackupNamespace()
 			dash.VerifyFatal(err, nil, "Getting px-backup namespace")
-			err = DeletePodWithLabelInNamespace(pxbNamespace, mongoDBPodLabel)
+			err = DeletePodWithWithoutLabelInNamespace(pxbNamespace, mongoDBPodLabel, false)
 			dash.VerifyFatal(err, nil, "Restart mongo pod when backup sharing is in-progress")
 			err = IsMongoDBReady()
 			log.FailOnError(err, "Checking if mongo db pod is in running state")
 		})
+
 		Step("Validate the shared backup with users", func() {
 			for _, user := range users {
 				// Get user context
 				ctxNonAdmin, err := backup.GetNonAdminCtx(user, commonPassword)
 				log.FailOnError(err, "Fetching non admin ctx")
-
 				for _, backup := range backupNames {
 					// Start Restore
 					restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, time.Now().Unix())
-					err = CreateRestore(restoreName, backup, nil, destinationClusterName, orgID, ctxNonAdmin, nil)
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+					err = CreateRestoreWithValidation(ctxNonAdmin, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsToBackup)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restore the backup %s for user %s", backup, user))
-
 					// Delete restore
 					err = DeleteRestore(restoreName, orgID, ctxNonAdmin)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
@@ -583,10 +577,10 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 
 		log.InfoD("Deleting the backups")
-		for _, backup := range backupNames {
-			_, err := DeleteBackup(backup, backupMap[backup], orgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backup))
-		}
+
+		_, err = DeleteBackup(backupName, backupUID, orgID, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting the backup %s", backupName))
+
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 		var wg sync.WaitGroup
 		log.Infof("Generating user context")

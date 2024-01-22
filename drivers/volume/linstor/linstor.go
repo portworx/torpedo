@@ -128,6 +128,16 @@ func (d *linstor) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.Pro
 	return nil, nil
 }
 
+func (d *linstor) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
+	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
+	return nil, nil
+}
+
+func (d *linstor) KillPXDaemon(n []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	log.Warnf("KillPXDaemon function has not been implemented for volume driver - %s", d.String())
+	return nil
+}
+
 func init() {
 	torpedovolume.Register(DriverName, provisioners, &linstor{})
 }

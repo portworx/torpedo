@@ -605,6 +605,14 @@ spec:
       value: "${AWS_SECRET_ACCESS_KEY}"
     - name: AWS_REGION
       value: "${AWS_REGION}"
+    - name: AWS_MINIO_ACCESS_KEY_ID
+      value: "${AWS_MINIO_ACCESS_KEY_ID}"
+    - name: AWS_MINIO_SECRET_ACCESS_KEY
+      value: "${AWS_MINIO_SECRET_ACCESS_KEY}"
+    - name: AWS_MINIO_REGION
+      value: "${AWS_MINIO_REGION}"
+    - name: AWS_MINIO_ENDPOINT
+      value: "${AWS_MINIO_ENDPOINT}"
     - name: KUBECONFIGS
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
@@ -725,8 +733,16 @@ spec:
       value: "${VCLUSTER_PARALLEL_APPS}"
     - name: VCLUSTER_TOTAL_ITERATIONS
       value: "${VCLUSTER_TOTAL_ITERATIONS}"
+    - name: NUM_ML_WORKLOADS
+      value: "${NUM_ML_WORKLOADS}"
+    - name: ML_WORKLOAD_RUNTIME
+      value: "${ML_WORKLOAD_RUNTIME}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
+    - name: PX_BACKUP_MONGODB_USERNAME
+      value: "${PX_BACKUP_MONGODB_USERNAME}"
+    - name: PX_BACKUP_MONGODB_PASSWORD
+      value: "${PX_BACKUP_MONGODB_PASSWORD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -747,22 +763,54 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 900) ; do
-  printf .
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
-  if [ "$state" == "Error" ]; then
-    echo "Error: Torpedo finished with $state state"
+function terminate_pod_then_exit {
+    echo "Terminating Ginkgo test in Torpedo pod..."
+    # Fetch the PID of the Ginkgo test process
+    local test_pid
+    test_pid=$(kubectl exec torpedo -- pgrep -f 'torpedo/bin')
+    if [ "$test_pid" ]; then
+        # Using SIGKILL instead of SIGTERM to immediately stop the process.
+        # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
+        # but the intention here is to stop the process immediately.
+        echo "Sending SIGKILL to terminate Ginkgo test process with PID: $test_pid"
+        kubectl exec torpedo -- kill -SIGKILL "$test_pid"
+    fi
+    exit 1
+}
+
+trap terminate_pod_then_exit SIGTERM
+
+# The for loop is run in a background process (subshell) to allow the main script
+# to remain responsive to signals (SIGTERM, SIGINT) while the loop is executing.
+(
+    first_iteration=true
+    for i in $(seq 1 900); do
+        echo "Iteration: $i"
+        state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+
+        if [ "$state" == "Error" ]; then
+            echo "Error: Torpedo finished with $state state"
+            describe_pod_then_exit
+        elif [ "$state" == "Running" ]; then
+            # For the first iteration, display all logs. Later, only from 1 minute ago
+            if [ "$first_iteration" = true ]; then
+                echo "Logs from first iteration"
+                kubectl logs -f torpedo
+                first_iteration=false
+            else
+                echo "Logs from iteration: $i"
+                kubectl logs -f --since=1m torpedo
+            fi
+        elif [ "$state" == "Completed" ]; then
+            echo "Success: Torpedo finished with $state state"
+            exit 0
+        fi
+
+        sleep 1
+    done
+
+    echo "Error: Failed to wait for torpedo to start running..."
     describe_pod_then_exit
-  elif [ "$state" == "Running" ]; then
-    echo ""
-    kubectl logs -f torpedo
-  elif [ "$state" == "Completed" ]; then
-    echo "Success: Torpedo finished with $state state"
-    exit 0
-  fi
+) &
 
-  sleep 1
-done
-
-echo "Error: Failed to wait for torpedo to start running..."
-describe_pod_then_exit
+wait $!
