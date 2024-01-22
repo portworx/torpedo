@@ -4481,7 +4481,7 @@ func GetAllRestoresForUser(username string, password string) ([]string, error) {
 }
 
 // CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
-func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context) (err error) {
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context, ObjectLock bool, AutoDeleteForObjectLock bool) (err error) {
 	backupDriver := Inst().Backup
 	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4492,8 +4492,8 @@ func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCo
 
 		SchedulePolicy: &api.SchedulePolicyInfo{
 			Interval:      &api.SchedulePolicyInfo_IntervalPolicy{Retain: retian, Minutes: intervalMins, IncrementalCount: &api.SchedulePolicyInfo_IncrementalCount{Count: incrCount}},
-			ForObjectLock: false,
-			AutoDelete:    false,
+			ForObjectLock: ObjectLock,
+			AutoDelete:    AutoDeleteForObjectLock,
 		},
 	}
 
