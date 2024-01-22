@@ -307,7 +307,7 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 		}
 	})
 
-	It("Deploy Dataservices and Restart PX During App scaleup", func() {
+	It("Deploy Dataservices and Kill PDS Pod Agent while App scaleup", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var wlDeploymentsToBeCleaned []*v1.Deployment
 
