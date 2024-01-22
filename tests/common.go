@@ -10159,6 +10159,46 @@ func DeleteAllNamespacesCreatedByTestCase() error {
 	return nil
 }
 
+func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
+
+	t := func() (interface{}, bool, error) {
+		pxVol, err := Inst().V.InspectVolume(volName)
+		if err != nil {
+			log.Warnf("Failed to inspect volume [%s], Err: %v", volName, err)
+			return nil, false, err
+		}
+
+		for _, n := range node.GetStorageDriverNodes() {
+			ok, err := Inst().V.IsVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				return &n, false, err
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volName)
+	}
+
+	n, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != nil {
+		attachedNode := n.(*node.Node)
+		return attachedNode, nil
+	}
+
+	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
+}
+
 // GetProcessPID returns the PID of KVDB master node
 func GetProcessPID(memberNode node.Node, processName string) (string, error) {
 	var processPid string
@@ -10204,17 +10244,9 @@ func KillPxExecUsingPid(memberNode node.Node) error {
 
 // KillPxStorageUsingPid return error in case of command failure
 func KillPxStorageUsingPid(memberNode node.Node) error {
-	pid, err := GetProcessPID(memberNode, "px-storage")
-	if err != nil {
-		return err
-	}
-	if pid == "" {
-		log.InfoD("Procrss with PID doesnot exists !! ")
-		return nil
-	}
-	command := fmt.Sprintf("kill -9 %s", pid)
-	log.InfoD("killing PID using command [%s]", command)
-	err = runCmd(command, memberNode)
+	nodes := []node.Node{}
+	nodes = append(nodes, memberNode)
+	err := Inst().V.StopDriver(nodes, true, nil)
 	if err != nil {
 		return err
 	}

@@ -758,30 +758,30 @@ var _ = Describe("{CreateCloudSnapAndDelete}", func() {
 	})
 })
 
-func getVolumeAttachedNodeAndKill(volName *volume.Volume) (string, *node.Node, error) {
+func getVolumeAttachedNodeAndKill(volName *volume.Volume) (*node.Node, error) {
 	appVol, err := Inst().V.InspectVolume(volName.ID)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	attachedNode := appVol.AttachedOn
 	log.InfoD("Volume [%v] is attached to Node [%v]", volName.Name, attachedNode)
 
 	nodeDetails, err := node.GetNodeByIP(attachedNode)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	killPxExecErr := KillPxExecUsingPid(nodeDetails)
 	if killPxExecErr != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	killPxStorageErr := KillPxStorageUsingPid(nodeDetails)
 	if killPxStorageErr != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	return attachedNode, &nodeDetails, nil
+	return &nodeDetails, nil
 }
 
 func isPodStuckNotRunning(nameSpace string) (bool, map[string]string, error) {
@@ -850,8 +850,8 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 		go func(nameSpace string) {
 			defer GinkgoRecover()
 			for {
-				podRestating, restartNode, err := isPodStuckNotRunning(nameSpace)
-				if podRestating && len(restartNode) > 1 {
+				podRestarting, restartNode, err := isPodStuckNotRunning(nameSpace)
+				if podRestarting && len(restartNode) > 1 {
 					isPodRestarting = true
 				}
 
@@ -862,11 +862,12 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 				// Wait for a few min and retry pod status to check if it is settled
 				time.Sleep(2 * time.Minute)
 				_, restartNodeAfter, err := isPodStuckNotRunning(nameSpace)
-				if podRestating && len(restartNode) > 1 {
+				if podRestarting && len(restartNode) > 1 {
 					for key, _ := range restartNodeAfter {
 						if restartNodeAfter[key] == restartNode[key] {
 							isPodRestarting = true
 							terminateScript = true
+							break
 						}
 					}
 				} else {
@@ -886,24 +887,24 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 				rand.Seed(time.Now().UnixNano())
 				randomNumber := rand.Intn(3) + 1
 
-				nodeIP, nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
+				nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
 				log.FailOnError(err, "Failed to kill Px Daemons")
-				log.InfoD("Volume  is Attached on Node {%s}", nodeIP)
+				log.InfoD("Volume  is Attached on Node {%s}", nodeDetail.GetMgmtIp())
 				restartedNode = append(restartedNode, *nodeDetail)
 
 				if randomNumber == 3 {
 					for i := 0; i < 2; i++ {
-						nodeIP, nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
+						nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
 						log.FailOnError(err, "Failed to kill Px Daemons")
-						log.InfoD("Volume  is Attached on Node {%s}", nodeIP)
+						log.InfoD("Volume  is Attached on Node {%s}", nodeDetail.GetMgmtIp())
 						restartedNode = append(restartedNode, *nodeDetail)
 					}
 				}
 
 				if randomNumber == 2 {
-					nodeIP, nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
+					nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
 					log.FailOnError(err, "Failed to kill Px Daemons")
-					log.InfoD("Volume  is Attached on Node {%s}", nodeIP)
+					log.InfoD("Volume  is Attached on Node {%s}", nodeDetail.GetMgmtIp())
 					restartedNode = append(restartedNode, *nodeDetail)
 				}
 
