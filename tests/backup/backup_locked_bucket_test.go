@@ -1279,11 +1279,10 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule - %s", preRuleNameList[0]))
 			}
 
-			log.InfoD(" Kiyer >> Dedbug List of all Post Rule names: %t", len(postRuleNameList) > 0)
 			if len(postRuleNameList) > 0 {
 				postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting postrule object for  - %s", postRuleNameList[0]))
-				log.InfoD("Inside the block with postRuleNameList length: %s", postRuleNameList)
+
 				log.InfoD("Update post-rule ownership for users - [%v]", userNames)
 				err = AddRuleOwnership(postRuleNameList[0], postRuleUid, userNames, nil, Read, Invalid, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule - %s", postRuleNameList[0]))
