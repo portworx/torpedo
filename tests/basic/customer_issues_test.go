@@ -818,6 +818,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 
 		var isPodRestarting bool = false
 		var terminateScript bool = false
+		var terminateAll bool = false
 
 		Inst().AppList = []string{"vdbench-sv4-svc"}
 		contexts = make([]*scheduler.Context, 0)
@@ -859,6 +860,10 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 					log.FailOnError(err, "failed with error")
 				}
 
+				if terminateAll {
+					break
+				}
+
 				// Wait for a few min and retry pod status to check if it is settled
 				time.Sleep(2 * time.Minute)
 				_, restartNodeAfter, err := isPodStuckNotRunning(nameSpace)
@@ -867,7 +872,6 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 						if restartNodeAfter[key] == restartNode[key] {
 							isPodRestarting = true
 							terminateScript = true
-							break
 						}
 					}
 				} else {
@@ -930,6 +934,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 				time.Sleep(10 * time.Minute)
 			}
 		}
+		terminateAll = true
 		if !terminateScript {
 			appsValidateAndDestroy(contexts)
 		}
