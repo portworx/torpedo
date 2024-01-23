@@ -1270,7 +1270,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 
-			if len(preRuleNameList) > 0 {
+			if len(preRuleNameList) > 1 {
 				preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting prerule object for  - %s", preRuleNameList[0]))
 
@@ -1279,7 +1279,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule - %s", preRuleNameList[0]))
 			}
 
-			if len(postRuleNameList) > 0 {
+			if len(postRuleNameList) > 1 {
 				postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting postrule object for  - %s", postRuleNameList[0]))
 
