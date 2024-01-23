@@ -817,7 +817,6 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 	It(stepLog, func() {
 
 		var isPodRestarting bool = false
-		var terminateScript bool = false
 		var terminateAll bool = false
 
 		Inst().AppList = []string{"vdbench-sv4-svc"}
@@ -827,6 +826,9 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 		}
 		ValidateApplications(contexts)
 		//defer appsValidateAndDestroy(contexts)
+
+		// Sleep for some time for IO's to start running
+		time.Sleep(30 * time.Second)
 
 		allVolumes, err := GetAllVolumesWithIO(contexts)
 		log.FailOnError(err, "Failed to get volumes with IO Running")
@@ -871,12 +873,10 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 					for key, _ := range restartNodeAfter {
 						if restartNodeAfter[key] == restartNode[key] {
 							isPodRestarting = true
-							terminateScript = true
 						}
 					}
 				} else {
 					isPodRestarting = false
-					terminateScript = false
 				}
 			}
 		}(randomVol.Namespace)
@@ -884,9 +884,6 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 		// Kill Random nodes associated with the volume one co-ordinator node every time
 		for loopKill := 0; loopKill < 30; loopKill++ {
 			restartedNode := []node.Node{}
-			if terminateScript {
-				break
-			}
 			if isPodRestarting == false {
 				rand.Seed(time.Now().UnixNano())
 				randomNumber := rand.Intn(3) + 1
@@ -929,15 +926,22 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 					err = Inst().V.WaitDriverUpOnNode(nodes, 20*time.Minute)
 					log.FailOnError(err, "Failed Waiting for Node to Come Online")
 				}
+				time.Sleep(2 * time.Minute)
+				restarting, _, err := isPodStuckNotRunning(randomVol.Namespace)
+				if restarting == true {
+					terminateAll = true
+					break
+				}
+
 			} else {
 				// Waiting for 10 min before checking the details
 				time.Sleep(10 * time.Minute)
 			}
 		}
-		terminateAll = true
-		if !terminateScript {
+		if !terminateAll {
 			appsValidateAndDestroy(contexts)
 		}
+		terminateAll = true
 	})
 
 	JustAfterEach(func() {
