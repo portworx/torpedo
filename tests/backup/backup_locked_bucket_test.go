@@ -1092,12 +1092,11 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 // BackupToLockedBucketWithSharedObjects creates backup with shared backup objects
 var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 	var (
-		appList               = Inst().AppList
+		preRuleName           string
+		postRuleName          string
 		credName              string
 		restoreNames          []string
 		schedulePolicyNames   []string
-		preRuleNameList       []string
-		postRuleNameList      []string
 		scheduledAppContexts  []*scheduler.Context
 		backupList            []string
 		backupLocation        string
@@ -1115,19 +1114,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("BackupToLockedBucketWithSharedObjects", "Backup with Shared objects", nil, 59893, Kshithijiyer, Q4FY24)
-		log.InfoD("Verifying if the pre/post rules for the required apps are present in the list or not")
-		for i := 0; i < len(appList); i++ {
-			if Contains(postRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["post_action_list"]; ok {
-					dash.VerifyFatal(ok, true, fmt.Sprintf("Post Rule details mentioned for the apps %s", appList[i]))
-				}
-			}
-			if Contains(preRuleApp, appList[i]) {
-				if _, ok := portworx.AppParameters[appList[i]]["pre_action_list"]; ok {
-					dash.VerifyFatal(ok, true, fmt.Sprintf("Pre Rule details mentioned for the apps %s", appList[i]))
-				}
-			}
-		}
+
 		log.InfoD("Deploy applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1160,23 +1147,23 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 			}
 		})
 
-		Step("Creating rules for backup", func() {
-			log.InfoD("Creating pre rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "pre")
-				log.FailOnError(err, "Creating pre rule for deployed apps failed")
-				dash.VerifyFatal(preRuleStatus, true, fmt.Sprintf("Verifying pre rule %s for backup", ruleName))
-				preRuleNameList = append(preRuleNameList, ruleName)
+		Step(fmt.Sprintf("Verify creation of pre and post exec rules for applications for Px-Admin user"), func() {
+			log.InfoD("Verify creation of pre and post exec rules for applications for Px-Admin user")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(orgID, Inst().AppList, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of pre and post exec rules for applications from px-admin"))
+			if preRuleName != "" {
+				preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleName)
+				log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleName)
+				log.Infof("Pre backup rule [%s] uid: [%s]", preRuleName, preRuleUid)
 			}
-			log.InfoD("Creating post rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], orgID, "post")
-				log.FailOnError(err, "Creating post rule for deployed apps failed")
-				dash.VerifyFatal(postRuleStatus, true, fmt.Sprintf("Verifying post rule %s for backup", ruleName))
-				postRuleNameList = append(postRuleNameList, ruleName)
+			if postRuleName != "" {
+				postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleName)
+				log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleName)
+				log.Infof("Post backup rule [%s] uid: [%s]", postRuleName, postRuleUid)
 			}
 		})
-
 		Step(fmt.Sprintf("Create a schedule policy with and without autodelete enabled"), func() {
 			log.InfoD("Verify Px-Admin User has permission to create a schedule policy")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -1270,22 +1257,22 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 
-			if len(preRuleNameList) > 1 {
-				preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting prerule object for  - %s", preRuleNameList[0]))
+			if preRuleName != "" {
+				preRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, preRuleName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting prerule object for  - %s", preRuleName))
 
 				log.InfoD("Update pre-rule ownership for users - [%v]", userNames)
-				err = AddRuleOwnership(preRuleNameList[0], preRuleUid, userNames, nil, Read, Invalid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule - %s", preRuleNameList[0]))
+				err = AddRuleOwnership(preRuleName, preRuleUid, userNames, nil, Read, Invalid, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for pre-rule - %s", preRuleName))
 			}
 
-			if len(postRuleNameList) > 1 {
-				postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting postrule object for  - %s", postRuleNameList[0]))
+			if postRuleName != "" {
+				postRuleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, postRuleName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting postrule object for  - %s", postRuleName))
 
 				log.InfoD("Update post-rule ownership for users - [%v]", userNames)
-				err = AddRuleOwnership(postRuleNameList[0], postRuleUid, userNames, nil, Read, Invalid, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule - %s", postRuleNameList[0]))
+				err = AddRuleOwnership(postRuleName, postRuleUid, userNames, nil, Read, Invalid, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for post-rule - %s", postRuleName))
 			}
 
 		})
@@ -1297,12 +1284,13 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 					log.InfoD("Register cluster for backup with user %s", customUser)
 					ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 					log.FailOnError(err, "failed to fetch user %s ctx", customUser)
-					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+					preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleName)
+					postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleName)
 					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, RandomString(5), backupLocationName)
 					backupList = append(backupList, backupName)
+					clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, orgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}
 				backupAndUserMap[customUser] = backupList
@@ -1315,11 +1303,13 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 				for _, backupName := range backups {
-					restoreName := fmt.Sprintf("%s-restore-%v-%s", backupName, time.Now().Unix(), backupName)
-					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), SourceClusterName, orgID, appContextsToBackup)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
-					restoreNames = append(restoreNames, restoreName)
+					for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
+						restoreName := fmt.Sprintf("%s-restore-%v-%s", backupName, time.Now().Unix(), backupName)
+						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+						err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), clusterName, orgID, appContextsToBackup)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore %s", restoreName))
+						restoreNames = append(restoreNames, restoreName)
+					}
 				}
 				restoreAndUserMap[customUser] = restoreNames
 			}
@@ -1334,11 +1324,11 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				for backupLocationUID, backupLocationName := range BackupLocationMap {
 					for _, schedulePolicyName := range schedulePolicyNames {
 						userScheduleName := fmt.Sprintf("backup-schedule-%v-%s", time.Now().Unix(), backupLocationName)
-						preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleNameList[0])
-						postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleNameList[0])
+						preRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, preRuleName)
+						postRuleUid, _ := Inst().Backup.GetRuleUid(orgID, ctx, postRuleName)
 						periodicSchedulePolicyUid, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schedulePolicyName)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Getting schedulepolicy object for  - %s", schedulePolicyName))
-						_, err = CreateScheduleBackupWithValidation(ctx, userScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, schedulePolicyName, periodicSchedulePolicyUid)
+						_, err = CreateScheduleBackupWithValidation(ctx, userScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, periodicSchedulePolicyUid)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", schedulePolicyName))
 					}
 				}
