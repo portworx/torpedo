@@ -20,12 +20,7 @@ import (
 
 func TestDataService(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : pds", specReporters)
-
+	RunSpecs(t, "Torpedo : pds")
 }
 
 var _ = BeforeSuite(func() {

@@ -496,6 +496,7 @@ spec:
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--poll-progress-after", "10m",
+            --junit-report=/testresults/junit_basic.xml,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,

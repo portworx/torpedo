@@ -120,6 +120,7 @@ spec:
             "$SKIP_ARG",
              "--poll-progress-after", "10m",
             "bin/basic.test",
+            --junit-report=/testresults/junit_basic.xml,
             "--",
             "--spec-dir", "../drivers/scheduler/k8s/specs",
             "--node-driver", "aws",

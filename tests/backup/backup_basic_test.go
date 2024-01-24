@@ -87,11 +87,7 @@ func getGlobalLockedBucketName(provider string) string {
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
+	RunSpecs(t, "Torpedo : Backup")
 }
 
 // BackupInitInstance initialises instances required for backup

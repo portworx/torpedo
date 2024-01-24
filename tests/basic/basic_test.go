@@ -40,11 +40,7 @@ var dash *aetosutil.Dashboard
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Basic", specReporters)
+	RunSpecs(t, "Torpedo : Backup")
 }
 
 var _ = BeforeSuite(func() {
