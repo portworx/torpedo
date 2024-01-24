@@ -6842,6 +6842,7 @@ func ValidateCustomResourceRestores(ctx context.Context, orgID string, resourceL
 	var errList []error
 	var wg sync.WaitGroup
 	for restoreName, contexts := range restoreContextMap {
+		contexts := contexts
 		restoreInspectRequest := &api.RestoreInspectRequest{
 			Name:  restoreName,
 			OrgId: orgID,
