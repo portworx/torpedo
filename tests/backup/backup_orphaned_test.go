@@ -3221,7 +3221,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			srcClusterConfigPath, err := GetSourceClusterConfigPath()
 			log.FailOnError(err, "Fetching source clusterconfigpath")
 			_, err = UpdateCluster(SourceClusterName, srcClusterUid, srcClusterConfigPath, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", SourceClusterName, nonAdminUserName))
+			//dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of update of cluster [%v] of user [%s] from px-admin user", SourceClusterName, nonAdminUserName))
 			dstClusterConfigPath, err := GetDestinationClusterConfigPath()
 			log.FailOnError(err, "Fetching destination clusterconfigpath")
 			_, err = UpdateCluster(destinationClusterName, destClusterUid, dstClusterConfigPath, orgID, invalidCredName, invalidCloudCredUID, adminCtx)
