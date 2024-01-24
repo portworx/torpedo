@@ -179,7 +179,7 @@ var _ = BeforeSuite(func() {
 	GlobalCredentialConfig, err = GetConfigObj()
 	dash.VerifyFatal(err, nil, "Fetching the cloud config details and persisting into globalConfig struct")
 	// Create the first bucket from the list to be used as generic bucket
-	providers := GetProviders()
+	providers := GetBackupProviders()
 	bucketNameSuffix := getBucketNameSuffix()
 	for _, provider := range providers {
 		switch provider {
@@ -360,7 +360,7 @@ var _ = AfterSuite(func() {
 	dash.VerifySafely(err, nil, "Verifying cloud credential deletion success")
 
 	// Cleanup all buckets after suite
-	providers := GetProviders()
+	providers := GetBackupProviders()
 	for _, provider := range providers {
 		switch provider {
 		case drivers.ProviderAws:

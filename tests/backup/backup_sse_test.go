@@ -90,7 +90,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 	It("Create backup and restore for all combinations of SSE-S3 form px-backup side and deny policy configured on AWS S3 bucket", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		providers := GetProviders()
+		providers := GetBackupProviders()
 
 		for _, provider := range providers {
 			Step("Validate applications", func() {
@@ -528,7 +528,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
 		// Delete custom buckets
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		for _, provider := range providers {
 			for _, customBucket := range customBuckets {
 				log.InfoD("Deleting bucket  - %s", customBucket)

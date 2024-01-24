@@ -34,7 +34,7 @@ var _ = Describe("{MultipleBackupLocationWithSameEndpoint}", func() {
 		restoreNames                  []string
 		numberOfBackupLocation        = 1000
 		numberOfBackups               = 30
-		providers                     = GetProviders()
+		providers                     = GetBackupProviders()
 		timeBetweenConsecutiveBackups = 10 * time.Second
 		controlChannel                chan string
 		errorGroup                    *errgroup.Group

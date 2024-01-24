@@ -28,7 +28,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 		scheduledAppContexts                           = make([]*scheduler.Context, 0)
 		appNamespaces                                  = make([]string, 0)
 		infraAdminUsers                                = make([]string, 0)
-		providers                                      = GetProviders()
+		providers                                      = GetBackupProviders()
 		userCloudCredentialMap                         = make(map[string]map[string]string)
 		userBackupLocationMap                          = make(map[string]map[string]string)
 		userClusterMap                                 = make(map[string]map[string]string)
@@ -383,7 +383,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 		scheduledAppContexts                       = make([]*scheduler.Context, 0)
 		appNamespaces                              = make([]string, 0)
 		infraAdminUsers                            = make([]string, 0)
-		providers                                  = GetProviders()
+		providers                                  = GetBackupProviders()
 		userCloudCredentialMap                     = make(map[string]map[string]string)
 		userBackupLocationMap                      = make(map[string]map[string]string)
 		userClusterMap                             = make(map[string]map[string]string)
@@ -711,7 +711,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 		scheduledAppContexts       = make([]*scheduler.Context, 0)
 		appNamespaces              = make([]string, 0)
 		infraAdminUsers            = make([]string, 0)
-		providers                  = GetProviders()
+		providers                  = GetBackupProviders()
 		userCloudCredentialMap     = make(map[string]map[string]string)
 		userBackupLocationMap      = make(map[string]map[string]string)
 		userClusterMap             = make(map[string]map[string]string)
@@ -1091,7 +1091,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 		appNamespaces                                  = make([]string, 0)
 		userCloudCredentialMap                         = make(map[string]string)
 		userBackupLocationMap                          = make(map[string]string)
-		providers                                      = GetProviders()
+		providers                                      = GetBackupProviders()
 		userInProgressBackupNames                      = make([]string, 0)
 		userFailedBackupNames                          = make([]string, 0)
 		userSuccessfulBackupMap                        = make(map[string]string)
@@ -1582,7 +1582,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 	var (
 		scheduledAppContexts                       = make([]*scheduler.Context, 0)
 		appNamespaces                              = make([]string, 0)
-		providers                                  = GetProviders()
+		providers                                  = GetBackupProviders()
 		userCloudCredentialMap                     = make(map[string]map[string]string)
 		userBackupLocationMap                      = make(map[string]map[string]string)
 		userClusterMap                             = make(map[string]map[string]string)
@@ -1888,7 +1888,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 	It("Delete backups by user from admin with non-shared RBAC objects", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -2536,7 +2536,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 	It("Delete backups by user from admin with shared RBAC objects", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -3073,7 +3073,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 		periodicSchedulePolicyUid      string
 		bkpNamespaces                  = make([]string, 0)
 		backupLocationMap              = make(map[string]string)
-		providers                      = GetProviders()
+		providers                      = GetBackupProviders()
 		userBackupNames                = make([]string, 0)
 		controlChannel                 chan string
 		errorGroup                     *errgroup.Group
@@ -3311,7 +3311,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 		bkpNamespaces                  = make([]string, 0)
 		timeBetweenConsecutiveBackups  = 10 * time.Second
 		backupLocationMap              = make(map[string]string)
-		providers                      = GetProviders()
+		providers                      = GetBackupProviders()
 		userIdMap                      = make(map[string]string)
 		backupLocationUserMap          = make(map[string]string)
 		backupLocationUidUserMap       = make(map[string]string)

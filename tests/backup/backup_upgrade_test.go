@@ -87,7 +87,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Adding Cloud Account", func() {
 			log.InfoD("Adding cloud account")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -319,7 +319,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
-			providers := GetProviders()
+			providers := GetBackupProviders()
 			backupLocationMap = make(map[string]string, 0)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
