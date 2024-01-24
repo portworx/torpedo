@@ -2236,7 +2236,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		}
 	}
 
-	currentPodAge, err := GetPodAge()
+	currentPodAge, err := GetBackupPodAge()
 	if err != nil {
 		return err
 	}
@@ -4725,7 +4725,7 @@ func GetAllRestoresForUser(username string, password string) ([]string, error) {
 }
 
 // CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
-func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context.Context, ObjectLock bool, AutoDeleteForObjectLock bool) (err error) {
+func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context1.Context, ObjectLock bool, AutoDeleteForObjectLock bool) (err error) {
 	backupDriver := Inst().Backup
 	schedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4853,11 +4853,11 @@ func DeleteAllBackups(ctx context1.Context, orgId string) error {
 type RoleServices string
 
 const (
-	SchedulePolicy  RoleServices = "schedulepolicy"
-	Rules                        = "rules"
-	Cloudcredential              = "cloudcredential"
-	BackupLocation               = "backuplocation"
-	Role                         = "role"
+	BackupSchedulePolicy RoleServices = "schedulepolicy"
+	Rules                             = "rules"
+	Cloudcredential                   = "cloudcredential"
+	BackupLocation                    = "backuplocation"
+	Role                              = "role"
 )
 
 type RoleApis string
@@ -5678,7 +5678,7 @@ func CheckBackupObjectForUnexpectedNS(ctx context1.Context, backupName string) e
 type nsPodAge map[string]time.Time
 
 // getPodAge gets the pod age of all pods on all the namespaces on the cluster
-func GetPodAge() (map[string]nsPodAge, error) {
+func GetBackupPodAge() (map[string]nsPodAge, error) {
 	var podAge = make(map[string]nsPodAge)
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
@@ -5700,7 +5700,7 @@ func GetPodAge() (map[string]nsPodAge, error) {
 // comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
 func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
-	podAge, err := GetPodAge()
+	podAge, err := GetBackupPodAge()
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
@@ -6747,7 +6747,7 @@ func SuspendAndDeleteAllSchedulesForUsers(userNames []string, clusterName string
 
 	for _, user := range userNames {
 		log.InfoD("Getting context for non admin user %s", user)
-		ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+		ctx, err := backup.GetNonAdminCtx(user, CommonPassword)
 		if err != nil {
 			return err
 		}
