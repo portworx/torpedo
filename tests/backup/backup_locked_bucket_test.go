@@ -1101,6 +1101,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 		backupList            []string
 		backupLocation        string
 		clusterUid            string
+		scheduleList          []string
 		clusterStatus         api.ClusterInfo_StatusInfo_Status
 		labelSelectors        = make(map[string]string)
 		CloudCredUIDMap       = make(map[string]string)
@@ -1110,6 +1111,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 		restoreAndUserMap     = make(map[string][]string)
 		bkpNamespaces         = make([]string, 0)
 		restoreAndUserMapSchd = make(map[string][]string)
+		backupSchedAndUserMap = make(map[string][]string)
 	)
 
 	JustBeforeEach(func() {
@@ -1332,8 +1334,11 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Getting schedulepolicy object for  - %s", schedulePolicyName))
 						_, err = CreateScheduleBackupWithValidation(ctx, userScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, periodicSchedulePolicyUid)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", schedulePolicyName))
+						scheduleList = append(scheduleList, userScheduleName)
 					}
 				}
+				backupSchedAndUserMap[customUser] = scheduleList
+				scheduleList = nil
 			}
 		})
 
@@ -1366,6 +1371,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 		DestroyApps(scheduledAppContexts, opts)
 
 		// cleaning up all the restores created in the tests
+		log.Info("Removing restores created by other users")
 		for customUser, restores := range restoreAndUserMap {
 			ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
@@ -1382,6 +1388,14 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				err := DeleteRestore(restoreName, orgID, ctx)
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 			}
+		}
+
+		log.InfoD("Cleanup schedule policies for non admin users")
+		for customUser, schedules := range backupSchedAndUserMap {
+			ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
+			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
+			err = DeleteBackupSchedulePolicyWithContext(orgID, schedules, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s] of the user %s", schedules, customUser))
 		}
 
 		log.InfoD("Deleting backup location and cloud setting")
