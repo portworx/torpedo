@@ -23,7 +23,7 @@ import (
 	"github.com/portworx/torpedo/drivers/volume"
 	corev1 "k8s.io/api/core/v1"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

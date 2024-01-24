@@ -75,7 +75,7 @@ import (
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -5369,7 +5369,7 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
-//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
 func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
 	// Getting NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()

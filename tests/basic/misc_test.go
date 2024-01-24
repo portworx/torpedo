@@ -11,7 +11,7 @@ import (
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/log"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
