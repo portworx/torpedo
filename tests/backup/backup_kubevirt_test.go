@@ -57,7 +57,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 		namespaceMappingRestart = make(map[string]string)
 		namespaceMappingStopped = make(map[string]string)
 		namespaceWithStoppedVM = make([]string, 0)
-		providers = GetProviders()
+		providers = GetBackupProviders()
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -487,7 +487,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
-		providers = GetProviders()
+		providers = GetBackupProviders()
 		namespaceMapping = make(map[string]string)
 
 		log.InfoD("scheduling applications")

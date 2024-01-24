@@ -62,7 +62,7 @@ var _ = Describe("{NamespaceLabelledBackupSharedWithDifferentAccessMode}", func(
 		log.InfoD("List of all namespaces deployed are %v", bkpNamespaces)
 	})
 	It("Take namespace labelled backup and share with users having different access mode", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -259,7 +259,7 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 	It("Schedule backup using namespace label for old and new namespaces", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -485,7 +485,7 @@ var _ = Describe("{ManualAndScheduledBackupUsingNamespaceAndResourceLabel}", fun
 		log.InfoD("Created namespaces : %v", bkpNamespaces)
 	})
 	It("Manual, schedule backup and restore using namespace label and resource label", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -685,7 +685,7 @@ var _ = Describe("{ScheduleBackupWithAdditionAndRemovalOfNS}", func() {
 		log.InfoD("Created namespaces : %v", bkpNamespaces)
 	})
 	It("Perform schedule backup during which remove and add namespace and verify restoration of removed namespace", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -934,7 +934,7 @@ var _ = Describe("{ManualAndScheduleBackupUsingNSLabelWithMaxCharLimit}", func()
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 	It("Manual, schedule backup and restore of single, multiple and all namespaces with namespace labeled as max character limit", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -1284,7 +1284,7 @@ var _ = Describe("{NamespaceLabelledBackupOfEmptyNamespace}", func() {
 		log.InfoD("Created namespaces %v", bkpNamespaces)
 	})
 	It("Namespace labelled backup of empty namespace and restore it", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()

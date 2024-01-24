@@ -44,7 +44,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 		cloudCredentialFromAdmin        []string
 		backupLocationsFromAdmin        []string
 		userNames                       = make([]string, 0)
-		providers                       = GetProviders()
+		providers                       = GetBackupProviders()
 		bkpNamespaces                   []string
 		infraAdminRole                  backup.PxBackupRole = backup.InfrastructureOwner
 		labelSelectors                  map[string]string
@@ -789,7 +789,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 		userBackupNamesMap         = make(map[string][]string)
 		backupLocationMap          = make(map[string]string)
 		userNames                  = make([]string, 0)
-		providers                  = GetProviders()
+		providers                  = GetBackupProviders()
 		bkpNamespaces              []string
 		labelSelectors             map[string]string
 		mutex                      sync.Mutex
@@ -1118,7 +1118,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 		backupLocationMap               = make(map[string]string)
 		backupLocationsFromAdmin        []string
 		userNames                       = make([]string, 0)
-		providers                       = GetProviders()
+		providers                       = GetBackupProviders()
 		bkpNamespaces                   []string
 		appAdminRole                    = backup.ApplicationOwner
 		labelSelectors                  map[string]string
@@ -1667,7 +1667,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 		backupLocationName              string
 		bkpNamespaces                   []string
 		appUser                         string
-		providers                       = GetProviders()
+		providers                       = GetBackupProviders()
 		backupLocationMap               = make(map[string]string)
 		periodicSchedulePolicyName      string
 		periodicSchedulePolicyUid       string

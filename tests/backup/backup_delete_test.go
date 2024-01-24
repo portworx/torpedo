@@ -66,7 +66,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 	})
 
 	It("Issue delete of incremental backups and try to restore the newest backup", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -251,7 +251,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 	})
 
 	It("Delete incremental Backups and re-create them", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -384,7 +384,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 		errorGroup                 *errgroup.Group
 	)
 
-	providers := GetProviders()
+	providers := GetBackupProviders()
 	backupLocationMap = make(map[string]string)
 	localBucketNameMap = make(map[string]string)
 	appContextsToBackupMap := make(map[string][]*scheduler.Context)
@@ -634,7 +634,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
 			}
 		}
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		log.Info("Check if backup location is empty or not")
 		customBucketName = fmt.Sprintf("custom-bucket-%v", time.Now().Unix())
 		for _, provider := range providers {
@@ -652,7 +652,7 @@ var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
 		}
 	})
 	It("Delete backups and verify if contents are deleted from backup location or not", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()

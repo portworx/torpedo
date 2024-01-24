@@ -81,7 +81,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 
 		Step("Creating NFS backup location", func() {
 			log.InfoD("Creating NFS backup location")
-			backupLocationProviders := GetProviders()
+			backupLocationProviders := GetBackupProviders()
 			for _, provider := range backupLocationProviders {
 				bkpLocationName = fmt.Sprintf("%s-%s-%s", provider, getGlobalBucketName(provider), RandomString(10))
 				backupLocationUID = uuid.New()

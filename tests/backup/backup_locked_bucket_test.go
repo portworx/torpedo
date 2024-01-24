@@ -73,7 +73,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 		}
 	})
 	It("Backup alternating between locked and unlocked buckets", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validating apps")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -278,7 +278,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 		}
 	})
 	It("Resize after the volume is restored from a backup", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -527,7 +527,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 		}
 	})
 	It("Schedule backup while resizing the volume", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
@@ -728,7 +728,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 		scheduledAppContexts                           = make([]*scheduler.Context, 0)
 		appNamespaces                                  = make([]string, 0)
 		infraAdminUsers                                = make([]string, 0)
-		providers                                      = GetProviders()
+		providers                                      = GetBackupProviders()
 		userCloudCredentialMap                         = make(map[string]map[string]string)
 		userBackupLocationMap                          = make(map[string]map[string]string)
 		userClusterMap                                 = make(map[string]map[string]string)

@@ -180,7 +180,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 	It("Validate shared backup is not duplicated without cluster", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
@@ -346,7 +346,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			providers := GetProviders()
+			providers := GetBackupProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
@@ -476,7 +476,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 		}
 	})
 	It("Share large number of backups", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -935,7 +935,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 		}
 	})
 	It("Share all backups at cluster level with a user group and revoke it and validate", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -1283,7 +1283,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 		}
 	})
 	It("Share all backups at cluster level with a user group and revoke it and validate", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -1819,7 +1819,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 		}
 	})
 	It("Share the backup and edit", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications and get their labels", func() {
 			log.InfoD("Validate applications and get their labels")
 			ValidateApplications(scheduledAppContexts)
@@ -2057,7 +2057,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 		}
 	})
 	It("Share the backups and delete", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -2275,7 +2275,7 @@ var _ = Describe("{ClusterBackupShareToggle}", func() {
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
-			providers := GetProviders()
+			providers := GetBackupProviders()
 			backupLocationMap = make(map[string]string)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
@@ -2460,7 +2460,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		})
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			providers := GetProviders()
+			providers := GetBackupProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cloudcred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-%v-bl", provider, getGlobalBucketName(provider), time.Now().Unix())
@@ -2595,7 +2595,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			providers := GetProviders()
+			providers := GetBackupProviders()
 			for _, provider := range providers {
 				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, time.Now().Unix())
 				bkpLocationName = fmt.Sprintf("%s-%s-%v", provider, getGlobalBucketName(provider), time.Now().Unix())
@@ -2753,7 +2753,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 		}
 	})
 	It("Validate shared backups are deleted from owner of backup ", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		Step("Validate applications", func() {
@@ -2960,7 +2960,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 	It("Share and remove backup location and add it back and check from other users if they show up", func() {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.Infof("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -3196,7 +3196,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 	})
 
 	It("Full backup view only and incremental backup restore access", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -3420,7 +3420,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 		namespaceMap[bkpNamespaces[0]] = fmt.Sprintf("new-namespace-%v", time.Now().Unix())
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)
@@ -3760,7 +3760,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 		}
 	})
 	It("Share the backups and delete", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
@@ -3967,7 +3967,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 		backupLocationCreationInterval = 10 * time.Second
 	})
 	It("Share the backup with same name", func() {
-		providers := GetProviders()
+		providers := GetBackupProviders()
 		Step("Validate applications", func() {
 			log.InfoD("Validate applications")
 			ValidateApplications(scheduledAppContexts)

@@ -82,7 +82,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			backupLocationProviders := GetProviders()
+			backupLocationProviders := GetBackupProviders()
 			for _, provider := range backupLocationProviders {
 				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
 				credUid = uuid.New()
@@ -345,7 +345,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			backupLocationProviders := GetProviders()
+			backupLocationProviders := GetBackupProviders()
 			for _, provider := range backupLocationProviders {
 				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
 				credUid = uuid.New()
@@ -583,7 +583,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			backupLocationProviders := GetProviders()
+			backupLocationProviders := GetBackupProviders()
 			for _, provider := range backupLocationProviders {
 				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
 				credUid = uuid.New()

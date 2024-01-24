@@ -67,7 +67,7 @@ var _ = Describe("{ExcludeDirectoryFileBackup}", func() {
 	)
 	JustBeforeEach(func() {
 		numDeployments = 1
-		providers = GetProviders()
+		providers = GetBackupProviders()
 
 		StartPxBackupTorpedoTest("ExcludeDirectoryFileBackup", "Excludes mentioned directories or files from backed-up apps and restores them", nil, 93691, Ak, Q4FY24)
 
@@ -795,7 +795,7 @@ var _ = Describe("{ExcludeInvalidDirectoryFileBackup}", func() {
 	)
 	JustBeforeEach(func() {
 		numDeployments = 1
-		providers = GetProviders()
+		providers = GetBackupProviders()
 		StartPxBackupTorpedoTest("ExcludeInvalidDirectoryFileBackup", "Excludes mentioned valid directories or files from backed-up apps and restores them when invalid,non-existent storageclass and files are there in KDMP exclude list", nil, 93692, Ak, Q4FY24)
 
 		log.InfoD(fmt.Sprintf("App list %v", Inst().AppList))
