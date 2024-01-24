@@ -196,7 +196,7 @@ var _ = Describe("{Sharedv4Functional}", func() {
 
 	AfterEach(func() {
 		Step("destroy apps", func() {
-			if CurrentGinkgoTestDescription().Failed {
+			if CurrentSpecReport().Failed() {
 				log.Info("not destroying apps because the test failed\n")
 				return
 			}
