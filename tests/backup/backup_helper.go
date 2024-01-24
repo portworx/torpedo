@@ -6745,6 +6745,39 @@ func validateCRCleanup(resourceInterface interface{},
 
 }
 
+// SuspendAndDeleteAllSchedulesForUsers suspends and delete the backup schedule for a give list of users
+func SuspendAndDeleteAllSchedulesForUsers(userNames []string, clusterName string, orgID string, deleteBackupFlag bool) error {
+
+	for _, user := range userNames {
+		log.InfoD("Getting context for non admin user %s", user)
+		ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+		if err != nil {
+			return err
+		}
+
+		SchedulePolices, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		log.InfoD("Getting list of all schedule polices %s", SchedulePolices)
+
+		for _, schedulePolicyName := range SchedulePolices {
+			backupScheduleNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, schedulePolicyName, orgID)
+			if err != nil {
+				return err
+			}
+			for _, backupScheduleName := range backupScheduleNames {
+				log.InfoD("Suspend and delete backup schedule [%s] for schedule policy [%s]", backupScheduleName, schedulePolicyName)
+				err := SuspendAndDeleteSchedule(backupScheduleName, schedulePolicyName, clusterName, orgID, ctx, deleteBackupFlag)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // SuspendAndDeleteSchedule suspends and deletes the backup schedule
 func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName string, clusterName string, orgID string, ctx context.Context, deleteBackupFlag bool) error {
 	backupDriver := Inst().Backup
