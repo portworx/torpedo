@@ -9414,19 +9414,19 @@ var _ = Describe("{KvdbFailoverSnapVolCreateDelete}", func() {
 					for _, eachVol := range volumesCreated {
 						uuidCreated := uuid.New()
 						snapshotName := fmt.Sprintf("snapshot_%s_%s", eachVol, uuidCreated.String())
+						if IsVolumeExits(eachVol) {
+							snapshotResponse, err := Inst().V.CreateSnapshot(eachVol, snapshotName)
+							if err != nil {
+								stopRoutine()
+								log.FailOnError(err, "error Creating Snapshot [%s]", eachVol)
+							}
 
-						snapshotResponse, err := Inst().V.CreateSnapshot(eachVol, snapshotName)
-						if err != nil {
-							stopRoutine()
-							log.FailOnError(err, "error Creating Snapshot [%s]", eachVol)
+							snapshotsCreated = append(snapshotsCreated, snapshotResponse.GetSnapshotId())
+							log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
+
+							err = inspectDeleteVolume(eachVol)
+							log.FailOnError(err, "Inspect and Delete Volume failed on cluster with Volume ID [%v]", eachVol)
 						}
-
-						snapshotsCreated = append(snapshotsCreated, snapshotResponse.GetSnapshotId())
-						log.InfoD("Snapshot [%s] created with ID [%s]", snapshotName, snapshotResponse.GetSnapshotId())
-
-						err = inspectDeleteVolume(eachVol)
-						log.FailOnError(err, "Inspect and Delete Volume failed on cluster with Volume ID [%v]", eachVol)
-
 						// Remove the first element
 						for i := 0; i < len(volumesCreated)-1; i++ {
 							volumesCreated[i] = volumesCreated[i+1]
