@@ -1,4 +1,4 @@
-package tests
+package backup_helper
 
 import (
 	"context"
@@ -63,55 +63,55 @@ import (
 )
 
 const (
-	cloudAccountDeleteTimeout                 = 5 * time.Minute
-	cloudAccountDeleteRetryTime               = 30 * time.Second
+	CloudAccountDeleteTimeout                 = 5 * time.Minute
+	CloudAccountDeleteRetryTime               = 30 * time.Second
 	storkDeploymentName                       = "stork"
 	defaultStorkDeploymentNamespace           = "kube-system"
-	upgradeStorkImage                         = "TARGET_STORK_VERSION"
-	latestStorkImage                          = "23.9.0"
+	UpgradeStorkImage                         = "TARGET_STORK_VERSION"
+	LatestStorkImage                          = "23.9.0"
 	restoreNamePrefix                         = "tp-restore"
-	destinationClusterName                    = "destination-cluster"
-	appReadinessTimeout                       = 10 * time.Minute
-	taskNamePrefix                            = "pxb"
-	orgID                                     = "default"
-	usersToBeCreated                          = "USERS_TO_CREATE"
-	groupsToBeCreated                         = "GROUPS_TO_CREATE"
-	maxUsersInGroup                           = "MAX_USERS_IN_GROUP"
-	maxBackupsToBeCreated                     = "MAX_BACKUPS"
+	DestinationClusterName                    = "destination-cluster"
+	AppReadinessTimeout                       = 10 * time.Minute
+	TaskNamePrefix                            = "pxb"
+	BackupOrgID                               = "default"
+	UsersToBeCreated                          = "USERS_TO_CREATE"
+	GroupsToBeCreated                         = "GROUPS_TO_CREATE"
+	MaxUsersInGroup                           = "MAX_USERS_IN_GROUP"
+	MaxBackupsToBeCreated                     = "MAX_BACKUPS"
 	errorChannelSize                          = 50
-	maxWaitPeriodForBackupCompletionInMinutes = 40
-	maxWaitPeriodForRestoreCompletionInMinute = 40
-	maxWaitPeriodForBackupJobCancellation     = 20
-	maxWaitPeriodForRestoreJobCancellation    = 20
-	restoreJobCancellationRetryTime           = 30
-	restoreJobProgressRetryTime               = 1
-	backupJobCancellationRetryTime            = 5
+	MaxWaitPeriodForBackupCompletionInMinutes = 40
+	MaxWaitPeriodForRestoreCompletionInMinute = 40
+	MaxWaitPeriodForBackupJobCancellation     = 20
+	MaxWaitPeriodForRestoreJobCancellation    = 20
+	RestoreJobCancellationRetryTime           = 30
+	RestoreJobProgressRetryTime               = 1
+	BackupJobCancellationRetryTime            = 5
 	K8sNodeReadyTimeout                       = 10
 	K8sNodeRetryInterval                      = 30
-	globalAWSBucketPrefix                     = "global-aws"
-	globalAzureBucketPrefix                   = "global-azure"
-	globalGCPBucketPrefix                     = "global-gcp"
-	globalNFSBucketPrefix                     = "global-nfs"
-	globalAWSLockedBucketPrefix               = "global-aws-locked"
-	globalAzureLockedBucketPrefix             = "global-azure-locked"
-	globalGCPLockedBucketPrefix               = "global-gcp-locked"
-	mongodbStatefulset                        = "pxc-backup-mongodb"
-	pxBackupDeployment                        = "px-backup"
-	backupDeleteTimeout                       = 60 * time.Minute
-	backupDeleteRetryTime                     = 30 * time.Second
-	backupLocationDeleteTimeout               = 60 * time.Minute
-	backupLocationDeleteRetryTime             = 30 * time.Second
-	rebootNodeTimeout                         = 1 * time.Minute
-	rebootNodeTimeBeforeRetry                 = 5 * time.Second
-	latestPxBackupVersion                     = "2.6.0"
+	GlobalAWSBucketPrefix                     = "global-aws"
+	GlobalAzureBucketPrefix                   = "global-azure"
+	GlobalGCPBucketPrefix                     = "global-gcp"
+	GlobalNFSBucketPrefix                     = "global-nfs"
+	GlobalAWSLockedBucketPrefix               = "global-aws-locked"
+	GlobalAzureLockedBucketPrefix             = "global-azure-locked"
+	GlobalGCPLockedBucketPrefix               = "global-gcp-locked"
+	MongodbStatefulset                        = "pxc-backup-mongodb"
+	PxBackupDeployment                        = "px-backup"
+	BackupDeleteTimeout                       = 60 * time.Minute
+	BackupDeleteRetryTime                     = 30 * time.Second
+	BackupLocationDeleteTimeout               = 60 * time.Minute
+	BackupLocationDeleteRetryTime             = 30 * time.Second
+	RebootNodeTimeout                         = 1 * time.Minute
+	RebootNodeTimeBeforeRetry                 = 5 * time.Second
+	LatestPxBackupVersion                     = "2.6.0"
 	defaultPxBackupHelmBranch                 = "master"
 	pxCentralPostInstallHookJobName           = "pxcentral-post-install-hook"
 	quickMaintenancePod                       = "quick-maintenance-repo"
 	fullMaintenancePod                        = "full-maintenance-repo"
 	jobDeleteTimeout                          = 5 * time.Minute
 	jobDeleteRetryTime                        = 10 * time.Second
-	podStatusTimeOut                          = 20 * time.Minute
-	podStatusRetryTime                        = 30 * time.Second
+	PodStatusTimeOut                          = 20 * time.Minute
+	PodStatusRetryTime                        = 30 * time.Second
 	licenseCountUpdateTimeout                 = 15 * time.Minute
 	licenseCountUpdateRetryTime               = 1 * time.Minute
 	podReadyTimeout                           = 15 * time.Minute
@@ -119,34 +119,34 @@ const (
 	podReadyRetryTime                         = 30 * time.Second
 	namespaceDeleteTimeout                    = 10 * time.Minute
 	clusterCreationTimeout                    = 5 * time.Minute
-	clusterCreationRetryTime                  = 10 * time.Second
-	clusterDeleteTimeout                      = 10 * time.Minute
-	clusterDeleteRetryTime                    = 5 * time.Second
+	ClusterCreationRetryTime                  = 10 * time.Second
+	ClusterDeleteTimeout                      = 10 * time.Minute
+	ClusterDeleteRetryTime                    = 5 * time.Second
 	vmStartStopTimeout                        = 10 * time.Minute
 	vmStartStopRetryTime                      = 30 * time.Second
 	cloudCredConfigMap                        = "cloud-config"
 	volumeSnapshotClassEnv                    = "VOLUME_SNAPSHOT_CLASS"
-	rancherActiveCluster                      = "local"
-	rancherProjectDescription                 = "new project"
-	multiAppNfsPodDeploymentNamespace         = "kube-system"
+	RancherActiveCluster                      = "local"
+	RancherProjectDescription                 = "new project"
+	MultiAppNfsPodDeploymentNamespace         = "kube-system"
 	backupScheduleDeleteTimeout               = 60 * time.Minute
 	backupScheduleDeleteRetryTime             = 30 * time.Second
 )
 
 var (
 	// User should keep updating preRuleApp, postRuleApp, appsWithCRDsAndWebhooks
-	preRuleApp                  = []string{"cassandra", "postgres"}
-	postRuleApp                 = []string{"cassandra"}
-	appsWithCRDsAndWebhooks     = []string{"elasticsearch-crd-webhook"} // The apps which have CRDs and webhooks
-	globalAWSBucketName         string
-	globalAzureBucketName       string
-	globalGCPBucketName         string
-	globalNFSBucketName         string
-	globalAWSLockedBucketName   string
-	globalAzureLockedBucketName string
-	globalGCPLockedBucketName   string
+	PreRuleApp                  = []string{"cassandra", "postgres"}
+	PostRuleApp                 = []string{"cassandra"}
+	AppsWithCRDsAndWebhooks     = []string{"elasticsearch-crd-webhook"} // The apps which have CRDs and webhooks
+	GlobalAWSBucketName         string
+	GlobalAzureBucketName       string
+	GlobalGCPBucketName         string
+	GlobalNFSBucketName         string
+	GlobalAWSLockedBucketName   string
+	GlobalAzureLockedBucketName string
+	GlobalGCPLockedBucketName   string
 	cloudProviders              = []string{"aws"}
-	commonPassword              string
+	CommonPassword              string
 	backupPodLabels             = []map[string]string{
 		{"app": "px-backup"}, {"app.kubernetes.io/component": "pxcentral-apiserver"},
 		{"app.kubernetes.io/component": "pxcentral-backend"},
@@ -155,31 +155,31 @@ var (
 		{"app.kubernetes.io/component": "pxcentral-lh-middleware"},
 		{"app.kubernetes.io/component": "pxcentral-mysql"}}
 	cloudPlatformList          = []string{"rke", "aws", "azure", "gke"}
-	nfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
-	nfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
+	NfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
+	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
 )
 
-type userRoleAccess struct {
-	user     string
-	roles    backup.PxBackupRole
-	accesses BackupAccess
-	context  context.Context
+type UserRoleAccess struct {
+	User     string
+	Roles    backup.PxBackupRole
+	Accesses BackupAccess
+	Context  context.Context
 }
 
-type userAccessContext struct {
-	user     string
-	accesses BackupAccess
-	context  context.Context
+type UserAccessContext struct {
+	User     string
+	Accesses BackupAccess
+	Context  context.Context
 }
 
-var backupAccessKeyValue = map[BackupAccess]string{
+var BackupAccessKeyValue = map[BackupAccess]string{
 	1: "ViewOnlyAccess",
 	2: "RestoreAccess",
 	3: "FullAccess",
 }
 
-var storkLabel = map[string]string{
+var StorkLabel = map[string]string{
 	"name": "stork",
 }
 
@@ -287,7 +287,7 @@ var (
 )
 
 // Set default provider as aws
-func getProviders() []string {
+func GetProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
 	if providersStr != "" {
 		return strings.Split(providersStr, ",")
@@ -313,7 +313,7 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 		return err
 	}
 
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func CreateBackupWithCRValidation(backupName string, clusterName string, bLocati
 		return err
 	}
 
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -350,7 +350,7 @@ func ValidateBackupCR(backupInspectResponse *api.BackupInspectResponse, ctx cont
 	backupObject := backupInspectResponse.GetBackup()
 
 	backupDriver := Inst().Backup
-	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, backupObject.Cluster)
+	clusterUID, err := backupDriver.GetClusterUID(ctx, BackupOrgID, backupObject.Cluster)
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func InsertDataForBackupValidation(namespaces []string, ctx context.Context, exi
 	} else {
 
 		backupDriver := Inst().Backup
-		backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUid, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 
 		for _, eachHandler := range existingAppHandler {
 			log.Infof("Backup UUID while adding data - [%s]", backupUid)
@@ -567,7 +567,7 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	if err != nil {
 		return err
 	}
-	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(firstScheduleBackupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -594,7 +594,7 @@ func CreateScheduleBackupWithValidation(ctx context.Context, scheduleName string
 		return "", err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, BackupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup along with CR validation
@@ -621,7 +621,7 @@ func CreateScheduleBackupWithCRValidation(ctx context.Context, scheduleName stri
 	if err != nil {
 		return "", err
 	}
-	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, BackupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // ValidateScheduleBackupCR validates creation of backup CR
@@ -774,7 +774,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	groupIDs := make([]string, 0)
 	userIDs := make([]string, 0)
 
-	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	bkpUid, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 	if err != nil {
 		return err
 	}
@@ -817,7 +817,7 @@ func ShareBackup(backupName string, groupNames []string, userNames []string, acc
 	}
 
 	shareBackupRequest := &api.BackupShareUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  backupName,
 		Backupshare: &api.BackupShare{
 			Groups:        groupBackupShareAccessConfigs,
@@ -838,7 +838,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	backupDriver := Inst().Backup
 	groupIDs := make([]string, 0)
 	userIDs := make([]string, 0)
-	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	clusterUID, err := backupDriver.GetClusterUID(ctx, BackupOrgID, clusterName)
 	if err != nil {
 		return err
 	}
@@ -888,7 +888,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 
 	if addUsersOrGroups {
 		clusterBackupShareUpdateRequest = &api.ClusterBackupShareUpdateRequest{
-			OrgId:          orgID,
+			OrgId:          BackupOrgID,
 			Name:           clusterName,
 			AddBackupShare: backupShare,
 			DelBackupShare: nil,
@@ -896,7 +896,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 		}
 	} else {
 		clusterBackupShareUpdateRequest = &api.ClusterBackupShareUpdateRequest{
-			OrgId:          orgID,
+			OrgId:          BackupOrgID,
 			Name:           clusterName,
 			AddBackupShare: nil,
 			DelBackupShare: backupShare,
@@ -910,7 +910,7 @@ func ClusterUpdateBackupShare(clusterName string, groupNames []string, userNames
 	}
 
 	clusterBackupShareStatusCheck := func() (interface{}, bool, error) {
-		clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+		clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 		clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 		if err != nil {
 			return "", true, err
@@ -939,7 +939,7 @@ func GetAllBackupsForUser(username, password string) ([]string, error) {
 	}
 
 	backupEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	currentBackups, err := backupDriver.EnumerateBackup(ctx, backupEnumerateReq)
 	if err != nil {
@@ -995,7 +995,7 @@ func CreateRestore(restoreName string, backupName string, namespaceMapping map[s
 	if err != nil {
 		return err
 	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -1057,7 +1057,7 @@ func CreateRestoreWithCRValidation(restoreName string, backupName string, namesp
 	if err != nil {
 		log.Warnf(err.Error())
 	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -1104,7 +1104,7 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	if err != nil {
 		return err
 	}
-	err = restoreSuccessWithReplacePolicy(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx, replacePolicy)
+	err = restoreSuccessWithReplacePolicy(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx, replacePolicy)
 	if err != nil {
 		return err
 	}
@@ -1137,7 +1137,7 @@ func CreateRestoreWithUID(restoreName string, backupName string, namespaceMappin
 	if err != nil {
 		return err
 	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -1236,7 +1236,7 @@ func CreateRestoreWithValidation(ctx context.Context, restoreName, backupName st
 	return err
 }
 
-func getSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerName ...string) (int, error) {
+func GetSizeOfMountPoint(podName string, namespace string, kubeConfigFile string, volumeMount string, containerName ...string) (int, error) {
 	var number int
 	var str string
 	output, err := kubectlExec([]string{fmt.Sprintf("--kubeconfig=%v", kubeConfigFile), "exec", "-it", podName, "-n", namespace, "--", "/bin/df"})
@@ -1290,7 +1290,7 @@ func kubectlExec(arguments []string) (string, error) {
 	return string(output), err
 }
 
-func createUsers(numberOfUsers int) []string {
+func CreateUsers(numberOfUsers int) []string {
 	users := make([]string, 0)
 	log.InfoD("Creating %d users", numberOfUsers)
 	var wg sync.WaitGroup
@@ -1303,7 +1303,7 @@ func createUsers(numberOfUsers int) []string {
 		go func(userName, firstName, lastName, email string) {
 			defer GinkgoRecover()
 			defer wg.Done()
-			err := backup.AddUser(userName, firstName, lastName, email, commonPassword)
+			err := backup.AddUser(userName, firstName, lastName, email, CommonPassword)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Creating user - %s", userName))
 			users = append(users, userName)
 		}(userName, firstName, lastName, email)
@@ -1314,14 +1314,14 @@ func createUsers(numberOfUsers int) []string {
 
 // CleanupCloudSettingsAndClusters removes the backup location(s), cloud accounts and source/destination clusters for the given context
 func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credName string, cloudCredUID string, ctx context.Context) {
-	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, destinationClusterName)
+	log.InfoD("Cleaning backup locations in map [%v], cloud credential [%s], source [%s] and destination [%s] cluster", backupLocationMap, credName, SourceClusterName, DestinationClusterName)
 	if len(backupLocationMap) != 0 {
 		for backupLocationUID, bkpLocationName := range backupLocationMap {
 			// Delete the backup location object
-			err := DeleteBackupLocationWithContext(bkpLocationName, backupLocationUID, orgID, true, ctx)
+			err := DeleteBackupLocationWithContext(bkpLocationName, backupLocationUID, BackupOrgID, true, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of backup location [%s]", bkpLocationName))
 			backupLocationDeleteStatusCheck := func() (interface{}, bool, error) {
-				status, err := IsBackupLocationPresent(bkpLocationName, ctx, orgID)
+				status, err := IsBackupLocationPresent(bkpLocationName, ctx, BackupOrgID)
 				if err != nil {
 					return "", true, fmt.Errorf("backup location %s still present with error %v", bkpLocationName, err)
 				}
@@ -1329,7 +1329,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					backupLocationInspectRequest := api.BackupLocationInspectRequest{
 						Name:  bkpLocationName,
 						Uid:   backupLocationUID,
-						OrgId: orgID,
+						OrgId: BackupOrgID,
 					}
 					backupLocationObject, err := Inst().Backup.InspectBackupLocation(ctx, &backupLocationInspectRequest)
 					if err != nil {
@@ -1340,16 +1340,16 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, backupLocationDeleteTimeout, backupLocationDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(backupLocationDeleteStatusCheck, BackupLocationDeleteTimeout, BackupLocationDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion status %s", bkpLocationName))
 		}
-		status, err := IsCloudCredPresent(credName, ctx, orgID)
+		status, err := IsCloudCredPresent(credName, ctx, BackupOrgID)
 		Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cloud cred [%s] is present", credName))
 		if status {
-			err = DeleteCloudCredentialWithContext(credName, orgID, cloudCredUID, ctx)
+			err = DeleteCloudCredentialWithContext(credName, BackupOrgID, cloudCredUID, ctx)
 			Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cloud cred [%s]", credName))
 			cloudCredDeleteStatus := func() (interface{}, bool, error) {
-				status, err = IsCloudCredPresent(credName, ctx, orgID)
+				status, err = IsCloudCredPresent(credName, ctx, BackupOrgID)
 				if err != nil {
 					return "", true, fmt.Errorf("cloud cred %s still present with error %v", credName, err)
 				}
@@ -1358,17 +1358,17 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 				}
 				return "", false, nil
 			}
-			_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, cloudAccountDeleteTimeout, cloudAccountDeleteRetryTime)
+			_, err = task.DoRetryWithTimeout(cloudCredDeleteStatus, CloudAccountDeleteTimeout, CloudAccountDeleteRetryTime)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", credName))
 		}
 	}
 
 	// Deleting clusters and the corresponding cloud cred
 	enumerateClusterRequest := &api.ClusterEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	enumerateClusterResponse, err := Inst().Backup.EnumerateAllCluster(ctx, enumerateClusterRequest)
-	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying enumerate cluster in organization %s", orgID))
+	Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying enumerate cluster in organization %s", BackupOrgID))
 	for _, clusterObj := range enumerateClusterResponse.GetClusters() {
 		clusterProvider := GetClusterProviders()
 		for _, provider := range clusterProvider {
@@ -1389,10 +1389,10 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
-			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), orgID, ctx, false)
+			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, false)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
-				err = DeleteCloudCredential(clusterCredName, orgID, clusterCredUID)
+				err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
 			}
 		}
@@ -1401,10 +1401,10 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 
 // AddRoleAndAccessToUsers assigns role and access level to the users
 // AddRoleAndAccessToUsers return map whose key is userRoleAccess and value is backup for each user
-func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRoleAccess]string, error) {
+func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[UserRoleAccess]string, error) {
 	var access BackupAccess
 	var role backup.PxBackupRole
-	roleAccessUserBackupContext := make(map[userRoleAccess]string)
+	roleAccessUserBackupContext := make(map[UserRoleAccess]string)
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return nil, err
@@ -1443,11 +1443,11 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 			access = ViewOnlyAccess
 			role = backup.ApplicationOwner
 		}
-		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], commonPassword)
+		ctxNonAdmin, err := backup.GetNonAdminCtx(users[i], CommonPassword)
 		if err != nil {
 			return nil, err
 		}
-		userRoleAccessContext := userRoleAccess{users[i], role, access, ctxNonAdmin}
+		userRoleAccessContext := UserRoleAccess{users[i], role, access, ctxNonAdmin}
 		roleAccessUserBackupContext[userRoleAccessContext] = backupNames[i]
 		err = backup.AddRoleToUser(users[i], role, "Adding role to user")
 		if err != nil {
@@ -1465,53 +1465,53 @@ func AddRoleAndAccessToUsers(users []string, backupNames []string) (map[userRole
 func ValidateSharedBackupWithUsers(user string, access BackupAccess, backupName string, restoreName string) {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	Inst().Dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-	userCtx, err := backup.GetNonAdminCtx(user, commonPassword)
+	userCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
 	Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching %s user ctx", user))
 	log.InfoD("Registering Source and Destination clusters from user context")
-	err = CreateApplicationClusters(orgID, "", "", userCtx)
+	err = CreateApplicationClusters(BackupOrgID, "", "", userCtx)
 	Inst().Dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, backupAccessKeyValue[access], backupName)
+	log.InfoD("Validating if user [%s] with access [%v] can restore and delete backup %s or not", user, BackupAccessKeyValue[access], backupName)
 	backupDriver := Inst().Backup
 	switch access {
 	case ViewOnlyAccess:
 		// Try restore with user having ViewOnlyAccess and it should fail
-		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
+		err := CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, userCtx, make(map[string]string))
 		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "failed to retrieve backup location"), true, "Verifying backup restore is not possible")
 		// Try to delete the backup with user having ViewOnlyAccess, and it should not pass
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has ViewOnlyAccess and cannot delete backup
-		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		_, err = DeleteBackup(backupName, backupUID, BackupOrgID, userCtx)
 		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case RestoreAccess:
 		// Try restore with user having RestoreAccess and it should pass
-		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
+		err := CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, userCtx, make(map[string]string))
 		Inst().Dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 		// Try to delete the backup with user having RestoreAccess, and it should not pass
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Restore Access and delete backup should fail
-		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		_, err = DeleteBackup(backupName, backupUID, BackupOrgID, userCtx)
 		log.Infof("The expected error returned is %v", err)
 		Inst().Dash.VerifyFatal(strings.Contains(err.Error(), "doesn't have permission to delete backup"), true, "Verifying backup deletion is not possible")
 
 	case FullAccess:
 		// Try restore with user having FullAccess, and it should pass
-		err := CreateRestore(restoreName, backupName, make(map[string]string), destinationClusterName, orgID, userCtx, make(map[string]string))
+		err := CreateRestore(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, userCtx, make(map[string]string))
 		Inst().Dash.VerifyFatal(err, nil, "Verifying that restore is possible")
 		// Try to delete the backup with user having FullAccess, and it should pass
-		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+		backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 		Inst().Dash.VerifyFatal(err, nil, fmt.Sprintf("Getting backup UID for- %s", backupName))
 		// Delete backup to confirm that the user has Full Access
-		_, err = DeleteBackup(backupName, backupUID, orgID, userCtx)
+		_, err = DeleteBackup(backupName, backupUID, BackupOrgID, userCtx)
 		Inst().Dash.VerifyFatal(err, nil, "Verifying that delete backup is possible")
 	}
 }
 
-func getEnv(environmentVariable string, defaultValue string) string {
+func GetEnv(environmentVariable string, defaultValue string) string {
 	value, present := os.LookupEnv(environmentVariable)
 	if !present {
 		value = defaultValue
@@ -1520,10 +1520,10 @@ func getEnv(environmentVariable string, defaultValue string) string {
 }
 
 // ShareBackupWithUsersAndAccessAssignment shares backup with multiple users with different access levels
-// It returns a map with key as userAccessContext and value as backup shared
-func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []string, ctx context.Context) (map[userAccessContext]string, error) {
+// It returns a map with key as UserAccessContext and value as backup shared
+func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []string, ctx context.Context) (map[UserAccessContext]string, error) {
 	log.InfoD("Sharing backups with users with different access level")
-	accessUserBackupContext := make(map[userAccessContext]string)
+	accessUserBackupContext := make(map[UserAccessContext]string)
 	var err error
 	var ctxNonAdmin context.Context
 	var access BackupAccess
@@ -1546,11 +1546,11 @@ func ShareBackupWithUsersAndAccessAssignment(backupNames []string, users []strin
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to share backup %s with user %s Error: %v", backupNames[i], user, err)
 		}
-		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], commonPassword)
+		ctxNonAdmin, err = backup.GetNonAdminCtx(users[i], CommonPassword)
 		if err != nil {
 			return accessUserBackupContext, fmt.Errorf("unable to get user context: %v", err)
 		}
-		accessContextUser := userAccessContext{users[i], access, ctxNonAdmin}
+		accessContextUser := UserAccessContext{users[i], access, ctxNonAdmin}
 		accessUserBackupContext[accessContextUser] = backupNames[i]
 	}
 	return accessUserBackupContext, nil
@@ -1566,7 +1566,7 @@ func GetAllBackupsAdmin() ([]string, error) {
 		return nil, err
 	}
 	bkpEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID}
+		OrgId: BackupOrgID}
 	curBackups, err := backupDriver.EnumerateBackup(ctx, bkpEnumerateReq)
 	if err != nil {
 		return nil, err
@@ -1587,7 +1587,7 @@ func GetAllRestoresAdmin() ([]string, error) {
 	}
 
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
 	if err != nil {
@@ -1599,7 +1599,7 @@ func GetAllRestoresAdmin() ([]string, error) {
 	return restoreNames, nil
 }
 
-func generateEncryptionKey() string {
+func GenerateEncryptionKey() string {
 	var lower = []byte("abcdefghijklmnopqrstuvwxyz")
 	var upper = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 	var number = []byte("0123456789")
@@ -1642,7 +1642,7 @@ func GetScheduleUID(scheduleName string, orgID string, ctx context.Context) (str
 	return scheduleUid, err
 }
 
-func removeStringItemFromSlice(itemList []string, item []string) []string {
+func RemoveStringItemFromSlice(itemList []string, item []string) []string {
 	sort.Sort(sort.StringSlice(itemList))
 	for _, element := range item {
 		index := sort.StringSlice(itemList).Search(element)
@@ -1660,11 +1660,11 @@ func removeIntItemFromSlice(itemList []int, item []int) []int {
 	return itemList
 }
 
-func getAllBackupLocations(ctx context.Context) (map[string]string, error) {
+func GetAllBackupLocations(ctx context.Context) (map[string]string, error) {
 	backupLocationMap := make(map[string]string, 0)
 	backupDriver := Inst().Backup
 	backupLocationEnumerateRequest := &api.BackupLocationEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	response, err := backupDriver.EnumerateBackupLocation(ctx, backupLocationEnumerateRequest)
 	if err != nil {
@@ -1681,11 +1681,11 @@ func getAllBackupLocations(ctx context.Context) (map[string]string, error) {
 	return backupLocationMap, nil
 }
 
-func getAllCloudCredentials(ctx context.Context) (map[string]string, error) {
+func GetAllCloudCredentials(ctx context.Context) (map[string]string, error) {
 	cloudCredentialMap := make(map[string]string, 0)
 	backupDriver := Inst().Backup
 	cloudCredentialEnumerateRequest := &api.CloudCredentialEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	response, err := backupDriver.EnumerateCloudCredential(ctx, cloudCredentialEnumerateRequest)
 	if err != nil {
@@ -1706,7 +1706,7 @@ func GetAllRestoresNonAdminCtx(ctx context.Context) ([]string, error) {
 	restoreNames := make([]string, 0)
 	backupDriver := Inst().Backup
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
 	if err != nil {
@@ -1786,7 +1786,7 @@ func DeletePodWithWithoutLabelInNamespace(namespace string, label map[string]str
 }
 
 // backupSuccessCheck inspects backup task
-func backupSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
+func BackupSuccessCheck(backupName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
 	bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
 	if err != nil {
 		return err
@@ -1832,9 +1832,9 @@ func backupSuccessCheck(backupName string, orgID string, retryDuration time.Dura
 	return nil
 }
 
-// backupSuccessCheckWithValidation checks if backup is Success and then validates the backup
-func backupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...string) error {
-	err := backupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
+// BackupSuccessCheckWithValidation checks if backup is Success and then validates the backup
+func BackupSuccessCheckWithValidation(ctx context.Context, backupName string, scheduledAppContextsToBackup []*scheduler.Context, orgID string, retryDuration time.Duration, retryInterval time.Duration, resourceTypeFilter ...string) error {
+	err := BackupSuccessCheck(backupName, orgID, retryDuration, retryInterval, ctx)
 	if err != nil {
 		return err
 	}
@@ -1868,7 +1868,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 		}
 		return "", true, fmt.Errorf("ValidateBackup requires backup [%s] to have a status of Success or PartialSuccess,got -%v", backupName, backupStatus)
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupStatusCheck, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupStatusCheck, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 	if err != nil {
 		return err
 	}
@@ -2083,7 +2083,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 }
 
 // restoreSuccessCheck inspects restore task to check for status being "success". NOTE: If the status is different, it retries every `retryInterval` for `retryDuration` before returning `err`
-func restoreSuccessCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
+func RestoreSuccessCheck(restoreName string, orgID string, retryDuration time.Duration, retryInterval time.Duration, ctx context.Context) error {
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
 		OrgId: orgID,
@@ -2176,19 +2176,19 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	backupDriver := Inst().Backup
 	restoreInspectRequest := &api.RestoreInspectRequest{
 		Name:  restoreName,
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	restoreInspectResponse, err := backupDriver.InspectRestore(appContext, restoreInspectRequest)
 	if err != nil {
 		return err
 	}
 
-	backupUid, err := backupDriver.GetBackupUID(appContext, backupName, orgID)
+	backupUid, err := backupDriver.GetBackupUID(appContext, backupName, BackupOrgID)
 
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
 		Uid:   backupUid,
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	backupInspectResponse, _ := backupDriver.InspectBackup(appContext, backupInspectRequest)
 	theBackup := backupInspectResponse.GetBackup()
@@ -2239,7 +2239,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		}
 	}
 
-	currentPodAge, err := getPodAge()
+	currentPodAge, err := GetPodAge()
 	if err != nil {
 		return err
 	}
@@ -2770,7 +2770,7 @@ func CreateCustomRestoreWithPVCs(restoreName string, backupName string, namespac
 	if err != nil {
 		return "", fmt.Errorf("fail to create restore with createrestore req %v and error %v", createRestoreReq, err)
 	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return "", fmt.Errorf("fail to create restore %v with error %v", restoreName, err)
 	}
@@ -2884,7 +2884,7 @@ func IsPresent(dataSlice interface{}, data interface{}) bool {
 func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 	backupDriver := Inst().Backup
 	backupEnumerateReq := &api.BackupEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 
 	backupDeletionSuccessCheck := func() (interface{}, bool, error) {
@@ -2899,7 +2899,7 @@ func DeleteBackupAndWait(backupName string, ctx context.Context) error {
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, backupDeleteTimeout, backupDeleteRetryTime)
+	_, err := task.DoRetryWithTimeout(backupDeletionSuccessCheck, BackupDeleteTimeout, BackupDeleteRetryTime)
 	return err
 }
 
@@ -3004,7 +3004,7 @@ func UpgradePxBackup(versionToUpgrade string) error {
 	}
 
 	// Get storage class using for px-backup deployment
-	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxBackupNamespace)
+	statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxBackupNamespace)
 	if err != nil {
 		return err
 	}
@@ -3169,7 +3169,7 @@ func getStorkImageVersion() (string, error) {
 }
 
 // upgradeStorkVersion upgrades the stork to the provided version.
-func upgradeStorkVersion(storkImageToUpgrade string) error {
+func UpgradeStorkVersion(storkImageToUpgrade string) error {
 	var finalImageToUpgrade string
 	var postUpgradeStorkImageVersionStr string
 	storkDeploymentNamespace, err := k8sutils.GetStorkPodNamespace()
@@ -3270,7 +3270,7 @@ func CreateBackupWithNamespaceLabel(backupName string, clusterName string, bkpLo
 	if err != nil {
 		return err
 	}
-	err = backupSuccessCheck(backupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -3299,7 +3299,7 @@ func CreateScheduleBackupWithNamespaceLabel(scheduleName string, clusterName str
 		return err
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
-	err = backupSuccessCheck(firstScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(firstScheduleBackupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -3426,17 +3426,17 @@ func CreateScheduleBackupWithNamespaceLabelWithValidation(ctx context.Context, s
 	}
 	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
 
-	return firstScheduleBackupName, backupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	return firstScheduleBackupName, BackupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsExpectedInBackup, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 }
 
 // suspendBackupSchedule will suspend backup schedule
-func suspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+func SuspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
 	backupDriver := Inst().Backup
-	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, BackupOrgID, ctx)
 	if err != nil {
 		return err
 	}
-	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, schPolicyName)
 	if err != nil {
 		return err
 	}
@@ -3453,13 +3453,13 @@ func suspendBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx 
 }
 
 // resumeBackupSchedule will resume backup schedule
-func resumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
+func ResumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx context.Context) error {
 	backupDriver := Inst().Backup
-	backupScheduleUID, err := GetScheduleUID(backupScheduleName, orgID, ctx)
+	backupScheduleUID, err := GetScheduleUID(backupScheduleName, BackupOrgID, ctx)
 	if err != nil {
 		return err
 	}
-	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schPolicyName)
+	schPolicyUID, err := Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, schPolicyName)
 	if err != nil {
 		return err
 	}
@@ -3479,14 +3479,14 @@ func resumeBackupSchedule(backupScheduleName, schPolicyName, OrgID string, ctx c
 func NamespaceLabelBackupSuccessCheck(backupName string, ctx context.Context, listOfLabelledNamespaces []string, namespaceLabel string) error {
 	backupDriver := Inst().Backup
 	log.Infof("Getting the Uid of backup %v", backupName)
-	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
 	if err != nil {
 		return err
 	}
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
 		Uid:   backupUid,
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
@@ -3576,7 +3576,7 @@ func VerifyLicenseConsumedCount(ctx context.Context, OrgId string, expectedLicen
 
 // DeleteRule deletes backup rule
 func DeleteRule(ruleName string, orgId string, ctx context.Context) error {
-	ruleUid, err := Inst().Backup.GetRuleUid(orgID, ctx, ruleName)
+	ruleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, ruleName)
 	if err != nil {
 		return err
 	}
@@ -3760,24 +3760,24 @@ func AreStringSlicesEqual(slice1 []string, slice2 []string) bool {
 // GetNextScheduleBackupName returns the upcoming schedule backup after it has been initiated
 func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
 	var nextScheduleBackupName string
-	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, BackupOrgID)
 	if err != nil {
 		return "", err
 	}
 	currentScheduleBackupCount := len(allScheduleBackupNames)
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
-		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, BackupOrgID)
 		log.InfoD("schedule name %s, Next schedule backup name: %s", scheduleName, ordinalScheduleBackupName)
 		if err != nil {
 			return "", true, err
 		}
 		backupDriver := Inst().Backup
-		backupUid, err := backupDriver.GetBackupUID(ctx, ordinalScheduleBackupName, orgID)
+		backupUid, err := backupDriver.GetBackupUID(ctx, ordinalScheduleBackupName, BackupOrgID)
 		backupInspectRequest := &api.BackupInspectRequest{
 			Name:  ordinalScheduleBackupName,
 			Uid:   backupUid,
-			OrgId: orgID,
+			OrgId: BackupOrgID,
 		}
 		resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
 		log.InfoD("Inspect obj %s", resp)
@@ -3785,7 +3785,7 @@ func GetNextScheduleBackupName(scheduleName string, scheduleInterval time.Durati
 	}
 	log.InfoD("Waiting for [%d] minutes for the next schedule backup to be triggered", scheduleInterval)
 	time.Sleep(scheduleInterval * time.Minute)
-	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 	if err != nil {
 		return "", err
 	}
@@ -3801,7 +3801,7 @@ func GetNextCompletedScheduleBackupName(ctx context.Context, scheduleName string
 		return "", err
 	}
 	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
-	err = backupSuccessCheck(nextScheduleBackupName, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(nextScheduleBackupName, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -3816,7 +3816,7 @@ func GetNextCompletedScheduleBackupNameWithValidation(ctx context.Context, sched
 		return "", err
 	}
 	log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
-	err = backupSuccessCheckWithValidation(ctx, nextScheduleBackupName, scheduledAppContextsToBackup, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	err = BackupSuccessCheckWithValidation(ctx, nextScheduleBackupName, scheduledAppContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 	if err != nil {
 		return "", err
 	}
@@ -3826,14 +3826,14 @@ func GetNextCompletedScheduleBackupNameWithValidation(ctx context.Context, sched
 // GetNextPeriodicScheduleBackupName returns next periodic schedule backup name with the given interval
 func GetNextPeriodicScheduleBackupName(scheduleName string, scheduleInterval time.Duration, ctx context.Context) (string, error) {
 	var nextScheduleBackupName string
-	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, orgID)
+	allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, BackupOrgID)
 	if err != nil {
 		return "", err
 	}
 	currentScheduleBackupCount := len(allScheduleBackupNames)
 	nextScheduleBackupOrdinal := currentScheduleBackupCount + 1
 	checkOrdinalScheduleBackupCreation := func() (interface{}, bool, error) {
-		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, orgID)
+		ordinalScheduleBackupName, err := GetOrdinalScheduleBackupName(ctx, scheduleName, nextScheduleBackupOrdinal, BackupOrgID)
 		if err != nil {
 			return "", true, err
 		}
@@ -3841,12 +3841,12 @@ func GetNextPeriodicScheduleBackupName(scheduleName string, scheduleInterval tim
 	}
 	log.InfoD("Waiting for %v minutes for the next schedule backup to be triggered", scheduleInterval)
 	time.Sleep(scheduleInterval * time.Minute)
-	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+	nextScheduleBackup, err := task.DoRetryWithTimeout(checkOrdinalScheduleBackupCreation, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 	if err != nil {
 		return "", err
 	}
 	log.InfoD("Next schedule backup name [%s]", nextScheduleBackup.(string))
-	err = backupSuccessCheck(nextScheduleBackup.(string), orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	err = BackupSuccessCheck(nextScheduleBackup.(string), BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return "", err
 	}
@@ -3942,7 +3942,7 @@ func IsMongoDBReady() error {
 		return err
 	}
 	mongoDBPodStatus := func() (interface{}, bool, error) {
-		statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+		statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
 		if err != nil {
 			return "", true, err
 		}
@@ -3958,7 +3958,7 @@ func IsMongoDBReady() error {
 	_, err = DoRetryWithTimeoutWithGinkgoRecover(mongoDBPodStatus, 30*time.Minute, 30*time.Second)
 	if err != nil {
 		if strings.Contains(err.Error(), errorString) {
-			statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+			statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
 
 			// Check atleast 2 mongo pods are up if 3 mongo pods have not come up even after waiting for 30 min
 			// Ideally we would expect all 3 pods to be ready but because of intermittent issues, we are limiting to 2
@@ -3971,7 +3971,7 @@ func IsMongoDBReady() error {
 			}
 		}
 	}
-	statefulSet, err := apps.Instance().GetStatefulSet(mongodbStatefulset, pxbNamespace)
+	statefulSet, err := apps.Instance().GetStatefulSet(MongodbStatefulset, pxbNamespace)
 	if err != nil {
 		return err
 	}
@@ -4071,7 +4071,7 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 	log.InfoD("Create cluster [%s] in org [%s]", clusterName, orgID)
 	if clusterName == SourceClusterName {
 		kubeconfigPath, err = GetSourceClusterConfigPath()
-	} else if clusterName == destinationClusterName {
+	} else if clusterName == DestinationClusterName {
 		kubeconfigPath, err = GetDestinationClusterConfigPath()
 	} else {
 		return fmt.Errorf("registering %s cluster not implemented", clusterName)
@@ -4094,7 +4094,7 @@ func RegisterCluster(clusterName string, cloudCredName string, orgID string, ctx
 		}
 		return "", true, fmt.Errorf("the %s cluster state is not Online yet", clusterName)
 	}
-	_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, clusterCreationRetryTime)
+	_, err = task.DoRetryWithTimeout(clusterStatus, clusterCreationTimeout, ClusterCreationRetryTime)
 	if err != nil {
 		return err
 	}
@@ -4124,7 +4124,7 @@ func RemoveNamespaceLabelForMultipleNamespaces(labels map[string]string, namespa
 }
 
 func AddSourceCluster(ctx context.Context) error {
-	err := RegisterCluster(SourceClusterName, "", orgID, ctx)
+	err := RegisterCluster(SourceClusterName, "", BackupOrgID, ctx)
 	if err != nil {
 		return err
 	}
@@ -4132,7 +4132,7 @@ func AddSourceCluster(ctx context.Context) error {
 }
 
 func AddDestinationCluster(ctx context.Context) error {
-	err := RegisterCluster(destinationClusterName, "", orgID, ctx)
+	err := RegisterCluster(DestinationClusterName, "", BackupOrgID, ctx)
 	if err != nil {
 		return err
 	}
@@ -4313,7 +4313,7 @@ func CreateRestoreWithProjectMapping(restoreName string, backupName string, name
 	if err != nil {
 		return err
 	}
-	err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
+	err = RestoreSuccessCheck(restoreName, orgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, 30*time.Second, ctx)
 	if err != nil {
 		return err
 	}
@@ -4693,7 +4693,7 @@ func GetAllBackupSchedulesForUser(username, password string) ([]string, error) {
 	}
 
 	scheduleEnumerateReq := &api.BackupScheduleEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	currentSchedules, err := backupDriver.EnumerateBackupSchedule(ctx, scheduleEnumerateReq)
 	if err != nil {
@@ -4715,7 +4715,7 @@ func GetAllRestoresForUser(username string, password string) ([]string, error) {
 	}
 
 	restoreEnumerateRequest := &api.RestoreEnumerateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	restoreResponse, err := backupDriver.EnumerateRestore(ctx, restoreEnumerateRequest)
 	if err != nil {
@@ -4752,7 +4752,7 @@ func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCo
 }
 
 // CreateInvalidAWSCloudCredential creates cloud credentials with invalid paramaters.
-func createInvalidAWSCloudCredential(credName string, uid, orgID string, ctx context.Context) error {
+func CreateInvalidAWSCloudCredential(credName string, uid, orgID string, ctx context.Context) error {
 	log.Infof("Create cloud credential with name [%s] for org [%s] ", credName, orgID)
 	var credCreateRequest *api.CloudCredentialCreateRequest
 	credCreateRequest = &api.CloudCredentialCreateRequest{
@@ -4833,7 +4833,7 @@ func DeleteAllBackups(ctx context.Context, orgId string) error {
 				errChan <- err
 				return
 			}
-			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), backupDeleteTimeout, backupDeleteRetryTime)
+			err = Inst().Backup.WaitForBackupDeletion(ctx, bkp.GetName(), bkp.GetOrgId(), BackupDeleteTimeout, BackupDeleteRetryTime)
 			if err != nil {
 				errChan <- err
 				return
@@ -4902,7 +4902,7 @@ func CreateRole(roleName backup.PxBackupRole, svcs []RoleServices, apis []RoleAp
 	roleCreateRequest := &api.RoleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
 			Name:  string(roleName),
-			OrgId: orgID,
+			OrgId: BackupOrgID,
 		},
 		Rules:  []*api.RoleConfig{rule},
 		RoleId: roleId,
@@ -4995,7 +4995,7 @@ func DeletePodWhileBackupInProgress(ctx context.Context, orgId string, backupNam
 			return "", false, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, backupInProgressStatus, actual)
 		}
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupProgressCheckFunc, maxWaitPeriodForBackupJobCancellation*time.Minute, backupJobCancellationRetryTime*time.Second)
+	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupProgressCheckFunc, MaxWaitPeriodForBackupJobCancellation*time.Minute, BackupJobCancellationRetryTime*time.Second)
 	if err != nil {
 		return err
 	}
@@ -5030,7 +5030,7 @@ func DeletePodWhileRestoreInProgress(ctx context.Context, orgId string, restoreN
 			return "", false, fmt.Errorf("restore status for [%s] expected was [%v] but got [%s]", restoreName, restoreInProgressStatus, actual)
 		}
 	}
-	_, err := DoRetryWithTimeoutWithGinkgoRecover(restoreProgressCheckFunc, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Second)
+	_, err := DoRetryWithTimeoutWithGinkgoRecover(restoreProgressCheckFunc, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, RestoreJobProgressRetryTime*time.Second)
 	if err != nil {
 		return err
 	}
@@ -5083,7 +5083,7 @@ func AddBackupLocationOwnership(name string, uid string, userNames []string, gro
 	}
 
 	backupLocationInspectRequest := &api.BackupLocationInspectRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  name,
 		Uid:   uid,
 	}
@@ -5097,7 +5097,7 @@ func AddBackupLocationOwnership(name string, uid string, userNames []string, gro
 	userBackupLocationOwnershipAccessConfigs = append(userBackupLocationOwnershipAccessConfigs, currentUsersConfigs...)
 
 	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  name,
 		Ownership: &api.Ownership{
 			Groups:        groupBackupLocationOwnershipAccessConfigs,
@@ -5158,7 +5158,7 @@ func AddRuleOwnership(ruleName string, ruleUid string, userNames []string, group
 	}
 
 	ruleInspectRequest := &api.RuleInspectRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  ruleName,
 		Uid:   ruleUid,
 	}
@@ -5172,7 +5172,7 @@ func AddRuleOwnership(ruleName string, ruleUid string, userNames []string, group
 	userRuleOwnershipAccessConfigs = append(userRuleOwnershipAccessConfigs, currentUsersConfigs...)
 
 	ruleOwnershipUpdateReq := &api.RuleOwnershipUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  ruleName,
 		Ownership: &api.Ownership{
 			Groups:        groupRuleOwnershipAccessConfigs,
@@ -5233,7 +5233,7 @@ func AddSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid str
 	}
 
 	schedulePolicyInspectRequest := &api.SchedulePolicyInspectRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  schedulePolicyName,
 		Uid:   schedulePolicyUid,
 	}
@@ -5247,7 +5247,7 @@ func AddSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid str
 	userSchdeulePolicyOwnershipAccessConfigs = append(userSchdeulePolicyOwnershipAccessConfigs, currentUsersConfigs...)
 
 	schedulePolicyOwnershipUpdateReq := &api.SchedulePolicyOwnershipUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  schedulePolicyName,
 		Ownership: &api.Ownership{
 			Groups:        groupSchedulePolicyOwnershipAccessConfigs,
@@ -5291,7 +5291,7 @@ func RemoveSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid 
 	}
 
 	schedulePolicyInspectRequest := &api.SchedulePolicyInspectRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  schedulePolicyName,
 		Uid:   schedulePolicyUid,
 	}
@@ -5314,7 +5314,7 @@ func RemoveSchedulePolicyOwnership(schedulePolicyName string, schedulePolicyUid 
 	}
 
 	schedulePolicyOwnershipUpdateReq := &api.SchedulePolicyOwnershipUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  schedulePolicyName,
 		Ownership: &api.Ownership{
 			Groups:        groupSchedulePolicyOwnershipAccessConfigs,
@@ -5358,7 +5358,7 @@ func RemoveRuleOwnership(ruleName string, ruleUid string, userNames []string, gr
 	}
 
 	ruleInspectRequest := &api.RuleInspectRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  ruleName,
 		Uid:   ruleUid,
 	}
@@ -5381,7 +5381,7 @@ func RemoveRuleOwnership(ruleName string, ruleUid string, userNames []string, gr
 	}
 
 	ruleOwnershipUpdateReq := &api.RuleOwnershipUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  ruleName,
 		Ownership: &api.Ownership{
 			Groups:        groupRuleOwnershipAccessConfigs,
@@ -5425,7 +5425,7 @@ func RemoveBackupLocationOwnership(name string, uid string, userNames []string, 
 	}
 
 	backupLocationInspectRequest := &api.BackupLocationInspectRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  name,
 		Uid:   uid,
 	}
@@ -5448,7 +5448,7 @@ func RemoveBackupLocationOwnership(name string, uid string, userNames []string, 
 	}
 
 	bLocationOwnershipUpdateReq := &api.BackupLocationOwnershipUpdateRequest{
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 		Name:  name,
 		Ownership: &api.Ownership{
 			Groups:        groupBackupLocationOwnershipAccessConfigs,
@@ -5624,12 +5624,12 @@ func RestartKubevirtVM(name string, namespace string, waitForCompletion bool) er
 
 // checkBackupObjectForUnexpectedNS checks if namespaces like kube-system, kube-node-lease, kube-public and px namespace
 // is backed up or not
-func checkBackupObjectForUnexpectedNS(ctx context.Context, backupName string) error {
+func CheckBackupObjectForUnexpectedNS(ctx context.Context, backupName string) error {
 
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
 
 	// Fetch a list of backups
-	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, orgID)
+	backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch backup UID")
 	}
@@ -5638,7 +5638,7 @@ func checkBackupObjectForUnexpectedNS(ctx context.Context, backupName string) er
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
 		Uid:   backupUID,
-		OrgId: orgID,
+		OrgId: BackupOrgID,
 	}
 	backupResponse, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
 	if err != nil {
@@ -5681,7 +5681,7 @@ func checkBackupObjectForUnexpectedNS(ctx context.Context, backupName string) er
 type nsPodAge map[string]time.Time
 
 // getPodAge gets the pod age of all pods on all the namespaces on the cluster
-func getPodAge() (map[string]nsPodAge, error) {
+func GetPodAge() (map[string]nsPodAge, error) {
 	var podAge = make(map[string]nsPodAge)
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
@@ -5701,9 +5701,9 @@ func getPodAge() (map[string]nsPodAge, error) {
 }
 
 // comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
-func comparePodAge(oldPodAge map[string]nsPodAge) error {
+func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
-	podAge, err := getPodAge()
+	podAge, err := GetPodAge()
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
@@ -5739,7 +5739,7 @@ func comparePodAge(oldPodAge map[string]nsPodAge) error {
 }
 
 // createBackupUntilIncrementalBackup creates backup until incremental backups is created returns the name of the incremental backup created
-func createBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContextToBackup *scheduler.Context, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string) (string, error) {
+func CreateBackupUntilIncrementalBackup(ctx context.Context, scheduledAppContextToBackup *scheduler.Context, customBackupLocationName string, backupLocationUID string, labelSelectors map[string]string, orgID string, clusterUid string) (string, error) {
 	namespace := scheduledAppContextToBackup.ScheduleOptions.Namespace
 	incrementalBackupName := fmt.Sprintf("%s-%s-%v", "incremental-backup", namespace, time.Now().Unix())
 	err := CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, []*scheduler.Context{scheduledAppContextToBackup}, labelSelectors, orgID, clusterUid, "", "", "", "")
@@ -6315,7 +6315,7 @@ func CreateKubevirtBackupRuleForAllVMsInNamespace(ctx context.Context, namespace
 		}
 	}
 
-	ruleStatus, ruleName, err := Inst().Backup.CreateRuleForKubevirtBackup(ctx, listOfVirtualMachine, orgID, ruleType, template)
+	ruleStatus, ruleName, err := Inst().Backup.CreateRuleForKubevirtBackup(ctx, listOfVirtualMachine, BackupOrgID, ruleType, template)
 	if err != nil {
 		return false, "", err
 	}
@@ -6604,7 +6604,7 @@ func isFBDAVolume(storageClass *storagev1.StorageClass) bool {
 }
 
 // isStorageClassPresent checks whether the storage class already present in the cluster.
-func isStorageClassPresent(storageClassName string) (bool, error) {
+func IsStorageClassPresent(storageClassName string) (bool, error) {
 	k8sStorage := storage.Instance()
 	storageClasses, err := k8sStorage.GetAllStorageClasses()
 	if err != nil {
