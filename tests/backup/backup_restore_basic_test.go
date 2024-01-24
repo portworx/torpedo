@@ -22,7 +22,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/backup"
-	. "github.com/portworx/torpedo/drivers/backup/backup_helper"
 	"github.com/portworx/torpedo/drivers/backup/portworx"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
@@ -3995,7 +3994,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 
-			oldPodAge, err := GetPodAge()
+			oldPodAge, err := GetBackupPodAge()
 			dash.VerifyFatal(err, nil, "Getting pod age")
 
 			err = SetSourceKubeConfig()
@@ -4053,7 +4052,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 
-			oldPodAge, err := GetPodAge()
+			oldPodAge, err := GetBackupPodAge()
 			dash.VerifyFatal(err, nil, "Getting pod age")
 
 			err = SetSourceKubeConfig()

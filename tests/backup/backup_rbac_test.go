@@ -10,7 +10,6 @@ import (
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
-	. "github.com/portworx/torpedo/drivers/backup/backup_helper"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -445,7 +444,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			nonAdminCtx, err := backup.GetNonAdminCtx(infraAdminUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
 			customInfraRoleName = backup.PxBackupRole(fmt.Sprintf("custom-infra-admin-role-%s", RandomString(4)))
-			services := []RoleServices{SchedulePolicy, Rules, Cloudcredential, BackupLocation}
+			services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation}
 			apis := []RoleApis{All}
 			err = CreateRole(customInfraRoleName, services, apis, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of role [%s] by the infra-admin user", customInfraRoleName))
@@ -511,7 +510,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			nonAdminCtx, err := backup.GetNonAdminCtx(customUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			customRoleName = backup.PxBackupRole(fmt.Sprintf("custom-user-role-%s", RandomString(4)))
-			services := []RoleServices{SchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
+			services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
 			apis := []RoleApis{All}
 			err = CreateRole(customRoleName, services, apis, nonAdminCtx)
 			dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied desc = Access denied for [Resource: role]"), true, fmt.Sprintf("Verifying custom user doesnt have permission for creating role [%s]", customRoleName))
@@ -868,7 +867,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 			customRoleName = backup.PxBackupRole(fmt.Sprintf("custom-px-admin-role-%s", RandomString(4)))
-			services := []RoleServices{SchedulePolicy, Rules, Cloudcredential, BackupLocation}
+			services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation}
 			apis := []RoleApis{All}
 			err = CreateRole(customRoleName, services, apis, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of role [%s] by the px-admin", customRoleName))
@@ -1197,7 +1196,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 			nonAdminCtx, err := backup.GetNonAdminCtx(appAdminUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user %s ctx", appAdminUser)
 			customRoleName = backup.PxBackupRole(fmt.Sprintf("custom-user-role-%s", RandomString(4)))
-			services := []RoleServices{SchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
+			services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
 			apis := []RoleApis{All}
 			err = CreateRole(customRoleName, services, apis, nonAdminCtx)
 			dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied desc = Access denied for [Resource: role]"), true, fmt.Sprintf("Verifying app-user doesnt have permission for creating role [%s]", customRoleName))
@@ -1772,7 +1771,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			nonAdminCtx, err := backup.GetNonAdminCtx(appUser, CommonPassword)
 			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			appUserRoleName := backup.PxBackupRole(fmt.Sprintf("app-user-role-%s", RandomString(4)))
-			services := []RoleServices{SchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
+			services := []RoleServices{BackupSchedulePolicy, Rules, Cloudcredential, BackupLocation, Role}
 			apis := []RoleApis{All}
 			err = CreateRole(appUserRoleName, services, apis, nonAdminCtx)
 			dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating role", appUser))

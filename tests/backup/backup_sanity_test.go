@@ -11,8 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
-
-	. "github.com/portworx/torpedo/drivers/backup/backup_helper"
 	. "github.com/portworx/torpedo/tests"
 	"golang.org/x/sync/errgroup"
 )

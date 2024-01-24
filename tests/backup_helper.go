@@ -2236,7 +2236,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		}
 	}
 
-	currentPodAge, err := GetPodAge()
+	currentPodAge, err := GetBackupPodAge()
 	if err != nil {
 		return err
 	}
@@ -4853,11 +4853,11 @@ func DeleteAllBackups(ctx context1.Context, orgId string) error {
 type RoleServices string
 
 const (
-	SchedulePolicy  RoleServices = "schedulepolicy"
-	Rules                        = "rules"
-	Cloudcredential              = "cloudcredential"
-	BackupLocation               = "backuplocation"
-	Role                         = "role"
+	BackupSchedulePolicy RoleServices = "schedulepolicy"
+	Rules                             = "rules"
+	Cloudcredential                   = "cloudcredential"
+	BackupLocation                    = "backuplocation"
+	Role                              = "role"
 )
 
 type RoleApis string
@@ -5678,7 +5678,7 @@ func CheckBackupObjectForUnexpectedNS(ctx context1.Context, backupName string) e
 type nsPodAge map[string]time.Time
 
 // getPodAge gets the pod age of all pods on all the namespaces on the cluster
-func GetPodAge() (map[string]nsPodAge, error) {
+func GetBackupPodAge() (map[string]nsPodAge, error) {
 	var podAge = make(map[string]nsPodAge)
 	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
@@ -5700,7 +5700,7 @@ func GetPodAge() (map[string]nsPodAge, error) {
 // comparePodAge checks the status of all pods on all namespaces clusters where the restore was done
 func ComparePodAge(oldPodAge map[string]nsPodAge) error {
 	var namespacesToSkip = []string{"kube-system", "kube-node-lease", "kube-public"}
-	podAge, err := GetPodAge()
+	podAge, err := GetBackupPodAge()
 	k8sCore := core.Instance()
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
