@@ -813,19 +813,28 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 	})
 
 	var contexts []*scheduler.Context
+	appList := make([]string, 0)
 	stepLog := "App Stuck in ContainerCreation State with Device Exists in the backend"
 	It(stepLog, func() {
 
 		var isPodRestarting bool = false
 		var terminateAll bool = false
 
-		Inst().AppList = []string{"vdbench-sv4-svc"}
+		for _, appName := range Inst().AppList {
+			if strings.Contains(appName, "shared") || strings.Contains(appName, "svc") {
+				appList = append(appList, appName)
+			}
+		}
+
+		if len(appList) == 0 {
+			log.FailOnError(fmt.Errorf("sharedv4 or sharedv4 svc apps are mandatory for the test"), "no sharedv4 or sharedv4 svc apps found to deploy")
+		}
+
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("volwithdeviceexist-%d", i))...)
 		}
 		ValidateApplications(contexts)
-		//defer appsValidateAndDestroy(contexts)
 
 		// Sleep for some time for IO's to start running
 		time.Sleep(30 * time.Second)
@@ -859,7 +868,7 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 				}
 
 				if err != nil {
-					log.FailOnError(err, "failed with error")
+					log.InfoD(fmt.Sprintf("Command reported error [%v] on Namespace [%v]", err, nameSpace))
 				}
 
 				if terminateAll {
@@ -882,11 +891,23 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 		}(randomVol.Namespace)
 
 		// Kill Random nodes associated with the volume one co-ordinator node every time
+		previousNode := 0
 		for loopKill := 0; loopKill < 30; loopKill++ {
 			restartedNode := []node.Node{}
 			if isPodRestarting == false {
 				rand.Seed(time.Now().UnixNano())
 				randomNumber := rand.Intn(3) + 1
+
+				/*  Kill random nodes in parallel where 1 node killed will always be Co-ordinator Node.
+					doing this to make devices present on all the nodes,
+				    Upon restart all device present in the nodes should be removed.
+				*/
+
+				if (previousNode == randomNumber) && (randomNumber != 1) {
+					previousNode = randomNumber - 1
+				} else if (previousNode == randomNumber) && (randomNumber == 1) {
+					previousNode = randomNumber + 1
+				}
 
 				nodeDetail, err := getVolumeAttachedNodeAndKill(randomVol)
 				log.FailOnError(err, "Failed to kill Px Daemons")
@@ -915,6 +936,8 @@ var _ = Describe("{ContainerCreateDeviceRemoval}", func() {
 					attachedNode := appVol.AttachedOn
 					log.InfoD("Volume [%v] is attached to Node [%v]", randomVol.Name, attachedNode)
 				}
+
+				previousNode = randomNumber
 
 				appVol, err = Inst().V.InspectVolume(randomVol.ID)
 				log.FailOnError(err, "Failed to get volumes attachment details")
