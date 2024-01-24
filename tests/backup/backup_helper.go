@@ -6745,6 +6745,54 @@ func validateCRCleanup(resourceInterface interface{},
 
 }
 
+// SuspendAndDeleteAllSchedulesForUsers suspends and delete the backup schedule for a give list of users
+func SuspendAndDeleteAllSchedulesForUsers(userNames []string, clusterName string, orgID string, deleteBackupFlag bool) error {
+
+	for _, user := range userNames {
+		log.InfoD("Getting context for non admin user %s", user)
+		ctx, err := backup.GetNonAdminCtx(user, commonPassword)
+		if err != nil {
+			return err
+		}
+
+		SchedulePolices, err := Inst().Backup.GetAllSchedulePolicies(ctx, orgID)
+		if err != nil {
+			return err
+		}
+		log.InfoD("Getting list of all schedule polices %s", SchedulePolices)
+
+		for _, schedulePolicyName := range SchedulePolices {
+			clusterUID, err := Inst().Backup.GetClusterUID(ctx, orgID, clusterName)
+			if err != nil {
+				return err
+			}
+			backupEnumreateRequest := &api.BackupScheduleEnumerateRequest{
+				OrgId: orgID,
+				EnumerateOptions: &api.EnumerateOptions{
+					ClusterNameFilter: clusterName,
+					ClusterUidFilter:  clusterUID,
+				},
+			}
+			listOfBackupSchedules, err := Inst().Backup.EnumerateBackupScheduleByUser(ctx, backupEnumreateRequest)
+			if err != nil {
+				return err
+			}
+			backupScheduleNames := listOfBackupSchedules.GetBackupSchedules()
+			if backupScheduleNames == nil {
+				return fmt.Errorf("got blank list for backup schedule list")
+			}
+			for _, backupScheduleName := range backupScheduleNames {
+				log.InfoD("Suspend and delete backup schedule [%s] for schedule policy [%s]", backupScheduleName, schedulePolicyName)
+				err := SuspendAndDeleteSchedule(backupScheduleName.Name, schedulePolicyName, clusterName, orgID, ctx, deleteBackupFlag)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // SuspendAndDeleteSchedule suspends and deletes the backup schedule
 func SuspendAndDeleteSchedule(backupScheduleName string, schedulePolicyName string, clusterName string, orgID string, ctx context.Context, deleteBackupFlag bool) error {
 	backupDriver := Inst().Backup

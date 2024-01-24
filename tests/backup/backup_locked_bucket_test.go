@@ -1344,10 +1344,10 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 
 		Step("Restore form scheduled backup", func() {
 			log.InfoD("Restore form scheduled backup")
-			for _, customUser := range userNames {
+			for customUser, scheduleList := range backupSchedAndUserMap {
 				ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", customUser)
-				for _, scheduleName := range schedulePolicyNames {
+				for _, scheduleName := range scheduleList {
 					firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
 					log.FailOnError(err, fmt.Sprintf("Fetching the name of the first schedule backup [%s]", firstScheduleBackupName))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
@@ -1390,13 +1390,8 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 			}
 		}
 
-		log.InfoD("Cleanup schedule policies for non admin users")
-		for customUser, schedules := range backupSchedAndUserMap {
-			ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
-			err = DeleteBackupSchedulePolicyWithContext(orgID, schedules, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of schedule policy [%s] of the user %s", schedules, customUser))
-		}
+		err := SuspendAndDeleteAllSchedulesForUsers(userNames, SourceClusterName, orgID, false)
+		dash.VerifyFatal(err, nil, "Deleting Backup schedules for non root users")
 
 		log.InfoD("Deleting backup location and cloud setting")
 		for backupLocationUID, backupLocationName := range BackupLocationMap {
