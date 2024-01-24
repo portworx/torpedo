@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
 	"github.com/portworx/torpedo/drivers/node/gke"
 
 	"github.com/portworx/torpedo/pkg/stats"
@@ -28,7 +29,6 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -41,6 +41,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -80,9 +81,11 @@ import (
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -189,6 +192,11 @@ var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
 	GlobalGkeSecretString  string
+)
+
+var (
+	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
+	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
 )
 
 type OwnershipAccessType int32
@@ -1904,6 +1912,57 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	})
 }
 
+// ValidateApplicationsStartData validates applications and start continous data injection to the same
+func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+
+	// Resetting the global map before starting the new App Validations
+	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+
+	log.InfoD("Validate applications")
+	for _, ctx := range contexts {
+		ValidateContext(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		if err != nil {
+			log.InfoD("Some error occurred - [%s]", err)
+		}
+		log.InfoD("App Info - [%+v]", appInfo)
+		if appContext == nil {
+			log.Warnf("App Context is not proper - [%v]", appContext)
+			continue
+		}
+		if appInfo.StartDataSupport {
+			appHandler, _ := appDriver.GetApplicationDriver(
+				appInfo.AppType,
+				appInfo.Hostname,
+				appInfo.User,
+				appInfo.Password,
+				appInfo.Port,
+				appInfo.DBName,
+				appInfo.NodePort,
+				appInfo.Namespace)
+			log.InfoD("App handler created for [%s]", appInfo.Hostname)
+			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
+		}
+	}
+
+	controlChannel := make(chan string)
+	errGroup := errgroup.Group{}
+
+	for _, allhandler := range NamespaceAppWithDataMap {
+		for _, handler := range allhandler {
+			currentHandler := handler
+			errGroup.Go(func() error {
+				err := currentHandler.StartData(controlChannel, appContext)
+				return err
+			})
+		}
+	}
+
+	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
+
+	return controlChannel, &errGroup
+}
+
 // StartVolDriverAndWait starts volume driver on given app nodes
 func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	defer func() {
@@ -2040,6 +2099,45 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// DestroyApps destroy applications with data validation
+func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
+
+	var allErrors string
+
+	log.InfoD("Validating apps data continuity")
+
+	// Stopping all data flow to apps
+
+	for _, appList := range NamespaceAppWithDataMap {
+		for range appList {
+			controlChannel <- "Stop"
+		}
+	}
+
+	if err := errGroup.Wait(); err != nil {
+		allErrors += err.Error()
+	}
+
+	close(controlChannel)
+
+	log.InfoD("Destroying apps")
+	for _, ctx := range contexts {
+		TearDownContext(ctx, opts)
+	}
+
+	if allErrors != "" {
+		if IsReplacePolicySetToDelete {
+			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+			return nil
+		} else {
+			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+		}
+	}
+
+	return nil
 }
 
 // AddLabelsOnNode adds labels on the node
@@ -5271,6 +5369,47 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
+//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
+	// Getting NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+	workerNode := node.GetWorkerNodes()[0]
+
+	// Mounting the NFS share to the worker node.
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+	}
+
+	for _, cmd := range mountCmds {
+		err = runCmd(cmd, workerNode)
+		if err != nil {
+			return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
+		}
+	}
+
+	defer func() {
+		// Unmounting the NFS share from the worker node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			if e := runCmd(cmd, workerNode); e != nil {
+				err = fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, e)
+			}
+		}
+	}()
+
+	rmCmd := fmt.Sprintf("cd %s/%s && rm -rf %s", mountDir, nfsPath, fileName)
+	err = runCmd(rmCmd, workerNode)
+	if err != nil {
+		return err
+	}
+	return
+}
+
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
@@ -7213,10 +7352,34 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
+
 	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
 	if ginkgoTestDescr.Failed {
 		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
 	}
+
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+		return
+	}
+
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
@@ -8047,7 +8210,10 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
 		return err
 	}
-	if err := ExitPoolMaintenance(stNode); err != nil {
+
+	err = ExitPoolMaintenance(stNode)
+
+	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
 		return err
 	}
 	return nil
@@ -9035,7 +9201,7 @@ outer:
 				}
 				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
 			}
-			_, mError = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			_, mError = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Minute)
 			if mError != nil {
 				return mError
 			}
@@ -10109,4 +10275,68 @@ func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
 	})
 
 	return shuffledElements[:subsetSize], nil
+}
+
+// DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
+func DeleteAllNamespacesCreatedByTestCase() error {
+
+	// Get all the namespaces on the cluster
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return fmt.Errorf("error in listing namespaces. Err: %v", err.Error())
+	}
+
+	// Iterate and remove all namespaces
+	for _, ns := range allNamespaces.Items {
+		if strings.Contains(ns.Name, Inst().InstanceID) {
+			log.Infof("Deleting namespace [%s]", ns.Name)
+			err = k8sCore.DeleteNamespace(ns.Name)
+			if err != nil {
+				// Not returning anything as it's the best case effort
+				log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
+
+	t := func() (interface{}, bool, error) {
+		pxVol, err := Inst().V.InspectVolume(volName)
+		if err != nil {
+			log.Warnf("Failed to inspect volume [%s], Err: %v", volName, err)
+			return nil, false, err
+		}
+
+		for _, n := range node.GetStorageDriverNodes() {
+			ok, err := Inst().V.IsVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				return &n, false, err
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volName)
+	}
+
+	n, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != nil {
+		attachedNode := n.(*node.Node)
+		return attachedNode, nil
+	}
+
+	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
 }

@@ -112,7 +112,7 @@ const (
 	defaultRetryInterval              = 10 * time.Second
 	podUpRetryInterval                = 30 * time.Second
 	maintenanceOpTimeout              = 1 * time.Minute
-	maintenanceWaitTimeout            = 2 * time.Minute
+	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
 	validateDeleteVolumeTimeout       = 6 * time.Minute
@@ -1301,6 +1301,14 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 				ID:    volumeName,
 				Cause: fmt.Sprintf("Volume has invalid state. Actual:%v", vol.State),
 			}
+		}
+
+		// DevicePath
+		// TODO: remove this retry once PWX-27773 is fixed
+		// It is noted that the DevicePath is intermittently empty.
+		// This check ensures the device path is not empty for attached volumes
+		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.DevicePath == "" {
+			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
 		}
 
 		return vol, false, nil

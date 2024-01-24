@@ -66,10 +66,23 @@ WORKDIR /torpedo
 COPY deployments deployments
 COPY scripts scripts
 
+# Install Postman-Newman Dependencies
+RUN apk update && apk upgrade \
+    && apk add --no-cache \
+        nodejs \
+        npm \
+    && rm -rf /var/cache/apk/*
+
+# Install Newman globally using npm
+RUN npm install -g newman
+
 WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install docker
 RUN apk add --update --no-cache docker
+
+# Install dependancy for OCP 4.14 CLI
+RUN apk --update add gcompat
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
