@@ -9,7 +9,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 
 	"github.com/libopenstorage/openstorage/pkg/mount"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/torpedo/drivers/node"
