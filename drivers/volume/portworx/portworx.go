@@ -1254,7 +1254,7 @@ func (d *portworx) GetNodePools(n node.Node) (map[string]string, error) {
 			poolId = strings.Trim(poolId, " ")
 		}
 		if poolId != "" && poolUUID != "" {
- 			if _, ok := poolsData[poolUUID]; !ok {
+			if _, ok := poolsData[poolUUID]; !ok {
 				poolsData[poolUUID] = poolId
 			}
 			poolUUID = ""
