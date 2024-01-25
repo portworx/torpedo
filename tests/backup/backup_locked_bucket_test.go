@@ -1393,18 +1393,6 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 		err := SuspendAndDeleteAllSchedulesForUsers(userNames, SourceClusterName, orgID, false)
 		dash.VerifyFatal(err, nil, "Deleting Backup schedules for non root users")
 
-		log.InfoD("Deleting backup location and cloud setting")
-		for backupLocationUID, backupLocationName := range BackupLocationMap {
-			err := DeleteBackupLocation(backupLocationName, backupLocationUID, orgID, false)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup location %s", backupLocationName))
-		}
-		// Need sleep as it takes some time for
-		time.Sleep(time.Minute * 1)
-		for CloudCredUID, CredName := range CloudCredUIDMap {
-			err := DeleteCloudCredential(CredName, orgID, CloudCredUID)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", CredName))
-		}
-
 		log.Infof("Deleting registered clusters for users context")
 		for _, customUser := range userNames {
 			ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
@@ -1413,14 +1401,6 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 				err := DeleteCluster(clusterName, orgID, ctx, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, customUser))
 			}
-		}
-
-		log.Infof("Deleting registered clusters for admin context")
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		for _, clusterName := range []string{SourceClusterName, destinationClusterName} {
-			err = DeleteCluster(clusterName, orgID, ctx, false)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterName))
 		}
 	})
 })

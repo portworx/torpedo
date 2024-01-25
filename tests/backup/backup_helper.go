@@ -6777,13 +6777,9 @@ func SuspendAndDeleteAllSchedulesForUsers(userNames []string, clusterName string
 			if err != nil {
 				return err
 			}
-			backupScheduleNames := listOfBackupSchedules.GetBackupSchedules()
-			if backupScheduleNames == nil {
-				return fmt.Errorf("got blank list for backup schedule list")
-			}
-			for _, backupScheduleName := range backupScheduleNames {
+			for _, backupScheduleName := range listOfBackupSchedules.GetBackupSchedules() {
 				log.InfoD("Suspend and delete backup schedule [%s] for schedule policy [%s]", backupScheduleName, schedulePolicyName)
-				err := SuspendAndDeleteSchedule(backupScheduleName.Name, schedulePolicyName, clusterName, orgID, ctx, deleteBackupFlag)
+				err := SuspendAndDeleteSchedule(backupScheduleName.GetName(), schedulePolicyName, clusterName, orgID, ctx, deleteBackupFlag)
 				if err != nil {
 					return err
 				}
