@@ -5222,8 +5222,7 @@ func DeleteGcpBucket(bucketName string) {
 
 	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
 	if err != nil {
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to create gcp client: %v", err))
+		log.FailOnError(err, "Failed to create gcp client")
 	}
 	defer client.Close()
 
@@ -5235,16 +5234,13 @@ func DeleteGcpBucket(bucketName string) {
 			break
 		}
 		if err != nil {
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Error iterating over objects: %v\n", err))
-			return
+			log.FailOnError(err, "error iterating over gcp bucket objects")
 		}
 
 		// Delete each object in the bucket
 		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
 		if err != nil {
-			expect(err).NotTo(haveOccurred(),
-				fmt.Sprintf("Error deleting object %s: %v\n", objAttrs.Name, err))
+			log.FailOnError(err, "error deleting object from gcp bucket %s", objAttrs.Name)
 			return
 		}
 		log.Infof("Deleted object: %s\n", objAttrs.Name)
@@ -5253,8 +5249,7 @@ func DeleteGcpBucket(bucketName string) {
 	// Delete the bucket
 	bucket := client.Bucket(bucketName)
 	if err := bucket.Delete(ctx); err != nil {
-		expect(err).NotTo(haveOccurred(),
-			fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
+		log.FailOnError(err, "failed to delete bucket [%v]", bucketName)
 	}
 }
 
