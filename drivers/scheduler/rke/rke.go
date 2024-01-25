@@ -12,6 +12,7 @@ import (
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -25,7 +26,6 @@ const (
 )
 
 var RancherMap = make(map[string]*RancherClusterParameters)
-var rancherUserPassword = "Password@123"
 
 type Rancher struct {
 	kube.K8s
@@ -37,6 +37,18 @@ type RancherClusterParameters struct {
 	Endpoint  string
 	AccessKey string
 	SecretKey string
+}
+
+// RandomString generates a random lowercase string of length characters.
+func RandomString(length int) string {
+	rand.Seed(time.Now().UnixNano())
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+	randomBytes := make([]byte, length)
+	for i := range randomBytes {
+		randomBytes[i] = letters[rand.Intn(len(letters))]
+	}
+	randomString := string(randomBytes)
+	return randomString
 }
 
 // String returns the string name of this driver.
@@ -201,24 +213,27 @@ func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers
 	userLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
 
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("user%v-%v", i, time.Now().Unix())
+		userName := fmt.Sprintf("user%v-%v", i, RandomString(4))
 		displayName := fmt.Sprintf("Test " + userName)
+		userPassword := RandomString(12)
 		userRequest := &rancherClient.User{
 			Username:    userName,
-			Password:    rancherUserPassword,
+			Password:    userPassword,
 			Name:        displayName,
 			Annotations: userAnnotation,
 			Labels:      userLabel,
 		}
 		newUser, err := r.client.User.Create(userRequest)
+		log.InfoD("The user [%s] is created with user id [%s]", userName, newUser.ID)
 		userIDList = append(userIDList, newUser.ID)
 		principalIDList = append(principalIDList, newUser.PrincipalIDs[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
-		//adding a sleep of 1sec because almost all users are getting created in the same second
-		time.Sleep(1 * time.Second)
 	}
+	//Reason for making use of principalID is because the principal ID consists of cluster details along with the user ID,eg: userid='u-kpvpp', principalId='local://u-kpvpp'
+	//ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
+	//the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
 	for _, principalID := range principalIDList {
 		roleRequest := &rancherClient.ProjectRoleTemplateBinding{
 			ProjectID:       projectId,
@@ -240,15 +255,18 @@ func (r *Rancher) ValidateUsersInProject(projectName string, userList []string) 
 	if err != nil {
 		return err
 	}
+	//the returned roleMapping collection would include details about the permissions and roles assigned for the entire rancher cluster
 	roleMapping, err := r.client.ProjectRoleTemplateBinding.List(nil)
 	if err != nil {
 		return err
 	}
+	//the if condition filters the data based on the supplied project and the role.Name, the value for role.Name will either be "creator-project-owner" or a user id of a user associated with that project.
 	for _, role := range roleMapping.Data {
 		if role.ProjectID == projectId && role.Name != "creator-project-owner" {
 			actualUserListForProject = append(actualUserListForProject, role.UserID)
 		}
 	}
+	//here we are trying to compare if all the users supplied to this function are present in the project
 	for _, user := range userList {
 		userFound := false
 		for _, actualUser := range actualUserListForProject {
@@ -257,6 +275,7 @@ func (r *Rancher) ValidateUsersInProject(projectName string, userList []string) 
 				break
 			}
 		}
+		//even if a single user from the supplied list isn't found in actualUserListForProject, we return an error
 		if !userFound {
 			return fmt.Errorf("user %s is not part of the actual user list for the project", user)
 		}
@@ -275,6 +294,7 @@ func (r *Rancher) DeleteRancherUsers(userIDList []string) error {
 		if err != nil {
 			return err
 		}
+		log.InfoD("The user [%s] is deleted", userID)
 	}
 	return nil
 }

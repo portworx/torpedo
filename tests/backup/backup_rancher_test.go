@@ -980,7 +980,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 		Step("Adding multiple users to the source project of rancher source cluster", func() {
 			log.InfoD("Adding multiple users to the source project of rancher source cluster")
 			userIDList, err = Inst().S.(*rke.Rancher).CreateUsersForRancherProject(sourceClusterProjectList[0], 5)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher users and adding them to project"))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher users and adding them to the project [%s]", sourceClusterProjectList[0]))
 		})
 
 		Step("Adding namespace to source project and taking backup of it", func() {
