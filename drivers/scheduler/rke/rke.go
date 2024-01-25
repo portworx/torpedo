@@ -201,7 +201,6 @@ func (r *Rancher) GetProjectID(projectName string) (string, error) {
 //CreateUsersForRancherProject Creates rancher users based on the supplied number and adds them to the project
 func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers int) ([]string, error) {
 	var userIDList []string
-	var principalIDList []string
 	userAnnotation := make(map[string]string)
 	userLabel := make(map[string]string)
 
@@ -226,7 +225,6 @@ func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers
 		newUser, err := r.client.User.Create(userRequest)
 		log.InfoD("The user [%s] is created with user id [%s]", userName, newUser.ID)
 		userIDList = append(userIDList, newUser.ID)
-		principalIDList = append(principalIDList, newUser.PrincipalIDs[0])
 		if err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
