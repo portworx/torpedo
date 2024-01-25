@@ -1,19 +1,90 @@
 package tests
 
 import (
+	context1 "context"
 	"fmt"
+
+	"math/rand"
 	"time"
 
-	. "github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
-	. "github.com/portworx/torpedo/drivers/backup/backup_helper"
 	"github.com/portworx/torpedo/drivers/scheduler"
+
 	"github.com/portworx/torpedo/pkg/log"
-	. "github.com/portworx/torpedo/tests"
+
+	. "github.com/onsi/ginkgo"
 )
+
+// All Longevity types for backup
+
+// Global variables to be used by all flows
+var (
+	LongevityBackupLocationName   string
+	LongevityBackupLocationUID    string
+	LongevityAllNamespaces        []string
+	LongevityClusterUID           string
+	LongevityScheduledAppContexts []*scheduler.Context
+)
+
+type PxBackupLongevity struct {
+	CustomData      *CustomData
+	ApplicationData *ApplicationData
+	BackupData      *BackupData
+	RestoreData     *RestoreData
+}
+
+type CustomData struct {
+	Integers map[string]int
+	Strings  map[string]string
+}
+
+type BackupData struct {
+	Namespaces         []string
+	BackupLocationName string
+	BackupLocationUID  string
+	ClusterUid         string
+	BackupName         string
+}
+
+type RestoreData struct {
+	RestoreMap  map[string]string
+	RestoreName string
+}
+
+type ApplicationData struct {
+	SchedulerContext []*scheduler.Context
+}
+
+type EventData struct {
+	SchedulerContext   []*scheduler.Context
+	AppContext         context1.Context
+	BackupNamespaces   []string
+	BackupLocationName string
+	BackupLocationUID  string
+	ClusterUid         string
+	BackupNames        []string
+	RestoreName        string
+}
+
+type EventBuilderResponse struct {
+	Error              error
+	TimeTakenInMinutes float32
+	HighlightEvent     string
+	EventData          EventData
+}
+
+type EventResponse struct {
+	Name               string
+	EventBuilders      map[string]*EventBuilderResponse
+	Errors             []error
+	TimeTakenInMinutes float32
+	HighlightEvents    []string
+	DisruptiveEventRan []string
+	Status             bool
+}
 
 const (
 	EventBuilder1                       = "EventBuilder1"
@@ -40,6 +111,89 @@ var AllBuilders = map[string]PxBackupEventBuilder{
 var ctx, _ = backup.GetAdminCtxFromSecret()
 
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
+
+func GetLongevityInputParams() PxBackupLongevity {
+	var customData = CustomData{
+		Integers: make(map[string]int),
+		Strings:  make(map[string]string),
+	}
+
+	var backupData = BackupData{
+		Namespaces:         make([]string, 0),
+		BackupLocationName: "",
+		BackupLocationUID:  "",
+		ClusterUid:         "",
+	}
+
+	var restoreData = RestoreData{
+		RestoreMap:  make(map[string]string),
+		RestoreName: "",
+	}
+
+	var applicationData = ApplicationData{
+		SchedulerContext: make([]*scheduler.Context, 0),
+	}
+
+	var longevityStruct = PxBackupLongevity{
+		CustomData:      &customData,
+		ApplicationData: &applicationData,
+		BackupData:      &backupData,
+		RestoreData:     &restoreData,
+	}
+
+	return longevityStruct
+}
+
+func GetLongevityEventResponse() EventResponse {
+	var someOtherVar = make(map[string]*EventBuilderResponse)
+
+	var eventResponse = EventResponse{
+		EventBuilders: someOtherVar,
+	}
+
+	return eventResponse
+}
+
+// All longevity utilities
+
+// ...
+
+func GetRandomNamespacesForBackup() []string {
+	var allNamespacesForBackupMap = make(map[string]bool)
+	var allNamepsacesForBackup []string
+	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
+
+	numberOfNamespaces := rand.Intn(len(LongevityAllNamespaces))
+
+	for i := 0; i <= numberOfNamespaces; i++ {
+		allNamespacesForBackupMap[LongevityAllNamespaces[rand.Intn(len(LongevityAllNamespaces))]] = true
+	}
+
+	for namespaceName, _ := range allNamespacesForBackupMap {
+		allNamepsacesForBackup = append(allNamepsacesForBackup, namespaceName)
+	}
+
+	log.Infof("Returning This - [%v]", allNamepsacesForBackup)
+	return allNamepsacesForBackup
+}
+
+func UpdateEventResponse(eventResponse *EventResponse) {
+	for _, builderResponse := range eventResponse.EventBuilders {
+		eventResponse.TimeTakenInMinutes += builderResponse.TimeTakenInMinutes
+		if builderResponse.Error != nil {
+			eventResponse.Errors = append(eventResponse.Errors, builderResponse.Error)
+		}
+		eventResponse.HighlightEvents = append(eventResponse.HighlightEvents, builderResponse.HighlightEvent)
+	}
+	if eventResponse.Errors != nil {
+		eventResponse.Status = false
+	} else {
+		eventResponse.Status = true
+	}
+	// LogEventData(eventResponse)
+}
+
+// All longevity events
 
 func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
@@ -77,7 +231,7 @@ func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevit
 	eventData := &EventData{}
 	backupLocationMap := make(map[string]string)
 	var cloudCredUidList []string
-	var providers = GetProvider()
+	var providers = GetBackupProviders()
 	var backupLocationUID string
 
 	log.InfoD("Creating cloud credentials and backup location")
@@ -233,3 +387,169 @@ func getGlobalBucketName(provider string) string {
 	log.Infof("Bucket created with name - %s", GlobalAWSBucketName)
 	return bucketName
 }
+
+// All Longevity Workflows
+
+func SetupAddCloudBackupLocation() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "Add global cloud location for backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	eventData := RunBuilder(EventAddCredentialandBackupLocation, &inputForBuilder, &result)
+
+	// Setting global variables for backup
+	LongevityBackupLocationName = eventData.BackupLocationName
+	LongevityBackupLocationUID = eventData.BackupLocationUID
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func SetupAddClusters() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "Add global cloud location for backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	eventData := RunBuilder(EventAddSourceAndDestinationCluster, &inputForBuilder, &result)
+
+	// Setting global variables for backup
+	LongevityClusterUID = eventData.ClusterUid
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func GlobalScheduleAndValidateApplication() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "Schedule And Validate App"
+	inputForBuilder := GetLongevityInputParams()
+
+	eventData := RunBuilder(EventScheduleApps, &inputForBuilder, &result)
+	LongevityScheduledAppContexts = append(LongevityScheduledAppContexts, eventData.SchedulerContext...)
+	LongevityAllNamespaces = append(LongevityAllNamespaces, eventData.BackupNamespaces...)
+
+	_ = RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+
+}
+
+func AppCreateBackup() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "Create Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Backup")
+	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+
+	_ = RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func AppCreateBackupandRestore() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "Create Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	log.Infof("Creating Backup")
+	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
+	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
+	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
+	inputForBuilder.BackupData.Namespaces = GetRandomNamespacesForBackup()
+	inputForBuilder.ApplicationData.SchedulerContext = LongevityScheduledAppContexts
+
+	eventData := RunBuilder(EventCreateBackup, &inputForBuilder, &result)
+
+	inputForBuilder.BackupData.BackupName = eventData.BackupNames[0]
+
+	_ = RunBuilder(EventRestore, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func OneSuccessOneFail() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "OneSuccessOneFail"
+	log.Infof("Running one success one fail")
+
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.CustomData.Integers["timeToBlock"] = 3
+
+	RunBuilder(EventBuilder1, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	log.Infof("Running one success one fail - Done")
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func OneSuccessTwoFail() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "OneSuccessTwoFail"
+
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
+
+	RunBuilder(EventBuilder1, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func DisruptiveEvent() EventResponse {
+	result := GetLongevityEventResponse()
+	result.Name = "DisruptiveEvent"
+
+	inputForBuilder := GetLongevityInputParams()
+	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+	return result
+}
+
+func CreateReport() EventResponse {
+	// report.DumpResult()
+	result := GetLongevityEventResponse()
+	result.Name = "DumpingData"
+
+	return result
+}
+
+// func LogEventData(eventResponse *EventResponse) {
+// 	// fmt.Println(table)
+// 	// fmt.Printf("\n\n\n")
+// 	report.ResultsMutex.Lock()
+// 	report.Results[eventResponse.Name+"-"+uuid.NewString()+"-"+time.Now().Format("02 Jan 06 15:04 MST")] = report.ResultForReport{
+// 		Data:   *eventResponse,
+// 		Status: eventResponse.Status,
+// 	}
+// 	report.ResultsMutex.Unlock()
+// }

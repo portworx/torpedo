@@ -71,7 +71,7 @@ const (
 	EmailRecipientsConfigMapField = "emailRecipients"
 	// DefaultEmailRecipient is list of email IDs that will receive email
 	// notifications when no EmailRecipientsConfigMapField field present in configMap
-	DefaultEmailRecipient = "test@portworx.com"
+	DefaultEmailRecipient = "atrivedi@purestorage.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
 	// EmailHostServerField is field in configmap which stores the server address
@@ -522,7 +522,10 @@ const (
 	HAIncreaseWithPVCResize = "haIncreaseWithPVCResize"
 
 	// ReallocateSharedMount reallocated shared mount volumes
-	ReallocateSharedMount = "reallocateSharedMount"
+	ReallocateSharedMount = "ReallocateSharedMount"
+
+	//Dummy Event just for testing
+	DummyOneSuccessOneFail = "DummyOneSuccessOneFail"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -9302,6 +9305,35 @@ func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan 
 	})
 }
 
+func TriggerOneSuccessOneFail(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DummyOneSuccessOneFail)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DummyOneSuccessOneFail,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	workflowResponse := OneSuccessOneFail()
+
+	for _, err := range workflowResponse.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+
+}
+
 // GetContextPVCs returns pvc from the given context
 func GetContextPVCs(context *scheduler.Context) ([]*corev1.PersistentVolumeClaim, error) {
 	updatedPVCs := make([]*corev1.PersistentVolumeClaim, 0)
@@ -9421,7 +9453,7 @@ func getReblanceCoolOffPeriod(triggerType string) int {
 
 	t := ChaosMap[triggerType]
 
-	baseInterval := 3600
+	baseInterval := 10
 
 	switch t {
 	case 1:

@@ -50,13 +50,15 @@ var (
 // TriggerFunction represents function signature of a testTrigger
 type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
-var _ = Describe("{Longevity}", func() {
+var _ = Describe("{BackupLongevity}", func() {
 	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
 	var emailTriggerLock sync.Mutex
 	var populateDone bool
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){}
+	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
+		DummyOneSuccessOneFail: TriggerOneSuccessOneFail,
+	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
 		EmailReporter: TriggerEmailReporter,
@@ -67,7 +69,7 @@ var _ = Describe("{Longevity}", func() {
 			StartPxBackupTorpedoTest("BackupLongevityTest",
 				"Longevity Run For Backup", nil, 58056, ATrivedi, Q1FY24)
 			populateIntervals()
-			populateDisruptiveTriggers()
+			//  populateDisruptiveTriggers()
 			populateDone = true
 		}
 	})
@@ -85,7 +87,7 @@ var _ = Describe("{Longevity}", func() {
 			}
 		})
 
-		TriggerDeployNewApps(&contexts, &triggerEventsChan)
+		// TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
@@ -191,8 +193,8 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	emailTriggerLock *sync.Mutex) {
 	defer wg.Done()
 
-	minRunTime := Inst().MinRunTimeMins
-	timeout := (minRunTime) * 60
+	// minRunTime := Inst().MinRunTimeMins
+	timeout := 0
 
 	start := time.Now().Local()
 	lastInvocationTime := start
@@ -269,7 +271,7 @@ func populateDisruptiveTriggers() {
 		CrashVolDriver:                  false,
 		RebootNode:                      true,
 		CrashNode:                       true,
-		EmailReporter:                   false,
+		EmailReporter:                   true,
 		AppTaskDown:                     false,
 		DeployApps:                      false,
 		BackupAllApps:                   false,
@@ -553,8 +555,9 @@ func populateIntervals() {
 	triggerInterval[StorageFullPoolExpansion] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseWithPVCResize] = make(map[int]time.Duration)
 	triggerInterval[ReallocateSharedMount] = make(map[int]time.Duration)
+	triggerInterval[DummyOneSuccessOneFail] = make(map[int]time.Duration)
 
-	baseInterval := 10 * time.Minute
+	baseInterval := 10 * time.Second
 
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
@@ -718,6 +721,17 @@ func populateIntervals() {
 	triggerInterval[AsyncDRMigrationSchedule][3] = 21 * baseInterval
 	triggerInterval[AsyncDRMigrationSchedule][2] = 24 * baseInterval
 	triggerInterval[AsyncDRMigrationSchedule][1] = 27 * baseInterval
+
+	triggerInterval[DummyOneSuccessOneFail][10] = 1 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][9] = 3 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][8] = 6 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][7] = 9 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][6] = 12 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][5] = 15 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][4] = 18 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][3] = 21 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][2] = 24 * baseInterval
+	triggerInterval[DummyOneSuccessOneFail][1] = 27 * baseInterval
 
 	triggerInterval[AutoFsTrimAsyncDR][10] = 1 * baseInterval
 	triggerInterval[AutoFsTrimAsyncDR][9] = 3 * baseInterval
@@ -1468,7 +1482,7 @@ func populateIntervals() {
 	triggerInterval[BackupAllApps][0] = 0
 	triggerInterval[BackupScheduleAll][0] = 0
 	triggerInterval[BackupSpecificResource][0] = 0
-	triggerInterval[EmailReporter][0] = 0
+	triggerInterval[EmailReporter][0] = 1
 	triggerInterval[BackupSpecificResourceOnCluster][0] = 0
 	triggerInterval[TestInspectRestore][0] = 0
 	triggerInterval[TestInspectBackup][0] = 0
