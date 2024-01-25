@@ -5226,6 +5226,27 @@ func DeleteGcpBucket(bucketName string) {
 	}
 	defer client.Close()
 
+	// List all objects in the bucket
+	it := client.Bucket(bucketName).Objects(ctx, nil)
+	for {
+		objAttrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			fmt.Printf("Error iterating over objects: %v\n", err)
+			return
+		}
+
+		// Delete each object in the bucket
+		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
+		if err != nil {
+			fmt.Printf("Error deleting object %s: %v\n", objAttrs.Name, err)
+			return
+		}
+		fmt.Printf("Deleted object: %s\n", objAttrs.Name)
+	}
+
 	// Delete the bucket
 	bucket := client.Bucket(bucketName)
 	if err := bucket.Delete(ctx); err != nil {
@@ -5711,6 +5732,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderNfs:
 		result, err := IsNFSSubPathEmpty(bucketName)
 		return result, err
+	case drivers.ProviderGke:
+		result, err := IsGCPBucketEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -5801,6 +5825,7 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 	defer client.Close()
+
 	it := client.Bucket(bucketName).Objects(ctx, query)
 	_, err = it.Next()
 	if err == iterator.Done {
