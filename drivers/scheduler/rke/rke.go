@@ -231,14 +231,13 @@ func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
 	}
-	//Reason for making use of principalID is because the principal ID consists of cluster details along with the user ID,eg: userid='u-kpvpp', principalId='local://u-kpvpp'
 	//ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
 	//the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
-	for _, principalID := range principalIDList {
+	for _, userID := range userIDList {
 		roleRequest := &rancherClient.ProjectRoleTemplateBinding{
-			ProjectID:       projectId,
-			UserPrincipalID: principalID,
-			RoleTemplateID:  "project-member",
+			ProjectID:      projectId,
+			UserID:         userID,
+			RoleTemplateID: "project-member",
 		}
 		_, err := r.client.ProjectRoleTemplateBinding.Create(roleRequest)
 		if err != nil {
