@@ -5222,7 +5222,8 @@ func DeleteGcpBucket(bucketName string) {
 
 	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to create gcp client: %v", err))
 	}
 	defer client.Close()
 
@@ -5234,23 +5235,26 @@ func DeleteGcpBucket(bucketName string) {
 			break
 		}
 		if err != nil {
-			fmt.Printf("Error iterating over objects: %v\n", err)
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Error iterating over objects: %v\n", err))
 			return
 		}
 
 		// Delete each object in the bucket
 		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
 		if err != nil {
-			fmt.Printf("Error deleting object %s: %v\n", objAttrs.Name, err)
+			expect(err).NotTo(haveOccurred(),
+				fmt.Sprintf("Error deleting object %s: %v\n", objAttrs.Name, err))
 			return
 		}
-		fmt.Printf("Deleted object: %s\n", objAttrs.Name)
+		log.Infof("Deleted object: %s\n", objAttrs.Name)
 	}
 
 	// Delete the bucket
 	bucket := client.Bucket(bucketName)
 	if err := bucket.Delete(ctx); err != nil {
-		log.Fatalf("Failed to delete bucket: %v", err)
+		expect(err).NotTo(haveOccurred(),
+			fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
 	}
 }
 
@@ -5822,7 +5826,8 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 	ctx := context1.Background()
 	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		log.Infof("Failed to create client gcp client : %v", err)
+		return false, fmt.Errorf("failed to create client gcp storage %s", err)
 	}
 	defer client.Close()
 
@@ -5832,8 +5837,7 @@ func IsGCPBucketEmpty(bucketName string) (bool, error) {
 		// Iterator finished, bucket is empty
 		return true, nil
 	} else if err != nil {
-		// An error occurred
-		return false, err
+		return false, fmt.Errorf("error occured while iterating over objects of gcp bucket %s", err)
 	}
 
 	// Iterator didn't finish, bucket is not empty
