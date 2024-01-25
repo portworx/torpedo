@@ -3,9 +3,11 @@ package pds
 import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	pdsv2api "github.com/portworx/torpedo/drivers/unifiedControlPlane"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
@@ -70,6 +72,22 @@ func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
 
 }
 
+func InitPdsv2ApiComponents(ControlPlaneURL string) (*pdsv2api.UnifiedControlPlaneComponents, error) {
+	log.InfoD("Initializing Api components")
+	apiConf := pdsv2.NewConfiguration()
+	endpointURL, err := url.Parse(ControlPlaneURL)
+	if err != nil {
+		return nil, err
+	}
+	apiConf.Host = endpointURL.Host
+	apiConf.Scheme = endpointURL.Scheme
+
+	apiClient := pdsv2.NewAPIClient(apiConf)
+	components := pdsv2api.NewUnifiedControlPlane(apiClient)
+
+	return components, nil
+
+}
 func InitPdsApiComponents(ControlPlaneURL string) (*pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")
 	apiConf := pds.NewConfiguration()
