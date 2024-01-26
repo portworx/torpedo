@@ -2368,11 +2368,12 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			if err != nil {
 				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
 			}
-
+			log.InfoD("Successfully retrieved pods restart counts: %v", pxPodRestartCountMap)
 			// Validate portworx pod restart count after test
 			for pod, value := range pxPodRestartCountMap {
 				n, err := node.GetNodeByIP(pod.Status.HostIP)
 				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
+				log.InfoD("Successfully retrieved node: %s", n.Name)
 				if n.PxPodRestartCount != value {
 					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
 					if Inst().PortworxPodRestartCheck {
