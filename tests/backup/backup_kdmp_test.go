@@ -1485,24 +1485,17 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			log.InfoD("Taking Backup of application")
-			var wg sync.WaitGroup
 			for i := 0; i < genericBackupCount; i++ {
-				wg.Add(1)
 				currentBackupName = fmt.Sprintf("%s-%v-%v", BackupNamePrefix, i+1, RandomString(10))
-				go func(currentBackupName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
-				}(currentBackupName)
+				err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
 				backupNameList = append(backupNameList, currentBackupName)
 			}
-			wg.Wait()
 			log.Infof("List of backups - %v", backupNameList)
 		})
 
-		Step("Deleting few random intermittent backups", func() {
-			log.InfoD("Deleting few random intermittent backups")
+		Step("Deleting few intermittent backups", func() {
+			log.InfoD("Deleting %v random intermittent backups", backupDeleteCount)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			rand.Seed(time.Now().UnixNano())
@@ -1519,7 +1512,7 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 		})
 
 		Step("Restoring random backups on destination cluster", func() {
-			log.InfoD("Restoring random backups on destination cluster")
+			log.InfoD("Restoring %v random backups on destination cluster", backupRestoreCount)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			// Shuffle the existing list
