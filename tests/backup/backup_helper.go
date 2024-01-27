@@ -2034,7 +2034,7 @@ func ValidateBackup(ctx context.Context, backupName string, orgID string, schedu
 						case string(DirectKDMP):
 							expectedVolumeDriver = "kdmp"
 						default:
-							expectedVolumeDriver = Inst().V.String()
+							expectedVolumeDriver = "kdmp"
 						}
 
 						if backedupVol.DriverName != expectedVolumeDriver {

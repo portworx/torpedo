@@ -1483,13 +1483,12 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 			log.InfoD("Taking %v generic backups of application on source cluster", genericBackupCount)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			//appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			log.InfoD("Taking Backup of application")
 			for i := 0; i < genericBackupCount; i++ {
 				for _, namespace := range bkpNamespaces {
 					currentBackupName = fmt.Sprintf("%s-%v-%s-%v", BackupNamePrefix, i+1, namespace, RandomString(6))
-					err := CreateBackup(currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, bkpNamespaces, nil, orgID, sourceClusterUid, "", "", "", "", ctx)
-					//err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+					err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
 					backupNameList = append(backupNameList, currentBackupName)
 				}
