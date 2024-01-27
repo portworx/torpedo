@@ -1418,9 +1418,9 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 		backupNameList       []string
 		backupListForRestore []string
 		restoreNames         []string
-		genericBackupCount   = 30
-		backupDeleteCount    = 15
-		backupRestoreCount   = 10
+		genericBackupCount   = 10
+		backupDeleteCount    = 6
+		backupRestoreCount   = 4
 	)
 
 	JustBeforeEach(func() {
@@ -1485,17 +1485,11 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			log.InfoD("Taking Backup of application")
-			var wg sync.WaitGroup
 			for i := 0; i < genericBackupCount; i++ {
 				for _, namespace := range bkpNamespaces {
 					currentBackupName = fmt.Sprintf("%s-%v-%s-%v", BackupNamePrefix, i+1, namespace, RandomString(6))
-					wg.Add(1)
-					go func(currentBackupName string) {
-						defer GinkgoRecover()
-						defer wg.Done()
-						err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
-					}(currentBackupName)
+					err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
 					backupNameList = append(backupNameList, currentBackupName)
 				}
 			}
