@@ -2521,7 +2521,7 @@ func ValidateRestore(ctx context.Context, restoreName string, orgID string, expe
 				case string(DirectKDMP):
 					expectedVolumeDriver = "kdmp"
 				default:
-					expectedVolumeDriver = Inst().V.String()
+					expectedVolumeDriver = "kdmp"
 				}
 
 				if restoredVolInfo.DriverName != expectedVolumeDriver {
