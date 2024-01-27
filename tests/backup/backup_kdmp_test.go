@@ -1521,6 +1521,7 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 				backupNameList[i], backupNameList[j] = backupNameList[j], backupNameList[i]
 			}
 			backupListForRestore = backupNameList[:backupRestoreCount]
+			log.Infof("List of backups to be restored - %v", backupListForRestore)
 			var wg sync.WaitGroup
 			for _, backupName := range backupListForRestore {
 				wg.Add(1)
