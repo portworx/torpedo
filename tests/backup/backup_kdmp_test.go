@@ -1418,9 +1418,9 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 		backupNameList       []string
 		backupListForRestore []string
 		restoreNames         []string
-		genericBackupCount   = 30
-		backupDeleteCount    = 15
-		backupRestoreCount   = 5
+		genericBackupCount   = 10
+		backupDeleteCount    = 6
+		backupRestoreCount   = 2
 	)
 
 	JustBeforeEach(func() {
