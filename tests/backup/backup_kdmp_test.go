@@ -1418,9 +1418,9 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 		backupNameList       []string
 		backupListForRestore []string
 		restoreNames         []string
-		genericBackupCount   = 10
-		backupDeleteCount    = 6
-		backupRestoreCount   = 2
+		genericBackupCount   = 30
+		backupDeleteCount    = 15
+		backupRestoreCount   = 4
 	)
 
 	JustBeforeEach(func() {
@@ -1522,20 +1522,13 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 			}
 			backupListForRestore = backupNameList[:backupRestoreCount]
 			log.Infof("List of backups to be restored - %v", backupListForRestore)
-			var wg sync.WaitGroup
 			for _, backupName := range backupListForRestore {
-				wg.Add(1)
-				go func(backupName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					restoreName := fmt.Sprintf("%s-%v", restoreNamePrefix, RandomString(10))
-					err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsExpectedInBackup)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, backupName))
-					restoreNames = append(restoreNames, restoreName)
-				}(backupName)
+				appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+				restoreName := fmt.Sprintf("%s-%v", restoreNamePrefix, RandomString(10))
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), destinationClusterName, orgID, appContextsExpectedInBackup)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, backupName))
+				restoreNames = append(restoreNames, restoreName)
 			}
-			wg.Wait()
 		})
 	})
 
