@@ -32,7 +32,6 @@ COPY Makefile Makefile
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY pkg pkg
-COPY porx porx
 COPY scripts scripts
 COPY drivers drivers
 COPY deployments deployments
@@ -80,6 +79,9 @@ WORKDIR /go/src/github.com/portworx/torpedo
 
 # Install docker
 RUN apk add --update --no-cache docker
+
+# Install dependancy for OCP 4.14 CLI
+RUN apk --update add gcompat
 
 # Copy ginkgo & binaries over from previous container
 COPY --from=build /go/bin/ginkgo /bin/ginkgo
