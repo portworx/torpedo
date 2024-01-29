@@ -2304,17 +2304,55 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 			stepLog = fmt.Sprintf("schedule application")
 			Step(stepLog, func() {
-
-				for i := 0; i < Inst().GlobalScaleFactor; i++ {
-					taskName := fmt.Sprintf("app-cleanup-when-px-kill-%v", i)
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Provisioner,
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-					contexts = append(contexts, context...)
-				}
+				taskName := fmt.Sprintf("FADA-vol-migrate-test")
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
 				ValidateApplications(contexts)
+			})
+			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node and check if the volume is still attached in multipath")
+			Step(stepLog, func() {
+				//get the node where the app is scheduled
+				scheduledNodeName := ""
+				pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
+				log.FailOnError(err, "Failed to get pods in namespace %v", contexts[0].App.NameSpace)
+				for _, pod := range pods.Items {
+					log.InfoD("Pod name: %v, node name: %v", pod.Name, pod.Spec.NodeName)
+					scheduledNodeName = pod.Spec.NodeName
+				}
+				//Stop PX on that node where pod has been scheduled
+				scheduledNode, err := node.GetNodeByName(scheduledNodeName)
+				log.FailOnError(err, "Failed to get node %v", scheduledNodeName)
+				log.InfoD("Stopping PX on node %v", scheduledNodeName)
+
+				StopVolDriverAndWait([]node.Node{scheduledNode})
+
+				//get device path of the volume
+				devicePath := ""
+				//get the volume name and inspect volume to get device path
+				volumes, err := Inst().S.GetVolumes(contexts[0])
+				for _, volume := range volumes {
+					volInspect, err := Inst().V.InspectVolume(volume.ID)
+					log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
+					devicePath = volInspect.DevicePath
+				}
+				log.InfoD("Device path of the volume: %v , device path: %v", volumes[0].Name, devicePath)
+
+				//check if the device path is present in multipath
+				n, err := Inst().V.GetNodeForVolume(volumes[0], defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to get node for volume: %s", volumes[0].ID)
+
+				log.InfoD("volume %s is attached on node %s [%s]", volumes[0].ID, n.SchedulerNodeName, n.Addresses[0])
+
+				//run the multipath -ll command on the node where the volume is attached
+
+				output, err := runCmd("multipath -ll", *n)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
+				log.InfoD("Output of multipath -ll command: %v", output)
+
 			})
 
 		})
