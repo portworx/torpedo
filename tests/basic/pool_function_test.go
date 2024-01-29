@@ -1176,8 +1176,8 @@ func checkAlertsForPoolExpansion(poolIDToResize string, targetSizeGiB uint64) (b
 	return false, fmt.Errorf("Alert not found")
 }
 
-func checkPoolShowOutput(n *node.Node) bool {
-	// Get the node to check the pool show output
+func checkPoolShowMessageOutput(n *node.Node) bool {
+	// Get the node to check the pool show output and grep for Message
 	cmd := "pxctl sv pool show | grep -e Message"
 	// Execute the command and check the alerts of type POOL
 	out, err := Inst().N.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
@@ -1186,9 +1186,9 @@ func checkPoolShowOutput(n *node.Node) bool {
 	})
 	log.FailOnError(err, "Unable to execute the pxctl show command")
 	outLines := strings.Split(out, "\n")
-	fmt.Println("outLines", outLines)
 	for _, l := range outLines {
 		line := strings.Trim(l, " ")
+		// the following error is expected cause we are trying to expand the pool beyond the limit
 		if strings.Contains(line, "could not find a suitable storage distribution") {
 			return true
 		}
