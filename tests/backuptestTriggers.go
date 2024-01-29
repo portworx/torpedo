@@ -421,7 +421,7 @@ func SetupAddClusters() EventResponse {
 	return result
 }
 
-func GlobalScheduleAndValidateApplication() EventResponse {
+func ScheduleAndValidateApplicationBackupApp() EventResponse {
 	result := GetLongevityEventResponse()
 	result.Name = "Schedule And Validate App"
 	inputForBuilder := GetLongevityInputParams()

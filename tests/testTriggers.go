@@ -524,8 +524,17 @@ const (
 	// ReallocateSharedMount reallocated shared mount volumes
 	ReallocateSharedMount = "ReallocateSharedMount"
 
-	//Dummy Event just for testing
-	DummyOneSuccessOneFail = "DummyOneSuccessOneFail"
+	// AddBackupCluster adds source and destination cluster
+	AddBackupCluster = "TriggerAddBackupCluster"
+
+	//SetupBackupBucketAndCreds add creds and adds bucket for backup
+	SetupBackupBucketAndCreds = "SetupBackupBucketAndCreds"
+
+	// DeployBackup Apps deploys backup application
+	DeployBackupApps = "DeployBackupApps"
+
+	// CreateBackup creates backup for longevity
+	CreatePxBackup = "CreatePxBackup"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -9305,15 +9314,15 @@ func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan 
 	})
 }
 
-func TriggerOneSuccessOneFail(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
-	startLongevityTest(DummyOneSuccessOneFail)
+	startLongevityTest(SetupBackupBucketAndCreds)
 
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: DummyOneSuccessOneFail,
+			Type: SetupBackupBucketAndCreds,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -9324,7 +9333,94 @@ func TriggerOneSuccessOneFail(contexts *[]*scheduler.Context, recordChan *chan *
 		*recordChan <- event
 	}()
 
-	workflowResponse := OneSuccessOneFail()
+	workflowResponse := SetupAddCloudBackupLocation()
+
+	for _, err := range workflowResponse.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+
+}
+
+func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetupBackupBucketAndCreds)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetupBackupBucketAndCreds,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	workflowResponse := SetupAddClusters()
+
+	for _, err := range workflowResponse.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+
+}
+
+func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(DeployBackupApps)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: DeployBackupApps,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	workflowResponse := ScheduleAndValidateApplicationBackupApp()
+
+	for _, err := range workflowResponse.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+
+}
+
+func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	workflowResponse := AppCreateBackup()
 
 	for _, err := range workflowResponse.Errors {
 		UpdateOutcome(event, err)
@@ -9453,7 +9549,7 @@ func getReblanceCoolOffPeriod(triggerType string) int {
 
 	t := ChaosMap[triggerType]
 
-	baseInterval := 10
+	baseInterval := 3600
 
 	switch t {
 	case 1:
