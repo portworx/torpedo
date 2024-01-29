@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
-	. "github.com/portworx/torpedo/drivers/unifiedControlPlane/utils"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 

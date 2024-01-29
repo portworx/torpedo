@@ -1,8 +1,8 @@
-package unifiedControlPlane
+package unifiedPlatform
 
 import (
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
-	platformApi "github.com/portworx/torpedo/drivers/unifiedControlPlane/platform/api"
+	platformApi "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api"
 )
 
 type UnifiedControlPlaneComponents struct {

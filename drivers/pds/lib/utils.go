@@ -7,7 +7,7 @@ import (
 	"fmt"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
 	"github.com/portworx/torpedo/drivers/node"
-	pdsv2api "github.com/portworx/torpedo/drivers/unifiedControlPlane"
+	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
