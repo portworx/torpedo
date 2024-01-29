@@ -5339,7 +5339,6 @@ func DeleteGcpBucket(bucketName string) {
 		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
 		if err != nil {
 			log.FailOnError(err, "error deleting object from gcp bucket %s", objAttrs.Name)
-			return
 		}
 		log.Infof("Deleted object: %s\n", objAttrs.Name)
 	}
