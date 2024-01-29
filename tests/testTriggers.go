@@ -71,7 +71,7 @@ const (
 	EmailRecipientsConfigMapField = "emailRecipients"
 	// DefaultEmailRecipient is list of email IDs that will receive email
 	// notifications when no EmailRecipientsConfigMapField field present in configMap
-	DefaultEmailRecipient = "atrivedi@purestorage.com"
+	DefaultEmailRecipient = "test@portworx.com"
 	// SendGridEmailAPIKeyField is field in config map which stores the SendGrid Email API key
 	SendGridEmailAPIKeyField = "sendGridAPIKey"
 	// EmailHostServerField is field in configmap which stores the server address

@@ -87,9 +87,7 @@ type EventResponse struct {
 }
 
 const (
-	EventBuilder1                       = "EventBuilder1"
-	EventBuilder1Fail                   = "EventBuilder1Fail"
-	EventScheduleApps                   = "eventScheduleApps"
+	EventScheduleApps                   = "EventScheduleApps"
 	EventValidateScheduleApplication    = "EventValidateScheduleApplication"
 	EventAddCredentialandBackupLocation = "EventAddCredentialandBackupLocation"
 	EventAddSourceAndDestinationCluster = "EventAddSourceAndDestinationCluster"
@@ -98,8 +96,6 @@ const (
 )
 
 var AllBuilders = map[string]PxBackupEventBuilder{
-	EventBuilder1:                       eventBuilder1,
-	EventBuilder1Fail:                   eventBuilder1Fail,
 	EventScheduleApps:                   eventScheduleApps,
 	EventValidateScheduleApplication:    eventValidateScheduleApplication,
 	EventAddCredentialandBackupLocation: eventAddCredentialandBackupLocation,
@@ -335,18 +331,6 @@ func eventRestore(inputsForEventBuilder *PxBackupLongevity) (error, string, Even
 	return err, "", *eventData
 }
 
-func eventBuilder1(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
-	eventData := &EventData{}
-	time.Sleep(time.Second * time.Duration(inputsForEventBuilder.CustomData.Integers["timeToBlock"]))
-	return nil, "", *eventData
-}
-
-func eventBuilder1Fail(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
-	eventData := &EventData{}
-	time.Sleep(time.Second * time.Duration(inputsForEventBuilder.CustomData.Integers["timeToBlock"]))
-	return fmt.Errorf("This is the returned error"), "This is the highlight event from - EventBuilder1Fail", *eventData
-}
-
 func RunBuilder(eventBuilderName string, inputsForEventBuilder *PxBackupLongevity, eventResponse *EventResponse) EventData {
 	defer GinkgoRecover()
 	eventBuilder := AllBuilders[eventBuilderName]
@@ -459,7 +443,7 @@ func AppCreateBackup() EventResponse {
 
 func AppCreateBackupandRestore() EventResponse {
 	result := GetLongevityEventResponse()
-	result.Name = "Create Backup"
+	result.Name = "Create Backup and Restore"
 	inputForBuilder := GetLongevityInputParams()
 
 	log.Infof("Creating Backup")
@@ -480,65 +464,10 @@ func AppCreateBackupandRestore() EventResponse {
 	return result
 }
 
-func OneSuccessOneFail() EventResponse {
-	result := GetLongevityEventResponse()
-	result.Name = "OneSuccessOneFail"
-	log.Infof("Running one success one fail")
-
-	inputForBuilder := GetLongevityInputParams()
-	inputForBuilder.CustomData.Integers["timeToBlock"] = 3
-
-	RunBuilder(EventBuilder1, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	log.Infof("Running one success one fail - Done")
-
-	UpdateEventResponse(&result)
-
-	return result
-}
-
-func OneSuccessTwoFail() EventResponse {
-	result := GetLongevityEventResponse()
-	result.Name = "OneSuccessTwoFail"
-
-	inputForBuilder := GetLongevityInputParams()
-	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
-
-	RunBuilder(EventBuilder1, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	UpdateEventResponse(&result)
-
-	return result
-}
-
-func DisruptiveEvent() EventResponse {
-	result := GetLongevityEventResponse()
-	result.Name = "DisruptiveEvent"
-
-	inputForBuilder := GetLongevityInputParams()
-	inputForBuilder.CustomData.Integers["timeToBlock"] = 2
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	RunBuilder(EventBuilder1Fail, &inputForBuilder, &result)
-
-	UpdateEventResponse(&result)
-
-	return result
-}
-
 func CreateReport() EventResponse {
 	// report.DumpResult()
 	result := GetLongevityEventResponse()
-	result.Name = "DumpingData"
+	result.Name = "Create Report"
 
 	return result
 }
