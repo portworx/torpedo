@@ -6024,14 +6024,14 @@ func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error)
 }
 
 // RunCmdInVM runs a command in the VM by SSHing into it
-func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) (string, error) {
+func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) error {
 	// Kubevirt client
 	k8sKubevirt := kubevirt.Instance()
 
 	// Getting IP of the VM
 	vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
 	if err != nil {
-		return "", err
+		return err
 	}
 	log.Infof("VM Name - %s", vm.Name)
 	ipAddress := vmInstance.Status.Interfaces[0].IP
@@ -6046,7 +6046,7 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	// Password has to be added as a value in the ConfigMap named kubevirt-creds whose key the name of the VM
 	cm, err := core.Instance().GetConfigMap("kubevirt-creds", "default")
 	if err != nil {
-		return "", err
+		return err
 	}
 	password := cm.Data[vm.Name]
 
@@ -6059,7 +6059,7 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 		log.Infof("Cluster is openshift hence creating the SSH Pod")
 		err = initSSHPod(sshPodNamespace)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		testCmdArgs := getSSHCommandArgs(username, password, ipAddress, "hostname")
@@ -6082,16 +6082,15 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 		}
 		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		// Executing the actual command
 		output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", "default")
 		if err != nil {
-			return output, err
+			return err
 		}
 		log.Infof("Output of cmd %s - \n%s", cmd, output)
-		return output, nil
 	} else {
 		workerNode := node.GetWorkerNodes()[0]
 		t := func() (interface{}, bool, error) {
@@ -6102,15 +6101,16 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 					log.Infof("Output of cmd %s - \n%s", cmd, output)
 					return "", true, err
 				} else {
-					return output, false, err
+					return "", false, err
 				}
 			}
 			log.Infof("Output of cmd %s - \n%s", cmd, output)
-			return output, false, nil
+			return "", false, nil
 		}
-		commandOutput, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
-		return commandOutput.(string), err
+		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+		return err
 	}
+	return nil
 }
 
 // initSSHPod creates a pod with ssh server installed and running along with sshpass utility

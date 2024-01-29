@@ -697,6 +697,8 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 		})
 
 		Step("SSH into the kubevirt VM", func() {
+			log.Infof("Sleeping...")
+			//time.Sleep(1 * time.Minute)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			vms, err := GetAllVMsInNamespace(scheduledAppContexts[0].ScheduleOptions.Namespace)
 			if err != nil {
@@ -704,8 +706,7 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 			}
 			for _, vm := range vms {
 				log.Infof("Running command for VM [%s]", vm.Name)
-				output, err := RunCmdInVM(vm, "uname -a", ctx)
-				log.InfoD("Output of command in step - [%s]", output)
+				err = RunCmdInVM(vm, "uname -a", ctx)
 				log.FailOnError(err, "Failed to run command in VM")
 			}
 
