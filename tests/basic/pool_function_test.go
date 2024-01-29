@@ -550,7 +550,7 @@ var _ = Describe("{PoolExpansionDiskResizeInvalidSize}", func() {
 		time.Sleep(2 * time.Minute)
 
 		// Verify error on pool expansion failure
-		match := checkPoolShowOutput(storageNode)
+		match := checkPoolShowMessageOutput(storageNode)
 		dash.VerifyFatal(match, true, "Pool expand with invalid PoolUUID failed as expected.")
 	})
 
