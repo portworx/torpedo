@@ -4,7 +4,10 @@ metadata:
   name: fio
 spec:
   serviceName: fio
-  replicas: 1
+  {{ if .Replicas }}
+  replicas: {{ .Replicas }}
+  {{ else }}
+  replicas: 6{{ end }}
   selector:
     matchLabels:
       app: fio
