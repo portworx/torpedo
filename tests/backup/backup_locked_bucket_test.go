@@ -1342,8 +1342,8 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 			}
 		})
 
-		Step("Restore form scheduled backup", func() {
-			log.InfoD("Restore form scheduled backup")
+		Step("Restore from scheduled backup", func() {
+			log.InfoD("Restore from scheduled backup")
 			for customUser, scheduleList := range backupSchedAndUserMap {
 				ctx, err := backup.GetNonAdminCtx(customUser, commonPassword)
 				log.FailOnError(err, "failed to fetch user %s ctx", customUser)
