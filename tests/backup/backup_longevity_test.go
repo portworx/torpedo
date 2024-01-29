@@ -56,6 +56,7 @@ var _ = Describe("{BackupLongevity}", func() {
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		CreatePxBackup:           TriggerCreateBackup,
 		CreatePxBackupAndRestore: TriggerCreateBackupAndRestore,
+		CreateRandomRestore:      TriggerCreateRandomRestore,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -395,6 +396,8 @@ func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[CreatePxBackup] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
+	triggerInterval[CreatePxBackupAndRestore] = map[int]time.Duration{}
+	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Second
 
@@ -419,6 +422,17 @@ func populateIntervals() {
 	triggerInterval[CreatePxBackupAndRestore][3] = 21 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][2] = 24 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][1] = 27 * baseInterval
+
+	triggerInterval[CreateRandomRestore][10] = 1 * baseInterval
+	triggerInterval[CreateRandomRestore][9] = 3 * baseInterval
+	triggerInterval[CreateRandomRestore][8] = 6 * baseInterval
+	triggerInterval[CreateRandomRestore][7] = 9 * baseInterval
+	triggerInterval[CreateRandomRestore][6] = 12 * baseInterval
+	triggerInterval[CreateRandomRestore][5] = 15 * baseInterval
+	triggerInterval[CreateRandomRestore][4] = 18 * baseInterval
+	triggerInterval[CreateRandomRestore][3] = 21 * baseInterval
+	triggerInterval[CreateRandomRestore][2] = 24 * baseInterval
+	triggerInterval[CreateRandomRestore][1] = 27 * baseInterval
 
 }
 

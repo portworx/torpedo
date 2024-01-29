@@ -556,7 +556,11 @@ func AppCreateBackupandRestore() {
 
 }
 
+<<<<<<< HEAD
 func AppCreateRandomRestore() {
+=======
+func AppCreateRandomRestore() EventResponse {
+>>>>>>> 2689e3d24 (Adding basic restore test event)
 	result := GetLongevityEventResponse()
 	result.Name = "Create Restore From Random Backup"
 	inputForBuilder := GetLongevityInputParams()
@@ -568,9 +572,16 @@ func AppCreateRandomRestore() {
 
 	UpdateEventResponse(&result)
 
+<<<<<<< HEAD
 }
 
 func CreateReport() {
+=======
+	return result
+}
+
+func CreateReport() EventResponse {
+>>>>>>> 2689e3d24 (Adding basic restore test event)
 	// report.DumpResult()
 	result := GetLongevityEventResponse()
 	result.Name = "Create Report"
