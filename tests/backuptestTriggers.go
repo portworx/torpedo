@@ -15,6 +15,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
+	"github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo"
 )
 
@@ -27,6 +28,7 @@ var (
 	LongevityAllNamespaces        []string
 	LongevityClusterUID           string
 	LongevityScheduledAppContexts []*scheduler.Context
+	LongevityAllBackupNames       []string
 )
 
 type PxBackupLongevity struct {
@@ -173,6 +175,12 @@ func GetRandomNamespacesForBackup() []string {
 	return allNamepsacesForBackup
 }
 
+func GetRandomBackupForRestore() string {
+	rand.Seed(time.Now().Unix()) // initialize global pseudo random generator
+
+	return LongevityAllBackupNames[rand.Intn(len(LongevityAllBackupNames))]
+}
+
 func UpdateEventResponse(eventResponse *EventResponse) {
 	for _, builderResponse := range eventResponse.EventBuilders {
 		eventResponse.TimeTakenInMinutes += builderResponse.TimeTakenInMinutes
@@ -310,6 +318,7 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	}
 
 	eventData.BackupNames = backupNames
+	LongevityAllBackupNames = append(LongevityAllBackupNames, backupNames...)
 
 	return nil, "", *eventData
 }
@@ -319,7 +328,7 @@ func eventRestore(inputsForEventBuilder *PxBackupLongevity) (error, string, Even
 
 	eventData := &EventData{}
 
-	restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName)
+	restoreName := fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, GenerateUUID())
 	appContextsExpectedInBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.BackupData.Namespaces)
 	err := CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
 	if err != nil {
@@ -372,9 +381,27 @@ func getGlobalBucketName(provider string) string {
 	return bucketName
 }
 
-// All Longevity Workflows
+// All Longevity Triggers
 
-func SetupAddCloudBackupLocation() EventResponse {
+func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetupBackupBucketAndCreds)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetupBackupBucketAndCreds,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Add global cloud location for backup"
 	inputForBuilder := GetLongevityInputParams()
@@ -387,10 +414,33 @@ func SetupAddCloudBackupLocation() EventResponse {
 
 	UpdateEventResponse(&result)
 
-	return result
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
+	updateMetrics(*event)
+
 }
 
-func SetupAddClusters() EventResponse {
+func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetupBackupBucketAndCreds)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetupBackupBucketAndCreds,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Add global cloud location for backup"
 	inputForBuilder := GetLongevityInputParams()
@@ -402,10 +452,30 @@ func SetupAddClusters() EventResponse {
 
 	UpdateEventResponse(&result)
 
-	return result
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
 }
 
-func ScheduleAndValidateApplicationBackupApp() EventResponse {
+func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(SetupBackupBucketAndCreds)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: SetupBackupBucketAndCreds,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
 	result := GetLongevityEventResponse()
 	result.Name = "Schedule And Validate App"
 	inputForBuilder := GetLongevityInputParams()
@@ -418,11 +488,31 @@ func ScheduleAndValidateApplicationBackupApp() EventResponse {
 
 	UpdateEventResponse(&result)
 
-	return result
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
 
 }
 
-func AppCreateBackup() EventResponse {
+func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Create Backup"
 	inputForBuilder := GetLongevityInputParams()
@@ -438,10 +528,13 @@ func AppCreateBackup() EventResponse {
 
 	UpdateEventResponse(&result)
 
-	return result
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
 }
 
-func AppCreateBackupandRestore() EventResponse {
+func AppCreateBackupandRestore() {
 	result := GetLongevityEventResponse()
 	result.Name = "Create Backup and Restore"
 	inputForBuilder := GetLongevityInputParams()
@@ -461,15 +554,27 @@ func AppCreateBackupandRestore() EventResponse {
 
 	UpdateEventResponse(&result)
 
-	return result
 }
 
-func CreateReport() EventResponse {
+func AppCreateRandomRestore() {
+	result := GetLongevityEventResponse()
+	result.Name = "Create Restore From Random Backup"
+	inputForBuilder := GetLongevityInputParams()
+
+	inputForBuilder.BackupData.BackupName = GetRandomBackupForRestore()
+	log.Infof("Creating restore from [%s]", inputForBuilder.BackupData.BackupName)
+
+	_ = RunBuilder(EventRestore, &inputForBuilder, &result)
+
+	UpdateEventResponse(&result)
+
+}
+
+func CreateReport() {
 	// report.DumpResult()
 	result := GetLongevityEventResponse()
 	result.Name = "Create Report"
 
-	return result
 }
 
 // func LogEventData(eventResponse *EventResponse) {
