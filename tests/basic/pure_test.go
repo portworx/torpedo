@@ -2304,7 +2304,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 			stepLog = fmt.Sprintf("schedule application")
 			Step(stepLog, func() {
-				taskName := fmt.Sprintf("FADA-vol-migrate-test")
+				taskName := fmt.Sprintf("vol-migrate-test")
 				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 					AppKeys:            Inst().AppList,
 					StorageProvisioner: Provisioner,
