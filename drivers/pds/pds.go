@@ -7,7 +7,7 @@ import (
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	pdsv2api "github.com/portworx/torpedo/drivers/unifiedControlPlane"
+	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
 	v1 "k8s.io/api/apps/v1"
