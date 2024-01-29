@@ -2286,3 +2286,42 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{FADAVolMigrateValidation}", func() {
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("FADAVolMigrateValidation", "Attach FADA PVC on Node 1, confirm proper attachment. Stop PX on Node 1, ensure volume persistence in multipath -ll. Move deployment to Node 2, validate successful pod startup. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.", nil, 0)
+	})
+	stepLog = "Schedule apps, migrate apps from node 1 to node 2 and check if new multipath has been updated and old multipath has been erased"
+	It(stepLog, func() {
+		log.InfoD(stepLog)
+		stepLog = "Schedule fada deployment apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			Inst().AppList = []string{"nginx-fada-deploy"}
+
+			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+
+			stepLog = fmt.Sprintf("schedule application")
+			Step(stepLog, func() {
+
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					taskName := fmt.Sprintf("app-cleanup-when-px-kill-%v", i)
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Provisioner,
+					})
+					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+					contexts = append(contexts, context...)
+				}
+				ValidateApplications(contexts)
+			})
+
+		})
+		JustAfterEach(func() {
+			defer EndTorpedoTest()
+			AfterEachTest(contexts)
+
+		})
+	})
+})
