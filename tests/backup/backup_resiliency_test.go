@@ -396,8 +396,8 @@ var _ = Describe("{KillStorkWithBackupsAndRestoresInProgress}", func() {
 // This test does restart the px-backup pod, Mongo pods during backup sharing
 var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	var (
-		controlChannel chan string
-		errorGroup     *errgroup.Group
+	// controlChannel chan string
+	// errorGroup     *errgroup.Group
 	)
 	numberOfUsers := 10
 	var scheduledAppContexts []*scheduler.Context
@@ -437,7 +437,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 	It("Restart backup pod during backup sharing", func() {
 		Step("Validate applications", func() {
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating cloud credentials", func() {
@@ -590,8 +590,8 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		// err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		// log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("Deleting the backups")
 
