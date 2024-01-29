@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/pborman/uuid"
+	"github.com/portworx/torpedo/pkg/log"
 	"sync"
 )
 
@@ -13,6 +14,8 @@ var (
 
 // AddNode adds a node to the node collection
 func AddNode(n Node) error {
+	log.Infof("Snigdha: Inside AddNode")
+	log.Infof("UUID is %v", n.uuid)
 	if n.uuid != "" {
 		return fmt.Errorf("UUID should not be set to add new node")
 	}
@@ -25,6 +28,8 @@ func AddNode(n Node) error {
 
 // UpdateNode updates a given node if it exists in the node collection
 func UpdateNode(n Node) error {
+	log.Infof("Snigdha: Inside UpdateNode")
+	log.Infof("UUID is %v", n.uuid)
 	lock.Lock()
 	defer lock.Unlock()
 	if _, ok := nodeRegistry[n.uuid]; !ok {
@@ -57,7 +62,9 @@ func GetNodes() []Node {
 // GetWorkerNodes returns only the worker nodes/agent nodes
 func GetWorkerNodes() []Node {
 	var nodeList []Node
+	log.Infof(" The list of nodes are %v", nodeRegistry)
 	for _, n := range nodeRegistry {
+		log.Infof("Snigdha:The node type is %v", n.Type)
 		if n.Type == TypeWorker {
 			nodeList = append(nodeList, n)
 		}
