@@ -1981,6 +1981,7 @@ var _ = Describe("{CloneVolumeAndValidate}", func() {
 				}
 			}
 		})
+
 		Step(fmt.Sprintf("Create a clone for each volume"), func() {
 			log.InfoD("Create a clone for each volume")
 			for volType, vols := range volumeMap {
