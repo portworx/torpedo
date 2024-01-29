@@ -534,7 +534,25 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 }
 
-func AppCreateBackupandRestore() {
+func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Create Backup and Restore"
 	inputForBuilder := GetLongevityInputParams()
@@ -554,13 +572,32 @@ func AppCreateBackupandRestore() {
 
 	UpdateEventResponse(&result)
 
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
 }
 
-<<<<<<< HEAD
-func AppCreateRandomRestore() {
-=======
-func AppCreateRandomRestore() EventResponse {
->>>>>>> 2689e3d24 (Adding basic restore test event)
+func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Create Restore From Random Backup"
 	inputForBuilder := GetLongevityInputParams()
@@ -572,16 +609,13 @@ func AppCreateRandomRestore() EventResponse {
 
 	UpdateEventResponse(&result)
 
-<<<<<<< HEAD
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
 }
 
 func CreateReport() {
-=======
-	return result
-}
-
-func CreateReport() EventResponse {
->>>>>>> 2689e3d24 (Adding basic restore test event)
 	// report.DumpResult()
 	result := GetLongevityEventResponse()
 	result.Name = "Create Report"
