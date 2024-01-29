@@ -9,13 +9,12 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/tests"
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"math/rand"
 	"os"
 	"strings"
-	"time"
 )
 
 const (
@@ -37,18 +36,6 @@ type RancherClusterParameters struct {
 	Endpoint  string
 	AccessKey string
 	SecretKey string
-}
-
-// RandomString generates a random lowercase string of length characters.
-func RandomString(length int) string {
-	rand.Seed(time.Now().UnixNano())
-	const letters = "abcdefghijklmnopqrstuvwxyz"
-	randomBytes := make([]byte, length)
-	for i := range randomBytes {
-		randomBytes[i] = letters[rand.Intn(len(letters))]
-	}
-	randomString := string(randomBytes)
-	return randomString
 }
 
 // String returns the string name of this driver.
@@ -212,9 +199,9 @@ func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers
 	userLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
 
 	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("user%v-%v", i, RandomString(4))
+		userName := fmt.Sprintf("user%v-%v", i, tests.RandomString(4))
 		displayName := fmt.Sprintf("Test " + userName)
-		userPassword := RandomString(12)
+		userPassword := tests.RandomString(12)
 		userRequest := &rancherClient.User{
 			Username:    userName,
 			Password:    userPassword,
