@@ -50,7 +50,7 @@ type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 var _ = Describe("{BackupLongevity}", func() {
 	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
-	// var emailTriggerLock sync.Mutex
+	var emailTriggerLock sync.Mutex
 	var populateDone bool
 	triggerEventsChan := make(chan *EventRecord, 100)
 	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
@@ -101,14 +101,14 @@ var _ = Describe("{BackupLongevity}", func() {
 			log.InfoD("Longevity Tests  timeout set to %d  minutes", Inst().MinRunTimeMins)
 		}
 
-		// Step("Register email trigger", func() {
-		// 	for triggerType, triggerFunc := range emailTriggerFunction {
-		// 		log.InfoD("Registering email trigger: [%v]", triggerType)
-		// 		go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
-		// 		wg.Add(1)
-		// 	}
-		// })
-		// log.InfoD("Finished registering email trigger")
+		Step("Register email trigger", func() {
+			for triggerType, triggerFunc := range emailTriggerFunction {
+				log.InfoD("Registering email trigger: [%v]", triggerType)
+				go emailEventTrigger(&wg, triggerType, triggerFunc, &emailTriggerLock)
+				wg.Add(1)
+			}
+		})
+		log.InfoD("Finished registering email trigger")
 
 		CollectEventRecords(&triggerEventsChan)
 		wg.Wait()
@@ -393,8 +393,9 @@ func populateTriggers(triggers *map[string]string) error {
 func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[CreatePxBackup] = map[int]time.Duration{}
+	triggerInterval[EmailReporter] = map[int]time.Duration{}
 
-	baseInterval := 30 * time.Second
+	baseInterval := 10 * time.Second
 
 	triggerInterval[CreatePxBackup][10] = 1 * baseInterval
 	triggerInterval[CreatePxBackup][9] = 3 * baseInterval
@@ -406,6 +407,19 @@ func populateIntervals() {
 	triggerInterval[CreatePxBackup][3] = 21 * baseInterval
 	triggerInterval[CreatePxBackup][2] = 24 * baseInterval
 	triggerInterval[CreatePxBackup][1] = 27 * baseInterval
+
+	baseInterval = 30 * time.Second
+
+	triggerInterval[EmailReporter][10] = 1 * baseInterval
+	triggerInterval[EmailReporter][9] = 3 * baseInterval
+	triggerInterval[EmailReporter][8] = 6 * baseInterval
+	triggerInterval[EmailReporter][7] = 9 * baseInterval
+	triggerInterval[EmailReporter][6] = 12 * baseInterval
+	triggerInterval[EmailReporter][5] = 15 * baseInterval
+	triggerInterval[EmailReporter][4] = 18 * baseInterval
+	triggerInterval[EmailReporter][3] = 21 * baseInterval
+	triggerInterval[EmailReporter][2] = 24 * baseInterval
+	triggerInterval[EmailReporter][1] = 27 * baseInterval
 
 }
 
