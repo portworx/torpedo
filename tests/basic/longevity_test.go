@@ -981,7 +981,7 @@ func populateIntervals() {
 	triggerInterval[HAIncreaseWithPVCResize] = make(map[int]time.Duration)
 	triggerInterval[ReallocateSharedMount] = make(map[int]time.Duration)
 
-	baseInterval := 10 * time.Minute
+	baseInterval := 2 * time.Minute
 
 	triggerInterval[BackupScaleMongo][10] = 1 * baseInterval
 	triggerInterval[BackupScaleMongo][9] = 2 * baseInterval
@@ -1266,6 +1266,17 @@ func populateIntervals() {
 	triggerInterval[StorkAppBkpPoolResize][3] = 21 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][2] = 24 * baseInterval
 	triggerInterval[StorkAppBkpPoolResize][1] = 27 * baseInterval
+
+	triggerInterval[ValidatePdsApps][10] = 1 * baseInterval
+	triggerInterval[ValidatePdsApps][9] = 2 * baseInterval
+	triggerInterval[ValidatePdsApps][8] = 3 * baseInterval
+	triggerInterval[ValidatePdsApps][7] = 4 * baseInterval
+	triggerInterval[ValidatePdsApps][6] = 5 * baseInterval
+	triggerInterval[ValidatePdsApps][5] = 6 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ValidatePdsApps][4] = 7 * baseInterval
+	triggerInterval[ValidatePdsApps][3] = 8 * baseInterval
+	triggerInterval[ValidatePdsApps][2] = 9 * baseInterval
+	triggerInterval[ValidatePdsApps][1] = 10 * baseInterval
 
 	baseInterval = 60 * time.Minute
 
@@ -1561,17 +1572,6 @@ func populateIntervals() {
 	triggerInterval[CoreChecker][3] = 8 * baseInterval
 	triggerInterval[CoreChecker][2] = 9 * baseInterval
 	triggerInterval[CoreChecker][1] = 10 * baseInterval
-
-	triggerInterval[ValidatePdsApps][10] = 1 * baseInterval
-	triggerInterval[ValidatePdsApps][9] = 2 * baseInterval
-	triggerInterval[ValidatePdsApps][8] = 3 * baseInterval
-	triggerInterval[ValidatePdsApps][7] = 4 * baseInterval
-	triggerInterval[ValidatePdsApps][6] = 5 * baseInterval
-	triggerInterval[ValidatePdsApps][5] = 6 * baseInterval // Default global chaos level, 3 hrs
-	triggerInterval[ValidatePdsApps][4] = 7 * baseInterval
-	triggerInterval[ValidatePdsApps][3] = 8 * baseInterval
-	triggerInterval[ValidatePdsApps][2] = 9 * baseInterval
-	triggerInterval[ValidatePdsApps][1] = 10 * baseInterval
 
 	triggerInterval[DeployApps][10] = 1 * baseInterval
 	triggerInterval[DeployApps][9] = 2 * baseInterval
