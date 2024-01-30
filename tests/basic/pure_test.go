@@ -2332,14 +2332,19 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 				//get device path of the volume
 				devicePath := ""
+				attachPath := ""
+				attachInfo := ""
 				//get the volume name and inspect volume to get device path
 				volumes, err := Inst().S.GetVolumes(contexts[0])
 				for _, volume := range volumes {
 					volInspect, err := Inst().V.InspectVolume(volume.ID)
 					log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
 					devicePath = volInspect.DevicePath
+					attachPath = volInspect.AttachPath[0]
+					attachInfo = volInspect.GetDevicePath()
+
 				}
-				log.InfoD("Device path of the volume: %v , device path: %v", volumes[0].Name, devicePath)
+				log.InfoD("Device path of the volume: %v , device path: %v, attachPath :%v , attachInfo: %v", volumes[0].Name, devicePath, attachPath, attachInfo)
 
 				//check if the device path is present in multipath
 				n, err := Inst().V.GetNodeForVolume(volumes[0], defaultCommandTimeout, defaultCommandRetry)
@@ -2356,10 +2361,11 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			})
 
 		})
-		JustAfterEach(func() {
-			defer EndTorpedoTest()
-			AfterEachTest(contexts)
 
-		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
 	})
 })
