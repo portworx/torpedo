@@ -2324,23 +2324,28 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					scheduledNodeName = pod.Spec.NodeName
 				}
 				//Stop PX on that node where pod has been scheduled
-				// scheduledNode, err := node.GetNodeByName(scheduledNodeName)
+				scheduledNode, err := node.GetNodeByName(scheduledNodeName)
 				log.FailOnError(err, "Failed to get node %v", scheduledNodeName)
 				log.InfoD("Stopping PX on node %v", scheduledNodeName)
+
 				//get device path of the volume
 				devicePath := ""
-				attachPath := ""
-				attachInfo := ""
+
 				//get the volume name and inspect volume to get device path
 				volumes, err := Inst().S.GetVolumes(contexts[0])
 				for _, volume := range volumes {
 					volInspect, err := Inst().V.InspectVolume(volume.ID)
 					log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
 					devicePath = volInspect.DevicePath
-					attachInfo = volInspect.GetDevicePath()
+					// get part of the device path
+
+					devicePathSplit := strings.Split(devicePath, "/")
+					devicePath = devicePathSplit[len(devicePathSplit)-1]
 
 				}
-				log.InfoD("Device path of the volume: %v , device path: %v, attachPath :%v , attachInfo: %v", volumes[0].Name, devicePath, attachPath, attachInfo)
+				log.InfoD("Device path of the volume: %v , device path: %v", volumes[0].Name, devicePath)
+
+				StopVolDriverAndWait([]node.Node{scheduledNode})
 
 				//check if the device path is present in multipath
 				n, err := Inst().V.GetNodeForVolume(volumes[0], defaultCommandTimeout, defaultCommandRetry)
@@ -2349,12 +2354,24 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				log.InfoD("volume %s is attached on node %s [%s]", volumes[0].ID, n.SchedulerNodeName, n.Addresses[0])
 
 				//run the multipath -ll command on the node where the volume is attached
-
-				output, err := runCmd("multipath -ll", *n)
+				cmd := fmt.Sprintf("multipath -ll | grep -i -a10 %v", devicePath)
+				output, err := runCmd(cmd, *n)
 				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
 				log.InfoD("Output of multipath -ll command: %v", output)
+				// cordon the node where the app is scheduled and delete the apps
+				defer func() {
+					err = core.Instance().UnCordonNode(scheduledNodeName, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to uncordon node %v", scheduledNodeName)
+					log.Infof("uncordoned node %v", scheduledNodeName)
+				}()
+				err = core.Instance().CordonNode(scheduledNodeName, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to cordon node %v", scheduledNodeName)
+				log.InfoD("cordoned node %v", scheduledNodeName)
 
-				//StopVolDriverAndWait([]node.Node{scheduledNode})
+				// delete the pods
+				err = core.Instance().DeletePod(pods.Items[0].Name, contexts[0].App.NameSpace, true)
+
+				log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
 
 			})
 
