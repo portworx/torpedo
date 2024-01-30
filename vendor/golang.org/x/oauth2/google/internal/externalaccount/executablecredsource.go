@@ -233,10 +233,6 @@ func (cs executableCredentialSource) parseSubjectTokenFromSource(response []byte
 	return "", tokenTypeError(source)
 }
 
-func (cs executableCredentialSource) credentialSourceType() string {
-	return "executable"
-}
-
 func (cs executableCredentialSource) subjectToken() (string, error) {
 	if token, err := cs.getTokenFromOutputFile(); token != "" || err != nil {
 		return token, err
