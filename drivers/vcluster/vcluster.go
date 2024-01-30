@@ -346,7 +346,7 @@ func (v *VCluster) CreatePVC(pvcName, svcName, appNs, accessMode string) (string
 			StorageClassName: &svcName,
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("5Gi"),
+					corev1.ResourceStorage: resource.MustParse("500Gi"),
 				},
 			},
 		},
@@ -980,4 +980,72 @@ func ReadEnvVariable(envVar string) string {
 		return envValue
 	}
 	return ""
+}
+
+func (v *VCluster) CreateFileOperationMD5AppVcluster(pvcName string, appNS string, deploymentName string) error {
+	fileOperationDeployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: appNS,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": deploymentName,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": deploymentName,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "file-operation-container",
+							Image:   "alpine",
+							Command: []string{"/bin/sh", "-c"},
+							Args: []string{
+								"file_counter=0; " +
+									"while true; do " +
+									"if [ $file_counter -eq 50 ]; then " +
+									"rm -f /mnt/data/testfile*; " +
+									"file_counter=0; " +
+									"fi; " +
+									"filename=/mnt/data/testfile$(date +%s%N); " +
+									"dd if=/dev/random of=${filename} bs=1M count=200; " +
+									"md5sum ${filename} >> md5sum.txt; " +
+									"file_counter=$((file_counter+1)); " +
+									"sleep 1; " +
+									"done",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/mnt/data",
+									Name:      "data-volume",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "data-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: pvcName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	log.Infof("Going ahead to deploy File Operation Application on VCluster %v", v.Name)
+	if _, err := v.Clientset.AppsV1().Deployments(appNS).Create(context.TODO(), fileOperationDeployment, metav1.CreateOptions{}); err != nil {
+		return err
+	}
+	return nil
 }

@@ -1267,10 +1267,36 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 })
 
 var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
+	envTotalVclusters := vcluster.ReadEnvVariable("TOTAL_VCLUSTERS")
+	envNginxAppCount := vcluster.ReadEnvVariable("NGINX_APP_COUNT")
+	envFioAppCount := vcluster.ReadEnvVariable("FIO_APP_COUNT")
+	envNewApp := vcluster.ReadEnvVariable("NEW_APP_COUNT")
+	envRunDuration := vcluster.ReadEnvVariable("RUN_DURATION") // Duration in minutes
+
+	// Default values
 	totalVclusters := 10
 	nginxAppCount := 9
 	fioAppCount := 0
 	newApp := 1
+	runDuration := 10 // default duration in minutes
+
+	// Convert environment variables to integers
+	if val, err := strconv.Atoi(envTotalVclusters); err == nil {
+		totalVclusters = val
+	}
+	if val, err := strconv.Atoi(envNginxAppCount); err == nil {
+		nginxAppCount = val
+	}
+	if val, err := strconv.Atoi(envFioAppCount); err == nil {
+		fioAppCount = val
+	}
+	if val, err := strconv.Atoi(envNewApp); err == nil {
+		newApp = val
+	}
+	if val, err := strconv.Atoi(envRunDuration); err == nil {
+		runDuration = val
+	}
+
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
@@ -1325,18 +1351,19 @@ var _ = Describe("{DeployMultipleAppsOnVclusters}", func() {
 				appNS = fmt.Sprintf("%s-ns-%s-%d", scName, vc.Name, rand.Intn(100000))
 				deploymentName := fmt.Sprintf("simple-deployment-%d", i)
 				pvcName, _ := vc.CreatePVC("", scName, appNS, "RWX")
-				err := vc.CreateFileOperationAppVcluster(pvcName, appNS, deploymentName)
+				err := vc.CreateFileOperationMD5AppVcluster(pvcName, appNS, deploymentName)
 				log.FailOnError(err, "Error in creating Nginx deployment")
 			}
 		}
+		time.Sleep(time.Duration(runDuration) * time.Minute)
 	})
 	JustAfterEach(func() {
 		// VCluster, StorageClass and Namespace cleanup
-		//for _, vc := range vClusters {
-		//	vc.TerminateVCluster()
-		//	vcluster.DeleteNSFromHost(vc.Namespace)
-		//}
-		//vcluster.DeleteStorageclassFromHost(scName)
+		for _, vc := range vClusters {
+			vc.TerminateVCluster()
+			vcluster.DeleteNSFromHost(vc.Namespace)
+		}
+		vcluster.DeleteStorageclassFromHost(scName)
 	})
 })
 
