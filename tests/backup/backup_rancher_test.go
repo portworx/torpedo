@@ -919,7 +919,9 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 		contexts                    []*scheduler.Context
 		appContexts                 []*scheduler.Context
 		scheduledAppContexts        []*scheduler.Context
+		numUsers                    = 5
 	)
+
 	backupLocationMap := make(map[string]string)
 	projectLabel := make(map[string]string)
 	projectAnnotation := make(map[string]string)
@@ -993,7 +995,13 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 
 		Step("Adding multiple users to the source project of rancher source cluster", func() {
 			log.InfoD("Adding multiple users to the source project of rancher source cluster")
-			userIDList, err = Inst().S.(*rke.Rancher).CreateUsersForRancherProject(sourceClusterProjectList[0], 5)
+			userMap := make(map[string]string)
+			password := RandomString(12)
+			for i := 1; i <= numUsers; i++ {
+				username := fmt.Sprintf("user-%d-%s", i, RandomString(6))
+				userMap[username] = password
+			}
+			userIDList, err = Inst().S.(*rke.Rancher).CreateMultipleUsersForRancherProject(sourceClusterProjectList[0], userMap)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher users and adding them to the project [%s]", sourceClusterProjectList[0]))
 		})
 

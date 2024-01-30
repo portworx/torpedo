@@ -12,10 +12,8 @@ import (
 	_ "github.com/rancher/norman/clientbase"
 	rancherClientBase "github.com/rancher/norman/clientbase"
 	rancherClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
-	"math/rand"
 	"os"
 	"strings"
-	"time"
 )
 
 const (
@@ -37,18 +35,6 @@ type RancherClusterParameters struct {
 	Endpoint  string
 	AccessKey string
 	SecretKey string
-}
-
-// RandomString generates a random lowercase string of length characters.
-func RandomString(length int) string {
-	rand.Seed(time.Now().UnixNano())
-	const letters = "abcdefghijklmnopqrstuvwxyz"
-	randomBytes := make([]byte, length)
-	for i := range randomBytes {
-		randomBytes[i] = letters[rand.Intn(len(letters))]
-	}
-	randomString := string(randomBytes)
-	return randomString
 }
 
 // String returns the string name of this driver.
@@ -198,54 +184,59 @@ func (r *Rancher) GetProjectID(projectName string) (string, error) {
 	return projectId, fmt.Errorf("no project matching the given projectName %s was found", projectName)
 }
 
-//CreateUsersForRancherProject Creates rancher users based on the supplied number and adds them to the project
-func (r *Rancher) CreateUsersForRancherProject(projectName string, numberOfUsers int) ([]string, error) {
-	var userIDList []string
+// CreateUserForRancherProject Creates a rancher user and adds the user to the project
+func (r *Rancher) CreateUserForRancherProject(projectName string, userName string, userPassword string) (string, error) {
 	userAnnotation := make(map[string]string)
 	userLabel := make(map[string]string)
 
 	projectId, err := r.GetProjectID(projectName)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	userAnnotation["field.cattle.io/projectId"] = projectId
 	userLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
 
-	for i := 1; i <= numberOfUsers; i++ {
-		userName := fmt.Sprintf("user%v-%v", i, RandomString(4))
-		displayName := fmt.Sprintf("Test " + userName)
-		userPassword := RandomString(12)
-		userRequest := &rancherClient.User{
-			Username:    userName,
-			Password:    userPassword,
-			Name:        displayName,
-			Annotations: userAnnotation,
-			Labels:      userLabel,
-		}
-		newUser, err := r.client.User.Create(userRequest)
-		log.InfoD("The user [%s] is created with user id [%s]", userName, newUser.ID)
-		userIDList = append(userIDList, newUser.ID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create user: %w", err)
-		}
+	userRequest := &rancherClient.User{
+		Username:    userName,
+		Password:    userPassword,
+		Name:        fmt.Sprintf("Test " + userName),
+		Annotations: userAnnotation,
+		Labels:      userLabel,
 	}
-	//ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
-	//the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
-	for _, userID := range userIDList {
-		roleRequest := &rancherClient.ProjectRoleTemplateBinding{
-			ProjectID:      projectId,
-			UserID:         userID,
-			RoleTemplateID: "project-member",
-		}
-		_, err := r.client.ProjectRoleTemplateBinding.Create(roleRequest)
+	newUser, err := r.client.User.Create(userRequest)
+	if err != nil {
+		return "", fmt.Errorf("failed to create user: %w", err)
+	}
+	// ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
+	// the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
+	roleRequest := &rancherClient.ProjectRoleTemplateBinding{
+		ProjectID:      projectId,
+		UserID:         newUser.ID,
+		RoleTemplateID: "project-member",
+	}
+	_, err = r.client.ProjectRoleTemplateBinding.Create(roleRequest)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("User [%s] is successfully created with user id [%s] and was added to the project [%s]", userName, newUser.ID, projectName)
+	return newUser.ID, nil
+}
+
+// CreateMultipleUsersForRancherProject Creates multiple rancher users based on the supplied user map
+func (r *Rancher) CreateMultipleUsersForRancherProject(projectName string, userMap map[string]string) ([]string, error) {
+	log.InfoD("Creating multiple users for rancher project")
+	var userIDList []string
+	for username, password := range userMap {
+		userID, err := r.CreateUserForRancherProject(projectName, username, password)
 		if err != nil {
 			return nil, err
 		}
+		userIDList = append(userIDList, userID)
 	}
 	return userIDList, nil
 }
 
-//ValidateUsersInProject Validates the rancher users for a project by comparing the project members and the supplied list of users
+// ValidateUsersInProject Validates the rancher users for a project by comparing the project members and the supplied list of users
 func (r *Rancher) ValidateUsersInProject(projectName string, userList []string) error {
 	var actualUserListForProject []string
 	projectId, err := r.GetProjectID(projectName)
@@ -280,7 +271,7 @@ func (r *Rancher) ValidateUsersInProject(projectName string, userList []string) 
 	return nil
 }
 
-//DeleteRancherUsers Deletes all the users who are a part of the supplied list
+// DeleteRancherUsers Deletes all the users who are a part of the supplied list
 func (r *Rancher) DeleteRancherUsers(userIDList []string) error {
 	for _, userID := range userIDList {
 		userObj, err := r.client.User.ByID(userID)
