@@ -325,3 +325,91 @@ var _ = Describe("{ScaleFioJobOnNomad}", func() {
 		}
 	})
 })
+
+var _ = Describe("{RunFioJobWithSnapshotOperationsOnNomad}", func() {
+	var client *nomad.NomadClient
+	var err error
+	var volumeID, snapshotID, jobID string
+	var pluginID string
+	BeforeEach(func() {
+		StartTorpedoTest("RunFioJobWithSnapshotOperationsOnNomad", "Runs FIO Job on Nomad Cluster with Snapshot Operations", nil, 0)
+		client, err = nomad.NewNomadClient()
+		log.FailOnError(err, "Failed to get Nomad Client")
+		volumeID = "fio-test-volume"
+		snapshotID = "fio-snapshot"
+		pluginID = "portworx"
+		capacityMin := int64(20 * 1024 * 1024 * 1024)
+		capacityMax := capacityMin
+		accessMode := "multi-node-multi-writer"
+		attachmentMode := "file-system"
+		fsType := "ext4"
+		mountFlags := []string{}
+		err = client.CreateVolume(volumeID, pluginID, capacityMin, capacityMax, accessMode, attachmentMode, fsType, mountFlags)
+		log.FailOnError(err, "Failed to create volume")
+		log.Infof("Volume %v created successfully", volumeID)
+		jobID = "fio-job"
+		fioJob := client.CreateFioJobSpec(volumeID, jobID)
+		err = client.CreateJob(fioJob)
+		log.FailOnError(err, "Failed to create Fio job")
+		log.Infof("FIO Job %v created successfully. Letting it run for 30 seconds before triggering snapshot", jobID)
+		time.Sleep(30 * time.Second)
+	})
+	It("Run Fio job and perform snapshot operations", func() {
+		createdSnap, err := client.CreateSnapshot(volumeID, "mySnapshot", pluginID, nil)
+		log.FailOnError(err, "Failed to create snapshot")
+		log.Infof("Snapshot created successfully. Sleeping for 5 seconds to let it complete")
+		time.Sleep(5 * time.Second)
+		snapshots, err := client.ListSnapshots(pluginID)
+		log.FailOnError(err, "Failed to list snapshots")
+		log.Infof("Snapshots found are: %v", snapshots)
+		found := false
+		for _, snap := range snapshots {
+			if snap.ID == createdSnap.Snapshots[0].ID {
+				log.Infof("Found snapshot: %v", snapshotID)
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.FailOnError(fmt.Errorf("Snapshot %v not found", snapshotID), "Error in finding snpashot")
+		}
+		log.Infof("Letting FIO run for 1 more minute before deleting snapshot")
+		const checkInterval = time.Minute * 1
+		const runDuration = time.Minute * 1
+		endTime := time.Now().Add(runDuration)
+		for time.Now().Before(endTime) {
+			status, err := client.CheckJobStatus(jobID)
+			log.FailOnError(err, "Failed to check Fio job status")
+			if status != "running" {
+				log.Errorf("Fio job is not running")
+				return
+			}
+			time.Sleep(checkInterval)
+		}
+		log.Infof("Fio ran successfully for the duration of the test")
+		err = client.DeleteSnapshot(createdSnap.Snapshots[0].ID, pluginID)
+		log.FailOnError(err, "Failed to delete snapshot")
+		log.Infof("Successfully deleted snapshot with ID: %v", createdSnap.Snapshots[0].ID)
+	})
+	AfterEach(func() {
+		err = client.DeleteJob(jobID)
+		if err != nil {
+			log.Errorf("Failed to delete Fio job: %v", err)
+		} else {
+			log.Infof("Successfully deleted job %v", jobID)
+		}
+		err = client.DeleteVolume(volumeID)
+		if err != nil {
+			log.Errorf("Failed to delete volume: %v. Will retry in 5 seconds", err)
+			time.Sleep(5 * time.Second)
+			err = client.DeleteVolume(volumeID)
+			if err != nil {
+				log.Errorf("Again failed to delete volume %v with err %v", volumeID, err)
+			} else {
+				log.Infof("Successfully deleted volume %v this time", volumeID)
+			}
+		} else {
+			log.Infof("Successfully deleted volume %v", volumeID)
+		}
+	})
+})
