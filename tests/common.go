@@ -2368,6 +2368,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
 			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+			log.InfoD("Successfully retrieved pods restart counts: %v", pxPodRestartCountMap)
 			//Using fatal verification will abort longevity runs
 			if err != nil {
 				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
@@ -2377,6 +2378,7 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 			for pod, value := range pxPodRestartCountMap {
 				n, err := node.GetNodeByIP(pod.Status.HostIP)
 				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
+				log.InfoD("Successfully retrieved node: %s", n.Name)
 				if n.PxPodRestartCount != value {
 					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
 					if Inst().PortworxPodRestartCheck {
@@ -10350,7 +10352,6 @@ func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
 
 	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
 }
-
 
 // GetProcessPID returns the PID of KVDB master node
 func GetProcessPID(memberNode node.Node, processName string) (string, error) {

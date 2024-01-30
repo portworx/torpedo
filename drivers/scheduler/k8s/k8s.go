@@ -7797,17 +7797,20 @@ func (k *K8s) GetAllSnapshotClasses() (*volsnapv1.VolumeSnapshotClassList, error
 
 // GetPodsRestartCount return map of HostIP and it restart count in given namespace
 func (k *K8s) GetPodsRestartCount(namespace string, podLabelMap map[string]string) (map[*v1.Pod]int32, error) {
+	log.Infof("Getting the px pods restart count")
 	podRestartCountMap := make(map[*v1.Pod]int32)
 	podList, err := k8sCore.GetPods(namespace, podLabelMap)
 	if err != nil {
 		return nil, err
 	}
+	log.Infof("Successfully retrived the pod list %v", podList)
 	for _, pod := range podList.Items {
 		actualPod, err := k8sCore.GetPodByName(pod.Name, pod.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		containerStatus := actualPod.Status.ContainerStatuses
+		log.Infof("Successfully retrived the pod: [%s]", pod.Name)
 		for _, status := range containerStatus {
 			podRestartCountMap[actualPod] += status.RestartCount
 		}
