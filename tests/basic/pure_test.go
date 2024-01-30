@@ -1924,6 +1924,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				dash.VerifyFatal(len(vols), volCountFromSpecMap[ctx.App.Key], fmt.Sprintf("Verifying volume count for app [%s]", ctx.App.Key))
 			}
 		})
+
 		Step("Identify backend and categorize volumes", func() {
 			log.InfoD("Identifying backend")
 			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
