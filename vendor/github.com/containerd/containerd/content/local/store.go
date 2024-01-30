@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,10 +32,9 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/filters"
 	"github.com/containerd/containerd/log"
-	"github.com/containerd/containerd/pkg/randutil"
 	"github.com/sirupsen/logrus"
 
-	"github.com/opencontainers/go-digest"
+	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -262,7 +262,7 @@ func (s *store) Walk(ctx context.Context, fn content.WalkFunc, fs ...string) err
 			return nil
 		}
 
-		dgst := digest.NewDigestFromEncoded(alg, filepath.Base(path))
+		dgst := digest.NewDigestFromHex(alg.String(), filepath.Base(path))
 		if err := dgst.Validate(); err != nil {
 			// log error but don't report
 			log.L.WithError(err).WithField("path", path).Error("invalid digest for blob path")
@@ -473,7 +473,7 @@ func (s *store) Writer(ctx context.Context, opts ...content.WriterOpt) (content.
 			lockErr = nil
 			break
 		}
-		time.Sleep(time.Millisecond * time.Duration(randutil.Intn(1<<count)))
+		time.Sleep(time.Millisecond * time.Duration(rand.Intn(1<<count)))
 	}
 
 	if lockErr != nil {
@@ -505,7 +505,6 @@ func (s *store) resumeStatus(ref string, total int64, digester digest.Digester) 
 		return status, fmt.Errorf("provided total differs from status: %v != %v", total, status.Total)
 	}
 
-	//nolint:dupword
 	// TODO(stevvooe): slow slow slow!!, send to goroutine or use resumable hashes
 	fp, err := os.Open(data)
 	if err != nil {
@@ -629,14 +628,14 @@ func (s *store) blobPath(dgst digest.Digest) (string, error) {
 		return "", fmt.Errorf("cannot calculate blob path from invalid digest: %v: %w", err, errdefs.ErrInvalidArgument)
 	}
 
-	return filepath.Join(s.root, "blobs", dgst.Algorithm().String(), dgst.Encoded()), nil
+	return filepath.Join(s.root, "blobs", dgst.Algorithm().String(), dgst.Hex()), nil
 }
 
 func (s *store) ingestRoot(ref string) string {
 	// we take a digest of the ref to keep the ingest paths constant length.
 	// Note that this is not the current or potential digest of incoming content.
 	dgst := digest.FromString(ref)
-	return filepath.Join(s.root, "ingest", dgst.Encoded())
+	return filepath.Join(s.root, "ingest", dgst.Hex())
 }
 
 // ingestPaths are returned. The paths are the following:
@@ -644,6 +643,7 @@ func (s *store) ingestRoot(ref string) string {
 // - root: entire ingest directory
 // - ref: name of the starting ref, must be unique
 // - data: file where data is written
+//
 func (s *store) ingestPaths(ref string) (string, string, string) {
 	var (
 		fp = s.ingestRoot(ref)

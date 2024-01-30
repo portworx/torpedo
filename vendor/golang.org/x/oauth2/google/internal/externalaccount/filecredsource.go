@@ -19,10 +19,6 @@ type fileCredentialSource struct {
 	Format format
 }
 
-func (cs fileCredentialSource) credentialSourceType() string {
-	return "file"
-}
-
 func (cs fileCredentialSource) subjectToken() (string, error) {
 	tokenFile, err := os.Open(cs.File)
 	if err != nil {

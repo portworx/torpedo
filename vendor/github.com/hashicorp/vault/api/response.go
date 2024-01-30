@@ -1,15 +1,14 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package api
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/hashicorp/vault/sdk/helper/consts"
+	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 )
 
 // Response is a raw response that wraps an HTTP response.
@@ -21,9 +20,7 @@ type Response struct {
 // will consume the response body, but will not close it. Close must
 // still be called.
 func (r *Response) DecodeJSON(out interface{}) error {
-	dec := json.NewDecoder(r.Body)
-	dec.UseNumber()
-	return dec.Decode(out)
+	return jsonutil.DecodeJSONFromReader(r.Body, out)
 }
 
 // Error returns an error response if there is one. If there is an error,
@@ -45,7 +42,7 @@ func (r *Response) Error() error {
 
 	r.Body.Close()
 	r.Body = ioutil.NopCloser(bodyBuf)
-	ns := r.Header.Get(NamespaceHeaderName)
+	ns := r.Header.Get(consts.NamespaceHeaderName)
 
 	// Build up the error object
 	respErr := &ResponseError{
@@ -59,9 +56,7 @@ func (r *Response) Error() error {
 	// in a bytes.Reader here so that the JSON decoder doesn't move the
 	// read pointer for the original buffer.
 	var resp ErrorResponse
-	dec := json.NewDecoder(bytes.NewReader(bodyBuf.Bytes()))
-	dec.UseNumber()
-	if err := dec.Decode(&resp); err != nil {
+	if err := jsonutil.DecodeJSON(bodyBuf.Bytes(), &resp); err != nil {
 		// Store the fact that we couldn't decode the errors
 		respErr.RawError = true
 		respErr.Errors = []string{bodyBuf.String()}
