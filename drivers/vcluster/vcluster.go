@@ -1009,14 +1009,10 @@ func (v *VCluster) CreateFileOperationMD5AppVcluster(pvcName string, appNS strin
 							Command: []string{"/bin/sh", "-c"},
 							Args: []string{
 								"file_counter=0; " +
-									"while true; do " +
-									"if [ $file_counter -eq 50 ]; then " +
-									"rm -f /mnt/data/testfile*; " +
-									"file_counter=0; " +
-									"fi; " +
+									"while [ $file_counter -lt 50 ]; do " +
 									"filename=/mnt/data/testfile$(date +%s%N); " +
 									"dd if=/dev/random of=${filename} bs=1M count=200; " +
-									"md5sum ${filename} >> md5sum.txt; " +
+									"md5sum ${filename} >> /mnt/data/md5sum.txt; " +
 									"file_counter=$((file_counter+1)); " +
 									"sleep 1; " +
 									"done",
