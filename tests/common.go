@@ -10415,7 +10415,6 @@ func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
 	return pods.Items, nil
 }
 
-=======
 func installGrafana(namespace string) {
 	enableGrafana := false
 
