@@ -2327,9 +2327,6 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				scheduledNode, err := node.GetNodeByName(scheduledNodeName)
 				log.FailOnError(err, "Failed to get node %v", scheduledNodeName)
 				log.InfoD("Stopping PX on node %v", scheduledNodeName)
-
-				StopVolDriverAndWait([]node.Node{scheduledNode})
-
 				//get device path of the volume
 				devicePath := ""
 				attachPath := ""
@@ -2356,6 +2353,8 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				output, err := runCmd("multipath -ll", *n)
 				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
 				log.InfoD("Output of multipath -ll command: %v", output)
+
+				//StopVolDriverAndWait([]node.Node{scheduledNode})
 
 			})
 
