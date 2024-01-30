@@ -13,7 +13,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"golang.org/x/net/context"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	. "github.com/portworx/torpedo/tests"
