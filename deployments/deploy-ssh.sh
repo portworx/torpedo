@@ -729,11 +729,11 @@ spec:
       value: "${TOTAL_VCLUSTERS}"
     - name: NGINX_APP_COUNT
       value: "${NGINX_APP_COUNT}"
-    -name: FIO_APP_COUNT
+    - name: FIO_APP_COUNT
       value: "${FIO_APP_COUNT}"
-    -name: NEW_APP_COUNT
+    - name: NEW_APP_COUNT
       value: "${NEW_APP_COUNT}"
-    -name: RUN_DURATION
+    - name: RUN_DURATION
       value: "${RUN_DURATION}"
     - name: KUBEVIRT_UPGRADE_VERSION
       value: "${KUBEVIRT_UPGRADE_VERSION}"
