@@ -2324,7 +2324,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					scheduledNodeName = pod.Spec.NodeName
 				}
 				//Stop PX on that node where pod has been scheduled
-				scheduledNode, err := node.GetNodeByName(scheduledNodeName)
+				// scheduledNode, err := node.GetNodeByName(scheduledNodeName)
 				log.FailOnError(err, "Failed to get node %v", scheduledNodeName)
 				log.InfoD("Stopping PX on node %v", scheduledNodeName)
 				//get device path of the volume
