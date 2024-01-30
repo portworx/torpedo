@@ -27,6 +27,7 @@ import (
 	clusterclient "github.com/libopenstorage/openstorage/api/client/cluster"
 	"github.com/libopenstorage/openstorage/api/spec"
 	"github.com/libopenstorage/openstorage/cluster"
+	pxapi "github.com/libopenstorage/operator/api/px"
 	v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/pborman/uuid"
@@ -47,7 +48,6 @@ import (
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	"github.com/portworx/torpedo/pkg/units"
-	pxapi "github.com/portworx/torpedo/porx/px/api"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -803,6 +803,24 @@ func (d *portworx) CreateVolume(volName string, size uint64, haLevel int64) (str
 
 	log.Infof("Successfully created Portworx volume [%s], size %v, ha %v", resp.VolumeId, size, haLevel)
 	return resp.VolumeId, nil
+}
+
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *portworx) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	log.InfoD("Initiate Volume create with Volume Name %s", volName)
+	cmd := fmt.Sprintf("pxctl volume create %s --size %v --repl %v", volName, size, haLevel)
+	out, err := d.nodeDriver.RunCommandWithNoRetry(
+		n,
+		cmd,
+		node.ConnectionOpts{
+			Timeout:         maintenanceWaitTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+		})
+	if err != nil {
+		return err
+	}
+	log.Infof("Create Volume with Name [%v] to Size [%v] Successful. response: [%v]", volName, size, out)
+	return nil
 }
 
 // ResizeVolume resizes Volume to specific size provided

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"time"
 
-	pxapi "github.com/portworx/torpedo/porx/px/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -126,6 +126,14 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateVolume()",
+	}
+}
+
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *DefaultDriver) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeUsingPxctlCmd()",
 	}
 }
 
