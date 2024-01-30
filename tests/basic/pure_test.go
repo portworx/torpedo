@@ -2340,7 +2340,6 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					volInspect, err := Inst().V.InspectVolume(volume.ID)
 					log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
 					devicePath = volInspect.DevicePath
-					attachPath = volInspect.AttachPath[0]
 					attachInfo = volInspect.GetDevicePath()
 
 				}
