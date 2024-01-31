@@ -2339,7 +2339,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					for _, volume := range volumes {
 						volInspect, err := Inst().V.InspectVolume(volume.ID)
 						log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
-						devicePath := volInspect.DevicePath
+						devicePath := volInspect.GetDevicePath()
 						// get part of the device path
 						log.Infof("device path: %v", devicePath)
 						devicePathSplit := strings.Split(devicePath, "/")
