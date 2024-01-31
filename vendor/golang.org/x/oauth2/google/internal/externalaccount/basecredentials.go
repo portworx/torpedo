@@ -8,12 +8,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google/internal/stsexchange"
 )
 
 // now aliases time.Now for testing
@@ -62,9 +63,30 @@ type Config struct {
 	WorkforcePoolUserProject string
 }
 
+// Each element consists of a list of patterns.  validateURLs checks for matches
+// that include all elements in a given list, in that order.
+
 var (
 	validWorkforceAudiencePattern *regexp.Regexp = regexp.MustCompile(`//iam\.googleapis\.com/locations/[^/]+/workforcePools/`)
 )
+
+func validateURL(input string, patterns []*regexp.Regexp, scheme string) bool {
+	parsed, err := url.Parse(input)
+	if err != nil {
+		return false
+	}
+	if !strings.EqualFold(parsed.Scheme, scheme) {
+		return false
+	}
+	toTest := parsed.Host
+
+	for _, pattern := range patterns {
+		if pattern.MatchString(toTest) {
+			return true
+		}
+	}
+	return false
+}
 
 func validateWorkforceAudience(input string) bool {
 	return validWorkforceAudiencePattern.MatchString(input)
@@ -163,6 +185,10 @@ func (c *Config) parse(ctx context.Context) (baseCredentialSource, error) {
 				awsCredSource.IMDSv2SessionTokenURL = c.CredentialSource.IMDSv2SessionTokenURL
 			}
 
+			if err := awsCredSource.validateMetadataServers(); err != nil {
+				return nil, err
+			}
+
 			return awsCredSource, nil
 		}
 	} else if c.CredentialSource.File != "" {
@@ -176,7 +202,6 @@ func (c *Config) parse(ctx context.Context) (baseCredentialSource, error) {
 }
 
 type baseCredentialSource interface {
-	credentialSourceType() string
 	subjectToken() (string, error)
 }
 
@@ -184,15 +209,6 @@ type baseCredentialSource interface {
 type tokenSource struct {
 	ctx  context.Context
 	conf *Config
-}
-
-func getMetricsHeaderValue(conf *Config, credSource baseCredentialSource) string {
-	return fmt.Sprintf("gl-go/%s auth/%s google-byoid-sdk source/%s sa-impersonation/%t config-lifetime/%t",
-		goVersion(),
-		"unknown",
-		credSource.credentialSourceType(),
-		conf.ServiceAccountImpersonationURL != "",
-		conf.ServiceAccountImpersonationLifetimeSeconds != 0)
 }
 
 // Token allows tokenSource to conform to the oauth2.TokenSource interface.
@@ -208,7 +224,7 @@ func (ts tokenSource) Token() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	stsRequest := stsexchange.TokenExchangeRequest{
+	stsRequest := stsTokenExchangeRequest{
 		GrantType:          "urn:ietf:params:oauth:grant-type:token-exchange",
 		Audience:           conf.Audience,
 		Scope:              conf.Scopes,
@@ -218,8 +234,7 @@ func (ts tokenSource) Token() (*oauth2.Token, error) {
 	}
 	header := make(http.Header)
 	header.Add("Content-Type", "application/x-www-form-urlencoded")
-	header.Add("x-goog-api-client", getMetricsHeaderValue(conf, credSource))
-	clientAuth := stsexchange.ClientAuthentication{
+	clientAuth := clientAuthentication{
 		AuthStyle:    oauth2.AuthStyleInHeader,
 		ClientID:     conf.ClientID,
 		ClientSecret: conf.ClientSecret,
@@ -232,7 +247,7 @@ func (ts tokenSource) Token() (*oauth2.Token, error) {
 			"userProject": conf.WorkforcePoolUserProject,
 		}
 	}
-	stsResp, err := stsexchange.ExchangeToken(ts.ctx, conf.TokenURL, &stsRequest, clientAuth, header, options)
+	stsResp, err := exchangeToken(ts.ctx, conf.TokenURL, &stsRequest, clientAuth, header, options)
 	if err != nil {
 		return nil, err
 	}

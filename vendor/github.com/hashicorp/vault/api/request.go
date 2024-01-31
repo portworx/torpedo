@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package api
 
 import (
@@ -10,6 +7,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+
+	"github.com/hashicorp/vault/sdk/helper/consts"
 
 	retryablehttp "github.com/hashicorp/go-retryablehttp"
 )
@@ -128,7 +127,7 @@ func (r *Request) toRetryableHTTP() (*retryablehttp.Request, error) {
 	}
 
 	if len(r.ClientToken) != 0 {
-		req.Header.Set(AuthHeaderName, r.ClientToken)
+		req.Header.Set(consts.AuthHeaderName, r.ClientToken)
 	}
 
 	if len(r.WrapTTL) != 0 {
