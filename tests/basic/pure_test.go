@@ -2435,6 +2435,10 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					}
 					log.InfoD("Successfully validated that the old multipath device is deleted")
 				})
+				stepLog = "Destroy apps"
+				Step(stepLog, func() {
+					DestroyApps(contexts, nil)
+				})
 			})
 
 		})
