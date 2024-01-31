@@ -2341,7 +2341,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 						log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
 						devicePath := volInspect.DevicePath
 						// get part of the device path
-
+						log.Infof("device path: %v", devicePath)
 						devicePathSplit := strings.Split(devicePath, "/")
 						devicePath = devicePathSplit[len(devicePathSplit)-1]
 						devicePaths = append(devicePaths, devicePath)
