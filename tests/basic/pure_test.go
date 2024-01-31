@@ -2298,70 +2298,84 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 		stepLog = "Schedule fada deployment apps"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			// select a node for apps to be scheduled
+			applist := Inst().AppList
+			storageNodes := node.GetStorageNodes()
+			selectedNode := storageNodes[0]
+			defer func() {
+				Inst().AppList = applist
+				err = Inst().S.RemoveLabelOnNode(selectedNode, "apptype")
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			}()
 			Inst().AppList = []string{"nginx-fada-deploy"}
+			err = Inst().S.AddLabelOnNode(selectedNode, "apptype", k8s.PureDAVolumeLabelValueFA)
 
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
 			Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 			stepLog = fmt.Sprintf("schedule application")
 			Step(stepLog, func() {
 				taskName := fmt.Sprintf("vol-migrate-test")
-				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-					AppKeys:            Inst().AppList,
-					StorageProvisioner: Provisioner,
-				})
-				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-				contexts = append(contexts, context...)
+				for i := 0; i < 3; i++ {
+					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            Inst().AppList,
+						StorageProvisioner: Provisioner,
+					})
+					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+					contexts = append(contexts, context...)
+				}
 				ValidateApplications(contexts)
 			})
 			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node and check if the volume is still attached in multipath")
 			Step(stepLog, func() {
-				//get the node where the app is scheduled
-				scheduledNodeName := ""
-				pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
-				log.FailOnError(err, "Failed to get pods in namespace %v", contexts[0].App.NameSpace)
-				for _, pod := range pods.Items {
-					log.InfoD("Pod name: %v, node name: %v", pod.Name, pod.Spec.NodeName)
-					scheduledNodeName = pod.Spec.NodeName
-				}
-				//Stop PX on that node where pod has been scheduled
-				scheduledNode, err := node.GetNodeByName(scheduledNodeName)
-				log.FailOnError(err, "Failed to get node %v", scheduledNodeName)
-				log.InfoD("Stopping PX on node %v", scheduledNodeName)
 
 				//get device path of the volume
-				devicePath := ""
+				devicePaths := make([]string, 0)
 
 				//get the volume name and inspect volume to get device path
-				volumes, err := Inst().S.GetVolumes(contexts[0])
-				for _, volume := range volumes {
-					volInspect, err := Inst().V.InspectVolume(volume.ID)
-					log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
-					devicePath = volInspect.DevicePath
-					// get part of the device path
+				for _, ctx := range contexts {
+					volumes, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "Failed to get volumes for app %v", ctx.App.Key)
+					for _, volume := range volumes {
+						volInspect, err := Inst().V.InspectVolume(volume.ID)
+						log.FailOnError(err, "Failed to inspect volume %v", volume.ID)
+						devicePath := volInspect.DevicePath
+						// get part of the device path
 
-					devicePathSplit := strings.Split(devicePath, "/")
-					devicePath = devicePathSplit[len(devicePathSplit)-1]
-
+						devicePathSplit := strings.Split(devicePath, "/")
+						devicePath = devicePathSplit[len(devicePathSplit)-1]
+						devicePaths = append(devicePaths, devicePath)
+						log.InfoD("Device path of the volume: %v , device path: %v", volumes[0].Name, devicePath)
+					}
 				}
-				log.InfoD("Device path of the volume: %v , device path: %v", volumes[0].Name, devicePath)
 
-				StopVolDriverAndWait([]node.Node{scheduledNode})
+				StopVolDriverAndWait([]node.Node{selectedNode})
 
 				// cordon the node where the app is scheduled and delete the apps
 				defer func() {
-					err = core.Instance().UnCordonNode(scheduledNodeName, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to uncordon node %v", scheduledNodeName)
-					log.Infof("uncordoned node %v", scheduledNodeName)
+					err = core.Instance().UnCordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
+					log.FailOnError(err, "Failed to uncordon node %v", selectedNode.Name)
+					log.Infof("uncordoned node %v", selectedNode.Name)
 				}()
-				err = core.Instance().CordonNode(scheduledNodeName, defaultCommandTimeout, defaultCommandRetry)
-				log.FailOnError(err, "Failed to cordon node %v", scheduledNodeName)
-				log.InfoD("cordoned node %v", scheduledNodeName)
+				err = core.Instance().CordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to cordon node %v", selectedNode.Name)
+				log.InfoD("cordoned node %v", selectedNode.Name)
 
+				//now label one more node so that it can be used for scheduling
+				secondNode := storageNodes[1]
+				err = Inst().S.AddLabelOnNode(secondNode, "apptype", k8s.PureDAVolumeLabelValueFA)
+				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondNode.Name))
+
+				defer func() {
+					err = Inst().S.RemoveLabelOnNode(secondNode, "apptype")
+					log.FailOnError(err, "error removing label on node [%s]", secondNode.Name)
+				}()
 				// delete the pods
-				err = core.Instance().DeletePod(pods.Items[0].Name, contexts[0].App.NameSpace, true)
-
-				log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
-
+				pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
+				for _, pod := range pods.Items {
+					err = core.Instance().DeletePod(pod.Name, contexts[0].App.NameSpace, true)
+					log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
+				}
 				//wait for the pods to be deleted
 				t := func() (interface{}, bool, error) {
 					labelSelector := make(map[string]string)
@@ -2378,25 +2392,20 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second); err != nil {
 					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", pods.Items[0].Name, err)
 				}
-				//check if the device path is present in multipath
-				n, err := Inst().V.GetNodeForVolume(volumes[0], defaultCommandTimeout, defaultCommandRetry)
-				log.FailOnError(err, "Failed to get node for volume: %s", volumes[0].ID)
-
-				log.InfoD("volume %s is attached on node %s [%s]", volumes[0].ID, n.SchedulerNodeName, n.Addresses[0])
 
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
-				output, err := runCmd(cmd, *n)
-				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
+				output, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
 				log.InfoD("Output of multipath -ll command: %v", output)
 
 				stepLog = "Check if pod is scheduled on other node and validate if the volume is attached on the new node"
 				Step(stepLog, func() {
-					pods, err = core.Instance().GetPods(contexts[0].App.NameSpace, nil)
+					pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
 					log.FailOnError(err, "Failed to get pods in namespace %v", contexts[0].App.NameSpace)
 					for _, pod := range pods.Items {
 						log.InfoD("Pod name: %v, node name: %v", pod.Name, pod.Spec.NodeName)
-						if pod.Spec.NodeName != scheduledNodeName {
+						if pod.Spec.NodeName != selectedNode.Name {
 							log.InfoD("Pod %v is scheduled on node %v", pod.Name, pod.Spec.NodeName)
 							break
 						}
@@ -2405,22 +2414,24 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				})
 				stepLog = "Start portworx on the node where the volume was attached"
 				Step(stepLog, func() {
-					StartVolDriverAndWait([]node.Node{scheduledNode})
+					StartVolDriverAndWait([]node.Node{selectedNode})
 				})
 
 				stepLog = "Check if the old multipath device is deleted and new multipath device is created"
 				Step(stepLog, func() {
 					//run the multipath -ll command on the node where the volume is attached
 					cmd := fmt.Sprintf("multipath -ll")
-					output, err := runCmd(cmd, *n)
-					log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
+					output, err := runCmd(cmd, selectedNode)
+					log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
 					log.InfoD("Output of multipath -ll command: %v", output)
 					//check if the device path is present in multipath
-					if strings.Contains(output, devicePath) {
-						log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
+					for _, devicePath := range devicePaths {
+						if strings.Contains(output, devicePath) {
+							log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
+						}
 					}
+					log.InfoD("Successfully validated that the old multipath device is deleted")
 				})
-
 			})
 
 		})
