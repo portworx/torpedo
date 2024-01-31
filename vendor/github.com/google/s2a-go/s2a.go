@@ -35,7 +35,6 @@ import (
 	"github.com/google/s2a-go/internal/handshaker/service"
 	"github.com/google/s2a-go/internal/tokenmanager"
 	"github.com/google/s2a-go/internal/v2"
-	"github.com/google/s2a-go/retry"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 
@@ -112,7 +111,7 @@ func NewClientCreds(opts *ClientOptions) (credentials.TransportCredentials, erro
 	if opts.FallbackOpts != nil && opts.FallbackOpts.FallbackClientHandshakeFunc != nil {
 		fallbackFunc = opts.FallbackOpts.FallbackClientHandshakeFunc
 	}
-	return v2.NewClientCreds(opts.S2AAddress, opts.TransportCreds, localIdentity, verificationMode, fallbackFunc, opts.getS2AStream, opts.serverAuthorizationPolicy)
+	return v2.NewClientCreds(opts.S2AAddress, localIdentity, verificationMode, fallbackFunc, opts.getS2AStream, opts.serverAuthorizationPolicy)
 }
 
 // NewServerCreds returns a server-side transport credentials object that uses
@@ -147,7 +146,7 @@ func NewServerCreds(opts *ServerOptions) (credentials.TransportCredentials, erro
 		}, nil
 	}
 	verificationMode := getVerificationMode(opts.VerificationMode)
-	return v2.NewServerCreds(opts.S2AAddress, opts.TransportCreds, localIdentities, verificationMode, opts.getS2AStream)
+	return v2.NewServerCreds(opts.S2AAddress, localIdentities, verificationMode, opts.getS2AStream)
 }
 
 // ClientHandshake initiates a client-side TLS handshake using the S2A.
@@ -156,16 +155,16 @@ func (c *s2aTransportCreds) ClientHandshake(ctx context.Context, serverAuthority
 		return nil, nil, errors.New("client handshake called using server transport credentials")
 	}
 
-	var cancel context.CancelFunc
-	ctx, cancel = context.WithCancel(ctx)
-	defer cancel()
-
 	// Connect to the S2A.
-	hsConn, err := service.Dial(ctx, c.s2aAddr, nil)
+	hsConn, err := service.Dial(c.s2aAddr)
 	if err != nil {
 		grpclog.Infof("Failed to connect to S2A: %v", err)
 		return nil, nil, err
 	}
+
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithCancel(ctx)
+	defer cancel()
 
 	opts := &handshaker.ClientHandshakerOptions{
 		MinTLSVersion:               c.minTLSVersion,
@@ -204,15 +203,15 @@ func (c *s2aTransportCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credent
 		return nil, nil, errors.New("server handshake called using client transport credentials")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
-	defer cancel()
-
 	// Connect to the S2A.
-	hsConn, err := service.Dial(ctx, c.s2aAddr, nil)
+	hsConn, err := service.Dial(c.s2aAddr)
 	if err != nil {
 		grpclog.Infof("Failed to connect to S2A: %v", err)
 		return nil, nil, err
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
 
 	opts := &handshaker.ServerHandshakerOptions{
 		MinTLSVersion:   c.minTLSVersion,
@@ -313,7 +312,6 @@ func NewTLSClientConfigFactory(opts *ClientOptions) (TLSClientConfigFactory, err
 		grpclog.Infof("Access token manager not initialized: %v", err)
 		return &s2aTLSClientConfigFactory{
 			s2av2Address:              opts.S2AAddress,
-			transportCreds:            opts.TransportCreds,
 			tokenManager:              nil,
 			verificationMode:          getVerificationMode(opts.VerificationMode),
 			serverAuthorizationPolicy: opts.serverAuthorizationPolicy,
@@ -321,7 +319,6 @@ func NewTLSClientConfigFactory(opts *ClientOptions) (TLSClientConfigFactory, err
 	}
 	return &s2aTLSClientConfigFactory{
 		s2av2Address:              opts.S2AAddress,
-		transportCreds:            opts.TransportCreds,
 		tokenManager:              tokenManager,
 		verificationMode:          getVerificationMode(opts.VerificationMode),
 		serverAuthorizationPolicy: opts.serverAuthorizationPolicy,
@@ -330,7 +327,6 @@ func NewTLSClientConfigFactory(opts *ClientOptions) (TLSClientConfigFactory, err
 
 type s2aTLSClientConfigFactory struct {
 	s2av2Address              string
-	transportCreds            credentials.TransportCredentials
 	tokenManager              tokenmanager.AccessTokenManager
 	verificationMode          s2av2pb.ValidatePeerCertificateChainReq_VerificationMode
 	serverAuthorizationPolicy []byte
@@ -342,7 +338,7 @@ func (f *s2aTLSClientConfigFactory) Build(
 	if opts != nil && opts.ServerName != "" {
 		serverName = opts.ServerName
 	}
-	return v2.NewClientTLSConfig(ctx, f.s2av2Address, f.transportCreds, f.tokenManager, f.verificationMode, serverName, f.serverAuthorizationPolicy)
+	return v2.NewClientTLSConfig(ctx, f.s2av2Address, f.tokenManager, f.verificationMode, serverName, f.serverAuthorizationPolicy)
 }
 
 func getVerificationMode(verificationMode VerificationModeType) s2av2pb.ValidatePeerCertificateChainReq_VerificationMode {
@@ -394,15 +390,9 @@ func NewS2ADialTLSContextFunc(opts *ClientOptions) func(ctx context.Context, net
 		}
 		timeoutCtx, cancel := context.WithTimeout(ctx, v2.GetS2ATimeout())
 		defer cancel()
-
-		var s2aTLSConfig *tls.Config
-		retry.Run(timeoutCtx,
-			func() error {
-				s2aTLSConfig, err = factory.Build(timeoutCtx, &TLSClientConfigOptions{
-					ServerName: serverName,
-				})
-				return err
-			})
+		s2aTLSConfig, err := factory.Build(timeoutCtx, &TLSClientConfigOptions{
+			ServerName: serverName,
+		})
 		if err != nil {
 			grpclog.Infof("error building S2A TLS config: %v", err)
 			return fallback(err)
@@ -411,12 +401,7 @@ func NewS2ADialTLSContextFunc(opts *ClientOptions) func(ctx context.Context, net
 		s2aDialer := &tls.Dialer{
 			Config: s2aTLSConfig,
 		}
-		var c net.Conn
-		retry.Run(timeoutCtx,
-			func() error {
-				c, err = s2aDialer.DialContext(timeoutCtx, network, addr)
-				return err
-			})
+		c, err := s2aDialer.DialContext(ctx, network, addr)
 		if err != nil {
 			grpclog.Infof("error dialing with S2A to %s: %v", addr, err)
 			return fallback(err)

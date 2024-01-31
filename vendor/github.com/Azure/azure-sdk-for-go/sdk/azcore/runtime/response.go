@@ -8,21 +8,22 @@ package runtime
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 
-	azexported "github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/exported"
-	"github.com/Azure/azure-sdk-for-go/sdk/internal/exported"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/exported"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/shared"
 )
 
 // Payload reads and returns the response body or an error.
 // On a successful read, the response body is cached.
 // Subsequent reads will access the cached value.
 func Payload(resp *http.Response) ([]byte, error) {
-	return exported.Payload(resp, nil)
+	return exported.Payload(resp)
 }
 
 // HasStatusCode returns true if the Response's status code is one of the specified values.
@@ -91,19 +92,45 @@ func Drain(resp *http.Response) {
 
 // removeBOM removes any byte-order mark prefix from the payload if present.
 func removeBOM(resp *http.Response) error {
-	_, err := exported.Payload(resp, &exported.PayloadOptions{
-		BytesModifier: func(b []byte) []byte {
-			// UTF8
-			return bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
-		},
-	})
+	payload, err := Payload(resp)
 	if err != nil {
 		return err
+	}
+	// UTF8
+	trimmed := bytes.TrimPrefix(payload, []byte("\xef\xbb\xbf"))
+	if len(trimmed) < len(payload) {
+		resp.Body.(shared.BytesSetter).Set(trimmed)
 	}
 	return nil
 }
 
 // DecodeByteArray will base-64 decode the provided string into v.
 func DecodeByteArray(s string, v *[]byte, format Base64Encoding) error {
-	return azexported.DecodeByteArray(s, v, format)
+	if len(s) == 0 {
+		return nil
+	}
+	payload := string(s)
+	if payload[0] == '"' {
+		// remove surrounding quotes
+		payload = payload[1 : len(payload)-1]
+	}
+	switch format {
+	case Base64StdFormat:
+		decoded, err := base64.StdEncoding.DecodeString(payload)
+		if err == nil {
+			*v = decoded
+			return nil
+		}
+		return err
+	case Base64URLFormat:
+		// use raw encoding as URL format should not contain any '=' characters
+		decoded, err := base64.RawURLEncoding.DecodeString(payload)
+		if err == nil {
+			*v = decoded
+			return nil
+		}
+		return err
+	default:
+		return fmt.Errorf("unrecognized byte array format: %d", format)
+	}
 }

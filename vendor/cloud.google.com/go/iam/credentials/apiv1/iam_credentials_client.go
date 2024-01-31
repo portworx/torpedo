@@ -35,6 +35,7 @@ import (
 	httptransport "google.golang.org/api/transport/http"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -258,7 +259,7 @@ type iamCredentialsGRPCClient struct {
 	iamCredentialsClient credentialspb.IAMCredentialsClient
 
 	// The x-goog-* metadata to be sent with each request.
-	xGoogHeaders []string
+	xGoogMetadata metadata.MD
 }
 
 // NewIamCredentialsClient creates a new iam credentials client based on gRPC.
@@ -315,7 +316,7 @@ func (c *iamCredentialsGRPCClient) Connection() *grpc.ClientConn {
 func (c *iamCredentialsGRPCClient) setGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", gax.GoVersion}, keyval...)
 	kv = append(kv, "gapic", getVersionClient(), "gax", gax.Version, "grpc", grpc.Version)
-	c.xGoogHeaders = []string{"x-goog-api-client", gax.XGoogHeader(kv...)}
+	c.xGoogMetadata = metadata.Pairs("x-goog-api-client", gax.XGoogHeader(kv...))
 }
 
 // Close closes the connection to the API service. The user should invoke this when
@@ -332,8 +333,8 @@ type iamCredentialsRESTClient struct {
 	// The http client.
 	httpClient *http.Client
 
-	// The x-goog-* headers to be sent with each request.
-	xGoogHeaders []string
+	// The x-goog-* metadata to be sent with each request.
+	xGoogMetadata metadata.MD
 
 	// Points back to the CallOptions field of the containing IamCredentialsClient
 	CallOptions **IamCredentialsCallOptions
@@ -383,7 +384,7 @@ func defaultIamCredentialsRESTClientOptions() []option.ClientOption {
 func (c *iamCredentialsRESTClient) setGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", gax.GoVersion}, keyval...)
 	kv = append(kv, "gapic", getVersionClient(), "gax", gax.Version, "rest", "UNKNOWN")
-	c.xGoogHeaders = []string{"x-goog-api-client", gax.XGoogHeader(kv...)}
+	c.xGoogMetadata = metadata.Pairs("x-goog-api-client", gax.XGoogHeader(kv...))
 }
 
 // Close closes the connection to the API service. The user should invoke this when
@@ -401,10 +402,9 @@ func (c *iamCredentialsRESTClient) Connection() *grpc.ClientConn {
 	return nil
 }
 func (c *iamCredentialsGRPCClient) GenerateAccessToken(ctx context.Context, req *credentialspb.GenerateAccessTokenRequest, opts ...gax.CallOption) (*credentialspb.GenerateAccessTokenResponse, error) {
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	ctx = gax.InsertMetadataIntoOutgoingContext(ctx, hds...)
+	ctx = insertMetadata(ctx, c.xGoogMetadata, md)
 	opts = append((*c.CallOptions).GenerateAccessToken[0:len((*c.CallOptions).GenerateAccessToken):len((*c.CallOptions).GenerateAccessToken)], opts...)
 	var resp *credentialspb.GenerateAccessTokenResponse
 	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
@@ -419,10 +419,9 @@ func (c *iamCredentialsGRPCClient) GenerateAccessToken(ctx context.Context, req 
 }
 
 func (c *iamCredentialsGRPCClient) GenerateIdToken(ctx context.Context, req *credentialspb.GenerateIdTokenRequest, opts ...gax.CallOption) (*credentialspb.GenerateIdTokenResponse, error) {
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	ctx = gax.InsertMetadataIntoOutgoingContext(ctx, hds...)
+	ctx = insertMetadata(ctx, c.xGoogMetadata, md)
 	opts = append((*c.CallOptions).GenerateIdToken[0:len((*c.CallOptions).GenerateIdToken):len((*c.CallOptions).GenerateIdToken)], opts...)
 	var resp *credentialspb.GenerateIdTokenResponse
 	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
@@ -437,10 +436,9 @@ func (c *iamCredentialsGRPCClient) GenerateIdToken(ctx context.Context, req *cre
 }
 
 func (c *iamCredentialsGRPCClient) SignBlob(ctx context.Context, req *credentialspb.SignBlobRequest, opts ...gax.CallOption) (*credentialspb.SignBlobResponse, error) {
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	ctx = gax.InsertMetadataIntoOutgoingContext(ctx, hds...)
+	ctx = insertMetadata(ctx, c.xGoogMetadata, md)
 	opts = append((*c.CallOptions).SignBlob[0:len((*c.CallOptions).SignBlob):len((*c.CallOptions).SignBlob)], opts...)
 	var resp *credentialspb.SignBlobResponse
 	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
@@ -455,10 +453,9 @@ func (c *iamCredentialsGRPCClient) SignBlob(ctx context.Context, req *credential
 }
 
 func (c *iamCredentialsGRPCClient) SignJwt(ctx context.Context, req *credentialspb.SignJwtRequest, opts ...gax.CallOption) (*credentialspb.SignJwtResponse, error) {
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	ctx = gax.InsertMetadataIntoOutgoingContext(ctx, hds...)
+	ctx = insertMetadata(ctx, c.xGoogMetadata, md)
 	opts = append((*c.CallOptions).SignJwt[0:len((*c.CallOptions).SignJwt):len((*c.CallOptions).SignJwt)], opts...)
 	var resp *credentialspb.SignJwtResponse
 	err := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
@@ -492,11 +489,9 @@ func (c *iamCredentialsRESTClient) GenerateAccessToken(ctx context.Context, req 
 	baseUrl.RawQuery = params.Encode()
 
 	// Build HTTP headers from client and context metadata.
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	hds = append(hds, "Content-Type", "application/json")
-	headers := gax.BuildHeaders(ctx, hds...)
+	headers := buildHeaders(ctx, c.xGoogMetadata, md, metadata.Pairs("Content-Type", "application/json"))
 	opts = append((*c.CallOptions).GenerateAccessToken[0:len((*c.CallOptions).GenerateAccessToken):len((*c.CallOptions).GenerateAccessToken)], opts...)
 	unm := protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
 	resp := &credentialspb.GenerateAccessTokenResponse{}
@@ -558,11 +553,9 @@ func (c *iamCredentialsRESTClient) GenerateIdToken(ctx context.Context, req *cre
 	baseUrl.RawQuery = params.Encode()
 
 	// Build HTTP headers from client and context metadata.
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	hds = append(hds, "Content-Type", "application/json")
-	headers := gax.BuildHeaders(ctx, hds...)
+	headers := buildHeaders(ctx, c.xGoogMetadata, md, metadata.Pairs("Content-Type", "application/json"))
 	opts = append((*c.CallOptions).GenerateIdToken[0:len((*c.CallOptions).GenerateIdToken):len((*c.CallOptions).GenerateIdToken)], opts...)
 	unm := protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
 	resp := &credentialspb.GenerateIdTokenResponse{}
@@ -624,11 +617,9 @@ func (c *iamCredentialsRESTClient) SignBlob(ctx context.Context, req *credential
 	baseUrl.RawQuery = params.Encode()
 
 	// Build HTTP headers from client and context metadata.
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	hds = append(hds, "Content-Type", "application/json")
-	headers := gax.BuildHeaders(ctx, hds...)
+	headers := buildHeaders(ctx, c.xGoogMetadata, md, metadata.Pairs("Content-Type", "application/json"))
 	opts = append((*c.CallOptions).SignBlob[0:len((*c.CallOptions).SignBlob):len((*c.CallOptions).SignBlob)], opts...)
 	unm := protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
 	resp := &credentialspb.SignBlobResponse{}
@@ -690,11 +681,9 @@ func (c *iamCredentialsRESTClient) SignJwt(ctx context.Context, req *credentials
 	baseUrl.RawQuery = params.Encode()
 
 	// Build HTTP headers from client and context metadata.
-	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName()))}
+	md := metadata.Pairs("x-goog-request-params", fmt.Sprintf("%s=%v", "name", url.QueryEscape(req.GetName())))
 
-	hds = append(c.xGoogHeaders, hds...)
-	hds = append(hds, "Content-Type", "application/json")
-	headers := gax.BuildHeaders(ctx, hds...)
+	headers := buildHeaders(ctx, c.xGoogMetadata, md, metadata.Pairs("Content-Type", "application/json"))
 	opts = append((*c.CallOptions).SignJwt[0:len((*c.CallOptions).SignJwt):len((*c.CallOptions).SignJwt)], opts...)
 	unm := protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
 	resp := &credentialspb.SignJwtResponse{}

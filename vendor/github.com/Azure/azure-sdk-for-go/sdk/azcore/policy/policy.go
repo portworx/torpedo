@@ -7,13 +7,11 @@
 package policy
 
 import (
-	"context"
 	"net/http"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/exported"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/internal/shared"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing"
 )
 
@@ -29,11 +27,9 @@ type Transporter = exported.Transporter
 type Request = exported.Request
 
 // ClientOptions contains optional settings for a client's pipeline.
-// Instances can be shared across calls to SDK client constructors when uniform configuration is desired.
-// Zero-value fields will have their specified default values applied during use.
+// All zero-value fields will be initialized with default values.
 type ClientOptions struct {
-	// APIVersion overrides the default version requested of the service.
-	// Set with caution as this package version has not been tested with arbitrary service versions.
+	// APIVersion overrides the default version requested of the service. Set with caution as this package version has not been tested with arbitrary service versions.
 	APIVersion string
 
 	// Cloud specifies a cloud for the client. The default is Azure Public Cloud.
@@ -103,7 +99,7 @@ type RetryOptions struct {
 
 	// MaxRetryDelay specifies the maximum delay allowed before retrying an operation.
 	// Typically the value is greater than or equal to the value specified in RetryDelay.
-	// The default Value is 60 seconds.  A value less than zero means there is no cap.
+	// The default Value is 120 seconds.  A value less than zero means there is no cap.
 	MaxRetryDelay time.Duration
 
 	// StatusCodes specifies the HTTP status codes that indicate the operation should be retried.
@@ -117,15 +113,6 @@ type RetryOptions struct {
 	// Specifying values will replace the default values.
 	// Specifying an empty slice will disable retries for HTTP status codes.
 	StatusCodes []int
-
-	// ShouldRetry evaluates if the retry policy should retry the request.
-	// When specified, the function overrides comparison against the list of
-	// HTTP status codes and error checking within the retry policy. Context
-	// and NonRetriable errors remain evaluated before calling ShouldRetry.
-	// The *http.Response and error parameters are mutually exclusive, i.e.
-	// if one is nil, the other is not nil.
-	// A return value of true means the retry policy should retry.
-	ShouldRetry func(*http.Response, error) bool
 }
 
 // TelemetryOptions configures the telemetry policy's behavior.
@@ -165,23 +152,4 @@ type AuthorizationHandler struct {
 	// Request.Raw().Context(). When OnChallenge returns nil, the policy will send the request again. When OnChallenge is nil,
 	// the policy will return any 401 response to the client.
 	OnChallenge func(*Request, *http.Response, func(TokenRequestOptions) error) error
-}
-
-// WithCaptureResponse applies the HTTP response retrieval annotation to the parent context.
-// The resp parameter will contain the HTTP response after the request has completed.
-func WithCaptureResponse(parent context.Context, resp **http.Response) context.Context {
-	return context.WithValue(parent, shared.CtxWithCaptureResponse{}, resp)
-}
-
-// WithHTTPHeader adds the specified http.Header to the parent context.
-// Use this to specify custom HTTP headers at the API-call level.
-// Any overlapping headers will have their values replaced with the values specified here.
-func WithHTTPHeader(parent context.Context, header http.Header) context.Context {
-	return context.WithValue(parent, shared.CtxWithHTTPHeaderKey{}, header)
-}
-
-// WithRetryOptions adds the specified RetryOptions to the parent context.
-// Use this to specify custom RetryOptions at the API-call level.
-func WithRetryOptions(parent context.Context, options RetryOptions) context.Context {
-	return context.WithValue(parent, shared.CtxWithRetryOptionsKey{}, options)
 }
