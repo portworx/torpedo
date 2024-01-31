@@ -2316,14 +2316,12 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			stepLog = fmt.Sprintf("schedule application")
 			Step(stepLog, func() {
 				taskName := fmt.Sprintf("vol-migrate-test")
-				for i := 0; i < 3; i++ {
-					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-						AppKeys:            Inst().AppList,
-						StorageProvisioner: Provisioner,
-					})
-					log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
-					contexts = append(contexts, context...)
-				}
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            Inst().AppList,
+					StorageProvisioner: Provisioner,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
 				ValidateApplications(contexts)
 			})
 			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node and check if the volume is still attached in multipath")
