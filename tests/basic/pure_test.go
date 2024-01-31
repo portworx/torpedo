@@ -2347,17 +2347,6 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 				StopVolDriverAndWait([]node.Node{scheduledNode})
 
-				//check if the device path is present in multipath
-				n, err := Inst().V.GetNodeForVolume(volumes[0], defaultCommandTimeout, defaultCommandRetry)
-				log.FailOnError(err, "Failed to get node for volume: %s", volumes[0].ID)
-
-				log.InfoD("volume %s is attached on node %s [%s]", volumes[0].ID, n.SchedulerNodeName, n.Addresses[0])
-
-				//run the multipath -ll command on the node where the volume is attached
-				cmd := fmt.Sprintf("multipath -ll | grep -i -a10 %v", devicePath)
-				output, err := runCmd(cmd, *n)
-				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
-				log.InfoD("Output of multipath -ll command: %v", output)
 				// cordon the node where the app is scheduled and delete the apps
 				defer func() {
 					err = core.Instance().UnCordonNode(scheduledNodeName, defaultCommandTimeout, defaultCommandRetry)
@@ -2372,6 +2361,65 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				err = core.Instance().DeletePod(pods.Items[0].Name, contexts[0].App.NameSpace, true)
 
 				log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
+
+				//wait for the pods to be deleted
+				t := func() (interface{}, bool, error) {
+					labelSelector := make(map[string]string)
+					podList, err := core.Instance().GetPods(contexts[0].App.NameSpace, labelSelector)
+					log.FailOnError(err, "Failed to get pods from namespace: %v", contexts[0].App.NameSpace)
+					for _, pod := range podList.Items {
+						if pod.Name == pods.Items[0].Name {
+							log.InfoD("pod : %s still present in the system", pod.Name)
+							return "", true, nil
+						}
+					}
+					return "", false, nil
+				}
+				if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second); err != nil {
+					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", pods.Items[0].Name, err)
+				}
+				//check if the device path is present in multipath
+				n, err := Inst().V.GetNodeForVolume(volumes[0], defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to get node for volume: %s", volumes[0].ID)
+
+				log.InfoD("volume %s is attached on node %s [%s]", volumes[0].ID, n.SchedulerNodeName, n.Addresses[0])
+
+				//run the multipath -ll command on the node where the volume is attached
+				cmd := fmt.Sprintf("multipath -ll | grep -i -a10 %v", devicePath)
+				output, err := runCmd(cmd, *n)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
+				log.InfoD("Output of multipath -ll command: %v", output)
+
+				stepLog = "Check if pod is scheduled on other node and validate if the volume is attached on the new node"
+				Step(stepLog, func() {
+					pods, err = core.Instance().GetPods(contexts[0].App.NameSpace, nil)
+					log.FailOnError(err, "Failed to get pods in namespace %v", contexts[0].App.NameSpace)
+					for _, pod := range pods.Items {
+						log.InfoD("Pod name: %v, node name: %v", pod.Name, pod.Spec.NodeName)
+						if pod.Spec.NodeName != scheduledNodeName {
+							log.InfoD("Pod %v is scheduled on node %v", pod.Name, pod.Spec.NodeName)
+							break
+						}
+					}
+					ValidateApplications(contexts)
+				})
+				stepLog = "Start portworx on the node where the volume was attached"
+				Step(stepLog, func() {
+					StartVolDriverAndWait([]node.Node{scheduledNode})
+				})
+
+				stepLog = "Check if the old multipath device is deleted and new multipath device is created"
+				Step(stepLog, func() {
+					//run the multipath -ll command on the node where the volume is attached
+					cmd := fmt.Sprintf("multipath -ll | grep -i -a10 %v", devicePath)
+					output, err := runCmd(cmd, *n)
+					log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
+					log.InfoD("Output of multipath -ll command: %v", output)
+					//check if the device path is present in multipath
+					if strings.Contains(output, devicePath) {
+						log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
+					}
+				})
 
 			})
 
