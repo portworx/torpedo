@@ -2385,7 +2385,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				log.InfoD("volume %s is attached on node %s [%s]", volumes[0].ID, n.SchedulerNodeName, n.Addresses[0])
 
 				//run the multipath -ll command on the node where the volume is attached
-				cmd := fmt.Sprintf("multipath -ll | grep -i -a10 %v", devicePath)
+				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, *n)
 				log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
 				log.InfoD("Output of multipath -ll command: %v", output)
@@ -2411,7 +2411,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				stepLog = "Check if the old multipath device is deleted and new multipath device is created"
 				Step(stepLog, func() {
 					//run the multipath -ll command on the node where the volume is attached
-					cmd := fmt.Sprintf("multipath -ll | grep -i -a10 %v", devicePath)
+					cmd := fmt.Sprintf("multipath -ll")
 					output, err := runCmd(cmd, *n)
 					log.FailOnError(err, "Failed to run multipath -ll command on node %v", n.SchedulerNodeName)
 					log.InfoD("Output of multipath -ll command: %v", output)
