@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"io/ioutil"
 	"net/http"
 	"os"

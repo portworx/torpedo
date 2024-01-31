@@ -5,13 +5,13 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
 
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 )
 
 // IamRoleBindingsV2 struct
 type IamRoleBindingsV2 struct {
-	apiClientV2 *pdsv2.APIClient
+	ApiClientv2 *pdsv2.APIClient
 }
 
 type NamespaceRoles struct {
@@ -22,7 +22,7 @@ type NamespaceRoles struct {
 
 // ListIamRoleBindings return service identities models for a project.
 func (iam *IamRoleBindingsV2) ListIamRoleBindings() ([]pdsv2.V1IAM, error) {
-	iamClient := iam.apiClientV2.IAMServiceApi
+	iamClient := iam.ApiClientv2.IAMServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -36,7 +36,7 @@ func (iam *IamRoleBindingsV2) ListIamRoleBindings() ([]pdsv2.V1IAM, error) {
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
 func (iam *IamRoleBindingsV2) CreateIamRoleBinding() (*pdsv2.V1IAM, error) {
-	iamClient := iam.apiClientV2.IAMServiceApi
+	iamClient := iam.ApiClientv2.IAMServiceApi
 
 	ctx, err := GetContext()
 	if err != nil {
@@ -50,7 +50,7 @@ func (iam *IamRoleBindingsV2) CreateIamRoleBinding() (*pdsv2.V1IAM, error) {
 }
 
 func (iam *IamRoleBindingsV2) UpdateIamRoleBindings(iamMetaUid string) (*pdsv2.V1IAM, error) {
-	iamClient := iam.apiClientV2.IAMServiceApi
+	iamClient := iam.ApiClientv2.IAMServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -65,7 +65,7 @@ func (iam *IamRoleBindingsV2) UpdateIamRoleBindings(iamMetaUid string) (*pdsv2.V
 
 // GetIamRoleBindingByID return IAM RoleBinding model.
 func (iam *IamRoleBindingsV2) GetIamRoleBindingByID(actorId string) (*pdsv2.V1IAM, error) {
-	iamClient := iam.apiClientV2.IAMServiceApi
+	iamClient := iam.ApiClientv2.IAMServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -79,7 +79,7 @@ func (iam *IamRoleBindingsV2) GetIamRoleBindingByID(actorId string) (*pdsv2.V1IA
 
 // DeleteIamRoleBinding delete IAM RoleBinding and return status.
 func (iam *IamRoleBindingsV2) DeleteIamRoleBinding(actorId string) (*status.Response, error) {
-	iamClient := iam.apiClientV2.IAMServiceApi
+	iamClient := iam.ApiClientv2.IAMServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)

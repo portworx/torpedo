@@ -4,18 +4,18 @@ import (
 	"fmt"
 	status "net/http"
 
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 )
 
 // BackupLocationV2 struct
 type BackupLocationV2 struct {
-	apiClientV2 *pdsv2.APIClient
+	ApiClientv2 *pdsv2.APIClient
 }
 
 // ListBackupLocations return backup locations models
 func (backupLocation *BackupLocationV2) ListBackupLocations() ([]pdsv2.V1BackupLocation, error) {
-	backupLocationClient := backupLocation.apiClientV2.BackupLocationServiceApi
+	backupLocationClient := backupLocation.ApiClientv2.BackupLocationServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -29,7 +29,7 @@ func (backupLocation *BackupLocationV2) ListBackupLocations() ([]pdsv2.V1BackupL
 
 // GetBackupLocation return backup location model.
 func (backupLocation *BackupLocationV2) GetBackupLocation(backupLocID string) (*pdsv2.V1BackupLocation, error) {
-	backupLocationClient := backupLocation.apiClientV2.BackupLocationServiceApi
+	backupLocationClient := backupLocation.ApiClientv2.BackupLocationServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -43,7 +43,7 @@ func (backupLocation *BackupLocationV2) GetBackupLocation(backupLocID string) (*
 
 // CreateBackupLocation return newly created backup location model.
 func (backupLocation *BackupLocationV2) CreateBackupLocation(tenantID string) (*pdsv2.V1BackupLocation, error) {
-	backupLocationClient := backupLocation.apiClientV2.BackupLocationServiceApi
+	backupLocationClient := backupLocation.ApiClientv2.BackupLocationServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -57,7 +57,7 @@ func (backupLocation *BackupLocationV2) CreateBackupLocation(tenantID string) (*
 
 // UpdateBackupLocation return updated backup location model.
 func (backupLocation *BackupLocationV2) UpdateBackupLocation(backupLocationID string) (*pdsv2.V1BackupLocation, error) {
-	backupLocationClient := backupLocation.apiClientV2.BackupLocationServiceApi
+	backupLocationClient := backupLocation.ApiClientv2.BackupLocationServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -74,7 +74,7 @@ func (backupLocation *BackupLocationV2) UpdateBackupLocation(backupLocationID st
 
 // DeleteBackupLocation delete backup location and return status.
 func (backupLocation *BackupLocationV2) DeleteBackupLocation(backupLocationID string) (*status.Response, error) {
-	backupLocationClient := backupLocation.apiClientV2.BackupLocationServiceApi
+	backupLocationClient := backupLocation.ApiClientv2.BackupLocationServiceApi
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)

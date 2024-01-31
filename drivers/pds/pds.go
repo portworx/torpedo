@@ -3,7 +3,7 @@ package pds
 import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -72,7 +72,7 @@ func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
 
 }
 
-func InitPdsv2ApiComponents(ControlPlaneURL string) (*pdsv2api.UnifiedControlPlaneComponents, error) {
+func InitPdsv2ApiComponents(ControlPlaneURL string) (*pdsv2api.UnifiedPlatformComponents, error) {
 	log.InfoD("Initializing Api components")
 	apiConf := pdsv2.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
@@ -83,7 +83,7 @@ func InitPdsv2ApiComponents(ControlPlaneURL string) (*pdsv2api.UnifiedControlPla
 	apiConf.Scheme = endpointURL.Scheme
 
 	apiClient := pdsv2.NewAPIClient(apiConf)
-	components := pdsv2api.NewUnifiedControlPlane(apiClient)
+	components := pdsv2api.NewUnifiedPlatformComponents(apiClient)
 
 	return components, nil
 

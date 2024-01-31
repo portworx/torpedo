@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
@@ -10,12 +10,12 @@ import (
 
 // ProjectV2 struct
 type ProjectV2 struct {
-	apiClientV2 *pdsv2.APIClient
+	ApiClientv2 *pdsv2.APIClient
 }
 
 // GetProjectsList return pdsv2 projects models.
 func (project *ProjectV2) GetProjectsList() ([]pdsv2.V1Project, error) {
-	projectClient := project.apiClientV2.ProjectServiceApi
+	projectClient := project.ApiClientv2.ProjectServiceApi
 	log.Info("Get list of Projects.")
 	ctx, err := GetContext()
 	if err != nil {
@@ -30,7 +30,7 @@ func (project *ProjectV2) GetProjectsList() ([]pdsv2.V1Project, error) {
 
 // GetProject return project model.
 func (project *ProjectV2) GetProject(projectID string) (*pdsv2.V1Project, error) {
-	projectClient := project.apiClientV2.ProjectServiceApi
+	projectClient := project.ApiClientv2.ProjectServiceApi
 	log.Info("Get the project details.")
 	ctx, err := GetContext()
 	if err != nil {

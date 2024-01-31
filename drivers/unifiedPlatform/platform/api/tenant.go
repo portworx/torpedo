@@ -2,7 +2,7 @@ package api
 
 import (
 	"fmt"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
@@ -10,12 +10,12 @@ import (
 
 // TenantV2 struct
 type TenantV2 struct {
-	apiClientV2 *pdsv2.APIClient
+	ApiClientv2 *pdsv2.APIClient
 }
 
 // GetTenantsList return pds tenants models.
 func (tenant *TenantV2) GetTenantsList(accountID string) ([]pdsv2.V1Tenant, error) {
-	tenantClient := tenant.apiClientV2.TenantServiceApi
+	tenantClient := tenant.ApiClientv2.TenantServiceApi
 	log.Info("Get list of tenants.")
 	ctx, err := GetContext()
 	if err != nil {
@@ -30,7 +30,7 @@ func (tenant *TenantV2) GetTenantsList(accountID string) ([]pdsv2.V1Tenant, erro
 
 // GetTenant return tenant model.
 func (tenant *TenantV2) GetTenant(tenantID string) (*pdsv2.V1Tenant, error) {
-	tenantClient := tenant.apiClientV2.TenantServiceApi
+	tenantClient := tenant.ApiClientv2.TenantServiceApi
 	log.Info("Get tenant.")
 	ctx, err := GetContext()
 	if err != nil {
