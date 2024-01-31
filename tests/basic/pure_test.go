@@ -2372,30 +2372,16 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					log.FailOnError(err, "error removing label on node [%s]", secondNode.Name)
 				}()
 				// delete the pods
-				pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
-				for _, pod := range pods.Items {
-					log.InfoD("Delete pod %v", pod.Name)
-					err = core.Instance().DeletePod(pod.Name, contexts[0].App.NameSpace, true)
-					log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
-				}
-				//wait for the pods to be deleted
-				t := func() (interface{}, bool, error) {
-					labelSelector := make(map[string]string)
-					podList, err := core.Instance().GetPods(contexts[0].App.NameSpace, labelSelector)
-					log.FailOnError(err, "Failed to get pods from namespace: %v", contexts[0].App.NameSpace)
-					for _, pod := range podList.Items {
-						if pod.Name == pods.Items[0].Name {
-							log.InfoD("pod : %s still present in the system", pod.Name)
-							return "", true, nil
-						}
+				for _, ctx := range contexts {
+					pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+					for _, pod := range pods.Items {
+						log.InfoD("Delete pod %v", pod.Name)
+						err = core.Instance().DeletePod(pod.Name, contexts[0].App.NameSpace, true)
+						log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
 					}
-					return "", false, nil
-				}
-				if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second); err != nil {
-					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", pods.Items[0].Name, err)
 				}
 
-				time.Sleep(20 * time.Second)
+				time.Sleep(60 * time.Second)
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
