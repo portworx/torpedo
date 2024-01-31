@@ -1995,7 +1995,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 				periodicSchedulePolicyInterval = 15
 				periodicSchedulePolicyNameMap[nonAdminUserName] = periodicSchedulePolicyName
 				periodicSchedulePolicyUidMap[nonAdminUserName] = periodicSchedulePolicyUid
-				err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName], orgID, nonAdminCtx)
+				err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[nonAdminUserName], periodicSchedulePolicyUidMap[nonAdminUserName], orgID, nonAdminCtx, false, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] for user [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyNameMap[nonAdminUserName], nonAdminUserName))
 			}
 		})
@@ -2591,7 +2591,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval = 15
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 			periodicSchedulePolicyUid, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, periodicSchedulePolicyName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching uid of periodic schedule policy named [%s]", periodicSchedulePolicyName))
@@ -3135,7 +3135,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s-%s", "periodic", RandomString(5), nonAdminUserName)
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval = 15
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, nonAdminCtx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, nonAdminCtx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] for user [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName, nonAdminUserName))
 
 		})
@@ -3449,7 +3449,7 @@ var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%s", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval = 15
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, adminCtx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, orgID, adminCtx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s] for px-admin ", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 			err = AddSchedulePolicyOwnership(periodicSchedulePolicyName, periodicSchedulePolicyUid, userNames, nil, Read, Invalid, adminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying update of owbership for SchedulePolicy- %s", periodicSchedulePolicyName))
