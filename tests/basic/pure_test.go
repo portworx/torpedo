@@ -2374,6 +2374,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				// delete the pods
 				pods, err := core.Instance().GetPods(contexts[0].App.NameSpace, nil)
 				for _, pod := range pods.Items {
+					log.InfoD("Delete pod %v", pod.Name)
 					err = core.Instance().DeletePod(pod.Name, contexts[0].App.NameSpace, true)
 					log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
 				}
@@ -2394,6 +2395,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", pods.Items[0].Name, err)
 				}
 
+				time.Sleep(20 * time.Second)
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
