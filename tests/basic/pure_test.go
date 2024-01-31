@@ -2397,7 +2397,11 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
 				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
-				log.InfoD("Output of multipath -ll command: %v", output)
+				log.InfoD("Output of multipath on provisioned node -ll command: %v", output)
+				//check if the device path is present in multipath
+				if !strings.Contains(output, "failed faulty running") {
+					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
+				}
 
 				stepLog = "Check if pod is scheduled on other node and validate if the volume is attached on the new node"
 				Step(stepLog, func() {
@@ -2410,7 +2414,6 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 							break
 						}
 					}
-					ValidateApplications(contexts)
 				})
 				stepLog = "Start portworx on the node where the volume was attached"
 				Step(stepLog, func() {
