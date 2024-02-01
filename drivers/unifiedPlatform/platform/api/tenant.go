@@ -62,7 +62,7 @@ func (tenant *TenantV2) CreateTenant() (*platformV2.V1Tenant, error) {
 // DeleteTenant return tenant model.
 func (tenant *TenantV2) DeleteTenant(tenantId string) (*status.Response, error) {
 	tenantClient := tenant.ApiClientV2.TenantServiceAPI
-	log.Info("Get tenant.")
+	log.Info("Delete tenant.")
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
