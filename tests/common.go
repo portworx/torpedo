@@ -252,6 +252,7 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
+	scaleAppTimeoutFlag                  = "scale-app-timeout"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -660,7 +661,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if ctx.ReadinessTimeout == time.Duration(0) {
+		if Inst().ScaleAppTimeout != time.Duration(0) {
+			timeout = Inst().ScaleAppTimeout
+		} else if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
@@ -6196,6 +6199,7 @@ type Torpedo struct {
 	Provisioner                         string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
+	ScaleAppTimeout                     time.Duration
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	LicenseExpiryTimeoutHours           time.Duration
@@ -6248,6 +6252,7 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var scaleAppTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
 	var licenseExpiryTimeoutHours time.Duration
 	var meteringIntervalMins time.Duration
@@ -6310,7 +6315,8 @@ func ParseFlags() {
 	flag.StringVar(&csiAppsCSV, csiAppCliFlag, "", "Comma-separated list of apps to deploy with CSI provisioner")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
-	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum wait time for app to be deleted")
+	flag.DurationVar(&scaleAppTimeout, scaleAppTimeoutFlag, 0, "Maximum wait time for app to be ready")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultDriverStartTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.DurationVar(&licenseExpiryTimeoutHours, licenseExpiryTimeoutHoursFlag, defaultLicenseExpiryTimeoutHours, "Maximum wait time in hours after which force expire license")
@@ -6561,6 +6567,7 @@ func ParseFlags() {
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
+				ScaleAppTimeout:                     scaleAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,

@@ -256,7 +256,7 @@ func doAppsValidation(contexts []*scheduler.Context, stopSignal <-chan struct{},
 
 	itr := 1
 	for {
-		log.Infof("Apps validation itreation: #%d", itr)
+		log.Infof("Apps validation iteration: #%d", itr)
 		select {
 		case <-stopSignal:
 			log.Infof("Exiting app validations routine")
