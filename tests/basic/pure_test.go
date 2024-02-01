@@ -2302,6 +2302,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			applist := Inst().AppList
 			storageNodes := node.GetStorageNodes()
 			selectedNode := storageNodes[0]
+			log.Infof("Length of storage nodes: %v", len(storageNodes))
 			log.InfoD("Selected Node: %v", selectedNode.Name)
 			defer func() {
 				Inst().AppList = applist
@@ -2376,7 +2377,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
 					for _, pod := range pods.Items {
 						log.InfoD("Delete pod %v", pod.Name)
-						err = core.Instance().DeletePod(pod.Name, contexts[0].App.NameSpace, true)
+						err = core.Instance().DeletePod(pod.Name, ctx.App.NameSpace, true)
 						log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
 					}
 				}
