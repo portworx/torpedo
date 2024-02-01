@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package api
 
 import (
@@ -8,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/hashicorp/vault/sdk/helper/logging"
 )
 
 // Monitor returns a channel that outputs strings containing the log messages
@@ -21,7 +20,7 @@ func (c *Sys) Monitor(ctx context.Context, logLevel string, logFormat string) (c
 		r.Params.Add("log_level", logLevel)
 	}
 
-	if logFormat == "" {
+	if logFormat == "" || logFormat == logging.UnspecifiedFormat.String() {
 		r.Params.Add("log_format", "standard")
 	} else {
 		r.Params.Add("log_format", logFormat)
