@@ -69,6 +69,17 @@ func (dt *TargetClusterV2) DeleteTarget(targetID string) (*status.Response, erro
 	return res, nil
 }
 
+func (dt *TargetClusterV2) GetClusterHealth(targetClusterId string) (*platformV2.PlatformTargetClusterv1Status, error) {
+	client := dt.ApiClientV2.TargetClusterServiceAPI
+	ctx, err := GetContext()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	targetCluster, _, err := client.TargetClusterServiceGetTargetCluster(ctx, targetClusterId).Execute()
+	log.Info("Get list of Accounts.")
+	return targetCluster.Status, nil
+}
+
 // ListTargetClustersBelongsToTenant not available
 
 // ListTargetClustersBelongsToProject not available
