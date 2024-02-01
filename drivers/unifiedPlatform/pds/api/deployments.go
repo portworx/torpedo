@@ -9,12 +9,12 @@ import (
 
 // DeploymentV2 struct
 type DeploymentV2 struct {
-	ApiClientv2 *pdsv2.APIClient
+	ApiClientV2 *pdsv2.APIClient
 }
 
 // ListDeployments return deployments models for a given project.
 func (ds *DeploymentV2) ListDeployments() ([]pdsv2.V1Deployment, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -28,7 +28,7 @@ func (ds *DeploymentV2) ListDeployments() ([]pdsv2.V1Deployment, error) {
 
 // CreateDeployment return newly created deployment model.
 func (ds *DeploymentV2) CreateDeployment(namespaceID string) (*pdsv2.V1Deployment, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	context, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -47,7 +47,7 @@ func (ds *DeploymentV2) CreateDeployment(namespaceID string) (*pdsv2.V1Deploymen
 // GetDeployment return deployment model.
 
 func (ds *DeploymentV2) GetDeployment(deploymentID string) (*pdsv2.V1Deployment, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -61,7 +61,7 @@ func (ds *DeploymentV2) GetDeployment(deploymentID string) (*pdsv2.V1Deployment,
 
 // GetDeploymentStatus return deployment status.
 func (ds *DeploymentV2) GetDeploymentStatus(deploymentID string) (*pdsv2.Deploymentv1Status, *status.Response, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -75,7 +75,7 @@ func (ds *DeploymentV2) GetDeploymentStatus(deploymentID string) (*pdsv2.Deploym
 
 // GetDeploymentCredentials return deployment credentials.
 func (ds *DeploymentV2) GetDeploymentCredentials(deploymentID string) (*pdsv2.V1DeploymentCredentials, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -91,7 +91,7 @@ func (ds *DeploymentV2) GetDeploymentCredentials(deploymentID string) (*pdsv2.V1
 
 // UpdateDeployment func
 func (ds *DeploymentV2) UpdateDeployment() (*pdsv2.V1Deployment, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	context, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -107,7 +107,7 @@ func (ds *DeploymentV2) UpdateDeployment() (*pdsv2.V1Deployment, error) {
 
 // DeleteDeployment delete deployment and return status.
 func (ds *DeploymentV2) DeleteDeployment(deploymentID string) (*status.Response, error) {
-	dsClient := ds.ApiClientv2.DeploymentServiceAPI
+	dsClient := ds.ApiClientV2.DeploymentServiceAPI
 	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
