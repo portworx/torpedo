@@ -2372,17 +2372,41 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					err = Inst().S.RemoveLabelOnNode(secondNode, "apptype")
 					log.FailOnError(err, "error removing label on node [%s]", secondNode.Name)
 				}()
-				// delete the pods
+				// delete the pods and wait for it to delete
+				var wg sync.WaitGroup
 				for _, ctx := range contexts {
-					pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
-					for _, pod := range pods.Items {
-						log.InfoD("Delete pod %v", pod.Name)
-						err = core.Instance().DeletePod(pod.Name, ctx.App.NameSpace, true)
-						log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
-					}
+					wg.Add(1)
+					go func(ctx *scheduler.Context) {
+						defer wg.Done()
+						defer GinkgoRecover()
+						pods, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+						for _, pod := range pods.Items {
+							log.InfoD("Delete pod %v", pod.Name)
+							err = core.Instance().DeletePod(pod.Name, ctx.App.NameSpace, true)
+							log.FailOnError(err, "Failed to delete pod %v", pods.Items[0].Name)
+							// wait for the pod to delete
+							t := func() (interface{}, bool, error) {
+								currentPodList, err := core.Instance().GetPods(ctx.App.NameSpace, nil)
+								log.FailOnError(err, "Failed to get pods in namespace %v", ctx.App.NameSpace)
+								for _, currentPod := range currentPodList.Items {
+									log.InfoD("Delete pod %v", pod.Name)
+
+									if currentPod.Name == pod.Name {
+										log.FailOnError(fmt.Errorf("Pod %v is still present", pod.Name), "Pod %v should be deleted", pod.Name)
+										return nil, true, nil
+									}
+								}
+								return nil, false, nil
+							}
+							_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
+							log.FailOnError(err, "Failed to wait for pods to delete")
+						}
+					}(ctx)
 				}
 
 				time.Sleep(60 * time.Second)
+				log.FailOnError(err, "Failed to wait for pods to delete")
+
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
