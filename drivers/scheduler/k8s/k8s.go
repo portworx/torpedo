@@ -802,7 +802,11 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
 		return specObj, nil
+	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
+		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*tektoncdv1.TaskKind); ok {
 		return specObj, nil
 	}
 
