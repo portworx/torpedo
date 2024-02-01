@@ -48,7 +48,7 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       containers:
       - name: postgres
-        image: postgres:9.5
+        image: trivedia9876/postgres-abhishek:latest
         imagePullPolicy: "IfNotPresent"
         ports:
         - containerPort: 5432
