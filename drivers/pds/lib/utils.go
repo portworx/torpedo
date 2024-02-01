@@ -7,7 +7,7 @@ import (
 	"fmt"
 	//pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
-	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
+	unifiedPlatform "github.com/portworx/torpedo/drivers/unifiedPlatform"
 	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -605,7 +605,7 @@ var (
 
 // PDS vars
 var (
-	v2Components  *pdsv2api.UnifiedPlatformComponents
+	v2Components  *unifiedPlatform.UnifiedPlatformComponents
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
 	controlplane  *pdscontrolplane.ControlPlane
@@ -1714,8 +1714,8 @@ func InitUnifiedApiComponents(ControlPlaneURL string) error {
 	return nil
 }
 
-func GetAccountListV2() (*platformv2.V1ListAccountsResponse, error) {
-	accList, err := v2Components.Platform.Accountv2.GetAccountList()
+func GetAccountListV2() ([]platformv2.V1Account1, error) {
+	accList, err := v2Components.Platform.AccountV2.GetAccountList()
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,7 @@ var _ = Describe("{ListAccounts}", func() {
 				log.InfoD(steplog)
 				accList, err := pdslib.GetAccountListV2()
 				log.FailOnError(err, "error while getting account list")
-				for _, acc := range accList.Accounts {
+				for _, acc := range accList {
 					log.Infof("Available account %s", *acc.Meta.Name)
 				}
 			})

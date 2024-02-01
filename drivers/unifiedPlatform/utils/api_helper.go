@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	//platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -66,7 +65,7 @@ func GetContext() (context.Context, error) {
 		return nil, err
 	}
 
-	ctx := context.WithValue(context.Background(), pdsv2.ContextAPIKeys, map[string]pdsv2.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token}})
+	ctx := context.WithValue(context.Background(), "authapiKeys", map[string]pdsv2.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token}})
 
 	return ctx, nil
 
