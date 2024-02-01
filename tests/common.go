@@ -705,9 +705,18 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
-			vols, err := Inst().S.GetVolumes(ctx)
-			// Fixing issue where it is priniting nil
-			if err != nil {
+			var vols []*volume.Volume
+			var err error
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 
@@ -1019,8 +1028,16 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
+			var vols []*volume.Volume
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
 				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
@@ -10418,7 +10435,6 @@ func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
 
 	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
 }
-
 
 // GetProcessPID returns the PID of KVDB master node
 func GetProcessPID(memberNode node.Node, processName string) (string, error) {
