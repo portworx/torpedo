@@ -87,7 +87,7 @@ func (ds *DeploymentV2) GetDeploymentCredentials(deploymentID string) (*pdsv2.V1
 	return dsModel, err
 }
 
-// UpdateDeploymentWithTls updates the deployment with TLS
+// UpdateDeploymentWithTls updates the deployment with TLS enabled/disabled
 
 // UpdateDeployment func
 func (ds *DeploymentV2) UpdateDeployment() (*pdsv2.V1Deployment, error) {
