@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package api
 
 import (
@@ -66,7 +63,7 @@ func (a *Auth) MFAValidate(ctx context.Context, mfaSecret *Secret, payload map[s
 		return nil, fmt.Errorf("secret does not contain MFARequirements")
 	}
 
-	s, err := a.c.Sys().MFAValidateWithContext(ctx, mfaSecret.Auth.MFARequirement.MFARequestID, payload)
+	s, err := a.c.Sys().MFAValidateWithContext(ctx, mfaSecret.Auth.MFARequirement.GetMFARequestID(), payload)
 	if err != nil {
 		return nil, err
 	}

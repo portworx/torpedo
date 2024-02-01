@@ -1,13 +1,9 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package api
 
 import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 )
 
@@ -20,7 +16,6 @@ var LastOutputPolicyError *OutputPolicyError
 type OutputPolicyError struct {
 	method         string
 	path           string
-	params         url.Values
 	finalHCLString string
 }
 
@@ -49,22 +44,8 @@ func (d *OutputPolicyError) HCLString() (string, error) {
 
 // Builds a sample policy document from the request
 func (d *OutputPolicyError) buildSamplePolicy() (string, error) {
-	operation := d.method
-	// List is often defined as a URL param instead of as an http.Method
-	// this will check for the header and properly switch off of the intended functionality
-	if d.params.Has("list") {
-		isList, err := strconv.ParseBool(d.params.Get("list"))
-		if err != nil {
-			return "", fmt.Errorf("the value of the list url param is not a bool: %v", err)
-		}
-
-		if isList {
-			operation = "LIST"
-		}
-	}
-
 	var capabilities []string
-	switch operation {
+	switch d.method {
 	case http.MethodGet, "":
 		capabilities = append(capabilities, "read")
 	case http.MethodPost, http.MethodPut:
@@ -78,15 +59,17 @@ func (d *OutputPolicyError) buildSamplePolicy() (string, error) {
 		capabilities = append(capabilities, "list")
 	}
 
+	// sanitize, then trim the Vault address and v1 from the front of the path
+	path, err := url.PathUnescape(d.path)
+	if err != nil {
+		return "", fmt.Errorf("failed to unescape request URL characters: %v", err)
+	}
+
 	// determine whether to add sudo capability
-	if IsSudoPath(d.path) {
+	if IsSudoPath(path) {
 		capabilities = append(capabilities, "sudo")
 	}
 
-	return formatOutputPolicy(d.path, capabilities), nil
-}
-
-func formatOutputPolicy(path string, capabilities []string) string {
 	// the OpenAPI response has a / in front of each path,
 	// but policies need the path without that leading slash
 	path = strings.TrimLeft(path, "/")
@@ -95,5 +78,5 @@ func formatOutputPolicy(path string, capabilities []string) string {
 	return fmt.Sprintf(
 		`path "%s" {
   capabilities = ["%s"]
-}`, path, capStr)
+}`, path, capStr), nil
 }
