@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	//pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
+	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -1705,15 +1706,15 @@ func InitPdsComponents(ControlPlaneURL string) error {
 	return nil
 }
 
-func InitPdsV2Components(ControlPlaneURL string) error {
-	v2Components, err = pdsdriver.InitPdsv2ApiComponents(ControlPlaneURL)
+func InitUnifiedApiComponents(ControlPlaneURL string) error {
+	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(ControlPlaneURL)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func GetAccountListV2() (*pdsv2.V1ListAccountsResponse, error) {
+func GetAccountListV2() (*platformv2.V1ListAccountsResponse, error) {
 	accList, err := v2Components.Platform.Accountv2.GetAccountList()
 	if err != nil {
 		return nil, err

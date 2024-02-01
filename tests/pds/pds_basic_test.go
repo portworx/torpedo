@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	dataservices "github.com/portworx/torpedo/drivers/pds/dataservice"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"os"
 	"strings"
@@ -44,22 +46,22 @@ var _ = BeforeSuite(func() {
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
 		//Initialize pds components in pdslib
-		//err = pdslib.InitPdsComponents(params.InfraToTest.ControlPlaneURL)
-		//log.FailOnError(err, "Error while initializing pds components in pdslib")
-
-		//Initialize pds v2 components in pdslib
-		err = pdslib.InitPdsV2Components(params.InfraToTest.ControlPlaneURL)
+		err = pdslib.InitPdsComponents(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing pds components in pdslib")
 
-		//components, controlPlane, err = pdsdriver.InitPdsApiComponents(params.InfraToTest.ControlPlaneURL)
-		//log.FailOnError(err, "Error while initializing pds components in pds test")
-		//
-		//dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)
-		//log.FailOnError(err, "Error while initializing dataservice package")
-		//
-		//accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = controlPlane.SetupPDSTest(
-		//	infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
-		//log.FailOnError(err, "Failed on SetupPDSTest method")
+		//Initialize pds v2 components in pdslib
+		err = pdslib.InitUnifiedApiComponents(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Error while initializing pds components in pdslib")
+
+		components, controlPlane, err = pdsdriver.InitPdsApiComponents(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Error while initializing pds components in pds test")
+
+		dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)
+		log.FailOnError(err, "Error while initializing dataservice package")
+		
+		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = controlPlane.SetupPDSTest(
+			infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
+		log.FailOnError(err, "Failed on SetupPDSTest method")
 
 	})
 	if params.CleanUpParams.SkipTargetClusterCheck {

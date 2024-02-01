@@ -3,13 +3,14 @@ package pds
 import (
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v2alpha1"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
+	unifiedPlatform "github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
+	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -72,18 +73,30 @@ func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
 
 }
 
-func InitPdsv2ApiComponents(ControlPlaneURL string) (*pdsv2api.UnifiedPlatformComponents, error) {
+func InitUnifiedPlatformApiComponents(ControlPlaneURL string) (*unifiedPlatform.UnifiedPlatformComponents, error) {
 	log.InfoD("Initializing Api components")
-	apiConf := pdsv2.NewConfiguration()
+
+	// generate pds api client
+	pdsApiConf := pdsv2.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
 	if err != nil {
 		return nil, err
 	}
-	apiConf.Host = endpointURL.Host
-	apiConf.Scheme = endpointURL.Scheme
+	pdsApiConf.Host = endpointURL.Host
+	pdsApiConf.Scheme = endpointURL.Scheme
+	pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
 
-	apiClient := pdsv2.NewAPIClient(apiConf)
-	components := pdsv2api.NewUnifiedPlatformComponents(apiClient)
+	//generate platform api client
+	platformApiConf := platformv2.NewConfiguration()
+	endpointURL, err = url.Parse(ControlPlaneURL)
+	if err != nil {
+		return nil, err
+	}
+	platformApiConf.Host = endpointURL.Host
+	platformApiConf.Scheme = endpointURL.Scheme
+	platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
+
+	components := unifiedPlatform.NewUnifiedPlatformComponents(platformV2apiClient, pdsV2apiClient)
 
 	return components, nil
 

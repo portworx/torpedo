@@ -2871,8 +2871,8 @@ github.com/portworx/kvdb v0.0.0-20200723230726-2734b7f40194/go.mod h1:Q8YyrNDvPp
 github.com/portworx/kvdb v0.0.0-20200929023115-b312c7519467/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b h1:nP+m9tYQv2cWbN9wAwjlhJU9FZRs7GaYszhLJBLAg/I=
 github.com/portworx/kvdb v0.0.0-20230326003017-21a38cf82d4b/go.mod h1:Q8YyrNDvPp3DVF96BDcQuaC7fAYUCuUX+l58S7OnD2M=
-github.com/portworx/pds-api-go-client v0.0.0-20240124080146-48e6b021cd0f h1:5ZFbKTdiNw6w9Epjc//8jX8tXA5cZTrvOxRelXxb5jk=
-github.com/portworx/pds-api-go-client v0.0.0-20240124080146-48e6b021cd0f/go.mod h1:yn0abd9g4Q3fBpY720Eb+hwRV1OnTjROUaSb9mOlzBk=
+github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e h1:bl1yElkDkH6Ej3aqzxxpFKx6DuPiOLG4m0jwBY7ee4o=
+github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e/go.mod h1:ExYTZMFNXhu9hTaTAmTF8HIL/gbuLfqprAhoZPbOa/Y=
 github.com/portworx/px-backup-api v1.0.1-0.20200915150042-274508e876ef/go.mod h1:puy7YVXeb6glot1vVCIePIiRLSwB//+rFtN2ZjvXeEw=
 github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7 h1:6+iLkINw2+XQdqsF6PBXwPo7V86GL3evThbqlXkeaIA=
 github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7/go.mod h1:3dY8z5wG95qb6r5Q2pGaeIkvH4bp3Z2y3i52YcfZBuQ=
@@ -3000,6 +3000,8 @@ github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40T
 github.com/prometheus/tsdb v0.8.0/go.mod h1:fSI0j+IUQrDd7+ZtR9WKIGtoYAYAJUKcKhYLG25tN4g=
 github.com/pseudomuto/protoc-gen-doc v1.3.2/go.mod h1:y5+P6n3iGrbKG+9O04V5ld71in3v/bX88wUwgt+U8EA=
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
+github.com/pure-px/platform-api-go-client v0.0.0-20240131093336-8ef532ef36bd h1:1DA35DmuE9rda6ElNkMYLqGOKE5pPtzbAkmP9haTPOc=
+github.com/pure-px/platform-api-go-client v0.0.0-20240131093336-8ef532ef36bd/go.mod h1:1JYlDoZQvC6Q2T9LdXVWHCzBGgR9frA9JKTEz3aSQcQ=
 github.com/quasilyte/go-ruleguard v0.3.1-0.20210203134552-1b5a410e1cc8/go.mod h1:KsAh3x0e7Fkpgs+Q9pNLS5XpFSvYCEVl5gP9Pp1xp30=
 github.com/quasilyte/go-ruleguard v0.3.18/go.mod h1:lOIzcYlgxrQ2sGJ735EHXmf/e9MJ516j16K/Ifcttvs=
 github.com/quasilyte/go-ruleguard/dsl v0.3.0/go.mod h1:KeCP03KrjuSO0H1kTuZQCWlQPulDV6YMIXmpQss17rU=
