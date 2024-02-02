@@ -2292,6 +2292,9 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADAVolMigrateValidation", "Attach FADA PVC on Node 1, confirm proper attachment. Stop PX on Node 1, ensure volume persistence in multipath -ll. Move deployment to Node 2, validate successful pod startup. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.", nil, 0)
 	})
+	//get device path of the volume
+	devicePaths := make([]string, 0)
+
 	stepLog = "Schedule apps, migrate apps from node 1 to node 2 and check if new multipath has been updated and old multipath has been erased"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
@@ -2328,12 +2331,8 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				}
 				ValidateApplications(contexts)
 			})
-			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node and check if the volume is still attached in multipath")
+			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node")
 			Step(stepLog, func() {
-
-				//get device path of the volume
-				devicePaths := make([]string, 0)
-
 				//get the volume name and inspect volume to get device path
 				for _, ctx := range contexts {
 					volumes, err := Inst().S.GetVolumes(ctx)
@@ -2352,8 +2351,9 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				}
 
 				StopVolDriverAndWait([]node.Node{selectedNode})
-
-				// cordon the node where the app is scheduled and delete the apps
+			})
+			stepLog = "cordon the node where the app is scheduled and delete the apps"
+			Step(stepLog, func() {
 				defer func() {
 					err = core.Instance().UnCordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
 					log.FailOnError(err, "Failed to uncordon node %v", selectedNode.Name)
@@ -2403,19 +2403,18 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 						}
 					}(ctx)
 				}
+			})
 
-				time.Sleep(60 * time.Second)
-				log.FailOnError(err, "Failed to wait for pods to delete")
-
-				//run the multipath -ll command on the node where the volume is attached
+			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
+			Step(stepLog, func() {
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
 				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
 				log.InfoD("Output of multipath on provisioned node -ll command: %v", output)
-				////check if the device path is present in multipath
-				//if !strings.Contains(output, "failed faulty running") {
-				//	log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
-				//}
+				//check if the device path is present in multipath
+				if !strings.Contains(output, "failed faulty running") {
+					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
+				}
 
 				stepLog = "Check if pod is scheduled on other node and validate if the volume is attached on the new node"
 				Step(stepLog, func() {
@@ -2429,30 +2428,30 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 						}
 					}
 				})
-				stepLog = "Start portworx on the node where the volume was attached"
-				Step(stepLog, func() {
-					StartVolDriverAndWait([]node.Node{selectedNode})
-				})
+			})
+			stepLog = "Start portworx on the node where the volume was attached"
+			Step(stepLog, func() {
+				StartVolDriverAndWait([]node.Node{selectedNode})
+			})
 
-				stepLog = "Check if the old multipath device is deleted and new multipath device is created"
-				Step(stepLog, func() {
-					//run the multipath -ll command on the node where the volume is attached
-					cmd := fmt.Sprintf("multipath -ll")
-					output, err := runCmd(cmd, selectedNode)
-					log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
-					log.InfoD("Output of multipath -ll command: %v", output)
-					//check if the device path is present in multipath
-					for _, devicePath := range devicePaths {
-						if strings.Contains(output, devicePath) {
-							log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
-						}
+			stepLog = "Check if the old multipath device entry is deleted from the node where the volume was attached"
+			Step(stepLog, func() {
+				//run the multipath -ll command on the node where the volume is attached
+				cmd := fmt.Sprintf("multipath -ll")
+				output, err := runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
+				log.InfoD("Output of multipath -ll command: %v", output)
+				//check if the device path is present in multipath
+				for _, devicePath := range devicePaths {
+					if strings.Contains(output, devicePath) {
+						log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
 					}
-					log.InfoD("Successfully validated that the old multipath device is deleted")
-				})
-				stepLog = "Destroy apps"
-				Step(stepLog, func() {
-					DestroyApps(contexts, nil)
-				})
+				}
+				log.InfoD("Successfully validated that the old multipath device is deleted")
+			})
+			stepLog = "Destroy apps"
+			Step(stepLog, func() {
+				DestroyApps(contexts, nil)
 			})
 
 		})
