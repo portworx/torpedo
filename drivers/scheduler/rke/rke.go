@@ -205,7 +205,7 @@ func (r *Rancher) CreateUserForRancherProject(projectName string, userName strin
 	}
 	newUser, err := r.client.User.Create(userRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to create user: %w", err)
+		return "", fmt.Errorf("failed to create the user %s: %w", userName, err)
 	}
 	// ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
 	// the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
