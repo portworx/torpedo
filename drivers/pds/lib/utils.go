@@ -1714,6 +1714,14 @@ func InitUnifiedApiComponents(ControlPlaneURL string) error {
 	return nil
 }
 
+func CreateAccountV2(name, displayName, userMail string) (*platformv2.V1Account1, error) {
+	acc, err := v2Components.Platform.AccountV2.CreateAccount(name, displayName, userMail)
+	if err != nil {
+		return nil, err
+	}
+	return acc, nil
+}
+
 func GetAccountListV2() ([]platformv2.V1Account1, error) {
 	accList, err := v2Components.Platform.AccountV2.GetAccountList()
 	if err != nil {

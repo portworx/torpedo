@@ -79,6 +79,7 @@ func InitUnifiedPlatformApiComponents(ControlPlaneURL string) (*unifiedPlatform.
 	// generate pds api client
 	pdsApiConf := pdsv2.NewConfiguration()
 	endpointURL, err := url.Parse(ControlPlaneURL)
+	log.Infof("controlPlane url is [%s]", endpointURL)
 	if err != nil {
 		return nil, err
 	}

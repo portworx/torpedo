@@ -33,7 +33,7 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		InitInstance()
+		//InitInstance()
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
@@ -58,7 +58,7 @@ var _ = BeforeSuite(func() {
 
 		dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing dataservice package")
-		
+
 		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = controlPlane.SetupPDSTest(
 			infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.FailOnError(err, "Failed on SetupPDSTest method")
