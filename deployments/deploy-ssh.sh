@@ -281,6 +281,25 @@ if [ $timeout -gt 600 ]; then
   describe_pod_then_exit
 fi
 
+PRE_TORPEDO_SCRIPT_VOLUME=""
+PRE_TORPEDO_SCRIPT_VOLUME_MOUNT=""
+if [ -f "${PRE_TORPEDO_SCRIPT_PATH}" ]; then
+    PRE_TORPEDO_SCRIPT_CM_NAME="pre-torpedo-script"
+    kubectl create configmap ${PRE_TORPEDO_SCRIPT_CM_NAME} --from-file="script=${PRE_TORPEDO_SCRIPT_PATH}" -o yaml --dry-run=client | kubectl apply -f -
+    PRE_TORPEDO_SCRIPT_VOLUME="{\"name\":\"${PRE_TORPEDO_SCRIPT_CM_NAME}\",\"configMap\":{\"name\":\"${PRE_TORPEDO_SCRIPT_CM_NAME}\",\"items\":[{\"key\":\"script\",\"path\":\"script\"}]}}"
+    PRE_TORPEDO_SCRIPT_VOLUME_MOUNT="{\"name\":\"${PRE_TORPEDO_SCRIPT_CM_NAME}\",\"mountPath\":\"/tmp/${PRE_TORPEDO_SCRIPT_CM_NAME}\"}"
+fi
+
+POST_TORPEDO_SCRIPT_VOLUME=""
+POST_TORPEDO_SCRIPT_VOLUME_MOUNT=""
+
+if [ -f "${POST_TORPEDO_SCRIPT_PATH}" ]; then
+    POST_TORPEDO_SCRIPT_CM_NAME="post-torpedo-script"
+    kubectl create configmap ${POST_TORPEDO_SCRIPT_CM_NAME} --from-file="script=${POST_TORPEDO_SCRIPT_PATH}" -o yaml --dry-run=client | kubectl apply -f -
+    POST_TORPEDO_SCRIPT_VOLUME="{\"name\":\"${POST_TORPEDO_SCRIPT_CM_NAME}\",\"configMap\":{\"name\":\"${POST_TORPEDO_SCRIPT_CM_NAME}\",\"items\":[{\"key\":\"script\",\"path\":\"script\"}]}}"
+    POST_TORPEDO_SCRIPT_VOLUME_MOUNT="{\"name\":\"${POST_TORPEDO_SCRIPT_CM_NAME}\",\"mountPath\":\"/tmp/${POST_TORPEDO_SCRIPT_CM_NAME}\"}"
+fi
+
 TORPEDO_CUSTOM_PARAM_VOLUME=""
 TORPEDO_CUSTOM_PARAM_MOUNT=""
 CUSTOM_APP_CONFIG_PATH=""
@@ -333,6 +352,38 @@ if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
 fi
 
 VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
+
+if [ -n "${PRE_TORPEDO_SCRIPT_VOLUME}" ]; then
+    if [ -n "${VOLUMES}" ]; then
+        VOLUMES="${VOLUMES},${PRE_TORPEDO_SCRIPT_VOLUME}"
+    else
+        VOLUMES="${PRE_TORPEDO_SCRIPT_VOLUME}"
+    fi
+fi
+
+if [ -n "${PRE_TORPEDO_SCRIPT_VOLUME_MOUNT}" ]; then
+    if [ -n "${VOLUME_MOUNTS}" ]; then
+        VOLUME_MOUNTS="${VOLUME_MOUNTS},${PRE_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    else
+        VOLUME_MOUNTS="${PRE_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    fi
+fi
+
+if [ -n "${POST_TORPEDO_SCRIPT_VOLUME}" ]; then
+    if [ -n "${VOLUMES}" ]; then
+        VOLUMES="${VOLUMES},${POST_TORPEDO_SCRIPT_VOLUME}"
+    else
+        VOLUMES="${POST_TORPEDO_SCRIPT_VOLUME}"
+    fi
+fi
+
+if [ -n "${POST_TORPEDO_SCRIPT_VOLUME_MOUNT}" ]; then
+    if [ -n "${VOLUME_MOUNTS}" ]; then
+        VOLUME_MOUNTS="${VOLUME_MOUNTS},${POST_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    else
+        VOLUME_MOUNTS="${POST_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    fi
+fi
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
@@ -518,8 +569,8 @@ spec:
       else
           true;
       fi && \
-      if [ -n "${ENCODED_PRE_TORPEDO_SCRIPT}" ]; then
-          echo "${ENCODED_PRE_TORPEDO_SCRIPT}" | base64 -d | sh;
+      if [ -n "${PRE_TORPEDO_SCRIPT_CM_NAME}" ]; then
+          bash /tmp/${PRE_TORPEDO_SCRIPT_CM_NAME}/script
       else
           true;
       fi && \
@@ -599,8 +650,8 @@ spec:
         --torpedo-job-type="${TORPEDO_JOB_TYPE}" \
         --torpedo-skip-system-checks="${TORPEDO_SKIP_SYSTEM_CHECKS}" \
         "${APP_DESTROY_TIMEOUT_ARG}" && \
-        if [ -n "${ENCODED_POST_TORPEDO_SCRIPT}" ]; then
-            echo "${ENCODED_POST_TORPEDO_SCRIPT}" | base64 -d | sh;
+        if [ -n "${POST_TORPEDO_SCRIPT_CM_NAME}" ]; then
+            bash /tmp/${POST_TORPEDO_SCRIPT_CM_NAME}/script
         else
             true;
         fi
