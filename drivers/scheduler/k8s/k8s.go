@@ -66,7 +66,7 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsapi "k8s.io/api/apps/v1"
@@ -801,8 +801,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
 		return specObj, nil
