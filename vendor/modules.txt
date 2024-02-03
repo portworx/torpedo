@@ -176,10 +176,6 @@ github.com/andygrunwald/go-jira
 # github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df
 ## explicit; go 1.18
 github.com/antlr/antlr4/runtime/Go/antlr/v4
-# github.com/armon/go-metrics v0.4.0
-## explicit; go 1.12
-# github.com/armon/go-radix v1.0.0
-## explicit
 # github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 ## explicit; go 1.13
 github.com/asaskevich/govalidator
@@ -718,23 +714,15 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-cleanhttp v0.5.2
 ## explicit; go 1.13
 github.com/hashicorp/go-cleanhttp
-# github.com/hashicorp/go-hclog v1.3.1
-## explicit; go 1.13
-# github.com/hashicorp/go-immutable-radix v1.3.1
-## explicit
 # github.com/hashicorp/go-multierror v1.1.1
 ## explicit; go 1.13
 github.com/hashicorp/go-multierror
-# github.com/hashicorp/go-plugin v1.4.5
-## explicit; go 1.17
 # github.com/hashicorp/go-retryablehttp v0.7.2
 ## explicit; go 1.13
 github.com/hashicorp/go-retryablehttp
 # github.com/hashicorp/go-rootcerts v1.0.2
 ## explicit; go 1.12
 github.com/hashicorp/go-rootcerts
-# github.com/hashicorp/go-secure-stdlib/mlock v0.1.2
-## explicit; go 1.16
 # github.com/hashicorp/go-secure-stdlib/parseutil v0.1.7
 ## explicit; go 1.16
 github.com/hashicorp/go-secure-stdlib/parseutil
@@ -744,13 +732,9 @@ github.com/hashicorp/go-secure-stdlib/strutil
 # github.com/hashicorp/go-sockaddr v1.0.2
 ## explicit
 github.com/hashicorp/go-sockaddr
-# github.com/hashicorp/go-uuid v1.0.3
-## explicit
 # github.com/hashicorp/go-version v1.6.0
 ## explicit
 github.com/hashicorp/go-version
-# github.com/hashicorp/golang-lru v1.0.2
-## explicit; go 1.12
 # github.com/hashicorp/hcl v1.0.1-vault-5
 ## explicit; go 1.15
 github.com/hashicorp/hcl
@@ -765,10 +749,6 @@ github.com/hashicorp/hcl/json/token
 # github.com/hashicorp/vault/api v1.10.0
 ## explicit; go 1.19
 github.com/hashicorp/vault/api
-# github.com/hashicorp/vault/sdk v0.6.1-0.20221102145943-1e9b0a1225c3
-## explicit; go 1.19
-# github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87
-## explicit; go 1.15
 # github.com/heptio/ark v1.0.0 => github.com/heptio/ark v1.0.0
 ## explicit
 github.com/heptio/ark/pkg/discovery
@@ -1043,8 +1023,6 @@ github.com/mitchellh/copystructure
 # github.com/mitchellh/go-homedir v1.1.0
 ## explicit
 github.com/mitchellh/go-homedir
-# github.com/mitchellh/go-testing-interface v1.14.1
-## explicit; go 1.14
 # github.com/mitchellh/go-wordwrap v1.0.0
 ## explicit
 github.com/mitchellh/go-wordwrap
@@ -1102,8 +1080,6 @@ github.com/nxadm/tail/ratelimiter
 github.com/nxadm/tail/util
 github.com/nxadm/tail/watch
 github.com/nxadm/tail/winfile
-# github.com/oklog/run v1.1.0
-## explicit; go 1.13
 # github.com/onsi/ginkgo v1.16.5
 ## explicit; go 1.16
 github.com/onsi/ginkgo
@@ -1190,8 +1166,6 @@ github.com/pelletier/go-toml/v2/unstable
 # github.com/peterbourgon/diskv v2.0.1+incompatible
 ## explicit
 github.com/peterbourgon/diskv
-# github.com/pierrec/lz4 v2.6.1+incompatible
-## explicit
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
@@ -1212,7 +1186,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20231212125252-c5df9b72ebe8
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240207123006-dbb5b83baca9
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1235,6 +1209,7 @@ github.com/portworx/sched-ops/k8s/rbac
 github.com/portworx/sched-ops/k8s/storage
 github.com/portworx/sched-ops/k8s/stork
 github.com/portworx/sched-ops/k8s/talisman
+github.com/portworx/sched-ops/k8s/tektoncd
 github.com/portworx/sched-ops/task
 # github.com/portworx/talisman v1.1.3
 ## explicit; go 1.13
@@ -1344,12 +1319,18 @@ github.com/tektoncd/pipeline/pkg/apis/pipeline/errors
 github.com/tektoncd/pipeline/pkg/apis/pipeline/internal/checksum
 github.com/tektoncd/pipeline/pkg/apis/pipeline/pod
 github.com/tektoncd/pipeline/pkg/apis/pipeline/v1
+github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1
 github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1
 github.com/tektoncd/pipeline/pkg/apis/resource/v1alpha1
 github.com/tektoncd/pipeline/pkg/apis/run/v1alpha1
 github.com/tektoncd/pipeline/pkg/apis/run/v1beta1
 github.com/tektoncd/pipeline/pkg/apis/validate
 github.com/tektoncd/pipeline/pkg/apis/version
+github.com/tektoncd/pipeline/pkg/client/clientset/versioned
+github.com/tektoncd/pipeline/pkg/client/clientset/versioned/scheme
+github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1
+github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1alpha1
+github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1beta1
 github.com/tektoncd/pipeline/pkg/internal/resultref
 github.com/tektoncd/pipeline/pkg/list
 github.com/tektoncd/pipeline/pkg/reconciler/pipeline/dag

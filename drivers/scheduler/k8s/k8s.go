@@ -55,6 +55,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
+	tektoncd "github.com/portworx/sched-ops/k8s/tektoncd"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -233,6 +234,7 @@ var (
 	k8sApiExtensions         = apiextensions.Instance()
 	k8sOperator              = operator.Instance()
 	k8sKubevirt              = kubevirt.Instance()
+	k8stektoncd              = tektoncd.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -393,6 +395,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sApiExtensions.SetConfig(config)
 	k8sOperator.SetConfig(config)
 	k8sKubevirt.SetConfig(config)
+	k8stektoncd.SetConfig(config)
 
 	return nil
 }
@@ -800,8 +803,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*tektoncdv1.TaskKind); ok {
 		return specObj, nil
 	}
 
@@ -1773,6 +1774,18 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		return obj, nil
 	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
 		obj, err := k8sKubevirt.GetVirtualMachine(specObj.Name, specObj.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		obj, err := k8stektoncd.GetPipeline(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		obj, err := k8stektoncd.GetTask(specObj.Namespace, specObj.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -4302,7 +4315,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					return nil, err
 				}
 			}
-		} else if pipeline, ok := specObj.(*tektoncdv1.Pipeline); ok {
+			// Kshithij: Check this code out and see if we need to change
+		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
 			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
@@ -4311,7 +4325,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				// check if the pvc has our VM as the owner
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
-					if ownerRef.Kind == vm.Kind && ownerRef.Name == pipeline.Name {
+					if ownerRef.Kind == pipeline.Kind && ownerRef.Name == pipeline.Name {
 						want = true
 					}
 				}
@@ -5015,6 +5029,58 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%+v\n", virtualMachine))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VirtualMachine", obj.Name)))
 			buf.WriteString(insertLineBreak("END VirtualMachine"))
+		} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("Pipeline: [%s] %s", obj.Namespace, obj.Name)))
+			var pipeline *tektoncdv1.Pipeline
+			if pipeline, err = k8stektoncd.GetPipeline(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get Pipeline: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", pipeline))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Pipeline", obj.Name)))
+			buf.WriteString(insertLineBreak("END Pipeline"))
+		} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("Task: [%s] %s", obj.Namespace, obj.Name)))
+			var task *tektoncdv1.Task
+			if task, err = k8stektoncd.GetTask(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get Task: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", task))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Task", obj.Name)))
+			buf.WriteString(insertLineBreak("END Task"))
+		} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("PipelineRun: [%s] %s", obj.Namespace, obj.Name)))
+			var pipelineRun *tektoncdv1.PipelineRun
+			if pipelineRun, err = k8stektoncd.GetPipelineRun(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get PipelineRun: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", pipelineRun))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "PipelineRun", obj.Name)))
+			buf.WriteString(insertLineBreak("END PipelineRun"))
+		} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("TaskRun: [%s] %s", obj.Namespace, obj.Name)))
+			var taskRun *tektoncdv1.TaskRun
+			if taskRun, err = k8stektoncd.GetTaskRun(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get TaskRun: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", taskRun))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "TaskRun", obj.Name)))
+			buf.WriteString(insertLineBreak("END TaskRun"))
 		} else {
 			log.Warnf("Object type unknown/not supported: %v", obj)
 		}
