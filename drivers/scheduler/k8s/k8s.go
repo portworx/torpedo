@@ -66,7 +66,7 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsapi "k8s.io/api/apps/v1"
@@ -4315,8 +4315,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					return nil, err
 				}
 			}
-			// Kshithij: Check this code out and see if we need to change
-		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+		} else if pipeline, ok := specObj.(*tektoncdv1.Pipeline); ok {
 			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
@@ -4326,6 +4325,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
 					if ownerRef.Kind == pipeline.Kind && ownerRef.Name == pipeline.Name {
+
 						want = true
 					}
 				}
