@@ -65,7 +65,7 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsapi "k8s.io/api/apps/v1"
@@ -798,8 +798,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
-		return specObj, nil
-	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
 		return specObj, nil
@@ -4293,6 +4291,27 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
 					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
+						want = true
+					}
+				}
+				if !want {
+					continue
+				}
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if pipeline, ok := specObj.(*tektoncdv1.Pipeline); ok {
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
+			}
+			for _, pvc := range pvcList.Items {
+				// check if the pvc has our VM as the owner
+				want := false
+				for _, ownerRef := range pvc.OwnerReferences {
+					if ownerRef.Kind == vm.Kind && ownerRef.Name == pipeline.Name {
 						want = true
 					}
 				}
