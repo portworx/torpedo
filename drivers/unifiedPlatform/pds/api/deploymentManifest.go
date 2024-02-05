@@ -7,4 +7,5 @@ import (
 // DeploymentManifestV2 struct
 type DeploymentManifestV2 struct {
 	ApiClientV2 *pdsv2.APIClient
+	AccountID   string
 }

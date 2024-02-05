@@ -7,4 +7,5 @@ import (
 // DataServiceVersionsV2 struct
 type DataServiceVersionsV2 struct {
 	ApiClientV2 *pdsv2.APIClient
+	AccountID   string
 }

@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	platformV2 "github.com/pure-px/platform-api-go-client/v1alpha1"
@@ -11,12 +12,24 @@ import (
 // NamespaceV2 struct
 type NamespaceV2 struct {
 	ApiClientV2 *platformV2.APIClient
+	AccountID   string
+}
+
+// GetClient updates the header with bearer token and returns the new client
+func (ns *NamespaceV2) GetClient() (context.Context, *platformV2.NamespaceServiceAPIService, error) {
+	ctx, token, err := GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	ns.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ns.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = ns.AccountID
+	client := ns.ApiClientV2.NamespaceServiceAPI
+	return ctx, client, nil
 }
 
 // ListNamespaces return namespaces models in a target cluster.
 func (ns *NamespaceV2) ListNamespaces(targetID string) ([]platformV2.V1Namespace, error) {
-	nsClient := ns.ApiClientV2.NamespaceServiceAPI
-	ctx, err := GetContext()
+	ctx, nsClient, err := ns.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
