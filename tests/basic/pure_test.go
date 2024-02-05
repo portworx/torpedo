@@ -2305,6 +2305,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			applist := Inst().AppList
 			storageNodes := node.GetStorageNodes()
 			selectedNode := storageNodes[0]
+			secondNode := storageNodes[1]
 			log.Infof("Length of storage nodes: %v", len(storageNodes))
 			log.InfoD("Selected Node: %v", selectedNode.Name)
 			defer func() {
@@ -2353,26 +2354,24 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 				StopVolDriverAndWait([]node.Node{selectedNode})
 			})
+			defer func() {
+				err = core.Instance().UnCordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to uncordon node %v", selectedNode.Name)
+				log.Infof("uncordoned node %v", selectedNode.Name)
+
+				err = Inst().S.RemoveLabelOnNode(secondNode, "apptype")
+				log.FailOnError(err, "error removing label on node [%s]", secondNode.Name)
+			}()
 			stepLog = "cordon the node where the app is scheduled and delete the apps"
 			Step(stepLog, func() {
-				defer func() {
-					err = core.Instance().UnCordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
-					log.FailOnError(err, "Failed to uncordon node %v", selectedNode.Name)
-					log.Infof("uncordoned node %v", selectedNode.Name)
-				}()
+
 				err = core.Instance().CordonNode(selectedNode.Name, defaultCommandTimeout, defaultCommandRetry)
 				log.FailOnError(err, "Failed to cordon node %v", selectedNode.Name)
 				log.InfoD("cordoned node %v", selectedNode.Name)
 
-				//now label one more node so that it can be used for scheduling
-				secondNode := storageNodes[1]
 				err = Inst().S.AddLabelOnNode(secondNode, "apptype", k8s.PureDAVolumeLabelValueFA)
 				log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", secondNode.Name))
 
-				defer func() {
-					err = Inst().S.RemoveLabelOnNode(secondNode, "apptype")
-					log.FailOnError(err, "error removing label on node [%s]", secondNode.Name)
-				}()
 				// delete the pods and wait for it to delete
 				var wg sync.WaitGroup
 				for _, ctx := range contexts {
