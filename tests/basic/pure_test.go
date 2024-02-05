@@ -2331,6 +2331,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 				}
 				ValidateApplications(contexts)
 			})
+
 			stepLog = fmt.Sprintf("Check where the apps is scheduled and Stop Px on that node")
 			Step(stepLog, func() {
 				//get the volume name and inspect volume to get device path
