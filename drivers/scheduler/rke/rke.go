@@ -185,7 +185,7 @@ func (r *Rancher) GetProjectID(projectName string) (string, error) {
 }
 
 // CreateUserForRancherProject Creates a rancher user and adds the user to the project
-func (r *Rancher) CreateUserForRancherProject(projectName string, userName string, userPassword string) (string, error) {
+func (r *Rancher) CreateUserForRancherProject(projectName string, username string, password string) (string, error) {
 	userAnnotation := make(map[string]string)
 	userLabel := make(map[string]string)
 
@@ -197,15 +197,15 @@ func (r *Rancher) CreateUserForRancherProject(projectName string, userName strin
 	userLabel["field.cattle.io/projectId"] = strings.Split(projectId, ":")[1]
 
 	userRequest := &rancherClient.User{
-		Username:    userName,
-		Password:    userPassword,
-		Name:        fmt.Sprintf("Test " + userName),
+		Username:    username,
+		Password:    password,
+		Name:        fmt.Sprintf("Test " + username),
 		Annotations: userAnnotation,
 		Labels:      userLabel,
 	}
 	newUser, err := r.client.User.Create(userRequest)
 	if err != nil {
-		return "", fmt.Errorf("failed to create the user %s: %w", userName, err)
+		return "", fmt.Errorf("failed to create the user %s: %w", username, err)
 	}
 	// ProjectRoleTemplateBinding is an RBAC for Rancher, which can be assigned to users to give them necessary permissions in a project
 	// the role of the user can either be "project-member" or "project-owner", we are restricting the role to a member
@@ -218,7 +218,7 @@ func (r *Rancher) CreateUserForRancherProject(projectName string, userName strin
 	if err != nil {
 		return "", err
 	}
-	log.InfoD("User [%s] is successfully created with user id [%s] and was added to the project [%s]", userName, newUser.ID, projectName)
+	log.InfoD("User [%s] is successfully created with user id [%s] and was added to the project [%s]", username, newUser.ID, projectName)
 	return newUser.ID, nil
 }
 
