@@ -2320,7 +2320,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 			stepLog = fmt.Sprintf("schedule application")
 			Step(stepLog, func() {
-				for i := 0; i < 2; i++ {
+				for i := 0; i < Inst().GlobalScaleFactor; i++ {
 					taskName := fmt.Sprintf("vol-migrate-test-%v", i)
 					context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 						AppKeys:            Inst().AppList,
