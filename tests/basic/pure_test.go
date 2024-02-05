@@ -2404,6 +2404,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 						}
 					}(ctx)
 				}
+				wg.Wait()
 			})
 
 			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
