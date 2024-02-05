@@ -2408,8 +2408,8 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
 			Step(stepLog, func() {
-				// sleep for 30 seconds for all the entries to update
-				time.Sleep(30 * time.Second)
+				// sleep for 60 seconds for all the entries to update
+				time.Sleep(60 * time.Second)
 				log.InfoD("Sleeping for 30 seconds for all the entries to update")
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
