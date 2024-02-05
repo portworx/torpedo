@@ -7,8 +7,6 @@ import (
 	"fmt"
 	//pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
-	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
-	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -605,7 +603,6 @@ var (
 
 // PDS vars
 var (
-	v2Components  *pdsv2api.UnifiedPlatformComponents
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
 	controlplane  *pdscontrolplane.ControlPlane
@@ -1704,22 +1701,6 @@ func InitPdsComponents(ControlPlaneURL string) error {
 		return err
 	}
 	return nil
-}
-
-func InitUnifiedApiComponents(ControlPlaneURL string) error {
-	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(ControlPlaneURL)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func GetAccountListV2() (*platformv2.V1ListAccountsResponse, error) {
-	accList, err := v2Components.Platform.Accountv2.GetAccountList()
-	if err != nil {
-		return nil, err
-	}
-	return accList, nil
 }
 
 func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus string) (*pds.ModelsDeploymentTarget, error) {

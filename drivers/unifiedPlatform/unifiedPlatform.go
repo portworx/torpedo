@@ -14,7 +14,7 @@ type UnifiedPlatformComponents struct {
 	ApiV2Pds *pds.Pds
 }
 
-func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsApiClient *pdsV2.APIClient) *UnifiedPlatformComponents {
+func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsApiClient *pdsV2.APIClient, AccountId string) *UnifiedPlatformComponents {
 	return &UnifiedPlatformComponents{
 		Platform: &platform.Platform{
 			AccountV2: &platformApi.AccountV2{
@@ -34,6 +34,11 @@ func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsAp
 			},
 			TenantV2: &platformApi.TenantV2{
 				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
+			},
+			WhoAmI: &platformApi.WhoAmI{
+				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
 			},
 			TargetClusterManifestV2: &platformApi.TargetClusterManifestV2{
 				ApiClientV2: platformApiClient,

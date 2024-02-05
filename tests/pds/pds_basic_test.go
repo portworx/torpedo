@@ -33,7 +33,7 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD(steplog)
-		InitInstance()
+		//InitInstance()
 		dash = Inst().Dash
 		dash.TestSet.Product = "pds"
 		dash.TestSetBegin(dash.TestSet)
@@ -50,7 +50,10 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "Error while initializing pds components in pdslib")
 
 		//Initialize pds v2 components in pdslib
-		err = pdslib.InitUnifiedApiComponents(params.InfraToTest.ControlPlaneURL)
+		accList, err := pdslib.GetAccountListV2()
+		log.FailOnError(err, "error while getting account list")
+		accID := pdslib.GetPlatformAccountID(accList, "demo-milestone-one")
+		err = pdslib.InitUnifiedApiComponents(params.InfraToTest.ControlPlaneURL, accID)
 		log.FailOnError(err, "Error while initializing pds components in pdslib")
 
 		components, controlPlane, err = pdsdriver.InitPdsApiComponents(params.InfraToTest.ControlPlaneURL)
@@ -58,7 +61,7 @@ var _ = BeforeSuite(func() {
 
 		dsTest, err = dataservices.DataserviceInit(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing dataservice package")
-		
+
 		accountID, tenantID, dnsZone, projectID, serviceType, clusterID, err = controlPlane.SetupPDSTest(
 			infraParams.ControlPlaneURL, infraParams.ClusterType, infraParams.AccountName, infraParams.TenantName, infraParams.ProjectName)
 		log.FailOnError(err, "Failed on SetupPDSTest method")

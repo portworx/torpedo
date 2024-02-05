@@ -47,8 +47,8 @@ func (dt *TargetClusterManifestV2) GetTargetClusterRegistrationManifest(tenantId
 		})
 
 	dtClient := dt.ApiClientV2.TargetClusterRegistrationManifestServiceAPI
-
 	dtModels, res, err := dtClient.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestExecute(tcManifestRequest)
+
 	if err != nil && res.StatusCode != status.StatusOK {
 		return "", fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
 	}
