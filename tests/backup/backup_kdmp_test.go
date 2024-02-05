@@ -1453,7 +1453,7 @@ var _ = Describe("{IssueGenericBackupsAndRestoreInterleavedCopies}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for _, provider := range providers {
 				cloudCredUID = uuid.New()
-				cloudAccountName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(4))
+				cloudAccountName = fmt.Sprintf("%s-%s-%v", CredName, provider, RandomString(4))
 				log.InfoD("Creating cloud credential named [%s] and uid [%s] using [%s] as provider", cloudAccountName, cloudCredUID, provider)
 				err := CreateCloudCredential(provider, cloudAccountName, cloudCredUID, orgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudAccountName, orgID, provider))
