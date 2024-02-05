@@ -116,6 +116,11 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 	//	targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 	//	targetSizeGiB = targetSizeInBytes / units.GiB
 
+	// isjournal, err := IsJournalEnabled()
+	// log.FailOnError(err, "Failed to check is journal enabled")
+	// if isjournal {
+	// 	targetSizeGiB = targetSizeGiB - 3
+	// }
 	//	log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 	//		poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 	//	triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
@@ -131,6 +136,11 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
@@ -152,6 +162,12 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
+
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
@@ -166,6 +182,12 @@ var _ = Describe("{PoolExpandSmoky}", func() {
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
 
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type auto",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
@@ -249,6 +271,12 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 	It("Expand a pool while a previous expansion is in progress", func() {
 		expandType := api.SdkStoragePool_RESIZE_TYPE_ADD_DISK
 		targetSize := poolToResize.TotalSize/units.GiB + 100
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSize = targetSize - 3
+		}
+
 		err = Inst().V.ExpandPool(poolIDToResize, expandType, targetSize, true)
 		// wait for expansion to start
 		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
@@ -300,6 +328,13 @@ var _ = Describe("{PoolExpandWithReboot}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
+
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
@@ -350,6 +385,13 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
+
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
@@ -381,6 +423,13 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
+
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK)
@@ -484,6 +533,12 @@ var _ = Describe("{PoolExpandDiskAddAndVerifyFromOtherNode}", func() {
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
 
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
@@ -630,6 +685,12 @@ var _ = Describe("{PoolExpandWhileResizeDiskInProgress}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
+
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
@@ -696,6 +757,12 @@ var _ = Describe("{PoolExpandResizePoolMaintenanceCycle}", func() {
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
+
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
 
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
@@ -771,15 +838,15 @@ var _ = Describe("{MaintenanceCycleDuringPoolExpandResizeDisk}", func() {
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
 
-		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
-			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
-
 		isjournal, err := IsJournalEnabled()
 		log.FailOnError(err, "Failed to check is journal enabled")
 		if isjournal {
 			targetSizeGiB = targetSizeGiB - 3
 		}
+
+		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
+			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
+		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
 		// Enter Maintenance Mode
 		err = Inst().V.EnterMaintenance(*storageNode)
@@ -863,10 +930,14 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
-
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, targetSizeGiB, true)
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 		})
 
@@ -943,10 +1014,14 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
-
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 		})
 
@@ -1131,6 +1206,11 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingResizeDisk}", func() {
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
@@ -1237,7 +1317,11 @@ var _ = Describe("{CheckPoolLabelsAfterResizeDisk}", func() {
 		originalSizeInBytes = poolToResize.TotalSize
 		targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 		targetSizeGiB = targetSizeInBytes / units.GiB
-
+		isjournal, err := IsJournalEnabled()
+		log.FailOnError(err, "Failed to check is journal enabled")
+		if isjournal {
+			targetSizeGiB = targetSizeGiB - 3
+		}
 		log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk",
 			poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 		triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
@@ -1314,10 +1398,15 @@ var _ = Describe("{CheckPoolLabelsAfterAddDisk}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
 
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
@@ -1403,10 +1492,15 @@ var _ = Describe("{PoolExpandAndCheckAlertsUsingAddDisk}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
 
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
-			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
+			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
@@ -1508,6 +1602,11 @@ var _ = Describe("{PoolVolUpdateResizeDisk}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			triggerPoolExpansion(poolIDToResize, targetSizeGiB, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 
@@ -1700,6 +1799,11 @@ var _ = Describe("{DriveAddDifferentTypesAndResize}", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
 			targetSizeGiB = targetSizeInBytes / units.GiB
+			isjournal, err := IsJournalEnabled()
+			log.FailOnError(err, "Failed to check is journal enabled")
+			if isjournal {
+				targetSizeGiB = targetSizeGiB - 3
+			}
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type resize-disk", allPools[i], poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			triggerPoolExpansion(allPools[i], 1000, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK)
 			resizeErr := waitForOngoingPoolExpansionToComplete(allPools[i])
