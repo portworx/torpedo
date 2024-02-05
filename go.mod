@@ -54,7 +54,7 @@ require (
 	golang.org/x/net v0.10.0
 	golang.org/x/sync v0.2.0
 	google.golang.org/api v0.126.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20230913181813-007df8e322eb
+	google.golang.org/genproto/googleapis/api v0.0.0-20230913181813-007df8e322eb // indirect
 	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
@@ -73,7 +73,6 @@ require (
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/hashicorp/cronexpr v1.1.2 // indirect
-	github.com/hashicorp/nomad/api v0.0.0-20240129235454-e059adef9892 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.11.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -97,6 +96,7 @@ require (
 
 require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
+	github.com/hashicorp/nomad/api v0.0.0-20240129235454-e059adef9892
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
 	go.mongodb.org/mongo-driver v1.13.0
