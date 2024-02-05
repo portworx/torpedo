@@ -932,11 +932,11 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 		log.InfoD("Deploying applications required for the testcase")
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = appReadinessTimeout
+				ctx.ReadinessTimeout = AppReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
@@ -956,16 +956,16 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
-			backupLocationProviders := getProviders()
+			backupLocationProviders := GetBackupProviders()
 			for _, provider := range backupLocationProviders {
 				credName = fmt.Sprintf("%s-cred-%v", provider, RandomString(10))
 				credUid = uuid.New()
-				err := CreateCloudCredential(provider, credName, credUid, orgID, ctx)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s]  as provider %s", credName, orgID, provider))
+				err := CreateCloudCredential(provider, credName, credUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s]  as provider %s", credName, BackupOrgID, provider))
 				customBackupLocationName = fmt.Sprintf("%s-backup-location-%v", provider, RandomString(10))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = customBackupLocationName
-				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), orgID, "", true)
+				err = CreateBackupLocation(provider, customBackupLocationName, backupLocationUID, credName, credUid, getGlobalBucketName(provider), BackupOrgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup location %s", customBackupLocationName))
 			}
 		})
@@ -974,9 +974,9 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			log.InfoD("Registering application clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateApplicationClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 		})
 
@@ -984,7 +984,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			log.InfoD("Creating rancher projects on source cluster")
 			for i := 0; i < 2; i++ {
 				project := fmt.Sprintf("source-rke-project-%v-%v", i+1, RandomString(5))
-				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
+				_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 				projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Getting Project ID for project %s", project))
@@ -1015,7 +1015,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			for _, namespace := range appNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
@@ -1036,9 +1036,9 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			}
 			projectNameMapping[sourceClusterProjectList[0]] = sourceClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = sourceClusterProjectUIDList[0]
-			restoreName := fmt.Sprintf("%s-same-project-%v", restoreNamePrefix, RandomString(5))
+			restoreName := fmt.Sprintf("%s-same-project-%v", RestoreNamePrefix, RandomString(5))
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
 		})
 
@@ -1058,9 +1058,9 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			}
 			projectNameMapping[sourceClusterProjectList[0]] = sourceClusterProjectList[1]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = sourceClusterProjectUIDList[1]
-			restoreName := fmt.Sprintf("%s-diff-project-%v", restoreNamePrefix, RandomString(5))
+			restoreName := fmt.Sprintf("%s-diff-project-%v", RestoreNamePrefix, RandomString(5))
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, SourceClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, SourceClusterName, BackupOrgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
 		})
 
@@ -1069,7 +1069,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			project := fmt.Sprintf("destination-rke-project-%v", RandomString(5))
-			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, rancherProjectDescription, rancherActiveCluster, projectLabel, projectAnnotation)
+			_, err = Inst().S.(*rke.Rancher).CreateRancherProject(project, RancherProjectDescription, RancherActiveCluster, projectLabel, projectAnnotation)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project %s", project))
 			projectID, err := Inst().S.(*rke.Rancher).GetProjectID(project)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating rancher project ID for destination cluster %s", project))
@@ -1094,9 +1094,9 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			}
 			projectNameMapping[sourceClusterProjectList[0]] = destClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = destClusterProjectUIDList[0]
-			restoreName := fmt.Sprintf("%s-diff-proj-same-ns-diff-cluster%v", restoreNamePrefix, RandomString(5))
+			restoreName := fmt.Sprintf("%s-diff-proj-same-ns-diff-cluster%v", RestoreNamePrefix, RandomString(5))
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
 		})
 
@@ -1116,9 +1116,9 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			}
 			projectNameMapping[sourceClusterProjectList[0]] = destClusterProjectList[0]
 			projectUIDMapping[sourceClusterProjectUIDList[0]] = destClusterProjectUIDList[0]
-			restoreName := fmt.Sprintf("%s-diff-proj-diff-ns-diff-cluster%v", restoreNamePrefix, RandomString(5))
+			restoreName := fmt.Sprintf("%s-diff-proj-diff-ns-diff-cluster%v", RestoreNamePrefix, RandomString(5))
 			restoreList = append(restoreList, restoreName)
-			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, destinationClusterName, orgID, ctx, nil, projectUIDMapping, projectNameMapping)
+			err = CreateRestoreWithProjectMapping(restoreName, backupName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, nil, projectUIDMapping, projectNameMapping)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore- %s from backup %s", restoreName, backupName))
 		})
 
@@ -1147,7 +1147,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			log.FailOnError(err, "Deletion of namespace %s failed", ns)
 		}
 		for _, restoreName := range restoreList {
-			err = DeleteRestore(restoreName, orgID, ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying restore deletion - %s", restoreName))
 		}
 		log.Infof("Deleting projects from source cluster")
