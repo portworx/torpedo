@@ -73,12 +73,12 @@ func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
 
 }
 
-func InitUnifiedPlatformApiComponents(ControlPlaneURL string) (*unifiedPlatform.UnifiedPlatformComponents, error) {
+func InitUnifiedPlatformApiComponents(controlPlaneURL, accountID string) (*unifiedPlatform.UnifiedPlatformComponents, error) {
 	log.InfoD("Initializing Api components")
 
 	// generate pds api client
 	pdsApiConf := pdsv2.NewConfiguration()
-	endpointURL, err := url.Parse(ControlPlaneURL)
+	endpointURL, err := url.Parse(controlPlaneURL)
 	log.Infof("controlPlane url is [%s]", endpointURL)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func InitUnifiedPlatformApiComponents(ControlPlaneURL string) (*unifiedPlatform.
 
 	//generate platform api client
 	platformApiConf := platformv2.NewConfiguration()
-	endpointURL, err = url.Parse(ControlPlaneURL)
+	endpointURL, err = url.Parse(controlPlaneURL)
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +97,9 @@ func InitUnifiedPlatformApiComponents(ControlPlaneURL string) (*unifiedPlatform.
 	platformApiConf.Scheme = endpointURL.Scheme
 	platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 
-	components := unifiedPlatform.NewUnifiedPlatformComponents(platformV2apiClient, pdsV2apiClient)
+	components := unifiedPlatform.NewUnifiedPlatformComponents(platformV2apiClient, pdsV2apiClient, accountID)
 
 	return components, nil
-
 }
 func InitPdsApiComponents(ControlPlaneURL string) (*pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")

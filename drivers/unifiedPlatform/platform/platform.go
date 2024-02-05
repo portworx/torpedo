@@ -11,4 +11,5 @@ type Platform struct {
 	NamespaceV2       *platformApi.NamespaceV2
 	ProjectV2         *platformApi.ProjectV2
 	TenantV2          *platformApi.TenantV2
+	WhoAmI            *platformApi.WhoAmI
 }

@@ -33,7 +33,13 @@ func GetBearerToken() (context.Context, string, error) {
 	username := os.Getenv(envPXCentralUsername)
 	password := os.Getenv(envPXCentralPassword)
 	issuerURL := os.Getenv(envPxCentralAPI)
+
+	log.Infof("user name %s", username)
+	log.Infof("password %s", password)
+
 	url := fmt.Sprintf("%s/login", issuerURL)
+
+	log.Infof("issuer url %s", issuerURL)
 
 	postBody, err := json.Marshal(map[string]string{
 		"email":    username,
@@ -61,7 +67,6 @@ func GetBearerToken() (context.Context, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-
 	return context.Background(), bearerToken.DATA.Token, nil
 }
 

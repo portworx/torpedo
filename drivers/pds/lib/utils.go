@@ -1706,14 +1706,16 @@ func InitPdsComponents(ControlPlaneURL string) error {
 	return nil
 }
 
-func InitUnifiedApiComponents(ControlPlaneURL string) error {
-	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(ControlPlaneURL)
+// move to separate dir
+func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
+	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(controlPlaneURL, accountID)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
+// move to separate dir
 func CreateAccountV2(name, displayName, userMail string) (*platformv2.V1Account1, error) {
 	acc, err := v2Components.Platform.AccountV2.CreateAccount(name, displayName, userMail)
 	if err != nil {
@@ -1722,12 +1724,44 @@ func CreateAccountV2(name, displayName, userMail string) (*platformv2.V1Account1
 	return acc, nil
 }
 
+// move to separate dir
+func WhoAmI() (*platformv2.V1WhoAmIResponse, error) {
+	whoAmIResp, err := v2Components.Platform.WhoAmI.WhoAmI()
+	if err != nil {
+		return nil, err
+	}
+	return whoAmIResp, nil
+}
+
+// move to separate dir
+func GetTenantList(accountID string) ([]platformv2.V1Tenant, error) {
+	tenantsList, err := v2Components.Platform.TenantV2.ListTenants(accountID)
+	if err != nil {
+		return nil, err
+	}
+	return tenantsList, nil
+}
+
+// move to separate dir
 func GetAccountListV2() ([]platformv2.V1Account1, error) {
 	accList, err := v2Components.Platform.AccountV2.GetAccountList()
 	if err != nil {
 		return nil, err
 	}
 	return accList, nil
+}
+
+// move to separate dir
+func GetPlatformAccountID(accList []platformv2.V1Account1, accountName string) string {
+	var accID string
+	for _, acc := range accList {
+		if *acc.Meta.Name == accountName {
+			log.Infof("Available account %s", *acc.Meta.Name)
+			accID = *acc.Meta.Uid
+			log.Infof("Available account ID %s", accID)
+		}
+	}
+	return accID
 }
 
 func ValidatePDSDeploymentTargetHealthStatus(DeploymentTargetID, healthStatus string) (*pds.ModelsDeploymentTarget, error) {

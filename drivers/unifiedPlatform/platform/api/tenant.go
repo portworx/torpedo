@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -12,15 +13,27 @@ import (
 // TenantV2 struct
 type TenantV2 struct {
 	ApiClientV2 *platformV2.APIClient
+	AccountID   string
+}
+
+// GetClient updates the header with bearer token and returns the new client
+func (tenant *TenantV2) GetClient() (context.Context, *platformV2.TenantServiceAPIService, error) {
+	ctx, token, err := GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	tenant.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	tenant.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = tenant.AccountID
+	client := tenant.ApiClientV2.TenantServiceAPI
+
+	return ctx, client, nil
 }
 
 // ListTenants return pds tenants models.
 func (tenant *TenantV2) ListTenants(accountID string) ([]platformV2.V1Tenant, error) {
-	tenantClient := tenant.ApiClientV2.TenantServiceAPI
-	log.Info("Get list of tenants.")
-	ctx, err := GetContext()
+	ctx, tenantClient, err := tenant.GetClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 	tenantsModel, res, err := tenantClient.TenantServiceListTenants2(ctx, accountID).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
