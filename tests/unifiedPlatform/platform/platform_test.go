@@ -2,7 +2,7 @@ package platform
 
 import (
 	. "github.com/onsi/ginkgo"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/platformUtils"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -19,14 +19,14 @@ var _ = Describe("{TenantsCRUD}", func() {
 			steplog = "ListTenants"
 			Step(steplog, func() {
 				log.InfoD(steplog)
-				accList, err := pdslib.GetAccountListV2()
+				accList, err := platformUtils.GetPlatformAccountListV1()
 				log.FailOnError(err, "error while getting account list")
-				accID := pdslib.GetPlatformAccountID(accList, "demo-milestone-one")
+				accID := platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
 				log.Infof("account ID [%s]", accID)
-				tenantList, err := pdslib.GetTenantList(accID)
+				tenantList, err := platformUtils.GetPlatformTenantListV1(accID)
 				log.FailOnError(err, "error while getting tenant list")
 				for _, tenant := range tenantList {
-					log.Infof("Available tenants under the account id %s", *tenant.Meta.Name)
+					log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accID)
 				}
 			})
 		})
@@ -47,7 +47,7 @@ var _ = Describe("{WhoamI}", func() {
 		log.InfoD(steplog)
 		It("WhoAmI", func() {
 			Step("create accounts", func() {
-				whoAmIResp, err := pdslib.WhoAmI()
+				whoAmIResp, err := platformUtils.WhoAmIV1()
 				log.FailOnError(err, "error while creating account")
 				log.Infof("Actor ID %s", whoAmIResp.GetId())
 			})
@@ -69,14 +69,14 @@ var _ = Describe("{AccountsCRUD}", func() {
 		log.InfoD(steplog)
 		It("Accounts", func() {
 			Step("create accounts", func() {
-				acc, err := pdslib.CreateAccountV2("test-account", "qa-test-automation-account", "marunachalam+2@purestorage.com")
+				acc, err := platformUtils.CreatePlatformAccountV1(envPlatformAccountName, envAccountDisplayName, envUserMailId)
 				log.FailOnError(err, "error while creating account")
 				log.Infof("created account with name %s", *acc.Meta.Name)
 			})
 			steplog = "ListAccounts"
 			Step(steplog, func() {
 				log.InfoD(steplog)
-				accList, err := pdslib.GetAccountListV2()
+				accList, err := platformUtils.GetPlatformAccountListV1()
 				log.FailOnError(err, "error while getting account list")
 				for _, acc := range accList {
 					log.Infof("Available account %s", *acc.Meta.Name)

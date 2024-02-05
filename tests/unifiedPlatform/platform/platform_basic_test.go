@@ -4,7 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/platformUtils"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"os"
@@ -16,12 +16,12 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD("Get Account ID")
-		err := pdslib.InitUnifiedApiComponents(os.Getenv("CONTROL_PLANE_URL"), "")
+		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
-		accList, err := pdslib.GetAccountListV2()
+		accList, err := platformUtils.GetPlatformAccountListV1()
 		log.FailOnError(err, "error while getting account list")
-		accID := pdslib.GetPlatformAccountID(accList, "demo-milestone-one")
-		err = pdslib.InitUnifiedApiComponents(os.Getenv("CONTROL_PLANE_URL"), accID)
+		accID := platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
+		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
 		log.FailOnError(err, "error while initialising api components")
 	})
 })
@@ -36,7 +36,7 @@ func TestDataService(t *testing.T) {
 	var specReporters []Reporter
 	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
 	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : pds", specReporters)
+	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : platform", specReporters)
 
 }
 
