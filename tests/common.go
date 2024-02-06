@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bufio"
-	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -10,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
+	"cloud.google.com/go/storage"
 
 	"github.com/portworx/torpedo/drivers/node/gke"
 	"google.golang.org/api/iterator"
@@ -1940,21 +1941,25 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+func ValidateApplicationsStartData(schedulerContexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
-	// Resetting the global map before starting the new App Validations
-	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+	log.Infof("Is backup longevity run [%v]", IsBackupLongevityRun)
+	// Skipping map reset in case of longevity run
+	if !IsBackupLongevityRun {
+		// Resetting the global map before starting the new App Validations
+		NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+	}
 
 	log.InfoD("Validate applications")
-	for _, ctx := range contexts {
+	for _, ctx := range schedulerContexts {
 		ValidateContext(ctx)
 		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
 		if err != nil {
 			log.InfoD("Some error occurred - [%s]", err)
 		}
 		log.InfoD("App Info - [%+v]", appInfo)
-		if appContext == nil {
-			log.Warnf("App Context is not proper - [%v]", appContext)
+		if context == nil {
+			log.Warnf("App Context is not proper - [%v]", context)
 			continue
 		}
 		if appInfo.StartDataSupport {
@@ -1979,7 +1984,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 		for _, handler := range allhandler {
 			currentHandler := handler
 			errGroup.Go(func() error {
-				err := currentHandler.StartData(controlChannel, appContext)
+				err := currentHandler.StartData(controlChannel, context)
 				return err
 			})
 		}

@@ -48,6 +48,9 @@ var (
 type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
 var _ = Describe("{BackupLongevity}", func() {
+
+	IsBackupLongevityRun = true
+
 	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
 	var emailTriggerLock sync.Mutex
@@ -242,10 +245,11 @@ func isDisruptiveTrigger(triggerType string) bool {
 func populateDataFromConfigMap(configData *map[string]string) error {
 	log.Infof("ChaosMap provided: %v", configData)
 	setEmailRecipients(configData)
-	setEmailHost(configData)
+	err := setEmailHost(configData)
+	log.FailOnError(err, fmt.Sprintf("Error during setting email host - [%v]", err.Error()))
 	setEmailSubject(configData)
 
-	err := populateTriggers(configData)
+	err = populateTriggers(configData)
 	if err != nil {
 		return err
 	}

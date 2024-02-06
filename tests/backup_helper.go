@@ -155,6 +155,7 @@ var (
 	NfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
+	IsBackupLongevityRun       = false
 )
 
 type UserRoleAccess struct {
@@ -4723,7 +4724,6 @@ func GetAllRestoresForUser(username string, password string) ([]string, error) {
 	}
 	return restoreNames, nil
 }
-
 
 // CreateBackupScheduleIntervalPolicy create periodic schedule policy with given context.
 func CreateBackupScheduleIntervalPolicy(retian int64, intervalMins int64, incrCount uint64, periodicSchedulePolicyName string, periodicSchedulePolicyUid string, OrgID string, ctx context1.Context, ObjectLock bool, AutoDeleteForObjectLock bool) (err error) {
