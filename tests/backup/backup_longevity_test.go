@@ -48,6 +48,9 @@ var (
 type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
 var _ = Describe("{BackupLongevity}", func() {
+
+	IsBackupLongevityRun = true
+
 	contexts := make([]*scheduler.Context, 0)
 	var triggerLock sync.Mutex
 	var emailTriggerLock sync.Mutex

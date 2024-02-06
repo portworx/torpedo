@@ -36,7 +36,6 @@ type PxBackupLongevity struct {
 	ApplicationData *ApplicationData
 	BackupData      *BackupData
 	RestoreData     *RestoreData
-	Context         context1.Context
 }
 
 type CustomData struct {
@@ -112,6 +111,7 @@ var ctx, _ = backup.GetAdminCtxFromSecret()
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
 
 func GetLongevityInputParams() PxBackupLongevity {
+
 	var customData = CustomData{
 		Integers: make(map[string]int),
 		Strings:  make(map[string]string),
@@ -172,7 +172,8 @@ func GetRandomNamespacesForBackup() []string {
 		allNamepsacesForBackup = append(allNamepsacesForBackup, namespaceName)
 	}
 
-	log.Infof("Returning This - [%v]", allNamepsacesForBackup)
+	log.Infof("Namespaces selected for restore - [%v]", allNamepsacesForBackup)
+
 	return allNamepsacesForBackup
 }
 
@@ -229,7 +230,7 @@ func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string,
 func eventValidateScheduleApplication(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
-	_, _ = ValidateApplicationsStartData(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.Context)
+	_, _ = ValidateApplicationsStartData(inputsForEventBuilder.ApplicationData.SchedulerContext, ctx)
 	return nil, "", *eventData
 }
 
@@ -492,6 +493,8 @@ func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *E
 	eventData := RunBuilder(EventScheduleApps, &inputForBuilder, &result)
 	LongevityScheduledAppContexts = append(LongevityScheduledAppContexts, eventData.SchedulerContext...)
 	LongevityAllNamespaces = append(LongevityAllNamespaces, eventData.BackupNamespaces...)
+
+	inputForBuilder.ApplicationData.SchedulerContext = eventData.SchedulerContext
 
 	_ = RunBuilder(EventValidateScheduleApplication, &inputForBuilder, &result)
 
