@@ -387,6 +387,17 @@ func populateIntervals() {
 	triggerInterval[CreatePxBackupAndRestore][2] = 24 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][1] = 27 * baseInterval
 
+	triggerInterval[EmailReporter][10] = 1 * baseInterval
+	triggerInterval[EmailReporter][9] = 3 * baseInterval
+	triggerInterval[EmailReporter][8] = 6 * baseInterval
+	triggerInterval[EmailReporter][7] = 9 * baseInterval
+	triggerInterval[EmailReporter][6] = 12 * baseInterval
+	triggerInterval[EmailReporter][5] = 15 * baseInterval
+	triggerInterval[EmailReporter][4] = 18 * baseInterval
+	triggerInterval[EmailReporter][3] = 21 * baseInterval
+	triggerInterval[EmailReporter][2] = 24 * baseInterval
+	triggerInterval[EmailReporter][1] = 27 * baseInterval
+
 	triggerInterval[CreateRandomRestore][10] = 1 * baseInterval
 	triggerInterval[CreateRandomRestore][9] = 3 * baseInterval
 	triggerInterval[CreateRandomRestore][8] = 6 * baseInterval
