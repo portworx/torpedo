@@ -22,15 +22,19 @@ func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsAp
 			},
 			TargetClusterV2: &platformApi.TargetClusterV2{
 				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
 			},
 			IamRoleBindingsV2: &platformApi.IamRoleBindingsV2{
 				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
 			},
 			NamespaceV2: &platformApi.NamespaceV2{
 				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
 			},
 			ProjectV2: &platformApi.ProjectV2{
 				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
 			},
 			TenantV2: &platformApi.TenantV2{
 				ApiClientV2: platformApiClient,
@@ -47,21 +51,27 @@ func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsAp
 		ApiV2Pds: &pds.Pds{
 			DataServiceV2: &pdsV2Api.DataServiceV2{
 				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
 			},
 			DataServiceVersionsV2: &pdsV2Api.DataServiceVersionsV2{
 				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
 			},
 			DeploymentV2: &pdsV2Api.DeploymentV2{
 				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
 			},
 			DeploymentConfigurationUpdateV2: &pdsV2Api.DeploymentConfigurationUpdateV2{
 				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
 			},
 			DeploymentEventsV2: &pdsV2Api.DeploymentEventsV2{
 				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
 			},
 			DeploymentManifestV2: &pdsV2Api.DeploymentManifestV2{
 				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
 			},
 		},
 	}

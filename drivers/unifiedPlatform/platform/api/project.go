@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
@@ -11,13 +12,25 @@ import (
 // ProjectV2 struct
 type ProjectV2 struct {
 	ApiClientV2 *platformV2.APIClient
+	AccountID   string
+}
+
+// GetClient updates the header with bearer token and returns the new client
+func (project *ProjectV2) GetClient() (context.Context, *platformV2.ProjectServiceAPIService, error) {
+	ctx, token, err := GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	project.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	project.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = project.AccountID
+	client := project.ApiClientV2.ProjectServiceAPI
+	return ctx, client, nil
 }
 
 // ListProjects return platformV2 projects models.
 func (project *ProjectV2) ListProjects() ([]platformV2.V1Project, error) {
-	projectClient := project.ApiClientV2.ProjectServiceAPI
+	ctx, projectClient, err := project.GetClient()
 	log.Info("Get list of Projects.")
-	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,9 +43,8 @@ func (project *ProjectV2) ListProjects() ([]platformV2.V1Project, error) {
 
 // GetProject return project model.
 func (project *ProjectV2) GetProject(projectID string) (*platformV2.V1Project, error) {
-	projectClient := project.ApiClientV2.ProjectServiceAPI
+	ctx, projectClient, err := project.GetClient()
 	log.Info("Get the project details.")
-	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -45,9 +57,8 @@ func (project *ProjectV2) GetProject(projectID string) (*platformV2.V1Project, e
 
 // CreateProject return project model.
 func (project *ProjectV2) CreateProject(tenantId string) (*platformV2.V1Project, error) {
-	projectClient := project.ApiClientV2.ProjectServiceAPI
+	ctx, projectClient, err := project.GetClient()
 	log.Info("Get the project details.")
-	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -60,9 +71,8 @@ func (project *ProjectV2) CreateProject(tenantId string) (*platformV2.V1Project,
 
 // AssociateResourcesToProject return project model.
 func (project *ProjectV2) AssociateResourcesToProject(projectID string) (*platformV2.V1Project, error) {
-	projectClient := project.ApiClientV2.ProjectServiceAPI
+	ctx, projectClient, err := project.GetClient()
 	log.Info("Get the project details.")
-	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -75,9 +85,8 @@ func (project *ProjectV2) AssociateResourcesToProject(projectID string) (*platfo
 
 // DisAssociateResourcesToProject return project model.
 func (project *ProjectV2) DisAssociateResourcesToProject(projectID string) (*platformV2.V1Project, error) {
-	projectClient := project.ApiClientV2.ProjectServiceAPI
+	ctx, projectClient, err := project.GetClient()
 	log.Info("Get the project details.")
-	ctx, err := GetContext()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -90,8 +99,7 @@ func (project *ProjectV2) DisAssociateResourcesToProject(projectID string) (*pla
 
 // DeleteProject delete IAM RoleBinding and return status.
 func (project *ProjectV2) DeleteProject(projectId string) (*status.Response, error) {
-	projectClient := project.ApiClientV2.ProjectServiceAPI
-	ctx, err := GetContext()
+	ctx, projectClient, err := project.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

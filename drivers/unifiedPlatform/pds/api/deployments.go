@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -10,12 +11,25 @@ import (
 // DeploymentV2 struct
 type DeploymentV2 struct {
 	ApiClientV2 *pdsv2.APIClient
+	AccountID   string
+}
+
+// GetClient updates the header with bearer token and returns the new client
+func (ds *DeploymentV2) GetClient() (context.Context, *pdsv2.DeploymentServiceAPIService, error) {
+	ctx, token, err := GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	ds.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ds.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
+	client := ds.ApiClientV2.DeploymentServiceAPI
+
+	return ctx, client, nil
 }
 
 // ListDeployments return deployments models for a given project.
 func (ds *DeploymentV2) ListDeployments() ([]pdsv2.V1Deployment, error) {
-	dsClient := ds.ApiClientV2.DeploymentServiceAPI
-	ctx, err := GetContext()
+	ctx, dsClient, err := ds.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -47,8 +61,7 @@ func (ds *DeploymentV2) CreateDeployment(namespaceID string) (*pdsv2.V1Deploymen
 // GetDeployment return deployment model.
 
 func (ds *DeploymentV2) GetDeployment(deploymentID string) (*pdsv2.V1Deployment, error) {
-	dsClient := ds.ApiClientV2.DeploymentServiceAPI
-	ctx, err := GetContext()
+	ctx, dsClient, err := ds.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -61,8 +74,7 @@ func (ds *DeploymentV2) GetDeployment(deploymentID string) (*pdsv2.V1Deployment,
 
 // GetDeploymentStatus return deployment status.
 func (ds *DeploymentV2) GetDeploymentStatus(deploymentID string) (*pdsv2.Deploymentv1Status, *status.Response, error) {
-	dsClient := ds.ApiClientV2.DeploymentServiceAPI
-	ctx, err := GetContext()
+	ctx, dsClient, err := ds.GetClient()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -75,8 +87,7 @@ func (ds *DeploymentV2) GetDeploymentStatus(deploymentID string) (*pdsv2.Deploym
 
 // GetDeploymentCredentials return deployment credentials.
 func (ds *DeploymentV2) GetDeploymentCredentials(deploymentID string) (*pdsv2.V1DeploymentCredentials, error) {
-	dsClient := ds.ApiClientV2.DeploymentServiceAPI
-	ctx, err := GetContext()
+	ctx, dsClient, err := ds.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -107,8 +118,7 @@ func (ds *DeploymentV2) UpdateDeployment() (*pdsv2.V1Deployment, error) {
 
 // DeleteDeployment delete deployment and return status.
 func (ds *DeploymentV2) DeleteDeployment(deploymentID string) (*status.Response, error) {
-	dsClient := ds.ApiClientV2.DeploymentServiceAPI
-	ctx, err := GetContext()
+	ctx, dsClient, err := ds.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

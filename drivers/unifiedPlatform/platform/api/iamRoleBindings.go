@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
@@ -11,6 +12,7 @@ import (
 // IamRoleBindingsV2 struct
 type IamRoleBindingsV2 struct {
 	ApiClientV2 *platformV2.APIClient
+	AccountID   string
 }
 
 type NamespaceRoles struct {
@@ -19,10 +21,22 @@ type NamespaceRoles struct {
 	roleName    string
 }
 
+// GetClient updates the header with bearer token and returns the new client
+func (iam *IamRoleBindingsV2) GetClient() (context.Context, *platformV2.IAMServiceAPIService, error) {
+	ctx, token, err := GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	iam.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	iam.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = iam.AccountID
+	client := iam.ApiClientV2.IAMServiceAPI
+
+	return ctx, client, nil
+}
+
 // ListIamRoleBindings return service identities models for a project.
 func (iam *IamRoleBindingsV2) ListIamRoleBindings() ([]platformV2.V1IAM, error) {
-	iamClient := iam.ApiClientV2.IAMServiceAPI
-	ctx, err := GetContext()
+	ctx, iamClient, err := iam.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -35,9 +49,7 @@ func (iam *IamRoleBindingsV2) ListIamRoleBindings() ([]platformV2.V1IAM, error) 
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
 func (iam *IamRoleBindingsV2) CreateIamRoleBinding() (*platformV2.V1IAM, error) {
-	iamClient := iam.ApiClientV2.IAMServiceAPI
-
-	ctx, err := GetContext()
+	ctx, iamClient, err := iam.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -49,8 +61,7 @@ func (iam *IamRoleBindingsV2) CreateIamRoleBinding() (*platformV2.V1IAM, error) 
 }
 
 func (iam *IamRoleBindingsV2) UpdateIamRoleBindings(iamMetaUid string) (*platformV2.V1IAM, error) {
-	iamClient := iam.ApiClientV2.IAMServiceAPI
-	ctx, err := GetContext()
+	ctx, iamClient, err := iam.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -64,8 +75,7 @@ func (iam *IamRoleBindingsV2) UpdateIamRoleBindings(iamMetaUid string) (*platfor
 
 // GetIamRoleBindingByID return IAM RoleBinding model.
 func (iam *IamRoleBindingsV2) GetIamRoleBindingByID(actorId string) (*platformV2.V1IAM, error) {
-	iamClient := iam.ApiClientV2.IAMServiceAPI
-	ctx, err := GetContext()
+	ctx, iamClient, err := iam.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -78,8 +88,7 @@ func (iam *IamRoleBindingsV2) GetIamRoleBindingByID(actorId string) (*platformV2
 
 // DeleteIamRoleBinding delete IAM RoleBinding and return status.
 func (iam *IamRoleBindingsV2) DeleteIamRoleBinding(actorId string) (*status.Response, error) {
-	iamClient := iam.ApiClientV2.IAMServiceAPI
-	ctx, err := GetContext()
+	ctx, iamClient, err := iam.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
