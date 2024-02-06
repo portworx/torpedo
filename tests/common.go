@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -11,6 +12,8 @@ import (
 	"fmt"
 
 	"github.com/portworx/torpedo/drivers/node/gke"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 
 	"github.com/portworx/torpedo/pkg/stats"
 
@@ -249,6 +252,7 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
+	scaleAppTimeoutFlag                  = "scale-app-timeout"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
@@ -575,6 +579,10 @@ func InitInstance() {
 	if pxVersion != "" {
 		t.Tags["px-version"] = pxVersion
 	}
+
+	ns, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Error occured while getting volume driver namespace")
+	installGrafana(ns)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -653,7 +661,9 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if ctx.ReadinessTimeout == time.Duration(0) {
+		if Inst().ScaleAppTimeout != time.Duration(0) {
+			timeout = Inst().ScaleAppTimeout
+		} else if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
@@ -698,9 +708,18 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
-			vols, err := Inst().S.GetVolumes(ctx)
-			// Fixing issue where it is priniting nil
-			if err != nil {
+			var vols []*volume.Volume
+			var err error
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 
@@ -1012,8 +1031,16 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 	context("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
+			var vols []*volume.Volume
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
 				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
@@ -1973,7 +2000,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
@@ -1982,7 +2009,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -2003,14 +2030,14 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
 		stepLog = fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -5311,6 +5338,42 @@ func DeleteS3Bucket(bucketName string) {
 		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
 }
 
+func DeleteGcpBucket(bucketName string) {
+
+	ctx := context1.Background()
+
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.FailOnError(err, "Failed to create gcp client")
+	}
+	defer client.Close()
+
+	// List all objects in the bucket
+	it := client.Bucket(bucketName).Objects(ctx, nil)
+	for {
+		objAttrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.FailOnError(err, "error iterating over gcp bucket objects")
+		}
+
+		// Delete each object in the bucket
+		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
+		if err != nil {
+			log.FailOnError(err, "error deleting object from gcp bucket %s", objAttrs.Name)
+		}
+		log.Infof("Deleted object: %s\n", objAttrs.Name)
+	}
+
+	// Delete the bucket
+	bucket := client.Bucket(bucketName)
+	if err := bucket.Delete(ctx); err != nil {
+		log.FailOnError(err, "failed to delete bucket [%v]", bucketName)
+	}
+}
+
 // DeleteAzureBucket delete bucket in azure
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
@@ -5369,7 +5432,7 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
-//DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
 func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
 	// Getting NFS share details from ENV variables.
 	creds := GetNfsInfoFromEnv()
@@ -5421,6 +5484,8 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteAzureBucket(bucketName)
 		case drivers.ProviderNfs:
 			DeleteNfsSubPath(bucketName)
+		case drivers.ProviderGke:
+			DeleteGcpBucket(bucketName)
 		}
 	})
 }
@@ -5828,6 +5893,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderNfs:
 		result, err := IsNFSSubPathEmpty(bucketName)
 		return result, err
+	case drivers.ProviderGke:
+		result, err := IsGCPBucketEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -5907,6 +5975,30 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// IsGCPBucketEmpty returns true if bucket empty else false
+func IsGCPBucketEmpty(bucketName string) (bool, error) {
+	query := &storage.Query{Prefix: "", Delimiter: ""}
+	ctx := context1.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.Infof("Failed to create client gcp client : %v", err)
+		return false, fmt.Errorf("failed to create client gcp storage %s", err)
+	}
+	defer client.Close()
+
+	it := client.Bucket(bucketName).Objects(ctx, query)
+	_, err = it.Next()
+	if err == iterator.Done {
+		// Iterator finished, bucket is empty
+		return true, nil
+	} else if err != nil {
+		return false, fmt.Errorf("error occured while iterating over objects of gcp bucket %s", err)
+	}
+
+	// Iterator didn't finish, bucket is not empty
+	return false, nil
 }
 
 // CreateS3Bucket creates bucket in S3
@@ -6107,6 +6199,7 @@ type Torpedo struct {
 	Provisioner                         string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
+	ScaleAppTimeout                     time.Duration
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	LicenseExpiryTimeoutHours           time.Duration
@@ -6159,6 +6252,7 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var scaleAppTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
 	var licenseExpiryTimeoutHours time.Duration
 	var meteringIntervalMins time.Duration
@@ -6221,7 +6315,8 @@ func ParseFlags() {
 	flag.StringVar(&csiAppsCSV, csiAppCliFlag, "", "Comma-separated list of apps to deploy with CSI provisioner")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
-	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum wait time for app to be deleted")
+	flag.DurationVar(&scaleAppTimeout, scaleAppTimeoutFlag, 0, "Maximum wait time for app to be ready")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultDriverStartTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.DurationVar(&licenseExpiryTimeoutHours, licenseExpiryTimeoutHoursFlag, defaultLicenseExpiryTimeoutHours, "Maximum wait time in hours after which force expire license")
@@ -6472,6 +6567,7 @@ func ParseFlags() {
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
+				ScaleAppTimeout:                     scaleAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
@@ -8617,7 +8713,13 @@ func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 
 // IsDMthin returns true if setup is dmthin enabled
 func IsDMthin() (bool, error) {
+	opBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 	dmthinEnabled := false
+	if !opBasedInstall {
+		log.Warn("This is not PX Operator based install, DMTHIN is not supported on legacy Daemonset installs, skipping this check..")
+		return dmthinEnabled, nil
+	}
+
 	cluster, err := Inst().V.GetDriver()
 	if err != nil {
 		return dmthinEnabled, err
@@ -10339,4 +10441,101 @@ func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
 	}
 
 	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
+}
+
+// GetProcessPID returns the PID of KVDB master node
+func GetProcessPID(memberNode node.Node, processName string) (string, error) {
+	var processPid string
+	command := fmt.Sprintf("ps -ef | grep -i %s", processName)
+	out, err := Inst().N.RunCommand(memberNode, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, fmt.Sprintf("/usr/local/bin/%s", processName)) && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
+}
+
+// KillPxExecUsingPid return error in case of command failure
+func KillPxExecUsingPid(memberNode node.Node) error {
+	pid, err := GetProcessPID(memberNode, "pxexec")
+	if err != nil {
+		return err
+	}
+	if pid == "" {
+		log.InfoD("Procrss with PID doesnot exists !! ")
+		return nil
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, memberNode)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// KillPxStorageUsingPid return error in case of command failure
+func KillPxStorageUsingPid(memberNode node.Node) error {
+	nodes := []node.Node{}
+	nodes = append(nodes, memberNode)
+	err := Inst().V.StopDriver(nodes, true, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllPodsInNameSpace Returns list of pods running in the namespace
+func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+	pods, err := k8sCore.GetPods(nameSpace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
+func installGrafana(namespace string) {
+	enableGrafana := false
+
+	// If true, enable grafana on the set up
+	if enableGrafanaVar := os.Getenv("ENABLE_GRAFANA"); enableGrafanaVar != "" {
+		enableGrafana, _ = strconv.ParseBool(enableGrafanaVar)
+	}
+	if enableGrafana {
+		grafanaScript := "/torpedo/deployments/setup_grafana.sh"
+		if _, err := os.Stat(grafanaScript); errors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find grafana set up script in path %s", grafanaScript)
+			return
+		}
+
+		// Change permission on file to be able to execute
+		if err := osutils.Chmod("+x", grafanaScript); err != nil {
+			log.Warnf("error changing permission for script [%s], err: %v", grafanaScript, err)
+			return
+		}
+
+		output, stErr, err := osutils.ExecTorpedoShell(fmt.Sprintf("%s %s", grafanaScript, namespace))
+		if err != nil {
+			log.Warnf("error running script [%s], err: %v", grafanaScript, err)
+			return
+		}
+		if stErr != "" {
+			log.Warnf("got standard error while running script [%s], err: %s", grafanaScript, stErr)
+			return
+		}
+		log.Infof(output)
+	}
+
 }

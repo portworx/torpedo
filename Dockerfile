@@ -1,4 +1,4 @@
-FROM golang:1.19.5-alpine AS build
+FROM golang:1.21.6-alpine AS build
 LABEL maintainer="harsh@portworx.com"
 ARG MAKE_TARGET
 
@@ -32,7 +32,6 @@ COPY Makefile Makefile
 COPY go.mod go.mod
 COPY go.sum go.sum
 COPY pkg pkg
-COPY porx porx
 COPY scripts scripts
 COPY drivers drivers
 COPY deployments deployments

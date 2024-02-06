@@ -4,6 +4,10 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
+if [ -z "${ENABLE_GRAFANA}" ]; then
+    ENABLE_GRAFANA=false
+fi
+
 if [ -z "${DATA_INTEGRITY_VALIDATION_TESTS}" ]; then
     DATA_INTEGRITY_VALIDATION_TESTS=""
 fi
@@ -168,6 +172,11 @@ fi
 APP_DESTROY_TIMEOUT_ARG=""
 if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
+fi
+
+SCALE_APP_TIMEOUT_ARG=""
+if [ -n "${SCALE_APP_TIMEOUT}" ]; then
+    SCALE_APP_TIMEOUT_ARG="--scale-app-timeout=$SCALE_APP_TIMEOUT"
 fi
 
 if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
@@ -561,6 +570,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCALE_APP_TIMEOUT_ARG",
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -743,6 +753,8 @@ spec:
       value: "${PX_BACKUP_MONGODB_USERNAME}"
     - name: PX_BACKUP_MONGODB_PASSWORD
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
+    - name: ENABLE_GRAFANA
+      value: "${ENABLE_GRAFANA}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

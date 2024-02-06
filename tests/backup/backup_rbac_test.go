@@ -133,7 +133,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			periodicSchedulePolicyNameMap[infraAdminUser] = fmt.Sprintf("%s-%v", "periodic", RandomString(5))
 			periodicSchedulePolicyUidMap[infraAdminUser] = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser], BackupOrgID, nonAdminCtx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser], BackupOrgID, nonAdminCtx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyNameMap[infraAdminUser]))
 		})
 
@@ -493,7 +493,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			periodicSchedulePolicyNameMap[customUser] = fmt.Sprintf("%s-%v", "periodic", RandomString(5))
 			periodicSchedulePolicyUidMap[customUser] = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser], BackupOrgID, nonAdminCtx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser], BackupOrgID, nonAdminCtx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyNameMap[customUser]))
 		})
 
@@ -840,7 +840,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", RandomString(5))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 		})
 
@@ -1255,7 +1255,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 			periodicSchedulePolicyNameMap[appAdminUser] = fmt.Sprintf("%s-%v", "periodic", RandomString(5))
 			periodicSchedulePolicyUidMap[appAdminUser] = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[appAdminUser], periodicSchedulePolicyUidMap[appAdminUser], BackupOrgID, nonAdminCtx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyNameMap[appAdminUser], periodicSchedulePolicyUidMap[appAdminUser], BackupOrgID, nonAdminCtx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyNameMap[appAdminUser]))
 		})
 
@@ -1762,7 +1762,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			periodicSchedulePolicyName := fmt.Sprintf("policy-%v", RandomString(4))
 			periodicSchedulePolicyUid := uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, nonAdminCtx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, nonAdminCtx, false, false)
 			dash.VerifyFatal(strings.Contains(err.Error(), "PermissionDenied"), true, fmt.Sprintf("Verifying if App-User [%s] doesn't have permission for creating schedule policy for user", appUser))
 		})
 
@@ -1812,7 +1812,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", RandomString(4))
 			periodicSchedulePolicyUid = uuid.New()
 			periodicSchedulePolicyInterval := int64(15)
-			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
 		})
 
