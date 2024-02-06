@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/gnostic/compiler"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"gopkg.in/natefinch/lumberjack.v2"
