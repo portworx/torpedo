@@ -82,9 +82,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		Step(watchLog, func() {
 			log.InfoD(watchLog)
 			err := watchConfigMap()
-			if err != nil {
-				log.Fatalf(fmt.Sprintf("%v", err))
-			}
+			log.FailOnError(err, fmt.Sprintf("%v", err))
 		})
 
 		TriggerDeployBackupApps(&contexts, &triggerEventsChan)
