@@ -15,8 +15,6 @@ type TargetClusterManifestV2 struct {
 }
 
 func (dt *TargetClusterManifestV2) GetTargetClusterRegistrationManifest(tenantId string, clusterName string, pConfig *utils.ProxyConfig, crConfig *utils.CustomRegistryConfig) (string, error) {
-	//var createRequest platformV2.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
-
 	var tcManifestClient platformV2.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
 	tcManifestRequest := tcManifestClient.ApiService.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest(context.Background(), tenantId)
@@ -24,7 +22,7 @@ func (dt *TargetClusterManifestV2) GetTargetClusterRegistrationManifest(tenantId
 	if clusterName == "" {
 		clusterName = fmt.Sprintf("Cluster_%v", time.Now())
 	}
-	tcManifestRequest.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody(
+	tcManifestRequest = tcManifestRequest.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody(
 		platformV2.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody{
 			ClusterName: &clusterName,
 			Config: &platformV2.V1Config5{
@@ -48,7 +46,6 @@ func (dt *TargetClusterManifestV2) GetTargetClusterRegistrationManifest(tenantId
 
 	dtClient := dt.ApiClientV2.TargetClusterRegistrationManifestServiceAPI
 	dtModels, res, err := dtClient.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestExecute(tcManifestRequest)
-
 	if err != nil && res.StatusCode != status.StatusOK {
 		return "", fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
 	}

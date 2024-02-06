@@ -3,6 +3,7 @@ package platformUtils
 import (
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 )
@@ -68,4 +69,31 @@ func GetPlatformAccountID(accList []platformv1.V1Account1, accountName string) s
 		}
 	}
 	return accID
+}
+
+// GetManifest Get the manifest for the account and tenant-id that can be used to install the platform agent
+func GetManifest(tenantId string, clusterName string) (string, error) {
+
+	// TODO: Proxy and Registry configs need to be added to this call
+	var pConfig utils.ProxyConfig
+	var crConfig utils.CustomRegistryConfig
+	pConfig.HttpUrl = ""
+	pConfig.HttpsUrl = ""
+	pConfig.Username = ""
+	pConfig.Password = ""
+	pConfig.NoProxy = ""
+	pConfig.CaCert = ""
+
+	crConfig.RegistryUrl = ""
+	crConfig.CustomImageRegistryConfig = ""
+	crConfig.RegistryNamespace = ""
+	crConfig.RegistryUserName = ""
+	crConfig.RegistryPassword = ""
+
+	// Get Manifest from API
+	manifest, err := v2Components.Platform.TargetClusterManifestV2.GetTargetClusterRegistrationManifest(tenantId, "", &pConfig, &crConfig)
+	if err != nil {
+		return "", err
+	}
+	return manifest, nil
 }

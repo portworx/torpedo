@@ -3,9 +3,12 @@ package platform
 import (
 	. "github.com/onsi/ginkgo"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/platformUtils"
+	tc "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
+
+var targetCluster tc.TargetCluster
 
 var _ = Describe("{TenantsCRUD}", func() {
 	steplog := "Tenants CRUD"
@@ -15,6 +18,7 @@ var _ = Describe("{TenantsCRUD}", func() {
 
 	Step(steplog, func() {
 		log.InfoD(steplog)
+		var tenantId string
 		It("Tenants", func() {
 			steplog = "ListTenants"
 			Step(steplog, func() {
@@ -27,6 +31,12 @@ var _ = Describe("{TenantsCRUD}", func() {
 				log.FailOnError(err, "error while getting tenant list")
 				for _, tenant := range tenantList {
 					log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accID)
+					tenantId = *tenant.Meta.Uid
+					break
+				}
+				err = targetCluster.RegisterToControlPlane("1.0.0", tenantId, "")
+				if err != nil {
+					log.FailOnError(err, "Failed to register Target Cluster to Control plane")
 				}
 			})
 		})

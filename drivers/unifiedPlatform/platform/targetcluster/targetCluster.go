@@ -5,7 +5,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	pdsv2api "github.com/portworx/torpedo/drivers/unifiedPlatform"
-	utils "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform/platformUtils"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +50,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion strin
 	var cmd string
 
 	// Get Manifest from API
-	manifest, err := getManifest(tenantId, "")
+	manifest, err := platformUtils.GetManifest(tenantId, "")
 	if err != nil {
 		return fmt.Errorf("Failed while getting Manifests: %v\n", err)
 	}
@@ -131,7 +131,7 @@ func (targetCluster *TargetCluster) DeregisterFromControlPlane(platformVersion s
 	if len(pods.Items) > 0 {
 		log.InfoD("Uninstalling Manifests %v", platformVersion)
 		// Get Manifest from API
-		manifest, err := getManifest(tenantId, "")
+		manifest, err := platformUtils.GetManifest(tenantId, "")
 		if err != nil {
 			return fmt.Errorf("Failed while getting platform manifests: %v\n", err)
 		}
@@ -144,33 +144,6 @@ func (targetCluster *TargetCluster) DeregisterFromControlPlane(platformVersion s
 	}
 	return nil
 
-}
-
-// getManifest Get the manifest for the account and tenant-id that can be used to install the platform agent
-func getManifest(tenantId string, clusterName string) (string, error) {
-
-	// TODO: Proxy and Registry configs need to be added to this call
-	var pConfig utils.ProxyConfig
-	var crConfig utils.CustomRegistryConfig
-	pConfig.HttpUrl = ""
-	pConfig.HttpsUrl = ""
-	pConfig.Username = ""
-	pConfig.Password = ""
-	pConfig.NoProxy = ""
-	pConfig.CaCert = ""
-
-	crConfig.RegistryUrl = ""
-	crConfig.CustomImageRegistryConfig = ""
-	crConfig.RegistryNamespace = ""
-	crConfig.RegistryUserName = ""
-	crConfig.RegistryPassword = ""
-
-	// Get Manifest from API
-	manifest, err := v2Components.Platform.TargetClusterManifestV2.GetTargetClusterRegistrationManifest(tenantId, "", &pConfig, &crConfig)
-	if err != nil {
-		return "", err
-	}
-	return manifest, nil
 }
 
 func IsLatestManifest(platformVersion string) (bool, error) {
