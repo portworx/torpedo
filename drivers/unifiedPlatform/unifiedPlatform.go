@@ -40,6 +40,9 @@ func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsAp
 				ApiClientV2: platformApiClient,
 				AccountID:   AccountId,
 			},
+			TargetClusterManifestV2: &platformApi.TargetClusterManifestV2{
+				ApiClientV2: platformApiClient,
+			},
 		},
 		ApiV2Pds: &pds.Pds{
 			DataServiceV2: &pdsV2Api.DataServiceV2{

@@ -70,6 +70,26 @@ func GetBearerToken() (context.Context, string, error) {
 	return context.Background(), bearerToken.DATA.Token, nil
 }
 
+// CustomRegistryConfig :Custom Registry info
+type CustomRegistryConfig struct {
+	CustomImageRegistryConfig string
+	RegistryUrl               string
+	RegistryNamespace         string
+	RegistryUserName          string
+	RegistryPassword          string
+	CaCert                    string
+}
+
+// ProxyConfig structure
+type ProxyConfig struct {
+	HttpUrl  string
+	HttpsUrl string
+	Username string
+	Password string
+	NoProxy  string
+	CaCert   string
+}
+
 func GetContext() (context.Context, error) {
 	username := os.Getenv(envPXCentralUsername)
 	password := os.Getenv(envPXCentralPassword)
