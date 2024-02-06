@@ -199,6 +199,7 @@ func UpdateEventResponse(eventResponse *EventResponse) {
 
 // All longevity events
 
+// Event to schedule apps on cluster
 func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
@@ -223,6 +224,7 @@ func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string,
 	return nil, "", *eventData
 }
 
+// Event to validate app but later will be changed to create handler and start data for app
 func eventValidateScheduleApplication(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
@@ -230,6 +232,7 @@ func eventValidateScheduleApplication(inputsForEventBuilder *PxBackupLongevity) 
 	return nil, "", *eventData
 }
 
+// Event for backup location and cred add
 func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
@@ -264,6 +267,7 @@ func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevit
 	return nil, "", *eventData
 }
 
+// Event for Source and Dest Cluster add
 func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
@@ -290,6 +294,7 @@ func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevit
 	return nil, "", *eventData
 }
 
+// Event for Backup Creation
 func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 
@@ -383,6 +388,7 @@ func getGlobalBucketName(provider string) string {
 
 // All Longevity Triggers
 
+// Trigger to create cred and bucket for backup
 func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -422,6 +428,7 @@ func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *c
 
 }
 
+// Trigger to add a backup cluster
 func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -458,6 +465,7 @@ func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *E
 
 }
 
+// Trigger to deploy backup apps with or without data validation
 func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -494,6 +502,7 @@ func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *E
 
 }
 
+// Trigger to create backup and validate
 func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()
@@ -534,6 +543,7 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 }
 
+// Trigger to create backup and restore from same backup
 func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 	defer ginkgo.GinkgoRecover()
 	defer endLongevityTest()

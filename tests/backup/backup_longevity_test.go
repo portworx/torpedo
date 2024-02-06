@@ -95,7 +95,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		Step("Register test triggers", func() {
 			for triggerType, triggerFunc := range triggerFunctions {
 				log.InfoD("Registering trigger: [%v]", triggerType)
-				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
+				go backupEventTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)
 			}
 		})
@@ -128,7 +128,7 @@ var _ = Describe("{BackupLongevity}", func() {
 	})
 })
 
-func testTrigger(wg *sync.WaitGroup,
+func backupEventTrigger(wg *sync.WaitGroup,
 	contexts *[]*scheduler.Context,
 	triggerType string,
 	triggerFunc func(*[]*scheduler.Context, *chan *EventRecord),
