@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	testTriggersConfigMap = "longevity-triggers"
+	testTriggersConfigMap = "pxb-longevity-triggers"
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
 )
@@ -57,6 +57,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		CreatePxBackup:           TriggerCreateBackup,
 		CreatePxBackupAndRestore: TriggerCreateBackupAndRestore,
 		CreateRandomRestore:      TriggerCreateRandomRestore,
+		DeployBackupApps:         TriggerDeployBackupApps,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -66,7 +67,7 @@ var _ = Describe("{BackupLongevity}", func() {
 	BeforeEach(func() {
 		if !populateDone {
 			StartPxBackupTorpedoTest("BackupLongevityTest",
-				"Longevity Run For Backup", nil, 58056, ATrivedi, Q1FY24)
+				"Longevity Run For Backup", nil, 0, ATrivedi, Q1FY24)
 			populateIntervals()
 			//  populateDisruptiveTriggers()
 			populateDone = true
@@ -155,9 +156,9 @@ func testTrigger(wg *sync.WaitGroup,
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 			// If trigger is not disabled and its right time to trigger,
 
-			log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
-			triggerLoc.Lock()
-			log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+			// log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			// triggerLoc.Lock()
+			// log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
 			/* PTX-2667: check no other disruptive trigger is happening at same time
 			if isDisruptiveTrigger(triggerType) {
 			   // At a give point in time, only single disruptive trigger is allowed to run.
@@ -176,8 +177,8 @@ func testTrigger(wg *sync.WaitGroup,
 			log.Infof("Trigger Function completed for [%s]\n", triggerType)
 
 			//if isDisruptiveTrigger(triggerType) {
-			triggerLoc.Unlock()
-			log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+			// triggerLoc.Unlock()
+			// log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 			//}
 
 			lastInvocationTime = time.Now().Local()
@@ -265,45 +266,7 @@ func watchConfigMap() error {
 }
 
 func populateDisruptiveTriggers() {
-	disruptiveTriggers = map[string]bool{
-		HAIncrease:                      false,
-		HADecrease:                      false,
-		RestartVolDriver:                false,
-		CrashVolDriver:                  false,
-		RebootNode:                      true,
-		CrashNode:                       true,
-		EmailReporter:                   true,
-		AppTaskDown:                     false,
-		DeployApps:                      false,
-		BackupAllApps:                   false,
-		BackupScheduleAll:               false,
-		BackupScheduleScale:             true,
-		BackupSpecificResource:          false,
-		BackupSpecificResourceOnCluster: false,
-		TestInspectBackup:               false,
-		TestInspectRestore:              false,
-		TestDeleteBackup:                false,
-		RestoreNamespace:                false,
-		BackupUsingLabelOnCluster:       false,
-		BackupRestartPX:                 false,
-		BackupRestartNode:               false,
-		BackupDeleteBackupPod:           false,
-		BackupScaleMongo:                false,
-		AppTasksDown:                    false,
-		RestartManyVolDriver:            true,
-		RebootManyNodes:                 true,
-		RestartKvdbVolDriver:            true,
-		NodeDecommission:                true,
-		CsiSnapShot:                     false,
-		CsiSnapRestore:                  false,
-		KVDBFailover:                    true,
-		HAIncreaseAndReboot:             true,
-		AddDiskAndReboot:                true,
-		ResizeDiskAndReboot:             true,
-		VolumeCreatePxRestart:           true,
-		OCPStorageNodeRecycle:           true,
-		CrashPXDaemon:                   true,
-	}
+	disruptiveTriggers = map[string]bool{}
 }
 
 func isDisruptiveTrigger(triggerType string) bool {
@@ -398,6 +361,7 @@ func populateIntervals() {
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[CreatePxBackupAndRestore] = map[int]time.Duration{}
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
+	triggerInterval[DeployBackupApps] = map[int]time.Duration{}
 
 	baseInterval := 10 * time.Second
 
@@ -433,6 +397,19 @@ func populateIntervals() {
 	triggerInterval[CreateRandomRestore][3] = 21 * baseInterval
 	triggerInterval[CreateRandomRestore][2] = 24 * baseInterval
 	triggerInterval[CreateRandomRestore][1] = 27 * baseInterval
+
+	baseInterval = 60 * time.Second
+
+	triggerInterval[DeployBackupApps][10] = 1 * baseInterval
+	triggerInterval[DeployBackupApps][9] = 3 * baseInterval
+	triggerInterval[DeployBackupApps][8] = 6 * baseInterval
+	triggerInterval[DeployBackupApps][7] = 9 * baseInterval
+	triggerInterval[DeployBackupApps][6] = 12 * baseInterval
+	triggerInterval[DeployBackupApps][5] = 15 * baseInterval
+	triggerInterval[DeployBackupApps][4] = 18 * baseInterval
+	triggerInterval[DeployBackupApps][3] = 21 * baseInterval
+	triggerInterval[DeployBackupApps][2] = 24 * baseInterval
+	triggerInterval[DeployBackupApps][1] = 27 * baseInterval
 
 }
 
