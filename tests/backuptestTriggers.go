@@ -613,21 +613,3 @@ func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan
 	}
 
 }
-
-func CreateReport() {
-	// report.DumpResult()
-	result := GetLongevityEventResponse()
-	result.Name = "Create Report"
-
-}
-
-// func LogEventData(eventResponse *EventResponse) {
-// 	// fmt.Println(table)
-// 	// fmt.Printf("\n\n\n")
-// 	report.ResultsMutex.Lock()
-// 	report.Results[eventResponse.Name+"-"+uuid.NewString()+"-"+time.Now().Format("02 Jan 06 15:04 MST")] = report.ResultForReport{
-// 		Data:   *eventResponse,
-// 		Status: eventResponse.Status,
-// 	}
-// 	report.ResultsMutex.Unlock()
-// }

@@ -149,37 +149,12 @@ func testTrigger(wg *sync.WaitGroup,
 			break
 		}
 
-		// Get next interval of when trigger should happen
-		// This interval can dynamically change by editing configMap
 		waitTime, isTriggerEnabled := isTriggerEnabled(triggerType)
 
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
-			// If trigger is not disabled and its right time to trigger,
-
-			// log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
-			// triggerLoc.Lock()
-			// log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
-			/* PTX-2667: check no other disruptive trigger is happening at same time
-			if isDisruptiveTrigger(triggerType) {
-			   // At a give point in time, only single disruptive trigger is allowed to run.
-			   // No other disruptive or non-disruptive trigger can run at this time.
-			   triggerLoc.Lock()
-			} else {
-			   // If trigger is non-disruptive then just check if no other disruptive trigger is running or not
-			   // and release the lock immediately so that other non-disruptive triggers can happen.
-				triggerLoc.Lock()
-				log.Infof("===No other disruptive event happening. Able to take lock for [%s]\n", triggerType)
-				triggerLoc.Unlock()
-				log.Infof("===Releasing lock for non-disruptive event [%s]\n", triggerType)
-			}*/
 
 			triggerFunc(contexts, triggerEventsChan)
 			log.Infof("Trigger Function completed for [%s]\n", triggerType)
-
-			//if isDisruptiveTrigger(triggerType) {
-			// triggerLoc.Unlock()
-			// log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
-			//}
 
 			lastInvocationTime = time.Now().Local()
 
@@ -195,17 +170,10 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	emailTriggerLock *sync.Mutex) {
 	defer wg.Done()
 
-	// minRunTime := Inst().MinRunTimeMins
-	timeout := 0
-
 	start := time.Now().Local()
 	lastInvocationTime := start
 
 	for {
-		// if timeout is 0, run indefinitely
-		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-			break
-		}
 
 		// Get next interval of when trigger should happen
 		// This interval can dynamically change by editing configMap
@@ -363,40 +331,29 @@ func populateIntervals() {
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
 	triggerInterval[DeployBackupApps] = map[int]time.Duration{}
 
-	baseInterval := 10 * time.Second
+	baseInterval := 1 * time.Minute
 
-	triggerInterval[CreatePxBackup][10] = 1 * baseInterval
-	triggerInterval[CreatePxBackup][9] = 3 * baseInterval
-	triggerInterval[CreatePxBackup][8] = 6 * baseInterval
-	triggerInterval[CreatePxBackup][7] = 9 * baseInterval
-	triggerInterval[CreatePxBackup][6] = 12 * baseInterval
-	triggerInterval[CreatePxBackup][5] = 15 * baseInterval
-	triggerInterval[CreatePxBackup][4] = 18 * baseInterval
-	triggerInterval[CreatePxBackup][3] = 21 * baseInterval
-	triggerInterval[CreatePxBackup][2] = 24 * baseInterval
-	triggerInterval[CreatePxBackup][1] = 27 * baseInterval
+	triggerInterval[CreatePxBackup][10] = 6 * baseInterval
+	triggerInterval[CreatePxBackup][9] = 12 * baseInterval
+	triggerInterval[CreatePxBackup][8] = 18 * baseInterval
+	triggerInterval[CreatePxBackup][7] = 24 * baseInterval
+	triggerInterval[CreatePxBackup][6] = 30 * baseInterval
+	triggerInterval[CreatePxBackup][5] = 36 * baseInterval
+	triggerInterval[CreatePxBackup][4] = 42 * baseInterval
+	triggerInterval[CreatePxBackup][3] = 48 * baseInterval
+	triggerInterval[CreatePxBackup][2] = 54 * baseInterval
+	triggerInterval[CreatePxBackup][1] = 60 * baseInterval
 
-	triggerInterval[CreatePxBackupAndRestore][10] = 1 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][9] = 3 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][8] = 6 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][7] = 9 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][6] = 12 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][5] = 15 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][4] = 18 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][3] = 21 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][2] = 24 * baseInterval
-	triggerInterval[CreatePxBackupAndRestore][1] = 27 * baseInterval
-
-	triggerInterval[EmailReporter][10] = 1 * baseInterval
-	triggerInterval[EmailReporter][9] = 3 * baseInterval
-	triggerInterval[EmailReporter][8] = 6 * baseInterval
-	triggerInterval[EmailReporter][7] = 9 * baseInterval
-	triggerInterval[EmailReporter][6] = 12 * baseInterval
-	triggerInterval[EmailReporter][5] = 15 * baseInterval
-	triggerInterval[EmailReporter][4] = 18 * baseInterval
-	triggerInterval[EmailReporter][3] = 21 * baseInterval
-	triggerInterval[EmailReporter][2] = 24 * baseInterval
-	triggerInterval[EmailReporter][1] = 27 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][10] = 6 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][9] = 12 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][8] = 18 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][7] = 24 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][6] = 30 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][5] = 36 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][4] = 42 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][3] = 48 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][2] = 54 * baseInterval
+	triggerInterval[CreatePxBackupAndRestore][1] = 60 * baseInterval
 
 	triggerInterval[CreateRandomRestore][10] = 1 * baseInterval
 	triggerInterval[CreateRandomRestore][9] = 3 * baseInterval
@@ -409,18 +366,29 @@ func populateIntervals() {
 	triggerInterval[CreateRandomRestore][2] = 24 * baseInterval
 	triggerInterval[CreateRandomRestore][1] = 27 * baseInterval
 
-	baseInterval = 60 * time.Second
+	triggerInterval[DeployBackupApps][10] = 5 * baseInterval
+	triggerInterval[DeployBackupApps][9] = 10 * baseInterval
+	triggerInterval[DeployBackupApps][8] = 15 * baseInterval
+	triggerInterval[DeployBackupApps][7] = 30 * baseInterval
+	triggerInterval[DeployBackupApps][6] = 3 * 15 * baseInterval
+	triggerInterval[DeployBackupApps][5] = 3 * 30 * baseInterval
+	triggerInterval[DeployBackupApps][4] = 3 * 60 * baseInterval
+	triggerInterval[DeployBackupApps][3] = 6 * 60 * baseInterval
+	triggerInterval[DeployBackupApps][2] = 12 * 60 * baseInterval
+	triggerInterval[DeployBackupApps][1] = 24 * 60 * baseInterval
 
-	triggerInterval[DeployBackupApps][10] = 1 * baseInterval
-	triggerInterval[DeployBackupApps][9] = 3 * baseInterval
-	triggerInterval[DeployBackupApps][8] = 6 * baseInterval
-	triggerInterval[DeployBackupApps][7] = 9 * baseInterval
-	triggerInterval[DeployBackupApps][6] = 12 * baseInterval
-	triggerInterval[DeployBackupApps][5] = 15 * baseInterval
-	triggerInterval[DeployBackupApps][4] = 18 * baseInterval
-	triggerInterval[DeployBackupApps][3] = 21 * baseInterval
-	triggerInterval[DeployBackupApps][2] = 24 * baseInterval
-	triggerInterval[DeployBackupApps][1] = 27 * baseInterval
+	baseInterval = 1 * time.Hour
+
+	triggerInterval[EmailReporter][10] = 1 * baseInterval
+	triggerInterval[EmailReporter][9] = 2 * baseInterval
+	triggerInterval[EmailReporter][8] = 3 * baseInterval
+	triggerInterval[EmailReporter][7] = 4 * baseInterval
+	triggerInterval[EmailReporter][6] = 5 * baseInterval
+	triggerInterval[EmailReporter][5] = 6 * baseInterval
+	triggerInterval[EmailReporter][4] = 7 * baseInterval
+	triggerInterval[EmailReporter][3] = 8 * baseInterval
+	triggerInterval[EmailReporter][2] = 12 * baseInterval
+	triggerInterval[EmailReporter][1] = 24 * baseInterval
 
 }
 
