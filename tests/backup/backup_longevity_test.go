@@ -82,9 +82,7 @@ var _ = Describe("{BackupLongevity}", func() {
 		Step(watchLog, func() {
 			log.InfoD(watchLog)
 			err := watchConfigMap()
-			if err != nil {
-				log.Fatalf(fmt.Sprintf("%v", err))
-			}
+			log.FailOnError(err, fmt.Sprintf("%v", err))
 		})
 
 		TriggerDeployBackupApps(&contexts, &triggerEventsChan)
@@ -244,10 +242,11 @@ func isDisruptiveTrigger(triggerType string) bool {
 func populateDataFromConfigMap(configData *map[string]string) error {
 	log.Infof("ChaosMap provided: %v", configData)
 	setEmailRecipients(configData)
-	setEmailHost(configData)
+	err := setEmailHost(configData)
+	log.FailOnError(err, fmt.Sprintf("Error during setting email host - [%v]", err.Error()))
 	setEmailSubject(configData)
 
-	err := populateTriggers(configData)
+	err = populateTriggers(configData)
 	if err != nil {
 		return err
 	}
