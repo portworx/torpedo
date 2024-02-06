@@ -3,10 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	"math"
 	"math/rand"
 	"os"
@@ -19,6 +15,11 @@ import (
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 
 	"github.com/portworx/torpedo/pkg/stats"
 
@@ -563,7 +564,7 @@ const (
 	ReallocateSharedMount = "reallocateSharedMount"
 
 	// AddBackupCluster adds source and destination cluster
-	AddBackupCluster = "triggerAddBackupCluster"
+	AddBackupCluster = "addBackupCluster"
 
 	//SetupBackupBucketAndCreds add creds and adds bucket for backup
 	SetupBackupBucketAndCreds = "setupBackupBucketAndCreds"

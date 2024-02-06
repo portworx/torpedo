@@ -328,7 +328,7 @@ func eventRestore(inputsForEventBuilder *PxBackupLongevity) (error, string, Even
 
 	eventData := &EventData{}
 
-	restoreName := fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, GenerateUUID())
+	restoreName := fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, RandomString(5))
 	appContextsExpectedInBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.BackupData.Namespaces)
 	err := CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
 	if err != nil {
@@ -430,7 +430,7 @@ func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *E
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: SetupBackupBucketAndCreds,
+			Type: AddBackupCluster,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -466,7 +466,7 @@ func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *E
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: SetupBackupBucketAndCreds,
+			Type: DeployBackupApps,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -542,7 +542,7 @@ func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *c
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: CreatePxBackup,
+			Type: CreatePxBackupAndRestore,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -557,7 +557,6 @@ func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *c
 	result.Name = "Create Backup and Restore"
 	inputForBuilder := GetLongevityInputParams()
 
-	log.Infof("Creating Backup")
 	inputForBuilder.BackupData.BackupLocationName = LongevityBackupLocationName
 	inputForBuilder.BackupData.BackupLocationUID = LongevityBackupLocationUID
 	inputForBuilder.BackupData.ClusterUid = LongevityClusterUID
@@ -587,7 +586,7 @@ func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: CreatePxBackup,
+			Type: CreateRandomRestore,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
