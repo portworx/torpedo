@@ -10,4 +10,8 @@ type Pds struct {
 	DeploymentEventsV2              *pdsV2api.DeploymentEventsV2
 	DeploymentManifestV2            *pdsV2api.DeploymentManifestV2
 	ImageV2                         *pdsV2api.ImageV2
+	BackupV2                        *pdsV2api.BackupV2
+	BackupConfigV2                  *pdsV2api.BackupConfigV2
+	DeploymentTopologyV2            *pdsV2api.DeploymentTopologyV2
+	RestoreV2                       *pdsV2api.RestoreV2
 }

@@ -13,4 +13,9 @@ type Platform struct {
 	TenantV2                *platformApi.TenantV2
 	WhoAmI                  *platformApi.WhoAmI
 	TargetClusterManifestV2 *platformApi.TargetClusterManifestV2
+	ApplicationV2           *platformApi.ApplicationsV2
+	BackupLocationV2        *platformApi.BackupLocationV2
+	CloudCredentialsV2      *platformApi.CloudCredentialsV2
+	InvitationV2            *platformApi.InvitationV2
+	ServiceAccountV2        *platformApi.ServiceAccountV2
 }
