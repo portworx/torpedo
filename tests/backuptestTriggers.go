@@ -36,6 +36,7 @@ type PxBackupLongevity struct {
 	ApplicationData *ApplicationData
 	BackupData      *BackupData
 	RestoreData     *RestoreData
+	Context         context1.Context
 }
 
 type CustomData struct {
@@ -228,7 +229,7 @@ func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string,
 func eventValidateScheduleApplication(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
-	ValidateApplications(inputsForEventBuilder.ApplicationData.SchedulerContext)
+	_, _ = ValidateApplicationsStartData(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.Context)
 	return nil, "", *eventData
 }
 
