@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	"math/rand"
 	"net/http"
@@ -165,6 +166,7 @@ func CollectSupport(c *gin.Context) {
 // ScheduleAppsAndValidate : This API schedules multiple applications on the cluster and validates them
 // context is created as a global context to be accessed later in further tests
 func ScheduleAppsAndValidate(c *gin.Context) {
+	log.Infof("Inside ScheduleAppsAndValidate")
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Errorf("Error happened while doing InitInstance()"),
@@ -199,6 +201,7 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 
 // GetPxVersion This function returns the current Px Version in the Target Cluster
 func GetPxVersion(c *gin.Context) {
+	log.Infof("Inside GetPxVersion")
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Errorf("Error happened while doing InitInstance()"),
