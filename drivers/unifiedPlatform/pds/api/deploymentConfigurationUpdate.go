@@ -41,8 +41,7 @@ func (depConfigUpdate *DeploymentConfigurationUpdateV2) ListDeploymentConfigurat
 
 // CreateDeploymentConfigurationUpdate return newly created deployment model.
 func (depConfigUpdate *DeploymentConfigurationUpdateV2) CreateDeploymentConfigurationUpdate(deploymentConfigUpdateConfigDeploymentMetaUid string) (*pdsv2.V1DeploymentConfigUpdate, error) {
-	dcpClient := depConfigUpdate.ApiClientV2.DeploymentConfigUpdateServiceAPI
-	context, err := GetContext()
+	context, dcpClient, err := depConfigUpdate.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
