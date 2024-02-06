@@ -331,7 +331,7 @@ func populateIntervals() {
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
 	triggerInterval[DeployBackupApps] = map[int]time.Duration{}
 
-	baseInterval := 1 * time.Second
+	baseInterval := 1 * time.Minute
 
 	triggerInterval[CreatePxBackup][10] = 6 * baseInterval
 	triggerInterval[CreatePxBackup][9] = 12 * baseInterval
@@ -377,7 +377,7 @@ func populateIntervals() {
 	triggerInterval[DeployBackupApps][2] = 12 * 60 * baseInterval
 	triggerInterval[DeployBackupApps][1] = 24 * 60 * baseInterval
 
-	baseInterval = 1 * time.Minute
+	baseInterval = 1 * time.Hour
 
 	triggerInterval[EmailReporter][10] = 1 * baseInterval
 	triggerInterval[EmailReporter][9] = 2 * baseInterval
