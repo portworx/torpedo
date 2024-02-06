@@ -534,7 +534,25 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 }
 
-func AppCreateBackupandRestore() {
+func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Create Backup and Restore"
 	inputForBuilder := GetLongevityInputParams()
@@ -554,9 +572,32 @@ func AppCreateBackupandRestore() {
 
 	UpdateEventResponse(&result)
 
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
+
 }
 
-func AppCreateRandomRestore() {
+func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreatePxBackup)
+
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreatePxBackup,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
 	result := GetLongevityEventResponse()
 	result.Name = "Create Restore From Random Backup"
 	inputForBuilder := GetLongevityInputParams()
@@ -567,6 +608,10 @@ func AppCreateRandomRestore() {
 	_ = RunBuilder(EventRestore, &inputForBuilder, &result)
 
 	UpdateEventResponse(&result)
+
+	for _, err := range result.Errors {
+		UpdateOutcome(event, err)
+	}
 
 }
 

@@ -535,6 +535,12 @@ const (
 
 	// CreateBackup creates backup for longevity
 	CreatePxBackup = "createPxBackup"
+
+	// CreateBackupAndRestore creates backup and Restores the backup
+	CreatePxBackupAndRestore = "createBackupAndRestore"
+
+	// CreateBackupAndRestore creates backup and Restores the backup
+	CreateRandomRestore = "createRandomRestore"
 )
 
 // TriggerCoreChecker checks if any cores got generated
