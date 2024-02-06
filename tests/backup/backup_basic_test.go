@@ -241,12 +241,16 @@ var _ = AfterSuite(func() {
 	}
 
 	// Cleanup all backups
-	allBackups, err := GetAllBackupsAdmin()
-	for _, backupName := range allBackups {
-		backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
-		_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+	lockedBucketName := os.Getenv("LOCKED_BUCKET_NAME")
+	if lockedBucketName == "" {
+		allBackups, err := GetAllBackupsAdmin()
+		dash.VerifySafely(err, nil, "Verifying fetching of all backups")
+		for _, backupName := range allBackups {
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+			_, err = DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup deletion - %s", backupName))
+		}
 	}
 
 	// Cleanup all restores
@@ -319,44 +323,46 @@ var _ = AfterSuite(func() {
 		}
 	}
 	// Cleanup all backup locations
-	allBackupLocations, err := GetAllBackupLocations(ctx)
-	dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-	for backupLocationUid, backupLocationName := range allBackupLocations {
-		err = DeleteBackupLocation(backupLocationName, backupLocationUid, BackupOrgID, true)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
-	}
-
-	backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+	if lockedBucketName == "" {
 		allBackupLocations, err := GetAllBackupLocations(ctx)
 		dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
-		if len(allBackupLocations) > 0 {
-			return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
-		} else {
-			return "", false, nil
+		for backupLocationUid, backupLocationName := range allBackupLocations {
+			err = DeleteBackupLocation(backupLocationName, backupLocationUid, BackupOrgID, true)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying backup location deletion - %s", backupLocationName))
 		}
-	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
-	dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
-	// Cleanup all cloud credentials
-	allCloudCredentials, err := GetAllCloudCredentials(ctx)
-	dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
-	for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
-		err = DeleteCloudCredential(cloudCredentialName, BackupOrgID, cloudCredentialUid)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
-	}
+		backupLocationDeletionSuccess := func() (interface{}, bool, error) {
+			allBackupLocations, err := GetAllBackupLocations(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all backup locations")
+			if len(allBackupLocations) > 0 {
+				return "", true, fmt.Errorf("found %d backup locations", len(allBackupLocations))
+			} else {
+				return "", false, nil
+			}
+		}
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(backupLocationDeletionSuccess, 5*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Verifying backup location deletion success")
 
-	cloudCredentialDeletionSuccess := func() (interface{}, bool, error) {
+		// Cleanup all cloud credentials
 		allCloudCredentials, err := GetAllCloudCredentials(ctx)
 		dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
-		if len(allCloudCredentials) > 0 {
-			return "", true, fmt.Errorf("found %d cloud credentials", len(allBackupLocations))
-		} else {
-			return "", false, nil
+		for cloudCredentialUid, cloudCredentialName := range allCloudCredentials {
+			err = DeleteCloudCredential(cloudCredentialName, BackupOrgID, cloudCredentialUid)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cloud cred %s", cloudCredentialName))
 		}
+
+		cloudCredentialDeletionSuccess := func() (interface{}, bool, error) {
+			allCloudCredentials, err := GetAllCloudCredentials(ctx)
+			dash.VerifySafely(err, nil, "Verifying fetching of all cloud credentials")
+			if len(allCloudCredentials) > 0 {
+				return "", true, fmt.Errorf("found %d cloud credentials", len(allBackupLocations))
+			} else {
+				return "", false, nil
+			}
+		}
+		_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
+		dash.VerifySafely(err, nil, "Verifying cloud credential deletion success")
 	}
-	_, err = DoRetryWithTimeoutWithGinkgoRecover(cloudCredentialDeletionSuccess, 5*time.Minute, 30*time.Second)
-	dash.VerifySafely(err, nil, "Verifying cloud credential deletion success")
 
 	// Cleanup all buckets after suite
 	providers := GetBackupProviders()
