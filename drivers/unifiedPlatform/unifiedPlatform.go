@@ -47,6 +47,26 @@ func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsAp
 			TargetClusterManifestV2: &platformApi.TargetClusterManifestV2{
 				ApiClientV2: platformApiClient,
 			},
+			ApplicationV2: &platformApi.ApplicationsV2{
+				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
+			},
+			BackupLocationV2: &platformApi.BackupLocationV2{
+				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
+			},
+			CloudCredentialsV2: &platformApi.CloudCredentialsV2{
+				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
+			},
+			InvitationV2: &platformApi.InvitationV2{
+				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
+			},
+			ServiceAccountV2: &platformApi.ServiceAccountV2{
+				ApiClientV2: platformApiClient,
+				AccountID:   AccountId,
+			},
 		},
 		ApiV2Pds: &pds.Pds{
 			DataServiceV2: &pdsV2Api.DataServiceV2{
@@ -70,6 +90,26 @@ func NewUnifiedPlatformComponents(platformApiClient *platformV2.APIClient, pdsAp
 				AccountID:   AccountId,
 			},
 			DeploymentManifestV2: &pdsV2Api.DeploymentManifestV2{
+				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
+			},
+			BackupV2: &pdsV2Api.BackupV2{
+				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
+			},
+			BackupConfigV2: &pdsV2Api.BackupConfigV2{
+				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
+			},
+			DeploymentTopologyV2: &pdsV2Api.DeploymentTopologyV2{
+				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
+			},
+			ImageV2: &pdsV2Api.ImageV2{
+				ApiClientV2: pdsApiClient,
+				AccountID:   AccountId,
+			},
+			RestoreV2: &pdsV2Api.RestoreV2{
 				ApiClientV2: pdsApiClient,
 				AccountID:   AccountId,
 			},

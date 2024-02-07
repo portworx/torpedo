@@ -23,7 +23,6 @@ func (img *ImageV2) GetClient() (context.Context, *pdsv2.ImageServiceAPIService,
 	img.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
 	img.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = img.AccountID
 	client := img.ApiClientV2.ImageServiceAPI
-
 	return ctx, client, nil
 }
 
