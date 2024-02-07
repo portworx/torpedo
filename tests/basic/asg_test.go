@@ -44,6 +44,8 @@ var _ = Describe("{ClusterScaleUpDown}", func() {
 		ValidateApplications(contexts)
 
 		intitialNodeCount, err := Inst().N.GetASGClusterSize()
+		log.Infof("intitialNodeCount of EKS cluster is [%v]", intitialNodeCount)
+
 		log.FailOnError(err, "Failed to Get ASG cluster size")
 
 		scaleupCount := intitialNodeCount + intitialNodeCount/2

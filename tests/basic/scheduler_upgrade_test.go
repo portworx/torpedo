@@ -19,30 +19,31 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 
-var (
-	upgradeTimeoutMins = 90 * time.Minute
-)
+const SchedulerUpgradeTimeoutInMins = 90 * time.Minute
 
 var _ = Describe("{UpgradeScheduler}", func() {
-	var testrailID = 58849
+	var (
+		testrailID = 58849
+		runID      int
+		contexts   []*scheduler.Context
+	)
+
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58849
-	var runID int
 	JustBeforeEach(func() {
 		StartTorpedoTest("UpgradeScheduler", "Validate scheduler upgrade", nil, testrailID)
 		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
-	var contexts []*scheduler.Context
 
 	stepLog := "upgrade scheduler and ensure everything is running fine"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
-		intitialNodeCount, err := Inst().N.GetASGClusterSize()
+		initialNodeCount, err := Inst().N.GetASGClusterSize()
 		log.FailOnError(err, "error getting ASG cluster size")
 
-		log.InfoD("Validating cluster size before upgrade. Initial Node Count: [%v]", intitialNodeCount)
-		ValidateClusterSize(intitialNodeCount)
+		log.InfoD("Validating cluster size before upgrade. Initial Node Count: [%v]", initialNodeCount)
+		ValidateClusterSize(initialNodeCount)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradescheduler-%d", i))...)
@@ -58,7 +59,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 			stepLog = fmt.Sprintf("start the upgrade of scheduler to version [%v]", schedVersion)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
+				err := Inst().N.SetClusterVersion(schedVersion, SchedulerUpgradeTimeoutInMins)
 				log.FailOnError(err, "Failed to set cluster version")
 			})
 
@@ -112,7 +113,7 @@ var _ = Describe("{UpgradeScheduler}", func() {
 				schedVersion)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				ValidateClusterSize(intitialNodeCount)
+				ValidateClusterSize(initialNodeCount)
 			})
 
 			Step("validate all apps after upgrade", func() {
@@ -237,7 +238,7 @@ var _ = Describe("{MigratePXCluster}", func() {
 			stepLog = fmt.Sprintf("start the upgrade of scheduler to version [%v]", schedVersion)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
-				err := Inst().N.SetClusterVersion(schedVersion, upgradeTimeoutMins)
+				err := Inst().N.SetClusterVersion(schedVersion, SchedulerUpgradeTimeoutInMins)
 				log.FailOnError(err, "Failed to set cluster version")
 			})
 
