@@ -804,8 +804,6 @@ func validateSpec(in interface{}) (interface{}, error) {
 		return specObj, nil
 	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
 		return specObj, nil
-	} else if specObj, ok := in.(*tektoncdv1.TaskKind); ok {
-		return specObj, nil
 	}
 
 	return nil, fmt.Errorf("unsupported object: %v", reflect.TypeOf(in))
