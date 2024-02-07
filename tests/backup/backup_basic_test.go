@@ -94,7 +94,8 @@ func TestBasic(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Backup", specReporters)
 }
 
-func envCleanup() bool {
+// triggerCleanup returns if cleanup should happen or not based on ENVs set in torpedo
+func triggerCleanup() bool {
 	lockedBucketName := os.Getenv("LOCKED_BUCKET_NAME")
 	if lockedBucketName == "" {
 		return true
@@ -241,7 +242,9 @@ var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
 
-	if envCleanup() {
+	cleanup := triggerCleanup()
+	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
+	if cleanup {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 
