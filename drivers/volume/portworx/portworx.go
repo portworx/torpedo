@@ -2586,6 +2586,7 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		switch pxNode.Status {
 		case api.Status_STATUS_DECOMMISSION: // do nothing
 		case api.Status_STATUS_OK:
+			log.Infof("Node [%s] api.Status_STATUS_OK", n.Name)
 			pxStatus, err := d.GetPxctlStatus(n)
 			if err != nil {
 				return "", true, &ErrFailedToWaitForPx{
@@ -5204,6 +5205,7 @@ func (d *portworx) GetPxctlStatus(n node.Node) (string, error) {
 	}
 
 	pxctlPath := d.getPxctlPath(n)
+	log.Infof("pxctlPath is [%s]", pxctlPath)
 
 	// Create context
 	if len(d.token) > 0 {
@@ -5217,6 +5219,12 @@ func (d *portworx) GetPxctlStatus(n node.Node) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get pxctl status. cause: %v", err)
 	}
+
+	if strings.Contains(out, "--output truncated--") {
+		log.Errorf("The output has an error --output truncated--")
+	}
+
+	log.Infof("The value of pxctl status -j is [%s]", out)
 
 	var data interface{}
 	err = json.Unmarshal([]byte(out), &data)
