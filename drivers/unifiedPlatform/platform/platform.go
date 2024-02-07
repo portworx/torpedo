@@ -1,16 +1,13 @@
 package platform
 
 import (
-	platformApi "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	status "net/http"
 )
 
-type Platform struct {
-	AccountV2               *platformApi.AccountV2
-	TargetClusterV2         *platformApi.TargetClusterV2
-	IamRoleBindingsV2       *platformApi.IamRoleBindingsV2
-	NamespaceV2             *platformApi.NamespaceV2
-	ProjectV2               *platformApi.ProjectV2
-	TenantV2                *platformApi.TenantV2
-	WhoAmI                  *platformApi.WhoAmI
-	TargetClusterManifestV2 *platformApi.TargetClusterManifestV2
+type Platform interface {
+	GetAccountList() ([]Account, *status.Response, error)
+	GetAccount(accountID string) (Account, *status.Response, error)
+	CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error)
+	DeleteBackupLocation(accountId string) (*status.Response, error)
 }
