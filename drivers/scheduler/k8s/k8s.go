@@ -4315,7 +4315,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					return nil, err
 				}
 			}
-		} else if pipeline, ok := specObj.(*tektoncdv1.Pipeline); ok {
+			// Kshithij: Check this code out and see if we need to change
+		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
 			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
@@ -4325,7 +4326,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
 					if ownerRef.Kind == pipeline.Kind && ownerRef.Name == pipeline.Name {
-
 						want = true
 					}
 				}
