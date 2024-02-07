@@ -794,6 +794,9 @@ github.com/jetstack/cert-manager/pkg/client/clientset/versioned
 github.com/jetstack/cert-manager/pkg/client/clientset/versioned/scheme
 github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/acme/v1
 github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/certmanager/v1
+# github.com/jinzhu/copier v0.4.0
+## explicit; go 1.13
+github.com/jinzhu/copier
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath

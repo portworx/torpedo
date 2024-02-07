@@ -95,6 +95,7 @@ require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
+	github.com/jinzhu/copier v0.4.0
 	github.com/pure-px/platform-api-go-client v0.0.0-20240131093336-8ef532ef36bd
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.7.0
@@ -133,7 +134,6 @@ require (
 	github.com/armon/go-metrics v0.4.0 // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/jinzhu/copier v0.4.0 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect

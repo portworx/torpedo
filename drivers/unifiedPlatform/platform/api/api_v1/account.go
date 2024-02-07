@@ -3,6 +3,7 @@ package apiv1
 import (
 	"context"
 	"fmt"
+	"github.com/jinzhu/copier"
 	status "net/http"
 
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"

@@ -3,6 +3,7 @@ package apiv2
 import (
 	"context"
 	"fmt"
+	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
