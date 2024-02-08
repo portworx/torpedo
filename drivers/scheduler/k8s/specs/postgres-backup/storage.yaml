@@ -1,17 +1,14 @@
-##### Portworx persistent volume claim
-{{- $volumeCount := .Values.VolumeCount }}
-{{- range $i, $ := until $volumeCount }}
----
-apiVersion: v1
+{{- range $i := until .VolumeCount }}
 kind: PersistentVolumeClaim
+apiVersion: v1
 metadata:
-  name: postgres-pvc-{{ $i }}
+  name: postgres-data-{{ $i }}
 spec:
+  storageClassName: postgres-sc
   accessModes:
     - ReadWriteOnce
-  storageClassName: postgres-sc
   resources:
     requests:
-      storage: 1Gi
-  {{- end }}
-
+      storage: 2Gi
+---
+{{- end }}
