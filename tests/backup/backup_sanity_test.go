@@ -100,6 +100,7 @@ var _ = Describe("{SetupTeardownWithCustomAppConfig}", func() {
 	var contexts []*scheduler.Context
 
 	It("has to setup, validate and teardown apps", func() {
+		log.Infof("In Px-Backup branch")
 		oldCustomAppConfig := Inst().CustomAppConfig
 		defer func() {
 			Inst().CustomAppConfig = oldCustomAppConfig
@@ -107,6 +108,8 @@ var _ = Describe("{SetupTeardownWithCustomAppConfig}", func() {
 		Inst().CustomAppConfig["fio"] = scheduler.AppConfig{
 			Replicas: 2,
 		}
+		log.Infof("CustomAppConfig: %#v", Inst().CustomAppConfig)
+		log.Infof("Rescanning specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
