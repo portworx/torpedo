@@ -1092,6 +1092,23 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
+			obj, err := k.createtektonObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
 			obj, err := k.createCoreObject(appSpec, ns, app, options)
 			if err != nil {
 				return nil, true, err
@@ -5373,6 +5390,63 @@ func (k *K8s) createVirtualMachineObjects(
 		}
 		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
 		return vm, nil
+	}
+
+	return nil, nil
+}
+
+// createtektonObjects creates the Tektoncd objects
+func (k *K8s) createtektonObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*tektoncdv1.Task); ok {
+
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		task, err := k8stektoncd.CreateTask(obj, obj.Namespace)
+		if k8serrors.IsAlreadyExists(err) {
+			if task, err = k8stektoncd.GetTask(obj.Namespace, obj.Name); err == nil {
+				log.Infof("[%v] Found existing task: %v", app.Key, obj.Name)
+				return task, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create task: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created task: %v", app.Key, obj.Name)
+		return task, nil
+	}
+
+	if obj, ok := spec.(*tektoncdv1.Pipeline); ok {
+
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		pipeline, err := k8stektoncd.CreatePipeline(obj, obj.Namespace)
+		if k8serrors.IsAlreadyExists(err) {
+			if pipeline, err = k8stektoncd.GetPipeline(obj.Namespace, obj.Name); err == nil {
+				log.Infof("[%v] Found existing pipeline: %v", app.Key, obj.Name)
+				return pipeline, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create pipeline: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created pipeline: %v", app.Key, obj.Name)
+		return pipeline, nil
 	}
 
 	return nil, nil
