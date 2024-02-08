@@ -2,21 +2,20 @@ package pds
 
 import (
 	"fmt"
+	"net/url"
+	"os"
+
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	unifiedPlatform "github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"net/url"
-	"os"
 )
 
 type LoadGenParams struct {
@@ -76,30 +75,9 @@ func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
 func InitUnifiedPlatformApiComponents(controlPlaneURL, accountID string) (*unifiedPlatform.UnifiedPlatformComponents, error) {
 	log.InfoD("Initializing Api components")
 
-	// generate pds api client
-	pdsApiConf := pdsv2.NewConfiguration()
-	endpointURL, err := url.Parse(controlPlaneURL)
-	log.Infof("controlPlane url is [%s]", endpointURL)
-	if err != nil {
-		return nil, err
-	}
-	pdsApiConf.Host = endpointURL.Host
-	pdsApiConf.Scheme = endpointURL.Scheme
-	pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
+	components, err := unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)
 
-	//generate platform api client
-	platformApiConf := platformv2.NewConfiguration()
-	endpointURL, err = url.Parse(controlPlaneURL)
-	if err != nil {
-		return nil, err
-	}
-	platformApiConf.Host = endpointURL.Host
-	platformApiConf.Scheme = endpointURL.Scheme
-	platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
-
-	components := unifiedPlatform.NewUnifiedPlatformComponents(platformV2apiClient, pdsV2apiClient, accountID)
-
-	return components, nil
+	return components, err
 }
 func InitPdsApiComponents(ControlPlaneURL string) (*pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")
