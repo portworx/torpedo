@@ -1,8 +1,7 @@
-{{- range $i := until .ClaimsCount }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: postgres-data-{{ $i }}
+  name: postgres-data
 spec:
   storageClassName: postgres-sc
   accessModes:
@@ -10,5 +9,3 @@ spec:
   resources:
     requests:
       storage: 2Gi
----
-{{- end }}
