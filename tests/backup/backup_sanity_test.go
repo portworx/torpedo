@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/testrailuttils"
 	"strings"
 	"time"
 
@@ -83,6 +84,46 @@ var _ = Describe("{UserGroupManagement}", func() {
 		err = backup.DeleteGroup("testgroup1")
 		dash.VerifySafely(err, nil, "Delete group testgroup1")
 		log.Infof("Cleanup done")
+	})
+})
+
+// This test performs basic test of starting an application and destroying it (along with storage)
+var _ = Describe("{SetupTeardownWithCustomAppConfig}", func() {
+	var testrailID = 35258
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35258
+	var runID int
+	JustBeforeEach(func() {
+		StartTorpedoTest("SetupTeardown", "Validate setup tear down", nil, testrailID)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	var contexts []*scheduler.Context
+
+	It("has to setup, validate and teardown apps", func() {
+		oldCustomAppConfig := Inst().CustomAppConfig
+		defer func() {
+			Inst().CustomAppConfig = oldCustomAppConfig
+		}()
+		Inst().CustomAppConfig["fio"] = scheduler.AppConfig{
+			Replicas: 2,
+		}
+		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("setupteardown-%d", i))...)
+		}
+		ValidateApplications(contexts)
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
