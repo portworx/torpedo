@@ -1,4 +1,4 @@
-{{- range $i := until .VolumeCount }}
+{{- range $i := until .ClaimsCount }}
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
