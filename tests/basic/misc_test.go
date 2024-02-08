@@ -1174,7 +1174,7 @@ var _ = Describe("{SetupTeardownWithCustomAppConfig}", func() {
 			Inst().CustomAppConfig = oldCustomAppConfig
 		}()
 		Inst().CustomAppConfig["fio"] = scheduler.AppConfig{
-			Replicas: 2,
+			Replicas: 8,
 		}
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
