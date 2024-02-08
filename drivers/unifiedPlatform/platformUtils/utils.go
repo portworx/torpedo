@@ -13,7 +13,7 @@ var (
 
 // InitUnifiedApiComponents
 func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
-	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(controlPlaneURL, accountID)
+	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(controlPlaneURL, accountID, false)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,181 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.account.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/account/apiv1;account";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.account.v1";
+option java_outer_classname = "AccountProto";
+
+
+// Account service provides APIs to interact with the Account entity
+service AccountService {
+  // ListAccounts API lists the accounts visible to the caller
+  rpc ListAccounts(ListAccountsRequest)
+      returns (ListAccountsResponse) {
+    option(google.api.http) = {
+      get: "/v1/accounts"
+    };
+  }
+
+  // GetAccount API returns the info about account for given account id
+  rpc GetAccount(GetAccountRequest)
+      returns (Account) {
+    option(google.api.http) = {
+      get: "/v1/accounts/{account_id}"
+    };
+  }
+}
+
+// ListAccountsRequest is an empty request to the ListAccounts API.
+message ListAccountsRequest {
+  // Pagination parameters for listing accounts
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 1;
+}
+
+// ListAccountsResponse is the response to the ListAccounts API and contains
+// the list of accounts visible to the caller.
+message ListAccountsResponse {
+  // the list of accounts
+  repeated Account accounts = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// GetAccountRequest is the request message to GetAccount API
+message GetAccountRequest {
+  // account id for which account details need to be fetched
+  string account_id = 1;
+}
+
+// Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants
+message Account {
+  // Metadata of the account.
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the Account
+  Config config = 2;
+
+  //Subscription Status for Portworx Services
+  Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Desired configuration of the account
+message Config {
+
+  // email of the first account user
+  string user_email = 1;
+
+ // Account DNS name
+  string dns_name = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // Display name of Account
+  string display_name = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Describes whether it is a Freemium or an Enterprise account
+  AccountType account_type =4;
+
+  //Product subscription info
+  oneof pds_subscription{
+    //Zuora subscription info
+    ZuoraSubscriptionInfo pds_zuora_subscription = 101;
+  }
+
+  oneof pxe_subscription{
+    //AWS registration token
+    AwsSubscriptionInfo pxe_aws_subscription = 200;
+    //Zuora subscription info
+    ZuoraSubscriptionInfo pxe_zuora_subscription = 201;
+  }
+
+  oneof baas_subscription{
+    //AWS registration token
+    AwsSubscriptionInfo baas_aws_subscription = 300;
+    //Zuora subscription info
+    ZuoraSubscriptionInfo baas_zuora_subscription = 301;
+  }
+
+}
+// AWS subscription info for one product
+message AwsSubscriptionInfo{
+    // Aws client id associated with the installed product
+    string client_id = 1;
+    // Aws product id of the installed product
+    string product_id = 2;
+    // Aws account id associated with the installed product
+    string account_id = 3;
+}
+
+// Zuora Subscription info for a particular installed product
+message ZuoraSubscriptionInfo {
+  // id associated installed product
+  string subscription_id = 1;
+  // id associated with the customer account
+  string account_id = 2;
+}
+
+// Subscription Status for Portworx Services
+message Status{
+  //Subscription status of Portworx Enterprise
+  StatusType pxe = 1;
+  //Subscription status of Portworx DataServices
+  StatusType pds = 2;
+  //Subscription status of Portworx Backup
+  StatusType baas= 3;
+}
+
+// Accepted status types for various cloud providers
+enum StatusType {
+  // Unspecified, do not use
+  STATUS_TYPE_UNSPECIFIED = 0;
+
+  // A successfully freemium account setup
+  FREEMIUM_SUCCESS=1;
+
+  // Customer has subscribed product on aws marketplace
+  AWS_SUBSCRIBE_SUCCESS = 2;
+  // Customer has subscribed product on aws marketplace but aws encountered failure during account setup
+  AWS_SUBSCRIBE_FAIL = 3;
+  // Customer has unsubscribed from marketplace and now we have 1 hour to report final billing
+  // and perform other deboarding processes
+  AWS_UNSUBSCRIBE_PENDING = 4;
+  // Customer successfully unsubscribed and we can't report billing to aws for this account anymore
+  AWS_UNSUBSCRIBE_SUCCESS = 5;
+
+  // Customer successfully subscribed to Zuora
+  ZUORA_SUBSCRIBE = 6;
+  // Customer has unsubscribed from Zuora
+  ZUORA_UNSUBSCRIBE = 7;
+}
+
+//Accepted account types
+enum AccountType{
+  // Unspecified, do not use
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  //Account is of freemium type for all three Portworx Service
+  FREEMIUM = 1;
+  //Account has a active subscription for atleast one of the Portworx Services
+  ENTERPRISE = 2;
+}

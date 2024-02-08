@@ -1,0 +1,410 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/account/apiv1/account.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "AccountService"
+        }
+    ],
+    "paths": {
+        "/v1/accounts": {
+            "get": {
+                "summary": "ListAccounts API lists the accounts visible to the caller",
+                "operationId": "AccountService_ListAccounts",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListAccountsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "AccountService"
+                ]
+            }
+        },
+        "/v1/accounts/{accountId}": {
+            "get": {
+                "summary": "GetAccount API returns the info about account for given account id",
+                "operationId": "AccountService_GetAccount",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Account"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "description": "account id for which account details need to be fetched",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "AccountService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "accountv1Status": {
+                "type": "object",
+                "properties": {
+                    "pxe": {
+                        "$ref": "#/components/schemas/v1StatusType"
+                    },
+                    "pds": {
+                        "$ref": "#/components/schemas/v1StatusType"
+                    },
+                    "baas": {
+                        "$ref": "#/components/schemas/v1StatusType"
+                    }
+                },
+                "title": "Subscription Status for Portworx Services"
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "v1Account": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/accountv1Status"
+                    }
+                },
+                "title": "Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants"
+            },
+            "v1AccountType": {
+                "type": "string",
+                "enum": [
+                    "ACCOUNT_TYPE_UNSPECIFIED",
+                    "FREEMIUM",
+                    "ENTERPRISE"
+                ],
+                "default": "ACCOUNT_TYPE_UNSPECIFIED",
+                "description": "- ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use\n - FREEMIUM: Account is of freemium type for all three Portworx Service\n - ENTERPRISE: Account has a active subscription for atleast one of the Portworx Services",
+                "title": "Accepted account types"
+            },
+            "v1AwsSubscriptionInfo": {
+                "type": "object",
+                "properties": {
+                    "clientId": {
+                        "type": "string",
+                        "title": "Aws client id associated with the installed product"
+                    },
+                    "productId": {
+                        "type": "string",
+                        "title": "Aws product id of the installed product"
+                    },
+                    "accountId": {
+                        "type": "string",
+                        "title": "Aws account id associated with the installed product"
+                    }
+                },
+                "title": "AWS subscription info for one product"
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "userEmail": {
+                        "type": "string",
+                        "title": "email of the first account user"
+                    },
+                    "dnsName": {
+                        "type": "string",
+                        "title": "Account DNS name"
+                    },
+                    "displayName": {
+                        "type": "string",
+                        "title": "Display name of Account"
+                    },
+                    "accountType": {
+                        "$ref": "#/components/schemas/v1AccountType"
+                    },
+                    "pdsZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "pxeAwsSubscription": {
+                        "$ref": "#/components/schemas/v1AwsSubscriptionInfo"
+                    },
+                    "pxeZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    },
+                    "baasAwsSubscription": {
+                        "$ref": "#/components/schemas/v1AwsSubscriptionInfo"
+                    },
+                    "baasZuoraSubscription": {
+                        "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
+                    }
+                },
+                "title": "Desired configuration of the account"
+            },
+            "v1ListAccountsResponse": {
+                "type": "object",
+                "properties": {
+                    "accounts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Account"
+                        },
+                        "title": "the list of accounts"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListAccountsResponse is the response to the ListAccounts API and contains\nthe list of accounts visible to the caller."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page number is the page number to return based on the size"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size is the maximum number of records to include per page"
+                    }
+                },
+                "title": "Request parameters for page-based pagination"
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total records without pagination available in the dataset"
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Current page number for this paginated response"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size used for pagination"
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total pages based on the page_size provided in the request"
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Next page if available in the dataset, -1 if unavailable"
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                    }
+                },
+                "title": "Metadata related to page based pagination for paginated API responses"
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+            },
+            "v1StatusType": {
+                "type": "string",
+                "enum": [
+                    "STATUS_TYPE_UNSPECIFIED",
+                    "FREEMIUM_SUCCESS",
+                    "AWS_SUBSCRIBE_SUCCESS",
+                    "AWS_SUBSCRIBE_FAIL",
+                    "AWS_UNSUBSCRIBE_PENDING",
+                    "AWS_UNSUBSCRIBE_SUCCESS",
+                    "ZUORA_SUBSCRIBE",
+                    "ZUORA_UNSUBSCRIBE"
+                ],
+                "default": "STATUS_TYPE_UNSPECIFIED",
+                "description": "- STATUS_TYPE_UNSPECIFIED: Unspecified, do not use\n - FREEMIUM_SUCCESS: A successfully freemium account setup\n - AWS_SUBSCRIBE_SUCCESS: Customer has subscribed product on aws marketplace\n - AWS_SUBSCRIBE_FAIL: Customer has subscribed product on aws marketplace but aws encountered failure during account setup\n - AWS_UNSUBSCRIBE_PENDING: Customer has unsubscribed from marketplace and now we have 1 hour to report final billing\nand perform other deboarding processes\n - AWS_UNSUBSCRIBE_SUCCESS: Customer successfully unsubscribed and we can't report billing to aws for this account anymore\n - ZUORA_SUBSCRIBE: Customer successfully subscribed to Zuora\n - ZUORA_UNSUBSCRIBE: Customer has unsubscribed from Zuora",
+                "title": "Accepted status types for various cloud providers"
+            },
+            "v1ZuoraSubscriptionInfo": {
+                "type": "object",
+                "properties": {
+                    "subscriptionId": {
+                        "type": "string",
+                        "title": "id associated installed product"
+                    },
+                    "accountId": {
+                        "type": "string",
+                        "title": "id associated with the customer account"
+                    }
+                },
+                "title": "Zuora Subscription info for a particular installed product"
+            }
+        }
+    }
+}

@@ -7,36 +7,51 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
+	publicaccountapis "github.com/pure-px/apis/public/portworx/platform/account/apiv1"
 	platformV2 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	"google.golang.org/grpc"
 	status "net/http"
 )
 
 // AccountV2 struct
 type GRPC struct {
-	ApiClientV2 *platformV2.APIClient
+	ApiClientV2 *grpc.ClientConn
+}
+
+type Credentials struct {
+	token string
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (AccountV2 *GRPC) getClient() (context.Context, *platformV2.AccountServiceAPIService, error) {
+func (grpc *GRPC) getClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
+	var accountClient publicaccountapis.AccountServiceClient
+
 	ctx, token, err := GetBearerToken()
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+		return nil, nil, "", fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	AccountV2.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	client := AccountV2.ApiClientV2.AccountServiceAPI
 
-	return ctx, client, nil
+	accountClient = publicaccountapis.NewAccountServiceClient(grpc.ApiClientV2)
+
+	//AccountV2.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	//client := AccountV2.ApiClientV2.AccountServiceAPI
+
+	return ctx, accountClient, token, nil
 }
 
 // GetAccountList returns the list of accounts
 func (AccountV2 *GRPC) GetAccountList() ([]Account, *status.Response, error) {
-	ctx, client, err := AccountV2.getClient()
 	accountsResponse := []Account{}
 
+	var cred Credentials
+	ctx, client, token, err := AccountV2.getClient()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
+
+	client.ListAccounts(ctx, nil, grpc.PerRPCCredentials())
+
 	accountList, res, err := client.AccountServiceListAccounts(ctx).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.Full HTTP response: %v", err, res)

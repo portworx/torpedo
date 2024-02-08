@@ -384,7 +384,6 @@ func init() {
 	node.Register(DriverName, v)
 }
 
-
-func(v *vsphere) GetSupportedDriveTypes() ([]string, error) {
+func (v *vsphere) GetSupportedDriveTypes() ([]string, error) {
 	return []string{"thin", "zeroedthick", "eagerzeroedthick", "lazyzeroedthick"}, nil
 }
