@@ -1,49 +1,76 @@
 package unifiedPlatform
 
 import (
-	pdsV2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
+	"crypto/tls"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v1"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v2"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/grpc"
 	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"os"
+
+	"net/url"
 )
 
 type UnifiedPlatformComponents struct {
 	Platform platform.Platform
 }
 
-func NewUnifiedPlatformComponents(platformApiClient *platformv2.APIClient, pdsApiClient *pdsV2.APIClient, grpcClient *grpc.ClientConn, AccountId string) *UnifiedPlatformComponents {
-	VARIABLE_FROM_JENKINS := os.Getenv("TYPEOFINTERFACE")
+func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*UnifiedPlatformComponents, error) {
+	VARIABLE_FROM_JENKINS := os.Getenv("TYPE_OF_INTERFACE")
 
 	switch VARIABLE_FROM_JENKINS {
 	case "v1":
+		//generate platform api_v1 client
+		platformApiConf := platformv2.NewConfiguration()
+		endpointURL, err := url.Parse(controlPlaneURL)
+		if err != nil {
+			return nil, err
+		}
+		platformApiConf.Host = endpointURL.Host
+		platformApiConf.Scheme = endpointURL.Scheme
+		platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 		return &UnifiedPlatformComponents{
 			Platform: &API_V1{
-				ApiClientV2: platformApiClient,
+				ApiClientV2: platformV2apiClient,
 			},
-		}
-	case "v2":
-		return &UnifiedPlatformComponents{
-			Platform: &API_V2{
-				ApiClientV2: platformApiClient,
-			},
-		}
+		}, nil
 	case "grpc":
-		//get the grpc client as an argument and initialize the GRPC struct
+		//generate platform grpc client
+		insecureDialOpt := true
+		dialOpts := []grpc.DialOption{}
+		if insecureDialOpt {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		} else {
+			tlsConfig := &tls.Config{}
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+		}
+		grpcClient, err := grpc.Dial(controlPlaneURL, dialOpts...)
+		if err != nil {
+			return nil, err
+		}
+
 		return &UnifiedPlatformComponents{
 			Platform: &GRPC{
 				ApiClientV2: grpcClient,
 			},
-		}
+		}, nil
 	default:
+		//generate platform api_v1 client
+		platformApiConf := platformv2.NewConfiguration()
+		endpointURL, err := url.Parse(controlPlaneURL)
+		if err != nil {
+			return nil, err
+		}
+		platformApiConf.Host = endpointURL.Host
+		platformApiConf.Scheme = endpointURL.Scheme
+		platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 		return &UnifiedPlatformComponents{
 			Platform: &API_V1{
-				ApiClientV2: platformApiClient,
+				ApiClientV2: platformV2apiClient,
 			},
-		}
+		}, nil
 	}
-
 }

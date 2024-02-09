@@ -1,7 +1,6 @@
 package platformUtils
 
 import (
-	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 )
@@ -13,7 +12,9 @@ var (
 
 // InitUnifiedApiComponents
 func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
-	v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(controlPlaneURL, accountID, false)
+	//v2Components, err = pdsdriver.InitUnifiedPlatformApiComponents(controlPlaneURL, accountID, false)
+
+	v2Components, err = unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)
 	if err != nil {
 		return err
 	}
@@ -21,10 +22,18 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 }
 
 // move to separate dir
-func CreatePlatformAccountV1(name, displayName, userMail string) (apiStructs.Account, error) {
-	acc, _, err := v2Components.Platform.CreateAccount(name, displayName, userMail)
+func GetAccountListv1() ([]apiStructs.Account, error) {
+	accList, err := v2Components.Platform.GetAccountList()
 	if err != nil {
-		return acc, err
+		return nil, err
 	}
-	return acc, nil
+	return accList, nil
 }
+
+//func CreatePlatformAccountV1(name, displayName, userMail string) (apiStructs.Account, error) {
+//	acc, _, err := v2Components.Platform.CreateAccount(name, displayName, userMail)
+//	if err != nil {
+//		return acc, err
+//	}
+//	return acc, nil
+//}

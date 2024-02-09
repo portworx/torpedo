@@ -2,7 +2,7 @@ package platform
 
 import (
 	. "github.com/onsi/ginkgo"
-	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformUtils"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformUtils"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -77,21 +77,21 @@ var _ = Describe("{AccountsCRUD}", func() {
 	Step(steplog, func() {
 		log.InfoD(steplog)
 		It("Accounts", func() {
-			Step("create accounts", func() {
-				acc, err := platformUtils.CreatePlatformAccountV1(envPlatformAccountName, envAccountDisplayName, envUserMailId)
-				log.FailOnError(err, "error while creating account")
-				log.Infof("created account with name %s", *acc.Meta.Name)
-			})
-			//steplog = "ListAccounts"
-			//Step(steplog, func() {
-			//	log.InfoD(steplog)
-			//	accList, err := platformUtils.GetPlatformAccountListV1()
-			//	log.FailOnError(err, "error while getting account list")
-			//	for _, acc := range accList {
-			//		log.Infof("Available account %s", *acc.Meta.Name)
-			//		log.Infof("Available account ID %s", *acc.Meta.Uid)
-			//	}
+			//Step("create accounts", func() {
+			//	acc, err := platformUtils.CreatePlatformAccountV1(envPlatformAccountName, envAccountDisplayName, envUserMailId)
+			//	log.FailOnError(err, "error while creating account")
+			//	log.Infof("created account with name %s", *acc.Meta.Name)
 			//})
+			steplog = "ListAccounts"
+			Step(steplog, func() {
+				log.InfoD(steplog)
+				accList, err := platformUtils.GetAccountListv1()
+				log.FailOnError(err, "error while getting account list")
+				for _, acc := range accList {
+					log.Infof("Available account %s", *acc.Meta.Name)
+					log.Infof("Available account ID %s", *acc.Meta.Uid)
+				}
+			})
 		})
 	})
 

@@ -30,22 +30,22 @@ func (AccountV2 *API_V2) getClient() (context.Context, *platformV2.AccountServic
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV2 *API_V2) GetAccountList() ([]Account, *status.Response, error) {
+func (AccountV2 *API_V2) GetAccountList() ([]Account, error) {
 	ctx, client, err := AccountV2.getClient()
 	accountsResponse := []Account{}
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 	accountList, res, err := client.AccountServiceListAccounts(ctx).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of accounts - [%v]", accountsResponse)
 	copier.Copy(&accountsResponse, accountList.Accounts)
 	log.Infof("Value of accounts after copy - [%v]", accountsResponse)
 
-	return accountsResponse, res, nil
+	return accountsResponse, nil
 }
 
 // GetAccount return pds account model.

@@ -1,6 +1,11 @@
 package apiStructs
 
-import "time"
+import (
+	"context"
+	"fmt"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"time"
+)
 
 type Meta struct {
 	Uid             *string            `copier:"must"`
@@ -22,4 +27,33 @@ type Config struct {
 type Account struct {
 	Meta   Meta   `copier:"must"`
 	Config Config `copier:"must"`
+}
+
+type Credentials struct {
+	Token    string
+	LoginAPI string
+	UserName string `json:"username"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+}
+
+func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
+	metadata := map[string]string{}
+
+	if c.Token == "" {
+		_, token, err := GetBearerToken()
+		if err != nil {
+			return nil, fmt.Errorf("get berare token, err: %s", err)
+		}
+
+		c.Token = token
+	}
+
+	metadata["Authorization"] = fmt.Sprintf("Bearer %s", c.Token)
+
+	return metadata, nil
+}
+
+func (c *Credentials) RequireTransportSecurity() bool {
+	return false
 }

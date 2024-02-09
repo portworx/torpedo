@@ -1,20 +1,13 @@
 package pds
 
 import (
-	"crypto/tls"
 	"fmt"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	pdscontrolplane "github.com/portworx/torpedo/drivers/pds/controlplane"
 	"github.com/portworx/torpedo/drivers/scheduler"
-	unifiedPlatform "github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -77,47 +70,6 @@ func GetK8sContext() (*kubernetes.Clientset, *rest.Config, error) {
 
 }
 
-func InitUnifiedPlatformApiComponents(controlPlaneURL, accountID string, insecureDialOpt bool) (*unifiedPlatform.UnifiedPlatformComponents, error) {
-	log.InfoD("Initializing Api components")
-
-	// generate pds api client
-	pdsApiConf := pdsv2.NewConfiguration()
-	endpointURL, err := url.Parse(controlPlaneURL)
-	log.Infof("controlPlane url is [%s]", endpointURL)
-	if err != nil {
-		return nil, err
-	}
-	pdsApiConf.Host = endpointURL.Host
-	pdsApiConf.Scheme = endpointURL.Scheme
-	pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
-
-	//generate platform api client
-	platformApiConf := platformv2.NewConfiguration()
-	endpointURL, err = url.Parse(controlPlaneURL)
-	if err != nil {
-		return nil, err
-	}
-	platformApiConf.Host = endpointURL.Host
-	platformApiConf.Scheme = endpointURL.Scheme
-	platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
-
-	//Initialize the grpc client here and pass it to the NewUnifiedPlatformComponents method
-	dialOpts := []grpc.DialOption{}
-	if insecureDialOpt {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	} else {
-		tlsConfig := &tls.Config{}
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
-	}
-	grpcClient, err := grpc.Dial(endpointURL.Host, dialOpts...)
-	if err != nil {
-		return nil, err
-	}
-
-	components := unifiedPlatform.NewUnifiedPlatformComponents(platformV2apiClient, pdsV2apiClient, grpcClient, accountID)
-
-	return components, nil
-}
 func InitPdsApiComponents(ControlPlaneURL string) (*pdsapi.Components, *pdscontrolplane.ControlPlane, error) {
 	log.InfoD("Initializing Api components")
 	apiConf := pds.NewConfiguration()
