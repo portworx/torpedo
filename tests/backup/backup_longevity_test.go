@@ -153,8 +153,18 @@ func backupEventTrigger(wg *sync.WaitGroup,
 
 		if isTriggerEnabled && time.Since(lastInvocationTime) > time.Duration(waitTime) {
 
+			// This lock needs to be removed once the restore validation is made thread safe
+			log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+			triggerLoc.Lock()
+			log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+
 			triggerFunc(contexts, triggerEventsChan)
 			log.Infof("Trigger Function completed for [%s]\n", triggerType)
+
+			triggerFunc(contexts, triggerEventsChan)
+			log.Infof("Trigger Function completed for [%s]\n", triggerType)
+			triggerLoc.Unlock()
+			log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
 
 			lastInvocationTime = time.Now().Local()
 
