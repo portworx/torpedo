@@ -87,8 +87,10 @@ require (
 	github.com/hashicorp/cronexpr v1.1.2 // indirect
 	github.com/hashicorp/nomad/api v0.0.0-20240209231933-e2bfdf0c1034 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/cel-go v0.18.1 // indirect
 	github.com/google/go-containerregistry v0.17.0 // indirect
+	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.11.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -115,8 +117,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.21.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
-	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/tools v0.13.0 // indirect
+	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/tools v0.16.1 // indirect
 	knative.dev/pkg v0.0.0-20231023150739-56bfe0dd9626 // indirect
 	kubevirt.io/client-go v0.59.2 // indirect
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
@@ -127,7 +129,7 @@ require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
-	github.com/onsi/ginkgo/v2 v2.6.0
+	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.10.0

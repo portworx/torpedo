@@ -522,6 +522,9 @@ github.com/go-playground/validator/v10
 # github.com/go-sql-driver/mysql v1.6.0
 ## explicit; go 1.10
 github.com/go-sql-driver/mysql
+# github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572
+## explicit; go 1.13
+github.com/go-task/slim-sprig
 # github.com/gobwas/glob v0.2.3
 ## explicit
 github.com/gobwas/glob
@@ -634,6 +637,9 @@ github.com/google/go-querystring/query
 ## explicit; go 1.12
 github.com/google/gofuzz
 github.com/google/gofuzz/bytesource
+# github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1
+## explicit; go 1.14
+github.com/google/pprof/profile
 # github.com/google/s2a-go v0.1.7
 ## explicit; go 1.19
 github.com/google/s2a-go
@@ -1073,11 +1079,21 @@ github.com/moul/http2curl
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/onsi/ginkgo/v2 v2.6.0
-## explicit; go 1.18
+# github.com/onsi/ginkgo/v2 v2.15.0
+## explicit; go 1.20
 github.com/onsi/ginkgo/v2
 github.com/onsi/ginkgo/v2/config
 github.com/onsi/ginkgo/v2/formatter
+github.com/onsi/ginkgo/v2/ginkgo
+github.com/onsi/ginkgo/v2/ginkgo/build
+github.com/onsi/ginkgo/v2/ginkgo/command
+github.com/onsi/ginkgo/v2/ginkgo/generators
+github.com/onsi/ginkgo/v2/ginkgo/internal
+github.com/onsi/ginkgo/v2/ginkgo/labels
+github.com/onsi/ginkgo/v2/ginkgo/outline
+github.com/onsi/ginkgo/v2/ginkgo/run
+github.com/onsi/ginkgo/v2/ginkgo/unfocus
+github.com/onsi/ginkgo/v2/ginkgo/watch
 github.com/onsi/ginkgo/v2/internal
 github.com/onsi/ginkgo/v2/internal/global
 github.com/onsi/ginkgo/v2/internal/interrupt_handler
@@ -1085,7 +1101,7 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/onsi/gomega v1.24.1
+# github.com/onsi/gomega v1.30.0
 ## explicit; go 1.18
 github.com/onsi/gomega
 github.com/onsi/gomega/format
@@ -1575,8 +1591,8 @@ golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/exp/constraints
 golang.org/x/exp/maps
 golang.org/x/exp/slices
-# golang.org/x/mod v0.12.0
-## explicit; go 1.17
+# golang.org/x/mod v0.14.0
+## explicit; go 1.18
 golang.org/x/mod/semver
 # golang.org/x/net v0.20.0
 ## explicit; go 1.18
@@ -1656,9 +1672,10 @@ golang.org/x/text/width
 # golang.org/x/time v0.5.0
 ## explicit; go 1.18
 golang.org/x/time/rate
-# golang.org/x/tools v0.13.0
+# golang.org/x/tools v0.16.1
 ## explicit; go 1.18
 golang.org/x/tools/cmd/stringer
+golang.org/x/tools/go/ast/inspector
 golang.org/x/tools/go/gcexportdata
 golang.org/x/tools/go/internal/packagesdriver
 golang.org/x/tools/go/packages
@@ -1675,6 +1692,7 @@ golang.org/x/tools/internal/pkgbits
 golang.org/x/tools/internal/tokeninternal
 golang.org/x/tools/internal/typeparams
 golang.org/x/tools/internal/typesinternal
+golang.org/x/tools/internal/versions
 # golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 ## explicit; go 1.17
 golang.org/x/xerrors
