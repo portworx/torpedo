@@ -217,7 +217,7 @@ const (
 )
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot                     = "/specs"
+	defaultSpecsRoot                     = "/Users/snigdhaagrawal/automation/torpedo_local/torpedo/drivers/scheduler/k8s/specs"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	monitorDriverCliFlag                 = "monitor-driver"
@@ -341,7 +341,7 @@ const (
 	defaultMonitorDriver                  = "prometheus"
 	defaultStorageDriver                  = "pxd"
 	defaultPdsDriver                      = "pds"
-	defaultLogLocation                    = "/testresults/"
+	defaultLogLocation                    = "/tmp/"
 	defaultBundleLocation                 = "/var/cores"
 	defaultLogLevel                       = "debug"
 	defaultAppScaleFactor                 = 1
