@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -13,7 +14,7 @@ import (
 )
 
 // AccountV2 struct
-type GRPC struct {
+type PLATFORM_GRPC struct {
 	ApiClientV2 *grpc.ClientConn
 }
 
@@ -22,7 +23,7 @@ var (
 )
 
 // GetClient updates the header with bearer token and returns the new client
-func (grpc *GRPC) getClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
+func (grpc *PLATFORM_GRPC) getClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var accountClient publicaccountapis.AccountServiceClient
 
@@ -47,7 +48,7 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV2 *GRPC) GetAccountList() ([]Account, error) {
+func (AccountV2 *PLATFORM_GRPC) GetAccountList() ([]Account, error) {
 	accountsResponse := []Account{}
 
 	ctx, client, token, err := AccountV2.getClient()

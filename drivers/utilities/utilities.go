@@ -3,11 +3,13 @@ package utilities
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"strconv"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -191,4 +193,14 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	}
 
 	return appInfo, nil
+}
+
+// Function to get environment variable and fall back to default value if not found
+func GetEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		log.Infof("Unable to find [%v] in the env variables, falling back to [%s]", fallback)
+		return fallback
+	}
+	return value
 }

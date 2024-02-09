@@ -3,22 +3,23 @@ package apiv2
 import (
 	"context"
 	"fmt"
+	status "net/http"
+
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	platformV2 "github.com/pure-px/platform-api-go-client/v1alpha1"
-	status "net/http"
 )
 
 // AccountV2 struct
-type API_V2 struct {
+type PLATFORM_API_V2 struct {
 	ApiClientV2 *platformV2.APIClient
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (AccountV2 *API_V2) getClient() (context.Context, *platformV2.AccountServiceAPIService, error) {
-	log.Infof("Creating client from api_v2 package")
+func (AccountV2 *PLATFORM_API_V2) getClient() (context.Context, *platformV2.AccountServiceAPIService, error) {
+	log.Infof("Creating client from PLATFORM_API_V2 package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
@@ -30,7 +31,7 @@ func (AccountV2 *API_V2) getClient() (context.Context, *platformV2.AccountServic
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV2 *API_V2) GetAccountList() ([]Account, error) {
+func (AccountV2 *PLATFORM_API_V2) GetAccountList() ([]Account, error) {
 	ctx, client, err := AccountV2.getClient()
 	accountsResponse := []Account{}
 
@@ -49,7 +50,7 @@ func (AccountV2 *API_V2) GetAccountList() ([]Account, error) {
 }
 
 // GetAccount return pds account model.
-func (AccountV2 *API_V2) GetAccount(accountID string) (Account, *status.Response, error) {
+func (AccountV2 *PLATFORM_API_V2) GetAccount(accountID string) (Account, *status.Response, error) {
 	log.Infof("Get the account detail having UUID: %v", accountID)
 
 	accountResponse := Account{}
@@ -72,7 +73,7 @@ func (AccountV2 *API_V2) GetAccount(accountID string) (Account, *status.Response
 }
 
 // CreateAccount return pds account model.
-func (AccountV2 *API_V2) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
+func (AccountV2 *PLATFORM_API_V2) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
 	_, client, err := AccountV2.getClient()
 
 	accountResponse := Account{}
@@ -106,7 +107,7 @@ func (AccountV2 *API_V2) CreateAccount(accountName, displayName, userMail string
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV2 *API_V2) DeleteBackupLocation(accountId string) (*status.Response, error) {
+func (AccountV2 *PLATFORM_API_V2) DeleteBackupLocation(accountId string) (*status.Response, error) {
 	ctx, client, err := AccountV2.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
