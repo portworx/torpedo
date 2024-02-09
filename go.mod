@@ -32,7 +32,6 @@ require (
 	github.com/libopenstorage/operator v0.0.0-20240206041752-d8569d10595c
 	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
 	github.com/onsi/gomega v1.30.0
-	github.com/onsi/ginkgo v1.16.5
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
@@ -128,6 +127,7 @@ require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
+	github.com/onsi/ginkgo/v2 v2.6.0
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.10.0
@@ -283,7 +283,6 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/moul/http2curl v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc5 // indirect
 	github.com/opencontainers/runc v1.1.5 // indirect
@@ -331,7 +330,6 @@ require (
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiserver v0.26.2 // indirect
 	k8s.io/cli-runtime v0.25.2 // indirect

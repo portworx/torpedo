@@ -52,7 +52,7 @@ var CharactersAroundMismatchToInclude uint = 5
 var contextType = reflect.TypeOf((*context.Context)(nil)).Elem()
 var timeType = reflect.TypeOf(time.Time{})
 
-// The default indentation string emitted by the format package
+//The default indentation string emitted by the format package
 var Indent = "    "
 
 var longFormThreshold = 20
@@ -258,11 +258,7 @@ Set PrintContextObjects to true to print the content of objects implementing con
 func Object(object interface{}, indentation uint) string {
 	indent := strings.Repeat(Indent, int(indentation))
 	value := reflect.ValueOf(object)
-	commonRepresentation := ""
-	if err, ok := object.(error); ok && !isNilValue(value) { // isNilValue check needed here to avoid nil deref due to boxed nil
-		commonRepresentation += "\n" + IndentString(err.Error(), indentation) + "\n" + indent
-	}
-	return fmt.Sprintf("%s<%s>: %s%s", indent, formatType(value), commonRepresentation, formatValue(value, indentation))
+	return fmt.Sprintf("%s<%s>: %s", indent, formatType(value), formatValue(value, indentation))
 }
 
 /*
@@ -302,7 +298,7 @@ func formatType(v reflect.Value) string {
 	case reflect.Map:
 		return fmt.Sprintf("%s | len:%d", v.Type(), v.Len())
 	default:
-		return v.Type().String()
+		return fmt.Sprintf("%s", v.Type())
 	}
 }
 
