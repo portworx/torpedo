@@ -1,4 +1,4 @@
-FROM golang:1.19.5-alpine
+FROM golang:1.21.6-alpine
 
 WORKDIR /go/src/github.com/portworx/
 
@@ -7,7 +7,7 @@ RUN apk update && \
     apk add --no-cache bash git gcc musl-dev make curl openssh-client ca-certificates jq libc6-compat docker python3 py3-pip
 
 # Install Ginkgo
-RUN GOFLAGS= GO111MODULE=on go install github.com/onsi/ginkgo/ginkgo@v1.16.5
+RUN GOFLAGS= GO111MODULE=on go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@v2.15.0
 
 # Install aws-iam-authenticator
 # This is needed for tests running inside the EKS cluster and for creating AWS entities like buckets
@@ -24,11 +24,20 @@ RUN curl -fsSL https://clis.cloud.ibm.com/install/linux | sh && \
 RUN curl -L -o /usr/local/bin/vcluster "https://github.com/loft-sh/vcluster/releases/latest/download/vcluster-linux-amd64" && \
     chmod 0755 /usr/local/bin/vcluster
 
-# Install Azure CLI and dependencies
-RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && \
+## Install Azure CLI and dependencies
+#RUN apk add --no-cache --update --virtual=build gcc musl-dev python3-dev libffi-dev openssl-dev cargo make && \
+#    pip3 install "pyyaml<=5.3.1" && \
+#    pip3 install --no-cache-dir --prefer-binary azure-cli && \
+#    apk del build
+
+# Install Azure CLI and dependencies within a virtual environment
+RUN apk add --no-cache --update python3-dev libffi-dev openssl-dev cargo make && \
+    python3 -m venv /azure-cli-venv && \
+    source /azure-cli-venv/bin/activate && \
+    pip3 install --upgrade pip && \
     pip3 install "pyyaml<=5.3.1" && \
     pip3 install --no-cache-dir --prefer-binary azure-cli && \
-    apk del build
+    deactivate
 
 # Install Postman-Newman Dependencies
 RUN apk update && apk upgrade \

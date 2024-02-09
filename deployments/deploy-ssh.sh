@@ -30,10 +30,6 @@ if [[ ! -z "${TORPEDO_SKIP_SYSTEM_CHECKS}" ]]; then
     TORPEDO_SKIP_SYSTEM_CHECKS=true
 fi
 
-if [ "${IS_OCP}" == true ]; then
-    SECURITY_CONTEXT=true
-fi
-
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
@@ -54,6 +50,14 @@ if [ -z "${SCHEDULER}" ]; then
     SCHEDULER="k8s"
 fi
 
+if [ "${SCHEDULER}" == "openshift" ]; then
+    IS_OCP="true"
+fi
+
+if [ "${IS_OCP}" == true ]; then
+    SECURITY_CONTEXT=true
+fi
+
 if [ -z "${LOGLEVEL}" ]; then
     LOGLEVEL="debug"
 fi
@@ -69,11 +73,11 @@ fi
 if [ "$FAIL_FAST" = "true" ]; then
     FAIL_FAST="--failFast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 if [ "$DRY_RUN" = "true" ]; then
-    DRY_RUN="--dryRun"
+    DRY_RUN="--dry-run"
 else
     DRY_RUN=""
 fi
@@ -579,8 +583,9 @@ spec:
         --trace \
         --timeout "${TIMEOUT}" \
         ${FAIL_FAST} \
+        --junit-report=/testresults/junit_basic.xml \
         ${DRY_RUN} \
-        --slowSpecThreshold 600 \
+        --poll-progress-after "10m" \
         "${FOCUS_ARG}" \
         ${SKIP_ARG} \
         ${TEST_SUITE} \
