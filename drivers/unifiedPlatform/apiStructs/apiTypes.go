@@ -30,11 +30,7 @@ type Account struct {
 }
 
 type Credentials struct {
-	Token    string
-	LoginAPI string
-	UserName string `json:"username"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
+	Token string
 }
 
 func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {

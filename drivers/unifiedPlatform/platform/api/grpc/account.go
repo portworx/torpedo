@@ -60,7 +60,7 @@ func (AccountV2 *GRPC) GetAccountList() ([]Account, error) {
 	}
 
 	firstPageRequest := &publicaccountapis.ListAccountsRequest{
-		Pagination: NewPaginationRequest(1, 2),
+		Pagination: NewPaginationRequest(1, 50),
 	}
 
 	apiResponse, err := client.ListAccounts(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
@@ -83,38 +83,35 @@ func (AccountV2 *GRPC) GetAccountList() ([]Account, error) {
 }
 
 // GetAccount return pds account model.
-//func (AccountV2 *GRPC) GetAccount(accountID string) (Account, *status.Response, error) {
-//	log.Infof("Get the account detail having UUID: %v", accountID)
+//func (AccountV2 *GRPC) GetAccount(accountID string) (*Account, error) {
+//	accountsResponse := []Account{}
 //
-//	accountResponse := Account{}
-//
-//	ctx, client, err := AccountV2.getClient()
+//	ctx, client, token, err := AccountV2.getClient()
 //	if err != nil {
-//		return accountResponse, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-//	}
-//	accountModel, res, err := client.AccountServiceGetAccount(ctx, accountID).Execute()
-//
-//	if err != nil && res.StatusCode != status.StatusOK {
-//		return accountResponse, nil, fmt.Errorf("Error when calling `AccountServiceGetAccount`: %v\n.Full HTTP response: %v", err, res)
+//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 //	}
 //
-//	log.Infof("Value of account - [%v]", accountResponse)
-//	copier.Copy(&accountResponse, accountModel)
-//	log.Infof("Value of account after copy - [%v]", accountResponse)
+//	credentials = &Credentials{
+//		Token: token,
+//	}
 //
-//	return accountResponse, res, nil
+//	client.GetAccount(ctx)
+//
+//	return nil, err
+//
 //}
+
 //
-//// CreateAccount return pds account model.
-//func (AccountV2 *GRPC) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
-//	_, client, err := AccountV2.getClient()
-//
-//	accountResponse := Account{}
-//
+// CreateAccount return pds account model.
+//func (AccountV2 *GRPC) CreateAccount(accountName, displayName, userMail string) (*Account, error) {
+//	_, client, token, err := AccountV2.getClient()
 //	if err != nil {
-//		return accountResponse, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 //	}
 //
+//	credentials = &Credentials{
+//		Token: token,
+//	}
 //	var createRequest platformV2.ApiAccountServiceCreateAccountRequest
 //	createRequest = createRequest.V1Account1(platformV2.V1Account1{
 //		Meta: &platformV2.V1Meta{
@@ -138,6 +135,7 @@ func (AccountV2 *GRPC) GetAccountList() ([]Account, error) {
 //
 //	return accountResponse, res, nil
 //}
+
 //
 //// DeleteBackupLocation delete backup location and return status.
 //func (AccountV2 *GRPC) DeleteBackupLocation(accountId string) (*status.Response, error) {

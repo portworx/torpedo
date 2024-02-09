@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"os"
+	"strconv"
 
 	"net/url"
 )
@@ -39,7 +40,13 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		}, nil
 	case "grpc":
 		//generate platform grpc client
-		insecureDialOpt := true
+		insecureDialOptStr := os.Getenv("INSECURE_FLAG")
+
+		insecureDialOpt, err := strconv.ParseBool(insecureDialOptStr)
+		if err != nil {
+			return nil, err
+		}
+
 		dialOpts := []grpc.DialOption{}
 		if insecureDialOpt {
 			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
