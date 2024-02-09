@@ -1,24 +1,25 @@
-package grpc
+package PLATFORM_GRPC
 
 import (
 	"context"
 	"fmt"
+	status "net/http"
+
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	platformV2 "github.com/pure-px/platform-api-go-client/v1alpha1"
-	status "net/http"
 )
 
 // AccountV2 struct
-type GRPC struct {
+type PLATFORM_GRPC struct {
 	ApiClientV2 *platformV2.APIClient
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (AccountV2 *GRPC) getClient() (context.Context, *platformV2.AccountServiceAPIService, error) {
-	log.Infof("Creating client from grpc package")
+func (AccountV2 *PLATFORM_GRPC) getClient() (context.Context, *platformV2.AccountServiceAPIService, error) {
+	log.Infof("Creating client from PLATFORM_GRPC package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
@@ -30,7 +31,7 @@ func (AccountV2 *GRPC) getClient() (context.Context, *platformV2.AccountServiceA
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV2 *GRPC) GetAccountList() ([]Account, *status.Response, error) {
+func (AccountV2 *PLATFORM_GRPC) GetAccountList() ([]Account, *status.Response, error) {
 	ctx, client, err := AccountV2.getClient()
 	accountsResponse := []Account{}
 
@@ -49,7 +50,7 @@ func (AccountV2 *GRPC) GetAccountList() ([]Account, *status.Response, error) {
 }
 
 // GetAccount return pds account model.
-func (AccountV2 *GRPC) GetAccount(accountID string) (Account, *status.Response, error) {
+func (AccountV2 *PLATFORM_GRPC) GetAccount(accountID string) (Account, *status.Response, error) {
 	log.Infof("Get the account detail having UUID: %v", accountID)
 
 	accountResponse := Account{}
@@ -72,7 +73,7 @@ func (AccountV2 *GRPC) GetAccount(accountID string) (Account, *status.Response, 
 }
 
 // CreateAccount return pds account model.
-func (AccountV2 *GRPC) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
+func (AccountV2 *PLATFORM_GRPC) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
 	_, client, err := AccountV2.getClient()
 
 	accountResponse := Account{}
@@ -106,7 +107,7 @@ func (AccountV2 *GRPC) CreateAccount(accountName, displayName, userMail string) 
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV2 *GRPC) DeleteBackupLocation(accountId string) (*status.Response, error) {
+func (AccountV2 *PLATFORM_GRPC) DeleteBackupLocation(accountId string) (*status.Response, error) {
 	ctx, client, err := AccountV2.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)

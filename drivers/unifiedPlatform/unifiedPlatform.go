@@ -7,7 +7,15 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v2"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/grpc"
+	. "github.com/portworx/torpedo/drivers/utilities"
 	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
+)
+
+const (
+	UNIFIED_PLATFORM_INTERFACE = "UNIFIED_PLATFORM_INTERFACE"
+	API_V1                     = "v1"
+	API_V2                     = "v2"
+	GRPC                       = "grpc"
 )
 
 type UnifiedPlatformComponents struct {
@@ -15,11 +23,11 @@ type UnifiedPlatformComponents struct {
 }
 
 func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*UnifiedPlatformComponents, error) {
-	// VARIABLE_FROM_JENKINS := os.Getenv("TYPEOFINTERFACE")
-	VARIABLE_FROM_JENKINS := "grpc"
+	// Check the API version to be used during test, fallback to API_v1 if not specified
+	VARIABLE_FROM_JENKINS := GetEnv(UNIFIED_PLATFORM_INTERFACE, API_V1)
 
 	switch VARIABLE_FROM_JENKINS {
-	case "v1":
+	case API_V1:
 		//generate platform api_v1 client
 		platformApiConf := platformv2.NewConfiguration()
 		endpointURL, err := url.Parse(controlPlaneURL)
@@ -30,11 +38,11 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		platformApiConf.Scheme = endpointURL.Scheme
 		platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 		return &UnifiedPlatformComponents{
-			Platform: &API_V1{
+			Platform: &PLATFORM_API_V1{
 				ApiClientV2: platformV2apiClient,
 			},
 		}, nil
-	case "v2":
+	case API_V2:
 		//generate platform api_v2 client
 		platformApiConf := platformv2.NewConfiguration()
 		endpointURL, err := url.Parse(controlPlaneURL)
@@ -45,11 +53,11 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		platformApiConf.Scheme = endpointURL.Scheme
 		platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 		return &UnifiedPlatformComponents{
-			Platform: &API_V2{
+			Platform: &PLATFORM_API_V2{
 				ApiClientV2: platformV2apiClient,
 			},
 		}, nil
-	case "grpc":
+	case GRPC:
 		//generate platform grpc client
 		platformApiConf := platformv2.NewConfiguration()
 		endpointURL, err := url.Parse(controlPlaneURL)
@@ -60,7 +68,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		platformApiConf.Scheme = endpointURL.Scheme
 		platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 		return &UnifiedPlatformComponents{
-			Platform: &API_V1{
+			Platform: &PLATFORM_GRPC{
 				ApiClientV2: platformV2apiClient,
 			},
 		}, nil
@@ -75,7 +83,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		platformApiConf.Scheme = endpointURL.Scheme
 		platformV2apiClient := platformv2.NewAPIClient(platformApiConf)
 		return &UnifiedPlatformComponents{
-			Platform: &GRPC{
+			Platform: &PLATFORM_API_V1{
 				ApiClientV2: platformV2apiClient,
 			},
 		}, nil
