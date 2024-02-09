@@ -90,9 +90,9 @@ var _ = Describe("{PingTest}", func() {
 	})
 
 	steplog := "Invoke whoami api and validate the api response "
-	Step(steplog, func() {
+	It(steplog, func() {
 		log.InfoD(steplog)
-		It("validate api response", func() {
+		Step("validate api response", func() {
 			_, httpResp, err := controlPlane.WhoAmI()
 			log.FailOnError(err, "Error while fetching user details")
 			dash.VerifyFatal(httpResp.StatusCode, 200, "validating whoami api response")
