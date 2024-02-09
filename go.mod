@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240209080705-6a8380a8d664
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240209121143-d645df5d8eea
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.15.1

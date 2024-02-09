@@ -121,9 +121,25 @@ func (c *Client) setClient(namespace string) error {
 			fmt.Println("kubeconfig is not empty")
 			fmt.Println("calling loadClientFromKubeconfig")
 			err = c.loadClientFromKubeconfig(kubeconfig, namespace)
+		} else {
+			fmt.Println("calling loadClientFromServiceAccount")
+			err = c.loadClientFromServiceAccount(namespace)
 		}
 	}
 	return err
+}
+
+// loadClientFromServiceAccount loads a k8s client from a ServiceAccount specified in the pod running px
+func (c *Client) loadClientFromServiceAccount(namespace string) error {
+	fmt.Println("Inside loadClientFromServiceAccount")
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+
+	c.config = config
+	fmt.Println("calling loadClient")
+	return c.loadClient(namespace)
 }
 
 func (c *Client) loadClientFromKubeconfig(kubeconfig string, namespace string) error {
