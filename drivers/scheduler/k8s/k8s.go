@@ -4332,7 +4332,6 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					return nil, err
 				}
 			}
-			// Kshithij: Check this code out and see if we need to change
 		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
 			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
 			if err != nil {
