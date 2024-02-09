@@ -40,9 +40,9 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 		StartTorpedoTest("ValidateDNSEndpoint", "validate dns endpoitns", pdsLabels, 0)
 	})
 
-	Step(steplog, func() {
+	It(steplog, func() {
 		log.InfoD(steplog)
-		It("validate dns endpoints", func() {
+		Step("validate dns endpoints", func() {
 			var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 			var dsVersions = make(map[string]map[string][]string)
 
