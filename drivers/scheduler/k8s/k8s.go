@@ -5423,9 +5423,7 @@ func (k *K8s) createtektonObjects(
 		}
 		log.Infof("[%v] Created task: %v", app.Key, obj.Name)
 		return task, nil
-	}
-
-	if obj, ok := spec.(*tektoncdv1.Pipeline); ok {
+	} else if obj, ok := spec.(*tektoncdv1.Pipeline); ok {
 
 		// Create VirtualMachine Spec
 		if obj.Namespace != "kube-system" {
@@ -5447,6 +5445,8 @@ func (k *K8s) createtektonObjects(
 		}
 		log.Infof("[%v] Created pipeline: %v", app.Key, obj.Name)
 		return pipeline, nil
+	} else {
+		log.Infof("Object type unknown/not supported: %v", obj)
 	}
 
 	return nil, nil
