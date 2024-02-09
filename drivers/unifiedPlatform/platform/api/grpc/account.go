@@ -7,6 +7,7 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
+	commonapis "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publicaccountapis "github.com/pure-px/apis/public/portworx/platform/account/apiv1"
 	"google.golang.org/grpc"
 )
@@ -38,6 +39,13 @@ func (grpc *GRPC) getClient() (context.Context, publicaccountapis.AccountService
 	return ctx, accountClient, token, nil
 }
 
+func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginationRequest {
+	return &commonapis.PageBasedPaginationRequest{
+		PageNumber: int64(pageNumber),
+		PageSize:   int64(pageSize),
+	}
+}
+
 // GetAccountList returns the list of accounts
 func (AccountV2 *GRPC) GetAccountList() ([]Account, error) {
 	accountsResponse := []Account{}
@@ -51,7 +59,11 @@ func (AccountV2 *GRPC) GetAccountList() ([]Account, error) {
 		Token: token,
 	}
 
-	apiResponse, err := client.ListAccounts(ctx, nil, grpc.PerRPCCredentials(credentials))
+	firstPageRequest := &publicaccountapis.ListAccountsRequest{
+		Pagination: NewPaginationRequest(1, 2),
+	}
+
+	apiResponse, err := client.ListAccounts(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.", err)
 	}
