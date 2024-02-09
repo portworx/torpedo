@@ -1109,6 +1109,25 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
+			obj, err := k.createRbacObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
 			obj, err := k.createCoreObject(appSpec, ns, app, options)
 			if err != nil {
 				return nil, true, err
@@ -1137,25 +1156,6 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 		if err != nil {
 			return nil, err
 		}
-		if obj != nil {
-			specObjects = append(specObjects, obj)
-		}
-	}
-
-	for _, appSpec := range app.SpecList {
-		t := func() (interface{}, bool, error) {
-			obj, err := k.createRbacObjects(appSpec, ns, app)
-			if err != nil {
-				return nil, true, err
-			}
-			return obj, false, nil
-		}
-
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
-		if err != nil {
-			return nil, err
-		}
-
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
