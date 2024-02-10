@@ -105,8 +105,8 @@ var _ = Describe("{SetupTeardownWithCustomAppConfig}", func() {
 		defer func() {
 			Inst().CustomAppConfig = oldCustomAppConfig
 		}()
-		Inst().CustomAppConfig["fio"] = scheduler.AppConfig{
-			Replicas: 2,
+		Inst().CustomAppConfig["postgres-backup-sts"] = scheduler.AppConfig{
+			Replicas: 10,
 		}
 		log.Infof("CustomAppConfig: %#v", Inst().CustomAppConfig)
 		log.Infof("Rescanning specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
@@ -170,13 +170,6 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
-		vProvider := Inst().V.String()
-		Inst().CustomAppConfig["fio"] = scheduler.AppConfig{
-			Replicas: 1,
-		}
-		err := Inst().S.RescanSpecs(Inst().SpecDir, vProvider)
-		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, vProvider)
-
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
