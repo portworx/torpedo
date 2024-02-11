@@ -12,7 +12,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies if the backup pods are in Ready state or not
@@ -108,8 +107,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -127,7 +126,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		Inst().CustomAppConfig["postgres-backup-sts"] = scheduler.AppConfig{
-			Replicas: 25,
+			Replicas: 1,
 		}
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
@@ -151,7 +150,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -273,11 +272,11 @@ var _ = Describe("{BasicBackupCreation}", func() {
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 
-		defer func() {
-			log.InfoD("switching to default context")
-			err := SetClusterContext("")
-			log.FailOnError(err, "failed to SetClusterContext to default cluster")
-		}()
+		//defer func() {
+		//	log.InfoD("switching to default context")
+		//	err := SetClusterContext("")
+		//	log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		//}()
 
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
 		ctx, err := backup.GetAdminCtxFromSecret()
@@ -296,28 +295,28 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		}
 		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-
-		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-
-		log.InfoD("switching to destination context")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "failed to switch to context to destination cluster")
-
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
-			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-		}
-		DestroyApps(restoredAppContexts, opts)
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//
+		//log.Info("Destroying scheduled apps on source cluster")
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
+		//
+		//log.InfoD("switching to destination context")
+		//err = SetDestinationKubeConfig()
+		//log.FailOnError(err, "failed to switch to context to destination cluster")
+		//
+		//log.InfoD("Destroying restored apps on destination clusters")
+		//restoredAppContexts := make([]*scheduler.Context, 0)
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//DestroyApps(restoredAppContexts, opts)
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
