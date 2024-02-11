@@ -15,7 +15,7 @@ import (
 
 // AccountV2 struct
 type PLATFORM_GRPC struct {
-	ApiClientV2 *grpc.ClientConn
+	ApiClientV1 *grpc.ClientConn
 }
 
 var (
@@ -32,10 +32,11 @@ func (grpc *PLATFORM_GRPC) getClient() (context.Context, publicaccountapis.Accou
 		return nil, nil, "", fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	accountClient = publicaccountapis.NewAccountServiceClient(grpc.ApiClientV2)
+	credentials = &Credentials{
+		Token: token,
+	}
 
-	//AccountV2.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	//client := AccountV2.ApiClientV2.AccountServiceAPI
+	accountClient = publicaccountapis.NewAccountServiceClient(grpc.ApiClientV1)
 
 	return ctx, accountClient, token, nil
 }
@@ -51,13 +52,9 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 func (AccountV2 *PLATFORM_GRPC) GetAccountList() ([]Account, error) {
 	accountsResponse := []Account{}
 
-	ctx, client, token, err := AccountV2.getClient()
+	ctx, client, _, err := AccountV2.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-	}
-
-	credentials = &Credentials{
-		Token: token,
 	}
 
 	firstPageRequest := &publicaccountapis.ListAccountsRequest{

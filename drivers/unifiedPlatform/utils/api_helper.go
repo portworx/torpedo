@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv2 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -130,7 +130,7 @@ func GetContext() (context.Context, error) {
 	}
 
 	log.Infof("Bearer Token %s", bearerToken.DATA.Token)
-	ctx := context.WithValue(context.Background(), "auth apiKey", map[string]platformv2.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token, Prefix: "Bearer"}})
+	ctx := context.WithValue(context.Background(), "auth apiKey", map[string]platformv1.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token, Prefix: "Bearer"}})
 	log.Infof("ctx value [%s]", ctx.Value("auth apiKey"))
 
 	return ctx, nil

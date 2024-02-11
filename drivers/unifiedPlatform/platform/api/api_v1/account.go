@@ -10,30 +10,30 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	platformV2 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 )
 
-// AccountV2 struct
+// AccountV1 struct
 type PLATFORM_API_V1 struct {
-	ApiClientV2 *platformV2.APIClient
+	ApiClientV1 *platformv1.APIClient
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (AccountV2 *PLATFORM_API_V1) getClient() (context.Context, *platformV2.AccountServiceAPIService, error) {
+func (AccountV1 *PLATFORM_API_V1) getClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
 	log.Infof("Creating client from PLATFORM_API_V1 package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	AccountV2.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	client := AccountV2.ApiClientV2.AccountServiceAPI
+	AccountV1.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	client := AccountV1.ApiClientV1.AccountServiceAPI
 
 	return ctx, client, nil
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV2 *PLATFORM_API_V1) GetAccountList() ([]Account, error) {
-	ctx, client, err := AccountV2.getClient()
+func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]Account, error) {
+	ctx, client, err := AccountV1.getClient()
 	accountsResponse := []Account{}
 
 	if err != nil {
@@ -51,12 +51,12 @@ func (AccountV2 *PLATFORM_API_V1) GetAccountList() ([]Account, error) {
 }
 
 // GetAccount return pds account model.
-func (AccountV2 *PLATFORM_API_V1) GetAccount(accountID string) (Account, *status.Response, error) {
+func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (Account, *status.Response, error) {
 	log.Infof("Get the account detail having UUID: %v", accountID)
 
 	accountResponse := Account{}
 
-	ctx, client, err := AccountV2.getClient()
+	ctx, client, err := AccountV1.getClient()
 	if err != nil {
 		return accountResponse, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
@@ -74,8 +74,8 @@ func (AccountV2 *PLATFORM_API_V1) GetAccount(accountID string) (Account, *status
 }
 
 // CreateAccount return pds account model.
-func (AccountV2 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
-	_, client, err := AccountV2.getClient()
+func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
+	_, client, err := AccountV1.getClient()
 
 	accountResponse := Account{}
 
@@ -83,12 +83,12 @@ func (AccountV2 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMa
 		return accountResponse, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
-	var createRequest platformV2.ApiAccountServiceCreateAccountRequest
-	createRequest = createRequest.V1Account1(platformV2.V1Account1{
-		Meta: &platformV2.V1Meta{
+	var createRequest platformv1.ApiAccountServiceCreateAccountRequest
+	createRequest = createRequest.V1Account1(platformv1.V1Account1{
+		Meta: &platformv1.V1Meta{
 			Name: &accountName,
 		},
-		Config: &platformV2.V1Config6{
+		Config: &platformv1.V1Config6{
 			UserEmail:   &userMail,
 			DisplayName: &displayName,
 		},
@@ -108,8 +108,8 @@ func (AccountV2 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMa
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV2 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) (*status.Response, error) {
-	ctx, client, err := AccountV2.getClient()
+func (AccountV1 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) (*status.Response, error) {
+	ctx, client, err := AccountV1.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}

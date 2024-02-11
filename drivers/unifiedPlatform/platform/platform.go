@@ -18,3 +18,6 @@ type Platform interface {
 	//CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error)
 	//DeleteBackupLocation(accountId string) (*status.Response, error)
 }
+
+type Tenant interface {
+}
