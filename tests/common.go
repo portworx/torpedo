@@ -7464,47 +7464,47 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
 
-	//// Cleanup all the namespaces created by the testcase
-	//err := DeleteAllNamespacesCreatedByTestCase()
-	//if err != nil {
-	//	log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	//}
-	//
-	//err = SetDestinationKubeConfig()
-	//if err != nil {
-	//	log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
-	//	return
-	//}
-	//
-	//err = DeleteAllNamespacesCreatedByTestCase()
-	//if err != nil {
-	//	log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	//}
-	//
-	//defer func() {
-	//	err := SetSourceKubeConfig()
-	//	log.FailOnError(err, "failed to switch context to source cluster")
-	//}()
-	//
-	//masterNodes := node.GetMasterNodes()
-	//if len(masterNodes) > 0 {
-	//	log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
-	//	testCaseName := currentSpecReport.FullText()
-	//	matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
-	//	if len(matches) > 1 {
-	//		testCaseName = matches[1]
-	//	}
-	//	masterNode := masterNodes[0]
-	//	log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
-	//	err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
-	//	if err != nil {
-	//		log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
-	//		return
-	//	}
-	//	collectStorkLogs(testCaseName)
-	//	collectPxBackupLogs(testCaseName)
-	//	compressSubDirectories(pxbLogDirPath)
-	//}
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+		return
+	}
+
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) > 0 {
+		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
+		testCaseName := currentSpecReport.FullText()
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
+		if len(matches) > 1 {
+			testCaseName = matches[1]
+		}
+		masterNode := masterNodes[0]
+		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
+		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
+		if err != nil {
+			log.Errorf("Error in creating a directory [%s] to store logs. Err: %v", pxbLogDirPath, err.Error())
+			return
+		}
+		collectStorkLogs(testCaseName)
+		collectPxBackupLogs(testCaseName)
+		compressSubDirectories(pxbLogDirPath)
+	}
 }
 
 func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string) (map[string]string, error) {
