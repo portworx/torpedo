@@ -127,7 +127,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		Inst().CustomAppConfig["postgres-backup-sts"] = scheduler.AppConfig{
-			Replicas: 25,
+			Replicas: 1,
 		}
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
