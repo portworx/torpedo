@@ -34,7 +34,8 @@ var _ = Describe("{TenantsCRUD}", func() {
 					tenantId = *tenant.Meta.Uid
 					break
 				}
-				err = targetCluster.RegisterToControlPlane("1.0.0", tenantId, "")
+				clusterID, err := targetCluster.RegisterToControlPlane("1.0.0", tenantId, "")
+				log.Infof("ClusterId: %v\n", clusterID)
 				if err != nil {
 					log.FailOnError(err, "Failed to register Target Cluster to Control plane")
 				}
