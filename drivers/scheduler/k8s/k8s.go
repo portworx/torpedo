@@ -6532,21 +6532,28 @@ func (k *K8s) GetPortworxNamespace() (string, error) {
 	return "", fmt.Errorf("failed to determine which namespace Portowrx is deployed in, if deployed at all")
 }
 
-// GetAutopilotNamespace looks for StorageCluster object and returns the namespace of the object
-// If StorageCluster object is not found, will try to determine namespace by checking portworx-service location
+// GetAutopilotNamespace list all deployments in all namespaces and looks for autopilot deployment and returns its namespace
 func (k *K8s) GetAutopilotNamespace() (string, error) {
-	stc, err := k8sOperator.ListStorageClusters("")
+	var autopilotNamespace string
+	deployments, err := k8sApps.ListDeployments("", metav1.ListOptions{})
 	if err != nil {
-		return "", err
-	}
-	if len(stc.Items) > 0 {
-		log.Debugf("Found StorageCluster object, will assume Portworx and Autopilot are deployed in [%s] namespace", stc.Items[0].Namespace)
-		return stc.Items[0].Namespace, nil
+		return "", fmt.Errorf("failed to list deployments, Err: %v", err)
 	}
 
-	// If StorageCluster object is not found, will try to determine namespace by checking portworx-service location
-	log.Debugf("Did not find any StorageCluster objects, will try to determine Portworx and Autopilot namespace based on [%s] service location", portworxServiceName)
-	return k.GetPortworxNamespace()
+	if len(deployments.Items) > 0 {
+		for _, deployment := range deployments.Items {
+			if deployment.Name == "autopilot" {
+				log.Debugf("Found [%s] deployment in [%s] namespace", deployment.Name, deployment.Namespace)
+				autopilotNamespace = deployment.Namespace
+			}
+		}
+	}
+
+	if len(autopilotNamespace) == 0 {
+		return "", fmt.Errorf("failed to find autopilot deployment")
+	}
+
+	return autopilotNamespace, nil
 }
 
 // CreateAutopilotRule creates the AutopilotRule object
