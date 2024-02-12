@@ -18,7 +18,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -158,6 +158,9 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 
 			var mError error
 			go doAppsValidation(contexts, stopSignal, &mError)
+			defer func() {
+				close(stopSignal)
+			}()
 
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
@@ -232,7 +235,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					break
 				}
 			}
-			close(stopSignal)
 			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
 		})
 
