@@ -81,6 +81,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
 			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			time.Sleep(10 * time.Minute)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
