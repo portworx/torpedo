@@ -69,8 +69,11 @@ var _ = Describe("{BackupLongevity}", func() {
 
 	BeforeEach(func() {
 		if !populateDone {
+			tags := map[string]string{
+				"longevity": "true",
+			}
 			StartPxBackupTorpedoTest("BackupLongevityTest",
-				"Longevity Run For Backup", nil, 0, ATrivedi, Q1FY24)
+				"Longevity Run For Backup", tags, 0, ATrivedi, Q1FY24)
 			populateIntervals()
 			//  populateDisruptiveTriggers()
 			populateDone = true
@@ -366,16 +369,16 @@ func populateIntervals() {
 	triggerInterval[CreatePxBackupAndRestore][2] = 54 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][1] = 60 * baseInterval
 
-	triggerInterval[CreateRandomRestore][10] = 1 * baseInterval
-	triggerInterval[CreateRandomRestore][9] = 3 * baseInterval
-	triggerInterval[CreateRandomRestore][8] = 6 * baseInterval
-	triggerInterval[CreateRandomRestore][7] = 9 * baseInterval
-	triggerInterval[CreateRandomRestore][6] = 12 * baseInterval
-	triggerInterval[CreateRandomRestore][5] = 15 * baseInterval
-	triggerInterval[CreateRandomRestore][4] = 18 * baseInterval
-	triggerInterval[CreateRandomRestore][3] = 21 * baseInterval
-	triggerInterval[CreateRandomRestore][2] = 24 * baseInterval
-	triggerInterval[CreateRandomRestore][1] = 27 * baseInterval
+	triggerInterval[CreateRandomRestore][10] = 6 * baseInterval
+	triggerInterval[CreateRandomRestore][9] = 12 * baseInterval
+	triggerInterval[CreateRandomRestore][8] = 18 * baseInterval
+	triggerInterval[CreateRandomRestore][7] = 24 * baseInterval
+	triggerInterval[CreateRandomRestore][6] = 30 * baseInterval
+	triggerInterval[CreateRandomRestore][5] = 36 * baseInterval
+	triggerInterval[CreateRandomRestore][4] = 42 * baseInterval
+	triggerInterval[CreateRandomRestore][3] = 48 * baseInterval
+	triggerInterval[CreateRandomRestore][2] = 54 * baseInterval
+	triggerInterval[CreateRandomRestore][1] = 60 * baseInterval
 
 	triggerInterval[DeployBackupApps][10] = 5 * baseInterval
 	triggerInterval[DeployBackupApps][9] = 10 * baseInterval
