@@ -1800,12 +1800,28 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
+		obj.Kind = "Pipeline"
 		return obj, nil
 	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
 		obj, err := k8stektoncd.GetTask(specObj.Namespace, specObj.Name)
 		if err != nil {
 			return nil, err
 		}
+		obj.Kind = "Task"
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
+		obj, err := k8stektoncd.GetTaskRun(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.Kind = "TaskRun"
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		obj, err := k8stektoncd.GetPipelineRun(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.Kind = "PipelineRun"
 		return obj, nil
 	}
 

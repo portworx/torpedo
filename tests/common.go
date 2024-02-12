@@ -95,6 +95,7 @@ import (
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -3119,6 +3120,14 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 	} else if obj, ok := specObj.(*admissionregistrationv1.ValidatingWebhookConfiguration); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	}
 
