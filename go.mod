@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240209121143-d645df5d8eea
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240212034921-520c7cb60125
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.15.1
@@ -91,6 +91,7 @@ require (
 	github.com/google/cel-go v0.18.1 // indirect
 	github.com/google/go-containerregistry v0.17.0 // indirect
 	github.com/google/pprof v0.0.0-20210720184732-4bb14d4b1be1 // indirect
+	github.com/hashicorp/cronexpr v1.1.2 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.11.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
@@ -127,6 +128,7 @@ require (
 
 require (
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
+	github.com/hashicorp/nomad/api v0.0.0-20240209231933-e2bfdf0c1034
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
 	github.com/onsi/ginkgo/v2 v2.15.0

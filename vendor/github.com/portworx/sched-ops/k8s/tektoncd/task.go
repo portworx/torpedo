@@ -2,7 +2,6 @@ package tektoncd
 
 import (
 	"context"
-	"fmt"
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	k8smetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -36,13 +35,6 @@ type taskRunOps interface {
 func (c *Client) CreateTask(task *tektonv1.Task, namespace string) (*tektonv1.Task, error) {
 	if err := c.initClient(namespace); err != nil {
 		return nil, err
-	}
-	// Kshithij: Debug statements need to remove before merging
-	if task == nil {
-		return nil, fmt.Errorf("task is nil")
-	}
-	if c.V1TaskClient == nil {
-		return nil, fmt.Errorf("task client is nil")
 	}
 	return c.V1TaskClient.Create(context.TODO(), task, k8smetav1.CreateOptions{})
 }

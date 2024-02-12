@@ -752,6 +752,10 @@ github.com/hashicorp/hcl/hcl/token
 github.com/hashicorp/hcl/json/parser
 github.com/hashicorp/hcl/json/scanner
 github.com/hashicorp/hcl/json/token
+# github.com/hashicorp/nomad/api v0.0.0-20240209231933-e2bfdf0c1034
+## explicit; go 1.20
+github.com/hashicorp/nomad/api
+github.com/hashicorp/nomad/api/contexts
 # github.com/hashicorp/vault/api v1.10.0
 ## explicit; go 1.19
 github.com/hashicorp/vault/api
@@ -1185,7 +1189,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240209121143-d645df5d8eea
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240212034921-520c7cb60125
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
@@ -1586,8 +1590,8 @@ golang.org/x/crypto/scrypt
 golang.org/x/crypto/sha3
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
-# golang.org/x/exp v0.0.0-20230321023759-10a507213a29
-## explicit; go 1.18
+# golang.org/x/exp v0.0.0-20230728194245-b0cb94b80691
+## explicit; go 1.20
 golang.org/x/exp/constraints
 golang.org/x/exp/maps
 golang.org/x/exp/slices
