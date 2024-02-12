@@ -274,26 +274,28 @@ func (a *Aws) GetASGClusterSize() (int64, error) {
 	log.Infof("Found %d node groups", len(nodeGroups.Nodegroups))
 	totalSize := int32(0)
 	for _, nodeGroupName := range nodeGroups.Nodegroups {
-		nodeGroup, err := a.eksClient.DescribeNodegroup(context.TODO(), &eks.DescribeNodegroupInput{
-			ClusterName:   aws.String(a.clusterName),
-			NodegroupName: aws.String(nodeGroupName),
-		})
-		if err != nil {
-			return 0, fmt.Errorf("failed to describe node group '%s': %v", nodeGroupName, err)
-		}
-		asgName := nodeGroup.Nodegroup.Resources.AutoScalingGroups[0].Name
-		log.Infof("Found ASG '%s' for node group '%s'", *asgName, nodeGroupName)
+		if nodeGroupName != "ng-torpedo" {
+			nodeGroup, err := a.eksClient.DescribeNodegroup(context.TODO(), &eks.DescribeNodegroupInput{
+				ClusterName:   aws.String(a.clusterName),
+				NodegroupName: aws.String(nodeGroupName),
+			})
+			if err != nil {
+				return 0, fmt.Errorf("failed to describe node group '%s': %v", nodeGroupName, err)
+			}
+			asgName := nodeGroup.Nodegroup.Resources.AutoScalingGroups[0].Name
+			log.Infof("Found ASG '%s' for node group '%s'", *asgName, nodeGroupName)
 
-		// Now query the Auto Scaling API to get the size of this ASG
-		asg, err := a.autoscalingClient.DescribeAutoScalingGroups(context.TODO(), &autoscaling.DescribeAutoScalingGroupsInput{
-			AutoScalingGroupNames: []string{*asgName},
-		})
-		if err != nil {
-			return 0, fmt.Errorf("failed to describe ASG '%s': %v", asgName, err)
-		}
-		log.Infof("Found %d ASGs", len(asg.AutoScalingGroups))
-		if len(asg.AutoScalingGroups) > 0 {
-			totalSize += aws.ToInt32(asg.AutoScalingGroups[0].DesiredCapacity)
+			// Now query the Auto Scaling API to get the size of this ASG
+			asg, err := a.autoscalingClient.DescribeAutoScalingGroups(context.TODO(), &autoscaling.DescribeAutoScalingGroupsInput{
+				AutoScalingGroupNames: []string{*asgName},
+			})
+			if err != nil {
+				return 0, fmt.Errorf("failed to describe ASG '%s': %v", asgName, err)
+			}
+			log.Infof("Found %d ASGs", len(asg.AutoScalingGroups))
+			if len(asg.AutoScalingGroups) > 0 {
+				totalSize += aws.ToInt32(asg.AutoScalingGroups[0].DesiredCapacity)
+			}
 		}
 	}
 	return int64(totalSize), nil
