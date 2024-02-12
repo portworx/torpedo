@@ -2778,6 +2778,18 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
 		clone := *specObj
 		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
+		clone := *specObj
+		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
 		clone := *specObj
 		return &clone, nil
@@ -3122,13 +3134,13 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
-		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
-		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
-		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
-		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	}
 
 	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
