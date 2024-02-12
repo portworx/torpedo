@@ -1,21 +1,35 @@
 # This Dockerfile sets up the environment for deploying Torpedo.
 
 # Alpine Linux is chosen as the base image for its security, simplicity and resource efficiency.
+
+# tell about apk and openrc init system
+
 # For release notes, visit: https://alpinelinux.org/releases/
-# It uses its own package manager called apk
 FROM alpine:3.19.1
 
-# Define arguments for versions of tools to be installed.
-# These versions can be updated as new releases become available.
-# Reference: https://github.com/kubernetes/kubernetes/releases/tag/v1.29.1
-ARG KUBECTL_VERSION="v1.29.1"
-# Reference: https://golang.org/dl/#go1.21.6
+# Define arguments for versions of dependencies used by the deployment scripts.
+
+# docker build --build-arg GO_VERSION=1.21.6 --build-arg GINKGO_VERSION=v2.15.0 --build-arg KUBECTL_VERSION=v1.29.1 -t torpedo-deployment:latest .
+
+# GO_VERSION specifies the version of the Go programming language to be installed.
+# Torpedo, being a project written in Go, requires a specific version of Go for compiling its source code reliably.
+# For release notes, visit: https://go.dev/doc/devel/release/
 ARG GO_VERSION="1.21.6"
-# Reference: https://github.com/onsi/ginkgo/releases/tag/v2.15.0
+
+# GINKGO_VERSION specifies the version of Ginkgo to be installed.
+# Ginkgo is a BDD-style Go testing framework, which is used to write and run tests for the Torpedo.
+# For release notes, visit: https://github.com/onsi/ginkgo/releases/
 ARG GINKGO_VERSION="v2.15.0"
+
+# KUBECTL_VERSION specifies the version of kubectl to be installed.
+# kubectl is a command-line tool for Kubernetes cluster management, which is used to deploy Torpedo as a pod
+# For release notes, visit: https://github.com/kubernetes/kubernetes/releases/
+ARG KUBECTL_VERSION="v1.29.1"
 
 # Set the default shell to bash with pipefail option for better error handling in shell commands.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+
 
 # Install runtime dependencies required for Torpedo and its deployment scripts.
 RUN apk add --no-cache \
@@ -31,7 +45,6 @@ RUN apk add --no-cache --virtual .build-deps \
     musl-dev
 
 # Download and install Go programming language.
-# Go is required for building and running Go-based applications, including Torpedo and Ginkgo tests.
 RUN wget -q "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" \
     && tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz \
     && rm go${GO_VERSION}.linux-amd64.tar.gz
