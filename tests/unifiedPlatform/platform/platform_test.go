@@ -85,6 +85,7 @@ var _ = Describe("{AccountsCRUD}", func() {
 			steplog = "ListAccounts"
 			Step(steplog, func() {
 				log.InfoD(steplog)
+				platformUtils.DummyTenantFunction()
 				accList, err := platformUtils.GetAccountListv1()
 				log.FailOnError(err, "error while getting account list")
 				for _, acc := range accList {

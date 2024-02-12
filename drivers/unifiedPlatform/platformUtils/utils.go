@@ -30,6 +30,10 @@ func GetAccountListv1() ([]apiStructs.Account, error) {
 	return accList, nil
 }
 
+func DummyTenantFunction() {
+	v2Components.Platform.GetTenantList()
+}
+
 //func CreatePlatformAccountV1(name, displayName, userMail string) (apiStructs.Account, error) {
 //	acc, _, err := v2Components.Platform.CreateAccount(name, displayName, userMail)
 //	if err != nil {
