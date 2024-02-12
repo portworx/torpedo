@@ -15,4 +15,4 @@ spec:
       serviceAccountName: tekton-pipeline-run-sa
       containers:
         - name: busybox
-          image: kshithijiyer/tektonpipelineruncreator:1.0.3
+          image: kshithijiyer/tektonpipelineruncreator:1.0.6
