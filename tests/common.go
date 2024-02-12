@@ -3040,6 +3040,26 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			specObj.SetNamespace(namespace)
 		}
 		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.TaskRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
