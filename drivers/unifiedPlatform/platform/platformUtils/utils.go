@@ -1,6 +1,7 @@
 package platformUtils
 
 import (
+	"fmt"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -91,9 +92,23 @@ func GetManifest(tenantId string, clusterName string) (string, error) {
 	crConfig.RegistryPassword = ""
 
 	// Get Manifest from API
-	manifest, err := v2Components.Platform.TargetClusterManifestV2.GetTargetClusterRegistrationManifest(tenantId, "", &pConfig, &crConfig)
+	manifest, err := v2Components.Platform.TargetClusterManifestV2.GetTargetClusterRegistrationManifest(tenantId, clusterName, &pConfig, &crConfig)
 	if err != nil {
 		return "", err
 	}
 	return manifest, nil
+}
+
+func GetClusterIdByName(clusterName string) (string, error) {
+	tcList, err := v2Components.Platform.TargetClusterV2.ListTargetClusters()
+	if err != nil {
+		return "", err
+	}
+	var index int
+	for index = 0; index <= len(tcList); index++ {
+		if *tcList[index].Meta.Name == clusterName {
+			return *tcList[index].Meta.Uid, nil
+		}
+	}
+	return "", fmt.Errorf("Cluster Name not found in list of targetclusters\n")
 }

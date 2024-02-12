@@ -33,6 +33,7 @@ const (
 	CertManager        = "jetstack/cert-manager"
 	CertManagerVersion = "v1.11.0"
 	TLSFeatureGates    = "AdditionalCertificateOutputFormats=true"
+	PDSAppUID          = "ABCD123456"
 )
 
 var (
@@ -46,19 +47,19 @@ type TargetCluster struct {
 }
 
 // RegisterToControlPlane register the target cluster to control plane.
-func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion string, tenantId string, clusterType string) error {
+func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion string, tenantId string, clusterType string) (string, error) {
 	var cmd string
-
 	// Get Manifest from API
-	manifest, err := platformUtils.GetManifest(tenantId, "")
+	clusterName := fmt.Sprintf("Cluster_%v", time.Now())
+	manifest, err := platformUtils.GetManifest(tenantId, clusterName)
 	if err != nil {
-		return fmt.Errorf("Failed while getting Manifests: %v\n", err)
+		return "", fmt.Errorf("Failed while getting Manifests: %v\n", err)
 	}
 
 	isRegistered := false
 	pods, err := k8sCore.GetPods(platformNamespace, nil)
 	if err != nil {
-		return fmt.Errorf("Failed while getting the pods on %v Namespace: %v\n", platformNamespace, err)
+		return "", fmt.Errorf("Failed while getting the pods on %v Namespace: %v\n", platformNamespace, err)
 	}
 
 	if len(pods.Items) > 0 {
@@ -66,7 +67,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion strin
 
 		isLatest, err := IsLatestManifest(platformVersion)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if !isLatest {
 			log.InfoD("Upgrading manifest version to %v", platformVersion)
@@ -77,15 +78,11 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion strin
 	if !isRegistered {
 		log.InfoD("Installing Manifests %v", platformVersion)
 		cmd = fmt.Sprintf("echo '%v' > /tmp/manifest.yaml && kubectl apply -f /tmp/manifest.yaml && rm -f /tmp/manifest.yaml", manifest)
-
-		if strings.EqualFold(clusterType, "ocp") {
-			// Add logic for OCP Install
-		}
 		log.Infof("Manifest:\n%v\n", cmd)
 	}
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("Error occured shile installing manifests: %v\n", err)
+		return "", fmt.Errorf("Error occured shile installing manifests: %v\n", err)
 	}
 
 	log.Infof("Terminal output: %v", output)
@@ -98,7 +95,12 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion strin
 		}
 		return true, nil
 	})
-	return err
+
+	clusterId, err := platformUtils.GetClusterIdByName(clusterName)
+	if err != nil {
+		return "", fmt.Errorf("Failed to get clusterId: %v", err)
+	}
+	return clusterId, nil
 }
 
 // ValidatePlatformComponents used to validate all k8s object in pds-system namespace
@@ -144,6 +146,27 @@ func (targetCluster *TargetCluster) DeregisterFromControlPlane(platformVersion s
 	}
 	return nil
 
+}
+
+func (targetCluster *TargetCluster) InstallPDSAppOnTC(clusterId string, tenantId string) error {
+	availableApps, err := v2Components.Platform.ApplicationV2.ListAvailableApplicationsForTenant(tenantId)
+	if err != nil {
+		return fmt.Errorf("Failed to get list of available Apps: %v", err)
+	}
+	var index int
+	for index = 0; index < len(availableApps); index++ {
+		if strings.Contains("PDS", *availableApps[index].Name) {
+			pdsApp := availableApps[index]
+			appName := pdsApp.GetName()
+			appVersion := pdsApp.GetVersion()
+			_, err := v2Components.Platform.ApplicationV2.InstallApplication(appName, appVersion, clusterId)
+			if err != nil {
+				return fmt.Errorf("Failed to install App PDS: %v", err)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("PDS App not found in catalog")
 }
 
 func IsLatestManifest(platformVersion string) (bool, error) {

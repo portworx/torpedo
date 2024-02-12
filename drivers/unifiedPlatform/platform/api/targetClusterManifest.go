@@ -15,9 +15,9 @@ type TargetClusterManifestV2 struct {
 }
 
 func (dt *TargetClusterManifestV2) GetTargetClusterRegistrationManifest(tenantId string, clusterName string, pConfig *utils.ProxyConfig, crConfig *utils.CustomRegistryConfig) (string, error) {
-	var tcManifestClient platformV2.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
+	var tcManifestRequest platformV2.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
-	tcManifestRequest := tcManifestClient.ApiService.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest(context.Background(), tenantId)
+	tcManifestRequest = tcManifestRequest.ApiService.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest(context.Background(), tenantId)
 
 	if clusterName == "" {
 		clusterName = fmt.Sprintf("Cluster_%v", time.Now())

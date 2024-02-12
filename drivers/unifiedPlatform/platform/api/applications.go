@@ -79,12 +79,24 @@ func (app *ApplicationsV2) GetApplicationByAppId(appId string) (*platformV2.V1Ap
 }
 
 // InstallApplication installs the app model on given clusterId
-func (app *ApplicationsV2) InstallApplication(clusterId string) (*platformV2.V1Application1, error) {
+func (app *ApplicationsV2) InstallApplication(appName string, appVersion string, clusterId string) (*platformV2.V1Application1, error) {
 	ctx, appClient, err := app.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	appModels, res, err := appClient.ApplicationServiceInstallApplication(ctx, clusterId).Execute()
+
+	var createRequest platformV2.ApiApplicationServiceInstallApplicationRequest
+	createRequest = createRequest.ApiService.ApplicationServiceInstallApplication(ctx, clusterId)
+	createRequest = createRequest.V1Application1(platformV2.V1Application1{
+		Meta: &platformV2.V1Meta{
+			Name: &appName,
+		},
+		Config: &platformV2.V1Config{
+			Version: &appVersion,
+		},
+	})
+
+	appModels, res, err := appClient.ApplicationServiceInstallApplicationExecute(createRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceInstallApplication`: %v\n.Full HTTP response: %v", err, res)
 	}
