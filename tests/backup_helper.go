@@ -1917,7 +1917,6 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 	specloop:
 		for _, spec := range scheduledAppContext.App.SpecList {
 
-			log.InfoD("Inside specloop")
 			if tektonspec, ok := spec.(*tektoncdv1.Task); ok {
 				updatedSpec, err = k8s.GetUpdatedSpec(tektonspec)
 				if err != nil {
@@ -1953,9 +1952,6 @@ func ValidateBackup(ctx context1.Context, backupName string, orgID string, sched
 			} else {
 				name, kind, ns, err = GetSpecNameKindNamepace(spec)
 			}
-			log.InfoD("Name %s", name)
-			log.InfoD("Kind %s", kind)
-			log.InfoD("Namespace %s", ns)
 			if err != nil {
 				err := fmt.Errorf("error in GetSpecNameKindNamepace: [%s] in namespace (appCtx) [%s], spec: [%+v]", err, scheduledAppContextNamespace, spec)
 				errors = append(errors, err)
