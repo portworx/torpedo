@@ -1958,6 +1958,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 	log.InfoD("Validate applications")
 	for _, ctx := range contexts {
 		ValidateContext(ctx)
+		time.Sleep(10 * time.Minute)
 		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
 		if err != nil {
 			log.InfoD("Some error occurred - [%s]", err)
