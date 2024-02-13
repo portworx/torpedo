@@ -4,7 +4,7 @@ metadata:
   name: kubevirt-mysql
   annotations:
     startDataSupported: "true"
-    username: "mysql"
+    username: "root"
     password: "password"
     databaseName: "mysql"
     port: "3306"
