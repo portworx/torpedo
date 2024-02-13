@@ -2,6 +2,7 @@ package utilities
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"strconv"
 
@@ -141,6 +142,7 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 
 	// TODO: This needs to be enhanced to support multiple application in one ctx
 	var appInfo AppInfo
+	appInfo.StartDataSupport = false
 
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.Service); ok {
@@ -159,12 +161,16 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 			appInfo.NodePort = int(nodePort)
 			if svcAnnotationValue, ok := obj.Annotations[svcAnnotationKey]; ok {
 				appInfo.StartDataSupport = svcAnnotationValue == "true"
-				if !appInfo.StartDataSupport {
-					break
+				if appInfo.StartDataSupport {
+					appInfo.StartDataSupport = true
+				} else {
+					log.Infof("Data support is not added for [%s]", obj.Name)
+					continue
 				}
 			} else {
+				log.Infof("Data support is not added for [%s]", obj.Name)
 				appInfo.StartDataSupport = false
-				break
+				continue
 			}
 			if userAnnotationValue, ok := obj.Annotations[userAnnotationKey]; ok {
 				appInfo.User = userAnnotationValue
