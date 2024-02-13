@@ -1388,14 +1388,18 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			}
 			log.Infof("Verifying all backup resource cleanup")
 			log.Infof("Cluster Object - [%v]", clusterObj)
-			err = ValidateAllBackupCreatedResourceCleanup(clusterObj)
-			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Validating resource cleanup %s", clusterObj.GetName()))
+			backupDriver := Inst().Backup
+			clusterReq := &api.ClusterInspectRequest{OrgId: clusterObj.OrgId, Name: clusterObj.Name, IncludeSecrets: true, Uid: clusterObj.Uid}
+			clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
+			clusterObj := clusterResp.GetCluster()
 			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, false)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
 				err = DeleteCloudCredential(clusterCredName, BackupOrgID, clusterCredUID)
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of cluster cloud cred [%s]", clusterCredName))
 			}
+			err = ValidateAllBackupCreatedResourceCleanup(clusterObj)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Validating resource cleanup %s", clusterObj.GetName()))
 		}
 	}
 }
