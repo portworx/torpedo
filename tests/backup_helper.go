@@ -1386,6 +1386,10 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 					log.Warnf("the cloud credential ref of the cluster [%s] is nil", clusterObj.GetName())
 				}
 			}
+			log.Infof("Verifying all backup resource cleanup")
+			log.Infof("Cluster Object - [%v]", clusterObj)
+			err = ValidateAllBackupCreatedResourceCleanup(clusterObj)
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Validating resource cleanup %s", clusterObj.GetName()))
 			err = DeleteClusterWithUID(clusterObj.GetName(), clusterObj.GetUid(), BackupOrgID, ctx, false)
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Deleting cluster %s", clusterObj.GetName()))
 			if clusterCredName != "" {
@@ -6937,14 +6941,17 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 // ValidateAllBackupCreatedResourceCleanup verfies all the backup related objects cleanup in after suite
 func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) error {
 
+	k8sCore := core.Instance()
 	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
 	if err != nil {
 		return err
 	}
+	log.Infof("All namespaces - [%v]", allNamespaces)
 	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
 	if err != nil {
 		return err
 	}
+	log.Infof("Stork client created")
 
 	var allExistingCRs = make([]string, 0)
 
