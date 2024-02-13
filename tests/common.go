@@ -2162,6 +2162,10 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 
 	log.InfoD("Destroying apps")
 	for _, ctx := range contexts {
+		// In case of tektoncd skip the volume validation
+		if Contains(Inst().AppList, "tektoncd") {
+			ctx.SkipVolumeValidation = true
+		}
 		TearDownContext(ctx, opts)
 	}
 
