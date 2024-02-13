@@ -4237,9 +4237,9 @@ var _ = Describe("{IssueMultipleBackupsAndRestoreInterleavedCopies}", func() {
 					err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
 				}(currentBackupName)
-				wg.Wait()
 				backupNameList = append(backupNameList, currentBackupName)
 			}
+			wg.Wait()
 			log.Infof("List of backups - %v", backupNameList)
 		})
 
