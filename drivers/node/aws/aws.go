@@ -1,5 +1,17 @@
 package aws
 
+import (
+	_ "github.com/aws/aws-sdk-go-v2/aws"
+	_ "github.com/aws/aws-sdk-go-v2/config"
+	_ "github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	_ "github.com/aws/aws-sdk-go-v2/service/ec2"
+	_ "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	_ "github.com/aws/aws-sdk-go-v2/service/eks"
+	_ "github.com/aws/aws-sdk-go-v2/service/eks/types"
+	_ "github.com/aws/aws-sdk-go-v2/service/ssm"
+	_ "github.com/aws/aws-sdk-go-v2/service/ssm/types"
+)
+
 //const (
 //	// DriverName is the name of the aws driver
 //	DriverName = "aws"
