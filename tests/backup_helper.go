@@ -6933,3 +6933,77 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 	}
 	return nil
 }
+
+// ValidateAllBackupCreatedResourceCleanup verfies all the backup related objects cleanup in after suite
+func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) error {
+
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return err
+	}
+	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
+	if err != nil {
+		return err
+	}
+
+	var allExistingCRs = make([]string, 0)
+
+	for _, namespace := range allNamespaces.Items {
+		log.Infof("Listing all Application Backup Schedule CRs")
+		applicationBackupScheduleCRs, err := storkClient.ListApplicationBackupSchedules(namespace.Name, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		for _, cr := range applicationBackupScheduleCRs.Items {
+			log.Infof("Backup schedule CR found - [%s]", cr.Name)
+			allExistingCRs = append(allExistingCRs, cr.Name)
+		}
+
+		log.Infof("Listing all BackupLocation CRs")
+		backupLocationCRs, err := storkClient.ListBackupLocations(namespace.Name, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		for _, cr := range backupLocationCRs.Items {
+			log.Infof("Backup location CR found - [%s]", cr.Name)
+			allExistingCRs = append(allExistingCRs, cr.Name)
+		}
+
+		log.Infof("Listing all RuleList CRs")
+		ruleList, err := storkClient.ListRules(namespace.Name, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		for _, cr := range ruleList.Items {
+			log.Infof("RuleList CR found - [%s]", cr.Name)
+			allExistingCRs = append(allExistingCRs, cr.Name)
+		}
+
+		log.Infof("Listing all Schedule Policy CRs")
+		shcedulePolicies, err := storkClient.ListSchedulePolicies()
+		if err != nil {
+			return err
+		}
+		for _, cr := range shcedulePolicies.Items {
+			log.Infof("Schedule Policy CR found - [%s]", cr.Name)
+			allExistingCRs = append(allExistingCRs, cr.Name)
+		}
+
+		log.Infof("Listing all Platform credential CRs")
+		platformCreds, err := storkClient.ListPlatformCredential(namespace.Name, metav1.ListOptions{})
+		if err != nil {
+			return err
+		}
+		for _, cr := range platformCreds.Items {
+			log.Infof("Platform credential CR found - [%s]", cr.Name)
+			allExistingCRs = append(allExistingCRs, cr.Name)
+		}
+
+	}
+
+	if len(allExistingCRs) > 0 {
+		return fmt.Errorf("CR cleanup validation failed, CRs found - [%s]", allExistingCRs)
+	}
+
+	return nil
+}
