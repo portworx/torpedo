@@ -24,9 +24,9 @@ type Config struct {
 	DisplayName *string `copier:"must"`
 }
 
-type Account struct {
-	Meta   Meta   `copier:"must"`
-	Config Config `copier:"must"`
+type ApiResponse struct {
+	Meta   Meta
+	Config Config
 }
 
 type Credentials struct {

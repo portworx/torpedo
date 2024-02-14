@@ -4,28 +4,18 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 )
 
-//type Account interface {
-//	GetAccountList() ([]Account, *status.Response, error)
-//	GetAccount(accountID string) (Account, *status.Response, error)
-//	CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error)
-//	DeleteBackupLocation(accountId string) (*status.Response, error)
-//}
-//
-//type Tenant interface {
-//}
-
 type AccountInterface interface {
-	GetAccountList() ([]Account, error)
+	GetAccountList() ([]ApiResponse, error)
+	GetAccount(string) (*ApiResponse, error)
+	CreateAccount(string, string, string) (ApiResponse, error)
+	DeleteBackupLocation(string) error
 }
 
 type TenantInterface interface {
-	GetTenantList()
+	ListTenants(string) ([]ApiResponse, error)
 }
 
 type Platform interface {
 	AccountInterface
 	TenantInterface
-	//GetAccount(accountID string) (Account, *status.Response, error)
-	//CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error)
-	//DeleteBackupLocation(accountId string) (*status.Response, error)
 }

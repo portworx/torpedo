@@ -4,7 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
-	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformUtils"
+	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"os"
@@ -18,11 +18,12 @@ var _ = BeforeSuite(func() {
 		log.InfoD("Get Account ID")
 		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
-		//accList, err := platformUtils.GetPlatformAccountListV1()
-		//log.FailOnError(err, "error while getting account list")
-		//accID := platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
-		//err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
-		//log.FailOnError(err, "error while initialising api components")
+		accList, err := platformUtils.GetAccountListv1()
+		log.FailOnError(err, "error while getting account list")
+		accID := platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
+		log.Infof("AccountID - [%s]", accID)
+		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
+		log.FailOnError(err, "error while initialising api components")
 	})
 })
 

@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"fmt"
-
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -14,16 +13,12 @@ import (
 )
 
 // AccountV2 struct
-type PLATFORM_GRPC struct {
+type AccountGrpc struct {
 	ApiClientV1 *grpc.ClientConn
 }
 
-var (
-	credentials *Credentials
-)
-
 // GetClient updates the header with bearer token and returns the new client
-func (grpc *PLATFORM_GRPC) getClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
+func (AccountV1 *AccountGrpc) getAccountClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var accountClient publicaccountapis.AccountServiceClient
 
@@ -36,7 +31,7 @@ func (grpc *PLATFORM_GRPC) getClient() (context.Context, publicaccountapis.Accou
 		Token: token,
 	}
 
-	accountClient = publicaccountapis.NewAccountServiceClient(grpc.ApiClientV1)
+	accountClient = publicaccountapis.NewAccountServiceClient(AccountV1.ApiClientV1)
 
 	return ctx, accountClient, token, nil
 }
@@ -49,10 +44,10 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV2 *PLATFORM_GRPC) GetAccountList() ([]Account, error) {
-	accountsResponse := []Account{}
+func (AccountV1 *AccountGrpc) GetAccountList() ([]ApiResponse, error) {
+	accountsResponse := []ApiResponse{}
 
-	ctx, client, _, err := AccountV2.getClient()
+	ctx, client, _, err := AccountV1.getAccountClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
@@ -80,70 +75,37 @@ func (AccountV2 *PLATFORM_GRPC) GetAccountList() ([]Account, error) {
 	return accountsResponse, nil
 }
 
-// GetAccount return pds account model.
-//func (AccountV2 *GRPC) GetAccount(accountID string) (*Account, error) {
-//	accountsResponse := []Account{}
-//
-//	ctx, client, token, err := AccountV2.getClient()
-//	if err != nil {
-//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-//	}
-//
-//	credentials = &Credentials{
-//		Token: token,
-//	}
-//
-//	client.GetAccount(ctx)
-//
-//	return nil, err
-//
-//}
+func (AccountV1 *AccountGrpc) GetAccount(accountID string) (*ApiResponse, error) {
+	accountsResponse := ApiResponse{}
+	ctx, client, _, err := AccountV1.getAccountClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+	}
 
-//
+	getAccRequest := &publicaccountapis.GetAccountRequest{
+		AccountId: accountID,
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, accountID)
+
+	apiResponse, err := client.GetAccount(ctx, getAccRequest, grpc.PerRPCCredentials(credentials))
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting the account: %v\n", err)
+	}
+
+	log.Infof("Value of accounts before copy - [%v]", apiResponse.Meta.Name)
+	copier.Copy(&accountsResponse, apiResponse)
+	log.Infof("Value of accounts after copy - [%v]", *accountsResponse.Meta.Name)
+
+	return &accountsResponse, nil
+}
+
 // CreateAccount return pds account model.
-//func (AccountV2 *GRPC) CreateAccount(accountName, displayName, userMail string) (*Account, error) {
-//	_, client, token, err := AccountV2.getClient()
-//	if err != nil {
-//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-//	}
-//
-//	credentials = &Credentials{
-//		Token: token,
-//	}
-//	var createRequest platformV2.ApiAccountServiceCreateAccountRequest
-//	createRequest = createRequest.V1Account1(platformV2.V1Account1{
-//		Meta: &platformV2.V1Meta{
-//			Name: &accountName,
-//		},
-//		Config: &platformV2.V1Config6{
-//			UserEmail:   &userMail,
-//			DisplayName: &displayName,
-//		},
-//	})
-//
-//	accountModel, res, err := client.AccountServiceCreateAccountExecute(createRequest)
-//
-//	if err != nil && res.StatusCode != status.StatusOK {
-//		return accountResponse, nil, fmt.Errorf("Error when calling `AccountServiceCreateAccount`: %v\n.Full HTTP response: %v", err, res)
-//	}
-//
-//	log.Infof("Value of account - [%v]", accountResponse)
-//	copier.Copy(&accountResponse, accountModel)
-//	log.Infof("Value of account after copy - [%v]", accountResponse)
-//
-//	return accountResponse, res, nil
-//}
+func (AccountV1 *AccountGrpc) CreateAccount(accountName, displayName, userMail string) (ApiResponse, error) {
+	var accResponse ApiResponse
+	return accResponse, fmt.Errorf("Create Account is not implemented in grpc client\n")
+}
 
-//
-//// DeleteBackupLocation delete backup location and return status.
-//func (AccountV2 *GRPC) DeleteBackupLocation(accountId string) (*status.Response, error) {
-//	ctx, client, err := AccountV2.getClient()
-//	if err != nil {
-//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-//	}
-//	_, res, err := client.AccountServiceDeleteAccount(ctx, accountId).Execute()
-//	if err != nil {
-//		return nil, fmt.Errorf("Error when calling `AccountServiceDeleteAccount`: %v\n.Full HTTP response: %v", err, res)
-//	}
-//	return res, nil
-//}
+func (AccountV1 *AccountGrpc) DeleteBackupLocation(accountId string) error {
+	return fmt.Errorf("DeleteBackuplocation is not implemented in grpc client\n")
+}

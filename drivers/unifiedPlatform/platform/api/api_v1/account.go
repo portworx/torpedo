@@ -16,25 +16,28 @@ import (
 // AccountV1 struct
 type PLATFORM_API_V1 struct {
 	ApiClientV1 *platformv1.APIClient
+	AccountID   string
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (AccountV1 *PLATFORM_API_V1) getClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
+func (account *PLATFORM_API_V1) getClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
 	log.Infof("Creating client from PLATFORM_API_V1 package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	AccountV1.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	client := AccountV1.ApiClientV1.AccountServiceAPI
 
+	account.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	account.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = account.AccountID
+
+	client := account.ApiClientV1.AccountServiceAPI
 	return ctx, client, nil
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]Account, error) {
+func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]ApiResponse, error) {
 	ctx, client, err := AccountV1.getClient()
-	accountsResponse := []Account{}
+	accountsResponse := []ApiResponse{}
 
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -51,36 +54,39 @@ func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]Account, error) {
 }
 
 // GetAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (Account, *status.Response, error) {
+func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*ApiResponse, error) {
 	log.Infof("Get the account detail having UUID: %v", accountID)
 
-	accountResponse := Account{}
+	accountResponse := ApiResponse{}
 
 	ctx, client, err := AccountV1.getClient()
 	if err != nil {
-		return accountResponse, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	accountModel, res, err := client.AccountServiceGetAccount(ctx, accountID).Execute()
+
+	var getRequest platformv1.ApiAccountServiceGetAccountRequest
+	getRequest = getRequest.ApiService.AccountServiceGetAccount(ctx, accountID)
+	accountModel, res, err := client.AccountServiceGetAccountExecute(getRequest)
 
 	if err != nil && res.StatusCode != status.StatusOK {
-		return accountResponse, nil, fmt.Errorf("Error when calling `AccountServiceGetAccount`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `AccountServiceGetAccount`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	log.Infof("Value of account - [%v]", accountResponse)
+	log.Infof("Value of account - [%v]", *accountModel.Meta.Name)
 	copier.Copy(&accountResponse, accountModel)
-	log.Infof("Value of account after copy - [%v]", accountResponse)
+	log.Infof("Value of account after copy - [%v]", *accountResponse.Meta.Name)
 
-	return accountResponse, res, nil
+	return &accountResponse, nil
 }
 
 // CreateAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (Account, *status.Response, error) {
+func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (ApiResponse, error) {
 	_, client, err := AccountV1.getClient()
 
-	accountResponse := Account{}
+	accountResponse := ApiResponse{}
 
 	if err != nil {
-		return accountResponse, nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return accountResponse, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
 	var createRequest platformv1.ApiAccountServiceCreateAccountRequest
@@ -97,25 +103,25 @@ func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMa
 	accountModel, res, err := client.AccountServiceCreateAccountExecute(createRequest)
 
 	if err != nil && res.StatusCode != status.StatusOK {
-		return accountResponse, nil, fmt.Errorf("Error when calling `AccountServiceCreateAccount`: %v\n.Full HTTP response: %v", err, res)
+		return accountResponse, fmt.Errorf("Error when calling `AccountServiceCreateAccount`: %v\n.Full HTTP response: %v", err, res)
 	}
 
 	log.Infof("Value of account - [%v]", accountResponse)
 	copier.Copy(&accountResponse, accountModel)
 	log.Infof("Value of account after copy - [%v]", accountResponse)
 
-	return accountResponse, res, nil
+	return accountResponse, nil
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV1 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) (*status.Response, error) {
+func (AccountV1 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) error {
 	ctx, client, err := AccountV1.getClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 	_, res, err := client.AccountServiceDeleteAccount(ctx, accountId).Execute()
 	if err != nil {
-		return nil, fmt.Errorf("Error when calling `AccountServiceDeleteAccount`: %v\n.Full HTTP response: %v", err, res)
+		return fmt.Errorf("Error when calling `AccountServiceDeleteAccount`: %v\n.Full HTTP response: %v", err, res)
 	}
-	return res, nil
+	return nil
 }

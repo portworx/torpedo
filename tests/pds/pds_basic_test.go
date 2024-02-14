@@ -49,13 +49,6 @@ var _ = BeforeSuite(func() {
 		err = pdslib.InitPdsComponents(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing pds components in pdslib")
 
-		//Initialize pds v2 components in pdslib
-		//accList, err := pdslib.GetAccountListV2()
-		//log.FailOnError(err, "error while getting account list")
-		//accID := pdslib.GetPlatformAccountID(accList, "demo-milestone-one")
-		//err = pdslib.InitUnifiedApiComponents(params.InfraToTest.ControlPlaneURL, accID)
-		//log.FailOnError(err, "Error while initializing pds components in pdslib")
-
 		components, controlPlane, err = pdsdriver.InitPdsApiComponents(params.InfraToTest.ControlPlaneURL)
 		log.FailOnError(err, "Error while initializing pds components in pds test")
 

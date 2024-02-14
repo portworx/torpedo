@@ -2,8 +2,11 @@ package unifiedPlatform
 
 import (
 	"crypto/tls"
+	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v1"
@@ -21,6 +24,7 @@ const (
 	UNIFIED_PLATFORM_INTERFACE = "BACKEND_TYPE"
 	API_V1                     = "v1"
 	GRPC                       = "grpc"
+	GRPC_PORT                  = "443"
 )
 
 type UnifiedPlatformComponents struct {
@@ -44,12 +48,20 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		return &UnifiedPlatformComponents{
 			Platform: &PLATFORM_API_V1{
 				ApiClientV1: platformV2apiClient,
+				AccountID:   AccountId,
 			},
 		}, nil
 	case GRPC:
-		//generate platform grpc client
-		insecureDialOptStr := os.Getenv("INSECURE_FLAG")
+		//Trim the controlPlane url and add port number to it
+		_, grpcUrl, isFound := strings.Cut(controlPlaneURL, "//")
+		if !isFound {
+			return nil, fmt.Errorf("Unable to parse control plane url\n")
+		}
+		grpcUrl = grpcUrl + ":" + GRPC_PORT
+		log.Infof("Generating grpc client for controlPlane [%s]", grpcUrl)
 
+		//generate grpc client
+		insecureDialOptStr := os.Getenv("INSECURE_FLAG")
 		insecureDialOpt, err := strconv.ParseBool(insecureDialOptStr)
 		if err != nil {
 			return nil, err
@@ -62,13 +74,13 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 			tlsConfig := &tls.Config{}
 			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 		}
-		grpcClient, err := grpc.Dial(controlPlaneURL, dialOpts...)
+		grpcClient, err := grpc.Dial(grpcUrl, dialOpts...)
 		if err != nil {
 			return nil, err
 		}
 
 		return &UnifiedPlatformComponents{
-			Platform: &PLATFORM_GRPC{
+			Platform: &AccountGrpc{
 				ApiClientV1: grpcClient,
 			},
 		}, nil
@@ -85,6 +97,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		return &UnifiedPlatformComponents{
 			Platform: &PLATFORM_API_V1{
 				ApiClientV1: platformV2apiClient,
+				AccountID:   AccountId,
 			},
 		}, nil
 	}
