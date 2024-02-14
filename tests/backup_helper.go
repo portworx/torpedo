@@ -206,6 +206,65 @@ const (
 	Parallel
 )
 
+type customResourceObjectDetails struct {
+	Group    string
+	Version  string
+	Resource string
+}
+
+var crListMap = map[string]customResourceObjectDetails{
+	"applicationbackups": customResourceObjectDetails{
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "applicationbackups",
+	},
+	"applicationbackupschedules": customResourceObjectDetails{
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "applicationbackupschedules",
+	},
+	"backuplocations": customResourceObjectDetails{
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "backuplocations",
+	},
+	"schedulepolicies": customResourceObjectDetails{
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "schedulepolicies",
+	},
+	"applicationrestores": customResourceObjectDetails{
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "applicationrestores",
+	},
+	"rules": customResourceObjectDetails{
+		Group:    "stork.libopenstorage.org",
+		Version:  "v1alpha1",
+		Resource: "rules",
+	},
+	"dataexports": customResourceObjectDetails{
+		Group:    "kdmp.portworx.com",
+		Version:  "v1alpha1",
+		Resource: "dataexports",
+	},
+	"resourcebackups": customResourceObjectDetails{
+		Group:    "kdmp.portworx.com",
+		Version:  "v1alpha1",
+		Resource: "resourcebackups",
+	},
+	"resourceexports": customResourceObjectDetails{
+		Group:    "kdmp.portworx.com",
+		Version:  "v1alpha1",
+		Resource: "resourceexports",
+	},
+	"volumebackups": customResourceObjectDetails{
+		Group:    "kdmp.portworx.com",
+		Version:  "v1alpha1",
+		Resource: "volumebackups",
+	},
+}
+
 var (
 	// AppRuleMaster is a map of struct for all the value for rules
 	// This map needs to be updated for new applications as and whe required
@@ -6199,17 +6258,6 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
-	allBackupCRsv1Aplha1, err = getCRObject(clusterObj, "", "stork.libopenstorage.org", "v1", "applicationbackups")
-	if err != nil {
-		log.Infof("Error occurred v1alpha1 - [%s]", err.Error())
-	}
-	log.Infof("AllBackupCRsV1Alpha1 - [%v]", allBackupCRsv1Aplha1)
-	allBackupCRsv1, _ = getCRObject(clusterObj, "", "stork.libopenstorage.org", "v1", "applicationbackups")
-	if err != nil {
-		log.Infof("Error occurred v1 - [%s]", err.Error())
-	}
-	log.Infof("AllBackupCRsV1 - [%v]", allBackupCRsv1)
-	
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
 		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
@@ -6959,82 +7007,20 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 // ValidateAllBackupCreatedResourceCleanup verfies all the backup related objects cleanup in after suite
 func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) error {
 
-	k8sCore := core.Instance()
-	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
-	if err != nil {
-		return err
+	validateResourceCleanup := func() (interface{}, bool, error) {
+		allCRObjects := GetAllBackupCRObjects(clusterObj)
+		if len(allCRObjects) > 0 {
+			return "", true, fmt.Errorf("Found CRs - [%v]", allCRObjects)
+		}
+		return "", false, nil
 	}
-	log.Infof("All namespaces - [%v]", allNamespaces)
-	_, storkClient, err := portworx.GetKubernetesInstance(clusterObj)
-	if err != nil {
-		return err
-	}
-	log.Infof("Stork client created")
+	_, err := task.DoRetryWithTimeout(validateResourceCleanup, 1*time.Minute, 10*time.Second)
 
-	var allExistingCRs = make([]string, 0)
-
-	for _, namespace := range allNamespaces.Items {
-		log.Infof("Listing all Application Backup Schedule CRs")
-		applicationBackupScheduleCRs, err := storkClient.ListApplicationBackupSchedules(namespace.Name, metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-		for _, cr := range applicationBackupScheduleCRs.Items {
-			log.Infof("Backup schedule CR found - [%s]", cr.Name)
-			allExistingCRs = append(allExistingCRs, cr.Name)
-		}
-
-		log.Infof("Listing all BackupLocation CRs")
-		backupLocationCRs, err := storkClient.ListBackupLocations(namespace.Name, metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-		for _, cr := range backupLocationCRs.Items {
-			log.Infof("Backup location CR found - [%s]", cr.Name)
-			allExistingCRs = append(allExistingCRs, cr.Name)
-		}
-
-		log.Infof("Listing all RuleList CRs")
-		ruleList, err := storkClient.ListRules(namespace.Name, metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-		for _, cr := range ruleList.Items {
-			log.Infof("RuleList CR found - [%s]", cr.Name)
-			allExistingCRs = append(allExistingCRs, cr.Name)
-		}
-
-		log.Infof("Listing all Schedule Policy CRs")
-		shcedulePolicies, err := storkClient.ListSchedulePolicies()
-		if err != nil {
-			return err
-		}
-		for _, cr := range shcedulePolicies.Items {
-			log.Infof("Schedule Policy CR found - [%s]", cr.Name)
-			allExistingCRs = append(allExistingCRs, cr.Name)
-		}
-
-		log.Infof("Listing all Platform credential CRs")
-		platformCreds, err := storkClient.ListPlatformCredential(namespace.Name, metav1.ListOptions{})
-		if err != nil {
-			return err
-		}
-		for _, cr := range platformCreds.Items {
-			log.Infof("Platform credential CR found - [%s]", cr.Name)
-			allExistingCRs = append(allExistingCRs, cr.Name)
-		}
-
-	}
-
-	if len(allExistingCRs) > 0 {
-		return fmt.Errorf("CR cleanup validation failed, CRs found - [%s]", allExistingCRs)
-	}
-
-	return nil
+	return err
 }
 
-// GetCRObject
-func getCRObject(clusterObj *api.ClusterObject, namespace, group, version, resource string) (*unstructured.UnstructuredList, error) {
+// GetCRObject queries and returns any CRD defined
+func getCRObject(clusterObj *api.ClusterObject, namespace string, customResourceObjectDetails customResourceObjectDetails) (*unstructured.UnstructuredList, error) {
 
 	ctx, err := backup.GetAdminCtxFromSecret()
 	config, err := portworx.GetKubernetesRestConfig(clusterObj)
@@ -7046,9 +7032,9 @@ func getCRObject(clusterObj *api.ClusterObject, namespace, group, version, resou
 
 	// Get the GVR of the CRD.
 	gvr := metav1.GroupVersionResource{
-		Group:    group,
-		Version:  version,
-		Resource: resource,
+		Group:    customResourceObjectDetails.Group,
+		Version:  customResourceObjectDetails.Version,
+		Resource: customResourceObjectDetails.Resource,
 	}
 	objects, err := dynamicClient.Resource(schema.GroupVersionResource(gvr)).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -7056,4 +7042,25 @@ func getCRObject(clusterObj *api.ClusterObject, namespace, group, version, resou
 	}
 
 	return objects, nil
+}
+
+// GetAllBackupCRObjects returns names of all backup CR object found in the cluster
+func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
+
+	var allBackupCrs = make([]string, 0)
+	for crName, definition := range crListMap {
+		allCurrentCrs, err := getCRObject(clusterObj, "", definition)
+		if err != nil {
+			log.Infof("Some error occurred while checking for [%s]", crName)
+		} else {
+			if len(allCurrentCrs.Items) > 0 {
+				log.Infof("Found [%s] object in the cluster", crName)
+				for _, item := range allCurrentCrs.Items {
+					allBackupCrs = append(allBackupCrs, item.GetName())
+				}
+			}
+		}
+	}
+
+	return allBackupCrs
 }
