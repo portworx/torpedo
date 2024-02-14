@@ -354,7 +354,7 @@ var _ = AfterSuite(func() {
 		kubeconfigs := os.Getenv("KUBECONFIGS")
 		kubeconfigList := strings.Split(kubeconfigs, ",")
 
-		// Validating resource cleanup
+		// Validating custom resource object cleanup
 		for _, kubeconfig := range kubeconfigList {
 			clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
 			isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
