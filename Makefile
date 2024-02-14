@@ -116,6 +116,16 @@ build-backup: $(GOPATH)/bin/ginkgo
 	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
 	chmod -R 755 bin/*
 
+build-longevity: GINKGO_BUILD_DIR=./tests/longevity
+build-longevity: $(GOPATH)/bin/ginkgo
+	mkdir -p $(BIN)
+	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
+
+	ginkgo build -r $(GINKGO_BUILD_DIR)
+	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
+	chmod -R 755 bin/*
+
+
 # this target builds the taas binary only.
 build-taas: TAAS_BUILD_DIR=./apiServer/taas
 build-taas:
