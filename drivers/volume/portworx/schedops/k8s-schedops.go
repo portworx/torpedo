@@ -1060,8 +1060,11 @@ func (k *k8sSchedOps) GetPortworxNamespace() (string, error) {
 		return ns, err
 	}
 
+	log.Infof("len fof px pods: %d", len(pods.Items))
 	if len(pods.Items) > 0 {
 		ns = pods.Items[0].Namespace
+		log.Infof("got namespace : %s", ns)
+		log.Infof("pod spec :%#v", pods.Items[0])
 	}
 	if len(ns) == 0 {
 		return ns, fmt.Errorf("error: can't find portworx namespace using pods with label [%s=%s]", PXPodlabelKey, PXPodLabelValue)
