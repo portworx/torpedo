@@ -207,13 +207,15 @@ const (
 	Parallel
 )
 
+// Type for customResourceObjects created by backup
 type customResourceObjectDetails struct {
 	Group         string
 	Version       string
 	Resource      string
-	SkipResources []string
+	SkipResources []string // If this list is populated that particular CR will not be considered for cleanup
 }
 
+// List of all the CRs to be considered for cleanup
 var crListMap = map[string]customResourceObjectDetails{
 	"applicationbackups": customResourceObjectDetails{
 		Group:         "stork.libopenstorage.org",
@@ -7074,6 +7076,7 @@ func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
 			if len(allCurrentCrs.Items) > 0 {
 				log.Infof("Found [%s] object in the cluster", crName)
 				for _, item := range allCurrentCrs.Items {
+					// Skip the CR if present in SkipResources
 					if !slices.Contains(definition.SkipResources, item.GetName()) {
 						allBackupCrs = append(allBackupCrs, item.GetName())
 					}
