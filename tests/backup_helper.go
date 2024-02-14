@@ -7051,7 +7051,7 @@ func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
 	for crName, definition := range crListMap {
 		allCurrentCrs, err := getCRObject(clusterObj, "", definition)
 		if err != nil {
-			log.Infof("Some error occurred while checking for [%s]", crName)
+			log.Infof("Some error occurred while checking for [%s], Error - [%s]", crName, err.Error())
 		} else {
 			if len(allCurrentCrs.Items) > 0 {
 				log.Infof("Found [%s] object in the cluster", crName)

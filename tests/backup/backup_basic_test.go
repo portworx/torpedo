@@ -362,9 +362,12 @@ var _ = AfterSuite(func() {
 				Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
 			}
 			if isPresent {
-				clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName}
+				clusterUID, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster UID, Error - [%s]", err.Error()))
+				log.Infof("Cluster UID - [%s], Cluster Name - [%s]", clusterUID, clusterName)
+				clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 				clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster response"))
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster response, Error - [%s]", err.Error()))
 				clusterObj := clusterResp.GetCluster()
 				err = ValidateAllBackupCreatedResourceCleanup(clusterObj)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("CR/Backup resources found after cleanup"))
