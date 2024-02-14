@@ -4,6 +4,9 @@ import (
 	context1 "context"
 	"fmt"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -6196,6 +6199,17 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
+	allBackupCRsv1Aplha1, err = getCRObject(clusterObj, "", "stork.libopenstorage.org", "v1", "applicationbackups")
+	if err != nil {
+		log.Infof("Error occurred v1alpha1 - [%s]", err.Error())
+	}
+	log.Infof("AllBackupCRsV1Alpha1 - [%v]", allBackupCRsv1Aplha1)
+	allBackupCRsv1, _ = getCRObject(clusterObj, "", "stork.libopenstorage.org", "v1", "applicationbackups")
+	if err != nil {
+		log.Infof("Error occurred v1 - [%s]", err.Error())
+	}
+	log.Infof("AllBackupCRsV1 - [%v]", allBackupCRsv1)
+	
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
 		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
@@ -7017,4 +7031,29 @@ func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) erro
 	}
 
 	return nil
+}
+
+// GetCRObject
+func getCRObject(clusterObj *api.ClusterObject, namespace, group, version, resource string) (*unstructured.UnstructuredList, error) {
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	config, err := portworx.GetKubernetesRestConfig(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicClient := dynamic.NewForConfigOrDie(config)
+
+	// Get the GVR of the CRD.
+	gvr := metav1.GroupVersionResource{
+		Group:    group,
+		Version:  version,
+		Resource: resource,
+	}
+	objects, err := dynamicClient.Resource(schema.GroupVersionResource(gvr)).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return objects, nil
 }
