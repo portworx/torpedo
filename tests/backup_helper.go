@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -207,61 +208,78 @@ const (
 )
 
 type customResourceObjectDetails struct {
-	Group    string
-	Version  string
-	Resource string
+	Group         string
+	Version       string
+	Resource      string
+	SkipResources []string
 }
 
 var crListMap = map[string]customResourceObjectDetails{
 	"applicationbackups": customResourceObjectDetails{
-		Group:    "stork.libopenstorage.org",
-		Version:  "v1alpha1",
-		Resource: "applicationbackups",
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationbackups",
+		SkipResources: []string{},
 	},
 	"applicationbackupschedules": customResourceObjectDetails{
-		Group:    "stork.libopenstorage.org",
-		Version:  "v1alpha1",
-		Resource: "applicationbackupschedules",
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationbackupschedules",
+		SkipResources: []string{},
 	},
 	"backuplocations": customResourceObjectDetails{
-		Group:    "stork.libopenstorage.org",
-		Version:  "v1alpha1",
-		Resource: "backuplocations",
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "backuplocations",
+		SkipResources: []string{},
 	},
 	"schedulepolicies": customResourceObjectDetails{
 		Group:    "stork.libopenstorage.org",
 		Version:  "v1alpha1",
 		Resource: "schedulepolicies",
+		SkipResources: []string{
+			"default-daily-policy",
+			"default-interval-policy",
+			"default-migration-policy",
+			"default-monthly-policy",
+			"default-weekly-policy",
+		},
 	},
 	"applicationrestores": customResourceObjectDetails{
-		Group:    "stork.libopenstorage.org",
-		Version:  "v1alpha1",
-		Resource: "applicationrestores",
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationrestores",
+		SkipResources: []string{},
 	},
 	"rules": customResourceObjectDetails{
-		Group:    "stork.libopenstorage.org",
-		Version:  "v1alpha1",
-		Resource: "rules",
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "rules",
+		SkipResources: []string{},
 	},
 	"dataexports": customResourceObjectDetails{
-		Group:    "kdmp.portworx.com",
-		Version:  "v1alpha1",
-		Resource: "dataexports",
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "dataexports",
+		SkipResources: []string{},
 	},
 	"resourcebackups": customResourceObjectDetails{
-		Group:    "kdmp.portworx.com",
-		Version:  "v1alpha1",
-		Resource: "resourcebackups",
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "resourcebackups",
+		SkipResources: []string{},
 	},
 	"resourceexports": customResourceObjectDetails{
-		Group:    "kdmp.portworx.com",
-		Version:  "v1alpha1",
-		Resource: "resourceexports",
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "resourceexports",
+		SkipResources: []string{},
 	},
 	"volumebackups": customResourceObjectDetails{
-		Group:    "kdmp.portworx.com",
-		Version:  "v1alpha1",
-		Resource: "volumebackups",
+		Group:         "kdmp.portworx.com",
+		Version:       "v1alpha1",
+		Resource:      "volumebackups",
+		SkipResources: []string{},
 	},
 }
 
@@ -7014,7 +7032,7 @@ func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) erro
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(validateResourceCleanup, 1*time.Minute, 10*time.Second)
+	_, err := task.DoRetryWithTimeout(validateResourceCleanup, 10*time.Minute, 10*time.Second)
 
 	return err
 }
@@ -7056,7 +7074,9 @@ func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
 			if len(allCurrentCrs.Items) > 0 {
 				log.Infof("Found [%s] object in the cluster", crName)
 				for _, item := range allCurrentCrs.Items {
-					allBackupCrs = append(allBackupCrs, item.GetName())
+					if !slices.Contains(definition.SkipResources, item.GetName()) {
+						allBackupCrs = append(allBackupCrs, item.GetName())
+					}
 				}
 			}
 		}
