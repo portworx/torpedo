@@ -54,7 +54,7 @@ func ExecuteCommandInShell(command string) (string, string, error) {
 	return out, res, nil
 }
 
-// ExecutePostmanCommandInTorpedoForPDS execute PDS specific collections
+// ExecutePostmanCommandInTorpedoForPDS execute pds specific collections
 func ExecutePostmanCommandInTorpedoForPDS(postmanParams *PostmanDriver) (bool, error) {
 	collectionPath, err := GetPostmanCollectionPath()
 	if err != nil {

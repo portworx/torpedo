@@ -62,13 +62,13 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 	bkpTargetName = bkpTargetName + pdsbkp.RandString(8)
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteDataServiceAndValidateBackupAtObjectStore", "Delete the PDS data service should not delete the backups in backend", pdsLabels, 0)
+		StartTorpedoTest("DeleteDataServiceAndValidateBackupAtObjectStore", "Delete the pds data service should not delete the backups in backend", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
 		bucketName = strings.ToLower("pds-automation-" + pdsbkp.RandString(5))
 	})
 
-	It("Delete the PDS data service should not delete the backups in backend", func() {
+	It("Delete the pds data service should not delete the backups in backend", func() {
 		stepLog := "Create backup target."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)

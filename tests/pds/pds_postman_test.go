@@ -11,10 +11,10 @@ import (
 
 var _ = Describe("{RunPdsPostManApiLoadTests}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RunPdsPostManApiLoadTests", "Run PDS Specific Api Load Tests using Postman-Newman ", pdsLabels, 0)
+		StartTorpedoTest("RunPdsPostManApiLoadTests", "Run pds Specific Api Load Tests using Postman-Newman ", pdsLabels, 0)
 	})
 	It("Deploy Dataservices", func() {
-		Step("Starting to execute Postman-Newman on PDS", func() {
+		Step("Starting to execute Postman-Newman on pds", func() {
 			currentTime := time.Now()
 			timeStamp := currentTime.Format("2006-01-02_15:04:05_MST")
 			resultsFileName := fmt.Sprintf("result_%s.json", timeStamp)

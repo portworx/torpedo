@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-// PDS vars
+// pds vars
 var (
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
@@ -63,7 +63,7 @@ const (
 	redis         = "Redis"
 )
 
-// PDS const
+// pds const
 const (
 	deploymentName                 = "qa"
 	driverName                     = "pds"
@@ -75,7 +75,7 @@ const (
 	PdsDeploymentAvailable         = "Available"
 )
 
-// PDS packages
+// pds packages
 var (
 	customparams *parameters.Customparams
 	controlplane *pdscontrolplane.ControlPlane

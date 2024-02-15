@@ -55,7 +55,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 				}
 				ns1, _, err := targetCluster.CreatePDSNamespace("ns1-" + strconv.Itoa(rand.Int()))
 				log.FailOnError(err, "Error while creating namespace")
-				log.InfoD("Successfully created namespace with PDS Label %v ", ns1)
+				log.InfoD("Successfully created namespace with pds Label %v ", ns1)
 				ns1Id1, err := targetCluster.GetnameSpaceID(ns1.Name, deploymentTargetID)
 				nsID1 = append(nsID1, ns1Id1)
 				log.FailOnError(err, "Error while fetching namespaceID")
@@ -64,7 +64,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 				ns2, _, err := targetCluster.CreatePDSNamespace("ns2-" + strconv.Itoa(rand.Int()))
 				log.FailOnError(err, "Error while creating namespace")
-				log.InfoD("Successfully created namespace with PDS Label %v ", ns2)
+				log.InfoD("Successfully created namespace with pds Label %v ", ns2)
 				ns2Id2, err := targetCluster.GetnameSpaceID(ns2.Name, deploymentTargetID)
 				nsID2 = append(nsID2, ns2Id2)
 				log.FailOnError(err, "Error while fetching namespaceID")
@@ -294,7 +294,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				srcNS, _, err := targetCluster.CreatePDSNamespace("ns1-" + strconv.Itoa(rand.Int()))
 				namespaceName := srcNS.Name
 				log.FailOnError(err, "Error while creating namespace")
-				log.InfoD("Successfully created source namespace with PDS Label %v ", srcNS)
+				log.InfoD("Successfully created source namespace with pds Label %v ", srcNS)
 				ns1Id1, err := targetCluster.GetnameSpaceID(namespaceName, deploymentTargetID)
 				nsID1 = append(nsID1, ns1Id1)
 				log.FailOnError(err, "Error while fetching namespaceID")
@@ -324,7 +324,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				log.InfoD("Destination cluster Target ID is- %v", destinationTargetID)
 				nsDesti, _, err := targetCluster.CreatePDSNamespace(namespaceName)
 				log.FailOnError(err, "Error while creating namespace")
-				log.InfoD("Successfully created namespace with PDS Label %v ", nsDesti)
+				log.InfoD("Successfully created namespace with pds Label %v ", nsDesti)
 				ns2Id2, err := targetCluster.GetnameSpaceID(namespaceName, destinationTargetID)
 				nsID2 = append(nsID2, ns2Id2)
 				log.FailOnError(err, "Error while fetching namespaceID")
@@ -614,7 +614,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 				}
 				ns1, _, err := targetCluster.CreatePDSNamespace("ns1-" + strconv.Itoa(rand.Int()))
 				log.FailOnError(err, "Error while creating namespace")
-				log.InfoD("Successfully created namespace with PDS Label %v ", ns1)
+				log.InfoD("Successfully created namespace with pds Label %v ", ns1)
 				ns1Id1, err := targetCluster.GetnameSpaceID(ns1.Name, deploymentTargetID)
 				nsID1 = append(nsID1, ns1Id1)
 				log.FailOnError(err, "Error while fetching namespaceID")

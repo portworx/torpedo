@@ -3,11 +3,14 @@ package unifiedPlatform
 import (
 	"crypto/tls"
 	"fmt"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/pds"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/pds/api/api_v1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v1"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/grpc"
@@ -29,6 +32,7 @@ const (
 
 type UnifiedPlatformComponents struct {
 	Platform platform.Platform
+	PDS      pds.PDS
 }
 
 func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*UnifiedPlatformComponents, error) {
@@ -45,20 +49,31 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		platformApiConf.Host = endpointURL.Host
 		platformApiConf.Scheme = endpointURL.Scheme
 		platformV2apiClient := platformv1.NewAPIClient(platformApiConf)
+
+		//generate pds api_v2 client
+		pdsApiConf := pdsv2.NewConfiguration()
+		pdsApiConf.Host = endpointURL.Host
+		pdsApiConf.Scheme = endpointURL.Scheme
+		pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
+
 		return &UnifiedPlatformComponents{
 			Platform: &PLATFORM_API_V1{
 				ApiClientV1: platformV2apiClient,
 				AccountID:   AccountId,
 			},
+			PDS: &PDSV2{
+				ApiClientV2: pdsV2apiClient,
+				AccountID:   AccountId,
+			},
 		}, nil
 	case GRPC:
-		//Trim the controlPlane url and add port number to it
+		//Trim the controlplane url and add port number to it
 		_, grpcUrl, isFound := strings.Cut(controlPlaneURL, "//")
 		if !isFound {
 			return nil, fmt.Errorf("Unable to parse control plane url\n")
 		}
 		grpcUrl = grpcUrl + ":" + GRPC_PORT
-		log.Infof("Generating grpc client for controlPlane [%s]", grpcUrl)
+		log.Infof("Generating grpc client for controlplane [%s]", grpcUrl)
 
 		//generate grpc client
 		insecureDialOptStr := os.Getenv("INSECURE_FLAG")
@@ -94,9 +109,20 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		platformApiConf.Host = endpointURL.Host
 		platformApiConf.Scheme = endpointURL.Scheme
 		platformV2apiClient := platformv1.NewAPIClient(platformApiConf)
+
+		//generate pds api_v2 client
+		pdsApiConf := pdsv2.NewConfiguration()
+		pdsApiConf.Host = endpointURL.Host
+		pdsApiConf.Scheme = endpointURL.Scheme
+		pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
+
 		return &UnifiedPlatformComponents{
 			Platform: &PLATFORM_API_V1{
 				ApiClientV1: platformV2apiClient,
+				AccountID:   AccountId,
+			},
+			PDS: &PDSV2{
+				ApiClientV2: pdsV2apiClient,
 				AccountID:   AccountId,
 			},
 		}, nil

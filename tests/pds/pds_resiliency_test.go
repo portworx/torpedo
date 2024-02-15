@@ -292,7 +292,7 @@ var _ = Describe("{RebootNodeDuringAppResourceUpdate}", func() {
 
 var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill PDS-Agent Pod during application is scaled up", pdsLabels, 0)
+		StartTorpedoTest("KillPdsAgentPodDuringAppScaleUp", "Kill pds-Agent Pod during application is scaled up", pdsLabels, 0)
 		pdslib.MarkResiliencyTC(true)
 		//Initializing the parameters required for workload generation
 		wkloadParams = pdsdriver.LoadGenParams{
@@ -307,7 +307,7 @@ var _ = Describe("{KillPdsAgentPodDuringAppScaleUp}", func() {
 		}
 	})
 
-	It("Deploy Dataservices and Kill PDS Pod Agent while App scaleup", func() {
+	It("Deploy Dataservices and Kill pds Pod Agent while App scaleup", func() {
 		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 		var wlDeploymentsToBeCleaned []*v1.Deployment
 
@@ -962,9 +962,9 @@ var _ = Describe("{KillPdsAgentDuringWorkloadRun}", func() {
 			}
 		}()
 
-		Step("Killing PDS Agent Pods", func() {
+		Step("Killing pds Agent Pods", func() {
 			err = pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsAgentPod)
-			log.FailOnError(err, "Failed while deleting PDS Agent Pods")
+			log.FailOnError(err, "Failed while deleting pds Agent Pods")
 		})
 
 		// TODO : Once Workload Validation Module is ready, we will add that here. AI: @jyoti
@@ -1306,7 +1306,7 @@ var _ = Describe("{KillTeleportDuringWorkloadRun}", func() {
 
 		Step("Killing Teleport Pods", func() {
 			err = pdslib.KillPodsInNamespace(params.InfraToTest.PDSNamespace, pdslib.PdsTeleportPod)
-			log.FailOnError(err, "Failed while deleting PDS Agent Pods")
+			log.FailOnError(err, "Failed while deleting pds Agent Pods")
 		})
 
 		// TODO : Once Workload Validation Module is ready, we will add that here. AI: @jyoti

@@ -50,7 +50,7 @@ const (
 	retryTimeout                        = time.Minute * 2
 )
 
-// PDS vars
+// pds vars
 var (
 	dataservice               *dataservices.DataserviceType
 	wg                        sync.WaitGroup

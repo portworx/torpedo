@@ -541,7 +541,7 @@ type StorageClassConfig struct {
 	} `yaml:"resources"`
 }
 
-// PDS const
+// pds const
 const (
 	PDS_Health_Status_DOWN     PDS_Health_Status = "Partially Available"
 	PDS_Health_Status_DEGRADED PDS_Health_Status = "Unavailable"
@@ -592,7 +592,7 @@ const (
 	configmapNamespace           = "default"
 )
 
-// K8s/PDS Instances
+// K8s/pds Instances
 var (
 	k8sCore       = core.Instance()
 	k8sApps       = apps.Instance()
@@ -601,7 +601,7 @@ var (
 	serviceType   = "LoadBalancer"
 )
 
-// PDS vars
+// pds vars
 var (
 	components    *pdsapi.Components
 	deployment    *pds.ModelsDeployment
@@ -1667,7 +1667,7 @@ func GetRandomString(length int32) string {
 	return random_string
 }
 
-// Creates a temporary non PDS namespace of 6 letters length randomly chosen
+// Creates a temporary non pds namespace of 6 letters length randomly chosen
 func CreateTempNS(length int32) (string, error) {
 	namespace := GetRandomString(length)
 	ns := &corev1.Namespace{
@@ -1888,7 +1888,7 @@ func CreateIndependentPVC(namespace string, name string) (*corev1.PersistentVolu
 	return pvc, nil
 }
 
-// Create an Independant MySQL non PDS App running in a namespace
+// Create an Independant MySQL non pds App running in a namespace
 func CreateIndependentMySqlApp(ns string, podName string, appImage string, pvcName string) (*corev1.Pod, string, error) {
 	namespace := ns
 	podSpec := &corev1.Pod{
@@ -3155,7 +3155,7 @@ func CreatePdsLabeledNamespaces() (string, error) {
 	_, err := CreateK8sPDSNamespace(nname)
 	log.FailOnError(err, "error while creating pds namespace")
 	log.InfoD("Created namespace: %v", nname)
-	log.InfoD("Waiting for created namespaces to be available in PDS")
+	log.InfoD("Waiting for created namespaces to be available in pds")
 	time.Sleep(10 * time.Second)
 	return nname, nil
 }

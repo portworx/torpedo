@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// ControlPlane PDS
+// ControlPlane pds
 type ControlPlane struct {
 	ControlPlaneURL string
 	components      *api.Components

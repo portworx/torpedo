@@ -123,7 +123,7 @@ var _ = Describe("{DeletePDSPods}", func() {
 				Step("get pods from pds-system namespace", func() {
 					podList, err = pdslib.GetPods(pdsNamespace)
 					log.FailOnError(err, "Error while getting pods")
-					log.Infof("PDS System Pods")
+					log.Infof("pds System Pods")
 					for _, pod := range podList.Items {
 						log.Infof("%v", pod.Name)
 						pdsPods = append(pdsPods, pod)
@@ -131,10 +131,10 @@ var _ = Describe("{DeletePDSPods}", func() {
 				})
 
 				Step("delete pods from pds-system namespace", func() {
-					log.InfoD("Deleting PDS System Pods")
+					log.InfoD("Deleting pds System Pods")
 					err = pdslib.DeletePods(pdsPods)
 					log.FailOnError(err, "Error while deleting pods")
-					log.InfoD("Validating PDS System Pods")
+					log.InfoD("Validating pds System Pods")
 					err = pdslib.ValidatePods(pdsNamespace, "")
 					log.FailOnError(err, "Error while validating pods")
 
@@ -379,7 +379,7 @@ var _ = Describe("{DeregisterTargetCluster}", func() {
 })
 
 var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
-	steplog := "Validate Health of PDS services in case of failures"
+	steplog := "Validate Health of pds services in case of failures"
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ValidatePDSHealthInCaseOfFailures", steplog, pdsLabels, 0)
@@ -396,7 +396,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 
 			pdsPods := make([]corev1.Pod, 0)
 
-			Step("Delete dataservice pods and Check health of data service in PDS Controlplane", func() {
+			Step("Delete dataservice pods and Check health of data service in pds Controlplane", func() {
 				podList, err := pdslib.GetPods(params.InfraToTest.Namespace)
 				log.FailOnError(err, "Error while getting pods")
 
@@ -421,7 +421,7 @@ var _ = Describe("{ValidatePDSHealthInCaseOfFailures}", func() {
 				go func() {
 					defer wg.Done()
 					defer GinkgoRecover()
-					log.InfoD("Validating the data service pod status in PDS Control Plane")
+					log.InfoD("Validating the data service pod status in pds Control Plane")
 					err = pdslib.WaitForPDSDeploymentToBeDown(deployment, tesTimeInterval, timeOut)
 					log.FailOnError(err, "Error while validating the pds pods")
 
@@ -466,14 +466,14 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 				})
 
 				Step("Delete pods from pds-system namespace", func() {
-					log.InfoD("Getting PDS System Pods")
+					log.InfoD("Getting pds System Pods")
 					agentPod := pdslib.GetPDSPods("pds-agent", pdsNamespace)
 
 					var wg sync.WaitGroup
 					wg.Add(2)
 					go func() {
 						defer wg.Done()
-						log.InfoD("Deleting PDS agent Pods")
+						log.InfoD("Deleting pds agent Pods")
 						err = pdslib.DeleteK8sPods(agentPod.Name, pdsNamespace)
 						log.FailOnError(err, "Error while deleting pods")
 					}()
@@ -487,10 +487,10 @@ var _ = Describe("{RestartPDSagentPod}", func() {
 
 					wg.Wait()
 
-					log.Infof("Getting new PDS agent Pod")
+					log.Infof("Getting new pds agent Pod")
 					agentPod = pdslib.GetPDSPods("pds-agent", pdsNamespace)
 
-					log.InfoD("Validating new PDS agent Pod")
+					log.InfoD("Validating new pds agent Pod")
 					err = k8sCore.ValidatePod(&agentPod, 5*time.Minute, 10*time.Second)
 					log.FailOnError(err, "pds agent pod failed to comeup")
 				})
@@ -526,11 +526,11 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 	})
 
 	It("enable/disable namespace multiple times by giving labels to the namespace", func() {
-		Step("Enable/Disable PDS Namespace", func() {
+		Step("Enable/Disable pds Namespace", func() {
 			pdsNamespace := "pds" + strconv.Itoa(rand.Int())
 			testns, _, err := targetCluster.CreatePDSNamespace(pdsNamespace)
 			log.FailOnError(err, "Error while creating pds namespace")
-			log.InfoD("PDS Namespace created %v", testns)
+			log.InfoD("pds Namespace created %v", testns)
 
 			defer func() {
 				err := pdslib.DeletePDSNamespace(pdsNamespace)
@@ -544,7 +544,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 				}
 				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
 				log.FailOnError(err, "Error while updating pds namespace")
-				log.Infof("PDS Namespace Updated %v", testns)
+				log.Infof("pds Namespace Updated %v", testns)
 
 				//Validate Namespace is available for pds
 				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "available")
@@ -555,7 +555,7 @@ var _ = Describe("{EnableandDisableNamespace}", func() {
 				}
 				testns, err = pdslib.UpdatePDSNamespce(pdsNamespace, nsLables)
 				log.FailOnError(err, "Error while updating pds namespace")
-				log.Infof("PDS Namespace Updated %v", testns)
+				log.Infof("pds Namespace Updated %v", testns)
 
 				//Validate Namespace is available for pds
 				err = pdslib.ValidateNamespaces(deploymentTargetID, pdsNamespace, "unavailable")
@@ -809,26 +809,26 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-PDS namespace and then enables PDS on this namespace", pdsLabels, 0)
+		StartTorpedoTest("RunIndependentAppNonPdsNS", "Runs an independent app on a non-pds namespace and then enables pds on this namespace", pdsLabels, 0)
 	})
 	ns := ""
 	var err error
 	var podName string
 
-	It("Create an independent app in a non PDS namespace and then enable PDS on this namespace", func() {
+	It("Create an independent app in a non pds namespace and then enable pds on this namespace", func() {
 		Step("Create a temporary namespace on the cluster for creating an independent app", func() {
 			ns, err = pdslib.CreateTempNS(6)
 			log.FailOnError(err, "Failure in creating namespace on the target cluster. Exiting the Test case with failure")
-			log.InfoD("Namespace %s created for creating a Non-PDS App", ns)
+			log.InfoD("Namespace %s created for creating a Non-pds App", ns)
 		})
-		Step("Create an Independent app in a non-PDS namespace", func() {
+		Step("Create an Independent app in a non-pds namespace", func() {
 			_, pv_creation_err := pdslib.CreateIndependentPV("mysql-pv-" + ns)
 			if pv_creation_err == nil {
 				_, pvc_creation_err := pdslib.CreateIndependentPVC(ns, "mysql-pvc-"+ns)
 				if pvc_creation_err == nil {
 					_, podName, err = pdslib.CreateIndependentMySqlApp(ns, "mysql-app-"+ns, "mysql:8.0", "mysql-pvc-"+ns)
 					log.FailOnError(err, "Failure in creating the application in non-pds namespace")
-					log.InfoD("Non PDS MySQL App with name : %s is created", podName)
+					log.InfoD("Non pds MySQL App with name : %s is created", podName)
 				} else {
 					log.FailOnError(pvc_creation_err, "Failure in creating PVC on Target Cluster. Exiting the Test case with failure")
 				}
@@ -836,13 +836,13 @@ var _ = Describe("{RunIndependentAppNonPdsNS}", func() {
 				log.FailOnError(pv_creation_err, "Failure in creating Persistent Volume on target cluster. Exiting the Test case with failure")
 			}
 		})
-		Step("Add PDS Label to Non-PDS Namespace running a DB Service already", func() {
+		Step("Add pds Label to Non-pds Namespace running a DB Service already", func() {
 			nsLables := map[string]string{
 				pdsNamespaceLabel: "true",
 			}
 			testns, err := pdslib.UpdatePDSNamespce(ns, nsLables)
 			log.FailOnError(err, "Error while updating pds namespace")
-			log.InfoD("PDS Namespace Updated with PDS Label %v", testns)
+			log.InfoD("pds Namespace Updated with pds Label %v", testns)
 		})
 		Step("Deploy, Validate and Delete Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
@@ -1424,7 +1424,7 @@ var _ = Describe("{DeployMultipleNamespaces}", func() {
 				})
 			}
 		}()
-		log.InfoD("Waiting for created namespaces to be available in PDS")
+		log.InfoD("Waiting for created namespaces to be available in pds")
 		time.Sleep(10 * time.Second)
 
 		Step("Deploy All Supported Data Services", func() {
@@ -1479,7 +1479,7 @@ var _ = Describe("{DeletePDSEnabledNamespace}", func() {
 		log.FailOnError(err, "error while creating pds namespace")
 		isNamespacesDeleted = false
 		log.InfoD("Created namespace: %v", nname)
-		log.InfoD("Waiting for created namespaces to be available in PDS")
+		log.InfoD("Waiting for created namespaces to be available in pds")
 		time.Sleep(10 * time.Second)
 		log.InfoD("Create dataservices")
 
@@ -1556,7 +1556,7 @@ var _ = Describe("{RestartPXPods}", func() {
 
 	It("Deploy Dataservices", func() {
 		log.Info("Create dataservices without backup.")
-		Step("Deploy PDS Data Service", func() {
+		Step("Deploy pds Data Service", func() {
 			for _, ds := range params.DataServiceToTest {
 				Step("Deploy and validate data service", func() {
 					isDeploymentsDeleted = false
@@ -1712,7 +1712,7 @@ func DeployInANamespaceAndVerify(nname string) []*pds.ModelsDeployment {
 
 var _ = Describe("{RollingRebootNodes}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("PDS: RollingRebootNodes", "Reboot node(s) while the data services will be running", pdsLabels, 0)
+		StartTorpedoTest("pds: RollingRebootNodes", "Reboot node(s) while the data services will be running", pdsLabels, 0)
 	})
 
 	It("has to deploy data service and reboot node(s) while the data services will be running.", func() {

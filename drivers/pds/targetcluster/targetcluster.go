@@ -40,7 +40,7 @@ const (
 	DefaultPdsPodsTimeOut = 15 * time.Minute
 	timeInterval          = 10 * time.Second
 
-	// PDSNamespace PDS
+	// PDSNamespace pds
 	PDSNamespace       = "pds-system"
 	PDSChartRepo       = "https://pds.pure-px.io/charts/target"
 	pxLabel            = "pds.portworx.com/available"
@@ -245,7 +245,7 @@ func (targetCluster *TargetCluster) IsLatestPDSHelm(helmChartversion string) (bo
 	log.Debugf("Get pds chart version: %q, %q, %v\n", helmVersion, after, found)
 	helmVersion = strings.TrimSpace(helmVersion)
 	helmChartversion = strings.TrimSpace(helmChartversion)
-	log.Debugf("Installed PDS Helm version %s and helm chart version passed %s", helmVersion, helmChartversion)
+	log.Debugf("Installed pds Helm version %s and helm chart version passed %s", helmVersion, helmChartversion)
 	return strings.EqualFold(helmVersion, helmChartversion), nil
 }
 
@@ -255,7 +255,7 @@ func (targetCluster *TargetCluster) DeRegisterFromControlPlane() error {
 		return err
 	}
 	if len(pods.Items) > 0 {
-		log.InfoD("Uninstalling PDS from the Target cluster")
+		log.InfoD("Uninstalling pds from the Target cluster")
 		cmd := fmt.Sprintf("helm uninstall  pds --namespace %v", PDSNamespace)
 		output, _, err := osutils.ExecShell(cmd)
 		if err != nil {
@@ -306,17 +306,17 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 			return err
 		}
 		if !isLatest {
-			log.InfoD("Upgrading PDS helm chart to %v", helmChartversion)
+			log.InfoD("Upgrading pds helm chart to %v", helmChartversion)
 			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s", PDSNamespace, PDSChartRepo, helmChartversion)
 		} else if enableTLS {
-			log.InfoD("Upgrading PDS helm with tls enabled %v", helmChartversion)
+			log.InfoD("Upgrading pds helm with tls enabled %v", helmChartversion)
 			cmd = fmt.Sprintf("helm upgrade --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s "+
 				"--set tenantId=%s --set bearerToken=%s --set apiEndpoint=%s --set dataServiceTLSEnabled=true", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		}
 		isRegistered = true
 	}
 	if !isRegistered {
-		log.InfoD("Installing PDS ( helm version -  %v)", helmChartversion)
+		log.InfoD("Installing pds ( helm version -  %v)", helmChartversion)
 		cmd = fmt.Sprintf("helm install --create-namespace --namespace=%s pds pds-target --repo=%s --version=%s --set tenantId=%s "+
 			"--set bearerToken=%s --set apiEndpoint=%s", PDSNamespace, PDSChartRepo, helmChartversion, tenantId, bearerToken, apiEndpoint)
 		if strings.EqualFold(clusterType, "ocp") {
@@ -326,7 +326,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(controlPlaneURL strin
 	}
 	output, _, err := osutils.ExecShell(cmd)
 	if err != nil {
-		return fmt.Errorf("kindly remove the PDS chart properly and retry: %v", err)
+		return fmt.Errorf("kindly remove the pds chart properly and retry: %v", err)
 	}
 	log.Infof("Terminal output: %v", output)
 
@@ -459,7 +459,7 @@ func (targetCluster *TargetCluster) RegisterClusterToControlPlane(infraParams *p
 
 	if installOldVersion {
 		helmChartversion = infraParams.PDSHelmVersions.PreviousHelmVersion
-		log.InfoD("Deregister PDS and Install Old Version")
+		log.InfoD("Deregister pds and Install Old Version")
 
 	} else {
 		helmChartversion, err = components.APIVersion.GetHelmChartVersion()

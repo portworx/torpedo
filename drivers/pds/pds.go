@@ -33,13 +33,13 @@ type LoadGenParams struct {
 
 type Driver interface {
 
-	//DeployPDSDataservices Deploys the given PDS dataservice and retruns the models deployment object
+	//DeployPDSDataservices Deploys the given pds dataservice and retruns the models deployment object
 	DeployPDSDataservices() ([]*pds.ModelsDeployment, error)
 
 	//CreateSchedulerContextForPDSApps Creates Context for the pds deployed applications
 	CreateSchedulerContextForPDSApps(pdsApps []*pds.ModelsDeployment) ([]*scheduler.Context, error)
 
-	//ValidateDataServiceDeployment Validate the PDS deployments
+	//ValidateDataServiceDeployment Validate the pds deployments
 	ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error
 
 	//InsertDataAndReturnChecksum Inserts data and returns md5 hash for the data inserted

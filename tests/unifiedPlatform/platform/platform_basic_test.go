@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -24,6 +25,10 @@ var _ = BeforeSuite(func() {
 		log.Infof("AccountID - [%s]", accID)
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
 		log.FailOnError(err, "error while initialising api components")
+
+		//Initialising UnifiedApiComponents in ds utils
+		err = dsUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
+		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 })
 

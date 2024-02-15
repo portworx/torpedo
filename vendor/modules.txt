@@ -1168,6 +1168,7 @@ github.com/portworx/kvdb/mem
 # github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e
 ## explicit; go 1.21
 github.com/portworx/pds-api-go-client/pds/v1alpha1
+github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1

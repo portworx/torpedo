@@ -182,7 +182,7 @@ const (
 	CreateCloudCredentialError = "PermissionDenied desc = Access denied for [Resource: cloudcredential]"
 )
 
-// PDS params
+// pds params
 const (
 	deployPDSAppsFlag = "deploy-pds-apps"
 	pdsDriveCliFlag   = "pds-driver"
@@ -1805,7 +1805,7 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var err error
 	Step("schedule applications", func() {
 		if Inst().IsPDSApps {
-			log.InfoD("Scheduling PDS Apps...")
+			log.InfoD("Scheduling pds Apps...")
 			pdsapps, err := Inst().Pds.DeployPDSDataservices()
 			if err != nil {
 				processError(err, errChan...)

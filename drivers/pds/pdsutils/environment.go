@@ -37,7 +37,7 @@ const (
 	envRestoreTargetCluster        = "PDS_RESTORE_TARGET_CLUSTER"
 )
 
-// Environment struct for PDS test execution
+// Environment struct for pds test execution
 type Environment struct {
 	PDSControlPlaneURL         string
 	PDSTestAccountName         string
