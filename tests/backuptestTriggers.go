@@ -15,8 +15,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	"github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 )
 
 // All Longevity types for backup
@@ -168,7 +167,7 @@ func GetRandomNamespacesForBackup() []string {
 		allNamespacesForBackupMap[LongevityAllNamespaces[rand.Intn(len(LongevityAllNamespaces))]] = true
 	}
 
-	for namespaceName, _ := range allNamespacesForBackupMap {
+	for namespaceName := range allNamespacesForBackupMap {
 		allNamepsacesForBackup = append(allNamepsacesForBackup, namespaceName)
 	}
 
@@ -392,7 +391,7 @@ func getGlobalBucketName(provider string) string {
 
 // Trigger to create cred and bucket for backup
 func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
+	defer GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(SetupBackupBucketAndCreds)
 
@@ -432,7 +431,7 @@ func TriggerAddBackupCredAndBucket(contexts *[]*scheduler.Context, recordChan *c
 
 // Trigger to add a backup cluster
 func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
+	defer GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(SetupBackupBucketAndCreds)
 
@@ -469,7 +468,7 @@ func TriggerAddBackupCluster(contexts *[]*scheduler.Context, recordChan *chan *E
 
 // Trigger to deploy backup apps with or without data validation
 func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
+	defer GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(SetupBackupBucketAndCreds)
 
@@ -508,7 +507,7 @@ func TriggerDeployBackupApps(contexts *[]*scheduler.Context, recordChan *chan *E
 
 // Trigger to create backup and validate
 func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
+	defer GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(CreatePxBackup)
 
@@ -549,7 +548,7 @@ func TriggerCreateBackup(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 // Trigger to create backup and restore from same backup
 func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-	defer ginkgo.GinkgoRecover()
+	defer GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(CreatePxBackup)
 
@@ -593,7 +592,7 @@ func TriggerCreateBackupAndRestore(contexts *[]*scheduler.Context, recordChan *c
 
 func TriggerCreateRandomRestore(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
 
-	defer ginkgo.GinkgoRecover()
+	defer GinkgoRecover()
 	defer endLongevityTest()
 	startLongevityTest(CreatePxBackup)
 
