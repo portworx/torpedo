@@ -81,6 +81,7 @@ type AppConfig struct {
 	IoProfile            string   `yaml:"io_profile"`
 	Journal              string   `yaml:"journal"`
 	DataSize             string   `yaml:"data_size"`
+	Suffix               string   `yaml:"suffix"`
 }
 
 // InitOptions initialization options

@@ -1,9 +1,7 @@
-{{ $randomString := randAlphaNum 5 | lower }}
-
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: postgres-data-{{ $randomString }}
+  name: postgres-data-{{ .Suffix }}
 spec:
   storageClassName: postgres-sc
   accessModes:
@@ -34,7 +32,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres-{{ $randomString }}
+  name: postgres-{{ .Suffix }}
 spec:
   strategy:
     rollingUpdate:
@@ -92,4 +90,4 @@ spec:
       volumes:
         - name: postgredb
           persistentVolumeClaim:
-            claimName: postgres-data-{{ $randomString }}
+            claimName: postgres-data-{{ .Suffix }}
