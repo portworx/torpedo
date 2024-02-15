@@ -4227,19 +4227,12 @@ var _ = Describe("{IssueMultipleBackupsAndRestoreInterleavedCopies}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
 			log.InfoD("Taking Backup of application")
-			var wg sync.WaitGroup
 			for i := 0; i < backupCount; i++ {
-				wg.Add(1)
 				currentBackupName = fmt.Sprintf("%s-%v-%v", BackupNamePrefix, i+1, RandomString(10))
-				go func(currentBackupName string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
-				}(currentBackupName)
+				err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, nil, orgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
 				backupNameList = append(backupNameList, currentBackupName)
 			}
-			wg.Wait()
 			log.Infof("List of backups - %v", backupNameList)
 		})
 
