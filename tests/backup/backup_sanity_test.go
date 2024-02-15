@@ -170,6 +170,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
+		namespace := fmt.Sprintf("test-namespace-abrar")
 		for i := 0; i < 10; i++ {
 			Inst().CustomAppConfig["postgres-backup"] = scheduler.AppConfig{
 				Suffix: RandomString(8),
@@ -177,7 +178,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 			log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
-			appContexts := ScheduleApplications(taskName)
+			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
