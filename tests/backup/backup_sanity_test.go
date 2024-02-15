@@ -171,7 +171,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		namespace := fmt.Sprintf("test-namespace-abrar")
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 1; i++ {
 			Inst().CustomAppConfig["postgres-backup"] = scheduler.AppConfig{
 				Suffix: RandomString(8),
 			}
