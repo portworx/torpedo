@@ -125,6 +125,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
 		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
