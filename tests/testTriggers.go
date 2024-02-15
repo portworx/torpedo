@@ -34,7 +34,7 @@ import (
 	"container/ring"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
@@ -603,7 +603,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	coresMap = make(map[string]string)
 	setMetrics(*event)
 
-	context("checking for core files...", func() {
+	Step("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetStorageDriverNodes()
@@ -5565,7 +5565,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 	setMetrics(*event)
 
 	stepLog := "upgrade volume driver"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
 			log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
 		}
@@ -5652,7 +5652,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	setMetrics(*event)
 
 	stepLog := "Validate AutoFsTrim of the volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		stepLog = "enable auto fstrim "
 		Step(stepLog,
@@ -5758,7 +5758,7 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	setMetrics(*event)
 	stepLog := "Validate update of the volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		stepLog = "Update Io priority on volumes "
 		Step(stepLog,
@@ -5790,7 +5790,7 @@ func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *ch
 	}()
 	setMetrics(*event)
 	stepLog := "Validate IO profile update on volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		Step(stepLog,
 			func() {
@@ -6130,7 +6130,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 	stepLog := "Validate Trashcan feature of the volumes"
 
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		if !isTrashcanEnabled {
 			stepLog = "enable trashcan"
@@ -6222,7 +6222,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	setMetrics(*event)
 
 	stepLog := "Validate Relaxed Reclaim of the volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		if !isRelaxedReclaimEnabled {
 			stepLog = "enable relaxed reclaim "
@@ -6778,7 +6778,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	setMetrics(*event)
 	stepLog := "perform kvdb failover in a cyclic manner"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		stepLog = "Get KVDB nodes and perform failover"
 		Step(stepLog, func() {
@@ -6965,7 +6965,7 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	chaosLevel := ChaosMap[AppTasksDown]
 	stepLog := "deletes all pods from a given app and validate if they recover"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			for i := 0; i < chaosLevel; i++ {
