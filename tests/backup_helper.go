@@ -305,10 +305,6 @@ func getPXNamespace() string {
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
-
-	dt := time.Now()
-	log.Infof("Backup is started at [%s] on source", dt.Format("01-02-2006 15:04:05"))
-
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err

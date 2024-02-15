@@ -1,3 +1,15 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-data-{{ .Suffix }}
+spec:
+  storageClassName: postgres-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -18,15 +30,16 @@ spec:
       targetPort: 5432
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: postgres
+  name: postgres-{{ .Suffix }}
 spec:
-  serviceName: "postgres"
-  {{ if .Replicas }}
-  replicas: {{ .Replicas }}
-  {{ else }}
-  replicas: 1{{ end }}
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  replicas: 1
   selector:
     matchLabels:
       app: postgres
@@ -35,6 +48,7 @@ spec:
       labels:
         app: postgres
     spec:
+      schedulerName: stork
       containers:
         - name: postgres
           image: postgres:9.5
@@ -55,20 +69,15 @@ spec:
               name: postgredb
           readinessProbe:
             exec:
-              command: ["psql", "-U", "pgbench", "-c", "SELECT 1"]
+              command: ["psql", "-U", "pgbench", "-c", "CREATE TABLE IF NOT EXISTS test_table ( test_text TEXT ); INSERT INTO test_table VALUES ( 'test_message' ); SELECT * FROM test_table; SELECT pg_sleep(1); DELETE FROM test_table;"]
             initialDelaySeconds: 15
             timeoutSeconds: 2
           livenessProbe:
             exec:
-              command: ["psql", "-U", "pgbench", "-c", "SELECT 1"]
+              command: ["psql", "-U", "pgbench", "-c", "CREATE TABLE IF NOT EXISTS test_table ( test_text TEXT ); INSERT INTO test_table VALUES ( 'test_message' ); SELECT * FROM test_table; SELECT pg_sleep(1); DELETE FROM test_table;"]
             initialDelaySeconds: 45
             timeoutSeconds: 2
-  volumeClaimTemplates:
-    - metadata:
-        name: postgredb
-      spec:
-        accessModes: [ "ReadWriteOnce" ]
-        storageClassName: postgres-sc
-        resources:
-          requests:
-            storage: 1Gi
+      volumes:
+        - name: postgredb
+          persistentVolumeClaim:
+            claimName: postgres-data-{{ .Suffix }}

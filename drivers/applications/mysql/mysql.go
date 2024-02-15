@@ -171,8 +171,6 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	  )`, tableName)
 	err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
-		dt := time.Now()
-		log.Infof("This error occurred at [%s] on source", dt.Format("01-02-2006 15:04:05"))
 		log.InfoD("Error while creating table - [%s]", err.Error())
 		allErrors = append(allErrors, err.Error())
 	}
