@@ -2480,14 +2480,11 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 		for _, restoredVolInfo := range apparentlyRestoredVolumes {
 			log.Infof("Restore volume is %v", restoredVolInfo.RestoreVolume)
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
-				log.Infof("Restore status is %v", restoredVolInfo.Status.Status)
-				log.Info(restoredVolInfo.Status.Status)
 				switch restoredVolInfo.Status.Status {
 				case api.RestoreInfo_StatusInfo_Success:
 					log.Infof("in restore [%s], the status of the restored volume [%s] was Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 				case api.RestoreInfo_StatusInfo_Retained:
 					log.Infof("Replace policy is %v", theRestore.ReplacePolicy)
-					log.Info(theRestore.ReplacePolicy)
 					if theRestore.ReplacePolicy == api.ReplacePolicy_Retain {
 						log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 					} else {
@@ -2503,6 +2500,9 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 
 				var actualVol *volume.Volume
 				var ok bool
+				log.Infof("The actual volume map is: %v", actualVolumeMap)
+				log.Infof("The apparently restored volumes are: %v", apparentlyRestoredVolumes)
+				log.Infof("The restored volume info is: %v", restoredVolInfo)
 				if actualVol, ok = actualVolumeMap[restoredVolInfo.RestoreVolume]; !ok {
 					err := fmt.Errorf("in restore [%s], said restored volume [%s] cannot be found in the actual cluster [%s]", restoreName, restoredVolInfo.RestoreVolume, expectedRestoredAppContextNamespace)
 					errors = append(errors, err)
