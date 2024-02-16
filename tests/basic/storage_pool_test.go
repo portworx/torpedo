@@ -10626,3 +10626,136 @@ var _ = Describe("{PoolDeleteServiceDisruption}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
+	/*
+		PTX:
+		https://portworx.atlassian.net/browse/PTX-15465
+
+		TestRail:
+		https://portworx.testrail.net/index.php?/cases/view/57783
+
+		 1. Trigger HA increase for volumes
+		 2. Pool resize trigger
+		 3. Add disk to the pool
+		All three steps should occur parallel and should not cause any issue
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("HAIncreasePoolresizeAndAdddisk", "HA increase, pool resize and add disk run all this parallely", nil, 57783)
+	})
+	var contexts []*scheduler.Context
+	var nodeToBeUpdated node.Node
+	var poolToBeUpdated string
+	var wg sync.WaitGroup
+
+	itLog := "HAIncreasePoolresizeAndAdddisk"
+	It(itLog, func() {
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				for _, app := range Inst().AppList {
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%d", app, itLog))...)
+				}
+			}
+		})
+		stepLog = "HA increase for volumes"
+		Step(stepLog, func() {
+			// First get volumes of the application
+			for _, eachContext := range contexts {
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to get volumes from context")
+				// check replication factor of 3 volumes and if it is 3 reduce it to 2
+				for index, eachVol := range vols {
+					curReplSet, err := Inst().V.GetReplicationFactor(eachVol)
+					log.FailOnError(err, "failed to get replication factor of the volume")
+					if index < 3 {
+						// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 3
+						if curReplSet == 3 {
+							newRepl := int64(curReplSet - 1)
+							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
+								nil, nil, true),
+								"Failed to set Replicaiton factor")
+						}
+					}
+				}
+				// now increase the replication factor of this volumes.
+				nodeToBeUpdated = node.GetStorageDriverNodes()[rand.Intn(len(node.GetStorageDriverNodes()))]
+				pools, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
+				poolToBeUpdated = pools[0]
+				log.FailOnError(err, "Failed to get all pools on node: %v", nodeToBeUpdated.Name)
+				log.InfoD("Node selected for repl increase")
+				wg.Add(1)
+				go func() {
+					defer GinkgoRecover()
+					defer wg.Done()
+					for index, eachVol := range vols {
+						if index < 3 {
+							var maxReplicaFactor int64
+							var nodesToBeUpdated []string
+							var poolsToBeUpdated []string
+							nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
+							poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+							maxReplicaFactor = 3
+							nodesToBeUpdated = nil
+							poolsToBeUpdated = nil
+							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
+								nodesToBeUpdated, poolsToBeUpdated, true),
+								"Failed to set Replicaiton factor")
+
+							// Sleep for some time before checking if any resync to start
+							time.Sleep(2 * time.Minute)
+							if inResync(eachVol.Name) {
+								WaitTillVolumeInResync(eachVol.Name)
+							}
+						}
+					}
+				}()
+
+			}
+		})
+		stepLog = "Pool resize trigger"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//initiate pool expand on the pool where ha increase is happening.
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				pool, err := GetStoragePoolByUUID(poolToBeUpdated)
+				log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
+
+				expectedSize := (pool.TotalSize / units.GiB) + 100
+				err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to initiate pool resize")
+
+				//wait for pool expand to complete
+				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+			}()
+		})
+
+		stepLog = "Pool expand add disk trigger"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				pool, err := GetStoragePoolByUUID(poolToBeUpdated)
+				log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
+
+				expectedSize := (pool.TotalSize / units.GiB) + 100
+				err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to initiate pool resize")
+
+				//wait for pool expand to complete
+				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+			}()
+
+		})
+		wg.Wait()
+	})
+})
