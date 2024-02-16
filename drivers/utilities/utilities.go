@@ -2,6 +2,7 @@ package utilities
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"strconv"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	corev1 "k8s.io/api/core/v1"
 )
+
+//var FROM_RESTORE_WE_ARE_ADDING = false
 
 type AppInfo struct {
 	StartDataSupport bool
@@ -190,5 +193,26 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 		}
 	}
 
+	if appInfo.StartDataSupport {
+		log.Infof("Printing hba config")
+		printHBAConfig(appInfo.Namespace)
+	}
 	return appInfo, nil
+}
+
+// printHBAConfig prints pg_hba.conf to console
+func printHBAConfig(namespace string) {
+	var k8sCore = core.Instance()
+	var output string
+	allPods, err := k8sCore.GetPods(namespace, make(map[string]string))
+
+	for _, pod := range allPods.Items {
+		output, err = k8sCore.RunCommandInPod([]string{"cat", "./var/lib/postgresql/data/pgdata/pg_hba.conf"}, pod.Name, pod.Spec.Containers[0].Name, namespace)
+		if err != nil {
+			log.Warnf("Some error occurred while print hba_conf. Error - [%s]", err.Error())
+		} else {
+			log.Infof("\n\n\n\n\nPG HBA CONFIG FROM [%s]\n\n\n\n\n\n", pod)
+			log.Infof(output)
+		}
+	}
 }

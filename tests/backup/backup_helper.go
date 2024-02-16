@@ -2245,6 +2245,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	}
 
 	// Creating restore handlers
+	//appUtils.FROM_RESTORE_WE_ARE_ADDING = true
 	log.Infof("Creating all restore app handlers")
 	log.Infof("Namespace Mapping - [%+v]", namespaceMapping)
 	for _, ctx := range expectedRestoredAppContexts {
