@@ -2478,6 +2478,9 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 
 		// looping over the list of volumes that PX-Backup says it restored, to run some checks
 		for _, restoredVolInfo := range apparentlyRestoredVolumes {
+			log.Infof("Restore volume is %v", restoredVolInfo.RestoreVolume)
+			log.Info("Restore status is %v", restoredVolInfo.Status.Status)
+			log.Info("Replace policy is %v", theRestore.ReplacePolicy)
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
 				switch restoredVolInfo.Status.Status {
 				case api.RestoreInfo_StatusInfo_Success:
