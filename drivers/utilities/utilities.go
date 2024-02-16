@@ -5,6 +5,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
@@ -194,10 +195,27 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	}
 
 	if appInfo.StartDataSupport {
+		time.Sleep(5 * time.Minute)
+		syncData(appInfo.Namespace)
 		log.Infof("Printing hba config")
 		printHBAConfig(appInfo.Namespace)
 	}
 	return appInfo, nil
+}
+
+// printHBAConfig prints pg_hba.conf to console
+func syncData(namespace string) {
+	var k8sCore = core.Instance()
+	allPods, err := k8sCore.GetPods(namespace, make(map[string]string))
+
+	for _, pod := range allPods.Items {
+		_, err = k8sCore.RunCommandInPod([]string{"sync"}, pod.Name, pod.Spec.Containers[0].Name, namespace)
+		if err != nil {
+			log.Warnf("Some error occurred while running sync command. Error - [%s]", err.Error())
+		} else {
+			log.Infof("Sync ran successfully")
+		}
+	}
 }
 
 // printHBAConfig prints pg_hba.conf to console
