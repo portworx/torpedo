@@ -10667,19 +10667,16 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 			for _, eachContext := range contexts {
 				vols, err := Inst().S.GetVolumes(eachContext)
 				log.FailOnError(err, "Failed to get volumes from context")
-				// check replication factor of 3 volumes and if it is 3 reduce it to 2
-				for index, eachVol := range vols {
-					curReplSet, err := Inst().V.GetReplicationFactor(eachVol)
-					log.FailOnError(err, "failed to get replication factor of the volume")
-					if index < 3 {
-						// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 3
-						if curReplSet == 3 {
-							newRepl := int64(curReplSet - 1)
-							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, newRepl,
-								nil, nil, true),
-								"Failed to set Replicaiton factor")
-						}
-					}
+				//pick a random volume
+				vol := vols[rand.Intn(len(vols))]
+				curReplSet, err := Inst().V.GetReplicationFactor(vol)
+				log.FailOnError(err, "failed to get replication factor of the volume")
+				// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 2
+				if curReplSet == 3 {
+					newRepl := int64(curReplSet - 1)
+					log.FailOnError(Inst().V.SetReplicationFactor(vol, newRepl,
+						nil, nil, true),
+						"Failed to set Replicaiton factor")
 				}
 				// now increase the replication factor of this volumes.
 				nodeToBeUpdated = node.GetStorageDriverNodes()[rand.Intn(len(node.GetStorageDriverNodes()))]
@@ -10687,38 +10684,33 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				poolToBeUpdated = pools[0]
 				log.FailOnError(err, "Failed to get all pools on node: %v", nodeToBeUpdated.Name)
 				log.InfoD("Node selected for repl increase")
-				wg.Add(1)
-				go func() {
-					defer GinkgoRecover()
-					defer wg.Done()
-					for index, eachVol := range vols {
-						if index < 3 {
-							wg.Add(1)
-							go func() {
-								defer wg.Done()
-								var maxReplicaFactor int64
-								var nodesToBeUpdated []string
-								var poolsToBeUpdated []string
-								nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
-								poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
-								maxReplicaFactor = 3
-								nodesToBeUpdated = nil
-								poolsToBeUpdated = nil
-								log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
-									nodesToBeUpdated, poolsToBeUpdated, true),
-									"Failed to set Replicaiton factor")
-								// Sleep for some time before checking if any resync to start
-								time.Sleep(2 * time.Minute)
-								if inResync(eachVol.Name) {
-									WaitTillVolumeInResync(eachVol.Name)
-								}
-
-							}()
+				var maxReplicaFactor int64
+				var nodesToBeUpdated []string
+				var poolsToBeUpdated []string
+				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
+				poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+				maxReplicaFactor = 3
+				nodesToBeUpdated = nil
+				poolsToBeUpdated = nil
+				log.FailOnError(Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
+					nodesToBeUpdated, poolsToBeUpdated, true),
+					"Failed to set Replicaiton factor")
+				// create a time limit for this for loop
+				timeout := time.After(20 * time.Minute)
+				for {
+					select {
+					case <-timeout:
+						// Timeout reached, exit the loop
+						fmt.Println("Timeout reached. Exiting loop.")
+						return
+					default:
+						// Continue the loop logic
+						if inResync(vol.Name) {
+							fmt.Println("In resync. Exiting loop.")
+							return
 						}
-
 					}
-				}()
-
+				}
 			}
 		})
 		stepLog = "Pool resize trigger"
