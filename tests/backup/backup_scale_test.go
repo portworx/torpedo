@@ -237,7 +237,7 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 		backupLocationMap = make(map[string]string)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
-		namespace = fmt.Sprintf("test-ns-abrar")
+		namespace = fmt.Sprintf("test-ns-%s", RandomString(6))
 		for i := 0; i < 2; i++ {
 			Inst().CustomAppConfig["postgres-backup-multiple-volumes"] = scheduler.AppConfig{
 				Suffix: RandomString(8),
