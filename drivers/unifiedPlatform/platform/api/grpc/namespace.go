@@ -50,14 +50,14 @@ func (NamespaceGrpcV1 *NamespaceGrpc) ListNamespaces() ([]ApiResponse, error) {
 	}
 
 	for _, ns := range nsResponse.Namespaces {
-		log.Infof("accounts - [%v]", ns.Meta.Name)
+		log.Infof("namespace -  [%v]", ns.Meta.Name)
 	}
 
 	copier.Copy(&namespaceResponse, nsResponse.Namespaces)
 
-	log.Infof("Value of tenants after copy - [%v]", nsResponse)
+	log.Infof("Value of namespace after copy - [%v]", nsResponse)
 	for _, ten := range namespaceResponse {
-		log.Infof("tenants - [%v]", ten.Meta.Name)
+		log.Infof("namespace -  [%v]", ten.Meta.Name)
 	}
 
 	return namespaceResponse, nil

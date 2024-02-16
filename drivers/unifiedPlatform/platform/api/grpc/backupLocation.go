@@ -47,7 +47,7 @@ func (BackupLocGrpcV1 *BackupLocGrpc) ListBackupLocations() ([]ApiResponse, erro
 	backupLocationModels, err := backupLocationClient.ListBackupLocations(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("Value of tenants - [%v]", backupLocationModels)
 	copier.Copy(&bckpLocResponse, backupLocationModels.BackupLocations)
-	log.Infof("Value of accounts after copy - [%v]", bckpLocResponse)
+	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResponse)
 	return bckpLocResponse, nil
 }
 
@@ -65,56 +65,39 @@ func (BackupLocGrpcV1 *BackupLocGrpc) GetBackupLocation(backupLocID string) (*Ap
 	}
 	log.Infof("Value of backupLocation - [%v]", backupLocationModel)
 	copier.Copy(&bckpLocResp, backupLocationModel)
-	log.Infof("Value of accounts after copy - [%v]", bckpLocResp)
+	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
 	return &bckpLocResp, nil
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(tenantID string) (*ApiResponse, error) {
+func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(createRequest *publicbackuplocapi.CreateBackupLocationRequest) (*ApiResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResp := ApiResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	createRequest := &publicbackuplocapi.CreateBackupLocationRequest{
-		TenantId: tenantID,
-		BackupLocation: &publicbackuplocapi.BackupLocation{
-			Meta:   nil,
-			Config: nil,
-			Status: nil,
-		},
 	}
 	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `BackupLocationServiceCreateBackupLocation` to create backup target - %v", err)
 	}
 	copier.Copy(&bckpLocResp, backupLocationModel)
-	log.Infof("Value of accounts after copy - [%v]", bckpLocResp)
+	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
 	return &bckpLocResp, nil
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(backupLocationID string) (*ApiResponse, error) {
+func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(updateRequest *publicbackuplocapi.UpdateBackupLocationRequest) (*ApiResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResp := ApiResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	updateRequest := &publicbackuplocapi.UpdateBackupLocationRequest{
-		UpdateMask: nil,
-		Id:         backupLocationID,
-		BackupLocation: &publicbackuplocapi.BackupLocation{
-			Meta:   nil,
-			Config: nil,
-			Status: nil,
-		},
 	}
 	backupLocationModel, err := backupLocationClient.UpdateBackupLocation(ctx, updateRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	copier.Copy(&bckpLocResp, backupLocationModel)
-	log.Infof("Value of accounts after copy - [%v]", bckpLocResp)
+	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
 	return &bckpLocResp, nil
 
 }
