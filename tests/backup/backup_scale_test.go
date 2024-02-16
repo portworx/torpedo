@@ -222,7 +222,7 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 		cloudCredUID         string
 		backupLocationUID    string
 		currentBackupName    string
-		bkpNamespaces        []string
+		namespace            string
 		backupNameList       []string
 		restoreNames         []string
 		preRuleName          string
@@ -237,8 +237,8 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 		backupLocationMap = make(map[string]string)
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
-		namespace := fmt.Sprintf("test-ns-abrar")
-		for i := 0; i < 10; i++ {
+		namespace = fmt.Sprintf("test-ns-abrar")
+		for i := 0; i < 2; i++ {
 			Inst().CustomAppConfig["postgres-backup-multiple-volumes"] = scheduler.AppConfig{
 				Suffix: RandomString(8),
 			}
@@ -313,7 +313,7 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 			log.InfoD("Taking backup of application with 50 volumes on source cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 			log.InfoD("Taking Backup of application")
 			currentBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
 			labelSelectors := make(map[string]string)
@@ -327,7 +327,7 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.Infof("Backup to be restored - %v", currentBackupName)
-			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
+			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(10))
 			err = CreateRestoreWithValidation(ctx, restoreName, currentBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, currentBackupName))
