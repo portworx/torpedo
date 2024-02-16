@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"math/rand"
 	"strconv"
+	"time"
 )
 
 //var FROM_RESTORE_WE_ARE_ADDING = false
@@ -193,8 +194,8 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	}
 
 	if appInfo.StartDataSupport {
-		// time.Sleep(5 * time.Minute)
-		syncData(appInfo.Namespace)
+		time.Sleep(5 * time.Minute)
+		//syncData(appInfo.Namespace)
 		log.Infof("Printing hba config")
 		printHBAConfig(appInfo.Namespace)
 	}
