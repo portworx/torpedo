@@ -2480,13 +2480,13 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 		for _, restoredVolInfo := range apparentlyRestoredVolumes {
 			log.Infof("Restore volume is %v", restoredVolInfo.RestoreVolume)
 			if namespaceMappings[restoredVolInfo.SourceNamespace] == expectedRestoredAppContextNamespace {
-				log.Info("Restore status is %v", restoredVolInfo.Status.Status)
+				log.Infof("Restore status is %v", restoredVolInfo.Status.Status)
 				log.Info(restoredVolInfo.Status.Status)
 				switch restoredVolInfo.Status.Status {
 				case api.RestoreInfo_StatusInfo_Success:
 					log.Infof("in restore [%s], the status of the restored volume [%s] was Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
 				case api.RestoreInfo_StatusInfo_Retained:
-					log.Info("Replace policy is %v", theRestore.ReplacePolicy)
+					log.Infof("Replace policy is %v", theRestore.ReplacePolicy)
 					log.Info(theRestore.ReplacePolicy)
 					if theRestore.ReplacePolicy == api.ReplacePolicy_Retain {
 						log.Infof("in restore [%s], the status of the restored volume [%s] was not Success. It was [%s] with reason [%s]", restoreName, restoredVolInfo.RestoreVolume, restoredVolInfo.Status.Status, restoredVolInfo.Status.Reason)
