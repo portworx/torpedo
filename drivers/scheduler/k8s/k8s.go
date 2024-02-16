@@ -1092,7 +1092,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createtektonObjects(appSpec, ns, app)
+			obj, err := k.createTektonObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -5410,8 +5410,8 @@ func (k *K8s) createVirtualMachineObjects(
 	return nil, nil
 }
 
-// createtektonObjects creates the Tektoncd objects
-func (k *K8s) createtektonObjects(
+// createTektonObjects creates the Tektoncd objects
+func (k *K8s) createTektonObjects(
 	spec interface{},
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
