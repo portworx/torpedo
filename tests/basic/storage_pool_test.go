@@ -10698,6 +10698,16 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				// create a time limit for this for loop
 				timeout := time.After(20 * time.Minute)
 				for {
+					volDetails, err := Inst().V.InspectVolume(vol.Name)
+					log.FailOnError(err, "Failed to get volume details")
+					resync := false
+					for _, v := range volDetails.RuntimeState {
+						log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
+						if v.GetRuntimeState()["RuntimeState"] == "resync" ||
+							v.GetRuntimeState()["RuntimeState"] == "clean" {
+							resync = true
+						}
+					}
 					select {
 					case <-timeout:
 						// Timeout reached, exit the loop
@@ -10705,10 +10715,12 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 						return
 					default:
 						// Continue the loop logic
-						if inResync(vol.Name) {
+						if resync {
 							fmt.Println("In resync. Exiting loop.")
 							return
 						}
+						log.Infof("Sleeping for 15 seconds until volume goes to resync state ")
+						time.Sleep(15 * time.Second)
 					}
 				}
 			}
