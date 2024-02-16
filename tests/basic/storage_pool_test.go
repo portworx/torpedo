@@ -10693,24 +10693,29 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					defer wg.Done()
 					for index, eachVol := range vols {
 						if index < 3 {
-							var maxReplicaFactor int64
-							var nodesToBeUpdated []string
-							var poolsToBeUpdated []string
-							nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
-							poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
-							maxReplicaFactor = 3
-							nodesToBeUpdated = nil
-							poolsToBeUpdated = nil
-							log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
-								nodesToBeUpdated, poolsToBeUpdated, true),
-								"Failed to set Replicaiton factor")
+							wg.Add(1)
+							go func() {
+								defer wg.Done()
+								var maxReplicaFactor int64
+								var nodesToBeUpdated []string
+								var poolsToBeUpdated []string
+								nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
+								poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+								maxReplicaFactor = 3
+								nodesToBeUpdated = nil
+								poolsToBeUpdated = nil
+								log.FailOnError(Inst().V.SetReplicationFactor(eachVol, maxReplicaFactor,
+									nodesToBeUpdated, poolsToBeUpdated, true),
+									"Failed to set Replicaiton factor")
+								// Sleep for some time before checking if any resync to start
+								time.Sleep(2 * time.Minute)
+								if inResync(eachVol.Name) {
+									WaitTillVolumeInResync(eachVol.Name)
+								}
 
-							// Sleep for some time before checking if any resync to start
-							time.Sleep(2 * time.Minute)
-							if inResync(eachVol.Name) {
-								WaitTillVolumeInResync(eachVol.Name)
-							}
+							}()
 						}
+
 					}
 				}()
 
