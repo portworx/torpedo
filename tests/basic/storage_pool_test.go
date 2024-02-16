@@ -10656,7 +10656,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 			log.InfoD(stepLog)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 				for _, app := range Inst().AppList {
-					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s", "ha-increase-pool-resize-and-add-disk"))...)
+					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%s", app, "ha-increase-pool-add-resize"))...)
 				}
 			}
 		})
