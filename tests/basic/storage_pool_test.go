@@ -10659,6 +10659,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					contexts = append(contexts, ScheduleApplications(fmt.Sprintf("%s-%s", app, "ha-increase-pool-add-resize"))...)
 				}
 			}
+			ValidateApplications(contexts)
 		})
 		stepLog = "HA increase for volumes"
 		Step(stepLog, func() {
