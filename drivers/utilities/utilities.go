@@ -2,15 +2,13 @@ package utilities
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
-	"math/rand"
-	"strconv"
-	"time"
-
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	corev1 "k8s.io/api/core/v1"
+	"math/rand"
+	"strconv"
 )
 
 //var FROM_RESTORE_WE_ARE_ADDING = false
@@ -195,7 +193,7 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	}
 
 	if appInfo.StartDataSupport {
-		time.Sleep(5 * time.Minute)
+		// time.Sleep(5 * time.Minute)
 		syncData(appInfo.Namespace)
 		log.Infof("Printing hba config")
 		printHBAConfig(appInfo.Namespace)
