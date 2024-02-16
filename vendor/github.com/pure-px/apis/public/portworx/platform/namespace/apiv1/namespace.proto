@@ -1,0 +1,97 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.namespace.v1;
+
+import "google/api/field_behavior.proto";
+import "google/api/annotations.proto";
+import "public/portworx/common/apiv1/sort.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/meta.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/namespace/apiv1;namespace";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.namespace.v1";
+option java_outer_classname = "NamespaceProto";
+
+// NamespaceService provides APIs to list namespaces on the control plane
+service NamespaceService {
+  // ListNamespaces API will return all the namespaces on the control plane
+  rpc ListNamespaces(ListNamespacesRequest)
+      returns (ListNamespacesResponse) {
+    option(google.api.http) = {
+      get: "/v1/clusters/{cluster_id}/namespaces"
+    };
+  }
+}
+
+// ListNamespacesRequest request message for the ListNamespaces API
+message ListNamespacesRequest {
+  // tenant ID for which namespace need to be fetched
+  string tenant_id = 1;
+  // cluster ID for which namespaces need to be fetched
+  string cluster_id = 2;
+  // project ID for which namespaces need to be fetched
+  string project_id = 3 [(google.api.field_behavior) = OPTIONAL];
+  // for label based filtering of the namespaces
+  string label = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting details using which requested list of namespaces to be sorted.
+  public.portworx.common.v1.Sort sort = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Pagination parameters for listing namespaces.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6 [(google.api.field_behavior) = OPTIONAL];
+
+}
+
+// ListNamespacesResponse response message for the ListNamespaces API
+message ListNamespacesResponse {
+  // list of namespaces
+  repeated Namespace namespaces = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+
+// A managed Kubernetes namespace.
+message Namespace {
+  // Metadata of the namespace.
+  public.portworx.common.v1.Meta meta = 1;
+  // status of the namespace resource
+  NamespaceStatus status = 2;
+}
+
+// NamespaceStatus represents the status of the namespace resource
+message NamespaceStatus {
+  // phase of a namespace is determined based on the available label on the namespace object
+  NamespacePhase.Phase phase = 1;
+}
+
+// NamespaceStatus is the current state of the namespace
+message NamespacePhase {
+  // Phase is the status of the namespace based on the label type
+  enum Phase {
+    // Must be set in the proto file; ignore.
+    PHASE_UNSPECIFIED = 0;
+    // Available namespaces can be used to deploy applications, they have "<platform-domain>/available: true" label
+    AVAILABLE = 1;
+    // Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have "<platform-domain>/reserved: true" label
+    RESERVED = 2;
+    // Unavailable namespaces are the ones deleted by user with active deployments or by removing available label
+    UNAVAILABLE = 3;
+  }
+}

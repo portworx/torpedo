@@ -12,22 +12,22 @@ import (
 )
 
 // GetClient updates the header with bearer token and returns the new client
-func (tenant *PLATFORM_API_V1) GetClient() (context.Context, *platformv1.TenantServiceAPIService, error) {
+func (ns *PLATFORM_API_V1) GetClient() (context.Context, *platformv1.TenantServiceAPIService, error) {
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	tenant.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tenant.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = tenant.AccountID
-	client := tenant.ApiClientV1.TenantServiceAPI
+	ns.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ns.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = ns.AccountID
+	client := ns.ApiClientV1.TenantServiceAPI
 
 	return ctx, client, nil
 }
 
 // ListTenants return pds tenants models.
-func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]ApiResponse, error) {
+func (ns *PLATFORM_API_V1) ListTenants(accountID string) ([]ApiResponse, error) {
 	tenantsResponse := []ApiResponse{}
-	ctx, tenantClient, err := tenant.GetClient()
+	ctx, tenantClient, err := ns.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}

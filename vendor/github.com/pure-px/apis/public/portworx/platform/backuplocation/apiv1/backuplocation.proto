@@ -1,0 +1,222 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.platform.backuplocation.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/common/apiv1/sort.proto";
+import "public/portworx/platform/cloudcredential/apiv1/cloudcredential.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1;backuplocation";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.backuplocation.v1";
+option java_outer_classname = "BackupLocationProto";
+
+// BackupLocationService serves and manages backup locations
+service BackupLocationService {
+  // Get API returns the backup location
+  rpc GetBackupLocation(GetBackupLocationRequest)
+      returns(BackupLocation) {
+    option(google.api.http) = {
+      get: "/v1/backupLocations/{id}"
+    };
+  }
+
+  // Create API creates a backup location for a tenant
+  rpc CreateBackupLocation(CreateBackupLocationRequest)
+      returns(BackupLocation) {
+    option(google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/backupLocations"
+      body: "backup_location"
+    };
+  }
+
+  // Update API updates a backup location
+  rpc UpdateBackupLocation(UpdateBackupLocationRequest)
+      returns(BackupLocation) {
+    option(google.api.http) = {
+      put: "/v1/backupLocations/{id}"
+      body: "backup_location"
+    };
+  }
+
+  // List API lists all the backup locations for a tenant or project
+  rpc ListBackupLocations(ListBackupLocationsRequest)
+      returns(ListBackupLocationsResponse) {
+    option(google.api.http) = {
+      get: "/v1/backupLocations"
+    };
+  }
+
+  // Delete API deletes a backup location
+  rpc DeleteBackupLocation(DeleteBackupLocationRequest)
+      returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/v1/backupLocations/{id}"
+    };
+  }
+}
+
+// Resource representing a backup location
+message BackupLocation {
+  // Metadata of the resource
+  portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the backup location
+  Config config = 2;
+
+  // Status of the backup location
+  Status status = 3;
+}
+
+// Desired configuration of the backup location
+message Config {
+  // Type of backup location
+  public.portworx.platform.cloudcredential.v1.Provider provider = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // id of the cloud credential associated with the backup location
+  string cloud_credential_id = 2;
+
+  // Location details
+  oneof Location {
+    // Azure blob storage details
+    AzureBlobStorage azure_storage = 3;
+
+    // Google cloud storage details
+    GoogleCloudStorage google_storage = 4;
+
+    // S3 object storage details
+    S3ObjectStorage s3_storage = 5;
+  }
+}
+
+// Status of the backup location
+message Status {
+  // Validity of the backup location
+  enum Validity {
+    // Validity unspecified
+    VALIDITY_UNSPECIFIED = 0;
+
+    // Valid backup location indicating its reachable
+    VALID = 1;
+
+    // Invalid backup location indicating its unreachable
+    INVALID = 2;
+
+    // NOT_APPLICABLE backup location specifies that status can not be defined
+    // for the backup location eg: S3Compatible location
+    NOT_APPLICABLE = 3;
+  }
+
+  // Validity of the backup location
+  Validity validity = 1;
+}
+
+// Azure blob storage location
+message AzureBlobStorage {
+  // Name of container
+  string container_name = 1;
+}
+
+
+// Google cloud storage location
+message GoogleCloudStorage {
+  // Bucket name
+  string bucket_name = 1;
+}
+
+// S3 object storage location
+message S3ObjectStorage {
+  // Bucket name
+  string bucket_name = 1;
+
+  // Region where bucket is hosted
+  string region = 2;
+
+  // Endpoint to reach S3/S3 compatible storage (defaults to s3.amazonaws.com)
+  string endpoint = 3;
+}
+
+// Request to get a backup location
+message GetBackupLocationRequest {
+  // ID of the backup location
+  string id = 1;
+}
+
+// Request to create a backup location
+message CreateBackupLocationRequest {
+  // The parent tenant id under which backup location will be created
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to support creation of
+  //     the resource in the tenant context. --)
+  string tenant_id = 1 ;
+
+  // Backup location configuration
+  BackupLocation backup_location = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request to update a backup location
+message UpdateBackupLocationRequest {
+  // Specifies the field that should be updated to the value specified in backup_location
+  google.protobuf.FieldMask update_mask = 1;
+
+  // ID of the backup location
+  string id = 2;
+
+  // Desired backup location configuration
+  BackupLocation backup_location = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request to list the backup locations for a tenant or a project
+message ListBackupLocationsRequest {
+  // Tenant ID for which the backup locations will be listed
+  string tenant_id = 1;
+  // Pagination metadata for this response.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2;
+  // Provides the key in labels and associated values for which backup locations need to be listed
+  public.portworx.common.v1.Selector label_selector = 3;
+  // Field selector is used to filter backup locations based on the fields in the backup locations's proto message 
+  public.portworx.common.v1.Selector field_selector = 4;
+  // Infra_resource_selector is used to filter backup location based on the infra resources associated with the backup location
+  // Supported infra resource filters: PROJECT
+  // To filter by credentials, use field_selector filter
+  public.portworx.common.v1.ResourceSelector infra_resource_selector = 5;
+  // Sorting details using which requested list of backup locations to be sorted.
+  public.portworx.common.v1.Sort sort = 6;
+}
+
+// Response of list backup locations
+message ListBackupLocationsResponse {
+  // The list of cloud credentials scoped to a tenant or a project
+  repeated BackupLocation backup_locations = 1;
+
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to delete a backup location
+message DeleteBackupLocationRequest {
+  // ID of the backup location
+  string id = 1;
+}

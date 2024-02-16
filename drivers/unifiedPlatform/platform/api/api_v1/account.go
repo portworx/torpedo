@@ -20,23 +20,23 @@ type PLATFORM_API_V1 struct {
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (account *PLATFORM_API_V1) getClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
+func (ns *PLATFORM_API_V1) getClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
 	log.Infof("Creating client from PLATFORM_API_V1 package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	account.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	account.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = account.AccountID
+	ns.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ns.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = ns.AccountID
 
-	client := account.ApiClientV1.AccountServiceAPI
+	client := ns.ApiClientV1.AccountServiceAPI
 	return ctx, client, nil
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]ApiResponse, error) {
-	ctx, client, err := AccountV1.getClient()
+func (ns *PLATFORM_API_V1) GetAccountList() ([]ApiResponse, error) {
+	ctx, client, err := ns.getClient()
 	accountsResponse := []ApiResponse{}
 
 	if err != nil {
@@ -54,12 +54,12 @@ func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]ApiResponse, error) {
 }
 
 // GetAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*ApiResponse, error) {
+func (ns *PLATFORM_API_V1) GetAccount(accountID string) (*ApiResponse, error) {
 	log.Infof("Get the account detail having UUID: %v", accountID)
 
 	accountResponse := ApiResponse{}
 
-	ctx, client, err := AccountV1.getClient()
+	ctx, client, err := ns.getClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
@@ -80,8 +80,8 @@ func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*ApiResponse, er
 }
 
 // CreateAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (ApiResponse, error) {
-	_, client, err := AccountV1.getClient()
+func (ns *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (ApiResponse, error) {
+	_, client, err := ns.getClient()
 
 	accountResponse := ApiResponse{}
 
@@ -114,8 +114,8 @@ func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMa
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV1 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) error {
-	ctx, client, err := AccountV1.getClient()
+func (ns *PLATFORM_API_V1) DeleteAccount(accountId string) error {
+	ctx, client, err := ns.getClient()
 	if err != nil {
 		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}

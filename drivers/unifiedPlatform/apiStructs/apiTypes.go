@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"time"
 )
 
@@ -31,6 +32,16 @@ type ApiResponse struct {
 
 type Credentials struct {
 	Token string
+}
+
+type BackupLocationParams struct {
+	BackupLocName     string
+	Provider          platformv1.V1Provider
+	CloudCredentialId string
+	AzureStorage      platformv1.V1AzureBlobStorage
+	GoogleStorage     platformv1.V1GoogleCloudStorage
+	S3Storage         platformv1.V1S3ObjectStorage
+	Validity          platformv1.StatusValidity
 }
 
 func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
