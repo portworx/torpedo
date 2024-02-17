@@ -1442,6 +1442,29 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 		}
 	}
 
+	kubeconfigs := os.Getenv("KUBECONFIGS")
+	kubeconfigList := strings.Split(kubeconfigs, ",")
+
+	// Validating custom resource object cleanup
+	for _, kubeconfig := range kubeconfigList {
+		clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"
+		isPresent, err := IsClusterPresent(clusterName, ctx, BackupOrgID)
+		if err != nil {
+			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
+		}
+		if isPresent {
+			clusterUID, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster UID"))
+			log.Infof("Cluster UID - [%s], Cluster Name - [%s]", clusterUID, clusterName)
+			clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+			clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster response"))
+			clusterObj := clusterResp.GetCluster()
+			err = ValidateAllBackupCreatedResourceCleanup(clusterObj)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("CR/Backup resources found after cleanup"))
+		}
+	}
+
 	// Deleting clusters and the corresponding cloud cred
 	enumerateClusterRequest := &api.ClusterEnumerateRequest{
 		OrgId: BackupOrgID,
