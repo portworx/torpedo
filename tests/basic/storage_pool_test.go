@@ -10662,7 +10662,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 		})
 		ValidateApplications(contexts)
-		defer ValidateAndDestroy(contexts, nil)
+		defer DestroyApps(contexts, nil)
 
 		stepLog = "HA increase for volumes"
 		Step(stepLog, func() {
@@ -10701,7 +10701,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				// create a time limit for this for loop
 				timeout := time.After(20 * time.Minute)
 				for {
-					volDetails, err := Inst().V.InspectVolume(vol.Name)
+					volDetails, err := Inst().V.InspectVolume(vol.ID)
 					log.FailOnError(err, "Failed to get volume details")
 					resync := false
 					for _, v := range volDetails.RuntimeState {
