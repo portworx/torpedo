@@ -10660,6 +10660,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				}
 			}
 			ValidateApplications(contexts)
+			defer ValidateAndDestroy(contexts, nil)
 		})
 		stepLog = "HA increase for volumes"
 		Step(stepLog, func() {
