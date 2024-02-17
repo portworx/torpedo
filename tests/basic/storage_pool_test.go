@@ -10771,4 +10771,9 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 		})
 		wg.Wait()
 	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
 })
