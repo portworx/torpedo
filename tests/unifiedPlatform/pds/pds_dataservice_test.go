@@ -15,7 +15,9 @@ var _ = Describe("{DeployDataservice}", func() {
 
 	log.InfoD(steplog)
 	It("Deploy and Validate Dataservice", func() {
-		_, err := dslibs.DeployDataservice("ns", "newDeployment")
+
+		// TODO: Take the input json struct and pass on it to the workflows/lib func
+		_, err := dslibs.DeployDataservice("ns", "newDeployment", "")
 		log.FailOnError(err, "Error while deploying ds %v\n")
 	})
 

@@ -3,17 +3,18 @@ package unifiedPlatform
 import (
 	"crypto/tls"
 	"fmt"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
 	"strconv"
 	"strings"
 
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/pds"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/pds/api/api_v1"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/pds/backend/apiv1"
+	pdsGrpc "github.com/portworx/torpedo/drivers/unifiedPlatform/pds/backend/grpc"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/api_v1"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/api/grpc"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/backend/apiv1"
+	platformGrpc "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/backend/grpc"
 	. "github.com/portworx/torpedo/drivers/utilities"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"google.golang.org/grpc"
@@ -32,7 +33,7 @@ const (
 
 type UnifiedPlatformComponents struct {
 	Platform platform.Platform
-	PDS      pds.PDS
+	PDS      pds.Pds
 }
 
 func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*UnifiedPlatformComponents, error) {
@@ -61,7 +62,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 				ApiClientV1: platformV2apiClient,
 				AccountID:   AccountId,
 			},
-			PDS: &PDSV2{
+			PDS: &PDSV2_API{
 				ApiClientV2: pdsV2apiClient,
 				AccountID:   AccountId,
 			},
@@ -95,8 +96,12 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		}
 
 		return &UnifiedPlatformComponents{
-			Platform: &AccountGrpc{
+			Platform: &platformGrpc.PlatformGrpc{
 				ApiClientV1: grpcClient,
+			},
+			PDS: &pdsGrpc.PdsGrpc{
+				ApiClientV2: grpcClient,
+				AccountId:   AccountId,
 			},
 		}, nil
 	default:
@@ -121,7 +126,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 				ApiClientV1: platformV2apiClient,
 				AccountID:   AccountId,
 			},
-			PDS: &PDSV2{
+			PDS: &PDSV2_API{
 				ApiClientV2: pdsV2apiClient,
 				AccountID:   AccountId,
 			},

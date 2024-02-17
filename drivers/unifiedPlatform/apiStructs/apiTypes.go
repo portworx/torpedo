@@ -24,13 +24,17 @@ type Config struct {
 	DisplayName *string `copier:"must"`
 }
 
-type ApiResponse struct {
+type WorkFlowResponse struct {
 	Meta   Meta
 	Config Config
 }
 
 type Credentials struct {
 	Token string
+}
+
+type WorkFlowRequest struct {
+	// TODO: Fill up the workflow requests struct
 }
 
 func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {

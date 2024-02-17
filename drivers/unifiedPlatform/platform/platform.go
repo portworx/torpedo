@@ -5,14 +5,14 @@ import (
 )
 
 type AccountInterface interface {
-	GetAccountList() ([]ApiResponse, error)
-	GetAccount(string) (*ApiResponse, error)
-	CreateAccount(string, string, string) (ApiResponse, error)
+	GetAccountList() ([]WorkFlowResponse, error)
+	GetAccount(string) (*WorkFlowResponse, error)
+	CreateAccount(string, string, string) (WorkFlowResponse, error)
 	DeleteBackupLocation(string) error
 }
 
 type TenantInterface interface {
-	ListTenants(string) ([]ApiResponse, error)
+	ListTenants(string) ([]WorkFlowResponse, error)
 }
 
 type Platform interface {

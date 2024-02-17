@@ -12,7 +12,7 @@ import (
 )
 
 // GetClient updates the header with bearer token and returns the new client
-func (Tenantgrpc *AccountGrpc) getTenantClient() (context.Context, publictenantapis.TenantServiceClient, string, error) {
+func (Tenantgrpc *PlatformGrpc) getTenantClient() (context.Context, publictenantapis.TenantServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var tenantClient publictenantapis.TenantServiceClient
 
@@ -30,8 +30,8 @@ func (Tenantgrpc *AccountGrpc) getTenantClient() (context.Context, publictenanta
 	return ctx, tenantClient, token, nil
 }
 
-func (Tenantgrpc *AccountGrpc) ListTenants(accountID string) ([]ApiResponse, error) {
-	tenantsResponse := []ApiResponse{}
+func (Tenantgrpc *PlatformGrpc) ListTenants(accountID string) ([]WorkFlowResponse, error) {
+	tenantsResponse := []WorkFlowResponse{}
 	ctx, client, _, err := Tenantgrpc.getTenantClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)

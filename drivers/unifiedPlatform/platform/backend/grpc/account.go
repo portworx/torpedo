@@ -13,12 +13,12 @@ import (
 )
 
 // AccountV2 struct
-type AccountGrpc struct {
+type PlatformGrpc struct {
 	ApiClientV1 *grpc.ClientConn
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (AccountV1 *AccountGrpc) getAccountClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
+func (AccountV1 *PlatformGrpc) getAccountClient() (context.Context, publicaccountapis.AccountServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var accountClient publicaccountapis.AccountServiceClient
 
@@ -44,8 +44,8 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV1 *AccountGrpc) GetAccountList() ([]ApiResponse, error) {
-	accountsResponse := []ApiResponse{}
+func (AccountV1 *PlatformGrpc) GetAccountList() ([]WorkFlowResponse, error) {
+	accountsResponse := []WorkFlowResponse{}
 
 	ctx, client, _, err := AccountV1.getAccountClient()
 	if err != nil {
@@ -75,8 +75,8 @@ func (AccountV1 *AccountGrpc) GetAccountList() ([]ApiResponse, error) {
 	return accountsResponse, nil
 }
 
-func (AccountV1 *AccountGrpc) GetAccount(accountID string) (*ApiResponse, error) {
-	accountsResponse := ApiResponse{}
+func (AccountV1 *PlatformGrpc) GetAccount(accountID string) (*WorkFlowResponse, error) {
+	accountsResponse := WorkFlowResponse{}
 	ctx, client, _, err := AccountV1.getAccountClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -101,11 +101,11 @@ func (AccountV1 *AccountGrpc) GetAccount(accountID string) (*ApiResponse, error)
 }
 
 // CreateAccount return pds account model.
-func (AccountV1 *AccountGrpc) CreateAccount(accountName, displayName, userMail string) (ApiResponse, error) {
-	var accResponse ApiResponse
+func (AccountV1 *PlatformGrpc) CreateAccount(accountName, displayName, userMail string) (WorkFlowResponse, error) {
+	var accResponse WorkFlowResponse
 	return accResponse, fmt.Errorf("Create Account is not implemented in grpc client\n")
 }
 
-func (AccountV1 *AccountGrpc) DeleteBackupLocation(accountId string) error {
+func (AccountV1 *PlatformGrpc) DeleteBackupLocation(accountId string) error {
 	return fmt.Errorf("DeleteBackuplocation is not implemented in grpc client\n")
 }

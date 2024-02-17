@@ -1,6 +1,8 @@
 package dataservice
 
 import (
+	"context"
+	"github.com/jinzhu/copier"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
@@ -22,27 +24,35 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 }
 
 // DeployDataservice should be called from workflows
-func DeployDataservice(depName, nameSpace string) (*apiStructs.ApiResponse, error) {
+func DeployDataservice(depName, namespace, accountID string) (*apiStructs.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
-	var depRequest pdsv2.ApiDeploymentServiceCreateDeploymentRequest
 
-	//TODO:  Form the request body once the api's are ready for create deployment
-	//var depCreateRequest pdsv2.ApiDeploymentServiceCreateDeploymentRequest
-	//depCreateRequest = depCreateRequest.V1Deployment(pdsv2.V1Deployment{
-	//	Meta: &pdsv2.V1Meta{
-	//		Name: &deploymentName,
-	//	},
-	//	Config: &pdsv2.V1Config1{
-	//		References:           nil,
-	//		TlsEnabled:           nil,
-	//		DeploymentTopologies: nil,
-	//	},
-	//	Status: nil,
-	//})
-	//
-	//depCreateRequest = depCreateRequest.ApiService.DeploymentServiceCreateDeployment(ctx, namespaceId)
+	//TODO: Take the json input param and populate the depCreate request, write the required support lib func
 
-	deployment, err := v2Components.PDS.CreateDeployment(depRequest)
+	var depInputs *apiStructs.WorkFlowRequest //make this global var
+	var namespaceId string
+
+	//TODO:  Form the request body once the backend's are ready for create deployment
+	var depCreateRequest pdsv2.ApiDeploymentServiceCreateDeploymentRequest
+	depCreateRequest = depCreateRequest.V1Deployment(pdsv2.V1Deployment{
+		Meta: &pdsv2.V1Meta{
+			Name: &depName,
+		},
+		Config: &pdsv2.V1Config1{
+			References:           nil,
+			TlsEnabled:           nil,
+			DeploymentTopologies: nil,
+		},
+		Status: nil,
+	})
+
+	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
+
+	depCreateRequest = depCreateRequest.ApiService.DeploymentServiceCreateDeployment(context.Background(), namespaceId)
+
+	copier.Copy(&depInputs, depCreateRequest)
+
+	deployment, err := v2Components.PDS.CreateDeployment(depInputs)
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 }
 
 // GetAccountListv1
-func GetAccountListv1() ([]apiStructs.ApiResponse, error) {
+func GetAccountListv1() ([]apiStructs.WorkFlowResponse, error) {
 	accList, err := v2Components.Platform.GetAccountList()
 	if err != nil {
 		return nil, err
@@ -30,7 +30,7 @@ func GetAccountListv1() ([]apiStructs.ApiResponse, error) {
 }
 
 // GetAccount
-func GetAccount(accountID string) (*apiStructs.ApiResponse, error) {
+func GetAccount(accountID string) (*apiStructs.WorkFlowResponse, error) {
 	acc, err := v2Components.Platform.GetAccount(accountID)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func GetAccount(accountID string) (*apiStructs.ApiResponse, error) {
 }
 
 // GetPlatformAccountID
-func GetPlatformAccountID(accList []apiStructs.ApiResponse, accountName string) string {
+func GetPlatformAccountID(accList []apiStructs.WorkFlowResponse, accountName string) string {
 	var accID string
 	for _, acc := range accList {
 		if *acc.Meta.Name == accountName {
@@ -52,7 +52,7 @@ func GetPlatformAccountID(accList []apiStructs.ApiResponse, accountName string) 
 }
 
 // CreatePlatformAccountV1
-func CreatePlatformAccountV1(name, displayName, userMail string) (apiStructs.ApiResponse, error) {
+func CreatePlatformAccountV1(name, displayName, userMail string) (apiStructs.WorkFlowResponse, error) {
 	acc, err := v2Components.Platform.CreateAccount(name, displayName, userMail)
 	if err != nil {
 		return acc, err

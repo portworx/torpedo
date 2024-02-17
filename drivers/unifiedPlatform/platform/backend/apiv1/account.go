@@ -35,9 +35,9 @@ func (account *PLATFORM_API_V1) getClient() (context.Context, *platformv1.Accoun
 }
 
 // GetAccountList returns the list of accounts
-func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]ApiResponse, error) {
+func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]WorkFlowResponse, error) {
 	ctx, client, err := AccountV1.getClient()
-	accountsResponse := []ApiResponse{}
+	accountsResponse := []WorkFlowResponse{}
 
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -54,10 +54,10 @@ func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]ApiResponse, error) {
 }
 
 // GetAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*ApiResponse, error) {
+func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*WorkFlowResponse, error) {
 	log.Infof("Get the account detail having UUID: %v", accountID)
 
-	accountResponse := ApiResponse{}
+	accountResponse := WorkFlowResponse{}
 
 	ctx, client, err := AccountV1.getClient()
 	if err != nil {
@@ -80,10 +80,10 @@ func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*ApiResponse, er
 }
 
 // CreateAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (ApiResponse, error) {
+func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (WorkFlowResponse, error) {
 	_, client, err := AccountV1.getClient()
 
-	accountResponse := ApiResponse{}
+	accountResponse := WorkFlowResponse{}
 
 	if err != nil {
 		return accountResponse, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)

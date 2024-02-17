@@ -25,8 +25,8 @@ func (tenant *PLATFORM_API_V1) GetClient() (context.Context, *platformv1.TenantS
 }
 
 // ListTenants return pds tenants models.
-func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]ApiResponse, error) {
-	tenantsResponse := []ApiResponse{}
+func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]WorkFlowResponse, error) {
+	tenantsResponse := []WorkFlowResponse{}
 	ctx, tenantClient, err := tenant.GetClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
