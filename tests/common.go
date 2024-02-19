@@ -7465,22 +7465,22 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
 
-	// Cleanup all the namespaces created by the testcase
-	// err := DeleteAllNamespacesCreatedByTestCase()
-	// if err != nil {
-	// 	log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	// }
+	Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
 
-	// err = SetDestinationKubeConfig()
-	// if err != nil {
-	// 	log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
-	// 	return
-	// }
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+		return
+	}
 
-	// err = DeleteAllNamespacesCreatedByTestCase()
-	// if err != nil {
-	// 	log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	// }
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
 
 	defer func() {
 		err := SetSourceKubeConfig()

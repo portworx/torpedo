@@ -333,20 +333,20 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 		})
 	})
 
-	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		log.InfoD("Deleting the restores")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
-		}
-		log.InfoD("Deleting the deployed apps after the testcase")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Deleting the px-backup objects")
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
-	})
+	// JustAfterEach(func() {
+	// 	defer EndPxBackupTorpedoTest(scheduledAppContexts)
+	// 	ctx, err := backup.GetAdminCtxFromSecret()
+	// 	log.FailOnError(err, "Fetching px-central-admin ctx")
+	// 	log.InfoD("Deleting the restores")
+	// 	for _, restoreName := range restoreNames {
+	// 		err = DeleteRestore(restoreName, BackupOrgID, ctx)
+	// 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
+	// 	}
+	// 	log.InfoD("Deleting the deployed apps after the testcase")
+	// 	opts := make(map[string]bool)
+	// 	opts[SkipClusterScopedObjects] = true
+	// 	DestroyApps(scheduledAppContexts, opts)
+	// 	log.InfoD("Deleting the px-backup objects")
+	// 	CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
+	// })
 })
