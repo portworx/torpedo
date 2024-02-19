@@ -52,6 +52,7 @@ func (app *KubevirtConfig) ExecuteCommand(commands []string, ctx context.Context
 				return result, err
 			}
 			result = append(result, output)
+			time.Sleep(2 * time.Second)
 		}
 
 	} else {
@@ -71,6 +72,7 @@ func (app *KubevirtConfig) ExecuteCommand(commands []string, ctx context.Context
 					}
 				}
 				result = append(result, output)
+				time.Sleep(2 * time.Second)
 
 			}
 			return result, false, nil
@@ -95,25 +97,49 @@ func (app *KubevirtConfig) WaitForVMToBoot() error {
 		if err != nil {
 			return err
 		}
+
+		// To check if the ssh server is up and running
+		t := func() (interface{}, bool, error) {
+			output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, sshContainer, sshPodNamespace)
+			if err != nil {
+				log.Infof("Error encountered - [%s]", err.Error())
+				if isConnectionError(err.Error()) {
+					log.Infof("Test connection output - \n%s", output)
+					return "", true, err
+				} else {
+					return "", false, err
+				}
+			}
+			log.Infof("Test connection success output - \n%s", output)
+			return "", false, nil
+		}
+		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+		return err
+	} else {
+		workerNode := node.GetWorkerNodes()[0]
+		t := func() (interface{}, bool, error) {
+			cmd := strings.Join(getSSHCommandArgs(app.User, app.Password, app.IPAddress, "hostname"), " ")
+			log.Infof("Executing = [%s]", cmd)
+			output, err := RunCmdGetOutputOnNode(cmd, workerNode, app.NodeDriver)
+			if err != nil {
+				log.Infof("Error encountered")
+				if isConnectionError(err.Error()) {
+					log.Infof("Output of cmd %s - \n%s", cmd, output)
+					return "", true, err
+				} else {
+					return "", false, err
+				}
+			}
+			return "", false, nil
+		}
+		_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+		if err != nil {
+			return err
+		}
 	}
 
-	// To check if the ssh server is up and running
-	t := func() (interface{}, bool, error) {
-		output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, sshContainer, sshPodNamespace)
-		if err != nil {
-			log.Infof("Error encountered")
-			if isConnectionError(err.Error()) {
-				log.Infof("Test connection output - \n%s", output)
-				return "", true, err
-			} else {
-				return "", false, err
-			}
-		}
-		log.Infof("Test connection success output - \n%s", output)
-		return "", false, nil
-	}
-	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
-	return err
+	return nil
+
 }
 
 // DefaultPort returns default port for kubevirt
@@ -176,6 +202,23 @@ func (app *KubevirtConfig) GetApplicationType() string {
 // GetNamespace returns the application namespace
 func (app *KubevirtConfig) GetNamespace() string {
 	return app.Namespace
+}
+
+// CheckDataPresent checks if the mentioned entry is present or not in the database
+func (app *KubevirtConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
+	log.Warnf("Not implemeneted for kubevirt")
+	return nil
+}
+
+// isConnectionError checks if the error message is a connection error
+func isConnectionError(errorMessage string) bool {
+	return strings.Contains(errorMessage, "Connection refused") || strings.Contains(errorMessage, "Host is unreachable") ||
+		strings.Contains(errorMessage, "No route to host")
+}
+
+// getSSHCommandArgs command retuns the SSH command Args
+func getSSHCommandArgs(username, password, ipAddress, cmd string) []string {
+	return []string{"sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", username, ipAddress), cmd}
 }
 
 // initSSHPod creates a pod with ssh server installed and running along with sshpass utility
@@ -248,21 +291,4 @@ func initSSHPod(namespace string) error {
 		return err
 	}
 	return err
-}
-
-// isConnectionError checks if the error message is a connection error
-func isConnectionError(errorMessage string) bool {
-	return strings.Contains(errorMessage, "Connection refused") || strings.Contains(errorMessage, "Host is unreachable") ||
-		strings.Contains(errorMessage, "No route to host")
-}
-
-// getSSHCommandArgs command retuns the SSH command Args
-func getSSHCommandArgs(username, password, ipAddress, cmd string) []string {
-	return []string{"sshpass", "-p", password, "ssh", "-o", "StrictHostKeyChecking=no", fmt.Sprintf("%s@%s", username, ipAddress), cmd}
-}
-
-// CheckDataPresent checks if the mentioned entry is present or not in the database
-func (app *KubevirtConfig) CheckDataPresent(selectQueries []string, ctx context.Context) error {
-	log.Warnf("Not implemeneted for kubevirt")
-	return nil
 }

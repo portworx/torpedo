@@ -1986,7 +1986,8 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, context contex
 				log.Infof("Error - %s", err.Error())
 			}
 			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
-				appHandler.WaitForVMToBoot()
+				err = appHandler.WaitForVMToBoot()
+				log.FailOnError(err, "Some error occured while starting the VM")
 			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)

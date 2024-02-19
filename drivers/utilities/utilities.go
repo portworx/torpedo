@@ -36,7 +36,7 @@ const (
 	passwordAnnotationKey           = "password"
 	databaseAnnotationKey           = "databaseName"
 	portAnnotationKey               = "port"
-	defaultFilePath                 = "/home/cirros/tmp/"
+	defaultFilePath                 = "/home/cirros/"
 	appTypeAnnotationKey            = "appType"
 	defaultCmdTimeout               = 20 * time.Second
 	defaultCmdRetryInterval         = 5 * time.Second
@@ -265,18 +265,18 @@ func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
 	var updateCommands []string
 
 	// Generating command to create the dir to hold files if not exists
-	createDir := fmt.Sprintf("mkdir -p %s", filePath)
+	createDir := fmt.Sprintf("mkdir -p -m777 %s", filePath)
 	log.Infof("Command to create Dir - [%s]", createDir)
 	insertCommands = append(insertCommands, createDir)
 
 	for counter := 0; counter < count; counter++ {
 		currentCounter := strconv.Itoa(counter)
 		fileName := fmt.Sprintf("%s/%s_%s.txt", filePath, currentCounter, RandomString(4))
-		fileContent := fmt.Sprintf("%s", RandomString(5000))
-		insertCommands = append(insertCommands, fmt.Sprintf("touch %s; echo '%s' > %s", fileName, fileContent, fileName))
-		selectCommands = append(selectCommands, fmt.Sprintf("cat %s | grep %s", filePath, fileContent))
-		updateCommands = append(updateCommands, fmt.Sprintf("echo '%s' >> %s", RandomString(1000), fileName))
-		deleteCommands = append(deleteCommands, fmt.Sprintf("rm %s", filePath))
+		// fileContent := fmt.Sprintf("%s", RandomString(10))
+		insertCommands = append(insertCommands, fmt.Sprintf("touch %s", fileName))
+		selectCommands = append(selectCommands, fmt.Sprintf("ls %s", fileName))
+		updateCommands = append(updateCommands, fmt.Sprintf("echo '%s' >> %s", RandomString(5), fileName))
+		deleteCommands = append(deleteCommands, fmt.Sprintf("rm %s", fileName))
 	}
 
 	randomFileCommands["insert"] = insertCommands
