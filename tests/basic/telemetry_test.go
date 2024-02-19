@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
 	"github.com/libopenstorage/openstorage/pkg/dbg"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -35,6 +36,14 @@ var (
 	}
 	isTelemetryOperatorEnabled = false
 	oneTimeInitDone            = false
+
+	// Default PX diag directory
+	pxDiagDir = "/var/cores/"
+	pxDir     = "/etc/pwx/"
+
+	// Default PX diag directory for PKS clusters
+	PksPxDiagDir = "/var/vcap/store/cores/"
+	PksPxDir     = "/var/vcap/store/etc/pwx/"
 )
 
 // Taken from SharedV4 tests...
@@ -61,7 +70,7 @@ func runPxctlCommand(pxctlCmd string, n node.Node, cmdConnectionOpts *node.Conne
 
 func TelemetryEnabled(currNode node.Node) bool {
 	// This returns true if telemetry is enabled
-	output, err := runPxctlCommand("status | egrep ^Telemetry:", currNode, nil)
+	output, err := runPxctlCommand("status | grep -E ^Telemetry:", currNode, nil)
 	Expect(err).NotTo(HaveOccurred(), "Failed to get status for node %v", currNode.Name)
 	log.Infof("node %s: %s", currNode.Name, output)
 	status, err := regexp.MatchString(`Telemetry:.*Healthy`, output)
@@ -69,6 +78,23 @@ func TelemetryEnabled(currNode node.Node) bool {
 		return false
 	}
 	return status
+}
+
+// IsPKS checks if this is PKS cluster based on annotation in the StorageCluster
+func IsPKS() bool {
+	// Check if this is PX Operator based install and see if this PKS annotation is set to true
+	log.Info("Checking if this is PX Operator based install...")
+	isOpBased, _ := Inst().V.IsOperatorBasedInstall()
+	if isOpBased {
+		log.Info("This is PX Operator based install, checking if StorageCluster has PKS annotation set to true...")
+		spec, err := Inst().V.GetDriver()
+		Expect(err).ToNot(HaveOccurred())
+		isPks, err := strconv.ParseBool(spec.Annotations["portworx.io/is-pks"])
+		Expect(err).ToNot(HaveOccurred())
+		return isOpBased && isPks
+	}
+	log.Warn("This is not PX Operator based install, will not be able to check if this is PKS cluster or not")
+	return false
 }
 
 func oneTimeInit() {
@@ -186,33 +212,38 @@ var _ = Describe("{DiagsCCMOnS3}", func() {
 		if !isTelemetryOperatorEnabled {
 			Skip("Skip test because telemetry is not enabled...")
 		}
+
 	})
+
 	var contexts []*scheduler.Context
 	It("has to setup, validate, try to get diags on nodes and teardown apps", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("collect diags on node: %s | %s", currNode.Name, currNode.Type), func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
+					OutputFile:    fmt.Sprintf("%s%s-diags-%s.tar.gz", pxDiagDir, currNode.Name, dbg.GetTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 					Live:          true,
 				}
-				if !TelemetryEnabled(currNode) {
-					log.Debugf("Telemetry not enabled, sleeping for 5 mins")
-					time.Sleep(5 * time.Minute)
-				}
+
 				err := Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false})
 				Expect(err).NotTo(HaveOccurred(), "Diags collected successfully")
-				if TelemetryEnabled(currNode) {
-					err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
-					Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
-				} else {
-					log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(currNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
 				}
+				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)), pxDir)
+				Expect(err).NotTo(HaveOccurred(), "Diags validated on S3")
 			})
 		}
 		for _, ctx := range contexts {
@@ -255,6 +286,12 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 	testSummaryMsg := "has to collect and validate profile diags on S3"
 	It(testSummaryMsg, func() {
 		log.InfoD(testSummaryMsg)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		contexts = make([]*scheduler.Context, 0)
 
 		// Collect diags and verify in S3 on each worker node
@@ -267,26 +304,20 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 				log.Warnf("PX is not installed on node [%s], skipping diags collection", currNode.Name)
 				continue
 			}
+			log.Infof("PX is installed on node [%s]", currNode.Name)
 
-			// Skip if Telemetry is not enabled
-			if !TelemetryEnabled(currNode) {
-				log.Warnf("Telemetry is not enabled on node [%s], skipping diags collection", currNode.Name)
-				continue
-			}
-
-			log.Infof("PX is installed and Telemetry is enabled on node [%s]", currNode.Name)
 			// Get the most recent profile diags for comparison
 			stepMsg := fmt.Sprintf("Check latest profile diags on node [%s]", currNode.Name)
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
 
-				log.Debugf("Get content of /var/cores/ on node [%s] before collecting profile only diags", currNode.Name)
-				cmd = "ls -lah /var/cores/"
+				log.Debugf("Get content of [%s] on node [%s] before collecting profile only diags", pxDiagDir, currNode.Name)
+				cmd = fmt.Sprintf("ls -lah %s", pxDiagDir)
 				out, err := telemetryRunCmd(cmd, currNode, nil)
 				log.FailOnError(err, "failed to execute [%s] on node [%s]", cmd, currNode.Name)
-				log.Debugf("Content of /var/cores/ on node [%s] before collecting profile only diags:\n%v\n", currNode.Name, out)
+				log.Debugf("Content of [%s] on node [%s] before collecting profile only diags:\n%v\n", pxDiagDir, currNode.Name, out)
 
-				cmd = "ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"
+				cmd = fmt.Sprintf("ls -t %s*-*.{stack,heap}.gz | head -n 2", pxDiagDir)
 				existingDiags, err = telemetryRunCmd(cmd, currNode, nil)
 				log.FailOnError(err, "failed to execute [%s] on node [%s]", cmd, currNode.Name)
 				if len(existingDiags) > 0 {
@@ -301,28 +332,28 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
 
-				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: true})
+				err = Inst().V.CollectDiags(currNode, collectDiagRequest, torpedovolume.DiagOps{Validate: false, Async: false, PxDir: pxDir})
 				log.FailOnError(err, "failed to collect profile only diags on node [%s]", currNode.Name)
 				log.InfoD("Successfully collected profile only diags on node [%s]", currNode.Name)
 
 				// This sleep is required because the heap and stack logs might not have been written at same time.
 				time.Sleep(10 * time.Second)
 
-				log.Debugf("Get content of /var/cores/ on node [%s] after collecting profile only diags", currNode.Name)
-				cmd = "ls -lah /var/cores/"
+				log.Debugf("Get content of [%s] on node [%s] after collecting profile only diags", pxDiagDir, currNode.Name)
+				cmd = fmt.Sprintf("ls -lah %s", pxDiagDir)
 				out, err := telemetryRunCmd(cmd, currNode, nil)
 				log.FailOnError(err, "failed to execute [%s] on node [%s]", cmd, currNode.Name)
-				log.Debugf("Content of /var/cores/ on node [%s] after collecting profile only diags:\n%v\n", currNode.Name, out)
+				log.Debugf("Content of [%s] on node [%s] after collecting profile only diags:\n%v\n", pxDiagDir, currNode.Name, out)
 
 			})
-			// Get the latest files in the directory.  The newly generated files will not equal the most recent. So you know they are new.
+			// Get the latest files in the directory. The newly generated files will not equal the most recent. So you know they are new.
 			stepMsg = fmt.Sprintf("Get the new profile only diags on node [%s]", currNode.Name)
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
 
 				t := func() (interface{}, bool, error) {
 					// Get new .gz diag files
-					cmd = "ls -t /var/cores/*-*.{stack,heap}.gz | head -n 2"
+					cmd = fmt.Sprintf("ls -t %s*-*.{stack,heap}.gz | head -n 2", pxDiagDir)
 					newDiags, err = telemetryRunCmd(cmd, currNode, nil)
 					if err != nil {
 						return nil, true, fmt.Errorf("failed to execute [%s], Err: %v", cmd, err)
@@ -336,19 +367,19 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 						log.Infof("Found new profile diags [%s]", newDiags)
 						// Needs to contain both stack/heap
 						if strings.Contains(newDiags, ".heap") && strings.Contains(newDiags, ".stack") {
-							diagsFiles = strings.Split(newDiags, "\n")
+							diagsFiles = strings.Split(strings.TrimSpace(newDiags), "\n")
 							log.InfoD("Files found on node [%s] [%v]", currNode.Name, diagsFiles)
 							return nil, false, nil
 						}
 					}
 
-					log.Debugf("Get content of /var/cores/ on node [%s]", currNode.Name)
-					cmd = "ls -lah /var/cores/"
+					log.Debugf("Get content of [%s] on node [%s]", pxDiagDir, currNode.Name)
+					cmd = fmt.Sprintf("ls -lah %s", pxDiagDir)
 					out, err := telemetryRunCmd(cmd, currNode, nil)
 					if err != nil {
 						return nil, true, fmt.Errorf("failed to execute [%s] on node [%s]", cmd, currNode.Name)
 					}
-					log.Debugf("Content of /var/cores/ on node [%s]:\n%v\n", currNode.Name, out)
+					log.Debugf("Content of [%s] on node [%s]:\n%v\n", pxDiagDir, currNode.Name, out)
 					return nil, true, fmt.Errorf("didn't find new profile only diags on node [%s]", currNode.Name)
 				}
 
@@ -359,10 +390,14 @@ var _ = Describe("{ProfileOnlyDiags}", func() {
 			stepMsg = "Validate diag files got uploaded to s3"
 			Step(stepMsg, func() {
 				log.InfoD(stepMsg)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(currNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
+				}
 				for _, file := range diagsFiles {
 					fileNameToCheck := path.Base(file)
 					log.InfoD("Validating diag file [%s] on s3", fileNameToCheck)
-					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
+					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck, pxDir)
 					log.FailOnError(err, "failed to validate diags file [%s] on s3", fileNameToCheck)
 					log.InfoD("Succesfully validated diags file [%s] got uploaded to s3 from node [%s]", fileNameToCheck, currNode.Name)
 				}
@@ -398,8 +433,15 @@ var _ = Describe("{DiagsClusterWide}", func() {
 	var contexts []*scheduler.Context
 	var diagFile string
 	var err error
+
 	It("has to collect diags on entire cluster, validate diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		// One node at a time, collect diags and verify in S3
 		for _, currNode := range node.GetWorkerNodes() {
 			Step(fmt.Sprintf("run pxctl sv diags to collect cluster wide diags  %v", currNode.Name), func() {
@@ -408,20 +450,20 @@ var _ = Describe("{DiagsClusterWide}", func() {
 			})
 			Step(fmt.Sprintf("Get the svc diags collected above %s", currNode.Name), func() {
 				log.Infof("Getting latest svc diags on %66v", currNode.Name)
-				diagFile, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", currNode.Name), currNode, nil)
+				diagFile, err = telemetryRunCmd(fmt.Sprintf("ls -t %s%s-*.tar.gz | head -n 1", pxDiagDir, currNode.Name), currNode, nil)
 				if err != nil {
 					log.Fatalf("Error in getting cluster wide diags files on: %s, err: %v", currNode.Name, err)
 				}
 			})
 			Step(fmt.Sprintf("Validate diags uploaded on S3"), func() {
-				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
-				log.Debugf("Validating file %s", fileNameToCheck)
-				if TelemetryEnabled(currNode) {
-					err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck)
-					Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
-				} else {
-					log.Debugf("Telemetry not enabled on %s, skipping test", currNode.Name)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(currNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
 				}
+				fileNameToCheck := path.Base(strings.TrimSuffix(diagFile, "\n"))
+				log.Debugf("Validating file [%s]", fileNameToCheck)
+				err := Inst().V.ValidateDiagsOnS3(currNode, fileNameToCheck, pxDir)
+				Expect(err).NotTo(HaveOccurred(), "Files validated on s3")
 			})
 			break
 		}
@@ -510,6 +552,12 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 
 	It("has to setup, validate, try to collect auto diags on nodes after px-storage/px crash", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 
 		for pxProcessNm = range testProcNmsTestRailIDs {
 			Step(fmt.Sprintf("Reset portworx for auto diags collect test after '%s' crash\n", pxProcessNm), func() {
@@ -527,10 +575,10 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 			// One node at a time, collect diags and verify in S3
 			for _, currNode := range node.GetWorkerNodes() {
 				Step(fmt.Sprintf("'%s': Check latest auto diags on node %v", pxProcessNm, currNode.Name), func() {
-					_, err = telemetryRunCmd("ls -d /var/cores/auto", currNode, nil)
+					_, err = telemetryRunCmd(fmt.Sprintf("ls -d %sauto", pxDiagDir), currNode, nil)
 					if err == nil {
 						log.Infof("'%s': Getting latest auto  diags on %v", pxProcessNm, currNode.Name)
-						existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
+						existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t %sauto/%s*.tar.gz | head -n 1", pxDiagDir, currNode.Name), currNode, nil)
 						if err == nil {
 							log.Infof("'%s': Found latest auto diags on node %s: %s ",
 								pxProcessNm, currNode.Name, path.Base(existingDiags))
@@ -554,7 +602,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 				})
 				Step(fmt.Sprintf("'%s': Get new auto diags on node %v", pxProcessNm, currNode.Name), func() {
 					Eventually(func() bool {
-						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/auto/%s*.tar.gz | head -n 1", currNode.Name), currNode, nil)
+						newDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t %sauto/%s*.tar.gz | head -n 1", pxDiagDir, currNode.Name), currNode, nil)
 						if err == nil {
 							if existingDiags != "" && existingDiags == newDiags {
 								log.Infof("'%s': No new auto diags found...", pxProcessNm)
@@ -570,7 +618,7 @@ var _ = Describe("{DiagsAutoStorage}", func() {
 						pxProcessNm, currNode.Name)
 				})
 				/// Need to validate new auto diags
-				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(newDiags)))
+				err = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(newDiags)), pxDir)
 				Expect(err).NotTo(HaveOccurred())
 			}
 			driverVersion, err := Inst().V.GetDriverVersion()
@@ -622,6 +670,12 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 
 	It("Validate, pxctl displays telemetry status", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 
 		Step(fmt.Sprintf("Stop portworx on all nodes..."), func() {
 			for _, currNode := range node.GetWorkerNodes() {
@@ -636,14 +690,14 @@ var _ = Describe("{DiagsOnStoppedPXnode}", func() {
 
 				config := &torpedovolume.DiagRequestConfig{
 					DockerHost:    "unix:///var/run/docker.sock",
-					OutputFile:    fmt.Sprintf("/var/cores/%s-diags-%s.tar.gz", currNode.Name, dbg.GetTimeStamp()),
+					OutputFile:    fmt.Sprintf("%s%s-diags-%s.tar.gz", pxDiagDir, currNode.Name, dbg.GetTimeStamp()),
 					ContainerName: "",
 					OnHost:        true,
 					Live:          true,
 				}
 				diagsErr = Inst().V.CollectDiags(currNode, config, torpedovolume.DiagOps{Validate: false, PxStopped: true})
 				if diagsErr == nil {
-					diagsValErr = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)))
+					diagsValErr = Inst().V.ValidateDiagsOnS3(currNode, path.Base(strings.TrimSpace(config.OutputFile)), pxDir)
 				}
 			})
 		}
@@ -699,13 +753,19 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 
 	It("has to collect diags on specific node from another node, validate diags on S3", func() {
 		contexts = make([]*scheduler.Context, 0)
+		// Check if this is PKS and change PX diag directory
+		if IsPKS() {
+			pxDiagDir = PksPxDiagDir
+			pxDir = PksPxDir
+			log.Infof("This is PKS cluster based on the StorageCluster annotation, will change diag directory to [%s] and PX directory to [%s]", pxDiagDir, pxDir)
+		}
 		nodes := node.GetWorkerNodes()
 		currNode := nodes[0]
 		diagNode := nodes[1]
 
 		Step(fmt.Sprintf("Check latest diags on node %v", diagNode.Name), func() {
 			log.Infof("Getting latest diags on %v", diagNode.Name)
-			existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
+			existingDiags, err = telemetryRunCmd(fmt.Sprintf("ls -t %s%s*.tar.gz | head -n 1", pxDiagDir, diagNode.Name), diagNode, nil)
 			if err == nil {
 				log.Infof("Found latest auto diags on node %s: %s ", diagNode.Name, path.Base(existingDiags))
 			} else {
@@ -719,12 +779,16 @@ var _ = Describe("{DiagsSpecificNode}", func() {
 		})
 
 		Step(fmt.Sprintf("Get new diags on node %v", diagNode.Name), func() {
-			diagFile, err = telemetryRunCmd(fmt.Sprintf("ls -t /var/cores/%s-*.tar.gz | head -n 1", diagNode.Name), diagNode, nil)
+			diagFile, err = telemetryRunCmd(fmt.Sprintf("ls -t %s%s-*.tar.gz | head -n 1", pxDiagDir, diagNode.Name), diagNode, nil)
 			Expect(err).NotTo(HaveOccurred(), "Error getting new diags on Node %s", diagNode.Name)
 			if existingDiags != diagFile {
 				log.Infof("Found new diags %s", diagFile)
+				// Fail this step if Telemetry is not enabled, since we have to validate diags on s3 for this test
+				if !TelemetryEnabled(diagNode) {
+					log.FailOnError(fmt.Errorf("Unable to validate diags on s3"), "Telemetry is not enabled on node [%s]", currNode.Name)
+				}
 				/// Need to validate new diags
-				err = Inst().V.ValidateDiagsOnS3(diagNode, path.Base(strings.TrimSpace(diagFile)))
+				err = Inst().V.ValidateDiagsOnS3(diagNode, path.Base(strings.TrimSpace(diagFile)), pxDir)
 				Expect(err).NotTo(HaveOccurred())
 			} else {
 				err = fmt.Errorf("Failed to find new diags on Node %s", diagNode.Name)

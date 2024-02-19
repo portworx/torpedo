@@ -1,22 +1,43 @@
 package controlplane
 
 import (
+	"context"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/api"
 	pdsapi "github.com/portworx/torpedo/drivers/pds/api"
 	"github.com/portworx/torpedo/pkg/log"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"net"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // ControlPlane PDS
 type ControlPlane struct {
 	ControlPlaneURL string
 	components      *api.Components
+}
+
+type Templates struct {
+	CpuLimit       string
+	CpuRequest     string
+	DataServiceID  string
+	MemoryLimit    string
+	MemoryRequest  string
+	Name           string
+	StorageRequest string
+	FsType         string
+	ReplFactor     int32
+	Provisioner    string
+	Secure         bool
+	VolGroups      bool
 }
 
 var (
@@ -269,11 +290,52 @@ func (cp *ControlPlane) GetAppConfTemplate(tenantID string, ds string) (string, 
 	return appConfigTemplateID, nil
 }
 
+func (cp *ControlPlane) CreateCustomResourceTemplate(tenantID string, templates Templates) (*pds.ModelsStorageOptionsTemplate, *pds.ModelsResourceSettingsTemplate, error) {
+	stConfigModel, err := components.StorageSettingsTemplate.CreateTemplate(tenantID, templates.VolGroups, templates.FsType, templates.Name, templates.Provisioner, templates.ReplFactor, templates.Secure)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.InfoD("Created Storage Configuration is- %v with Storage-templateID: %v", stConfigModel.GetName(), stConfigModel.GetId())
+	resConfigModel, err := components.ResourceSettingsTemplate.CreateTemplate(tenantID, templates.CpuLimit, templates.CpuRequest, templates.DataServiceID, templates.MemoryLimit, templates.MemoryRequest, templates.Name, templates.StorageRequest)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.InfoD("Created Resource Configuration is- %v with Resource-templateID: %v", stConfigModel.GetName(), stConfigModel.GetId())
+	return stConfigModel, resConfigModel, nil
+}
+
+func (cp *ControlPlane) UpdateCustomResourceTemplates(cusResourceTempId string, templates Templates) (*pds.ModelsResourceSettingsTemplate, error) {
+	resConfigModelUpdated, err := components.ResourceSettingsTemplate.UpdateTemplate(cusResourceTempId, templates.CpuLimit, templates.CpuRequest, templates.MemoryLimit, templates.MemoryRequest, templates.Name, templates.StorageRequest)
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("Updated Resource Configuration is- %v with Resource-templateID: %v", resConfigModelUpdated.GetName(), resConfigModelUpdated.GetId())
+	return resConfigModelUpdated, nil
+}
+
+func (cp *ControlPlane) UpdateCustomStorageTemplates(cusStorageTempId string, templates Templates) (*pds.ModelsStorageOptionsTemplate, error) {
+	stConfigModelUpdated, err := components.StorageSettingsTemplate.UpdateTemplate(cusStorageTempId, templates.VolGroups, templates.FsType, templates.Name, templates.ReplFactor, templates.Secure)
+	if err != nil {
+		return nil, err
+	}
+	log.InfoD("Updated Storage Configuration is- %v with Storage-templateID: %v", stConfigModelUpdated.GetName(), stConfigModelUpdated.GetId())
+	return stConfigModelUpdated, nil
+}
+
 // update template name with custom name
 func (cp *ControlPlane) UpdateResourceTemplateName(TemplateName string) string {
 	log.Infof("Updating the resource template name with : %v", TemplateName)
 	resourceTemplateName = TemplateName
 	return resourceTemplateName
+}
+
+// WhoAmI Fetches the details of the current calling actor (user or service account)
+func (cp *ControlPlane) WhoAmI() (*pds.ControllersWhoAmIResponse, *http.Response, error) {
+	whoamiResp, httpResp, err := components.Whoami.WhoAmI()
+	if err != nil {
+		return nil, nil, err
+	}
+	return whoamiResp, httpResp, err
 }
 
 // GetResourceTemplate get the resource template id
@@ -312,6 +374,23 @@ func (cp *ControlPlane) GetResourceTemplate(tenantID string, supportedDataServic
 	return resourceTemplateID, nil
 }
 
+func (cp *ControlPlane) CleanupCustomTemplates(storageTemplateIDs []string, resourceTemplateIDs []string) error {
+	for _, stId := range storageTemplateIDs {
+		_, err := components.StorageSettingsTemplate.DeleteTemplate(stId)
+		if err != nil {
+			return fmt.Errorf("failed to delete storage template with ID- %v", stId)
+		}
+	}
+	for _, resId := range resourceTemplateIDs {
+		_, err := components.ResourceSettingsTemplate.DeleteTemplate(resId)
+		if err != nil {
+			return fmt.Errorf("failed to delete storage template with ID- %v", resId)
+		}
+	}
+	return nil
+
+}
+
 // GetRegistrationToken return token to register a target cluster.
 func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	log.Info("Fetch the registration token.")
@@ -331,9 +410,64 @@ func (cp *ControlPlane) GetRegistrationToken(tenantID string) (string, error) {
 	return token.GetToken(), nil
 }
 
+// CreatePostgreSQLClientAndConnect takes connectionString as parameter and does a ping then returns client
+func (cp *ControlPlane) CreatePostgreSQLClientAndConnect(connectionString string) (*pgx.Conn, error) {
+	log.Debugf("Connection string %s", connectionString)
+	conn, err := pgx.Connect(context.Background(), connectionString)
+	if err != nil {
+		return nil, fmt.Errorf("error while connecting to the database")
+	}
+	err = conn.Ping(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("error while pinging the database")
+	}
+	return conn, nil
+}
+
+// CreateMongoDBClientAndConnect takes connectionString as parameter and does a ping then returns client
+func (cp *ControlPlane) CreateMongoDBClientAndConnect(connectionString string) (*mongo.Client, error) {
+	log.Debugf("Connection string %s", connectionString)
+	clientOptions := options.Client().ApplyURI(connectionString)
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(context.Background(), clientOptions)
+	if err != nil {
+		return nil, fmt.Errorf("error while connecting to mongoDB: [%v]", err)
+	}
+	// Ping the MongoDB server to ensure connectivity
+	err = client.Ping(context.Background(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error occured during ping: [%v]", err)
+	}
+	log.Infof("Connected to MongoDB!")
+
+	// Close the client when done
+	err = client.Disconnect(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// ValidateIfTLSEnabled takes db related parameters to establish connection and returns error if connection is unsuccessful
+func (cp *ControlPlane) ValidateIfTLSEnabled(username, password, dnsEndPoint, port string) error {
+	log.Infof("Data service endpoint is: [%s]", dnsEndPoint)
+	connectionString := fmt.Sprintf("mongodb://%s:%s@%s:%s", username, password, dnsEndPoint, port)
+
+	_, err := cp.CreateMongoDBClientAndConnect(connectionString)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ValidateDNSEndpoint
 func (cp *ControlPlane) ValidateDNSEndpoint(dnsEndPoint string) error {
 	log.Infof("Dataservice endpoint is: [%s]", dnsEndPoint)
+	log.Debugf("sleeping for 5 min, before validating dns endpoint")
+	time.Sleep(5 * time.Minute)
 	_, err := net.Dial("tcp", dnsEndPoint)
 	if err != nil {
 		log.Errorf("Failed to connect to the dns endpoint with err: %v", err)

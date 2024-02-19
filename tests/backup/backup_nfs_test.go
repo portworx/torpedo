@@ -2,14 +2,20 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	"time"
+
+	"strings"
+	"sync"
+
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/torpedo/drivers"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"time"
+	"golang.org/x/sync/errgroup"
 )
 
 // DeleteNfsExecutorPodWhileBackupAndRestoreInProgress deletes the nfs executor pod while backup and restore are in progress and validates their status
@@ -39,6 +45,8 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 		scheduledAppContexts     []*scheduler.Context
 		appContextsToBackup      []*scheduler.Context
 		schedulePolicyInfo       *api.SchedulePolicyInfo
+		controlChannel           chan string
+		errorGroup               *errgroup.Group
 	)
 	backupLocationMap := make(map[string]string)
 	scheduleBackup = "scheduleBackup"
@@ -46,15 +54,15 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 	singleNamespaceBkp = "singleNamespaceBkp"
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeleteNfsExecutorPodWhileBackupAndRestoreInProgress", "Delete nfs executor pod while backup and restore are in progress and validate the status", nil, 86105)
+		StartPxBackupTorpedoTest("DeleteNfsExecutorPodWhileBackupAndRestoreInProgress", "Delete nfs executor pod while backup and restore are in progress and validate the status", nil, 86105, Sagrawal, Q3FY24)
 		log.InfoD("Scheduling Applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		for i := 0; i < 5; i++ {
-			taskName := fmt.Sprintf("%s-%d", taskNamePrefix, i)
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts = ScheduleApplications(taskName)
 			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
-				ctx.ReadinessTimeout = appReadinessTimeout
+				ctx.ReadinessTimeout = AppReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				appNamespaces = append(appNamespaces, namespace)
 				scheduledAppContexts = append(scheduledAppContexts, ctx)
@@ -66,17 +74,18 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 	It("To validate backup and restore status after deleting the respective nfs executor pod while in progress", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
-			ValidateApplications(scheduledAppContexts)
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating NFS backup location", func() {
 			log.InfoD("Creating NFS backup location")
-			backupLocationProviders := getProviders()
+			backupLocationProviders := GetBackupProviders()
 			for _, provider := range backupLocationProviders {
 				bkpLocationName = fmt.Sprintf("%s-%s-%s", provider, getGlobalBucketName(provider), RandomString(10))
 				backupLocationUID = uuid.New()
 				backupLocationMap[backupLocationUID] = bkpLocationName
-				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, "", "", getGlobalBucketName(provider), orgID, "")
+				err := CreateBackupLocation(provider, bkpLocationName, backupLocationUID, "", "", getGlobalBucketName(provider), BackupOrgID, "", true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
 			}
 		})
@@ -85,9 +94,9 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 			log.InfoD("Registering application clusters for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = CreateApplicationClusters(orgID, "", "", ctx)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
-			clusterUid, err = Inst().Backup.GetClusterUID(ctx, orgID, SourceClusterName)
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 			log.FailOnError(err, "Fetching [%s] uid", SourceClusterName)
 		})
 
@@ -100,19 +109,19 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 			userSchedulePolicyCreateRequest := &api.SchedulePolicyCreateRequest{
 				CreateMetadata: &api.CreateMetadata{
 					Name:  schedulePolicyName,
-					OrgId: orgID,
+					OrgId: BackupOrgID,
 				},
 				SchedulePolicy: schedulePolicyInfo,
 			}
 			_, err = Inst().Backup.CreateSchedulePolicy(ctx, userSchedulePolicyCreateRequest)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation schedule policy %s", schedulePolicyName))
-			schedulePolicyUID, err = Inst().Backup.GetSchedulePolicyUid(orgID, ctx, schedulePolicyName)
+			schedulePolicyUID, err = Inst().Backup.GetSchedulePolicyUid(BackupOrgID, ctx, schedulePolicyName)
 			log.FailOnError(err, "failed to fetch uid for schedule policy- %s", schedulePolicyName)
 		})
 
 		Step("Validating backup status after deleting the respective nfs executor pod while backup is in progress", func() {
 			log.InfoD("Validating backup status after deleting the respective nfs executor pod while backup is in progress")
-			backupToNfsExecutorPodNamespaceMapping := map[string]string{scheduleBackup: multiAppNfsPodDeploymentNamespace, customResourceBackup: multiAppNfsPodDeploymentNamespace, singleNamespaceBkp: appNamespaces[0]}
+			backupToNfsExecutorPodNamespaceMapping := map[string]string{scheduleBackup: MultiAppNfsPodDeploymentNamespace, customResourceBackup: MultiAppNfsPodDeploymentNamespace, singleNamespaceBkp: appNamespaces[0]}
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			for backupType, namespace := range backupToNfsExecutorPodNamespaceMapping {
@@ -121,18 +130,18 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 				case "scheduleBackup":
 					log.InfoD("Taking schedule backup of multiple namespaces")
 					scheduleName = fmt.Sprintf("schedule-bkp-%v", RandomString(5))
-					_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appNamespaces, make(map[string]string), orgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, ctx)
+					_, err = CreateScheduleBackupWithoutCheck(scheduleName, SourceClusterName, bkpLocationName, backupLocationUID, appNamespaces, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s]", schedulePolicyName))
-					firstSchBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+					firstSchBackupName, err = GetFirstScheduleBackupName(ctx, scheduleName, BackupOrgID)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the first schedule backup"))
-					err = suspendBackupSchedule(scheduleName, schedulePolicyName, orgID, ctx)
+					err = SuspendBackupSchedule(scheduleName, schedulePolicyName, BackupOrgID, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending backup schedule [%s] so that no new nfs executor pod is deployed for this schedule", scheduleName))
 					currentBackupName = firstSchBackupName
 					currentContext = scheduledAppContexts
 				case "customResourceBackup":
 					log.InfoD("Taking custom resource backup of all namespaces")
 					customResourceBackupName = fmt.Sprintf("%s-custom-resource-%v", BackupNamePrefix, RandomString(5))
-					err = CreateBackupWithCustomResourceTypeWithoutValidation(customResourceBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appNamespaces, make(map[string]string), orgID, clusterUid, "", "", "", "", []string{"PersistentVolumeClaim"}, ctx)
+					err = CreateBackupWithCustomResourceTypeWithoutValidation(customResourceBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appNamespaces, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "", []string{"PersistentVolumeClaim"}, ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of custom resource backup - %s", customResourceBackupName))
 					resourceTypeFilter = append(resourceTypeFilter, "PersistentVolumeClaim")
 					currentBackupName = customResourceBackupName
@@ -141,7 +150,7 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 					log.InfoD("Taking backup of single namespace")
 					singleNamespaceBackup = fmt.Sprintf("single-ns-%s-%v-backup", appNamespaces[0], RandomString(5))
 					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{appNamespaces[0]})
-					_, err = CreateBackupWithoutCheck(ctx, singleNamespaceBackup, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), orgID, clusterUid, "", "", "", "")
+					_, err = CreateBackupWithoutCheck(ctx, singleNamespaceBackup, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creating backup %s with single namespace", singleNamespaceBackup))
 					currentBackupName = singleNamespaceBackup
 					currentContext = appContextsToBackup
@@ -149,19 +158,19 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 					log.InfoD("Backup type provided is not supported for this testcase")
 				}
 				log.InfoD("Deleting nfs executor pod while backup %s of type %s is in progress", currentBackupName, backupType)
-				err = DeletePodWhileBackupInProgress(ctx, orgID, currentBackupName, namespace, nfsBackupExecutorPodLabel)
+				err = DeletePodWhileBackupInProgress(ctx, BackupOrgID, currentBackupName, namespace, NfsBackupExecutorPodLabel)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Delete nfs executor pod while backup %s of type %s is in progress", currentBackupName, backupType))
 				log.InfoD("Verifying backup %s status of type %s after deleting nfs executor pod", currentBackupName, backupType)
-				err = backupSuccessCheckWithValidation(ctx, currentBackupName, currentContext, orgID, maxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, resourceTypeFilter...)
+				err = BackupSuccessCheckWithValidation(ctx, currentBackupName, currentContext, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, resourceTypeFilter...)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of backup:[%s] status of type %s after deleting nfs executor pod", currentBackupName, backupType))
 			}
 		})
 
 		Step("Validating restore status after deleting the respective nfs executor pod while restore is in progress", func() {
 			log.InfoD("Validating restore status after deleting the respective nfs executor pod while restore is in progress")
-			multiNamespaceRestore = fmt.Sprintf("multi-ns-%s-%s-%v", restoreNamePrefix, firstSchBackupName, RandomString(5))
-			singleNamespaceRestore = fmt.Sprintf("single-ns-%s-%s-%v", restoreNamePrefix, singleNamespaceBackup, RandomString(5))
-			restoreToNfsExecutorPodNamespaceAndBackupMapping := map[string][]string{multiNamespaceRestore: {multiAppNfsPodDeploymentNamespace, firstSchBackupName}, singleNamespaceRestore: {appNamespaces[0], singleNamespaceBackup}}
+			multiNamespaceRestore = fmt.Sprintf("multi-ns-%s-%s-%v", RestoreNamePrefix, firstSchBackupName, RandomString(5))
+			singleNamespaceRestore = fmt.Sprintf("single-ns-%s-%s-%v", RestoreNamePrefix, singleNamespaceBackup, RandomString(5))
+			restoreToNfsExecutorPodNamespaceAndBackupMapping := map[string][]string{multiNamespaceRestore: {MultiAppNfsPodDeploymentNamespace, firstSchBackupName}, singleNamespaceRestore: {appNamespaces[0], singleNamespaceBackup}}
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.Infof("Switching the context to destination cluster as restore nfs executor pod are created in destination cluster")
@@ -169,14 +178,14 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			for restoreName, namespaceBackup := range restoreToNfsExecutorPodNamespaceAndBackupMapping {
 				log.InfoD("Restoring the backup %s without check", namespaceBackup[1])
-				_, err = CreateRestoreWithoutCheck(restoreName, namespaceBackup[1], make(map[string]string), destinationClusterName, orgID, ctx)
+				_, err = CreateRestoreWithoutCheck(restoreName, namespaceBackup[1], make(map[string]string), DestinationClusterName, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creating in-progress restore [%s] from backup %s", restoreName, namespaceBackup[1]))
 				restoreNames = append(restoreNames, restoreName)
 				log.InfoD("Deleting nfs executor pod while restore %s is in progress", restoreName)
-				err = DeletePodWhileRestoreInProgress(ctx, orgID, restoreName, namespaceBackup[0], nfsRestoreExecutorPodLabel)
+				err = DeletePodWhileRestoreInProgress(ctx, BackupOrgID, restoreName, namespaceBackup[0], NfsRestoreExecutorPodLabel)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting nfs executor pod while restore %s is in progress", restoreName))
 				log.InfoD("Verifying restore %s status after deleting nfs executor pod", restoreName)
-				err = restoreSuccessCheck(restoreName, orgID, maxWaitPeriodForRestoreCompletionInMinute*time.Minute, restoreJobProgressRetryTime*time.Minute, ctx)
+				err = RestoreSuccessCheck(restoreName, BackupOrgID, MaxWaitPeriodForRestoreCompletionInMinute*time.Minute, RestoreJobProgressRetryTime*time.Minute, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restore %s taken from backup %v after deleting nfs executor pod", restoreName, namespaceBackup[1]))
 			}
 		})
@@ -190,16 +199,487 @@ var _ = Describe("{DeleteNfsExecutorPodWhileBackupAndRestoreInProgress}", func()
 		log.Infof("Deleting the deployed applications")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		log.FailOnError(err, "Data validations failed")
+		log.InfoD("Deleting the restores taken")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
+		}
+		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
+		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
+		CleanupCloudSettingsAndClusters(backupLocationMap, "", "", ctx)
+	})
+})
+
+// RemoveJSONFilesFromNFSBackupLocation deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore
+var _ = Describe("{RemoveJSONFilesFromNFSBackupLocation}", func() {
+	var (
+		bkpLocationName          string
+		backupLocationUID        string
+		customResourceBackupName string
+		clusterUid               string
+		singleNamespaceBackup    string
+		multipleNamespaceBackup  string
+		newBackupName            string
+		appNamespaces            []string
+		appContexts              []*scheduler.Context
+		scheduledAppContexts     []*scheduler.Context
+		labelSelectors           map[string]string
+		globalBucket             string
+		backupNames              []string
+		restoreNames             []string
+		backupLocationMap        = make(map[string]string)
+	)
+
+	JustBeforeEach(func() {
+		labelSelectors = make(map[string]string)
+		StartPxBackupTorpedoTest("RemoveJSONFilesFromNFSBackupLocation", "This TC deletes the .json files from the NFS backup location,check the status of the backups and then perform the restore", nil, 86098, Sabrarhussaini, Q4FY23)
+		log.InfoD("Scheduling Applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		log.Infof("The list of namespaces deployed are", appNamespaces)
+	})
+
+	It("To validate the backup and restore when the json files are deleted", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating NFS backup location", func() {
+			log.InfoD("Creating NFS backup location")
+			globalBucket = getGlobalBucketName(drivers.ProviderNfs)
+			bkpLocationName = fmt.Sprintf("%s-%s-%s", drivers.ProviderNfs, globalBucket, RandomString(10))
+			backupLocationUID = uuid.New()
+			backupLocationMap[backupLocationUID] = bkpLocationName
+			err := CreateBackupLocation(drivers.ProviderNfs, bkpLocationName, backupLocationUID, "", "", globalBucket, BackupOrgID, "", true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
+		})
+
+		Step("Registering application clusters for backup", func() {
+			log.InfoD("Registering application clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, DestinationClusterName)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with App-User ctx", SourceClusterName, DestinationClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			log.FailOnError(err, "Fetching [%s] uid", SourceClusterName)
+		})
+
+		Step("Taking backup of single namespaces", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of single namespaces [%v]", appNamespaces[0]))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			singleNamespaceBackup = fmt.Sprintf("single-ns-%s-%v-backup", appNamespaces[0], RandomString(5))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{appNamespaces[0]})
+			err = CreateBackupWithValidation(ctx, singleNamespaceBackup, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", singleNamespaceBackup))
+			backupNames = append(backupNames, singleNamespaceBackup)
+		})
+
+		Step("Taking backup of multiple namespaces", func() {
+			log.InfoD(fmt.Sprintf("Taking backup of multiple namespaces [%v]", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			multipleNamespaceBackup = fmt.Sprintf("multiple-ns-%v-backup", RandomString(5))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, multipleNamespaceBackup, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", multipleNamespaceBackup))
+			backupNames = append(backupNames, multipleNamespaceBackup)
+		})
+
+		Step("Taking custom resource backup of all namespaces", func() {
+			log.InfoD("Taking custom resource backup of all namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			customResourceBackupName = fmt.Sprintf("%s-custom-resource-%v", BackupNamePrefix, RandomString(5))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, customResourceBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, []string{"PersistentVolumeClaim"}, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of custom resource backup - %s", customResourceBackupName))
+			backupNames = append(backupNames, customResourceBackupName)
+		})
+
+		Step("Remove the JSON files from the NFS backup location for all the backups", func() {
+			log.InfoD("Remove the JSON files from the NFS backup location for all the backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  backupName,
+					Uid:   backupUID,
+					OrgId: BackupOrgID,
+				}
+				resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+				log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
+				currentBackupPath := globalBucket + "/" + resp.Backup.BackupPath
+				log.Infof("Deleting the JSON files from the NFS backup location for backup %v", backupName)
+				err = DeleteFilesFromNFSLocation(currentBackupPath, "*.json")
+				log.FailOnError(err, fmt.Sprintf("Faced error while deleting the JSON files from path [%s]", currentBackupPath))
+			}
+		})
+
+		Step("Verify if the backups are in CloudBackupMissing state after the JSON file deletion", func() {
+			log.InfoD("Verify if the backups are in CloudBackupMissing state after the JSON file deletion")
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					log.Infof("Verifying the backup status for the backup %v", backupName)
+					bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					log.FailOnError(err, "Fetching backup uid")
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   bkpUid,
+						OrgId: BackupOrgID,
+					}
+					requiredStatus := api.BackupInfo_StatusInfo_CloudBackupMissing
+					backupCloudBackupMissingCheckFunc := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						if err != nil {
+							return "", false, err
+						}
+						actual := resp.GetBackup().GetStatus().Status
+						if actual == requiredStatus {
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, requiredStatus, actual)
+					}
+					_, err = DoRetryWithTimeoutWithGinkgoRecover(backupCloudBackupMissingCheckFunc, 20*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verfiying backup %s is in CloudBackup missing state", backupName))
+				}(backupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Verify if the restores for the above backups get failed", func() {
+			log.InfoD("Verify if the restores for the above backups get failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+
+		Step("Taking a new backup of namespaces", func() {
+			log.InfoD(fmt.Sprintf("Taking a new backup of namespaces [%v]", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newBackupName = fmt.Sprintf("new-backup-%v", RandomString(8))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithValidation(ctx, newBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", newBackupName))
+			backupNames = append(backupNames, newBackupName)
+		})
+
+		Step("Verify if the restores for the new backup is successful", func() {
+			log.InfoD("Verify if the restores for the new backup is successful")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newRestoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, newBackupName)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, newRestoreName, newBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the restore [%s] is successful.", newRestoreName))
+			restoreNames = append(restoreNames, newRestoreName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Deleting the deployed applications")
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting the restores taken")
 		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, orgID, ctx)
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
 		}
-		err = DeleteSchedule(scheduleName, SourceClusterName, orgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
-		err = Inst().Backup.DeleteBackupSchedulePolicy(orgID, []string{schedulePolicyName})
-		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policies %s ", []string{schedulePolicyName}))
+		CleanupCloudSettingsAndClusters(backupLocationMap, "", "", ctx)
+		log.InfoD("Switching context to destination cluster for clean up")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "Unable to switch context to destination cluster [%s]", DestinationClusterName)
+		DestroyApps(scheduledAppContexts, opts)
+		log.InfoD("Switching back context to Source cluster")
+		err = SetSourceKubeConfig()
+		log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+	})
+})
+
+// CloudSnapshotMissingValidationForNFSLocation this TC validates the Cloud Snapshot missing status for backups after deleting the Cloud Snapshots on the NFS location
+var _ = Describe("{CloudSnapshotMissingValidationForNFSLocation}", func() {
+	var (
+		bkpLocationName            string
+		backupLocationUID          string
+		customResourceBackupName   string
+		clusterUid                 string
+		appNamespaces              []string
+		appContexts                []*scheduler.Context
+		scheduledAppContexts       []*scheduler.Context
+		globalBucket               string
+		backupNames                []string
+		backupLocationMap          = make(map[string]string)
+		periodicSchedulePolicyName string
+		singleNSScheduleName       string
+		singleNSScheduledBackup    string
+		multipleNSScheduleName     string
+		multipleNSScheduledBackup  string
+		newScheduleName            string
+		newScheduledBackup         string
+		restoreNames               []string
+		scheduleNames              []string
+		periodicSchedulePolicyUid  string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("CloudSnapshotMissingValidationForNFSLocation", "This TC validates the Cloud Snapshot missing status for backups after deleting the Cloud Snapshots on the NFS location", nil, 86094, Sabrarhussaini, Q4FY23)
+		log.InfoD("Scheduling Applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+			appContexts = ScheduleApplications(taskName)
+			for _, ctx := range appContexts {
+				ctx.ReadinessTimeout = AppReadinessTimeout
+				namespace := GetAppNamespace(ctx, taskName)
+				appNamespaces = append(appNamespaces, namespace)
+				scheduledAppContexts = append(scheduledAppContexts, ctx)
+			}
+		}
+		log.Infof("The list of namespaces deployed are", appNamespaces)
+	})
+
+	It("To validate the backup status when the cloud snapshots are deleted", func() {
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating NFS backup location", func() {
+			log.InfoD("Creating NFS backup location")
+			globalBucket = getGlobalBucketName(drivers.ProviderNfs)
+			bkpLocationName = fmt.Sprintf("%s-%s-%s", drivers.ProviderNfs, globalBucket, RandomString(10))
+			backupLocationUID = uuid.New()
+			backupLocationMap[backupLocationUID] = bkpLocationName
+			err := CreateBackupLocation(drivers.ProviderNfs, bkpLocationName, backupLocationUID, "", "", globalBucket, BackupOrgID, "", true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating NFS backup location %s", bkpLocationName))
+		})
+
+		Step("Creating Schedule Policy", func() {
+			log.InfoD("Creating Schedule Policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			periodicSchedulePolicyName = fmt.Sprintf("%s-%v", "periodic", RandomString(4))
+			periodicSchedulePolicyUid = uuid.New()
+			periodicSchedulePolicyInterval := int64(15)
+			err = CreateBackupScheduleIntervalPolicy(5, periodicSchedulePolicyInterval, 5, periodicSchedulePolicyName, periodicSchedulePolicyUid, BackupOrgID, ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of periodic schedule policy of interval [%v] minutes named [%s]", periodicSchedulePolicyInterval, periodicSchedulePolicyName))
+		})
+
+		Step("Registering application clusters for backup", func() {
+			log.InfoD("Registering application clusters for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, DestinationClusterName)
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with App-User ctx", SourceClusterName, DestinationClusterName))
+			clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			log.FailOnError(err, "Fetching [%s] uid", SourceClusterName)
+		})
+
+		Step(fmt.Sprintf("Taking a scheduled backup of single namespaces"), func() {
+			log.InfoD(fmt.Sprintf("Taking a scheduled backup of single namespaces [%v]", appNamespaces[0]))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			singleNSScheduleName = fmt.Sprintf("single-ns-bkp-schedule-%v", RandomString(4))
+			singleNSScheduledBackup, err = CreateScheduleBackupWithValidation(ctx, singleNSScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", singleNSScheduleName))
+			err = SuspendBackupSchedule(singleNSScheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", singleNSScheduleName))
+			backupNames = append(backupNames, singleNSScheduledBackup)
+			scheduleNames = append(scheduleNames, singleNSScheduleName)
+		})
+
+		Step(fmt.Sprintf("Taking a scheduled backup of multiple namespaces"), func() {
+			log.InfoD(fmt.Sprintf("Taking a scheduled backup of multiple namespaces [%v]", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			multipleNSScheduleName = fmt.Sprintf("multiple-ns-bkp-schedule-%v", RandomString(4))
+			multipleNSScheduledBackup, err = CreateScheduleBackupWithValidation(ctx, multipleNSScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", multipleNSScheduleName))
+			err = SuspendBackupSchedule(multipleNSScheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", multipleNSScheduleName))
+			backupNames = append(backupNames, multipleNSScheduledBackup)
+			scheduleNames = append(scheduleNames, multipleNSScheduleName)
+		})
+
+		Step("Taking a custom resource backup of all namespaces", func() {
+			log.InfoD("Taking a custom resource backup of all namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			customResourceBackupName = fmt.Sprintf("%s-custom-resource-%v", BackupNamePrefix, RandomString(5))
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateBackupWithCustomResourceTypeWithValidation(ctx, customResourceBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, []string{"PersistentVolumeClaim"}, nil, BackupOrgID, clusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of custom resource backup - %s", customResourceBackupName))
+			backupNames = append(backupNames, customResourceBackupName)
+		})
+
+		Step("Remove the Cloud Snapshots from the NFS backup location for all the backups", func() {
+			log.InfoD("Remove the Cloud Snapshots from the NFS backup location for all the backups")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  backupName,
+					Uid:   backupUID,
+					OrgId: BackupOrgID,
+				}
+				resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+				log.FailOnError(err, fmt.Sprintf("error inspecting backup %v", backupName))
+				volumePath := resp.Backup.Volumes
+				for _, ele := range volumePath {
+					bkpID := ele.BackupId
+					parts := strings.Split(bkpID, "/")
+					subparts := strings.Split(parts[1], "-")
+					currentSnapShotPath := parts[0] + "/" + subparts[0] + "/" + subparts[0] + "-" + subparts[1]
+					log.InfoD("Deleting the Cloud Snapshots from the NFS backup location for backup [%s] from path [%s]", backupName, currentSnapShotPath)
+					DeleteNfsSubPath(currentSnapShotPath)
+				}
+				//the below code is a work around and can be removed once PB-3788 is fixed.
+				metadataPath := globalBucket + "/" + resp.Backup.BackupPath + "/" + "metadata.json"
+				log.Infof("Deleting the cloud snapshots from the NFS backup location for backup [%v] with backup path [%s]", backupName, metadataPath)
+				DeleteNfsSubPath(metadataPath)
+			}
+		})
+
+		Step("Verify if the backups are in CloudBackupMissing state after the cloud snapshot deletion", func() {
+			log.InfoD("Verify if the backups are in CloudBackupMissing state after the cloud snapshot deletion")
+			var wg sync.WaitGroup
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				wg.Add(1)
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					bkpUid, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+					log.FailOnError(err, "Fetching backup uid for backup %s", backupName)
+					backupInspectRequest := &api.BackupInspectRequest{
+						Name:  backupName,
+						Uid:   bkpUid,
+						OrgId: BackupOrgID,
+					}
+					requiredStatus := api.BackupInfo_StatusInfo_CloudBackupMissing
+					backupCloudBackupMissingCheckFunc := func() (interface{}, bool, error) {
+						resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+						if err != nil {
+							return "", false, err
+						}
+						actual := resp.GetBackup().GetStatus().Status
+						if actual == requiredStatus {
+							return "", false, nil
+						}
+						return "", true, fmt.Errorf("backup status for [%s] expected was [%v] but got [%s]", backupName, requiredStatus, actual)
+					}
+					_, err = DoRetryWithTimeoutWithGinkgoRecover(backupCloudBackupMissingCheckFunc, 20*time.Minute, 30*time.Second)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Verfiying backup %s is in CloudBackup missing state", backupName))
+				}(backupName)
+			}
+			wg.Wait()
+		})
+
+		Step("Verify if the restores for the above backups get failed", func() {
+			log.InfoD("Verify if the restores for the above backups get failed")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, backupName := range backupNames {
+				restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
+				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+				err = CreateRestoreWithValidation(ctx, restoreName, backupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+				dash.VerifyFatal(strings.Contains(err.Error(), "CloudBackup objects are missing"), true, fmt.Sprintf("Verifying if the restore [%s] is getting Failed after JSON file deletion.", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+
+		Step(fmt.Sprintf("Taking a new scheduled backup of multiple namespaces"), func() {
+			log.InfoD(fmt.Sprintf("Taking a new scheduled backup of multiple namespaces [%v]", appNamespaces))
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newScheduleName = fmt.Sprintf("new-bkp-schedule-%v", RandomString(4))
+			newScheduledBackup, err = CreateScheduleBackupWithValidation(ctx, newScheduleName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of schedule backup with schedule name [%s]", multipleNSScheduleName))
+			err = SuspendBackupSchedule(newScheduleName, periodicSchedulePolicyName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s]", newScheduleName))
+			backupNames = append(backupNames, newScheduledBackup)
+			scheduleNames = append(scheduleNames, newScheduleName)
+		})
+
+		Step("Verify if the restores for the new scheduled backup is successful", func() {
+			log.InfoD("Verify if the restores for the new scheduled backup is successful")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			newRestoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, newScheduledBackup)
+			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
+			err = CreateRestoreWithValidation(ctx, newRestoreName, newScheduledBackup, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsToBackup)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the restore [%s] is successful.", newRestoreName))
+			restoreNames = append(restoreNames, newRestoreName)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "Switching context to source cluster failed")
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		log.Infof("Cleaning up schedules")
+		var wg sync.WaitGroup
+		for _, schedule := range scheduleNames {
+			wg.Add(1)
+			go func(schedule string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err = DeleteSchedule(schedule, SourceClusterName, BackupOrgID, ctx)
+				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting Backup Schedule [%s]", schedule))
+			}(schedule)
+		}
+		wg.Wait()
+		log.Infof("Cleaning up restores")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore %s", restoreName))
+		}
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.Infof("Deleting the deployed applications")
+		DestroyApps(scheduledAppContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, "", "", ctx)
 	})
 })

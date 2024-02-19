@@ -2,10 +2,9 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
@@ -18,14 +17,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ServiceIdentityNsLevel", "Create and Update Service Identity with N namespaces with different roles ", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
-
 	})
 
 	It("Deploy Dataservices", func() {
@@ -45,7 +36,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 			nsID2                  []string
 			serviceIdentityID      string
 			pdsRestoreNsName       string
-			//resDepId               string
 		)
 
 		Step("Deploy Data Services", func() {
@@ -168,7 +158,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 					_, err := components.IamRoleBindings.UpdateIamRoleBindings(accountID, serviceIdentityID, nsRoles)
 					log.FailOnError(err, "Failed while updating IAM Roles for ns2")
 				})
-
+				//ToDo: Commenting due to Bug- https://portworx.atlassian.net/browse/DS-7080
 				Step("Perform restore again for the backup jobs to ns2 with admin role", func() {
 					ctx, err := GetSourceClusterConfigPath()
 					log.FailOnError(err, "failed while getting src cluster path")
@@ -220,10 +210,10 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 
 						log.InfoD("Update deploymnets params are- resDepId- %v, dataServiceDefaultAppConfigID- %v ,resDep.GetImageId()- %v ,int32(3)- %v ,dataServiceDefaultResourceTemplateID- %v", *resDep.Id,
 							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(3), dataServiceDefaultResourceTemplateID)
+							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID)
 						updatedDeployment, err := dsTest.UpdateDataServices(*resDep.Id,
 							dataServiceDefaultAppConfigID, resDep.GetImageId(),
-							int32(3), dataServiceDefaultResourceTemplateID, ns2.Name)
+							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, ns2.Name)
 						log.FailOnError(err, "Error while updating dataservices")
 
 						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, ns2.Name)
@@ -232,7 +222,7 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 						customParams.SetParamsForServiceIdentityTest(params, false)
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns2.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 				})
 				//ToDo : Add workload generation for restored-deps with RBAC roles on ns2
@@ -246,8 +236,6 @@ var _ = Describe("{ServiceIdentityNsLevel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -255,14 +243,6 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ServiceIdentityTargetClusterLevel", "Create and Update Service Identity with 2 namespaces on different clusters and perform cross-cluster restore", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target1.")
-		log.InfoD("AWS S3 target1 - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
-
 	})
 
 	It("Deploy Dataservices", func() {
@@ -299,7 +279,7 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 				nsRolesSrc, nsRolesDesti = nil, nil
 				nsID2, nsID2, iamRolesToBeCleanedinSrc, iamRolesToBeCleanedinDest, siToBeCleanedinDest, siToBeCleanedinSrc = nil, nil, nil, nil, nil, nil
 				deps, depList, deploymentsToBeCleaned, restoredDeploymentsToBeCleaned = []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}, []*pds.ModelsDeployment{}
-				resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
+				//resDeployments = make(map[PDSDataService]*pds.ModelsDeployment)
 				deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 
 				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
@@ -427,6 +407,8 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 
 					}
 				})
+
+				//ToDo: Commenting due to Bug- https://portworx.atlassian.net/browse/DS-7080
 
 				Step("Update IAM2 with ns1 of cluster1 as reader role", func() {
 					nsRolesDesti = nil
@@ -582,8 +564,6 @@ var _ = Describe("{ServiceIdentityTargetClusterLevel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })
 
@@ -591,14 +571,6 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("ServiceIdentitySiDLevel", "Create and Update N Service Identities with N namespaces with different roles ", pdsLabels, 0)
-		credName := targetName + pdsbkp.RandString(8)
-		bkpClient, err = pdsbkp.InitializePdsBackup()
-		log.FailOnError(err, "Failed to initialize backup for pds.")
-		bkpTarget, err = bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", credName), deploymentTargetID)
-		log.FailOnError(err, "Failed to create S3 backup target.")
-		log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
-		awsBkpTargets = append(awsBkpTargets, bkpTarget)
-
 	})
 
 	It("Deploy Dataservices", func() {
@@ -722,7 +694,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 
 						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *deployment.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, ns1.Name)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 
 				})
@@ -767,6 +739,7 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 					}
 				})
 
+				//ToDo: Commenting due to Bug- https://portworx.atlassian.net/browse/DS-7080
 				Step("Update IAM2 with newly created restore namespace", func() {
 					nsReaderRoles = nil
 					var (
@@ -805,12 +778,12 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 							int32(ds.ScaleReplicas), dataServiceDefaultResourceTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "Error while updating dataservices")
 						customParams.SetParamsForServiceIdentityTest(params, false)
-						log.InfoD("PDS RESTORE NAMESPACE IS- %v", pdsRestoreNsName)
-						err = dsTest.ValidateDataServiceDeployment(updatedDeployment, pdsRestoreNsName)
+						log.InfoD("Successfully scaled up the restored deployment- %v", updatedDeployment)
+						err = dsTest.ValidateDataServiceDeployment(resDep, pdsRestoreNsName)
 						log.FailOnError(err, "Error while validating data service deployment")
-						_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
+						_, _, config, err := pdslib.ValidateDataServiceVolumes(resDep, *resDep.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, pdsRestoreNsName)
 						log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-						dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+						dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 					}
 
 				})
@@ -863,7 +836,5 @@ var _ = Describe("{ServiceIdentitySiDLevel}", func() {
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		err := bkpClient.AWSStorageClient.DeleteBucket()
-		log.FailOnError(err, "Failed while deleting the bucket")
 	})
 })

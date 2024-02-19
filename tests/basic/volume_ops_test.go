@@ -3,16 +3,6 @@ package tests
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-	"github.com/libopenstorage/openstorage/api"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	"github.com/portworx/sched-ops/k8s/core"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/pkg/log"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"math"
 	"math/rand"
 	"reflect"
@@ -20,10 +10,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"github.com/libopenstorage/openstorage/api"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/storage"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/pkg/log"
+	v1 "k8s.io/api/core/v1"
+	storageApi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -297,6 +301,21 @@ var _ = Describe("{VolumeUpdateForAttachedNode}", func() {
 					dash.VerifyFatal(len(appVolumes) > 0, true, "App volumes exist ?")
 				})
 				for _, v := range appVolumes {
+					if _, ok := v.Labels[k8s.PureDAVolumeLabel]; ok {
+						// This is a Pure Direct Access volume, which will not support repl updates.
+						// Ensure the command fails.
+						Step(fmt.Sprintf("ensure repl update fails on Pure Direct Access on app %s's volume: %v", ctx.App.Key, v), func() {
+							appNodes, err := Inst().S.GetNodesForApp(ctx)
+							log.FailOnError(err, "Failed to get nodes for app %s", ctx.App.Key)
+							dash.VerifyFatal(len(appNodes) > 0, true, "App nodes exist ?")
+
+							err = Inst().V.SetReplicationFactor(v, 3, []string{appNodes[0].VolDriverNodeID}, nil, true)
+							dash.VerifyFatal(err != nil, true, "Repl update failed (as expected) for Pure DA volumes?")
+							dash.VerifyFatal(strings.Contains(err.Error(), "not supported for Pure"), true, "Repl update error for Pure DA volumes contains proper string?")
+						})
+						continue
+					}
+
 					MaxRF := Inst().V.GetMaxReplicationFactor()
 					MinRF := Inst().V.GetMinReplicationFactor()
 					currReplicaSet := []string{}
@@ -2731,3 +2750,327 @@ var _ = Describe("{PoolFullCloudsnap}", func() {
 		AfterEachTest(contexts, testrailID, runID)
 	})
 })
+
+var _ = Describe("{NFSProxyVolumeValidation}", func() {
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("NFSProxyVolumeValidation", "Validate PX operations with NFS proxy volumes", nil, 0)
+	})
+
+	It("schedule proxy volumes on applications, run CRUD, tear down", func() {
+		var masterNode node.Node
+		stepLog = "setup proxy server necessary for proxy volume"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			masterNodes := node.GetMasterNodes()
+			if len(masterNodes) == 0 {
+				log.FailOnError(fmt.Errorf("no master nodes found"), "Identifying master node of proxy server failed")
+			}
+
+			masterNode = masterNodes[0]
+			err = SetupProxyServer(masterNode)
+			log.FailOnError(err, fmt.Sprintf("error setting up proxy server on master node %s", masterNode.Name))
+
+		})
+		stepLog = "create storage class for proxy volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			addresses := masterNode.Addresses
+			if len(addresses) == 0 {
+				log.FailOnError(fmt.Errorf("no addresses found for node [%s]", masterNode.Name), "error getting ip addresses ")
+			}
+			err = CreateNFSProxyStorageClass("portworx-proxy-volume-volume", addresses[0], "/exports/testnfsexportdir")
+			log.FailOnError(err, "error creating storage class for proxy volume")
+		})
+
+		stepLog = "create apps with proxy volumes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			appList := Inst().AppList
+
+			defer func() {
+				Inst().AppList = appList
+			}()
+
+			Inst().AppList = []string{"nginx-proxy-deployment"}
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("nfsproxytest-%d", i))...)
+			}
+
+			for _, ctx := range contexts {
+				log.InfoD("Validating application [%s]", ctx.App.Key)
+				ctx.SkipVolumeValidation = true //skipping as volume does not have the mount path inside the pod
+				ValidateContext(ctx)
+			}
+		})
+
+		stepLog = "restart PX on all nodes one by one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appNode := range node.GetStorageDriverNodes() {
+				stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StopVolDriverAndWait([]node.Node{appNode})
+					})
+				time.Sleep(20 * time.Second)
+
+				stepLog = fmt.Sprintf("starting volume %s driver on node %s",
+					Inst().V.String(), appNode.Name)
+				Step(stepLog,
+					func() {
+						log.InfoD(stepLog)
+						StartVolDriverAndWait([]node.Node{appNode})
+					})
+
+				stepLog = "Giving few seconds for volume driver to stabilize"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					time.Sleep(20 * time.Second)
+				})
+			}
+			Step("validate apps after PX restart", func() {
+				for _, ctx := range contexts {
+					log.InfoD("Validating application [%s]", ctx.App.Key)
+					ctx.SkipVolumeValidation = true //skipping as volume does not have the mount path inside the pod
+					ValidateContext(ctx)
+				}
+			})
+			PerformSystemCheck()
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+var _ = Describe("{SharedVolFuseTest}", func() {
+	/*
+					https://portworx.atlassian.net/browse/PWX-35639
+				   https://portworx.atlassian.net/browse/PTX-21805
+
+
+
+			  		1.Get the list of storage nodes where sv4 service and sv4 volumes are attached
+					2.Stop/Start PX on each storage node filtered in step 1
+					3.Validate PX on the node
+			   		4.Repeat this in a loop for 10 iterations
+		            5. Validate the applications
+	*/
+	var testrailID = 12133434
+	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/35259
+	var runID int
+	var contexts []*scheduler.Context
+	JustBeforeEach(func() {
+		StartTorpedoTest("SharedVolFuseTest", "Validate PX operations after sharedv4 and sharedv4 svc volumes  failover multiple times", nil, 0)
+		runID = testrailuttils.AddRunsToMilestone(testrailID)
+	})
+
+	It("schedule sharedv4 and sharedv4_svc volumes and perform failover of the coordinator node", func() {
+
+		appList := make([]string, 0)
+		stepLog = "create sharedv4 and sharedv4_svc apps "
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			for _, appName := range Inst().AppList {
+
+				if strings.Contains(appName, "shared") || strings.Contains(appName, "svc") {
+					appList = append(appList, appName)
+				}
+			}
+
+			if len(appList) == 0 {
+				log.FailOnError(fmt.Errorf("sharedv4 or sharedv4 svc apps are mandatory for the test"), "no sharedv4 or sharedv4 svc apps found to deploy")
+			}
+
+			contexts = make([]*scheduler.Context, 0)
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("pxfusetest-%d", i))...)
+			}
+
+			for _, ctx := range contexts {
+				log.InfoD("Validating application [%s]", ctx.App.Key)
+				ValidateContext(ctx)
+			}
+		})
+
+		stNodes := node.GetStorageNodes()
+
+		nodesToRestart := make(map[string]bool)
+		sharedVols := make([]*volume.Volume, 0)
+
+		for _, stNode := range stNodes {
+			nodesToRestart[stNode.Name] = false
+		}
+
+		stepLog = "restart PX on storage nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			numIter := 10
+
+			//Getting the volumes of sharedv4 and sharedv4 svc apps
+			for _, ctx := range contexts {
+				if Contains(appList, ctx.App.Key) {
+					appVols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, fmt.Sprintf("error getting volumes for app [%s]", ctx.App.Key))
+					sharedVols = append(sharedVols, appVols...)
+				}
+			}
+
+			for i := 1; i <= numIter; i++ {
+
+				log.Infof("Running Iteration: #%d", i)
+
+				//Getting the coordinator nodes of sharedv4 and sharedv4 svc volumes
+				for _, appVol := range sharedVols {
+					attachedNode, err := Inst().V.GetNodeForVolume(appVol, 1*time.Minute, 5*time.Second)
+					log.FailOnError(err, fmt.Sprintf("error getting attached node for volume [%s]", appVol.Name))
+					nodesToRestart[attachedNode.Name] = true
+				}
+
+				for _, stNode := range stNodes {
+					//Restarting Px only if sharedv4 or sharedv4 svc volume is attached to the provided node
+					if nodesToRestart[stNode.Name] {
+						StopVolDriverAndWait([]node.Node{stNode})
+						log.Infof("waiting for 1 min before starting PX for volumes corordinator to failover")
+						time.Sleep(1 * time.Second)
+						StartVolDriverAndWait([]node.Node{stNode})
+						status, err := IsPxRunningOnNode(&stNode)
+						log.FailOnError(err, "error checking px status on node [%s]", stNode.Name)
+						dash.VerifyFatal(status, true, fmt.Sprintf("verfiy px is running on node [%s]", stNode.Name))
+					}
+				}
+
+				//Setting it false to obtain refreshed nodes once volumes failover
+				for _, stNode := range stNodes {
+					nodesToRestart[stNode.Name] = false
+				}
+
+			}
+
+			Step("validate apps after all failovers", func() {
+				for _, ctx := range contexts {
+					log.InfoD("Validating application [%s]", ctx.App.Key)
+					ValidateContext(ctx)
+				}
+			})
+			PerformSystemCheck()
+
+		})
+
+		opts := make(map[string]bool)
+		opts[scheduler.OptionsWaitForResourceLeakCleanup] = true
+
+		for _, ctx := range contexts {
+			TearDownContext(ctx, opts)
+		}
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+func SetupProxyServer(n node.Node) error {
+
+	createDirCommand := "mkdir -p /exports/testnfsexportdir"
+	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
+	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
+	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+	exportCmd := "exportfs -a"
+	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	enableNfsServerCmd := "systemctl enable nfs-server"
+	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	startNfsServerCmd := "systemctl restart nfs-server"
+	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	return nil
+}
+
+func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
+	params := make(map[string]string)
+	params["repl"] = "1"
+	params["io_profile"] = "none"
+	params["proxy_endpoint"] = fmt.Sprintf("nfs://%s", nfsServer)
+	params["proxy_nfs_exportpath"] = fmt.Sprintf("%s", mountPath)
+	params["mount_options"] = "vers=4.0"
+	v1obj := meta_v1.ObjectMeta{
+		Name: scName,
+	}
+	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	bindMode := storageApi.VolumeBindingImmediate
+	allowWxpansion := true
+	scObj := storageApi.StorageClass{
+		ObjectMeta:           v1obj,
+		Provisioner:          "kubernetes.io/portworx-volume",
+		Parameters:           params,
+		ReclaimPolicy:        &reclaimPolicyDelete,
+		VolumeBindingMode:    &bindMode,
+		AllowVolumeExpansion: &allowWxpansion,
+	}
+
+	k8sStorage := storage.Instance()
+	_, err = k8sStorage.CreateStorageClass(&scObj)
+	return err
+}

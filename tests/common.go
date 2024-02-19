@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bufio"
+	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -9,6 +10,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
+	"github.com/portworx/torpedo/drivers/node/gke"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+
+	"github.com/portworx/torpedo/pkg/stats"
+
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
@@ -24,7 +32,6 @@ import (
 	"go.uber.org/multierr"
 
 	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/pborman/uuid"
 	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
@@ -37,6 +44,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/units"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -70,21 +78,24 @@ import (
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
+	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
+	appUtils "github.com/portworx/torpedo/drivers/utilities"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -159,6 +170,9 @@ import (
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
 
+	// import ocp driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+
 	context1 "context"
 
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
@@ -182,6 +196,11 @@ var (
 	clusterProviders       = []string{"k8s"}
 	GlobalCredentialConfig backup.BackupCloudConfig
 	GlobalGkeSecretString  string
+)
+
+var (
+	NamespaceAppWithDataMap    = make(map[string][]appDriver.ApplicationDriver)
+	IsReplacePolicySetToDelete = false // To check if the policy in the test is set to delete - Skip data continuity validation in this case
 )
 
 type OwnershipAccessType int32
@@ -234,11 +253,13 @@ const (
 	backupScheduleScaleName              = "-scale"
 	configMapName                        = "kubeconfigs"
 	pxNamespace                          = "kube-system"
+	scaleAppTimeoutFlag                  = "scale-app-timeout"
 
 	pxbackupDeploymentName             = "px-backup"
 	pxbackupDeploymentNamespace        = "px-backup"
 	pxbackupMongodbDeploymentName      = "pxc-backup-mongodb"
 	pxbackupMongodbDeploymentNamespace = "px-backup"
+	defaultnamespace                   = "default"
 
 	milestoneFlag               = "testrail-milestone"
 	testrailRunNameFlag         = "testrail-run-name"
@@ -295,9 +316,12 @@ const (
 const (
 	BackupNamePrefix                  = "tp-backup"
 	RestoreNamePrefix                 = "tp-restore"
+	StorkNamePrefix                   = "stork-namespace"
 	BackupRestoreCompletionTimeoutMin = 20
 	clusterDeleteTimeout              = 60 * time.Minute
 	clusterDeleteRetryTime            = 30 * time.Second
+	poolExpandApplyTimeOut            = 15 * time.Minute
+	poolExpandApplyRetryTime          = 30 * time.Second
 	backupLocationDeleteTimeoutMin    = 60
 	CredName                          = "tp-backup-cred"
 	KubeconfigDirectory               = "/tmp"
@@ -307,6 +331,8 @@ const (
 	SchedulePolicyScaleName           = "schedule-policy-scale"
 	BucketNamePrefix                  = "tp-backup-bucket"
 	mongodbStatefulset                = "pxc-backup-mongodb"
+	AwsS3encryptionPolicy             = "s3:x-amz-server-side-encryption=AES256"
+	AwsS3Sid                          = "DenyNonAES256Uploads"
 )
 
 const (
@@ -441,9 +467,11 @@ var (
 )
 
 const (
-	rootLogDir    = "/root/logs"
-	diagsDirPath  = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
-	pxbLogDirPath = "/tmp/px-backup-test-logs"
+	rootLogDir            = "/root/logs"
+	diagsDirPath          = "diags.pwx.dev.purestorage.com:/var/lib/osd/pxns/688230076034934618"
+	pxbLogDirPath         = "/tmp/px-backup-test-logs"
+	KubevirtNamespace     = "kubevirt"
+	LatestKubevirtVersion = "v1.0.0"
 )
 
 type Weekday string
@@ -475,6 +503,13 @@ type PlatformCredentialStruct struct {
 	credUID  string
 }
 
+type (
+	// TestcaseAuthor represents the owner of a Testcase
+	TestcaseAuthor string
+	// TestcaseQuarter represents the fiscal quarter during which the Testcase is automated
+	TestcaseQuarter string
+)
+
 // InitInstance is the ginkgo spec for initializing torpedo
 func InitInstance() {
 	var err error
@@ -498,6 +533,7 @@ func InitInstance() {
 		SecureApps:                       Inst().SecureAppList,
 		AnthosAdminWorkStationNodeIP:     Inst().AnthosAdminWorkStationNodeIP,
 		AnthosInstancePath:               Inst().AnthosInstPath,
+		UpgradeHops:                      Inst().SchedUpgradeHops,
 	})
 
 	log.FailOnError(err, "Error occured while Scheduler Driver Initialization")
@@ -544,6 +580,20 @@ func InitInstance() {
 	if pxVersion != "" {
 		t.Tags["px-version"] = pxVersion
 	}
+
+	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], "pxctl status", node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("failed to get pxctl status, Err: %v", err)
+	}
+	log.Infof(output)
+	ns, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Error occured while getting volume driver namespace")
+	installGrafana(ns)
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -592,7 +642,7 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 	}()
 
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		stepLog := fmt.Sprintf("check health status of %s app", ctx.App.Key)
 
 		Step(stepLog, func() {
@@ -618,11 +668,13 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if ctx.ReadinessTimeout == time.Duration(0) {
+		if Inst().ScaleAppTimeout != time.Duration(0) {
+			timeout = Inst().ScaleAppTimeout
+		} else if ctx.ReadinessTimeout == time.Duration(0) {
 			timeout = appScaleFactor * defaultTimeout
 		} else {
 			timeout = appScaleFactor * ctx.ReadinessTimeout
@@ -667,9 +719,18 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
-			vols, err := Inst().S.GetVolumes(ctx)
-			// Fixing issue where it is priniting nil
-			if err != nil {
+			var vols []*volume.Volume
+			var err error
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
 
@@ -771,7 +832,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -889,7 +950,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
@@ -978,11 +1039,19 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			vols, err := Inst().S.GetVolumes(ctx)
-			if err != nil {
+			var vols []*volume.Volume
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
 				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
 				processError(err, errChan...)
 			}
@@ -1039,7 +1108,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1084,12 +1153,17 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 				}
 			})
 		}
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 
 // ValidatePureVolumesPXCTL is the ginkgo spec for validating FA/FB DA volumes using PXCTL for a context
 func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1114,7 +1188,7 @@ func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
 func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var (
 			err  error
 			vols map[string]map[string]string
@@ -1156,7 +1230,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 
 // ValidateResizePurePVC is the ginkgo spec for validating resize of volumes
 func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+	Step("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1171,12 +1245,17 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 
 		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
 		//       CSI resize succeeded.
+
+		Step("validate Pure local volume paths", func() {
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
+		})
 	})
 }
 
 // ValidatePureVolumeNoReplicaSet is the ginko spec for validating empty replicaset for pure volumes
 func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+	Step("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1197,7 +1276,7 @@ func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan err
 
 // ValidatePureVolumeStatisticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statistic for pure volumes
 func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of a resizing pvc", func() {
+	Step("For validation of a resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1239,7 +1318,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 
 // ValidateCSISnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
 func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an snapshot and restoring", func() {
+	Step("For validation of an snapshot and restoring", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
@@ -1290,7 +1369,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 
 // ValidateCSIVolumeClone is the ginkgo spec for cloning a volume and verifying the content
 func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an cloning", func() {
+	Step("For validation of an cloning", func() {
 		var err error
 		var vols []*volume.Volume
 		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
@@ -1311,13 +1390,16 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
+
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
 		}
 	})
 }
 
 // ValidatePureVolumeLargeNumOfClones is the ginkgo spec for restoring a snapshot to many volumes
 func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an restoring large number of volumes from a snapshot", func() {
+	Step("For validation of an restoring large number of volumes from a snapshot", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "." + timestamp
@@ -1345,13 +1427,18 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 			}
 			err = Inst().S.CSISnapshotAndRestoreMany(ctx, request)
 			processError(err, errChan...)
+
+			// Note: the above only creates PVCs, it does not attach them to pods, so no extra care needs to be taken for local paths
+
+			err = Inst().V.ValidatePureLocalVolumePaths()
+			processError(err, errChan...)
 		}
 	})
 }
 
 // ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
 func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
+	Step("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		if err != nil {
 			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
@@ -1502,7 +1589,7 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	volOptsMap[SkipClusterScopedObjects] = true
 
 	for _, ctx := range contexts {
-		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1580,7 +1667,7 @@ func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.Fastpa
 // StorageClass has to be deleted last because it has information that is required for when deleting PVC, if StorageClass objects are deleted before
 // deleting PVCs, especially with CSI + Auth enabled, PVC deletion will fail as Auth params are stored inside StorageClass objects
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
-	context("For tearing down of an app context", func() {
+	Step("For tearing down of an app context", func() {
 		var err error
 		var originalSkipClusterScopedObjects bool
 
@@ -1863,6 +1950,57 @@ func ValidateApplications(contexts []*scheduler.Context) {
 	})
 }
 
+// ValidateApplicationsStartData validates applications and start continous data injection to the same
+func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+
+	// Resetting the global map before starting the new App Validations
+	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+
+	log.InfoD("Validate applications")
+	for _, ctx := range contexts {
+		ValidateContext(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		if err != nil {
+			log.InfoD("Some error occurred - [%s]", err)
+		}
+		log.InfoD("App Info - [%+v]", appInfo)
+		if appContext == nil {
+			log.Warnf("App Context is not proper - [%v]", appContext)
+			continue
+		}
+		if appInfo.StartDataSupport {
+			appHandler, _ := appDriver.GetApplicationDriver(
+				appInfo.AppType,
+				appInfo.Hostname,
+				appInfo.User,
+				appInfo.Password,
+				appInfo.Port,
+				appInfo.DBName,
+				appInfo.NodePort,
+				appInfo.Namespace)
+			log.InfoD("App handler created for [%s]", appInfo.Hostname)
+			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
+		}
+	}
+
+	controlChannel := make(chan string)
+	errGroup := errgroup.Group{}
+
+	for _, allhandler := range NamespaceAppWithDataMap {
+		for _, handler := range allhandler {
+			currentHandler := handler
+			errGroup.Go(func() error {
+				err := currentHandler.StartData(controlChannel, appContext)
+				return err
+			})
+		}
+	}
+
+	log.InfoD("Channel - [%v], errGroup - [%v]", controlChannel, &errGroup)
+
+	return controlChannel, &errGroup
+}
+
 // StartVolDriverAndWait starts volume driver on given app nodes
 func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 	defer func() {
@@ -1870,10 +2008,10 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.StartDriver(n)
 				processError(err, errChan...)
@@ -1882,7 +2020,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -1900,17 +2038,17 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			err := Inst().V.StopDriver(appNodes, false, nil)
 			processError(err, errChan...)
 		})
 
 		stepLog = fmt.Sprintf("wait for volume driver to stop on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.Infof(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverDownOnNode(n)
 				processError(err, errChan...)
@@ -1927,11 +2065,38 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			err := Inst().V.StopDriver(appNodes, true, nil)
+			processError(err, errChan...)
+		})
+
+		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.Info(stepLog)
+			for _, n := range appNodes {
+				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+				processError(err, errChan...)
+			}
+		})
+
+	})
+}
+
+// CrashPXDaemonAndWait crashes px daemon service on given app nodes and waits till driver is back up
+func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	Step(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.KillPXDaemon(appNodes, nil)
 			processError(err, errChan...)
 		})
 
@@ -1972,6 +2137,49 @@ func DestroyApps(contexts []*scheduler.Context, opts map[string]bool) {
 			TearDownContext(ctx, opts)
 		}
 	})
+}
+
+// DestroyApps destroy applications with data validation
+func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, controlChannel chan string, errGroup *errgroup.Group) error {
+
+	var allErrors string
+
+	log.InfoD("Validating apps data continuity")
+
+	// Stopping all data flow to apps
+
+	for _, appList := range NamespaceAppWithDataMap {
+		for range appList {
+			controlChannel <- "Stop"
+		}
+	}
+
+	if err := errGroup.Wait(); err != nil {
+		allErrors += err.Error()
+	}
+
+	close(controlChannel)
+
+	log.InfoD("Destroying apps")
+	for _, ctx := range contexts {
+		// In case of tektoncd skip the volume validation
+		if Contains(Inst().AppList, "tektoncd") {
+			ctx.SkipVolumeValidation = true
+		}
+		TearDownContext(ctx, opts)
+	}
+
+	if allErrors != "" {
+		if IsReplacePolicySetToDelete {
+			log.Infof("Skipping data continuity check as the replace policy was set to delete in this scenario")
+			IsReplacePolicySetToDelete = false // Resetting replace policy for next testcase
+			return nil
+		} else {
+			return fmt.Errorf("Data validation failed for apps. Error - [%s]", allErrors)
+		}
+	}
+
+	return nil
 }
 
 // AddLabelsOnNode adds labels on the node
@@ -2037,9 +2245,163 @@ func ValidateStoragePools(contexts []*scheduler.Context) {
 
 }
 
+// ValidateRuleNotApplied is validating storage pool, but expects the error to occur
+func ValidateRuleNotApplied(contexts []*scheduler.Context, name string) {
+
+	strExpansionEnabled, err := Inst().V.IsStorageExpansionEnabled()
+	expect(err).NotTo(haveOccurred())
+
+	if strExpansionEnabled {
+		log.InfoD("Validating Error shows up in events")
+		fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+		waitForActiveAction := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+			expect(err).NotTo(haveOccurred())
+			for _, e := range events.Items {
+				if strings.Contains(e.Message, "ActiveActionsInProgress") {
+					log.InfoD("Found Active action is in progress in autopilot events")
+					return e.Message, false, nil
+				}
+			}
+			return "", true, fmt.Errorf("Autopilot rule not applied yet")
+		}
+		_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+		checkRuleFailed := func() (interface{}, bool, error) {
+			events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+			expect(err).NotTo(haveOccurred())
+			for _, e := range events.Items {
+				if strings.Contains(e.Message, "cloud drive is not initialized") {
+					log.InfoD("Found the error, stating cloud drive is not initialized")
+					log.InfoD("Message in log is: %s", e.Message)
+					return e.Message, false, nil
+				}
+			}
+			return "", true, fmt.Errorf("Autopilot rule did not fail yet")
+		}
+		_, err = task.DoRetryWithTimeout(checkRuleFailed, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+		expect(err).NotTo(haveOccurred())
+	}
+}
+
+// ValidateRuleNotTriggered is validating PVC to see if rule is not triggered
+func ValidateRuleNotTriggered(contexts []*scheduler.Context, name string) {
+	log.InfoD("Validating rule is active")
+	fields := fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", name)
+	waitForActiveAction := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Initializing => Normal") {
+				log.InfoD("Found rule which is initialized")
+				return e.Message, false, nil
+			}
+		}
+		return "", true, fmt.Errorf("Autopilot rule not applied yet")
+	}
+	_, err := task.DoRetryWithTimeout(waitForActiveAction, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+
+	checkCount := 0
+	checkRuleTriggered := func() (interface{}, bool, error) {
+		events, err := k8sCore.ListEvents(defaultnamespace, metav1.ListOptions{FieldSelector: fields})
+		expect(err).NotTo(haveOccurred())
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, "Triggered") {
+				log.InfoD("Message in log is: %s", e.Message)
+				return e.Message, false, fmt.Errorf("Triggered found in Autopilot rule.")
+			}
+		}
+		if checkCount <= 10 {
+			checkCount += 1
+			return "", true, fmt.Errorf("Autopilot rule did not trigger yet")
+		} else {
+			log.InfoD("Rule not triggered yet, which is expected")
+			return "", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkRuleTriggered, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+}
+
+func ToggleAutopilotInStc() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	stc.Spec.Autopilot.Enabled = !stc.Spec.Autopilot.Enabled
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating autopilot pod is deleted")
+	checkPodIsDeleted := func() (interface{}, bool, error) {
+		autopilotLabels := make(map[string]string)
+		autopilotLabels["name"] = "autopilot"
+		pods, err := k8sCore.GetPods(pxNamespace, autopilotLabels)
+		expect(err).NotTo(haveOccurred())
+		if stc.Spec.Autopilot.Enabled {
+			log.Infof("autopilot is active, checking is pod is present.")
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("autopilot pod is still not deployed")
+			}
+			return "autopilot pod deployed", false, nil
+		} else {
+			log.Infof("autopilot is inactive, checking if pod is deleted.")
+			if len(pods.Items) > 0 {
+				return "", true, fmt.Errorf("autopilot pod is still present")
+			}
+			return "autopilot pod is deleted", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+	log.InfoD("Update STC, is AutopilotEnabled Now?: %t", stc.Spec.Autopilot.Enabled)
+	return nil
+}
+
+func TogglePrometheusInStc() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+	log.Infof("is prometheus enabled?: %t", stc.Spec.Monitoring.Prometheus.Enabled)
+	stc.Spec.Monitoring.Prometheus.Enabled = !stc.Spec.Monitoring.Prometheus.Enabled
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	if err != nil {
+		return err
+	}
+	log.InfoD("Validating prometheus pod is deleted")
+	checkPodIsDeleted := func() (interface{}, bool, error) {
+		prometheusLabels := make(map[string]string)
+		prometheusLabels["app.kubernetes.io/name"] = "prometheus"
+		pods, err := k8sCore.GetPods(pxNamespace, prometheusLabels)
+		expect(err).NotTo(haveOccurred())
+		if stc.Spec.Monitoring.Prometheus.Enabled {
+			log.Infof("prometheus is active, checking is pod is present.")
+			if len(pods.Items) == 0 {
+				return "", true, fmt.Errorf("prometheus pod is still not deployed")
+			}
+			return "prometheus pod deployed", false, nil
+		} else {
+			log.Infof("prometheus is inactive, checking if pod is deleted.")
+			if len(pods.Items) > 0 {
+				return "", true, fmt.Errorf("prometheus pod is still present")
+			}
+			return "prometheus pod is deleted", false, nil
+		}
+	}
+	_, err = task.DoRetryWithTimeout(checkPodIsDeleted, poolExpandApplyTimeOut, poolExpandApplyRetryTime)
+	expect(err).NotTo(haveOccurred())
+	log.InfoD("Update STC, is PrometheusEnabled Now?: %t", stc.Spec.Monitoring.Prometheus.Enabled)
+	return nil
+}
+
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
-	context("Validating portworx pods restart count ...", func() {
+	Step("Validating portworx pods restart count ...", func() {
 		Step("Getting current restart counts for portworx pods and matching", func() {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
@@ -2082,8 +2444,8 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
 func DescribeNamespace(contexts []*scheduler.Context) {
-	context("generating namespace info...", func() {
-		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+	Step("generating namespace info...", func() {
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentSpecReport().LeafNodeText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
@@ -2143,7 +2505,7 @@ func GetStorageNodes() ([]node.Node, error) {
 
 // CollectSupport creates a support bundle
 func CollectSupport() {
-	context("generating support bundle...", func() {
+	Step("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		skipSystemCheck := false
@@ -2259,7 +2621,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
-	context("checking for core files...", func() {
+	Step("checking for core files...", func() {
 		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
@@ -2418,6 +2780,18 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 		clone := *specObj
 		return &clone, nil
 	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
 		clone := *specObj
 		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
@@ -2670,6 +3044,26 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			specObj.SetNamespace(namespace)
 		}
 		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.TaskRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
@@ -2763,6 +3157,14 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	}
 
 	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
@@ -2818,9 +3220,9 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -2898,6 +3300,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		}
 	} else if ibmNodeDriver, ok := Inst().N.(*ibm.Ibm); ok {
 		err = ssh.RefreshDriver(&ibmNodeDriver.SSH)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+		}
+	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
@@ -3123,7 +3530,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 			if err, ok := bkpErrors[namespace]; ok {
 				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
-				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+				Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 					Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -3634,15 +4041,19 @@ func DeleteBackupWithClusterUID(backupName string, backupUID string, clusterName
 
 // DeleteCluster deletes/de-registers cluster from px-backup
 func DeleteCluster(name string, orgID string, ctx context1.Context, cleanupBackupsRestores bool) error {
-
 	backupDriver := Inst().Backup
+	clusterUid, err := backupDriver.GetClusterUID(ctx, orgID, name)
+	if err != nil {
+		return err
+	}
 	clusterDeleteReq := &api.ClusterDeleteRequest{
 		OrgId:          orgID,
 		Name:           name,
 		DeleteBackups:  cleanupBackupsRestores,
 		DeleteRestores: cleanupBackupsRestores,
+		Uid:            clusterUid,
 	}
-	_, err := backupDriver.DeleteCluster(ctx, clusterDeleteReq)
+	_, err = backupDriver.DeleteCluster(ctx, clusterDeleteReq)
 	return err
 }
 
@@ -3731,7 +4142,11 @@ func DeleteSchedule(backupScheduleName string, clusterName string, orgID string,
 	if err != nil {
 		return err
 	}
-	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true}
+	clusterUID, err := backupDriver.GetClusterUID(ctx, orgID, clusterName)
+	if err != nil {
+		return err
+	}
+	clusterReq := &api.ClusterInspectRequest{OrgId: orgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
 	clusterResp, err := backupDriver.InspectCluster(ctx, clusterReq)
 	if err != nil {
 		return err
@@ -4035,33 +4450,43 @@ func CreateApplicationClusters(orgID string, cloudName string, uid string, ctx c
 }
 
 // CreateBackupLocation creates backup location
-func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string) error {
+func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, validate bool) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey)
+		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID)
+		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
-		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID)
+		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, true)
+		err = CreateNFSBackupLocation(name, uid, orgID, encryptionKey, bucketName, validate)
 	}
 	return err
 }
 
 // CreateBackupLocationWithContext creates backup location using the given context
-func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateBackupLocationWithContext(provider, name, uid, credName, credUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool) error {
 	var err error
 	switch provider {
 	case drivers.ProviderAws:
-		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx)
+		err = CreateS3BackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx)
+		err = CreateAzureBackupLocationWithContext(name, uid, credName, CloudCredUID, bucketName, orgID, encryptionKey, ctx, validate)
 	case drivers.ProviderGke:
-		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx)
+		err = CreateGCPBackupLocationWithContext(name, uid, credName, credUID, bucketName, orgID, ctx, validate)
 	case drivers.ProviderNfs:
-		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, true)
+		err = CreateNFSBackupLocationWithContext(name, uid, bucketName, orgID, encryptionKey, ctx, validate)
+	}
+	return err
+}
+
+// UpdateBackupLocation updates s3 backup location with the provided values
+func UpdateBackupLocation(provider string, name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse) error {
+	var err error
+	switch provider {
+	case drivers.ProviderAws:
+		err = UpdateS3BackupLocation(name, uid, orgID, cloudCred, cloudCredUID, ctx, sseS3EncryptionType, false)
 	}
 	return err
 }
@@ -4280,18 +4705,23 @@ func CreateCloudCredential(provider, credName string, uid, orgID string, ctx con
 }
 
 // CreateS3BackupLocation creates backup location for S3
-func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string) error {
+func CreateS3BackupLocation(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	ctx, err := backup.GetAdminCtxFromSecret()
 	if err != nil {
 		return err
 	}
-
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	// Get SSE S3 Encryption Type
-	sseS3EncryptionType, err := GetSseS3EncryptionType()
-	if err != nil {
-		return err
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
 	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4300,8 +4730,9 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4312,7 +4743,7 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 					Endpoint:   endpoint,
 					Region:     region,
 					DisableSsl: disableSSLBool,
-					SseType:    sseS3EncryptionType,
+					SseType:    sseType,
 				},
 			},
 		},
@@ -4326,13 +4757,20 @@ func CreateS3BackupLocation(name string, uid, cloudCred string, cloudCredUID str
 }
 
 // CreateS3BackupLocationWithContext creates backup location for S3 using the given context
-func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateS3BackupLocationWithContext(name, uid, cloudCred, cloudCredUID, bucketName, orgID, encryptionKey string, ctx context1.Context, validate bool, sseS3EncryptionType ...api.S3Config_Sse) error {
 	backupDriver := Inst().Backup
 	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
-	// Get SSE S3 Encryption Type
-	sseS3EncryptionType, err := GetSseS3EncryptionType()
-	if err != nil {
-		return err
+	// Initialize a new variable to hold the SSE S3 Encryption Type
+	var sseType api.S3Config_Sse
+	var err error
+	if len(sseS3EncryptionType) == 0 {
+		// If sseS3EncryptionType Type parameter is not passed , then take it from environment variable
+		sseType, err = GetSseS3EncryptionType()
+		if err != nil {
+			return err
+		}
+	} else {
+		sseType = sseS3EncryptionType[0]
 	}
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4341,8 +4779,45 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
+			CloudCredentialRef: &api.ObjectRef{
+				Name: cloudCred,
+				Uid:  cloudCredUID,
+			},
+			Type: api.BackupLocationInfo_S3,
+			Config: &api.BackupLocationInfo_S3Config{
+				S3Config: &api.S3Config{
+					Endpoint:   endpoint,
+					Region:     region,
+					DisableSsl: disableSSLBool,
+					SseType:    sseType,
+				},
+			},
+		},
+	}
+
+	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	if err != nil {
+		return fmt.Errorf("failed to create backup location: %v", err)
+	}
+	return nil
+}
+
+// UpdateS3BackupLocation updates s3 backup location with the provided values
+func UpdateS3BackupLocation(name string, uid string, orgID string, cloudCred string, cloudCredUID string, ctx context1.Context, sseS3EncryptionType api.S3Config_Sse, validate bool) error {
+
+	backupDriver := Inst().Backup
+	_, _, endpoint, region, disableSSLBool := s3utils.GetAWSDetailsFromEnv()
+	bLocationUpdateReq := &api.BackupLocationUpdateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  name,
+			OrgId: orgID,
+			Uid:   uid,
+		},
+		BackupLocation: &api.BackupLocationInfo{
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4359,7 +4834,7 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 		},
 	}
 
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.UpdateBackupLocation(ctx, bLocationUpdateReq)
 	if err != nil {
 		return err
 	}
@@ -4367,7 +4842,7 @@ func CreateS3BackupLocationWithContext(name string, uid, cloudCred string, cloud
 }
 
 // CreateAzureBackupLocation creates backup location for Azure
-func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4377,8 +4852,9 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4398,7 +4874,7 @@ func CreateAzureBackupLocation(name string, uid string, cloudCred string, cloudC
 }
 
 // CreateAzureBackupLocationWithContext creates backup location for Azure using the given context
-func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context) error {
+func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, encryptionKey string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4407,8 +4883,9 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4424,7 +4901,7 @@ func CreateAzureBackupLocationWithContext(name string, uid string, cloudCred str
 }
 
 // CreateGCPBackupLocation creates backup location for Google cloud
-func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string) error {
+func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4434,8 +4911,9 @@ func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCre
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4455,7 +4933,7 @@ func CreateGCPBackupLocation(name string, uid string, cloudCred string, cloudCre
 }
 
 // CreateGCPBackupLocationWithContext creates backup location for Google cloud
-func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context) error {
+func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred string, cloudCredUID string, bucketName string, orgID string, ctx context1.Context, validate bool) error {
 	backupDriver := Inst().Backup
 	encryptionKey := "torpedo"
 	bLocationCreateReq := &api.BackupLocationCreateRequest{
@@ -4465,8 +4943,9 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Uid:   uid,
 		},
 		BackupLocation: &api.BackupLocationInfo{
-			Path:          bucketName,
-			EncryptionKey: encryptionKey,
+			Path:                    bucketName,
+			EncryptionKey:           encryptionKey,
+			ValidateCloudCredential: validate,
 			CloudCredentialRef: &api.ObjectRef{
 				Name: cloudCred,
 				Uid:  cloudCredUID,
@@ -4474,11 +4953,7 @@ func CreateGCPBackupLocationWithContext(name string, uid string, cloudCred strin
 			Type: api.BackupLocationInfo_Google,
 		},
 	}
-	ctx, err := backup.GetAdminCtxFromSecret()
-	if err != nil {
-		return err
-	}
-	_, err = backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
+	_, err := backupDriver.CreateBackupLocation(ctx, bLocationCreateReq)
 	if err != nil {
 		return fmt.Errorf("failed to create backup location Error: %v", err)
 	}
@@ -4918,6 +5393,42 @@ func DeleteS3Bucket(bucketName string) {
 		fmt.Sprintf("Failed to delete bucket [%v]. Error: [%v]", bucketName, err))
 }
 
+func DeleteGcpBucket(bucketName string) {
+
+	ctx := context1.Background()
+
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.FailOnError(err, "Failed to create gcp client")
+	}
+	defer client.Close()
+
+	// List all objects in the bucket
+	it := client.Bucket(bucketName).Objects(ctx, nil)
+	for {
+		objAttrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			log.FailOnError(err, "error iterating over gcp bucket objects")
+		}
+
+		// Delete each object in the bucket
+		err = client.Bucket(bucketName).Object(objAttrs.Name).Delete(ctx)
+		if err != nil {
+			log.FailOnError(err, "error deleting object from gcp bucket %s", objAttrs.Name)
+		}
+		log.Infof("Deleted object: %s\n", objAttrs.Name)
+	}
+
+	// Delete the bucket
+	bucket := client.Bucket(bucketName)
+	if err := bucket.Delete(ctx); err != nil {
+		log.FailOnError(err, "failed to delete bucket [%v]", bucketName)
+	}
+}
+
 // DeleteAzureBucket delete bucket in azure
 func DeleteAzureBucket(bucketName string) {
 	// From the Azure portal, get your Storage account blob service URL endpoint.
@@ -4976,6 +5487,47 @@ func DeleteNfsSubPath(subPath string) {
 	log.FailOnError(err, fmt.Sprintf("Failed to run [%s] command on node [%s], error : [%s]", rmCmd, workerNode, err))
 }
 
+// DeleteFilesFromNFSLocation deletes any file/directory from the supplied path
+func DeleteFilesFromNFSLocation(nfsPath string, fileName string) (err error) {
+	// Getting NFS share details from ENV variables.
+	creds := GetNfsInfoFromEnv()
+	mountDir := fmt.Sprintf("/tmp/nfsMount" + RandomString(4))
+	workerNode := node.GetWorkerNodes()[0]
+
+	// Mounting the NFS share to the worker node.
+	mountCmds := []string{
+		fmt.Sprintf("mkdir -p %s", mountDir),
+		fmt.Sprintf("mount -t nfs %s:%s %s", creds.NfsServerAddress, creds.NfsPath, mountDir),
+	}
+
+	for _, cmd := range mountCmds {
+		err = runCmd(cmd, workerNode)
+		if err != nil {
+			return fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, err)
+		}
+	}
+
+	defer func() {
+		// Unmounting the NFS share from the worker node.
+		umountCmds := []string{
+			fmt.Sprintf("umount %s", mountDir),
+			fmt.Sprintf("rm -rf %s", mountDir),
+		}
+		for _, cmd := range umountCmds {
+			if e := runCmd(cmd, workerNode); e != nil {
+				err = fmt.Errorf("failed to run [%s] command on node [%s], error : [%s]", cmd, workerNode, e)
+			}
+		}
+	}()
+
+	rmCmd := fmt.Sprintf("cd %s/%s && rm -rf %s", mountDir, nfsPath, fileName)
+	err = runCmd(rmCmd, workerNode)
+	if err != nil {
+		return err
+	}
+	return
+}
+
 // DeleteBucket deletes bucket from the cloud or shared subpath from NFS server
 func DeleteBucket(provider string, bucketName string) {
 	Step(fmt.Sprintf("Delete bucket [%s]", bucketName), func() {
@@ -4987,12 +5539,14 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteAzureBucket(bucketName)
 		case drivers.ProviderNfs:
 			DeleteNfsSubPath(bucketName)
+		case drivers.ProviderGke:
+			DeleteGcpBucket(bucketName)
 		}
 	})
 }
 
 // HaIncreaseRebootTargetNode repl increase and reboot target node
-func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
+func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
 
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot target node",
 		Inst().V.String(), ctx.App.Key, v)
@@ -5083,6 +5637,11 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 							}
 							log.InfoD("Increasing repl with target node  [%v]", newReplID)
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep+1, []string{newReplID}, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -5092,24 +5651,40 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 
 					if err == nil {
 						action := "reboot"
-						if restartPX {
+						if errInj == PX_RESTART {
 							action = "restart px on"
+						} else if errInj == CRASH {
+							action = "crash px on"
 						}
-						stepLog = fmt.Sprintf("%a target node %s while repl increase is in-progres", action,
+						dashStats := make(map[string]string)
+						dashStats["node"] = newReplNode.Name
+
+						stepLog = fmt.Sprintf("%s target node %s while repl increase is in-progres", action,
 							newReplNode.Hostname)
 						Step(stepLog,
 							func() {
 								log.InfoD(stepLog)
 								log.Info("Waiting for 10 seconds for re-sync to initialize before target node reboot")
 								time.Sleep(10 * time.Second)
-								if restartPX {
-									testError := Inst().V.RestartDriver(newReplNode, nil)
+								if errInj == PX_RESTART {
+									updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+									testError := Inst().V.StopDriver([]node.Node{newReplNode}, false, nil)
 									if testError != nil {
 										log.Error(testError)
+										UpdateOutcome(event, err)
+										return
+									}
+									log.Infof("waiting for 15 mins before starting volume driver")
+									time.Sleep(15 * time.Minute)
+									testError = Inst().V.StartDriver(newReplNode)
+									if testError != nil {
+										log.Error(testError)
+										UpdateOutcome(event, err)
 										return
 									}
 									log.InfoD("PX restarted successfully on node %v", newReplNode)
-								} else {
+								} else if errInj == REBOOT {
+									updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 									err = Inst().N.RebootNode(newReplNode, node.RebootNodeOpts{
 										Force: true,
 										ConnectionOpts: node.ConnectionOpts{
@@ -5119,6 +5694,13 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 									})
 									if err != nil {
 										log.Errorf("error rebooting node %v, Error: %v", newReplNode.Name, err)
+										UpdateOutcome(event, err)
+									}
+								} else if errInj == CRASH {
+									updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+									errorChan := make(chan error, errorChannelSize)
+									CrashVolDriverAndWait([]node.Node{newReplNode}, &errorChan)
+									for err := range errorChan {
 										UpdateOutcome(event, err)
 									}
 								}
@@ -5133,6 +5715,12 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
+									dashStats = make(map[string]string)
+									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+									dashStats["fastpath"] = "true"
+									dashStats["volume-name"] = v.Name
+									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 							})
@@ -5153,7 +5741,7 @@ func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *v
 }
 
 // HaIncreaseRebootSourceNode repl increase and reboot source node
-func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, restartPX bool) {
+func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
 	stepLog := fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v and reboot source node",
 		Inst().V.String(), ctx.App.Key, v)
 	Step(stepLog,
@@ -5176,13 +5764,21 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 			}
 
 			if err == nil {
-				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
+				action := "reboot"
+				if errInj == PX_RESTART {
+					action = "restart px on"
+				} else if errInj == CRASH {
+					action = "crash px on"
+				}
+				stepLog = fmt.Sprintf("%s source node while repl increase volume driver %s on app %s's volume: %v", action,
 					Inst().V.String(), ctx.App.Key, v)
+
 				Step(stepLog,
 					func() {
 						log.InfoD(stepLog)
 						replicaSets, err := Inst().V.GetReplicaSets(v)
 						if err == nil {
+
 							replicaNodes := replicaSets[0].Nodes
 							if strings.Contains(ctx.App.Key, fastpathAppName) {
 								newFastPathNode, err := AddFastPathLabel(ctx)
@@ -5191,6 +5787,11 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								}
 								UpdateOutcome(event, err)
 							}
+							dashStats := make(map[string]string)
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep+1, 10)
+							dashStats["volume-name"] = v.Name
+							updateLongevityStats(event.Event.Type, stats.HAIncreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep+1, nil, nil, false)
 							if err != nil {
 								log.Errorf("There is an error increasing repl [%v]", err.Error())
@@ -5201,15 +5802,29 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								//rebooting source nodes one by one
 								for _, nID := range replicaNodes {
 									replNodeToReboot := storageNodeMap[nID]
+									dashStats = make(map[string]string)
+									dashStats["node"] = replNodeToReboot.Name
 									log.Infof("selected repl node: %s", replNodeToReboot.Name)
-									if restartPX {
-										testError := Inst().V.RestartDriver(replNodeToReboot, nil)
+									if errInj == PX_RESTART {
+										updateLongevityStats(event.Event.Type, stats.PXRestartEventName, dashStats)
+										testError := Inst().V.StopDriver([]node.Node{replNodeToReboot}, false, nil)
 										if testError != nil {
 											log.Error(testError)
+											UpdateOutcome(event, err)
 											return
 										}
-										log.InfoD("PX restarted successfully on node %v", replNodeToReboot)
-									} else {
+										log.Infof("waiting for 15 mins before starting volume driver")
+										time.Sleep(15 * time.Minute)
+										testError = Inst().V.StartDriver(replNodeToReboot)
+										if testError != nil {
+											log.Error(testError)
+											UpdateOutcome(event, err)
+											return
+										}
+										log.InfoD("PX restarted successfully on node %s", replNodeToReboot.Name)
+
+									} else if errInj == REBOOT {
+										updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 										err = Inst().N.RebootNode(replNodeToReboot, node.RebootNodeOpts{
 											Force: true,
 											ConnectionOpts: node.ConnectionOpts{
@@ -5219,6 +5834,13 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 										})
 										if err != nil {
 											log.Errorf("error rebooting node %v, Error: %v", replNodeToReboot.Name, err)
+											UpdateOutcome(event, err)
+										}
+									} else if errInj == CRASH {
+										updateLongevityStats(event.Event.Type, stats.PXCrashEventName, dashStats)
+										errorChan := make(chan error, errorChannelSize)
+										CrashVolDriverAndWait([]node.Node{replNodeToReboot}, &errorChan)
+										for err := range errorChan {
 											UpdateOutcome(event, err)
 										}
 									}
@@ -5234,6 +5856,12 @@ func HaIncreaseRebootSourceNode(event *EventRecord, ctx *scheduler.Context, v *v
 								if strings.Contains(ctx.App.Key, fastpathAppName) {
 									err := ValidateFastpathVolume(ctx, opsapi.FastpathStatus_FASTPATH_INACTIVE)
 									UpdateOutcome(event, err)
+									dashStats = make(map[string]string)
+									dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+									dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+									dashStats["fastpath"] = "true"
+									dashStats["volume-name"] = v.Name
+									updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
 									err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true)
 								}
 
@@ -5320,6 +5948,9 @@ func IsBackupLocationEmpty(provider, bucketName string) (bool, error) {
 	case drivers.ProviderNfs:
 		result, err := IsNFSSubPathEmpty(bucketName)
 		return result, err
+	case drivers.ProviderGke:
+		result, err := IsGCPBucketEmpty(bucketName)
+		return result, err
 	default:
 		return false, fmt.Errorf("function does not support %s provider", provider)
 	}
@@ -5399,6 +6030,30 @@ func IsS3BucketEmpty(bucketName string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+// IsGCPBucketEmpty returns true if bucket empty else false
+func IsGCPBucketEmpty(bucketName string) (bool, error) {
+	query := &storage.Query{Prefix: "", Delimiter: ""}
+	ctx := context1.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsJSON([]byte(GlobalGkeSecretString)))
+	if err != nil {
+		log.Infof("Failed to create client gcp client : %v", err)
+		return false, fmt.Errorf("failed to create client gcp storage %s", err)
+	}
+	defer client.Close()
+
+	it := client.Bucket(bucketName).Objects(ctx, query)
+	_, err = it.Next()
+	if err == iterator.Done {
+		// Iterator finished, bucket is empty
+		return true, nil
+	} else if err != nil {
+		return false, fmt.Errorf("error occured while iterating over objects of gcp bucket %s", err)
+	}
+
+	// Iterator didn't finish, bucket is not empty
+	return false, nil
 }
 
 // CreateS3Bucket creates bucket in S3
@@ -5599,6 +6254,7 @@ type Torpedo struct {
 	Provisioner                         string
 	MaxStorageNodesPerAZ                int
 	DestroyAppTimeout                   time.Duration
+	ScaleAppTimeout                     time.Duration
 	DriverStartTimeout                  time.Duration
 	AutoStorageNodeRecoveryTimeout      time.Duration
 	LicenseExpiryTimeoutHours           time.Duration
@@ -5651,6 +6307,7 @@ func ParseFlags() {
 	var storageNodesPerAZ int
 	var destroyAppTimeout time.Duration
 	var driverStartTimeout time.Duration
+	var scaleAppTimeout time.Duration
 	var autoStorageNodeRecoveryTimeout time.Duration
 	var licenseExpiryTimeoutHours time.Duration
 	var meteringIntervalMins time.Duration
@@ -5713,7 +6370,8 @@ func ParseFlags() {
 	flag.StringVar(&csiAppsCSV, csiAppCliFlag, "", "Comma-separated list of apps to deploy with CSI provisioner")
 	flag.StringVar(&provisionerName, provisionerFlag, defaultStorageProvisioner, "Name of the storage provisioner Portworx or CSI.")
 	flag.IntVar(&storageNodesPerAZ, storageNodesPerAZFlag, defaultStorageNodesPerAZ, "Maximum number of storage nodes per availability zone")
-	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum ")
+	flag.DurationVar(&destroyAppTimeout, "destroy-app-timeout", defaultTimeout, "Maximum wait time for app to be deleted")
+	flag.DurationVar(&scaleAppTimeout, scaleAppTimeoutFlag, 0, "Maximum wait time for app to be ready")
 	flag.DurationVar(&driverStartTimeout, "driver-start-timeout", defaultDriverStartTimeout, "Maximum wait volume driver startup")
 	flag.DurationVar(&autoStorageNodeRecoveryTimeout, "storagenode-recovery-timeout", defaultAutoStorageNodeRecoveryTimeout, "Maximum wait time in minutes for storageless nodes to transition to storagenodes in case of ASG")
 	flag.DurationVar(&licenseExpiryTimeoutHours, licenseExpiryTimeoutHoursFlag, defaultLicenseExpiryTimeoutHours, "Maximum wait time in hours after which force expire license")
@@ -5964,6 +6622,7 @@ func ParseFlags() {
 				Provisioner:                         provisionerName,
 				MaxStorageNodesPerAZ:                storageNodesPerAZ,
 				DestroyAppTimeout:                   destroyAppTimeout,
+				ScaleAppTimeout:                     scaleAppTimeout,
 				DriverStartTimeout:                  driverStartTimeout,
 				AutoStorageNodeRecoveryTimeout:      autoStorageNodeRecoveryTimeout,
 				ConfigMap:                           configMapName,
@@ -6829,6 +7488,14 @@ func EndTorpedoTest() {
 	dash.TestCaseEnd()
 }
 
+// StartPxBackupTorpedoTest starts the logging for Px Backup torpedo test
+func StartPxBackupTorpedoTest(testName string, testDescription string, tags map[string]string, testRepoID int, _ TestcaseAuthor, _ TestcaseQuarter) {
+	instanceIDString := strconv.Itoa(testRepoID)
+	timestamp := time.Now().Format("01-02-15h04m05s")
+	Inst().InstanceID = fmt.Sprintf("%s-%s", instanceIDString, timestamp)
+	StartTorpedoTest(testName, testDescription, tags, testRepoID)
+}
+
 // EndPxBackupTorpedoTest ends the logging for Px Backup torpedo test and updates results in testrail
 func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	CloseLogger(TestLogger)
@@ -6836,15 +7503,43 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if TestRailSetupSuccessful && CurrentTestRailTestCaseId != 0 && RunIdForSuite != 0 {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
-		testCaseName := ginkgoTestDescr.FullTestText
-		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
+	}
+
+	// Cleanup all the namespaces created by the testcase
+	err := DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	err = SetDestinationKubeConfig()
+	if err != nil {
+		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+		return
+	}
+
+	err = DeleteAllNamespacesCreatedByTestCase()
+	if err != nil {
+		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	}
+
+	defer func() {
+		err := SetSourceKubeConfig()
+		log.FailOnError(err, "failed to switch context to source cluster")
+	}()
+
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) > 0 {
+		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
+		testCaseName := currentSpecReport.FullText()
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
-		masterNode := node.GetMasterNodes()[0]
+		masterNode := masterNodes[0]
 		log.Infof("Creating a directory [%s] to store logs", pxbLogDirPath)
 		err := runCmd(fmt.Sprintf("mkdir -p %v", pxbLogDirPath), masterNode)
 		if err != nil {
@@ -7069,6 +7764,17 @@ func GetPoolIDsFromVolName(volName string) ([]string, error) {
 		}
 	}
 	return poolUuids, nil
+}
+
+func GetNodeFromPoolUUID(poolUUID string) (*node.Node, error) {
+	for _, n := range node.GetStorageNodes() {
+		for _, p := range n.StoragePools {
+			if p.Uuid == poolUUID {
+				return &n, nil
+			}
+		}
+	}
+	return nil, fmt.Errorf("failed to find node for pool UUID %v", poolUUID)
 }
 
 // GetPoolExpansionEligibility identifying the nodes and pools in it if they are eligible for expansion
@@ -7589,15 +8295,11 @@ func RandomString(length int) string {
 	return randomString
 }
 
-// DeleteGivenPoolInNode deletes pool with given ID in the given node
-func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
-
+func EnterPoolMaintenance(stNode node.Node) error {
 	log.InfoD("Setting pools in maintenance on node %s", stNode.Name)
-	if err = Inst().V.EnterPoolMaintenance(stNode); err != nil {
+	if err := Inst().V.EnterPoolMaintenance(stNode); err != nil {
 		return err
 	}
-	//Waiting for cli to work
-	time.Sleep(2 * time.Minute)
 
 	status, err := Inst().V.GetNodeStatus(stNode)
 	if err != nil {
@@ -7609,48 +8311,65 @@ func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) 
 	if err = WaitForPoolStatusToUpdate(stNode, expectedStatus); err != nil {
 		return fmt.Errorf("node %s pools are not in status %s. Err:%v", stNode.Name, expectedStatus, err)
 	}
-	defer func() {
-		var exitErr error
-		if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
-			log.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
 
-		if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
-			log.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
-		//Adding wait as even PX is up it is taking some time for pool status to update
-		//when all pools are deleted
-		time.Sleep(1 * time.Minute)
-		cmd := "pxctl sv pool show"
-		var out string
-
-		// Execute the command and check if any pools exist
-		out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
-		if exitErr != nil {
-			log.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
-			return
-		}
-		log.Infof("pool show: [%s]", out)
-
-		//skipping waitForPoolStatusToUpdate if there are no pools in the node
-		if strings.Contains(out, "No drives configured for this node") {
-			return
-		}
-
-		expectedStatus := "Online"
-		if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
-			log.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
-		}
-
-	}()
-	err = Inst().V.DeletePool(stNode, poolIDToDelete, retry)
-	return err
+	return nil
 }
+
+func ExitPoolMaintenance(stNode node.Node) error {
+	var exitErr error
+	if exitErr = Inst().V.ExitPoolMaintenance(stNode); exitErr != nil {
+		return fmt.Errorf("error exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+
+	if exitErr = Inst().V.WaitDriverUpOnNode(stNode, 5*time.Minute); exitErr != nil {
+		return fmt.Errorf("error waiting for driver up after exiting pool maintenance in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+
+	// wait as even PX is up it is taking some time for pool status to update when all pools are deleted
+	time.Sleep(1 * time.Minute)
+	cmd := "pxctl sv pool show"
+	var out string
+
+	// Execute the command and check if any pools exist
+	out, exitErr = Inst().N.RunCommandWithNoRetry(stNode, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if exitErr != nil {
+		return fmt.Errorf("error checking pools in the node [%v]. Err: %v", stNode.Name, exitErr)
+	}
+	log.Infof("pool show: [%s]", out)
+
+	// skipping waitForPoolStatusToUpdate if there are no pools in the node
+	if strings.Contains(out, "No drives configured for this node") {
+		return nil
+	}
+
+	expectedStatus := "Online"
+	if exitErr = WaitForPoolStatusToUpdate(stNode, expectedStatus); exitErr != nil {
+		return fmt.Errorf("pools are not online after exiting pool maintenance in the node [%v],Err: %v", stNode.Name, exitErr)
+	}
+
+	return nil
+}
+
+// DeleteGivenPoolInNode deletes pool with given ID in the given node
+func DeleteGivenPoolInNode(stNode node.Node, poolIDToDelete string, retry bool) (err error) {
+	if err := EnterPoolMaintenance(stNode); err != nil {
+		return err
+	}
+	if err := Inst().V.DeletePool(stNode, poolIDToDelete, retry); err != nil {
+		return err
+	}
+
+	err = ExitPoolMaintenance(stNode)
+
+	if err != nil && !strings.Contains(err.Error(), "not in pool maintenance mode") {
+		return err
+	}
+	return nil
+}
+
 func GetPoolUUIDWithMetadataDisk(stNode node.Node) (string, error) {
 
 	systemOpts := node.SystemctlOpts{
@@ -8049,7 +8768,13 @@ func getReplicaNodes(vol *volume.Volume) ([]string, error) {
 
 // IsDMthin returns true if setup is dmthin enabled
 func IsDMthin() (bool, error) {
+	opBasedInstall, _ := Inst().V.IsOperatorBasedInstall()
 	dmthinEnabled := false
+	if !opBasedInstall {
+		log.Warn("This is not PX Operator based install, DMTHIN is not supported on legacy Daemonset installs, skipping this check..")
+		return dmthinEnabled, nil
+	}
+
 	cluster, err := Inst().V.GetDriver()
 	if err != nil {
 		return dmthinEnabled, err
@@ -8565,7 +9290,7 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) (mError error) {
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
@@ -8633,7 +9358,7 @@ outer:
 				}
 				return "", false, fmt.Errorf("volume %s is in %s state cannot proceed further", v.ID, replicationStatus)
 			}
-			_, mError = task.DoRetryWithTimeout(t, 60*time.Minute, 1*time.Minute)
+			_, mError = task.DoRetryWithTimeout(t, 120*time.Minute, 2*time.Minute)
 			if mError != nil {
 				return mError
 			}
@@ -8926,7 +9651,7 @@ func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail 
 // GetContextsOnNode returns the contexts which have volumes attached on the given node.
 func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
 	contextsOnNode := make([]*scheduler.Context, 0)
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
@@ -9551,11 +10276,16 @@ func AddCloudCredentialOwnership(cloudCredentialName string, cloudCredentialUid 
 }
 
 // GenerateS3BucketPolicy Generates an S3 bucket policy based on encryption policy provided
-func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string) (string, error) {
+func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName string, enforceServerSideEncryption ...bool) (string, error) {
 
 	encryptionPolicyValues := strings.Split(encryptionPolicy, "=")
 	if len(encryptionPolicyValues) < 2 {
 		return "", fmt.Errorf("failed to generate policy for s3,check for proper length of encryptionPolicy : %v", encryptionPolicy)
+	}
+	var enforceSse string
+	if len(enforceServerSideEncryption) == 0 {
+		// If enableServerSideEncryption is not passed , default it to true
+		enforceSse = "true"
 	}
 	policy := `{
 	   "Version": "2012-10-17",
@@ -9564,19 +10294,31 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 			 "Sid": "%s",
 			 "Effect": "Deny",
 			 "Principal": "*",
-			 "Action": ["s3:PutObject"],
+			 "Action": "s3:PutObject",
 			 "Resource": "arn:aws:s3:::%s/*",
 			 "Condition": {
 				"StringNotEquals": {
 				   "%s":"%s"
 				}
 			 }
-		  }
+		  },
+		  {
+			"Sid": "DenyUnencryptedObjectUploads",
+			"Effect": "Deny",
+			"Principal": "*",
+			"Action": "s3:PutObject",
+			"Resource": "arn:aws:s3:::%s/*",
+			"Condition": {
+				"Null": {
+					"%s":"%s"
+				}
+			}
+		  }	
 	   ]
 	}`
 
 	// Replace the placeholders in the policy with the values passed to the function.
-	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1])
+	policy = fmt.Sprintf(policy, sid, bucketName, encryptionPolicyValues[0], encryptionPolicyValues[1], bucketName, encryptionPolicyValues[0], enforceSse)
 
 	return policy, nil
 }
@@ -9667,4 +10409,188 @@ func DeletePXPods(nameSpace string) error {
 		return err
 	}
 	return nil
+}
+
+func GetKubevirtVersionToUpgrade() string {
+	kubevirtVersion, present := os.LookupEnv("KUBEVIRT_UPGRADE_VERSION")
+	if present && kubevirtVersion != "" {
+		return kubevirtVersion
+	}
+	return LatestKubevirtVersion
+}
+
+// GetRandomSubset generates a random subset of elements from a given list.
+func GetRandomSubset(elements []string, subsetSize int) ([]string, error) {
+	if subsetSize > len(elements) {
+		return nil, fmt.Errorf("subset size exceeds the length of the input list")
+	}
+
+	shuffledElements := make([]string, len(elements))
+	copy(shuffledElements, elements)
+	rand.Shuffle(len(shuffledElements), func(i, j int) {
+		shuffledElements[i], shuffledElements[j] = shuffledElements[j], shuffledElements[i]
+	})
+
+	return shuffledElements[:subsetSize], nil
+}
+
+// DeleteAllNamespacesCreatedByTestCase deletes all the namespaces created for the test case
+func DeleteAllNamespacesCreatedByTestCase() error {
+
+	// Get all the namespaces on the cluster
+	k8sCore := core.Instance()
+	allNamespaces, err := k8sCore.ListNamespaces(make(map[string]string))
+	if err != nil {
+		return fmt.Errorf("error in listing namespaces. Err: %v", err.Error())
+	}
+
+	// Iterate and remove all namespaces
+	for _, ns := range allNamespaces.Items {
+		if strings.Contains(ns.Name, Inst().InstanceID) {
+			log.Infof("Deleting namespace [%s]", ns.Name)
+			err = k8sCore.DeleteNamespace(ns.Name)
+			if err != nil {
+				// Not returning anything as it's the best case effort
+				log.InfoD("Error in deleting namespace [%s]. Err: %v", ns.Name, err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+func GetNodeForGivenVolumeName(volName string) (*node.Node, error) {
+
+	t := func() (interface{}, bool, error) {
+		pxVol, err := Inst().V.InspectVolume(volName)
+		if err != nil {
+			log.Warnf("Failed to inspect volume [%s], Err: %v", volName, err)
+			return nil, false, err
+		}
+
+		for _, n := range node.GetStorageDriverNodes() {
+			ok, err := Inst().V.IsVolumeAttachedOnNode(pxVol, n)
+			if err != nil {
+				return nil, false, err
+			}
+			if ok {
+				return &n, false, err
+			}
+		}
+
+		// Snapshots may not be attached to a node
+		if pxVol.Source.Parent != "" {
+			return nil, false, nil
+		}
+
+		return nil, true, fmt.Errorf("volume [%s] is not attached on any node", volName)
+	}
+
+	n, err := task.DoRetryWithTimeout(t, 1*time.Minute, 10*time.Second)
+	if err != nil {
+		return nil, err
+	}
+
+	if n != nil {
+		attachedNode := n.(*node.Node)
+		return attachedNode, nil
+	}
+
+	return nil, fmt.Errorf("no attached node found for vol [%s]", volName)
+}
+
+// GetProcessPID returns the PID of KVDB master node
+func GetProcessPID(memberNode node.Node, processName string) (string, error) {
+	var processPid string
+	command := fmt.Sprintf("ps -ef | grep -i %s", processName)
+	out, err := Inst().N.RunCommand(memberNode, command, node.ConnectionOpts{
+		Timeout:         20 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, fmt.Sprintf("/usr/local/bin/%s", processName)) && !strings.Contains(line, "grep") {
+			fields := strings.Fields(line)
+			processPid = fields[1]
+			break
+		}
+	}
+	return processPid, err
+}
+
+// KillPxExecUsingPid return error in case of command failure
+func KillPxExecUsingPid(memberNode node.Node) error {
+	pid, err := GetProcessPID(memberNode, "pxexec")
+	if err != nil {
+		return err
+	}
+	if pid == "" {
+		log.InfoD("Procrss with PID doesnot exists !! ")
+		return nil
+	}
+	command := fmt.Sprintf("kill -9 %s", pid)
+	log.InfoD("killing PID using command [%s]", command)
+	err = runCmd(command, memberNode)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// KillPxStorageUsingPid return error in case of command failure
+func KillPxStorageUsingPid(memberNode node.Node) error {
+	nodes := []node.Node{}
+	nodes = append(nodes, memberNode)
+	err := Inst().V.StopDriver(nodes, true, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetAllPodsInNameSpace Returns list of pods running in the namespace
+func GetAllPodsInNameSpace(nameSpace string) ([]v1.Pod, error) {
+	pods, err := k8sCore.GetPods(nameSpace, nil)
+	if err != nil {
+		return nil, err
+	}
+	return pods.Items, nil
+}
+
+func installGrafana(namespace string) {
+	enableGrafana := false
+
+	// If true, enable grafana on the set up
+	if enableGrafanaVar := os.Getenv("ENABLE_GRAFANA"); enableGrafanaVar != "" {
+		enableGrafana, _ = strconv.ParseBool(enableGrafanaVar)
+	}
+	if enableGrafana {
+		grafanaScript := "/torpedo/deployments/setup_grafana.sh"
+		if _, err := os.Stat(grafanaScript); errors.Is(err, os.ErrNotExist) {
+			log.Warnf("Cannot find grafana set up script in path %s", grafanaScript)
+			return
+		}
+
+		// Change permission on file to be able to execute
+		if err := osutils.Chmod("+x", grafanaScript); err != nil {
+			log.Warnf("error changing permission for script [%s], err: %v", grafanaScript, err)
+			return
+		}
+
+		output, stErr, err := osutils.ExecTorpedoShell(fmt.Sprintf("%s %s", grafanaScript, namespace))
+		if err != nil {
+			log.Warnf("error running script [%s], err: %v", grafanaScript, err)
+			return
+		}
+		if stErr != "" {
+			log.Warnf("got standard error while running script [%s], err: %s", grafanaScript, stErr)
+			return
+		}
+		log.Infof(output)
+	}
+
 }

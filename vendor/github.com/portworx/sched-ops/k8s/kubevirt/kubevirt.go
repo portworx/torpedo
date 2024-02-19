@@ -19,9 +19,13 @@ var (
 // Ops is an interface to perform kubernetes related operations on the core resources.
 type Ops interface {
 	VirtualMachineOps
+	VirtualMachineInstanceOps
 
 	// SetConfig sets the config and resets the client
 	SetConfig(config *rest.Config)
+
+	// GetVersion gets the version of kubevirt control plane
+	GetVersion() (string, error)
 }
 
 // Instance returns a singleton instance of the client.
@@ -79,6 +83,19 @@ type Client struct {
 func (c *Client) SetConfig(cfg *rest.Config) {
 	c.config = cfg
 	c.kubevirt = nil
+}
+
+// GetVersion gets the version of kubevirt control plane
+func (c *Client) GetVersion() (string, error) {
+	if err := c.initClient(); err != nil {
+		return "", err
+	}
+	versionInfo, err := c.kubevirt.ServerVersion().Get()
+	if err != nil {
+		return "", err
+	}
+	version := versionInfo.String()
+	return version, nil
 }
 
 // initClient the k8s client if uninitialized

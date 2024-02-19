@@ -16,53 +16,40 @@ import (
 )
 
 const (
-	bucketName           = "pds-qa-automation"
 	awsS3endpoint        = "s3.amazonaws.com"
 	bkpTimeOut           = 30 * time.Minute
-	bkpTimeInterval      = 20 * time.Second
+	bkpTimeInterval      = 60 * time.Second
 	bkpMaxtimeInterval   = 10 * time.Minute
 	BACKUP_JOB_SUCCEEDED = "Succeeded"
 )
 
+var (
+	bucketName = "pds-automation-"
+)
+
 // BackupClient struct
 type BackupClient struct {
-	controlPlaneURL    string
-	Components         *pdsapi.Components
-	AWSStorageClient   *awsStorageClient
-	AzureStorageClient *azureStorageClient
-	GCPStorageClient   *gcpStorageClient
+	controlPlaneURL      string
+	Components           *pdsapi.Components
+	AWSStorageClient     *awsStorageClient
+	AzureStorageClient   *azureStorageClient
+	GCPStorageClient     *gcpStorageClient
+	S3MinioStorageClient *awsCompatibleStorageClient
 }
 
-// CreateAwsS3BackupCredsAndTarget create backup creds,bucket and target.
-func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name, deploymentTargetId string) (*pds.ModelsBackupTarget, error) {
-	log.Info("Add AWS S3 backup credentials")
-	akid := backupClient.AWSStorageClient.accessKey
-	skid := backupClient.AWSStorageClient.secretKey
-	region := backupClient.AWSStorageClient.region
-	log.Debugf("Creating backup %s credentials", name)
-	backupCred, err := backupClient.Components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
-	if err != nil {
-		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
-	}
-	log.Infof("Backup Credential %v created successfully.", backupCred.GetName())
-	log.Info("Create S3 bucket on AWS cloud.")
-	err = backupClient.AWSStorageClient.createBucket()
-	if err != nil {
-		return nil, fmt.Errorf("Failed while creating S3 bucket, Err: %v ", err)
-	}
-	log.Infof("Adding backup target {Name: %v} to PDS.", name)
-	backupTarget, err := backupClient.Components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred.GetId(), bucketName, region, "s3")
+func (backupClient *BackupClient) CreateBackupTarget(tenantId, deploymentTargetId, name, bucketName, region, backupCred, backupType string) (*pds.ModelsBackupTarget, error) {
+	backupTarget, err := backupClient.Components.BackupTarget.CreateBackupTarget(tenantId, name, backupCred, bucketName, region, backupType)
 	time.Sleep(bkpTimeInterval)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
+		return nil, fmt.Errorf("Failed to create AWS S3 compatible backup target, Err: %v ", err)
 	}
 	res, err := backupClient.Components.BackupTarget.SyncToBackupLocation(backupTarget.GetId())
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("failed to sync to AWS S3 backup target. Err: %v, Http response: %v", err, res)
+		return nil, fmt.Errorf("failed to sync to AWS S3 compatible backup target. Err: %v, Http response: %v", err, res)
 	}
 	backupStates, err := backupClient.Components.BackupTarget.LisBackupsStateBelongToBackupTarget(backupTarget.GetId())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create AWS S3 backup target, Err: %v ", err)
+		return nil, fmt.Errorf("Failed to create AWS S3 compatible backup target, Err: %v ", err)
 	}
 	for _, backupState := range backupStates {
 		if deploymentTargetId == backupState.GetDeploymentTargetId() {
@@ -74,6 +61,51 @@ func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name
 		}
 	}
 	return backupTarget, nil
+}
+
+// CreateAwsS3BackupCredsAndTarget create backup creds,bucket and target.
+func (backupClient *BackupClient) CreateAwsS3MinioBackupCredsAndTarget(tenantId, name, bucketName, deploymentTargetId string) (*pds.ModelsBackupTarget, error) {
+	log.Info("Add AWS S3 backup credentials")
+	akid := backupClient.S3MinioStorageClient.accessKey
+	skid := backupClient.S3MinioStorageClient.secretKey
+	region := backupClient.S3MinioStorageClient.region
+	endpoint := backupClient.S3MinioStorageClient.endpoint
+	log.Debugf("Creating backup %s credentials", name)
+	backupCred, err := backupClient.Components.BackupCredential.CreateS3CompatibleBackupCredential(tenantId, name, akid, endpoint, skid)
+	if err != nil {
+		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
+	}
+	log.Infof("Backup Credential %v created successfully.", backupCred.GetName())
+	log.Info("Create S3 Compatible bucket on minio")
+	err = backupClient.S3MinioStorageClient.createBucket(bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("Failed while creating S3 compatible bucket, Err: %v ", err)
+	}
+	log.Infof("Adding backup target {Name: %v} to PDS.", name)
+	backupTarget, err := backupClient.CreateBackupTarget(tenantId, deploymentTargetId, name, bucketName, region, backupCred.GetId(), "s3-compatible")
+	return backupTarget, err
+}
+
+// CreateAwsS3BackupCredsAndTarget create backup creds,bucket and target.
+func (backupClient *BackupClient) CreateAwsS3BackupCredsAndTarget(tenantId, name, bucketName, deploymentTargetId string) (*pds.ModelsBackupTarget, error) {
+	log.Info("Add AWS S3 backup credentials")
+	akid := backupClient.AWSStorageClient.accessKey
+	skid := backupClient.AWSStorageClient.secretKey
+	region := backupClient.AWSStorageClient.region
+	log.Debugf("Creating backup %s credentials", name)
+	backupCred, err := backupClient.Components.BackupCredential.CreateS3BackupCredential(tenantId, name, akid, awsS3endpoint, skid)
+	if err != nil {
+		return nil, fmt.Errorf("Error in adding the backup credentials to PDS , Err: %v ", err)
+	}
+	log.Infof("Backup Credential %v created successfully.", backupCred.GetName())
+	log.Info("Create S3 bucket on AWS cloud.")
+	err = backupClient.AWSStorageClient.createBucket(bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("Failed while creating S3 bucket, Err: %v ", err)
+	}
+	log.Infof("Adding backup target {Name: %v} to PDS.", name)
+	backupTarget, err := backupClient.CreateBackupTarget(tenantId, deploymentTargetId, name, bucketName, region, backupCred.GetId(), "s3")
+	return backupTarget, err
 }
 
 // CreateAzureBackupCredsAndTarget create backup creds,bucket and target.
@@ -147,11 +179,6 @@ func (backupClient *BackupClient) GetAllBackUpTargets(projectID, bkptargetPrefix
 
 // DeleteAwsS3BackupCredsAndTarget delete backup creds,bucket and target.
 func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId string) error {
-	log.Info("Delete S3 bucket from AWS cloud.")
-	err := backupClient.AWSStorageClient.DeleteBucket()
-	if err != nil {
-		return fmt.Errorf("Failed to delete S3 bucket %s, Err: %v ", bucketName, err)
-	}
 	log.Info("Removing S3 backup creadentials and target from PDS.")
 	backupTarget, err := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 	if err != nil {
@@ -163,7 +190,7 @@ func (backupClient *BackupClient) DeleteAwsS3BackupCredsAndTarget(backupTargetId
 	if err != nil {
 		return fmt.Errorf("Failed to delete AWS S3 backup target, Err: %v ", err)
 	}
-	waitErr := wait.Poll(bkpTimeInterval, 1*time.Minute, func() (bool, error) {
+	waitErr := wait.Poll(bkpTimeInterval, 15*time.Minute, func() (bool, error) {
 		model, bkpErr := backupClient.Components.BackupTarget.GetBackupTarget(backupTargetId)
 		if model != nil {
 			log.Info(model.GetName())
@@ -289,7 +316,8 @@ func (backupClient *BackupClient) TriggerAndValidateAdhocBackup(deploymentID str
 	if err != nil {
 		return fmt.Errorf("failed while creating adhoc backup. Err: %v", err)
 	}
-	log.Infof("Created adhoc backup. Details: deployment- %v,backup type - %v, backup resource name: %v", bkpObj.GetDeploymentName(), bkpObj.GetBackupType(), bkpObj.GetClusterResourceName())
+	log.Infof("Created adhoc backup. Details: deployment- %v,backup type - %v, backup resource name: %v, backupObj id: %v", bkpObj.GetDeploymentName(),
+		bkpObj.GetBackupType(), bkpObj.GetClusterResourceName(), bkpObj.GetId())
 
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
 		bkpJobs, err = backupClient.Components.BackupJob.ListBackupJobs(bkpObj.GetId())
@@ -333,6 +361,9 @@ func InitializePdsBackup() (*BackupClient, error) {
 		Components:      Components,
 		AWSStorageClient: &awsStorageClient{accessKey: envVars.PDSAwsAccessKey,
 			secretKey: envVars.PDSAwsSecretKey, region: envVars.PDSAwsRegion},
+		S3MinioStorageClient: &awsCompatibleStorageClient{endpoint: envVars.PDSMinioEndpoint,
+			accessKey: envVars.PDSMinioAccessKey,
+			secretKey: envVars.PDSMinioSecretKey, region: envVars.PDSMinioRegion},
 		AzureStorageClient: &azureStorageClient{accountName: envVars.PDSAzureStorageAccountName,
 			accountKey: envVars.PDSAzurePrimaryAccountKey},
 		GCPStorageClient: &gcpStorageClient{projectId: envVars.PDSGcpProjectId},
