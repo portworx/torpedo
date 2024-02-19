@@ -1880,6 +1880,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 	restoreContextMapping := make(map[string][]*scheduler.Context)
 	restoreWithReplaceContextMapping := make(map[string][]*scheduler.Context)
 	backupNamespaceMapping := map[string]string{}
+	timeBetweenConsecutiveOps := 10 * time.Second
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("MultipleInPlaceRestoreSameTime",
@@ -1934,20 +1935,21 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 			var wg sync.WaitGroup
 			var mutex sync.Mutex
 			for _, bkpNameSpace := range bkpNamespaces {
+				time.Sleep(timeBetweenConsecutiveOps)
 				sem <- struct{}{}
-				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNameSpace, RandomString(5))
 				wg.Add(1)
-				go func(bkpNameSpace string, backupName string) {
+				go func(bkpNameSpace string) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					defer func() { <-sem }()
+					backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNameSpace, RandomString(5))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
 					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, bkpNameSpace))
 					mutex.Lock()
 					backupNamespaceMapping[bkpNameSpace] = backupName
 					mutex.Unlock()
-				}(bkpNameSpace, backupName)
+				}(bkpNameSpace)
 			}
 			wg.Wait()
 		})
@@ -1958,19 +1960,20 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 			var wg sync.WaitGroup
 			var mutex sync.Mutex
 			for bkpNameSpace, backupName := range backupNamespaceMapping {
-				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", bkpNameSpace, RandomString(5))
-				restoreList = append(restoreList, restoreName)
+				time.Sleep(timeBetweenConsecutiveOps)
 				wg.Add(1)
-				go func(bkpNameSpace string, backupName string) {
+				go func(bkpNameSpace string) {
 					defer GinkgoRecover()
 					defer wg.Done()
+					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", bkpNameSpace, RandomString(5))
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
 					mutex.Lock()
 					restoreContextMapping[restoreName] = appContextsToBackup
+					restoreList = append(restoreList, restoreName)
 					mutex.Unlock()
 					err = CreateRestore(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string))
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
-				}(bkpNameSpace, backupName)
+				}(bkpNameSpace)
 			}
 			wg.Wait()
 		})
@@ -1982,6 +1985,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 			errors := make([]string, 0)
 			var wg sync.WaitGroup
 			for restoreName, scheduledAppContexts := range restoreContextMapping {
+				time.Sleep(timeBetweenConsecutiveOps)
 				wg.Add(1)
 				go func(restoreName string, scheduledAppContexts []*scheduler.Context) {
 					defer GinkgoRecover()
@@ -1997,7 +2001,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 						}
 						mutex.Lock()
 						restoredAppContextsInSourceCluster = append(restoredAppContextsInSourceCluster, restoredAppContext)
-						mutex.Lock()
+						mutex.Unlock()
 					}
 					err = ValidateRestore(ctx, restoreName, BackupOrgID, restoredAppContextsInSourceCluster, make([]string, 0))
 					if err != nil {
@@ -2017,15 +2021,15 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 			var wg sync.WaitGroup
 			var mutex sync.Mutex
 			for bkpNameSpace, backupName := range backupNamespaceMapping {
-				restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", bkpNameSpace, RandomString(5))
-				restoreList = append(restoreList, restoreName)
 				wg.Add(1)
 				go func(bkpNameSpace string, backupName string) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNameSpace})
+					restoreName := fmt.Sprintf("%s-%s-%v", "test-restore-recent-backup", bkpNameSpace, RandomString(5))
 					mutex.Lock()
 					restoreWithReplaceContextMapping[restoreName] = appContextsToBackup
+					restoreList = append(restoreList, restoreName)
 					mutex.Unlock()
 					err = CreateRestoreWithReplacePolicy(restoreName, backupName, make(map[string]string), SourceClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Restoring backup %v into namespce %v with replacing existing resources", backupName, bkpNameSpace))
