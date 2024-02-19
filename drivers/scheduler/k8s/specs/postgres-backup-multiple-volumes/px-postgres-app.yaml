@@ -32,7 +32,7 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
+  name: postgres-{{ .Suffix }}
 spec:
   strategy:
     rollingUpdate:
