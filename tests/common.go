@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bufio"
-	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -10,6 +9,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+
+	"cloud.google.com/go/storage"
 
 	"github.com/portworx/torpedo/drivers/node/gke"
 	"google.golang.org/api/iterator"
@@ -7465,21 +7466,21 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	}
 
 	// Cleanup all the namespaces created by the testcase
-	err := DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
+	// err := DeleteAllNamespacesCreatedByTestCase()
+	// if err != nil {
+	// 	log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	// }
 
-	err = SetDestinationKubeConfig()
-	if err != nil {
-		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
-		return
-	}
+	// err = SetDestinationKubeConfig()
+	// if err != nil {
+	// 	log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+	// 	return
+	// }
 
-	err = DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
+	// err = DeleteAllNamespacesCreatedByTestCase()
+	// if err != nil {
+	// 	log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+	// }
 
 	defer func() {
 		err := SetSourceKubeConfig()
