@@ -489,7 +489,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "cd /bin && ./taas && sleep 1800"]
+    command: ["sh", "-c", "cd /bin && ./taas && sleep 10800"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
