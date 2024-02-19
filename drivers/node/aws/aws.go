@@ -25,30 +25,31 @@ const (
 	DriverName = "aws"
 )
 
-type Aws struct {
+type AWS struct {
 	ssh.SSH
 	region            string
 	clusterName       string
 	config            aws.Config
 	eksClient         *eks.Client
 	ec2Client         *ec2.Client
-	ec2Instances      []ec2types.Instance
 	ssmClient         *ssm.Client
 	autoscalingClient *autoscaling.Client
+	ec2Instances      []ec2types.Instance
 }
 
-func (a *Aws) String() string {
+func (a *AWS) String() string {
 	return DriverName
 }
 
-func (a *Aws) Init(nodeOpts node.InitOptions) error {
+func (a *AWS) Init(nodeOpts node.InitOptions) error {
 	err := a.SSH.Init(nodeOpts)
 	if err != nil {
 		return err
 	}
 	a.region = os.Getenv("AWS_REGION")
 	if a.region == "" {
-		return fmt.Errorf("env AWS_REGION is empty")
+		err := fmt.Errorf("env AWS_REGION is empty")
+		log.FailOnError(err, "")
 	}
 	a.clusterName = os.Getenv("AWS_CLUSTER_NAME")
 	if a.clusterName == "" {
@@ -84,7 +85,7 @@ func (a *Aws) Init(nodeOpts node.InitOptions) error {
 	return nil
 }
 
-func (a *Aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
+func (a *AWS) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	instanceID, err := a.getNodeIDByPrivateIpAddress(n)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
@@ -143,7 +144,7 @@ func (a *Aws) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	return nil
 }
 
-func (a *Aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
+func (a *AWS) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	instanceID, err := a.getNodeIDByPrivateIpAddress(n)
 	if err != nil {
 		return &node.ErrFailedToRebootNode{
@@ -164,7 +165,7 @@ func (a *Aws) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	return nil
 }
 
-func (a *Aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
+func (a *AWS) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	instanceID, err := a.getNodeIDByPrivateIpAddress(n)
 	if err != nil {
 		return &node.ErrFailedToShutdownNode{
@@ -185,7 +186,7 @@ func (a *Aws) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	return nil
 }
 
-func (a *Aws) DeleteNode(n node.Node, timeout time.Duration) error {
+func (a *AWS) DeleteNode(n node.Node, timeout time.Duration) error {
 	instanceID, err := a.getNodeIDByPrivateIpAddress(n)
 	if err != nil {
 		return &node.ErrFailedToDeleteNode{
@@ -206,19 +207,19 @@ func (a *Aws) DeleteNode(n node.Node, timeout time.Duration) error {
 	return nil
 }
 
-// // TODO add AWS implementation for this
-//
-//	func (a *Aws) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
-//		return "", nil
-//	}
-//
-// // TODO implement for AWS
-//
-//	func (a *Aws) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
-//		return nil
-//	}
+// TODO add AWS implementation for this
 
-func (a *Aws) getAllInstances() ([]ec2types.Instance, error) {
+func (a *AWS) FindFiles(path string, n node.Node, options node.FindOpts) (string, error) {
+	return "", nil
+}
+
+// TODO implement for AWS
+
+func (a *AWS) Systemctl(n node.Node, service string, options node.SystemctlOpts) error {
+	return nil
+}
+
+func (a *AWS) getAllInstances() ([]ec2types.Instance, error) {
 	var instances []ec2types.Instance
 	clusterTagKey := "tag:kubernetes.io/cluster/" + a.clusterName
 	params := &ec2.DescribeInstancesInput{
@@ -244,7 +245,7 @@ func (a *Aws) getAllInstances() ([]ec2types.Instance, error) {
 	return instances, nil
 }
 
-func (a *Aws) getNodeIDByPrivateIpAddress(n node.Node) (string, error) {
+func (a *AWS) getNodeIDByPrivateIpAddress(n node.Node) (string, error) {
 	for _, i := range a.ec2Instances {
 		for _, addr := range n.Addresses {
 			log.Infof("%#v %#v, %#v, %#v", *i.InstanceId, aws.ToString(i.PrivateIpAddress) == addr, aws.ToString(i.PrivateIpAddress), addr)
@@ -256,7 +257,7 @@ func (a *Aws) getNodeIDByPrivateIpAddress(n node.Node) (string, error) {
 	return "", fmt.Errorf("failed to get node [%s] instanceID by privateIP address", n.Name)
 }
 
-func (a *Aws) GetASGClusterSize() (int64, error) {
+func (a *AWS) GetASGClusterSize() (int64, error) {
 	nodeGroups, err := a.eksClient.ListNodegroups(context.TODO(), &eks.ListNodegroupsInput{
 		ClusterName: aws.String(a.clusterName),
 	})
@@ -293,7 +294,7 @@ func (a *Aws) GetASGClusterSize() (int64, error) {
 	return int64(totalSize), nil
 }
 
-func (a *Aws) GetZones() ([]string, error) {
+func (a *AWS) GetZones() ([]string, error) {
 	filters := []ec2types.Filter{
 		{
 			Name:   aws.String("tag:kubernetes.io/cluster/" + a.clusterName),
@@ -326,7 +327,7 @@ func (a *Aws) GetZones() ([]string, error) {
 	return zones, nil
 }
 
-func (a *Aws) SetClusterVersion(version string, timeout time.Duration) error {
+func (a *AWS) SetClusterVersion(version string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	input := &eks.UpdateClusterVersionInput{
@@ -345,7 +346,7 @@ func (a *Aws) SetClusterVersion(version string, timeout time.Duration) error {
 }
 
 // waitForClusterUpdate waits for the EKS cluster's control plane to finish updating
-func (a *Aws) waitForClusterUpdate(ctx context.Context, version string) error {
+func (a *AWS) waitForClusterUpdate(ctx context.Context, version string) error {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
@@ -378,7 +379,7 @@ func (a *Aws) waitForClusterUpdate(ctx context.Context, version string) error {
 }
 
 // upgradeNodeGroups upgrades all node groups in the EKS cluster to the specified version
-func (a *Aws) upgradeNodeGroups(ctx context.Context, version string) error {
+func (a *AWS) upgradeNodeGroups(ctx context.Context, version string) error {
 	nodeGroups, err := a.eksClient.ListNodegroups(ctx, &eks.ListNodegroupsInput{
 		ClusterName: aws.String(a.clusterName),
 	})
@@ -405,8 +406,8 @@ func (a *Aws) upgradeNodeGroups(ctx context.Context, version string) error {
 }
 
 func init() {
-	a := &Aws{
+	a := &AWS{
 		SSH: *ssh.New(),
 	}
-	node.Register(DriverName, a)
+	_ = node.Register(DriverName, a)
 }
