@@ -2345,6 +2345,7 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 	if err != nil {
 		return err
 	}
+	log.Infof("Inspect Restore Response - [%#v]", restoreInspectResponse)
 	theRestore := restoreInspectResponse.GetRestore()
 	restoredResourcesInfo := theRestore.GetResources()
 	apparentlyRestoredVolumes := theRestore.GetVolumes()
@@ -2459,6 +2460,8 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 			}
 		}
 
+		log.Infof("We are inside cluster: [%s]", CurrentClusterConfigPath)
+
 		// VALIDATION OF VOLUMES
 		log.InfoD("Validating Restored Volumes for the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 
@@ -2503,6 +2506,8 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 				log.Infof("The actual volume map is: %v", actualVolumeMap)
 				log.Infof("The apparently restored volumes are: %v", apparentlyRestoredVolumes)
 				log.Infof("The restored volume info is: %v", restoredVolInfo)
+				log.Infof("The source volume is: %v", restoredVolInfo.SourceVolume)
+				log.Infof("The restored volume is: %v", restoredVolInfo.RestoreVolume)
 				if actualVol, ok = actualVolumeMap[restoredVolInfo.RestoreVolume]; !ok {
 					err := fmt.Errorf("in restore [%s], said restored volume [%s] cannot be found in the actual cluster [%s]", restoreName, restoredVolInfo.RestoreVolume, expectedRestoredAppContextNamespace)
 					errors = append(errors, err)

@@ -230,7 +230,7 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 		preRuleUid           string
 		postRuleUid          string
 		providers            = GetBackupProviders()
-		numberOfVolumes      = 1
+		numberOfVolumes      = 2
 	)
 
 	JustBeforeEach(func() {
