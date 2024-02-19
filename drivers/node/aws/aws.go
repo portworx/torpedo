@@ -46,15 +46,6 @@ func (a *AWS) Init(nodeOpts node.InitOptions) error {
 	if err != nil {
 		return err
 	}
-	a.region = os.Getenv("AWS_REGION")
-	if a.region == "" {
-		err := fmt.Errorf("env AWS_REGION is empty")
-		log.FailOnError(err, "")
-	}
-	a.clusterName = os.Getenv("AWS_CLUSTER_NAME")
-	if a.clusterName == "" {
-		return fmt.Errorf("env AWS_CLUSTER_NAME is empty")
-	}
 	a.config, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(a.region))
 	if err != nil {
 		return fmt.Errorf("failed to load default AWS SDK config for region [%s] due to [%v]", a.region, err)
@@ -63,21 +54,20 @@ func (a *AWS) Init(nodeOpts node.InitOptions) error {
 	a.ec2Client = ec2.NewFromConfig(a.config)
 	a.ssmClient = ssm.NewFromConfig(a.config)
 	a.autoscalingClient = autoscaling.NewFromConfig(a.config)
-	nodes := node.GetWorkerNodes()
-	log.Infof("There are [%d] worker nodes in [%s] cluster in [%s]", len(nodes), a.clusterName, a.region)
-	for _, n := range nodes {
-		log.Infof("Testing connection to node [%s]", n.Name)
-		err = a.TestConnection(n, node.ConnectionOpts{
-			Timeout:         1 * time.Minute,
-			TimeBeforeRetry: 10 * time.Second,
-		})
+	workerNodes := node.GetWorkerNodes()
+	log.Infof("There are [%d] worker nodes in [%s] cluster in [%s]", len(workerNodes), a.clusterName, a.region)
+	testConnectionOpts := node.ConnectionOpts{
+		Timeout:         1 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	}
+	for _, n := range workerNodes {
+		log.Infof("Testing connection to worker node [%s]", n.Name)
+		err = a.TestConnection(n, testConnectionOpts)
 		if err != nil {
-			return &node.ErrFailedToTestConnection{
-				Node:  n,
-				Cause: err.Error(),
-			}
+			return err
 		}
 	}
+
 	a.ec2Instances, err = a.getAllInstances()
 	if err != nil {
 		return err
@@ -90,10 +80,10 @@ func (a *AWS) TestConnection(n node.Node, options node.ConnectionOpts) error {
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to get instance ID for connection due to [%v]", err),
+			Cause: fmt.Sprintf("failed to get instanceID for connection due to [%v]", err),
 		}
 	}
-	log.Infof("Node [%s] has instance ID [%v]", n.Name, instanceID)
+	log.Infof("Node [%s] has instanceID [%v]", n.Name, instanceID)
 	command := "uptime"
 	param := make(map[string][]string)
 	param["commands"] = []string{command}
@@ -103,16 +93,16 @@ func (a *AWS) TestConnection(n node.Node, options node.ConnectionOpts) error {
 		Parameters:   param,
 		InstanceIds:  []string{instanceID},
 	}
-	log.Infof("Sending command [%s] to node [%s] with instance ID [%v]", command, n.Name, instanceID)
+	log.Infof("Sending command [%s] to node [%s] with instanceID [%v]", command, n.Name, instanceID)
 	sendCommandOutput, err := a.ssmClient.SendCommand(context.TODO(), sendCommandInput)
 	if err != nil {
 		return &node.ErrFailedToTestConnection{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to send command to instance ID [%s] due to [%v]", instanceID, err),
+			Cause: fmt.Sprintf("failed to send command to instanceID [%s] due to [%v]", instanceID, err),
 		}
 	}
 	if sendCommandOutput.Command == nil || sendCommandOutput.Command.CommandId == nil {
-		return fmt.Errorf("no response received after sending command to instance ID [%s]", instanceID)
+		return fmt.Errorf("no response received after sending command to instanceID [%s]", instanceID)
 	}
 	t := func() (interface{}, bool, error) {
 		listCmdInvocationsOutput, err := a.ssmClient.ListCommandInvocations(
@@ -129,10 +119,10 @@ func (a *AWS) TestConnection(n node.Node, options node.ConnectionOpts) error {
 			case ssmtypes.CommandInvocationStatusSuccess:
 				return nil, false, nil
 			default:
-				return nil, true, fmt.Errorf("current status of the command ID [%s] is [%s], expected [%s]", *cmd.CommandId, cmd.Status, ssmtypes.CommandInvocationStatusSuccess)
+				return nil, true, fmt.Errorf("current status of the commandID [%s] is [%s], expected [%s]", *cmd.CommandId, cmd.Status, ssmtypes.CommandInvocationStatusSuccess)
 			}
 		}
-		return nil, false, fmt.Errorf("no command invocations found for command ID [%s]", *sendCommandOutput.Command.CommandId)
+		return nil, false, fmt.Errorf("no command invocations found for commandID [%s]", *sendCommandOutput.Command.CommandId)
 	}
 	_, err = task.DoRetryWithTimeout(t, options.Timeout, options.TimeBeforeRetry)
 	if err != nil {
@@ -149,7 +139,7 @@ func (a *AWS) RebootNode(n node.Node, options node.RebootNodeOpts) error {
 	if err != nil {
 		return &node.ErrFailedToRebootNode{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+			Cause: fmt.Sprintf("failed to get instanceID due to: %v", err),
 		}
 	}
 	rebootInput := &ec2.RebootInstancesInput{
@@ -170,7 +160,7 @@ func (a *AWS) ShutdownNode(n node.Node, options node.ShutdownNodeOpts) error {
 	if err != nil {
 		return &node.ErrFailedToShutdownNode{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+			Cause: fmt.Sprintf("failed to get instanceID due to: %v", err),
 		}
 	}
 	stopInstanceInput := &ec2.StopInstancesInput{
@@ -191,7 +181,7 @@ func (a *AWS) DeleteNode(n node.Node, timeout time.Duration) error {
 	if err != nil {
 		return &node.ErrFailedToDeleteNode{
 			Node:  n,
-			Cause: fmt.Sprintf("failed to get instance ID due to: %v", err),
+			Cause: fmt.Sprintf("failed to get instanceID due to: %v", err),
 		}
 	}
 	terminateInstanceInput := &ec2.TerminateInstancesInput{
@@ -248,13 +238,12 @@ func (a *AWS) getAllInstances() ([]ec2types.Instance, error) {
 func (a *AWS) getNodeIDByPrivateIpAddress(n node.Node) (string, error) {
 	for _, i := range a.ec2Instances {
 		for _, addr := range n.Addresses {
-			log.Infof("%#v %#v, %#v, %#v", *i.InstanceId, aws.ToString(i.PrivateIpAddress) == addr, aws.ToString(i.PrivateIpAddress), addr)
 			if aws.ToString(i.PrivateIpAddress) == addr {
 				return aws.ToString(i.InstanceId), nil
 			}
 		}
 	}
-	return "", fmt.Errorf("failed to get node [%s] instanceID by privateIP address", n.Name)
+	return "", fmt.Errorf("failed to get node [%s] instanceID by privateIP address [%s]", n.Name, n.Addresses)
 }
 
 func (a *AWS) GetASGClusterSize() (int64, error) {
@@ -407,7 +396,9 @@ func (a *AWS) upgradeNodeGroups(ctx context.Context, version string) error {
 
 func init() {
 	a := &AWS{
-		SSH: *ssh.New(),
+		SSH:         *ssh.New(),
+		region:      os.Getenv("AWS_REGION"),
+		clusterName: os.Getenv("AWS_CLUSTER_NAME"),
 	}
 	_ = node.Register(DriverName, a)
 }
