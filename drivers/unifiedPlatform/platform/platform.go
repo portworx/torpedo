@@ -4,6 +4,12 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 )
 
+type Platform interface {
+	AccountInterface
+	TenantInterface
+	TargetClusterInterface
+}
+
 type AccountInterface interface {
 	GetAccountList() ([]WorkFlowResponse, error)
 	GetAccount(string) (*WorkFlowResponse, error)
@@ -15,7 +21,13 @@ type TenantInterface interface {
 	ListTenants(string) ([]WorkFlowResponse, error)
 }
 
-type Platform interface {
-	AccountInterface
-	TenantInterface
+type TargetClusterInterface interface {
+	ListTargetClusters() ([]WorkFlowResponse, error)
+	GetTarget(*WorkFlowRequest) (*WorkFlowResponse, error)
+	PatchTargetCluster(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteTarget(request *WorkFlowRequest) error
+}
+
+type TargetClusterManifestInterface interface {
+	GetTargetClusterRegistrationManifest(getRequest *WorkFlowRequest) (string, error)
 }

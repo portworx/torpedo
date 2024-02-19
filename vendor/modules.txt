@@ -1247,6 +1247,9 @@ github.com/pure-px/apis/public/portworx/common/apiv1
 github.com/pure-px/apis/public/portworx/pds/deployment/apiv1
 github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1
 github.com/pure-px/apis/public/portworx/platform/account/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetclusterregistrationmanifest/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 # github.com/pure-px/platform-api-go-client v0.0.0-20240131093336-8ef532ef36bd
 ## explicit; go 1.21

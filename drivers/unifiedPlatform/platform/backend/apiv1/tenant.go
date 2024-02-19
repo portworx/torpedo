@@ -12,7 +12,7 @@ import (
 )
 
 // GetClient updates the header with bearer token and returns the new client
-func (tenant *PLATFORM_API_V1) GetClient() (context.Context, *platformv1.TenantServiceAPIService, error) {
+func (tenant *PLATFORM_API_V1) getTenantClient() (context.Context, *platformv1.TenantServiceAPIService, error) {
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
@@ -27,7 +27,7 @@ func (tenant *PLATFORM_API_V1) GetClient() (context.Context, *platformv1.TenantS
 // ListTenants return pds tenants models.
 func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]WorkFlowResponse, error) {
 	tenantsResponse := []WorkFlowResponse{}
-	ctx, tenantClient, err := tenant.GetClient()
+	ctx, tenantClient, err := tenant.getTenantClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}

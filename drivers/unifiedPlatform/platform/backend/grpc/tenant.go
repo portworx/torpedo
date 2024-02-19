@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// GetClient updates the header with bearer token and returns the new client
+// getTenantClient updates the header with bearer token and returns the new client
 func (Tenantgrpc *PlatformGrpc) getTenantClient() (context.Context, publictenantapis.TenantServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var tenantClient publictenantapis.TenantServiceClient

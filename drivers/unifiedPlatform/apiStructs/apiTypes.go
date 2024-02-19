@@ -34,11 +34,13 @@ type Config struct {
 type WorkFlowResponse struct {
 	Meta   Meta
 	Config Config
+	Id     string
 }
 
 type WorkFlowRequest struct {
 	Meta   Meta
 	Config Config
+	Id     string // This is used in GetTarget api
 }
 
 type Reference struct {
