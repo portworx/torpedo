@@ -493,6 +493,7 @@ spec:
     args:
       - "cd /bin && ./taas"
       - "-spec-dir=$SPEC_DIR"
+      - "-testval=avinash"
       - "-app-list=$APP_LIST"
       - "-deploy-pds-apps=$DEPLOY_PDS_APPS"
       - "-pds-driver=$PDS_DRIVER"
