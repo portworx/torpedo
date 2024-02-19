@@ -7465,7 +7465,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
 
-	Cleanup all the namespaces created by the testcase
+	//Cleanup all the namespaces created by the testcase
 	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
 		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
