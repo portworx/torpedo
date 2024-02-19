@@ -20,7 +20,7 @@ type PLATFORM_API_V1 struct {
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (account *PLATFORM_API_V1) getClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
+func (account *PLATFORM_API_V1) getAccountClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
 	log.Infof("Creating client from PLATFORM_API_V1 package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -36,7 +36,7 @@ func (account *PLATFORM_API_V1) getClient() (context.Context, *platformv1.Accoun
 
 // GetAccountList returns the list of accounts
 func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]WorkFlowResponse, error) {
-	ctx, client, err := AccountV1.getClient()
+	ctx, client, err := AccountV1.getAccountClient()
 	accountsResponse := []WorkFlowResponse{}
 
 	if err != nil {
@@ -59,7 +59,7 @@ func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*WorkFlowRespons
 
 	accountResponse := WorkFlowResponse{}
 
-	ctx, client, err := AccountV1.getClient()
+	ctx, client, err := AccountV1.getAccountClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
@@ -81,7 +81,7 @@ func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*WorkFlowRespons
 
 // CreateAccount return pds account model.
 func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMail string) (WorkFlowResponse, error) {
-	_, client, err := AccountV1.getClient()
+	_, client, err := AccountV1.getAccountClient()
 
 	accountResponse := WorkFlowResponse{}
 
@@ -114,8 +114,8 @@ func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMa
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV1 *PLATFORM_API_V1) DeleteAccount(accountId string) error {
-	ctx, client, err := AccountV1.getClient()
+func (AccountV1 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) error {
+	ctx, client, err := AccountV1.getAccountClient()
 	if err != nil {
 		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}

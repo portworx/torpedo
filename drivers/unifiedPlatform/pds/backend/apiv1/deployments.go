@@ -47,6 +47,5 @@ func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *WorkFlowRequest) 
 	}
 
 	copier.Copy(&dsResponse, dsModel)
-
 	return &dsResponse, err
 }
