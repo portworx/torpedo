@@ -490,7 +490,7 @@ spec:
     securityContext:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c", "cd /bin && ./taas "]
-    args: [ -testval=avinash
+    args: [ "-testval=avinash"
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
