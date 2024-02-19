@@ -6077,7 +6077,7 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 					log.Infof("Output of cmd %s - \n%s", cmd, output)
 					return "", true, err
 				} else {
-					return "", false, err
+					return output, false, err
 				}
 			}
 			log.Infof("Output of cmd %s - \n%s", cmd, output)

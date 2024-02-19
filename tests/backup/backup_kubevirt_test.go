@@ -697,8 +697,6 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 		})
 
 		Step("SSH into the kubevirt VM", func() {
-			log.Infof("Sleeping...")
-			//time.Sleep(1 * time.Minute)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			vms, err := GetAllVMsInNamespace(scheduledAppContexts[0].ScheduleOptions.Namespace)
 			if err != nil {
