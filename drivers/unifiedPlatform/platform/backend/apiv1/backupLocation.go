@@ -43,14 +43,14 @@ func (backuploc *PLATFORM_API_V1) ListBackupLocations() ([]WorkFlowResponse, err
 }
 
 // GetBackupLocation get backup location model by its ID.
-func (backuploc *PLATFORM_API_V1) GetBackupLocation(backupLocID string) (*WorkFlowResponse, error) {
-	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
+func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+	_, backupLocationClient, err := backuploc.GetBackupLocClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	bckpLocResp := WorkFlowResponse{}
 	var getRequest platformv1.ApiBackupLocationServiceGetBackupLocationRequest
-	getRequest = getRequest.ApiService.BackupLocationServiceGetBackupLocation(ctx, backupLocID)
+	copier.Copy(&getRequest, getReq)
 	backupLocationModel, res, err := backupLocationClient.BackupLocationServiceGetBackupLocationExecute(getRequest)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when called `BackupLocatiobackuplocerviceGetBackupLocation`, Full HTTP respobackuploce: %v\n", res)
@@ -62,13 +62,12 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocation(backupLocID string) (*WorkFl
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (backuploc *PLATFORM_API_V1) CreateBackupLocation(tenantID string, createReq platformv1.ApiBackupLocationServiceCreateBackupLocationRequest) (*WorkFlowResponse, error) {
-	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
+func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq platformv1.ApiBackupLocationServiceCreateBackupLocationRequest) (*WorkFlowResponse, error) {
+	_, backupLocationClient, err := backuploc.GetBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	createReq = createReq.ApiService.BackupLocationServiceCreateBackupLocation(ctx, tenantID)
 	backupLocationModel, _, err := backupLocationClient.BackupLocationServiceCreateBackupLocationExecute(createReq)
 	if err != nil {
 		return nil, fmt.Errorf("error when called `BackupLocatiobackuplocerviceCreateBackupLocation` to create backup target - %v", err)
@@ -79,13 +78,12 @@ func (backuploc *PLATFORM_API_V1) CreateBackupLocation(tenantID string, createRe
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq platformv1.ApiBackupLocationServiceUpdateBackupLocationRequest, backupLocationID string) (*WorkFlowResponse, error) {
-	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
+func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq platformv1.ApiBackupLocationServiceUpdateBackupLocationRequest) (*WorkFlowResponse, error) {
+	_, backupLocationClient, err := backuploc.GetBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	updateReq = updateReq.ApiService.BackupLocationServiceUpdateBackupLocation(ctx, backupLocationID)
 	backupLocationModel, res, err := backupLocationClient.BackupLocationServiceUpdateBackupLocationExecute(updateReq)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupLocatiobackuplocerviceUpdateBackupLocation`: %v\n.Full HTTP respobackuploce: %v", err, res)
@@ -99,12 +97,12 @@ func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq platformv1.ApiB
 // SyncToBackupLocation returned synced backup location model.
 
 // DeleteBackupLocation delete backup location and return status.
-func (backuploc *PLATFORM_API_V1) DeleteBackupLocation(backupLocationID string) error {
+func (backuploc *PLATFORM_API_V1) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
 	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	_, res, err := backupLocationClient.BackupLocationServiceDeleteBackupLocation(ctx, backupLocationID).Execute()
+	_, res, err := backupLocationClient.BackupLocationServiceDeleteBackupLocation(ctx, backupLocationID.Id).Execute()
 	if err != nil {
 		return fmt.Errorf("Error when calling `BackupLocatiobackuplocerviceDeleteBackupLocation`: %v\n.Full HTTP respobackuploce: %v", err, res)
 	}

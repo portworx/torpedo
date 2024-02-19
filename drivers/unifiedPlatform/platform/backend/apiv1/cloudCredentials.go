@@ -42,15 +42,15 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials() ([]WorkFlowResponse, er
 }
 
 // GetCloudCredentials gets cloud credentials by ts id
-func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(cloudCredId string) (*WorkFlowResponse, error) {
-	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+	_, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	cloudCredsResponse := WorkFlowResponse{}
-	var getRequest platformv1.ApiCloudCredentialServiceGetCloudCredentialRequest
-	getRequest = getRequest.ApiService.CloudCredentialServiceGetCloudCredential(ctx, cloudCredId)
-	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceGetCloudCredential(ctx, cloudCredId).Execute()
+	var getCloudCredReq platformv1.ApiCloudCredentialServiceGetCloudCredentialRequest
+	copier.Copy(&getCloudCredReq, getReq)
+	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceGetCloudCredentialExecute(getCloudCredReq)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `CloudCredentialServiceGetCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -61,14 +61,15 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(cloudCredId string) (*Work
 }
 
 // CreateCloudCredentials return newly created cloud credentials
-func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest platformv1.ApiCloudCredentialServiceCreateCloudCredentialRequest, tenantId string) (*WorkFlowResponse, error) {
-	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+	_, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	cloudCredsResponse := WorkFlowResponse{}
-	createRequest = createRequest.ApiService.CloudCredentialServiceCreateCloudCredential(ctx, tenantId)
-	cloudCredModel, _, err := cloudCredsClient.CloudCredentialServiceCreateCloudCredentialExecute(createRequest)
+	var createCloudCredRequest platformv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
+	copier.Copy(&createCloudCredRequest, createRequest)
+	cloudCredModel, _, err := cloudCredsClient.CloudCredentialServiceCreateCloudCredentialExecute(createCloudCredRequest)
 	if err != nil {
 		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
 	}
@@ -78,14 +79,15 @@ func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest platformv
 }
 
 // UpdateCloudCredentials return updated created cloud credentials
-func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq platformv1.ApiCloudCredentialServiceUpdateCloudCredentialRequest, cloudCredentialId string) (*WorkFlowResponse, error) {
-	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+	_, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
 	cloudCredsResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	updateReq = updateReq.ApiService.CloudCredentialServiceUpdateCloudCredential(ctx, cloudCredentialId)
-	cloudCredationModel, res, err := cloudCredsClient.CloudCredentialServiceUpdateCloudCredentialExecute(updateReq)
+	var updateAppReq platformv1.ApiCloudCredentialServiceUpdateCloudCredentialRequest
+	copier.Copy(&updateAppReq, updateReq)
+	cloudCredationModel, res, err := cloudCredsClient.CloudCredentialServiceUpdateCloudCredentialExecute(updateAppReq)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `cloudCredationServiceUpdatecloudCredation`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -95,12 +97,12 @@ func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq platformv1.Ap
 }
 
 // DeleteCloudCredential delete cloud cred model.
-func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCredId string) error {
+func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCredId *WorkFlowRequest) error {
 	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	_, res, _ := cloudCredsClient.CloudCredentialServiceDeleteCloudCredential(ctx, cloudCredId).Execute()
+	_, res, _ := cloudCredsClient.CloudCredentialServiceDeleteCloudCredential(ctx, cloudCredId.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `CloudCredentialServiceDeleteCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}

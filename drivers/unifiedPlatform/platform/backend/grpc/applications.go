@@ -59,13 +59,14 @@ func (ApplicationGrpcV1 *ApplicationGrpc) getAppClientForCluster() (context.Cont
 }
 
 // ListAvailableApplicationsForTenant lists all application based on tenant id
-func (ApplicationGrpcV1 *ApplicationGrpc) ListAvailableApplicationsForTenant(tenantId string) ([]WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) ListAvailableApplicationsForTenant(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForTenant()
 	applicationResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	firstPageRequest := &publicAppsApitenant.ListAvailableApplicationsRequest{TenantId: tenantId}
+	var firstPageRequest *publicAppsApitenant.ListAvailableApplicationsRequest
+	copier.Copy(&firstPageRequest, listReq)
 	appModels, err := appClient.ListAvailableApplications(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting while calling `ListAvailableApplicationsRequest`: %v\n", err)
@@ -77,16 +78,14 @@ func (ApplicationGrpcV1 *ApplicationGrpc) ListAvailableApplicationsForTenant(ten
 }
 
 // ListAllApplicationsInCluster lists all application based on clusterId id
-func (ApplicationGrpcV1 *ApplicationGrpc) ListAllApplicationsInCluster(clusterId string) ([]WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) ListAllApplicationsInCluster(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	applicationResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	firstPageRequest2 := &publicAppsApicluster.ListApplicationsRequest{
-		ClusterId:  clusterId,
-		Pagination: NewPaginationRequest(1, 50),
-	}
+	var firstPageRequest2 *publicAppsApicluster.ListApplicationsRequest
+	copier.Copy(&firstPageRequest2, listReq)
 	appModels, err := appClient.ListApplications(ctx, firstPageRequest2, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting while calling `ListAvailableApplicationsRequest`: %v\n", err)
@@ -98,17 +97,15 @@ func (ApplicationGrpcV1 *ApplicationGrpc) ListAllApplicationsInCluster(clusterId
 }
 
 // GetApplicationAtClusterLevel gets the app model by its appid and the clusterId its installed in
-func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationAtClusterLevel(clusterId, appId string) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationAtClusterLevel(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	getRequest := &publicAppsApicluster.GetApplicationRequest{
-		ClusterId: clusterId,
-		Id:        appId,
-	}
-	appModel, err := appClient.GetApplication(ctx, getRequest, grpc.PerRPCCredentials(credentials))
+	var getAppRequest *publicAppsApicluster.GetApplicationRequest
+	copier.Copy(&getAppRequest, getReq)
+	appModel, err := appClient.GetApplication(ctx, getAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetApplication`: %v\n", err)
 	}
@@ -116,18 +113,18 @@ func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationAtClusterLevel(clusterId
 	copier.Copy(&appResponse, appModel)
 	log.Infof("Value of app after copy - [%v]", appResponse)
 	return &appResponse, nil
-
 }
 
 // GetApplicationByAppId gets the app model by its appid
-func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationByAppId(appId string) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationByAppId(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	getRequest := &publicAppsApicluster.GetApplicationRequest{Id: appId}
-	appModel, err := appClient.GetApplication(ctx, getRequest, grpc.PerRPCCredentials(credentials))
+	var getAppRequest *publicAppsApicluster.GetApplicationRequest
+	copier.Copy(&getAppRequest, getReq)
+	appModel, err := appClient.GetApplication(ctx, getAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetApplication`: %v\n", err)
 	}
@@ -138,14 +135,15 @@ func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationByAppId(appId string) (*
 }
 
 // InstallApplication installs the app model on given clusterId
-func (ApplicationGrpcV1 *ApplicationGrpc) InstallApplication(installRequest *publicAppsApicluster.InstallApplicationRequest, clusterId string) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) InstallApplication(installRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	installRequest = &publicAppsApicluster.InstallApplicationRequest{ClusterId: clusterId}
-	appModel, err := appClient.InstallApplication(ctx, installRequest, grpc.PerRPCCredentials(credentials))
+	var installAppReq *publicAppsApicluster.InstallApplicationRequest
+	copier.Copy(&installAppReq, installRequest)
+	appModel, err := appClient.InstallApplication(ctx, installAppReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `InstallApplication`: %v\n", err)
 	}
@@ -155,14 +153,15 @@ func (ApplicationGrpcV1 *ApplicationGrpc) InstallApplication(installRequest *pub
 }
 
 // UninstallApplicationByAppId uninstalls the app model by given appId
-func (ApplicationGrpcV1 *ApplicationGrpc) UninstallApplicationByAppId(appId string, uninstallReq *publicAppsApicluster.UninstallApplicationRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) UninstallApplicationByAppId(uninstallReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	uninstallReq = &publicAppsApicluster.UninstallApplicationRequest{Id: appId}
-	appModel, err := appClient.UninstallApplication(ctx, uninstallReq, grpc.PerRPCCredentials(credentials))
+	var uninstallAppReq *publicAppsApicluster.UninstallApplicationRequest
+	copier.Copy(&uninstallAppReq, uninstallReq)
+	appModel, err := appClient.UninstallApplication(ctx, uninstallAppReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `UninstallApplication`: %v\n", err)
 	}
@@ -172,17 +171,15 @@ func (ApplicationGrpcV1 *ApplicationGrpc) UninstallApplicationByAppId(appId stri
 }
 
 // UninstallAppByAppIdClusterId uninstalls the app model by given appId and clusterId
-func (ApplicationGrpcV1 *ApplicationGrpc) UninstallAppByAppIdClusterId(appId string, clusterId string, uninstallReq *publicAppsApicluster.UninstallApplicationRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *ApplicationGrpc) UninstallAppByAppIdClusterId(uninstallReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	uninstallReq = &publicAppsApicluster.UninstallApplicationRequest{
-		ClusterId: clusterId,
-		Id:        appId,
-	}
-	appModel, err := appClient.UninstallApplication(ctx, uninstallReq, grpc.PerRPCCredentials(credentials))
+	var uninstallAppReq *publicAppsApicluster.UninstallApplicationRequest
+	copier.Copy(&uninstallAppReq, uninstallReq)
+	appModel, err := appClient.UninstallApplication(ctx, uninstallAppReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `UninstallApplication`: %v\n", err)
 	}

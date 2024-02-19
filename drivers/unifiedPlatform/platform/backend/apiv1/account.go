@@ -114,7 +114,7 @@ func (AccountV1 *PLATFORM_API_V1) CreateAccount(accountName, displayName, userMa
 }
 
 // DeleteBackupLocation delete backup location and return status.
-func (AccountV1 *PLATFORM_API_V1) DeleteBackupLocation(accountId string) error {
+func (AccountV1 *PLATFORM_API_V1) DeleteAccount(accountId string) error {
 	ctx, client, err := AccountV1.getAccountClient()
 	if err != nil {
 		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)

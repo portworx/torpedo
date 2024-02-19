@@ -18,7 +18,7 @@ type AccountInterface interface {
 	GetAccountList() ([]WorkFlowResponse, error)
 	GetAccount(string) (*WorkFlowResponse, error)
 	CreateAccount(string, string, string) (WorkFlowResponse, error)
-	DeleteBackupLocation(string) error
+	DeleteAccount(string) error
 }
 
 type TenantInterface interface {
@@ -34,32 +34,33 @@ type TargetClusterInterface interface {
 
 type TargetClusterManifestInterface interface {
 	GetTargetClusterRegistrationManifest(getRequest *WorkFlowRequest) (string, error)
+}
 
 type ApplicationInterface interface {
-	ListAllApplicationsInCluster(string) ([]WorkFlowResponse, error)
-	ListAvailableApplicationsForTenant(string) ([]WorkFlowResponse, error)
-	GetApplicationAtClusterLevel(string, string) (*WorkFlowResponse, error)
-	GetApplicationByAppId(string) (*WorkFlowResponse, error)
-	InstallApplication(*WorkFlowRequest, string) (*WorkFlowResponse, error)
-	UninstallApplicationByAppId(string, *WorkFlowRequest) (*WorkFlowResponse, error)
-	UninstallAppByAppIdClusterId(string, string, *WorkFlowRequest) (*WorkFlowResponse, error)
+	ListAllApplicationsInCluster(*WorkFlowResponse) ([]WorkFlowResponse, error)
+	ListAvailableApplicationsForTenant(*WorkFlowResponse) ([]WorkFlowResponse, error)
+	GetApplicationAtClusterLevel(*WorkFlowResponse) (*WorkFlowResponse, error)
+	GetApplicationByAppId(*WorkFlowResponse) (*WorkFlowResponse, error)
+	InstallApplication(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UninstallApplicationByAppId(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UninstallAppByAppIdClusterId(*WorkFlowRequest) (*WorkFlowResponse, error)
 }
 
 type BackupLocationInterface interface {
 	ListBackupLocations() ([]WorkFlowResponse, error)
-	GetBackupLocation(string) (*WorkFlowResponse, error)
-	CreateBackupLocation(string, *WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateBackupLocation(*WorkFlowRequest, string) (*WorkFlowResponse, error)
-	DeleteBackupLocation(string) error
+	GetBackupLocation(*WorkFlowResponse) (*WorkFlowResponse, error)
+	CreateBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteBackupLocation(*WorkFlowRequest) error
 }
 
 type CloudCredentialsInterface interface {
 	ListCloudCredentials() ([]WorkFlowResponse, error)
-	GetCloudCredentials(string) (*WorkFlowResponse, error)
-	CreateCloudCredentials(*WorkFlowRequest, string) (*WorkFlowResponse, error)
-	UpdateCloudCredentials(*WorkFlowRequest, string) (*WorkFlowResponse, error)
-	DeleteCloudCredential(string) error
+	GetCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteCloudCredential(*WorkFlowRequest) error
 }
 type NamespaceInterface interface {
-	ListNamespaces(string) ([]WorkFlowResponse, error)
+	ListNamespaces(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }

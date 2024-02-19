@@ -52,13 +52,14 @@ func (BackupLocGrpcV1 *BackupLocGrpc) ListBackupLocations() ([]WorkFlowResponse,
 }
 
 // GetBackupLocation get backup location model by its ID.
-func (BackupLocGrpcV1 *BackupLocGrpc) GetBackupLocation(backupLocID string) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *BackupLocGrpc) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	bckpLocResp := WorkFlowResponse{}
-	getRequest := &publicbackuplocapi.GetBackupLocationRequest{Id: backupLocID}
+	var getRequest *publicbackuplocapi.GetBackupLocationRequest
+	copier.Copy(&getRequest, getReq)
 	backupLocationModel, err := backupLocationClient.GetBackupLocation(ctx, getRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -70,14 +71,15 @@ func (BackupLocGrpcV1 *BackupLocGrpc) GetBackupLocation(backupLocID string) (*Wo
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(tenantID string, createRequest *publicbackuplocapi.CreateBackupLocationRequest) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	createRequest = &publicbackuplocapi.CreateBackupLocationRequest{TenantId: tenantID}
-	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createRequest, grpc.PerRPCCredentials(credentials))
+	var createAppRequest *publicbackuplocapi.CreateBackupLocationRequest
+	copier.Copy(&createAppRequest, createRequest)
+	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `BackupLocationServiceCreateBackupLocation` to create backup target - %v", err)
 	}
@@ -87,16 +89,15 @@ func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(tenantID string, crea
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(updateRequest *publicbackuplocapi.UpdateBackupLocationRequest, backupLocationID string) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	updateRequest = &publicbackuplocapi.UpdateBackupLocationRequest{
-		Id: backupLocationID,
-	}
-	backupLocationModel, err := backupLocationClient.UpdateBackupLocation(ctx, updateRequest, grpc.PerRPCCredentials(credentials))
+	var updateAppRequest *publicbackuplocapi.UpdateBackupLocationRequest
+	copier.Copy(&updateAppRequest, updateRequest)
+	backupLocationModel, err := backupLocationClient.UpdateBackupLocation(ctx, updateAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -109,12 +110,12 @@ func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(updateRequest *public
 // SyncToBackupLocation returned synced backup location model.
 
 // DeleteBackupLocation delete backup location and return status.
-func (BackupLocGrpcV1 *BackupLocGrpc) DeleteBackupLocation(backupLocationID string) error {
+func (BackupLocGrpcV1 *BackupLocGrpc) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	deleteRequest := &publicbackuplocapi.DeleteBackupLocationRequest{Id: backupLocationID}
+	deleteRequest := &publicbackuplocapi.DeleteBackupLocationRequest{Id: backupLocationID.Id}
 	_, err = backupLocationClient.DeleteBackupLocation(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return fmt.Errorf("Error when calling `BackupLocationServiceDeleteBackupLocation`: %v\n", err)

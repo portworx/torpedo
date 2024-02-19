@@ -106,6 +106,6 @@ func (AccountV1 *PlatformGrpc) CreateAccount(accountName, displayName, userMail 
 	return accResponse, fmt.Errorf("Create Account is not implemented in grpc client\n")
 }
 
-func (AccountV1 *PlatformGrpc) DeleteBackupLocation(accountId string) error {
+func (AccountV1 *PlatformGrpc) DeleteAccount(accountId string) error {
 	return fmt.Errorf("DeleteBackuplocation is not implemented in grpc client\n")
 }

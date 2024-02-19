@@ -24,13 +24,13 @@ func (ns *PLATFORM_API_V1) GetNamespaceClient() (context.Context, *platformv1.Na
 }
 
 // ListNamespaces return namespaces models in a target cluster.
-func (ns *PLATFORM_API_V1) ListNamespaces(targetID string) ([]WorkFlowResponse, error) {
+func (ns *PLATFORM_API_V1) ListNamespaces(targetID *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, nsClient, err := ns.GetNamespaceClient()
 	namespaceResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	nsModels, res, err := nsClient.NamespaceServiceListNamespaces(ctx, targetID).Execute()
+	nsModels, res, err := nsClient.NamespaceServiceListNamespaces(ctx, targetID.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `NamespaceServiceListNamespaces`: %v\n.Full HTTP response: %v", err, res)
 	}

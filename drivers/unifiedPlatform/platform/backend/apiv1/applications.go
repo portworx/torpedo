@@ -25,13 +25,13 @@ func (applications *PLATFORM_API_V1) GetAppClient() (context.Context, *platformv
 }
 
 // ListAllApplicationsInCluster lists all application based on cluster id
-func (applications *PLATFORM_API_V1) ListAllApplicationsInCluster(clusterId string) ([]WorkFlowResponse, error) {
+func (applications *PLATFORM_API_V1) ListAllApplicationsInCluster(appRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, appClient, err := applications.GetAppClient()
 	applicationResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	appModels, res, err := appClient.ApplicationServiceListApplications(ctx, clusterId).Execute()
+	appModels, res, err := appClient.ApplicationServiceListApplications(ctx, appRequest.ClusterId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceListApplications`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -42,13 +42,13 @@ func (applications *PLATFORM_API_V1) ListAllApplicationsInCluster(clusterId stri
 }
 
 // ListAvailableApplicationsForTenant lists all application available across tenant
-func (applications *PLATFORM_API_V1) ListAvailableApplicationsForTenant(tenantId string) ([]WorkFlowResponse, error) {
+func (applications *PLATFORM_API_V1) ListAvailableApplicationsForTenant(appRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, appClient, err := applications.GetAppClient()
 	applicationResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	appModels, res, err := appClient.ApplicationServiceListAvailableApplications(ctx, tenantId).Execute()
+	appModels, res, err := appClient.ApplicationServiceListAvailableApplications(ctx, appRequest.TenantId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceListAvailableApplications`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -62,7 +62,7 @@ func (applications *PLATFORM_API_V1) ListAvailableApplicationsForTenant(tenantId
 }
 
 // GetApplicationAtClusterLevel gets the app model by its appid and the clusterId its installed in
-func (applications *PLATFORM_API_V1) GetApplicationAtClusterLevel(appId string, clusterId string) (*WorkFlowResponse, error) {
+func (applications *PLATFORM_API_V1) GetApplicationAtClusterLevel(appReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, err := applications.GetAppClient()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
@@ -70,7 +70,7 @@ func (applications *PLATFORM_API_V1) GetApplicationAtClusterLevel(appId string, 
 	}
 
 	var getRequest platformv1.ApiApplicationServiceGetApplication2Request
-	getRequest = getRequest.ApiService.ApplicationServiceGetApplication2(ctx, clusterId, appId)
+	getRequest = getRequest.ApiService.ApplicationServiceGetApplication2(ctx, appReq.ClusterId, appReq.PdsAppId)
 	appModel, res, err := appClient.ApplicationServiceGetApplication2Execute(getRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceGetApplication2`: %v\n.Full HTTP response: %v", err, res)
@@ -82,7 +82,7 @@ func (applications *PLATFORM_API_V1) GetApplicationAtClusterLevel(appId string, 
 }
 
 // GetApplicationByAppId gets the app model by its appid
-func (applications *PLATFORM_API_V1) GetApplicationByAppId(appId string) (*WorkFlowResponse, error) {
+func (applications *PLATFORM_API_V1) GetApplicationByAppId(appReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, err := applications.GetAppClient()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
@@ -90,7 +90,7 @@ func (applications *PLATFORM_API_V1) GetApplicationByAppId(appId string) (*WorkF
 	}
 
 	var getRequest platformv1.ApiApplicationServiceGetApplicationRequest
-	getRequest = getRequest.ApiService.ApplicationServiceGetApplication(ctx, appId)
+	getRequest = getRequest.ApiService.ApplicationServiceGetApplication(ctx, appReq.PdsAppId)
 	appModel, res, err := appClient.ApplicationServiceGetApplicationExecute(getRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceGetApplication2`: %v\n.Full HTTP response: %v", err, res)
@@ -102,13 +102,14 @@ func (applications *PLATFORM_API_V1) GetApplicationByAppId(appId string) (*WorkF
 }
 
 // InstallApplication installs the app model on given clusterId
-func (applications *PLATFORM_API_V1) InstallApplication(installRequest platformv1.ApiApplicationServiceInstallApplicationRequest, clusterId string) (*WorkFlowResponse, error) {
-	ctx, appClient, err := applications.GetAppClient()
-	appResponse := WorkFlowResponse{}
+func (applications *PLATFORM_API_V1) InstallApplication(appInstallRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+	var installRequest platformv1.ApiApplicationServiceInstallApplicationRequest
+	_, appClient, err := applications.GetAppClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	installRequest = installRequest.ApiService.ApplicationServiceInstallApplication(ctx, clusterId)
+	appResponse := WorkFlowResponse{}
+	copier.Copy(&installRequest, appInstallRequest)
 	appModel, res, err := appClient.ApplicationServiceInstallApplicationExecute(installRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceInstallApplication`: %v\n.Full HTTP response: %v", err, res)
@@ -119,13 +120,14 @@ func (applications *PLATFORM_API_V1) InstallApplication(installRequest platformv
 }
 
 // UninstallApplicationByAppId uninstalls the app model by given appId
-func (applications *PLATFORM_API_V1) UninstallApplicationByAppId(appId string, uninstallReq platformv1.ApiApplicationServiceUninstallApplicationRequest) (*WorkFlowResponse, error) {
-	ctx, appClient, err := applications.GetAppClient()
+func (applications *PLATFORM_API_V1) UninstallApplicationByAppId(appUninstallRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+	var uninstallReq platformv1.ApiApplicationServiceUninstallApplicationRequest
+	_, appClient, err := applications.GetAppClient()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	uninstallReq = uninstallReq.ApiService.ApplicationServiceUninstallApplication(ctx, appId)
+	copier.Copy(&uninstallReq, appUninstallRequest)
 	appModel, res, err := appClient.ApplicationServiceUninstallApplicationExecute(uninstallReq)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceUninstallApplication`: %v\n.Full HTTP response: %v", err, res)
@@ -136,16 +138,17 @@ func (applications *PLATFORM_API_V1) UninstallApplicationByAppId(appId string, u
 }
 
 // UninstallAppByAppIdClusterId uninstalls the app model by given appId and clusterId
-func (applications *PLATFORM_API_V1) UninstallAppByAppIdClusterId(appId string, clusterId string, uninstallReq platformv1.ApiApplicationServiceUninstallApplication2Request) (*WorkFlowResponse, error) {
-	ctx, appClient, err := applications.GetAppClient()
+func (applications *PLATFORM_API_V1) UninstallAppByAppIdClusterId(appUninstallRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+	var uninstallReq platformv1.ApiApplicationServiceUninstallApplication2Request
+	_, appClient, err := applications.GetAppClient()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	uninstallReq = uninstallReq.ApiService.ApplicationServiceUninstallApplication2(ctx, clusterId, appId)
+	copier.Copy(&uninstallReq, appUninstallRequest)
 	appModel, res, err := appClient.ApplicationServiceUninstallApplication2Execute(uninstallReq)
 	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApplicationServiceUninstallApplication2`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `ApplicationServiceUninstallApplication`: %v\n.Full HTTP response: %v", err, res)
 	}
 	copier.Copy(&appResponse, appModel)
 	log.Infof("Value of applications after copy - [%v]", appResponse)

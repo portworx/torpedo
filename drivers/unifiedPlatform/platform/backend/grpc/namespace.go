@@ -34,16 +34,14 @@ func (NamespaceGrpcV1 *NamespaceGrpc) getNamespaceClient() (context.Context, pub
 	return ctx, accountClient, token, nil
 }
 
-func (NamespaceGrpcV1 *NamespaceGrpc) ListNamespaces() ([]WorkFlowResponse, error) {
+func (NamespaceGrpcV1 *NamespaceGrpc) ListNamespaces(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, nsClient, _, err := NamespaceGrpcV1.getNamespaceClient()
 	namespaceResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	firstPageRequest := &publicnamespaceapis.ListNamespacesRequest{
-		Pagination: NewPaginationRequest(1, 50),
-	}
-
+	var firstPageRequest *publicnamespaceapis.ListNamespacesRequest
+	copier.Copy(&firstPageRequest, request)
 	nsResponse, err := nsClient.ListNamespaces(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListTenants`: %v\n.", err)

@@ -31,6 +31,11 @@ type Config struct {
 	DeploymentTopologies []DeploymentTopology `copier:"must"`
 }
 
+type PaginationRequest struct {
+	PageNumber int
+	PageSize   int
+}
+
 type WorkFlowResponse struct {
 	Meta   Meta
 	Config Config
@@ -38,9 +43,13 @@ type WorkFlowResponse struct {
 }
 
 type WorkFlowRequest struct {
-	Meta   Meta
-	Config Config
-	Id     string // This is used in GetTarget api
+	Meta       Meta
+	Config     Config
+	Id         string
+	ClusterId  string
+	TenantId   string
+	PdsAppId   string
+	Pagination PaginationRequest // This is used in GetTarget api
 }
 
 type Reference struct {
