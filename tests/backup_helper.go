@@ -1454,14 +1454,7 @@ func CleanupCloudSettingsAndClusters(backupLocationMap map[string]string, credNa
 			Inst().Dash.VerifySafely(err, nil, fmt.Sprintf("Verifying if cluster [%s] is present", clusterName))
 		}
 		if isPresent {
-			clusterUID, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, clusterName)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster UID"))
-			log.Infof("Cluster UID - [%s], Cluster Name - [%s]", clusterUID, clusterName)
-			clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
-			clusterResp, err := Inst().Backup.InspectCluster(ctx, clusterReq)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Unable to get cluster response"))
-			clusterObj := clusterResp.GetCluster()
-			err = ValidateAllBackupCreatedResourceCleanup(clusterObj)
+			err = ValidateAllBackupCreatedResourceCleanup(clusterName, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("CR/Backup resources found after cleanup"))
 		}
 	}
@@ -7111,7 +7104,19 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 }
 
 // ValidateAllBackupCreatedResourceCleanup verfies all the backup related objects cleanup in after suite
-func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) error {
+func ValidateAllBackupCreatedResourceCleanup(clusterName string, context context1.Context) error {
+
+	clusterUID, err := Inst().Backup.GetClusterUID(context, BackupOrgID, clusterName)
+	if err != nil {
+		return fmt.Errorf("unable to find cluster UID. Error: [%s]", err.Error())
+	}
+	log.Infof("Cluster UID - [%s], Cluster Name - [%s]", clusterUID, clusterName)
+	clusterReq := &api.ClusterInspectRequest{OrgId: BackupOrgID, Name: clusterName, IncludeSecrets: true, Uid: clusterUID}
+	clusterResp, err := Inst().Backup.InspectCluster(context, clusterReq)
+	if err != nil {
+		return fmt.Errorf("cluster Inspect request failed. Error: [%s]", err.Error())
+	}
+	clusterObj := clusterResp.GetCluster()
 
 	validateResourceCleanup := func() (interface{}, bool, error) {
 		allCRObjects := GetAllBackupCRObjects(clusterObj)
@@ -7120,7 +7125,7 @@ func ValidateAllBackupCreatedResourceCleanup(clusterObj *api.ClusterObject) erro
 		}
 		return "", false, nil
 	}
-	_, err := task.DoRetryWithTimeout(validateResourceCleanup, 10*time.Minute, 10*time.Second)
+	_, err = task.DoRetryWithTimeout(validateResourceCleanup, 10*time.Minute, 10*time.Second)
 
 	return err
 }
