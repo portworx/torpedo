@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
@@ -29,6 +30,14 @@ var _ = BeforeSuite(func() {
 		//Initialising UnifiedApiComponents in ds utils
 		err = dsUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
 		log.FailOnError(err, "error while initialising api components in ds utils")
+
+		// Read pds params from the configmap
+		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
+		Params, err = customParams.ReadParams(pdsparams)
+		log.FailOnError(err, "Failed to read params from json file")
+		infraParams := Params.InfraToTest
+		pdsLabels["clusterType"] = infraParams.ClusterType
+
 	})
 })
 

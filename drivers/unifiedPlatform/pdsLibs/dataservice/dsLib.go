@@ -7,12 +7,29 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
+	"strconv"
 )
 
 var (
-	v2Components *unifiedPlatform.UnifiedPlatformComponents
-	err          error
+	v2Components     *unifiedPlatform.UnifiedPlatformComponents
+	depInputs        *apiStructs.WorkFlowRequest
+	depCreateRequest pdsv2.ApiDeploymentServiceCreateDeploymentRequest
+	namespaceId      string
+	err              error
 )
+
+type PDSDataService struct {
+	DeploymentName        string "json:\"DeploymentName\""
+	Name                  string "json:\"Name\""
+	Version               string "json:\"Version\""
+	Image                 string "json:\"Image\""
+	Replicas              int    "json:\"Replicas\""
+	ScaleReplicas         int    "json:\"ScaleReplicas\""
+	OldVersion            string "json:\"OldVersion\""
+	OldImage              string "json:\"OldImage\""
+	DataServiceEnabledTLS bool   "json:\"DataServiceEnabledTLS\""
+	ServiceType           string "json:\"ServiceType\""
+}
 
 // InitUnifiedApiComponents
 func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
@@ -23,27 +40,54 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-// DeployDataservice should be called from workflows
-func DeployDataservice(depName, namespace, accountID string) (*apiStructs.WorkFlowResponse, error) {
+// DeployDataService should be called from workflows
+func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
-	//TODO: Take the json input param and populate the depCreate request, write the required support lib func
+	// TODO call the below methods and fill up the structs
+	// Get TargetClusterID
+	// Get ImageID
+	// Get ProjectID
+	// Get App, Resource and storage Template Ids
 
-	var depInputs *apiStructs.WorkFlowRequest //make this global var
-	var namespaceId string
-
-	//TODO:  Form the request body once the backend's are ready for create deployment
-	var depCreateRequest pdsv2.ApiDeploymentServiceCreateDeploymentRequest
 	depCreateRequest = depCreateRequest.V1Deployment(pdsv2.V1Deployment{
 		Meta: &pdsv2.V1Meta{
-			Name: &depName,
+			Name: &ds.DeploymentName,
 		},
 		Config: &pdsv2.V1Config1{
-			References:           nil,
-			TlsEnabled:           nil,
-			DeploymentTopologies: nil,
+			References: &pdsv2.V1References2{
+				TargetClusterId: nil,
+				ImageId:         nil,
+				ProjectId:       nil,
+				RestoreId:       nil,
+			},
+			TlsEnabled: &ds.DataServiceEnabledTLS,
+			DeploymentTopologies: []pdsv2.V1DeploymentTopology{
+				{
+					Name:                     &ds.Name,
+					Description:              nil,
+					Replicas:                 intToPointerString(ds.Replicas),
+					ServiceType:              &ds.ServiceType,
+					ServiceName:              nil,
+					LoadBalancerSourceRanges: nil,
+					ResourceTemplate: &pdsv2.V1Template{
+						Id:              nil,
+						ResourceVersion: nil,
+						Values:          nil,
+					},
+					ApplicationTemplate: &pdsv2.V1Template{
+						Id:              nil,
+						ResourceVersion: nil,
+						Values:          nil,
+					},
+					StorageTemplate: &pdsv2.V1Template{
+						Id:              nil,
+						ResourceVersion: nil,
+						Values:          nil,
+					},
+				},
+			},
 		},
-		Status: nil,
 	})
 
 	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
@@ -62,4 +106,13 @@ func DeployDataservice(depName, namespace, accountID string) (*apiStructs.WorkFl
 
 func ValidateDataServiceDeployment() {
 	log.Info("Data service will be validated in this method")
+}
+
+func intToPointerString(n int) *string {
+	// Convert the integer to a string
+	str := strconv.Itoa(n)
+	// Create a pointer to the string
+	ptr := &str
+	// Return the pointer to the string
+	return ptr
 }

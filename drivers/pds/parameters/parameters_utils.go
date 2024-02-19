@@ -11,6 +11,7 @@ import (
 
 type Parameter struct {
 	DataServiceToTest []struct {
+		DeploymentName        string `json:"DeploymentName"`
 		Name                  string `json:"Name"`
 		Version               string `json:"Version"`
 		Image                 string `json:"Image"`
@@ -20,6 +21,93 @@ type Parameter struct {
 		OldImage              string `json:"OldImage"`
 		DataServiceEnabledTLS bool   `json:"DataServiceEnabledTLS"`
 	} `json:"DataServiceToTest"`
+
+	ForceImageID bool
+
+	SSIE struct {
+		NumIterations int `json:"NumIterations"`
+	} `json:"SSIE"`
+
+	TLS struct {
+		EnableTLS              bool
+		RepoName               string
+		RepoURL                string
+		ClusterIssuerName      string
+		ClusterIssuerNamespace string
+	}
+	BackUpAndRestore struct {
+		RunBkpAndRestrTest bool
+		TargetLocation     string
+	}
+	InfraToTest struct {
+		ControlPlaneURL      string `json:"ControlPlaneURL"`
+		AccountName          string `json:"AccountName"`
+		TenantName           string `json:"TenantName"`
+		ProjectName          string `json:"ProjectName"`
+		ClusterType          string `json:"ClusterType"`
+		Namespace            string `json:"Namespace"`
+		PxNamespace          string `json:"PxNamespace"`
+		PDSNamespace         string `json:"PDSNamespace"`
+		ServiceIdentityToken bool   `json:"ServiceIdentityToken"`
+	} `json:"InfraToTest"`
+	PDSHelmVersions struct {
+		LatestHelmVersion   string `json:"LatestHelmVersion"`
+		PreviousHelmVersion string `json:"PreviousHelmVersion"`
+	} `json:"PDSHelmVersions"`
+	LoadGen struct {
+		LoadGenDepName  string `json:"LoadGenDepName"`
+		FailOnError     string `json:"FailOnError"`
+		Mode            string `json:"Mode"` //example: read,write
+		TableName       string `json:"TableName"`
+		NumOfRows       string `json:"NumOfRows"`
+		Iterations      string `json:"Iterations"`
+		Timeout         string `json:"Timeout"` //example: 60s
+		ReplacePassword string `json:"ReplacePassword"`
+		ClusterMode     string `json:"ClusterMode"`
+		Replicas        int32  `json:"Replicas"`
+	}
+	CleanUpParams struct {
+		AppTemplatePrefix      []string `json:"AppTemplatePrefix"`
+		ResourceTemplatePrefix []string `json:"ResourceTemplatePrefix"`
+		StorageTemplatePrefix  []string `json:"StorageTemplatePrefix"`
+		SkipTargetClusterCheck bool     `json:"SkipTargetClusterCheck"`
+	}
+	Users struct {
+		AdminUsername    string `json:"AdminUsername"`
+		AdminPassword    string `json:"AdminPassword"`
+		NonAdminUsername string `json:"NonAdminUsername"`
+		NonAdminPassword string `json:"NonAdminPassword"`
+	} `json:"Users"`
+	ResiliencyTest struct {
+		CheckTillReplica int32 `json:"CheckTillReplica"`
+	} `json:"ResiliencyTest"`
+	StorageConfigurations struct {
+		FSType         []string
+		ReplFactor     []int32
+		NewStorageSize string
+		CpuLimit       string
+		CpuRequest     string
+		MemoryLimit    string
+		MemoryRequest  string
+		StorageRequest string
+		Iterations     int
+	} `json:"StorageConfigurations"`
+}
+
+type NewPDSParams struct {
+	DataServiceToTest []struct {
+		DeploymentName        string `json:"DeploymentName"`
+		Name                  string `json:"Name"`
+		Version               string `json:"Version"`
+		Image                 string `json:"Image"`
+		Replicas              int    `json:"Replicas"`
+		ScaleReplicas         int    `json:"ScaleReplicas"`
+		OldVersion            string `json:"OldVersion"`
+		OldImage              string `json:"OldImage"`
+		DataServiceEnabledTLS bool   `json:"DataServiceEnabledTLS"`
+		ServiceType           string `json:"ServiceType"`
+	} `json:"DataServiceToTest"`
+
 	ForceImageID bool
 
 	SSIE struct {
