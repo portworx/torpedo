@@ -101,7 +101,7 @@ require (
 	github.com/jetstack/cert-manager v1.7.3
 	github.com/jinzhu/copier v0.4.0
 	github.com/pure-px/apis v0.0.0-20240208062504-a3b217e8dca4
-	github.com/pure-px/platform-api-go-client v0.0.0-20240131093336-8ef532ef36bd
+	github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.7.0
 )
