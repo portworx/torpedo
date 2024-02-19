@@ -489,7 +489,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "cd /bin && ./taas"]
+    command: ["sh", "-c", "cd /bin && ./taas -testval=avinash"]
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
