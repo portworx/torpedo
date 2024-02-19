@@ -3,6 +3,11 @@ apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
   name: vm-cirros-containerdisk
+  annotations:
+    startDataSupported: "true"
+    username: "cirros"
+    port: "22"
+    appType: "kubevirt"
 spec:
   running: true
   template:

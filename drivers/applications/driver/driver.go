@@ -2,8 +2,10 @@ package driver
 
 import (
 	"context"
+	"github.com/portworx/torpedo/drivers/node"
 
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
+	. "github.com/portworx/torpedo/drivers/applications/kubevirt"
 	. "github.com/portworx/torpedo/drivers/applications/mysql"
 	. "github.com/portworx/torpedo/drivers/applications/postgres"
 	. "github.com/portworx/torpedo/drivers/utilities"
@@ -12,9 +14,6 @@ import (
 type ApplicationDriver interface {
 	// DefaultPort returns the default port for the application
 	DefaultPort() int
-
-	// DefaultDBName returns default database name in case of an database app
-	DefaultDBName() string
 
 	// ExecuteCommand executes a command on the application
 	ExecuteCommand(commands []string, ctx context.Context) error
@@ -49,7 +48,8 @@ type ApplicationDriver interface {
 
 // GetApplicationDriver returns struct of appType provided as input
 func GetApplicationDriver(appType string, hostname string, user string,
-	password string, port int, dbname string, nodePort int, namespace string) (ApplicationDriver, error) {
+	password string, port int, dbname string, nodePort int, namespace string, IPAddress string,
+	nodeDriver node.Driver) (ApplicationDriver, error) {
 
 	switch appType {
 	case Postgres:
@@ -77,6 +77,19 @@ func GetApplicationDriver(appType string, hostname string, user string,
 			},
 			NodePort:  nodePort,
 			Namespace: namespace,
+		}, nil
+
+	case Kubevirt:
+		return &KubevirtConfig{
+			Hostname:  hostname,
+			User:      user,
+			Password:  password,
+			IPAddress: IPAddress,
+			DataCommands: map[string]map[string][]string{
+				"default": GenerateRandomCommandToCreateFiles(20),
+			},
+			NodeDriver: nodeDriver,
+			Namespace:  namespace,
 		}, nil
 	default:
 		return &PostgresConfig{

@@ -1,9 +1,15 @@
 package utilities
 
 import (
+	"context"
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/kubevirt"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/pkg/log"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
@@ -21,15 +27,20 @@ type AppInfo struct {
 	Hostname         string
 	AppType          string
 	Namespace        string
+	IPAddress        string
 }
 
 const (
-	svcAnnotationKey      = "startDataSupported"
-	userAnnotationKey     = "username"
-	passwordAnnotationKey = "password"
-	databaseAnnotationKey = "databaseName"
-	portAnnotationKey     = "port"
-	appTypeAnnotationKey  = "appType"
+	svcAnnotationKey                = "startDataSupported"
+	userAnnotationKey               = "username"
+	passwordAnnotationKey           = "password"
+	databaseAnnotationKey           = "databaseName"
+	portAnnotationKey               = "port"
+	defaultFilePath                 = "/tmp"
+	appTypeAnnotationKey            = "appType"
+	defaultCmdTimeout               = 20 * time.Second
+	defaultCmdRetryInterval         = 5 * time.Second
+	defaultKubeconfigMapForKubevirt = "kubevirt-creds"
 )
 
 // RandomString generates a random lowercase string of length characters.
@@ -137,12 +148,46 @@ func CreateHostNameForApp(serviceName string, nodePort int32, namespace string) 
 }
 
 // ExtractConnectionInfo Extracts the connection information from the service yaml
-func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
+func ExtractConnectionInfo(ctx *scheduler.Context, context context.Context) (AppInfo, error) {
 
 	// TODO: This needs to be enhanced to support multiple application in one ctx
 	var appInfo AppInfo
 
 	for _, specObj := range ctx.App.SpecList {
+		if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
+			k8sKubevirt := kubevirt.Instance()
+			appInfo.Namespace = obj.Namespace
+			vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(context, obj.Name, obj.Namespace)
+			if err != nil {
+				return appInfo, err
+			}
+			if svcAnnotationValue, ok := obj.Annotations[svcAnnotationKey]; ok {
+				appInfo.StartDataSupport = svcAnnotationValue == "true"
+				if !appInfo.StartDataSupport {
+					break
+				}
+			} else {
+				appInfo.StartDataSupport = false
+				break
+			}
+			if userAnnotationValue, ok := obj.Annotations[userAnnotationKey]; ok {
+				appInfo.User = userAnnotationValue
+			} else {
+				return appInfo, fmt.Errorf("Username not found")
+			}
+			if appTypeAnnotationValue, ok := obj.Annotations[appTypeAnnotationKey]; ok {
+				appInfo.AppType = appTypeAnnotationValue
+			} else {
+				return appInfo, fmt.Errorf("AppType not found")
+			}
+			appInfo.Hostname = vmInstance.Status.Interfaces[0].IP
+			cm, err := core.Instance().GetConfigMap(defaultKubeconfigMapForKubevirt, "default")
+			if err != nil {
+				return appInfo, err
+			}
+			appInfo.Password = cm.Data[obj.Name]
+			appInfo.IPAddress = vmInstance.Status.Interfaces[0].IP
+		}
 		if obj, ok := specObj.(*corev1.Service); ok {
 			appInfo.Namespace = obj.Namespace
 			// TODO: This needs to be fetched from spec once CloneAppContextAndTransformWithMappings is fixed
@@ -191,4 +236,49 @@ func ExtractConnectionInfo(ctx *scheduler.Context) (AppInfo, error) {
 	}
 
 	return appInfo, nil
+}
+
+// RunCmdGetOutputOnNode runs the command on a particular node and returns output
+func RunCmdGetOutputOnNode(cmd string, n node.Node, nodeDriver node.Driver) (string, error) {
+	output, err := nodeDriver.RunCommand(n, cmd, node.ConnectionOpts{
+		Timeout:         defaultCmdTimeout,
+		TimeBeforeRetry: defaultCmdRetryInterval,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Warnf("failed to run cmd: %s. err: %v", cmd, err)
+	}
+	return output, err
+}
+
+// GenerateRandomCommandToCreateFiles creates random textfiles with random data
+func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
+	var randomFileCommands = make(map[string][]string)
+	var filePath = defaultFilePath + RandomString(10) + "/"
+	var insertCommands []string
+	var selectCommands []string
+	var deleteCommands []string
+	var updateCommands []string
+
+	// Generating command to create the dir to hold files if not exists
+	createDir := fmt.Sprintf("mkdir -p %s", filePath)
+	log.Infof("Command to create Dir - [%s]", createDir)
+	insertCommands = append(insertCommands, createDir)
+
+	for counter := 0; counter < count; counter++ {
+		currentCounter := strconv.Itoa(counter)
+		fileName := fmt.Sprintf("%s/%s_%s.txt", filePath, currentCounter, RandomString(4))
+		fileContent := fmt.Sprintf("This is the file content\n %s", RandomString(1000))
+		insertCommands = append(insertCommands, fmt.Sprintf("echo '%s' > %s", fileContent, fileName))
+		selectCommands = append(selectCommands, fmt.Sprintf("cat %s | grep %s", filePath, fileContent))
+		updateCommands = append(updateCommands, fmt.Sprintf("echo '%s' >> %s", RandomString(1000), fileName))
+		deleteCommands = append(deleteCommands, fmt.Sprintf("rm %s", filePath))
+	}
+
+	randomFileCommands["insert"] = insertCommands
+	randomFileCommands["select"] = selectCommands
+	randomFileCommands["update"] = updateCommands
+	randomFileCommands["delete"] = deleteCommands
+
+	return randomFileCommands
 }
