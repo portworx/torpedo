@@ -230,15 +230,15 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 		preRuleUid           string
 		postRuleUid          string
 		providers            = GetBackupProviders()
+		numberOfVolumes      = 2
 	)
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("ValidateFiftVolumeBackups", "To verify backup of 50 volumes and performs restore", nil, 55816, Sabrarhussaini, Q1FY25)
 		backupLocationMap = make(map[string]string)
 		log.InfoD("scheduling applications")
-		scheduledAppContexts = make([]*scheduler.Context, 0)
 		namespace = fmt.Sprintf("test-ns-%s", RandomString(6))
-		for i := 0; i < 2; i++ {
+		for i := 0; i < numberOfVolumes; i++ {
 			Inst().CustomAppConfig["postgres-backup-multiple-volumes"] = scheduler.AppConfig{
 				Suffix: RandomString(8),
 			}
@@ -313,11 +313,10 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 			log.InfoD("Taking backup of application with 50 volumes on source cluster")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 			log.InfoD("Taking Backup of application")
 			currentBackupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
 			labelSelectors := make(map[string]string)
-			err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			err = CreateBackupWithValidation(ctx, currentBackupName, SourceClusterName, bkpLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", currentBackupName))
 			backupNameList = append(backupNameList, currentBackupName)
 		})
@@ -327,9 +326,8 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Unable to fetch px-central-admin ctx")
 			log.Infof("Backup to be restored - %v", currentBackupName)
-			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 			restoreName := fmt.Sprintf("%s-%v", RestoreNamePrefix, RandomString(10))
-			err = CreateRestoreWithValidation(ctx, restoreName, currentBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
+			err = CreateRestoreWithValidation(ctx, restoreName, currentBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creating restore [%s] from backup [%s]", restoreName, currentBackupName))
 			restoreNames = append(restoreNames, restoreName)
 		})
