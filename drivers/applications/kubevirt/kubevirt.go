@@ -109,12 +109,13 @@ func (app *KubevirtConfig) ExecuteCommand(commands []string, ctx context1.Contex
 					}
 				}
 				log.Infof("Output of cmd %s - \n%s", cmd, output)
-				return "", false, nil
 			}
 			return "", false, nil
 		}
 		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
-		return err
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

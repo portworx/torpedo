@@ -6,7 +6,6 @@ metadata:
   annotations:
     startDataSupported: "true"
     username: "cirros"
-    port: "22"
     appType: "kubevirt"
 spec:
   running: true

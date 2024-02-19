@@ -1970,7 +1970,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, context contex
 			continue
 		}
 		if appInfo.StartDataSupport {
-			appHandler, _ := appDriver.GetApplicationDriver(
+			appHandler, err := appDriver.GetApplicationDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -1981,6 +1981,9 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, context contex
 				appInfo.Namespace,
 				appInfo.IPAddress,
 				Inst().N)
+			if err != nil {
+				log.Infof("Error - %s", err.Error())
+			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 		}

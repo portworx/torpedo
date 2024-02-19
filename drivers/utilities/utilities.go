@@ -36,7 +36,7 @@ const (
 	passwordAnnotationKey           = "password"
 	databaseAnnotationKey           = "databaseName"
 	portAnnotationKey               = "port"
-	defaultFilePath                 = "/tmp"
+	defaultFilePath                 = "/home/cirros/tmp/"
 	appTypeAnnotationKey            = "appType"
 	defaultCmdTimeout               = 20 * time.Second
 	defaultCmdRetryInterval         = 5 * time.Second
@@ -157,6 +157,7 @@ func ExtractConnectionInfo(ctx *scheduler.Context, context context.Context) (App
 		if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 			k8sKubevirt := kubevirt.Instance()
 			appInfo.Namespace = obj.Namespace
+			log.Infof("%+v", obj.Annotations)
 			vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(context, obj.Name, obj.Namespace)
 			if err != nil {
 				return appInfo, err
@@ -180,13 +181,16 @@ func ExtractConnectionInfo(ctx *scheduler.Context, context context.Context) (App
 			} else {
 				return appInfo, fmt.Errorf("AppType not found")
 			}
-			appInfo.Hostname = vmInstance.Status.Interfaces[0].IP
+			appInfo.Hostname = obj.Name
+
+			appInfo.IPAddress = vmInstance.Status.Interfaces[0].IP
 			cm, err := core.Instance().GetConfigMap(defaultKubeconfigMapForKubevirt, "default")
 			if err != nil {
 				return appInfo, err
 			}
 			appInfo.Password = cm.Data[obj.Name]
-			appInfo.IPAddress = vmInstance.Status.Interfaces[0].IP
+			return appInfo, nil
+
 		}
 		if obj, ok := specObj.(*corev1.Service); ok {
 			appInfo.Namespace = obj.Namespace
@@ -205,11 +209,11 @@ func ExtractConnectionInfo(ctx *scheduler.Context, context context.Context) (App
 			if svcAnnotationValue, ok := obj.Annotations[svcAnnotationKey]; ok {
 				appInfo.StartDataSupport = svcAnnotationValue == "true"
 				if !appInfo.StartDataSupport {
-					break
+					continue
 				}
 			} else {
 				appInfo.StartDataSupport = false
-				break
+				continue
 			}
 			if userAnnotationValue, ok := obj.Annotations[userAnnotationKey]; ok {
 				appInfo.User = userAnnotationValue
@@ -254,7 +258,7 @@ func RunCmdGetOutputOnNode(cmd string, n node.Node, nodeDriver node.Driver) (str
 // GenerateRandomCommandToCreateFiles creates random textfiles with random data
 func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
 	var randomFileCommands = make(map[string][]string)
-	var filePath = defaultFilePath + RandomString(10) + "/"
+	var filePath = defaultFilePath + RandomString(10)
 	var insertCommands []string
 	var selectCommands []string
 	var deleteCommands []string
@@ -268,8 +272,8 @@ func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
 	for counter := 0; counter < count; counter++ {
 		currentCounter := strconv.Itoa(counter)
 		fileName := fmt.Sprintf("%s/%s_%s.txt", filePath, currentCounter, RandomString(4))
-		fileContent := fmt.Sprintf("This is the file content\n %s", RandomString(1000))
-		insertCommands = append(insertCommands, fmt.Sprintf("echo '%s' > %s", fileContent, fileName))
+		fileContent := fmt.Sprintf("%s", RandomString(5000))
+		insertCommands = append(insertCommands, fmt.Sprintf("touch %s; echo '%s' > %s", fileName, fileContent, fileName))
 		selectCommands = append(selectCommands, fmt.Sprintf("cat %s | grep %s", filePath, fileContent))
 		updateCommands = append(updateCommands, fmt.Sprintf("echo '%s' >> %s", RandomString(1000), fileName))
 		deleteCommands = append(deleteCommands, fmt.Sprintf("rm %s", filePath))
