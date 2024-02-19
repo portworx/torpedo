@@ -16,7 +16,7 @@ type ApplicationDriver interface {
 	DefaultPort() int
 
 	// ExecuteCommand executes a command on the application
-	ExecuteCommand(commands []string, ctx context.Context) error
+	ExecuteCommand(commands []string, ctx context.Context) ([]string, error)
 
 	// StartData starts injecting continous data to the application
 	StartData(command <-chan string, ctx context.Context) error
@@ -44,6 +44,9 @@ type ApplicationDriver interface {
 
 	// GetNamespace returns the application namespace
 	GetNamespace() string
+
+	// WaitForVMToBoot waits for kubevirt vm to boot
+	WaitForVMToBoot() error
 }
 
 // GetApplicationDriver returns struct of appType provided as input

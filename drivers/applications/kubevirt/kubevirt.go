@@ -1,10 +1,8 @@
 package kubevirt
 
 import (
-	context1 "context"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/task"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/node"
@@ -20,7 +18,8 @@ import (
 
 const (
 	sshPodName      = "ssh-pod"
-	sshPodNamespace = "ssh-pod-namespace"
+	sshPodNamespace = "default"
+	sshContainer    = "ssh-container"
 )
 
 type KubevirtConfig struct {
@@ -34,62 +33,25 @@ type KubevirtConfig struct {
 }
 
 // RunCmdInVM runs a command in the VM by SSHing into it
-func (app *KubevirtConfig) ExecuteCommand(commands []string, ctx context1.Context) error {
+func (app *KubevirtConfig) ExecuteCommand(commands []string, ctx context.Context) ([]string, error) {
 	// Kubevirt client
 	var k8sCore = core.Instance()
-	k8sKubevirt := kubevirt.Instance()
+	var result []string
 
-	// Getting IP of the VM
-	vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, app.Hostname, app.Namespace)
-	if err != nil {
-		return err
-	}
 	log.Infof("VM Name - %s", app.Hostname)
 	log.Infof("IP Address - %s", app.IPAddress)
 
-	// Getting username of the VM
-	// Username has to be added as a label to the VM Spec
-	username := vmInstance.Labels["username"]
 	log.Infof("Username - %s", app.User)
 
-	// If the cluster provider is openshift then we are creating ssh pod and running the command in it
 	if os.Getenv("CLUSTER_PROVIDER") == "openshift" {
-		log.Infof("Cluster is openshift hence creating the SSH Pod")
-		err = initSSHPod(sshPodNamespace)
-		if err != nil {
-			return err
-		}
-
-		testCmdArgs := getSSHCommandArgs(username, app.Password, app.IPAddress, "hostname")
-
-		// To check if the ssh server is up and running
-		t := func() (interface{}, bool, error) {
-			output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", "default")
-			if err != nil {
-				log.Infof("Error encountered")
-				if isConnectionError(err.Error()) {
-					log.Infof("Test connection output - \n%s", output)
-					return "", true, err
-				} else {
-					return "", false, err
-				}
-			}
-			log.Infof("Test connection success output - \n%s", output)
-			return "", false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
-		if err != nil {
-			return err
-		}
-
 		// Executing the actual command
 		for _, eachCommand := range commands {
-			cmdArgs := getSSHCommandArgs(username, app.Password, app.IPAddress, eachCommand)
-			output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", "default")
+			cmdArgs := getSSHCommandArgs(app.User, app.Password, app.IPAddress, eachCommand)
+			output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, sshContainer, sshPodNamespace)
 			if err != nil {
-				return err
+				return result, err
 			}
-			log.Infof("Output of cmd %s - \n%s", eachCommand, output)
+			result = append(result, output)
 		}
 
 	} else {
@@ -108,16 +70,50 @@ func (app *KubevirtConfig) ExecuteCommand(commands []string, ctx context1.Contex
 						return "", false, err
 					}
 				}
-				log.Infof("Output of cmd %s - \n%s", cmd, output)
+				result = append(result, output)
+
 			}
-			return "", false, nil
+			return result, false, nil
 		}
-		_, err = task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+		_, err := task.DoRetryWithTimeout(t, 2*time.Minute, 30*time.Second)
+		if err != nil {
+			return result, err
+		}
+	}
+	log.Infof("Final Output - [%v]", result)
+	return result, nil
+}
+
+func (app *KubevirtConfig) WaitForVMToBoot() error {
+	var k8sCore = core.Instance()
+	testCmdArgs := getSSHCommandArgs(app.User, app.Password, app.IPAddress, "hostname")
+
+	// If the cluster provider is openshift then we are creating ssh pod and running the command in it
+	if os.Getenv("CLUSTER_PROVIDER") == "openshift" {
+		log.Infof("Cluster is openshift hence creating the SSH Pod")
+		err := initSSHPod(sshPodNamespace)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+
+	// To check if the ssh server is up and running
+	t := func() (interface{}, bool, error) {
+		output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, sshContainer, sshPodNamespace)
+		if err != nil {
+			log.Infof("Error encountered")
+			if isConnectionError(err.Error()) {
+				log.Infof("Test connection output - \n%s", output)
+				return "", true, err
+			} else {
+				return "", false, err
+			}
+		}
+		log.Infof("Test connection success output - \n%s", output)
+		return "", false, nil
+	}
+	_, err := task.DoRetryWithTimeout(t, 10*time.Minute, 30*time.Second)
+	return err
 }
 
 // DefaultPort returns default port for kubevirt
@@ -137,10 +133,10 @@ func (app *KubevirtConfig) InsertBackupData(ctx context.Context, identifier stri
 	log.InfoD("Inserting data")
 	if len(commands) == 0 {
 		log.InfoD("Inserting below data : %s", strings.Join(app.DataCommands[identifier]["insert"], "\n"))
-		err = app.ExecuteCommand(app.DataCommands[identifier]["insert"], ctx)
+		_, err = app.ExecuteCommand(app.DataCommands[identifier]["insert"], ctx)
 	} else {
 		log.InfoD("Inserting below data : %s", strings.Join(commands, "\n"))
-		err = app.ExecuteCommand(commands, ctx)
+		_, err = app.ExecuteCommand(commands, ctx)
 	}
 
 	return err

@@ -12,6 +12,7 @@ import (
 
 	"cloud.google.com/go/storage"
 
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"github.com/portworx/torpedo/drivers/node/gke"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -1983,6 +1984,9 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, context contex
 				Inst().N)
 			if err != nil {
 				log.Infof("Error - %s", err.Error())
+			}
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				appHandler.WaitForVMToBoot()
 			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
