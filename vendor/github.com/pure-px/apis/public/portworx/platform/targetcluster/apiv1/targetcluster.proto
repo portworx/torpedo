@@ -1,0 +1,199 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.TargetCluster.v1;
+
+import "google/api/field_behavior.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "google/protobuf/timestamp.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/common/apiv1/sort.proto";
+import "public/portworx/platform/targetcluster/application/apiv1/application.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1;targetcluster";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.TargetCluster.v1";
+option java_outer_classname = "TargetClusterProto";
+
+
+// TargetCluster service provides APIs to interact with the TargetCluster entity
+service TargetClusterService {
+  // ListTargetCluster API lists the TargetClusters visible to the caller
+  rpc ListTargetClusters(ListTargetClustersRequest)
+      returns (ListTargetClustersResponse) {
+    option(google.api.http) = {
+      get: "/v1/clusters"
+    };
+  }
+
+  // GetTargetCluster API returns the info about the TargetCluster for given name
+  rpc GetTargetCluster(GetTargetClusterRequest)
+      returns (TargetCluster) {
+    option(google.api.http) = {
+      get: "/v1/clusters/{id}"
+    };
+  }
+
+  //  DeleteTargetCluster API deletes the specified TargetCluster
+  rpc DeleteTargetCluster(DeleteTargetClusterRequest)
+      returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/v1/clusters/{id}"
+    };
+  }
+
+  //  UpdateTargetCluster API updates the metadata(e.g name or labels) of the specified TargetCluster
+  rpc UpdateTargetCluster(UpdateTargetClusterRequest)
+      returns(TargetCluster) {
+    option(google.api.http) = {
+      patch: "/v1/clusters/{target_cluster.meta.uid}"
+      body: "target_cluster"
+    };
+  }
+}
+
+// ListTargetClusterRequest is a request message to the List TargetCluster API.
+message ListTargetClustersRequest {
+  // List target clusters associated with a tenant
+  string tenant_id = 1 [(google.api.field_behavior) = REQUIRED];
+  // Pagination parameters for listing target clusters.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2;
+  // Provides the key in labels and associated values for which target cluster need to be listed
+  public.portworx.common.v1.Selector label_selector = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Field selector is used to filter target clusters based on the fields in target cluster proto message 
+  public.portworx.common.v1.Selector field_selector = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Infra_resource_selector is used to filter target cluster based on the infra resources associated with the target cluster
+  // Supported infra resource filters: PROJECT, APPLICATION
+  public.portworx.common.v1.ResourceSelector infra_resource_selector = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting details using which the target cluster list to be sorted
+  public.portworx.common.v1.Sort sort = 6 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListTargetClusterResponse is the response message to the List TargetCluster API
+message ListTargetClustersResponse {
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We really need this field because cluster details are required in the response --)
+  // The list of TargetClusters visible to the caller
+  repeated TargetCluster clusters = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+
+}
+
+// GetTargetClusterRequest is the request message to the Get TargetCluster API
+message GetTargetClusterRequest {
+  // Unique identifier of the cluster whose details needs to be fetched
+  string id = 1;
+}
+
+// DeleteTargetClusterRequest is the request message to DeleteTargetCluster API
+message DeleteTargetClusterRequest {
+  // Unique identifier of the cluster whose details needs to be fetched
+  string id = 1;
+  // Flag to indicate force delete
+  bool force = 2;
+}
+
+// UpdateTargetClusterRequest is the request message to the Update TargetCluster API
+message UpdateTargetClusterRequest {
+  // Target cluster details
+  TargetCluster target_cluster = 1;
+}
+
+// TargetCluster is a high level entity that represents one large company(e.g. a Pure).
+message TargetCluster {
+  // Metadata of the target cluster(Resource Meta)
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the Target Cluster
+  Config config = 2;
+
+  // Current status of the Target Cluster
+  Status status = 3;
+}
+
+// Desired configuration of the Target Cluster
+message Config {
+
+}
+
+// Status of the Target Cluster
+message Status {
+  // Target Cluster Metadata
+  Metadata metadata = 1;
+  // Phase of target cluster
+  TargetClusterPhase.Phase phase = 2;
+  // Timestamp of cluster's last status update to control plane
+  google.protobuf.Timestamp last_status_update_time = 3;
+  // Status of the platform agent running in the target cluster
+  public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase platform_agent = 4;
+  // Status of applications running in the target cluster eg: BAAS, PDS, MPXE
+  map<string, public.portworx.platform.targetcluster.application.v1.ApplicationPhase.Phase> applications = 5;
+}
+
+// TargetClusterPhase represents the phase of target cluster
+message TargetClusterPhase {
+  // Supported values of phase of target cluster
+  enum Phase {
+    // Must be set in the proto file; ignore.
+    PHASE_UNSPECIFIED = 0;
+    // Represents target cluster is connected to control plane
+    CONNECTED = 1;
+    // Represents target cluster is disconnected from control plane if
+    // heartbeat is not received for three consecutive cycles
+    DISCONNECTED = 2;
+    // Represents target cluster failed to setup agent
+    FAILED = 3;
+    // Represents target cluster deletion in progress
+    DELETING = 4;
+  }
+}
+
+// TargetClusterMetadata represents the metadata of a cluster
+message Metadata {
+  // Version of kubernetes api server
+  string kube_server_version = 1;
+  // Platform of the kubernetes eg: aws, ocp, etc
+  KubePlatform.Type kube_platform = 2;
+}
+
+
+// KubePlatform represents the k8s platform of the target cluster
+message KubePlatform {
+  // kubeplatform values
+  enum Type {
+    // Unsepecified
+    TYPE_UNSPECIFIED = 0;
+    // Aws platform
+    AWS = 1;
+    // Azure platform
+    AZURE = 2;
+    // Openshift cloud platform
+    OCP = 3;
+    // Google cloud platform
+    GCP = 4;
+    // VMware vSphere
+    VSPHERE = 5;
+    // Unknown platform
+    UNKNOWN = 6;
+  }
+}

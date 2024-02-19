@@ -1251,6 +1251,9 @@ github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1
 github.com/pure-px/apis/public/portworx/platform/cloudcredential/apiv1
 github.com/pure-px/apis/public/portworx/platform/namespace/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetclusterregistrationmanifest/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
 # github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
