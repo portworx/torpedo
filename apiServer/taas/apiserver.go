@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/apiServer/taas/utils"
 	"log"
@@ -10,6 +12,8 @@ import (
 // Once Gin Server starts, it will initialise all APIs it contains.
 // Future work : To have segregated APIs based on need -> We will have to create multiple main calls for initialising.
 func main() {
+	val := flag.String("testval", "mithun koppal", "test value")
+	flag.Parse()
 	router := gin.Default()
 	router.DELETE("taas/deletens/:namespace", utils.DeleteNS)
 	router.POST("taas/createns", utils.CreateNS)
@@ -27,5 +31,7 @@ func main() {
 	router.GET("taas/pxversion", utils.GetPxVersion)
 	router.GET("taas/ispxinstalled", utils.IsPxInstalled)
 	router.GET("taas/getpxctloutput", utils.GetPxctlStatusOutput)
+	fmt.Println("Got flag - mithun - " + *val)
+	log.Println("Got flag - mithun - " + *val)
 	log.Fatal(router.Run(":8080"))
 }
