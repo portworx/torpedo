@@ -91,6 +91,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		for _, provider := range providers {
 			Step("Validate applications", func() {
 				log.InfoD("Validating apps")
+				// Disabling data validation for this test as data continuity issue needs to be debugged
+				// https://portworx.atlassian.net/browse/PB-5680
 				ValidateApplications(scheduledAppContexts)
 			})
 			Step("Register cluster for backup", func() {
@@ -508,6 +510,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+		// Once data validation is enabled use DestroyAppsWithData
+		// https://portworx.atlassian.net/browse/PB-5680
 		DestroyApps(scheduledAppContexts, opts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
