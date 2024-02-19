@@ -489,9 +489,8 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c"]
+    command: ["sh", "-c", "cd /bin && ./taas"]
     args:
-      - cd /bin && ./taas
       - -spec-dir=$SPEC_DIR
       - -testval=avinash
     tty: true
