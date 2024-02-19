@@ -702,6 +702,11 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 			for namespace, appWithData := range NamespaceAppWithDataMap {
 				log.Infof("Found vm with data in %s", namespace)
 				appWithData[0].InsertBackupData(ctx, "default", []string{})
+				output, err := RunCMDInKubevirtVM(namespace, []string{"hostname"}, ctx)
+				if err != nil {
+					log.Errorf("Error Occurred - [%s]", err.Error())
+				}
+				log.Infof("Output - [%s]", output)
 			}
 
 		})
