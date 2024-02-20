@@ -20,6 +20,31 @@ const (
 	envPxCentralAPI      = "PX_CENTRAL_API"
 )
 
+type Credentials struct {
+	Token string
+}
+
+func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
+	metadata := map[string]string{}
+
+	if c.Token == "" {
+		_, token, err := GetBearerToken()
+		if err != nil {
+			return nil, fmt.Errorf("get berare token, err: %s", err)
+		}
+
+		c.Token = token
+	}
+
+	metadata["Authorization"] = fmt.Sprintf("Bearer %s", c.Token)
+
+	return metadata, nil
+}
+
+func (c *Credentials) RequireTransportSecurity() bool {
+	return false
+}
+
 // BearerToken struct
 type BearerToken struct {
 	SUCCESS        bool   `json:"SUCCESS"`

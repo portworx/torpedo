@@ -2,7 +2,7 @@ package grpc
 
 import (
 	"context"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -11,7 +11,7 @@ const (
 )
 
 var (
-	credentials *Credentials
+	credentials *utils.Credentials
 )
 
 // WithAccountIDMetaCtx returns the context with accountID added in metadata
