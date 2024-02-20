@@ -10706,8 +10706,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					resync := false
 					for _, v := range volDetails.RuntimeState {
 						log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
-						if v.GetRuntimeState()["RuntimeState"] == "resync" ||
-							v.GetRuntimeState()["RuntimeState"] == "clean" {
+						if v.GetRuntimeState()["RuntimeState"] == "resync" {
 							resync = true
 						}
 					}
