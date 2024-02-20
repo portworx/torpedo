@@ -1,15 +1,10 @@
 # This Dockerfile sets up the environment for deploying Torpedo.
 
-# Alpine Linux is chosen as the base image for its security, simplicity and resource efficiency.
-
-# tell about apk and openrc init system
-
+# Alpine Linux is chosen as the base image for its security, simplicity, and resource efficiency.
 # For release notes, visit: https://alpinelinux.org/releases/
 FROM alpine:3.19.1
 
 # Define arguments for versions of dependencies used by the deployment scripts.
-
-# docker build --build-arg GO_VERSION=1.21.6 --build-arg GINKGO_VERSION=v2.15.0 --build-arg KUBECTL_VERSION=v1.29.1 -t torpedo-deployment:latest .
 
 # GO_VERSION specifies the version of the Go programming language to be installed.
 # Torpedo, being a project written in Go, requires a specific version of Go for compiling its source code reliably.
@@ -29,6 +24,12 @@ ARG KUBECTL_VERSION="v1.29.1"
 # Set the default shell to bash with pipefail option for better error handling in shell commands.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# docker build --build-arg GO_VERSION=1.21.6 --build-arg GINKGO_VERSION=v2.15.0 --build-arg KUBECTL_VERSION=v1.29.1 -t torpedo-deployment:latest .
+
+
+#     The --no-cache option installs packages without caching them to minimize image size.
+#     To install a package:
+#         RUN apk add --no-cache package-name=version
 
 
 # Install runtime dependencies required for Torpedo and its deployment scripts.
