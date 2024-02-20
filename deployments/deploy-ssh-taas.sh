@@ -489,7 +489,7 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c", "cd /bin && ./taas"]
+    command: ["sh", "-c", "cd /bin && ./taas -spec-dir=$SPEC_DIR"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:

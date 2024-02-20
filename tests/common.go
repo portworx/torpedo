@@ -217,7 +217,7 @@ const (
 )
 const (
 	// defaultSpecsRoot specifies the default location of the base specs directory in the Torpedo container
-	defaultSpecsRoot                     = "../drivers/scheduler/k8s/specs"
+	defaultSpecsRoot                     = "/spec"
 	schedulerCliFlag                     = "scheduler"
 	nodeDriverCliFlag                    = "node-driver"
 	monitorDriverCliFlag                 = "monitor-driver"

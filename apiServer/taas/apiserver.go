@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/apiServer/taas/utils"
+	"github.com/portworx/torpedo/tests"
 	"log"
 )
 
@@ -12,6 +13,7 @@ import (
 // Once Gin Server starts, it will initialise all APIs it contains.
 // Future work : To have segregated APIs based on need -> We will have to create multiple main calls for initialising.
 func main() {
+	tests.ParseFlags()
 	val := flag.String("testval", "mithun koppal", "test value")
 	flag.Parse()
 	router := gin.Default()
