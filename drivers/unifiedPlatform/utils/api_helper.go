@@ -24,6 +24,15 @@ type Credentials struct {
 	Token string
 }
 
+// BearerToken struct
+type BearerToken struct {
+	SUCCESS        bool   `json:"SUCCESS"`
+	SUCCESSMESSAGE string `json:"SUCCESSMESSAGE"`
+	DATA           struct {
+		Token string `json:"token"`
+	} `json:"DATA"`
+}
+
 func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[string]string, error) {
 	metadata := map[string]string{}
 
@@ -43,15 +52,6 @@ func (c *Credentials) GetRequestMetadata(_ context.Context, _ ...string) (map[st
 
 func (c *Credentials) RequireTransportSecurity() bool {
 	return false
-}
-
-// BearerToken struct
-type BearerToken struct {
-	SUCCESS        bool   `json:"SUCCESS"`
-	SUCCESSMESSAGE string `json:"SUCCESSMESSAGE"`
-	DATA           struct {
-		Token string `json:"token"`
-	} `json:"DATA"`
 }
 
 // GetBearerToken returns the bearer token

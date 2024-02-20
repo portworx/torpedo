@@ -16,7 +16,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	log.InfoD(steplog)
 	It("Deploy and Validate DataService", func() {
-		for _, ds := range platformTests.Params.DataServiceToTest {
+		for _, ds := range platformTests.NewPdsParams.DataServiceToTest {
 			_, err := dslibs.DeployDataService(ds)
 			log.FailOnError(err, "Error while deploying ds %v\n")
 		}
