@@ -489,8 +489,10 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: ["sh", "-c"]
-    args: ["cd /bin && ./taas -spec-dir=../drivers/scheduler/k8s/specs"]
+    command: ["sh", "-c", "cd /bin && ./taas"]
+    args: [ "--spec-dir", $SPEC_DIR,
+            "--testval", avinash
+    ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
