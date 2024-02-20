@@ -10675,11 +10675,17 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				vol := vols[rand.Intn(len(vols))]
 				curReplSet, err := Inst().V.GetReplicationFactor(vol)
 				log.FailOnError(err, "failed to get replication factor of the volume")
+
+				var nodesToBeUpdated []string
+				var poolsToBeUpdated []string
+				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
+				poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+
 				// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 2
 				if curReplSet == 3 {
 					newRepl := int64(curReplSet - 1)
 					log.FailOnError(Inst().V.SetReplicationFactor(vol, newRepl,
-						nil, nil, true),
+						nodesToBeUpdated, poolsToBeUpdated, true),
 						"Failed to set Replicaiton factor")
 				}
 				// now increase the replication factor of this volumes.
@@ -10689,10 +10695,6 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				poolToBeUpdated = pools[0]
 				log.InfoD("Node selected for repl increase")
 				var maxReplicaFactor int64
-				var nodesToBeUpdated []string
-				var poolsToBeUpdated []string
-				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
-				poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
 				maxReplicaFactor = 3
 
 				log.FailOnError(Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
