@@ -10664,10 +10664,11 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
 
-		stepLog = "HA increase for volumes"
-		Step(stepLog, func() {
-			// First get volumes of the application
-			for _, eachContext := range contexts {
+		for _, eachContext := range contexts {
+			stepLog = "HA increase for volumes of app: " + eachContext.App.Key
+			Step(stepLog, func() {
+				// First get volumes of the application
+
 				vols, err := Inst().S.GetVolumes(eachContext)
 				log.FailOnError(err, "Failed to get volumes from context")
 				//pick a random volume
@@ -10684,8 +10685,8 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				// now increase the replication factor of this volumes.
 				nodeToBeUpdated = node.GetStorageDriverNodes()[rand.Intn(len(node.GetStorageDriverNodes()))]
 				pools, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
-				poolToBeUpdated = pools[0]
 				log.FailOnError(err, "Failed to get all pools on node: %v", nodeToBeUpdated.Name)
+				poolToBeUpdated = pools[0]
 				log.InfoD("Node selected for repl increase")
 				var maxReplicaFactor int64
 				var nodesToBeUpdated []string
@@ -10693,16 +10694,15 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
 				poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
 				maxReplicaFactor = 3
-				nodesToBeUpdated = nil
-				poolsToBeUpdated = nil
+
 				log.FailOnError(Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
 					nodesToBeUpdated, poolsToBeUpdated, true),
 					"Failed to set Replicaiton factor")
-				// create a time limit for this for loop
-				timeout := time.After(20 * time.Minute)
-				for {
+				t := func() (interface{}, bool, error) {
 					volDetails, err := Inst().V.InspectVolume(vol.ID)
-					log.FailOnError(err, "Failed to get volume details")
+					if err != nil {
+						return nil, true, fmt.Errorf("error getting volume by using id %s", vol.ID)
+					}
 					resync := false
 					for _, v := range volDetails.RuntimeState {
 						log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
@@ -10711,65 +10711,59 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 							resync = true
 						}
 					}
-					select {
-					case <-timeout:
-						// Timeout reached, exit the loop
-						fmt.Println("Timeout reached. Exiting loop.")
-						return
-					default:
-						// Continue the loop logic
-						if resync {
-							fmt.Println("In resync. Exiting loop.")
-							return
-						}
-						log.Infof("Sleeping for 15 seconds until volume goes to resync state ")
-						time.Sleep(15 * time.Second)
+					if resync {
+						return fmt.Sprintf("Volume resync has started"), false, nil
+
 					}
+					return nil, true, fmt.Errorf("volume resync hasn't started")
 				}
-			}
-		})
-		stepLog = "Pool resize trigger"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			//initiate pool expand on the pool where ha increase is happening.
-			wg.Add(1)
-			go func() {
-				defer GinkgoRecover()
-				defer wg.Done()
-				pool, err := GetStoragePoolByUUID(poolToBeUpdated)
-				log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
+				_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
+				log.FailOnError(err, "Error checking volume resync")
 
-				expectedSize := (pool.TotalSize / units.GiB) + 100
-				err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
-				log.FailOnError(err, "Failed to initiate pool resize")
+			})
+			stepLog = "Pool resize trigger"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				//initiate pool expand on the pool where ha increase is happening.
+				wg.Add(1)
+				go func() {
+					defer GinkgoRecover()
+					defer wg.Done()
+					pool, err := GetStoragePoolByUUID(poolToBeUpdated)
+					log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
 
-				//wait for pool expand to complete
-				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
-				log.FailOnError(err, "Failed to wait for pool to be resized")
-			}()
-		})
+					expectedSize := (pool.TotalSize / units.GiB) + 100
+					err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+					log.FailOnError(err, "Failed to initiate pool resize")
 
-		stepLog = "Pool expand add disk trigger"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				defer GinkgoRecover()
-				pool, err := GetStoragePoolByUUID(poolToBeUpdated)
-				log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
+					//wait for pool expand to complete
+					err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+					log.FailOnError(err, "Failed to wait for pool to be resized")
+				}()
+			})
 
-				expectedSize := (pool.TotalSize / units.GiB) + 100
-				err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
-				log.FailOnError(err, "Failed to initiate pool resize")
+			stepLog = "Pool expand add disk trigger"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer GinkgoRecover()
+					pool, err := GetStoragePoolByUUID(poolToBeUpdated)
+					log.FailOnError(err, "Failed to get pool using UUID %s", poolToBeUpdated)
 
-				//wait for pool expand to complete
-				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
-				log.FailOnError(err, "Failed to wait for pool to be resized")
-			}()
+					expectedSize := (pool.TotalSize / units.GiB) + 100
+					err = Inst().V.ExpandPool(poolToBeUpdated, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+					log.FailOnError(err, "Failed to initiate pool resize")
 
-		})
-		wg.Wait()
+					//wait for pool expand to complete
+					err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+					log.FailOnError(err, "Failed to wait for pool to be resized")
+				}()
+
+			})
+			wg.Wait()
+		}
 	})
 
 	JustAfterEach(func() {
