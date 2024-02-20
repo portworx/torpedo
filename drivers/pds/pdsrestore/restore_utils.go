@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	restoreTimeInterval    = 20 * time.Second
+	restoreTimeInterval    = 10 * time.Second
 	restoreMaxTimeInterval = 1 * time.Minute
 )
 
@@ -96,6 +96,7 @@ func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds
 	}
 
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
+		log.Infof("check polling status...")
 		restore, err := restoreClient.Components.Restore.GetRestore(restoreDepId)
 		state := restore.GetStatus()
 		if err != nil {
