@@ -10689,8 +10689,8 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					nodeToBeUpdated, err := GetNodeWithGivenPoolID(replicaset.PoolUuids[0])
 					poolToBeUpdated = replicaset.PoolUuids[0]
 
-					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
-					log.InfoD("pool selected: %v", poolToBeUpdated)
+					log.InfoD("Node selected for pool expand: %v", nodeToBeUpdated.Name)
+					log.InfoD("pool selected for pool expand: %v", poolToBeUpdated)
 					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
 					poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
 
@@ -10729,7 +10729,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					log.FailOnError(err, "Failed to get pool using node %s", nodeToBeUpdated.Id)
 
 					poolToBeUpdated = poolsUuid[0]
-					log.InfoD("pool selected: %v", poolToBeUpdated)
+					log.InfoD("pool selected for pool expand: %v", poolToBeUpdated)
 
 					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
 					poolsToBeUpdated = append(poolsToBeUpdated, poolsUuid[0])
@@ -10783,6 +10783,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					//wait for pool expand to complete
 					err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
 					log.FailOnError(err, "Failed to wait for pool to be resized")
+					log.InfoD("Successfully expanded the pool with resize disk: %s", pool.Uuid)
 				}()
 			})
 
@@ -10803,6 +10804,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					//wait for pool expand to complete
 					err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
 					log.FailOnError(err, "Failed to wait for pool to be resized")
+					log.InfoD("Successfully expanded the pool with add disk pool id: %s", pool.Uuid)
 				}()
 
 			})
