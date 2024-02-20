@@ -10645,7 +10645,6 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 		StartTorpedoTest("HAIncreasePoolresizeAndAdddisk", "HA increase, pool resize and add disk run all this parallely", nil, 57783)
 	})
 	var contexts []*scheduler.Context
-	var nodeToBeUpdated node.Node
 	var poolToBeUpdated string
 	var wg sync.WaitGroup
 
