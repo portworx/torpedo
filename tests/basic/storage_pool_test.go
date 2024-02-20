@@ -10815,3 +10815,48 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{PoolResizeInTrashCanNode}", func() {
+	/*
+	  1. Deploy apps
+	  2. Pick a volume and locate the node where this is attached
+	  3. Delete the volume and let it be placed in trashcan
+	  4. Trigger pool expand in the node where the trashcan volume is present
+
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteServiceDisruption", "Pool delete with service disruption", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "PoolResizeInTrashCanNode"
+	It(itLog, func() {
+		log.InfoD(itLog)
+
+		// Deploy apps
+		stepLog := "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("trash-can-pool-exopand-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer ValidateAndDestroy(contexts, nil)
+
+		stepLog = "Get a volume and locate the node where this is attached"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+		})
+
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+
+})
