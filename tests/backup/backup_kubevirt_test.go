@@ -690,23 +690,30 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 	})
 
 	It("Verify backup and restore of Kubevirt VMs in different states", func() {
-		ctx, _ := backup.GetAdminCtxFromSecret()
+
 		Step("Validating applications", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Validating applications")
 			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("SSH into the kubevirt VM", func() {
-			log.Infof("Sleeping...")
-			//time.Sleep(1 * time.Minute)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			vms, err := GetAllVMsInNamespace(scheduledAppContexts[0].ScheduleOptions.Namespace)
+			if err != nil {
+				return
+			}
+			for _, vm := range vms {
+				log.Infof("Running command for VM [%s]", vm.Name)
+				output, err := RunCmdInVM(vm, "uname -a", ctx)
+				log.InfoD("Output of command in step - [%s]", output)
+				log.FailOnError(err, "Failed to run command in VM")
+			}
+
 			for namespace, appWithData := range NamespaceAppWithDataMap {
 				log.Infof("Found vm with data in %s", namespace)
 				appWithData[0].InsertBackupData(ctx, "default", []string{})
-				output, err := RunCMDInKubevirtVM(namespace, []string{"hostname"}, ctx)
-				if err != nil {
-					log.Errorf("Error Occurred - [%s]", err.Error())
-				}
-				log.Infof("Output - [%s]", output)
 			}
 
 		})
