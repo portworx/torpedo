@@ -249,6 +249,7 @@ var _ = Describe("{ValidateFiftVolumeBackups}", func() {
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				log.Infof("Scheduled app context: %#v", appCtx)
 			}
 		}
 	})

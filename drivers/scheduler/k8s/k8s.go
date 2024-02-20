@@ -4218,10 +4218,12 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			log.Infof("K8s.GetVolumes() obj name [%s] and namespace [%s]", obj.Name, obj.Namespace)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
 			}
+			log.Infof("K8s.GetVolumes() found PVC %s for app %s", pvcObj.Name, ctx.App.Key)
 			vols, err = k.appendVolForPVC(vols, pvcObj)
 			if err != nil {
 				return nil, err
