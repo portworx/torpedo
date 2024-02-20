@@ -10671,28 +10671,63 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 				vols, err := Inst().S.GetVolumes(eachContext)
 				log.FailOnError(err, "Failed to get volumes from context")
-				//pick a random volume
+
 				vol := vols[rand.Intn(len(vols))]
 				curReplSet, err := Inst().V.GetReplicationFactor(vol)
-				log.FailOnError(err, "failed to get replication factor of the volume")
-				// now increase the replication factor of this volumes.
-				nodeToBeUpdated = node.GetStorageDriverNodes()[rand.Intn(len(node.GetStorageDriverNodes()))]
-				pools, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
-				log.FailOnError(err, "Failed to get all pools on node: %v", nodeToBeUpdated.Name)
-				poolToBeUpdated = pools[0]
 				log.InfoD("Node selected for repl increase")
 
 				var nodesToBeUpdated []string
 				var poolsToBeUpdated []string
-				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
-				poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
 
 				// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 2
 				if curReplSet == 3 {
+					//pick a random volume
+
+					inspectVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect volume: %v", vol.ID)
+					replicaSets := inspectVol.ReplicaSets
+					replicaset := replicaSets[len(replicaSets)-1]
+					nodeToBeUpdated, err := GetNodeWithGivenPoolID(replicaset.PoolUuids[0])
+					poolToBeUpdated := replicaset.PoolUuids[0]
+
+					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
+					log.InfoD("pool selected: %v", poolToBeUpdated)
+					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
+					poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+
 					newRepl := int64(curReplSet - 1)
 					log.FailOnError(Inst().V.SetReplicationFactor(vol, newRepl,
 						nodesToBeUpdated, poolsToBeUpdated, true),
 						"Failed to set Replicaiton factor")
+				} else {
+					// pick nodes which are not in replicaset
+					inspectVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "Failed to inspect volume: %v", vol.ID)
+					replicaSets := inspectVol.ReplicaSets
+					found := false
+					nodeToBeUpdated := node.Node{}
+					//pick a node which is not present in replicaset
+					for _, n := range replicaSets {
+						for _, storageNode := range node.GetStorageNodes() {
+							for _, node := range n.Nodes {
+								if storageNode.Name == node {
+									found = true
+									break
+								}
+							}
+							if !found {
+								nodeToBeUpdated = storageNode
+								break
+							}
+							found = false
+						}
+					}
+					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
+					log.InfoD("pool selected: %v", poolToBeUpdated)
+
+					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
+					poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+
 				}
 
 				var maxReplicaFactor int64
