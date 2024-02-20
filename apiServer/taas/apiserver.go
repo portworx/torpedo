@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/apiServer/taas/utils"
+	"github.com/portworx/torpedo/tests"
 	"log"
 )
 
@@ -39,13 +40,7 @@ func main() {
 	router.GET("taas/pxversion", utils.GetPxVersion)
 	router.GET("taas/ispxinstalled", utils.IsPxInstalled)
 	router.GET("taas/getpxctloutput", utils.GetPxctlStatusOutput)
-	//tests.ParseFlags()
-	flag.Parse()
-	fmt.Println("Got flag - " + *val1)
-	log.Println("Got flag - " + *val1)
-	fmt.Println("Got flag - " + *val2)
-	log.Println("Got flag - " + *val2)
-	fmt.Println("Got flag - " + *val3)
-	log.Println("Got flag - " + *val3)
+	tests.ParseFlags()
+	//flag.Parse()
 	log.Fatal(router.Run(":8080"))
 }
