@@ -87,13 +87,16 @@ func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds
 	testName := strings.Split(currentSpecReport.FullText(), " ")[0]
 	log.Debugf("Testcase Name %v", testName)
 
+	restoreDepId := restoredModel.GetId()
+	log.Infof("restored deployment_id [%s]", restoreDepId)
+
 	if testName == "{ValidateDSHealthStatusOnNodeFailures}" {
 		log.Debugf("Updating the restoreTimeout to 2min")
 		restoreTimeOut = 2 * time.Minute
 	}
 
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
-		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
+		restore, err := restoreClient.Components.Restore.GetRestore(restoreDepId)
 		state := restore.GetStatus()
 		if err != nil {
 			log.Errorf("failed during fetching the restore object, %v", err)
