@@ -3,9 +3,13 @@ package nomad
 import (
 	"fmt"
 	"github.com/hashicorp/nomad/api"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/pkg/log"
 	"golang.org/x/crypto/ssh"
 	"net"
+	"regexp"
+	"strings"
+	"time"
 )
 
 // NomadClient defines structure for nomad client
@@ -20,11 +24,89 @@ func NewNomadClient() (*NomadClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &NomadClient{client: client}, nil
+	newClient := &NomadClient{client: client}
+	status, err := newClient.ValidateCsiPluginStatus("portworx")
+	if (status) && (err == nil) {
+		log.Infof("Portworx CSI already registered")
+	} else {
+		err = newClient.EnablePortworxCsiPlugin("portworx")
+		if err != nil {
+			return nil, err
+		}
+		_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
+			status, err := newClient.ValidateCsiPluginStatus("portworx")
+			if err != nil {
+				return nil, true, fmt.Errorf("error validating CSI plugin status: %v", err)
+			}
+			if !status {
+				return nil, true, fmt.Errorf("Portworx CSI plugin not registered yet")
+			}
+			return nil, false, nil
+		}, 5*time.Minute, 30*time.Second)
+
+		if err != nil {
+			return nil, fmt.Errorf("Portworx CSI plugin did not register within the expected time: %v", err)
+		}
+
+	}
+	return newClient, nil
+}
+
+// EnablePortworxCsiPlugin enables the CSI plugin for the Portworx job.
+func (n *NomadClient) EnablePortworxCsiPlugin(jobName string) error {
+	job, _, err := n.client.Jobs().Info(jobName, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch job info for %s: %v", jobName, err)
+	}
+
+	for _, group := range job.TaskGroups {
+		if *group.Name == "portworx" {
+			for _, task := range group.Tasks {
+				if task.CSIPluginConfig == nil {
+					task.CSIPluginConfig = &api.TaskCSIPluginConfig{
+						ID:                  "portworx",
+						Type:                api.CSIPluginTypeMonolith,
+						MountDir:            "/var/lib/csi",
+						HealthTimeout:       30 * time.Minute,
+						StagePublishBaseDir: "/var/lib/portworx",
+					}
+				}
+
+				// Add CSI_ENDPOINT environment variable
+				if task.Env == nil {
+					task.Env = make(map[string]string)
+				}
+				task.Env["CSI_ENDPOINT"] = "unix:///var/lib/csi/csi.sock"
+			}
+		}
+	}
+
+	_, _, err = n.client.Jobs().Register(job, nil)
+	if err != nil {
+		return fmt.Errorf("failed to update job with CSI plugin enabled: %v", err)
+	}
+
+	return nil
+}
+
+// ValidateCsiPluginStatus checks if the Portworx CSI plugin is properly configured and healthy.
+func (n *NomadClient) ValidateCsiPluginStatus(pluginID string) (bool, error) {
+	plugins, _, err := n.client.CSIPlugins().List(nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to list CSI plugins: %v", err)
+	}
+
+	for _, plugin := range plugins {
+		if plugin.ID == pluginID {
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf("CSI plugin with ID %s not found", pluginID)
 }
 
 // CreateVolume creates a new CSI volume
-func (n *NomadClient) CreateVolume(volumeID, pluginID string, capacityMin, capacityMax int64, accessMode, attachmentMode, fsType string, mountFlags []string) error {
+func (n *NomadClient) CreateVolume(volumeID, pluginID string, capacityMin, capacityMax int64, accessMode, attachmentMode, fsType string, mountFlags []string, parameters map[string]string) error {
 	volume := &api.CSIVolume{
 		ID:                   volumeID,
 		Name:                 volumeID,
@@ -41,6 +123,7 @@ func (n *NomadClient) CreateVolume(volumeID, pluginID string, capacityMin, capac
 				AttachmentMode: api.CSIVolumeAttachmentMode(attachmentMode),
 			},
 		},
+		Parameters: parameters,
 	}
 
 	_, _, err := n.client.CSIVolumes().Create(volume, nil)
@@ -149,7 +232,8 @@ func (n *NomadClient) ExecCommandOnNodeSSH(nodeID, command string) (string, erro
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	client, err := ssh.Dial("tcp", net.JoinHostPort(node.HTTPAddr, "22"), config)
+	ipOfNode := strings.Split(node.HTTPAddr, ":")[0]
+	client, err := ssh.Dial("tcp", net.JoinHostPort(ipOfNode, "22"), config)
 	if err != nil {
 		return "", fmt.Errorf("failed to dial: %s", err)
 	}
@@ -170,7 +254,11 @@ func (n *NomadClient) ExecCommandOnNodeSSH(nodeID, command string) (string, erro
 }
 
 // CreateFioJobSpec creates the FIO Job spec
-func (n *NomadClient) CreateFioJobSpec(volumeID, jobID string) *api.Job {
+func (n *NomadClient) CreateFioJobSpec(volumeID, jobID string, directories ...string) *api.Job {
+	directory := "/mnt/fio-data"
+	if len(directories) > 0 && directories[0] != "" {
+		directory = "/mnt/" + directories[0]
+	}
 	job := api.NewServiceJob(jobID, "fio", "global", 1)
 	taskGroup := api.NewTaskGroup("fio-group", 1)
 	volume := &api.VolumeRequest{
@@ -197,7 +285,7 @@ func (n *NomadClient) CreateFioJobSpec(volumeID, jobID string) *api.Job {
 			"--numjobs=1",
 			"--time_based",
 			"--runtime=1800",
-			"--filename=/mnt/fio-data",
+			"--filename=" + directory,
 		},
 	}
 	task.Resources = &api.Resources{
@@ -320,4 +408,50 @@ func (n *NomadClient) DeleteSnapshot(snapID, pluginID string) error {
 	}
 	err := n.client.CSIVolumes().DeleteSnapshot(snap, nil)
 	return err
+}
+
+// ExecCommandOnPortworxNode Chooses a node and executes cmd on it
+func (n *NomadClient) ExecCommandOnPortworxNode(cmd string) (string, error) {
+	nodes, err := n.ListNodes()
+	if err != nil {
+		return "", err
+	}
+	// Assuming all nodes are Portworx Nodes
+	node := nodes[0]
+	return n.ExecCommandOnNodeSSH(node.ID, cmd)
+}
+
+// AdjustVolumeReplFactor adjusts the volume repl factor via pxctl
+func (n *NomadClient) AdjustVolumeReplFactor(volumeID, newRepl string) error {
+	cmd := fmt.Sprintf("pxctl volume ha-update --repl %s %s", newRepl, volumeID)
+	output, err := n.ExecCommandOnPortworxNode(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to adjust replica factor for volume %s: %v. Output: %s", volumeID, err, output)
+	}
+	log.Infof("Replica factor for volume %s adjusted to %s. Output: %s", volumeID, newRepl, output)
+	return nil
+}
+
+// ValidateVolumeReplFactor method validates volume from pxctl and nomad nodes
+func (n *NomadClient) ValidateVolumeReplFactor(volumeID, expectedRepl string) error {
+	cmd := fmt.Sprintf("pxctl volume inspect %s", volumeID)
+
+	output, err := n.ExecCommandOnPortworxNode(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to get volume info for %s: %v", volumeID, err)
+	}
+
+	re := regexp.MustCompile(`HA\s+:\s+(\d+)`)
+	matches := re.FindStringSubmatch(output)
+	if matches == nil || len(matches) < 2 {
+		return fmt.Errorf("could not find replica factor in volume info for %s. Output: %s", volumeID, output)
+	}
+
+	actualRepl := matches[1]
+	if actualRepl != expectedRepl {
+		return fmt.Errorf("replica factor for volume %s does not match expected value %s. Actual value: %s", volumeID, expectedRepl, actualRepl)
+	}
+
+	log.Infof("Volume %s replica factor validated successfully as %s", volumeID, expectedRepl)
+	return nil
 }
