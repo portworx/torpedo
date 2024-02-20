@@ -4,32 +4,23 @@
 # For release notes, visit: https://alpinelinux.org/releases/
 FROM alpine:3.19.1
 
-# Define arguments for versions of dependencies used by the deployment scripts.
-
-# GO_VERSION specifies the version of the Go programming language to be installed.
-# Torpedo, being a project written in Go, requires a specific version of Go for compiling its source code reliably.
-# For release notes, visit: https://go.dev/doc/devel/release/
-ARG GO_VERSION="1.21.6"
-
-# GINKGO_VERSION specifies the version of Ginkgo to be installed.
-# Ginkgo is a BDD-style Go testing framework, which is used to write and run tests for the Torpedo.
-# For release notes, visit: https://github.com/onsi/ginkgo/releases/
-ARG GINKGO_VERSION="v2.15.0"
-
-# KUBECTL_VERSION specifies the version of kubectl to be installed.
-# kubectl is a command-line tool for Kubernetes cluster management, which is used to deploy Torpedo as a pod
-# For release notes, visit: https://github.com/kubernetes/kubernetes/releases/
-ARG KUBECTL_VERSION="v1.29.1"
-
-# Set the default shell to bash with pipefail option for better error handling in shell commands.
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-# docker build --build-arg GO_VERSION=1.21.6 --build-arg GINKGO_VERSION=v2.15.0 --build-arg KUBECTL_VERSION=v1.29.1 -t torpedo-deployment:latest .
-
+# Alpine Linux
 
 #     The --no-cache option installs packages without caching them to minimize image size.
 #     To install a package:
 #         RUN apk add --no-cache package-name=version
+
+# Set the default shell to bash with pipefail option for better error handling in shell commands.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Define arguments to specify dependency versions,
+# to facilitate building of images with different versions without altering the Dockerfile.
+
+
+# docker build --build-arg GO_VERSION=1.21.6 --build-arg GINKGO_VERSION=v2.15.0 --build-arg KUBECTL_VERSION=v1.29.1 -t torpedo-deployment:latest .
+
+
+
 
 
 # Install runtime dependencies required for Torpedo and its deployment scripts.
