@@ -10708,10 +10708,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					//pick a node which is not present in replicaset
 					for _, n := range replicaSets {
 						for _, storageNode := range node.GetStorageNodes() {
-							log.Infof("Storage node: %v", storageNode.Name)
+							log.Infof("Storage node: %v", storageNode.Id)
 							for _, node := range n.Nodes {
 								log.InfoD("replica set: %v", node)
-								if storageNode.Name == node {
+								if storageNode.Id == node {
 									found = true
 									break
 								}
