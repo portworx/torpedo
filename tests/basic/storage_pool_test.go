@@ -10708,7 +10708,9 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					//pick a node which is not present in replicaset
 					for _, n := range replicaSets {
 						for _, storageNode := range node.GetStorageNodes() {
+							log.Infof("Storage node: %v", storageNode.Name)
 							for _, node := range n.Nodes {
+								log.InfoD("replica set: %v", node)
 								if storageNode.Name == node {
 									found = true
 									break
@@ -10723,9 +10725,11 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					}
 					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
 					log.InfoD("pool selected: %v", poolToBeUpdated)
+					poolsUuid, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
+					log.FailOnError(err, "Failed to get pool using node %s", nodeToBeUpdated.Name)
 
 					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
-					poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
+					poolsToBeUpdated = append(poolsToBeUpdated, poolsUuid[0])
 
 				}
 
