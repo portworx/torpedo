@@ -490,7 +490,7 @@ spec:
     securityContext:
       privileged: ${SECURITY_CONTEXT}
     command: ["sh", "-c"]
-    args: ["cd /bin && ./taas -spec-dir=$SPEC_DIR"]
+    args: ["cd /bin && ./taas -spec-dir=../drivers/scheduler/k8s/specs"]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
