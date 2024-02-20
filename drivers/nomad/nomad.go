@@ -1,15 +1,18 @@
 package nomad
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
-	"github.com/hashicorp/nomad/api"
-	"github.com/portworx/sched-ops/task"
-	"github.com/portworx/torpedo/pkg/log"
-	"golang.org/x/crypto/ssh"
 	"net"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/hashicorp/nomad/api"
+	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/pkg/log"
+	"golang.org/x/crypto/ssh"
 )
 
 // NomadClient defines structure for nomad client
@@ -432,6 +435,17 @@ func (n *NomadClient) AdjustVolumeReplFactor(volumeID, newRepl string) error {
 	return nil
 }
 
+// ResizeVolume manages the volume size
+func (n *NomadClient) ResizeVolume(volumeID, newSize string) error {
+	cmd := fmt.Sprintf("pxctl volume update --size %s %s", newSize, volumeID)
+	output, err := n.ExecCommandOnPortworxNode(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to modify size for volume %s: %v. Output: %s", volumeID, err, output)
+	}
+	log.Infof("Size for volume %s adjusted to %s. Output: %s", volumeID, newSize, output)
+	return nil
+}
+
 // ValidateVolumeReplFactor method validates volume from pxctl and nomad nodes
 func (n *NomadClient) ValidateVolumeReplFactor(volumeID, expectedRepl string) error {
 	cmd := fmt.Sprintf("pxctl volume inspect %s", volumeID)
@@ -454,4 +468,151 @@ func (n *NomadClient) ValidateVolumeReplFactor(volumeID, expectedRepl string) er
 
 	log.Infof("Volume %s replica factor validated successfully as %s", volumeID, expectedRepl)
 	return nil
+}
+
+// ValidateVolumeSize method validates volume size via pxctl and nomad nodes
+func (n *NomadClient) ValidateVolumeSize(volumeID, expectedSize string) error {
+	cmd := fmt.Sprintf("pxctl volume inspect %s", volumeID)
+
+	output, err := n.ExecCommandOnPortworxNode(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to get volume info for %s: %v", volumeID, err)
+	}
+
+	re := regexp.MustCompile(`Size\s+:\s+(\d+)`)
+	matches := re.FindStringSubmatch(output)
+	if matches == nil || len(matches) < 2 {
+		return fmt.Errorf("could not find replica factor in volume info for %s. Output: %s", volumeID, output)
+	}
+
+	actualSize := matches[1]
+	if actualSize != expectedSize {
+		return fmt.Errorf("size for volume %s does not match expected value %s. Actual value: %s", volumeID, expectedSize, actualSize)
+	}
+
+	log.Infof("Volume %s replica factor validated successfully as %s", volumeID, expectedSize)
+	return nil
+}
+
+// FetchPoolUIDs fetches the UIDs of all storage pools on the specified node.
+func (n *NomadClient) FetchPoolUIDs(nodeID string) ([]string, error) {
+	cmd := "pxctl service pool show"
+	output, err := n.ExecCommandOnNodeSSH(nodeID, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("error executing '%s' on node %s: %v", cmd, nodeID, err)
+	}
+
+	return parsePoolUIDsFromOutput(output), nil
+}
+
+// parsePoolUIDsFromOutput parses the output of 'pxctl service pool show' to extract pool UIDs.
+func parsePoolUIDsFromOutput(output string) []string {
+	var poolUIDs []string
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "UUID:") {
+			parts := strings.Fields(line)
+			if len(parts) == 2 {
+				poolUIDs = append(poolUIDs, parts[1])
+			}
+		}
+	}
+	return poolUIDs
+}
+
+// GeneratePXSecuritySecrets generates secrets for PX-Security and enables it for the Portworx job.
+func (n *NomadClient) GeneratePXSecuritySecrets(jobName string, issuerName string) error {
+	systemKey, err := generateSecureRandomString(64)
+	if err != nil {
+		return fmt.Errorf("failed to generate system key: %v", err)
+	}
+
+	sharedSecret, err := generateSecureRandomString(64)
+	if err != nil {
+		return fmt.Errorf("failed to generate shared secret: %v", err)
+	}
+
+	if issuerName == "" {
+		issuerName = "portworx.io"
+	}
+
+	return n.EnablePxSecurity(jobName, systemKey, sharedSecret, issuerName)
+}
+
+// generateSecureRandomString generates a secure random string of the specified length.
+func generateSecureRandomString(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(bytes), nil
+}
+
+// EnablePxSecurity enables PX-Security for the Portworx job and waits for it to become healthy.
+func (n *NomadClient) EnablePxSecurity(jobName string, systemKey, sharedSecret, issuerName string) error {
+	job, _, err := n.client.Jobs().Info(jobName, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch job info for %s: %v", jobName, err)
+	}
+
+	foundPortworxGroup := false
+	for _, group := range job.TaskGroups {
+		for _, task := range group.Tasks {
+			if task.Name == "portworx" {
+				if task.Env == nil {
+					task.Env = make(map[string]string)
+				}
+				task.Env["PORTWORX_AUTH_SYSTEM_KEY"] = systemKey
+				task.Env["PORTWORX_AUTH_JWT_SHAREDSECRET"] = sharedSecret
+				task.Env["PORTWORX_AUTH_JWT_ISSUER"] = issuerName
+				foundPortworxGroup = true
+				break
+			}
+		}
+		if foundPortworxGroup {
+			break
+		}
+	}
+
+	if !foundPortworxGroup {
+		return fmt.Errorf("portworx task not found in job %s", jobName)
+	}
+
+	_, _, err = n.client.Jobs().Register(job, nil)
+	if err != nil {
+		return fmt.Errorf("failed to update job with PX-Security enabled: %v", err)
+	}
+
+	return n.WaitForPortworxToBeHealthy(jobName)
+}
+
+// WaitForPortworxToBeHealthy waits until all allocations of the Portworx job are healthy.
+func (n *NomadClient) WaitForPortworxToBeHealthy(jobName string) error {
+	timeout := 10 * time.Minute
+	startTime := time.Now()
+
+	for {
+		if time.Since(startTime) > timeout {
+			return fmt.Errorf("timeout waiting for Portworx job %s to become healthy", jobName)
+		}
+
+		allocations, _, err := n.client.Jobs().Allocations(jobName, false, nil)
+		if err != nil {
+			return fmt.Errorf("error fetching allocations for job %s: %v", jobName, err)
+		}
+
+		allHealthy := true
+		for _, alloc := range allocations {
+			if alloc.ClientStatus != "running" {
+				allHealthy = false
+				break
+			}
+		}
+
+		if allHealthy {
+			return nil
+		}
+
+		time.Sleep(30 * time.Second)
+	}
 }
