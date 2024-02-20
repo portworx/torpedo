@@ -10691,7 +10691,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				var maxReplicaFactor int64
 				var nodesToBeUpdated []string
 				var poolsToBeUpdated []string
-				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Name)
+				nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
 				poolsToBeUpdated = append(poolsToBeUpdated, poolToBeUpdated)
 				maxReplicaFactor = 3
 
