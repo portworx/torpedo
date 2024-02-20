@@ -50,7 +50,10 @@ func (Tenantgrpc *PlatformGrpc) ListTenants(accountID string) ([]WorkFlowRespons
 		log.Infof("accounts - [%v]", ten.Meta.Name)
 	}
 
-	copier.Copy(&tenantsResponse, apiResponse.Tenants)
+	err = copier.Copy(&tenantsResponse, apiResponse.Tenants)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Infof("Value of tenants after copy - [%v]", tenantsResponse)
 	for _, ten := range tenantsResponse {

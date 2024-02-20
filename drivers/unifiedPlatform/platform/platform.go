@@ -64,3 +64,23 @@ type CloudCredentialsInterface interface {
 type NamespaceInterface interface {
 	ListNamespaces(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
+
+type IamRoleBindings interface {
+	ListIamRoleBindings(*WorkFlowResponse) ([]WorkFlowResponse, error)
+	CreateIamRoleBinding(*WorkFlowResponse) (*WorkFlowResponse, error)
+	UpdateIamRoleBindings(*WorkFlowResponse) (*WorkFlowResponse, error)
+	GetIamRoleBindingByID(*WorkFlowResponse) (*WorkFlowResponse, error)
+	GrantIAMRoles(*WorkFlowResponse) (*WorkFlowResponse, error)
+	RevokeAccessForIAM(*WorkFlowResponse) (*WorkFlowResponse, error)
+	DeleteIamRoleBinding(*WorkFlowResponse) error
+}
+
+type ServiceAccounts interface {
+	ListAllServiceAccounts(*WorkFlowResponse) ([]WorkFlowResponse, error)
+	GetServiceAccount(*WorkFlowResponse) (*WorkFlowResponse, error)
+	CreateServiceAccount(*WorkFlowResponse) (*WorkFlowResponse, error)
+	RegenerateServiceAccountSecret(*WorkFlowResponse) (*WorkFlowResponse, error)
+	UpdateServiceAccount(*WorkFlowResponse) (*WorkFlowResponse, error)
+	GenerateServiceAccountAccessToken(*WorkFlowResponse) (*WorkFlowResponse, error)
+	DeleteServiceAccount(*WorkFlowResponse) error
+}

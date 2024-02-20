@@ -36,7 +36,10 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials() ([]WorkFlowResponse, er
 		return nil, fmt.Errorf("Error when calling `cloudCredationServiceListcloudCredations`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
-	copier.Copy(&cloudCredsResponse, cloudCredModel.CloudCredentials)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel.CloudCredentials)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
 	return cloudCredsResponse, nil
 }
@@ -49,13 +52,19 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *WorkFlowRequest) (
 	}
 	cloudCredsResponse := WorkFlowResponse{}
 	var getCloudCredReq platformv1.ApiCloudCredentialServiceGetCloudCredentialRequest
-	copier.Copy(&getCloudCredReq, getReq)
+	err = copier.Copy(&getCloudCredReq, getReq)
+	if err != nil {
+		return nil, err
+	}
 	cloudCredModel, res, err := cloudCredsClient.CloudCredentialServiceGetCloudCredentialExecute(getCloudCredReq)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `CloudCredentialServiceGetCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
-	copier.Copy(&cloudCredsResponse, cloudCredModel)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredModel)
 	return &cloudCredsResponse, nil
 }
@@ -68,12 +77,18 @@ func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *WorkFlow
 	}
 	cloudCredsResponse := WorkFlowResponse{}
 	var createCloudCredRequest platformv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
-	copier.Copy(&createCloudCredRequest, createRequest)
+	err = copier.Copy(&createCloudCredRequest, createRequest)
+	if err != nil {
+		return nil, err
+	}
 	cloudCredModel, _, err := cloudCredsClient.CloudCredentialServiceCreateCloudCredentialExecute(createCloudCredRequest)
 	if err != nil {
 		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
 	}
-	copier.Copy(&cloudCredsResponse, cloudCredModel)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
 	return &cloudCredsResponse, nil
 }
@@ -86,12 +101,18 @@ func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequ
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var updateAppReq platformv1.ApiCloudCredentialServiceUpdateCloudCredentialRequest
-	copier.Copy(&updateAppReq, updateReq)
+	err = copier.Copy(&updateAppReq, updateReq)
+	if err != nil {
+		return nil, err
+	}
 	cloudCredationModel, res, err := cloudCredsClient.CloudCredentialServiceUpdateCloudCredentialExecute(updateAppReq)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `cloudCredationServiceUpdatecloudCredation`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&cloudCredsResponse, cloudCredationModel)
+	err = copier.Copy(&cloudCredsResponse, cloudCredationModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
 	return &cloudCredsResponse, nil
 }

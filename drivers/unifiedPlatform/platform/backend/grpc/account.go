@@ -65,7 +65,10 @@ func (AccountV1 *PlatformGrpc) GetAccountList() ([]WorkFlowResponse, error) {
 		log.Infof("accounts - [%v]", acc.Meta.Name)
 	}
 
-	copier.Copy(&accountsResponse, apiResponse.Accounts)
+	err = copier.Copy(&accountsResponse, apiResponse.Accounts)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Infof("Value of accounts after copy - [%v]", accountsResponse)
 	for _, acc := range accountsResponse {
@@ -94,7 +97,10 @@ func (AccountV1 *PlatformGrpc) GetAccount(accountID string) (*WorkFlowResponse, 
 	}
 
 	log.Infof("Value of accounts before copy - [%v]", apiResponse.Meta.Name)
-	copier.Copy(&accountsResponse, apiResponse)
+	err = copier.Copy(&accountsResponse, apiResponse)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of accounts after copy - [%v]", *accountsResponse.Meta.Name)
 
 	return &accountsResponse, nil

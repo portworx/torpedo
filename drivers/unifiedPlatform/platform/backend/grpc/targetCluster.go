@@ -46,7 +46,10 @@ func (tcGrpc *PlatformGrpc) ListTargetClusters() ([]WorkFlowResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `ListTargetClusters`: %v\n.", err)
 	}
-	copier.Copy(&tcResponse, apiResponse.Clusters)
+	err = copier.Copy(&tcResponse, apiResponse.Clusters)
+	if err != nil {
+		return nil, err
+	}
 
 	return tcResponse, nil
 
@@ -59,15 +62,18 @@ func (tcGrpc *PlatformGrpc) GetTarget(getTCRequest *WorkFlowRequest) (*WorkFlowR
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-
-	copier.Copy(&getRequest, getTCRequest)
-
+	err = copier.Copy(&getRequest, getTCRequest)
+	if err != nil {
+		return nil, err
+	}
 	apiResponse, err := dtClient.GetTargetCluster(ctx, getRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting the target cluster: %v\n", err)
 	}
-
-	copier.Copy(&getTcResponse, apiResponse)
+	err = copier.Copy(&getTcResponse, apiResponse)
+	if err != nil {
+		return nil, err
+	}
 	return &getTcResponse, nil
 }
 
@@ -78,15 +84,18 @@ func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *WorkFlowRequest) (*Wor
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-
-	copier.Copy(&patchRequest, tcRequest)
-
+	err = copier.Copy(&patchRequest, tcRequest)
+	if err != nil {
+		return nil, err
+	}
 	dtModel, err := dtClient.UpdateTargetCluster(ctx, patchRequest)
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `UpdateTargetCluster`: %v\n.", err)
 	}
-
-	copier.Copy(&tcResponse, dtModel)
+	err = copier.Copy(&tcResponse, dtModel)
+	if err != nil {
+		return nil, err
+	}
 	return &tcResponse, nil
 }
 
@@ -96,8 +105,10 @@ func (tcGrpc *PlatformGrpc) DeleteTarget(tcRequest *WorkFlowRequest) error {
 	if err != nil {
 		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	copier.Copy(&deleteRequest, tcRequest)
-
+	err = copier.Copy(&deleteRequest, tcRequest)
+	if err != nil {
+		return err
+	}
 	_, err = dtClient.DeleteTargetCluster(ctx, deleteRequest)
 	if err != nil {
 		return fmt.Errorf("Error when calling `DeleteTargetCluster`: %v\n.", err)

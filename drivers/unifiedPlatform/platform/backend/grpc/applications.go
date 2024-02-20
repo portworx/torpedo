@@ -66,13 +66,19 @@ func (ApplicationGrpcV1 *ApplicationGrpc) ListAvailableApplicationsForTenant(lis
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var firstPageRequest *publicAppsApitenant.ListAvailableApplicationsRequest
-	copier.Copy(&firstPageRequest, listReq)
+	err = copier.Copy(&firstPageRequest, listReq)
+	if err != nil {
+		return nil, err
+	}
 	appModels, err := appClient.ListAvailableApplications(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting while calling `ListAvailableApplicationsRequest`: %v\n", err)
 	}
 	log.Infof("Value of applications - [%v]", appModels)
-	copier.Copy(&applicationResponse, appModels.Applications)
+	err = copier.Copy(&applicationResponse, appModels.Applications)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", applicationResponse)
 	return applicationResponse, nil
 }
@@ -85,13 +91,19 @@ func (ApplicationGrpcV1 *ApplicationGrpc) ListAllApplicationsInCluster(listReq *
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var firstPageRequest2 *publicAppsApicluster.ListApplicationsRequest
-	copier.Copy(&firstPageRequest2, listReq)
+	err = copier.Copy(&firstPageRequest2, listReq)
+	if err != nil {
+		return nil, err
+	}
 	appModels, err := appClient.ListApplications(ctx, firstPageRequest2, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting while calling `ListAvailableApplicationsRequest`: %v\n", err)
 	}
 	log.Infof("Value of applications - [%v]", appModels)
-	copier.Copy(&applicationResponse, appModels.Applications)
+	err = copier.Copy(&applicationResponse, appModels.Applications)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", applicationResponse)
 	return applicationResponse, nil
 }
@@ -104,13 +116,19 @@ func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationAtClusterLevel(getReq *W
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var getAppRequest *publicAppsApicluster.GetApplicationRequest
-	copier.Copy(&getAppRequest, getReq)
+	err = copier.Copy(&getAppRequest, getReq)
+	if err != nil {
+		return nil, err
+	}
 	appModel, err := appClient.GetApplication(ctx, getAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetApplication`: %v\n", err)
 	}
 	log.Infof("Value of app - [%v]", appModel)
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of app after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -123,13 +141,19 @@ func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationByAppId(getReq *WorkFlow
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var getAppRequest *publicAppsApicluster.GetApplicationRequest
-	copier.Copy(&getAppRequest, getReq)
+	err = copier.Copy(&getAppRequest, getReq)
+	if err != nil {
+		return nil, err
+	}
 	appModel, err := appClient.GetApplication(ctx, getAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetApplication`: %v\n", err)
 	}
 	log.Infof("Value of app - [%v]", appModel)
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of app after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -142,12 +166,18 @@ func (ApplicationGrpcV1 *ApplicationGrpc) InstallApplication(installRequest *Wor
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var installAppReq *publicAppsApicluster.InstallApplicationRequest
-	copier.Copy(&installAppReq, installRequest)
+	err = copier.Copy(&installAppReq, installRequest)
+	if err != nil {
+		return nil, err
+	}
 	appModel, err := appClient.InstallApplication(ctx, installAppReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `InstallApplication`: %v\n", err)
 	}
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -160,12 +190,18 @@ func (ApplicationGrpcV1 *ApplicationGrpc) UninstallApplicationByAppId(uninstallR
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var uninstallAppReq *publicAppsApicluster.UninstallApplicationRequest
-	copier.Copy(&uninstallAppReq, uninstallReq)
+	err = copier.Copy(&uninstallAppReq, uninstallReq)
+	if err != nil {
+		return nil, err
+	}
 	appModel, err := appClient.UninstallApplication(ctx, uninstallAppReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `UninstallApplication`: %v\n", err)
 	}
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -178,12 +214,18 @@ func (ApplicationGrpcV1 *ApplicationGrpc) UninstallAppByAppIdClusterId(uninstall
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var uninstallAppReq *publicAppsApicluster.UninstallApplicationRequest
-	copier.Copy(&uninstallAppReq, uninstallReq)
+	err = copier.Copy(&uninstallAppReq, uninstallReq)
+	if err != nil {
+		return nil, err
+	}
 	appModel, err := appClient.UninstallApplication(ctx, uninstallAppReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `UninstallApplication`: %v\n", err)
 	}
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }

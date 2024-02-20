@@ -34,7 +34,10 @@ func (ns *PLATFORM_API_V1) ListNamespaces(targetID *WorkFlowRequest) ([]WorkFlow
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `NamespaceServiceListNamespaces`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&namespaceResponse, nsModels.Namespaces)
+	err = copier.Copy(&namespaceResponse, nsModels.Namespaces)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of namespace after copy - [%v]", namespaceResponse)
 	return namespaceResponse, nil
 }

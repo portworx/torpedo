@@ -25,7 +25,7 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocClient() (context.Context, *platfo
 	return ctx, client, nil
 }
 
-// ListBackupLocatiobackuploc return lis of backup locatiobackuploc
+// ListBackupLocations return lis of backup locatiobackuploc
 func (backuploc *PLATFORM_API_V1) ListBackupLocations() ([]WorkFlowResponse, error) {
 	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
 	backupLocResp := []WorkFlowResponse{}
@@ -37,7 +37,10 @@ func (backuploc *PLATFORM_API_V1) ListBackupLocations() ([]WorkFlowResponse, err
 		return nil, fmt.Errorf("Error when calling `BackupLocatiobackuplocerviceListBackupLocatiobackuploc`: %v\n.Full HTTP respobackuploce: %v", err, res)
 	}
 	log.Infof("Value of backupLocation - [%v]", backupLocationModels)
-	copier.Copy(&backupLocResp, backupLocationModels.BackupLocations)
+	err = copier.Copy(&backupLocResp, backupLocationModels.BackupLocations)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of backupLocation after copy - [%v]", backupLocResp)
 	return backupLocResp, nil
 }
@@ -50,45 +53,67 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*W
 	}
 	bckpLocResp := WorkFlowResponse{}
 	var getRequest platformv1.ApiBackupLocationServiceGetBackupLocationRequest
-	copier.Copy(&getRequest, getReq)
+	err = copier.Copy(&getRequest, getReq)
+	if err != nil {
+		return nil, err
+	}
 	backupLocationModel, res, err := backupLocationClient.BackupLocationServiceGetBackupLocationExecute(getRequest)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when called `BackupLocatiobackuplocerviceGetBackupLocation`, Full HTTP respobackuploce: %v\n", res)
 	}
 	log.Infof("Value of backupLocation - [%v]", backupLocationModel)
-	copier.Copy(&bckpLocResp, backupLocationModel)
+	err = copier.Copy(&bckpLocResp, backupLocationModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
 	return &bckpLocResp, nil
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq platformv1.ApiBackupLocationServiceCreateBackupLocationRequest) (*WorkFlowResponse, error) {
+func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	_, backupLocationClient, err := backuploc.GetBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	backupLocationModel, _, err := backupLocationClient.BackupLocationServiceCreateBackupLocationExecute(createReq)
+	var createBackupLoc platformv1.ApiBackupLocationServiceCreateBackupLocationRequest
+	err = copier.Copy(&createBackupLoc, createReq)
+	if err != nil {
+		return nil, err
+	}
+	backupLocationModel, _, err := backupLocationClient.BackupLocationServiceCreateBackupLocationExecute(createBackupLoc)
 	if err != nil {
 		return nil, fmt.Errorf("error when called `BackupLocatiobackuplocerviceCreateBackupLocation` to create backup target - %v", err)
 	}
-	copier.Copy(&bckpLocResp, backupLocationModel)
+	err = copier.Copy(&bckpLocResp, backupLocationModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
 	return &bckpLocResp, nil
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq platformv1.ApiBackupLocationServiceUpdateBackupLocationRequest) (*WorkFlowResponse, error) {
+func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	_, backupLocationClient, err := backuploc.GetBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	backupLocationModel, res, err := backupLocationClient.BackupLocationServiceUpdateBackupLocationExecute(updateReq)
+	var updateBackupLoc platformv1.ApiBackupLocationServiceUpdateBackupLocationRequest
+	err = copier.Copy(&updateBackupLoc, updateReq)
+	if err != nil {
+		return nil, err
+	}
+	backupLocationModel, res, err := backupLocationClient.BackupLocationServiceUpdateBackupLocationExecute(updateBackupLoc)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupLocatiobackuplocerviceUpdateBackupLocation`: %v\n.Full HTTP respobackuploce: %v", err, res)
 	}
-	copier.Copy(&bckpLocResp, backupLocationModel)
+	err = copier.Copy(&bckpLocResp, backupLocationModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
 	return &bckpLocResp, nil
 

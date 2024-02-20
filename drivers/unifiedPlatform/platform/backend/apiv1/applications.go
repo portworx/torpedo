@@ -36,7 +36,10 @@ func (applications *PLATFORM_API_V1) ListAllApplicationsInCluster(appRequest *Wo
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceListApplications`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of applications - [%v]", appModels)
-	copier.Copy(&applicationResponse, appModels.Applications)
+	err = copier.Copy(&applicationResponse, appModels.Applications)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", applicationResponse)
 	return applicationResponse, nil
 }
@@ -68,7 +71,6 @@ func (applications *PLATFORM_API_V1) GetApplicationAtClusterLevel(appReq *WorkFl
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-
 	var getRequest platformv1.ApiApplicationServiceGetApplication2Request
 	getRequest = getRequest.ApiService.ApplicationServiceGetApplication2(ctx, appReq.ClusterId, appReq.PdsAppId)
 	appModel, res, err := appClient.ApplicationServiceGetApplication2Execute(getRequest)
@@ -76,7 +78,10 @@ func (applications *PLATFORM_API_V1) GetApplicationAtClusterLevel(appReq *WorkFl
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceGetApplication2`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of applications - [%v]", appModel)
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -88,7 +93,6 @@ func (applications *PLATFORM_API_V1) GetApplicationByAppId(appReq *WorkFlowReque
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-
 	var getRequest platformv1.ApiApplicationServiceGetApplicationRequest
 	getRequest = getRequest.ApiService.ApplicationServiceGetApplication(ctx, appReq.PdsAppId)
 	appModel, res, err := appClient.ApplicationServiceGetApplicationExecute(getRequest)
@@ -96,7 +100,10 @@ func (applications *PLATFORM_API_V1) GetApplicationByAppId(appReq *WorkFlowReque
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceGetApplication2`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of applications - [%v]", appModel)
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -109,12 +116,18 @@ func (applications *PLATFORM_API_V1) InstallApplication(appInstallRequest *WorkF
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	appResponse := WorkFlowResponse{}
-	copier.Copy(&installRequest, appInstallRequest)
+	err = copier.Copy(&installRequest, appInstallRequest)
+	if err != nil {
+		return nil, err
+	}
 	appModel, res, err := appClient.ApplicationServiceInstallApplicationExecute(installRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceInstallApplication`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -127,12 +140,18 @@ func (applications *PLATFORM_API_V1) UninstallApplicationByAppId(appUninstallReq
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	copier.Copy(&uninstallReq, appUninstallRequest)
+	err = copier.Copy(&uninstallReq, appUninstallRequest)
+	if err != nil {
+		return nil, err
+	}
 	appModel, res, err := appClient.ApplicationServiceUninstallApplicationExecute(uninstallReq)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceUninstallApplication`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }
@@ -145,12 +164,18 @@ func (applications *PLATFORM_API_V1) UninstallAppByAppIdClusterId(appUninstallRe
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	copier.Copy(&uninstallReq, appUninstallRequest)
+	err = copier.Copy(&uninstallReq, appUninstallRequest)
+	if err != nil {
+		return nil, err
+	}
 	appModel, res, err := appClient.ApplicationServiceUninstallApplication2Execute(uninstallReq)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceUninstallApplication`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&appResponse, appModel)
+	err = copier.Copy(&appResponse, appModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of applications after copy - [%v]", appResponse)
 	return &appResponse, nil
 }

@@ -38,7 +38,10 @@ func (tc *PLATFORM_API_V1) ListTargetClusters() ([]WorkFlowResponse, error) {
 		return nil, fmt.Errorf("Error when calling `TargetClusterServiceListTargetClusters`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	copier.Copy(&tcResponse, dtModels)
+	err = copier.Copy(&tcResponse, dtModels)
+	if err != nil {
+		return nil, err
+	}
 
 	return tcResponse, nil
 }
@@ -54,7 +57,10 @@ func (tc *PLATFORM_API_V1) GetTarget(tcRequest *WorkFlowRequest) (*WorkFlowRespo
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TargetClusterServiceGetTargetCluster`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&tcResponse, dtModel)
+	err = copier.Copy(&tcResponse, dtModel)
+	if err != nil {
+		return nil, err
+	}
 	return &tcResponse, nil
 }
 
@@ -67,14 +73,20 @@ func (tc *PLATFORM_API_V1) PatchTargetCluster(tcRequest *WorkFlowRequest) (*Work
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	copier.Copy(&patchRequest, tcRequest)
+	err = copier.Copy(&patchRequest, tcRequest)
+	if err != nil {
+		return nil, err
+	}
 
 	dtModel, res, err := dtClient.TargetClusterServiceUpdateTargetClusterExecute(patchRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TargetClusterServiceUpdateTargetCluster`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	copier.Copy(&tcResponse, dtModel)
+	err = copier.Copy(&tcResponse, dtModel)
+	if err != nil {
+		return nil, err
+	}
 	return &tcResponse, nil
 }
 

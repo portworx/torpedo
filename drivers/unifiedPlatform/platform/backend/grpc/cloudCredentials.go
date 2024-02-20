@@ -49,7 +49,10 @@ func (cloudCredGrpcV1 *CloudCredentialGrpc) ListCloudCredentials() ([]WorkFlowRe
 		return nil, fmt.Errorf("Error in calling api `ListCloudCredentials` call: %v\n", err)
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
-	copier.Copy(&cloudCredsResponse, cloudCredModel.CloudCredentials)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel.CloudCredentials)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
 	return cloudCredsResponse, nil
 }
@@ -62,13 +65,19 @@ func (cloudCredGrpcV1 *CloudCredentialGrpc) GetCloudCredentials(cloudCredId *Wor
 	}
 	cloudCredsResponse := WorkFlowResponse{}
 	var getRequest *publiccloudcredapi.GetCloudCredentialRequest
-	copier.Copy(&getRequest, cloudCredId)
+	err = copier.Copy(&getRequest, cloudCredId)
+	if err != nil {
+		return nil, err
+	}
 	cloudCredModel, err := cloudCredsClient.GetCloudCredential(ctx, getRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling api `GetCloudCredential` call: %v\n", err)
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
-	copier.Copy(&cloudCredsResponse, cloudCredModel)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredModel)
 	return &cloudCredsResponse, nil
 }
@@ -81,12 +90,18 @@ func (cloudCredGrpcV1 *CloudCredentialGrpc) CreateCloudCredentials(createRequest
 	}
 	cloudCredsResponse := WorkFlowResponse{}
 	var createCloudCredRequest *publiccloudcredapi.CreateCloudCredentialRequest
-	copier.Copy(&createCloudCredRequest, createRequest)
+	err = copier.Copy(&createCloudCredRequest, createRequest)
+	if err != nil {
+		return nil, err
+	}
 	cloudCredModel, err := cloudCredsClient.CreateCloudCredential(ctx, createCloudCredRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
 	}
-	copier.Copy(&cloudCredsResponse, cloudCredModel)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
 	return &cloudCredsResponse, nil
 }
@@ -99,12 +114,18 @@ func (cloudCredGrpcV1 *CloudCredentialGrpc) UpdateCloudCredentials(updateRequest
 	}
 	cloudCredsResponse := WorkFlowResponse{}
 	var updateAppRequest *publiccloudcredapi.UpdateCloudCredentialRequest
-	copier.Copy(&updateAppRequest, updateRequest)
+	err = copier.Copy(&updateAppRequest, updateRequest)
+	if err != nil {
+		return nil, err
+	}
 	cloudCredModel, err := cloudCredsClient.UpdateCloudCredential(ctx, updateAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
 	}
-	copier.Copy(&cloudCredsResponse, cloudCredModel)
+	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
 	return &cloudCredsResponse, nil
 }

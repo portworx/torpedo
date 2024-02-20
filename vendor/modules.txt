@@ -1249,8 +1249,9 @@ github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1
 github.com/pure-px/apis/public/portworx/platform/account/apiv1
 github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1
 github.com/pure-px/apis/public/portworx/platform/cloudcredential/apiv1
+github.com/pure-px/apis/public/portworx/platform/iam/apiv1
 github.com/pure-px/apis/public/portworx/platform/namespace/apiv1
-github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
+github.com/pure-px/apis/public/portworx/platform/serviceaccount/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetclusterregistrationmanifest/apiv1

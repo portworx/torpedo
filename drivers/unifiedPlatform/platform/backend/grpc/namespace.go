@@ -41,7 +41,10 @@ func (NamespaceGrpcV1 *NamespaceGrpc) ListNamespaces(request *WorkFlowRequest) (
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var firstPageRequest *publicnamespaceapis.ListNamespacesRequest
-	copier.Copy(&firstPageRequest, request)
+	err = copier.Copy(&firstPageRequest, request)
+	if err != nil {
+		return nil, err
+	}
 	nsResponse, err := nsClient.ListNamespaces(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListTenants`: %v\n.", err)
@@ -51,7 +54,10 @@ func (NamespaceGrpcV1 *NamespaceGrpc) ListNamespaces(request *WorkFlowRequest) (
 		log.Infof("namespace -  [%v]", ns.Meta.Name)
 	}
 
-	copier.Copy(&namespaceResponse, nsResponse.Namespaces)
+	err = copier.Copy(&namespaceResponse, nsResponse.Namespaces)
+	if err != nil {
+		return nil, err
+	}
 
 	log.Infof("Value of namespace after copy - [%v]", nsResponse)
 	for _, ten := range namespaceResponse {
