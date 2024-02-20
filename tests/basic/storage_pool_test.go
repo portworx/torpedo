@@ -10724,9 +10724,12 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 						}
 					}
 					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
-					log.InfoD("pool selected: %v", poolToBeUpdated)
+
 					poolsUuid, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
 					log.FailOnError(err, "Failed to get pool using node %s", nodeToBeUpdated.Name)
+
+					poolToBeUpdated = poolsUuid[0]
+					log.InfoD("pool selected: %v", poolToBeUpdated)
 
 					nodesToBeUpdated = append(nodesToBeUpdated, nodeToBeUpdated.Id)
 					poolsToBeUpdated = append(poolsToBeUpdated, poolsUuid[0])
