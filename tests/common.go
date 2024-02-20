@@ -6299,7 +6299,7 @@ func ParseFlags() {
 	var anthosWsNodeIp string
 	var anthosInstPath string
 	log.Infof("The default scheduler is %v", defaultScheduler)
-	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
+
 	flag.StringVar(&n, nodeDriverCliFlag, defaultNodeDriver, "Name of the node driver to use")
 	flag.StringVar(&m, monitorDriverCliFlag, defaultMonitorDriver, "Name of the prometheus driver to use")
 	flag.StringVar(&v, storageDriverCliFlag, defaultStorageDriver, "Name of the storage driver to use")
@@ -6309,6 +6309,7 @@ func ParseFlags() {
 	flag.StringVar(&specDir, specDirCliFlag, defaultSpecsRoot, "Root directory containing the application spec files")
 	flag.StringVar(&logLoc, logLocationCliFlag, defaultLogLocation,
 		"Path to save logs/artifacts upon failure. Default: /mnt/torpedo_support_dir")
+	flag.StringVar(&s, schedulerCliFlag, defaultScheduler, "Name of the scheduler to use")
 	flag.StringVar(&logLevel, logLevelCliFlag, defaultLogLevel, "Log level")
 	flag.IntVar(&appScaleFactor, scaleFactorCliFlag, defaultAppScaleFactor, "Factor by which to scale applications")
 	flag.IntVar(&minRunTimeMins, minRunTimeMinsFlag, defaultMinRunTimeMins, "Minimum Run Time in minutes for appliation deletion tests")
