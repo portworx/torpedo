@@ -10723,10 +10723,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 							found = false
 						}
 					}
-					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
+					log.InfoD("Node selected: %v", nodeToBeUpdated.Id)
 
 					poolsUuid, err := GetAllPoolsOnNode(nodeToBeUpdated.Id)
-					log.FailOnError(err, "Failed to get pool using node %s", nodeToBeUpdated.Name)
+					log.FailOnError(err, "Failed to get pool using node %s", nodeToBeUpdated.Id)
 
 					poolToBeUpdated = poolsUuid[0]
 					log.InfoD("pool selected: %v", poolToBeUpdated)
@@ -10750,7 +10750,8 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					resync := false
 					for _, v := range volDetails.RuntimeState {
 						log.InfoD("RuntimeState is in state %s", v.GetRuntimeState()["RuntimeState"])
-						if v.GetRuntimeState()["RuntimeState"] == "resync" {
+						if v.GetRuntimeState()["RuntimeState"] == "resync" ||
+							v.GetRuntimeState()["RuntimeState"] == "clean" {
 							resync = true
 						}
 					}
