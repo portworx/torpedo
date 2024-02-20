@@ -19,9 +19,9 @@ type Config struct {
 	UserEmail            *string              `copier:"must"`
 	DnsName              *string              `copier:"must"`
 	DisplayName          *string              `copier:"must"`
-	TlsEnabled           *bool                `copier:"must"`
-	Reference            *Reference           `copier:"must"`
-	DeploymentTopologies []DeploymentTopology `copier:"must"`
+	TlsEnabled           *bool                `copier:"must,nopanic"`
+	Reference            *Reference           `copier:"must,nopanic"`
+	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
 
 type WorkFlowResponse struct {

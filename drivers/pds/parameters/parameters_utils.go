@@ -11,7 +11,6 @@ import (
 
 type Parameter struct {
 	DataServiceToTest []struct {
-		DeploymentName        string `json:"DeploymentName"`
 		Name                  string `json:"Name"`
 		Version               string `json:"Version"`
 		Image                 string `json:"Image"`

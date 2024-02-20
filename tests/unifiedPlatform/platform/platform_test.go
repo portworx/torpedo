@@ -77,7 +77,9 @@ var _ = Describe("{CreateAccount}", func() {
 			workflowResponse, err := stworkflows.WorkflowCreateAndListAccounts()
 			log.FailOnError(err, "Some error occurred while running WorkflowCreateAndListAccounts")
 			for key, value := range workflowResponse {
-				log.Infof("Output of %s is [%+v]", key, value)
+				for index, _ := range value {
+					log.Infof("Output of %s is [%s]", key, *value[index].Meta.Name)
+				}
 			}
 		})
 	})
