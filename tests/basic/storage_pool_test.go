@@ -10687,7 +10687,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 					replicaSets := inspectVol.ReplicaSets
 					replicaset := replicaSets[len(replicaSets)-1]
 					nodeToBeUpdated, err := GetNodeWithGivenPoolID(replicaset.PoolUuids[0])
-					poolToBeUpdated := replicaset.PoolUuids[0]
+					poolToBeUpdated = replicaset.PoolUuids[0]
 
 					log.InfoD("Node selected: %v", nodeToBeUpdated.Name)
 					log.InfoD("pool selected: %v", poolToBeUpdated)
