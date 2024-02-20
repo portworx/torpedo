@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
@@ -135,4 +136,9 @@ func GetContext() (context.Context, error) {
 
 	return ctx, nil
 
+}
+
+func GetWorkflowResponseMap() map[string][]WorkFlowResponse {
+	var createdMap = make(map[string][]WorkFlowResponse)
+	return createdMap
 }
