@@ -10696,7 +10696,7 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 				maxReplicaFactor = 3
 
 				log.FailOnError(Inst().V.SetReplicationFactor(vol, maxReplicaFactor,
-					nodesToBeUpdated, poolsToBeUpdated, true),
+					nodesToBeUpdated, poolsToBeUpdated, false),
 					"Failed to set Replicaiton factor")
 				t := func() (interface{}, bool, error) {
 					volDetails, err := Inst().V.InspectVolume(vol.ID)
