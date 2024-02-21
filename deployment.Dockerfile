@@ -20,6 +20,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # docker build --build-arg GO_VERSION=1.21.6 --build-arg GINKGO_VERSION=v2.15.0 --build-arg KUBECTL_VERSION=v1.29.1 -t torpedo-deployment:latest .
 
 
+COPY --from=golang:1.13-alpine /usr/local/go/ /usr/local/go/
 
 
 
