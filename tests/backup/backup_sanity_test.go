@@ -335,3 +335,34 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
+
+var _ = Describe("{DeployAppsToCluster}", func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("DeployAppsToCluster", "Deploy Apps to cluster", nil, 0, Mkoppal, Q1FY25)
+		log.InfoD("Scheduling applications in destination cluster")
+		err := SetDestinationKubeConfig()
+		log.FailOnError(err, "Switching context to destination cluster failed")
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 250, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify backup and restore of Kubevirt VMs in different states", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+	})
+})
