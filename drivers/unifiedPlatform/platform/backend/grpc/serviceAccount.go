@@ -11,12 +11,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-type ServiceAccountGrpc struct {
-	ApiClientV1 *grpc.ClientConn
-}
-
 // getIamClient updates the header with bearer token and returns the new client
-func (saGrpcV1 *ServiceAccountGrpc) getSAClient() (context.Context, publicsaapi.ServiceAccountServiceClient, string, error) {
+func (saGrpcV1 *PlatformGrpc) getSAClient() (context.Context, publicsaapi.ServiceAccountServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var backupLocClient publicsaapi.ServiceAccountServiceClient
 
@@ -35,7 +31,7 @@ func (saGrpcV1 *ServiceAccountGrpc) getSAClient() (context.Context, publicsaapi.
 }
 
 // ListAllServiceAccounts List all Service Accounts
-func (saGrpcV1 *ServiceAccountGrpc) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -60,7 +56,7 @@ func (saGrpcV1 *ServiceAccountGrpc) ListAllServiceAccounts(listReq *WorkFlowRequ
 }
 
 // GetServiceAccount return service account model.
-func (saGrpcV1 *ServiceAccountGrpc) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -85,7 +81,7 @@ func (saGrpcV1 *ServiceAccountGrpc) GetServiceAccount(saID *WorkFlowRequest) (*W
 }
 
 // CreateServiceAccount return new service account model.
-func (saGrpcV1 *ServiceAccountGrpc) CreateServiceAccount(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) CreateServiceAccount(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -110,7 +106,7 @@ func (saGrpcV1 *ServiceAccountGrpc) CreateServiceAccount(createReq *WorkFlowRequ
 }
 
 // DeleteServiceAccount delete service account and return status.
-func (saGrpcV1 *ServiceAccountGrpc) DeleteServiceAccount(saId *WorkFlowRequest) error {
+func (saGrpcV1 *PlatformGrpc) DeleteServiceAccount(saId *WorkFlowRequest) error {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -135,7 +131,7 @@ func (saGrpcV1 *ServiceAccountGrpc) DeleteServiceAccount(saId *WorkFlowRequest) 
 }
 
 // RegenerateServiceAccountSecret serviceAccountSecret
-func (saGrpcV1 *ServiceAccountGrpc) RegenerateServiceAccountSecret(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) RegenerateServiceAccountSecret(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -163,7 +159,7 @@ func (saGrpcV1 *ServiceAccountGrpc) RegenerateServiceAccountSecret(saId *WorkFlo
 }
 
 // UpdateServiceAccount update existing serviceAccount
-func (saGrpcV1 *ServiceAccountGrpc) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -190,7 +186,7 @@ func (saGrpcV1 *ServiceAccountGrpc) UpdateServiceAccount(saId *WorkFlowRequest) 
 	return &saResponse, nil
 }
 
-func (saGrpcV1 *ServiceAccountGrpc) GenerateServiceAccountAccessToken(tokenReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) GenerateServiceAccountAccessToken(tokenReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)

@@ -11,12 +11,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-type IAMGrpc struct {
-	ApiClientV1 *grpc.ClientConn
-}
-
 // getIamClient updates the header with bearer token and returns the new client
-func (iamGrpcV1 *IAMGrpc) getIamClient() (context.Context, publiciamapi.IAMServiceClient, string, error) {
+func (iamGrpcV1 *PlatformGrpc) getIamClient() (context.Context, publiciamapi.IAMServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var backupLocClient publiciamapi.IAMServiceClient
 
@@ -35,7 +31,7 @@ func (iamGrpcV1 *IAMGrpc) getIamClient() (context.Context, publiciamapi.IAMServi
 }
 
 // ListIamRoleBindings return service identities models for a project.
-func (iamGrpcV1 *IAMGrpc) ListIamRoleBindings(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) ListIamRoleBindings(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := []WorkFlowResponse{}
 	if err != nil {
@@ -60,7 +56,7 @@ func (iamGrpcV1 *IAMGrpc) ListIamRoleBindings(listReq *WorkFlowRequest) ([]WorkF
 }
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
-func (iamGrpcV1 *IAMGrpc) CreateIamRoleBinding(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) CreateIamRoleBinding(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {
@@ -84,7 +80,7 @@ func (iamGrpcV1 *IAMGrpc) CreateIamRoleBinding(createReq *WorkFlowRequest) (*Wor
 	return &iamResponse, nil
 }
 
-func (iamGrpcV1 *IAMGrpc) UpdateIamRoleBindings(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) UpdateIamRoleBindings(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {
@@ -109,7 +105,7 @@ func (iamGrpcV1 *IAMGrpc) UpdateIamRoleBindings(updateReq *WorkFlowRequest) (*Wo
 }
 
 // GetIamRoleBindingByID return IAM RoleBinding model.
-func (iamGrpcV1 *IAMGrpc) GetIamRoleBindingByID(actorId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) GetIamRoleBindingByID(actorId *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {
@@ -134,7 +130,7 @@ func (iamGrpcV1 *IAMGrpc) GetIamRoleBindingByID(actorId *WorkFlowRequest) (*Work
 }
 
 // DeleteIamRoleBinding delete IAM RoleBinding and return status.
-func (iamGrpcV1 *IAMGrpc) DeleteIamRoleBinding(actorId *WorkFlowRequest) error {
+func (iamGrpcV1 *PlatformGrpc) DeleteIamRoleBinding(actorId *WorkFlowRequest) error {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {
@@ -158,7 +154,7 @@ func (iamGrpcV1 *IAMGrpc) DeleteIamRoleBinding(actorId *WorkFlowRequest) error {
 	return nil
 }
 
-func (iamGrpcV1 *IAMGrpc) GrantIAMRoles(grantIamReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) GrantIAMRoles(grantIamReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {
@@ -182,7 +178,7 @@ func (iamGrpcV1 *IAMGrpc) GrantIAMRoles(grantIamReq *WorkFlowRequest) (*WorkFlow
 	return &iamResponse, nil
 }
 
-func (iamGrpcV1 *IAMGrpc) RevokeAccessForIAM(revokeReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iamGrpcV1 *PlatformGrpc) RevokeAccessForIAM(revokeReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, iamClient, _, err := iamGrpcV1.getIamClient()
 	iamResponse := WorkFlowResponse{}
 	if err != nil {

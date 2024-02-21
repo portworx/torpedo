@@ -13,24 +13,24 @@ import (
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 )
 
-// AccountV1 struct
+// PLATFORM_API_V1 struct
 type PLATFORM_API_V1 struct {
 	ApiClientV1 *platformv1.APIClient
 	AccountID   string
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (account *PLATFORM_API_V1) getAccountClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
+func (AccountV1 *PLATFORM_API_V1) getAccountClient() (context.Context, *platformv1.AccountServiceAPIService, error) {
 	log.Infof("Creating client from PLATFORM_API_V1 package")
 	ctx, token, err := GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
 
-	account.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	account.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = account.AccountID
+	AccountV1.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	AccountV1.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = AccountV1.AccountID
 
-	client := account.ApiClientV1.AccountServiceAPI
+	client := AccountV1.ApiClientV1.AccountServiceAPI
 	return ctx, client, nil
 }
 
