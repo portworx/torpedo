@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
@@ -85,6 +86,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(10 * time.Minute)
 				}
+				printK8sCluterInfo()
 			})
 
 			Step("validate storage components", func() {
@@ -93,12 +95,25 @@ var _ = Describe("{UpgradeCluster}", func() {
 				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
 				err = Inst().V.ValidateDriver(u.String(), true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+
+				// Printing cluster node info after the upgrade
+				printK8sCluterInfo()
 			})
 
 			// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
 			if Inst().S.String() != aks.SchedName {
 				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
 			}
+
+			Step("update node drive endpoints", func() {
+				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+				err = Inst().S.RefreshNodeRegistry()
+				log.FailOnError(err, "Refresh Node Registry failed")
+
+				// Refresh Driver Endpoints
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "Refresh Driver Endpoints failed")
+			})
 
 			Step("validate all apps after upgrade", func() {
 				ValidateApplications(contexts)
@@ -194,7 +209,6 @@ func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 }
 
 func ocp414Prereq() error {
-
 	stc, err := Inst().V.GetDriver()
 	if err != nil {
 		return err
@@ -210,9 +224,36 @@ func ocp414Prereq() error {
 			return err
 		}
 	}
-
 	return nil
+}
 
+// printK8sClusterInfo prints info about K8s cluster nodes
+func printK8sCluterInfo() {
+	log.Info("Get cluster info..")
+	t := func() (interface{}, bool, error) {
+		nodeList, err := core.Instance().GetNodes()
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
+		}
+		if len(nodeList.Items) > 0 {
+			for _, node := range nodeList.Items {
+				nodeType := "Worker"
+				if core.Instance().IsNodeMaster(node) {
+					nodeType = "Master"
+				}
+				log.Infof(
+					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
+					node.Name, nodeType,
+					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
+					node.Status.NodeInfo.ContainerRuntimeVersion)
+			}
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("no nodes were found in the cluster")
+	}
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		log.Warnf("failed to get k8s cluster info, Err: %v", err)
+	}
 }
 
 func createClusterMonitoringConfig() error {
@@ -228,14 +269,11 @@ func createClusterMonitoringConfig() error {
 	}
 
 	_, err = core.Instance().CreateConfigMap(ocpConfigmap)
-
 	return err
-
 }
 
 func updatePrometheusAndAutopilot(stc *ops_v1.StorageCluster) error {
 	thanosQuerierHostCmd := `kubectl get route thanos-querier -n openshift-monitoring -o json | jq -r '.spec.host'`
-
 	var output []byte
 
 	output, err = exec.Command("sh", "-c", thanosQuerierHostCmd).CombinedOutput()
@@ -259,7 +297,5 @@ func updatePrometheusAndAutopilot(stc *ops_v1.StorageCluster) error {
 	}
 	pxOperator := operator.Instance()
 	_, err = pxOperator.UpdateStorageCluster(stc)
-
 	return err
-
 }
