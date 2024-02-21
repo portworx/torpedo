@@ -10903,7 +10903,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 				log.FailOnError(err, "Failed to initiate pool resize")
 
 				//wait for pool expand to complete
-				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+				err = waitForPoolToBeResized(expectedSize, pool.Uuid, true)
 			})
 		}
 	})
