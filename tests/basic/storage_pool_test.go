@@ -10899,7 +10899,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 				log.FailOnError(err, "Failed to get pool using UUID %s", volDetails.ReplicaSets[0].PoolUuids[0])
 
 				expectedSize := (pool.TotalSize / units.GiB) + 100
-				err = Inst().V.ExpandPool(volDetails.ReplicaSets[0].PoolUuids[0], api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				err = Inst().V.ExpandPool(pool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
 				log.FailOnError(err, "Failed to initiate pool resize")
 
 				//wait for pool expand to complete
