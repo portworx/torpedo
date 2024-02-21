@@ -7,30 +7,26 @@ import (
 )
 
 func WorkflowCreateAndListAccounts() (map[string][]apiStructs.WorkFlowResponse, error) {
-	response := utils.GetWorkflowResponseMap()
+	resultMap := utils.GetWorkflowResponseMap()
 
-	//stepName := "CreateAccount"
-	//startStep(stepName)
 	//acc, err := platformLibs.CreatePlatformAccountV1(
 	//	fmt.Sprintf("%s-%s", envPlatformAccountName, utilities.RandomString(3)),
 	//	fmt.Sprintf("%s-%s", envAccountDisplayName, utilities.RandomString(3)),
 	//	fmt.Sprintf("%s-%s", envUserMailId, utilities.RandomString(3)),
 	//)
 	//if err != nil {
-	//	return response, err
+	//	return resultMap, err
 	//}
 	//
 	//log.Infof("Created account with name %s", *acc.Meta.Name)
-	//response[stepName] = []apiStructs.WorkFlowResponse{acc}
+	//addResultToResponse([]apiStructs.WorkFlowResponse{acc}, CreatePlatformAccountV1, resultMap)
 
-	stepName := "ListAccount"
-	startStep(stepName)
 	accList, err := platformLibs.GetAccountListv1()
 	if err != nil {
-		return response, err
+		return resultMap, err
 	}
 
-	response[stepName] = accList
+	addResultToResponse(accList, GetAccountListv1, resultMap)
 
-	return response, nil
+	return resultMap, nil
 }
