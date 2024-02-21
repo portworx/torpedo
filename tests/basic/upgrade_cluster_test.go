@@ -15,6 +15,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -62,9 +63,11 @@ var _ = Describe("{UpgradeCluster}", func() {
 				err = ocp414Prereq()
 				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
 			}
-			Step("start scheduler upgrade", func() {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade", Inst().S.String()), func() {
 				err := Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+
+				// Sleep needed for AKS cluster upgrades
 				if Inst().S.String() == aks.SchedName {
 					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
 						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
@@ -73,6 +76,14 @@ var _ = Describe("{UpgradeCluster}", func() {
 						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
 					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(30 * time.Minute)
+				}
+
+				// Sleep needed for GKE cluster upgrades
+				if Inst().S.String() == gke.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Pool upgrades, GKE creates an extra node. "+
+						"After the Node Pool upgrade is complete, GKE deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(10 * time.Minute)
 				}
 			})
 
