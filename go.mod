@@ -1,6 +1,8 @@
 module github.com/portworx/torpedo
 
-go 1.21
+go 1.21.4
+
+toolchain go1.21.7
 
 require (
 	cloud.google.com/go/storage v1.30.1
@@ -36,7 +38,7 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
+	github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e
 	github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7
 	github.com/portworx/sched-ops v1.20.4-rc1.0.20240214035641-f67239479cd9
 	github.com/portworx/talisman v1.1.3
@@ -53,7 +55,7 @@ require (
 	golang.org/x/net v0.20.0
 	golang.org/x/sync v0.6.0
 	google.golang.org/api v0.156.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20231212172506-995d672761c0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240108191215-35c7eff3a6b1 // indirect
 	google.golang.org/grpc v1.60.1
 	google.golang.org/protobuf v1.32.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
@@ -97,6 +99,7 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
 	github.com/montanaflynn/stats v0.0.0-20180911141734-db72e6cae808 // indirect
+	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
@@ -113,6 +116,7 @@ require (
 	golang.org/x/exp v0.0.0-20230728194245-b0cb94b80691 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/tools v0.16.1 // indirect
+	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	knative.dev/pkg v0.0.0-20231023150739-56bfe0dd9626 // indirect
 	kubevirt.io/client-go v0.59.2 // indirect
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
@@ -124,7 +128,11 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20240209231933-e2bfdf0c1034
 	github.com/jackc/pgx/v4 v4.15.0
 	github.com/jetstack/cert-manager v1.7.3
+	github.com/jinzhu/copier v0.4.0
+	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/ginkgo/v2 v2.15.0
+	github.com/pure-px/apis v0.0.0-20240219053634-348bdc2a3d67
+	github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.10.0
@@ -226,7 +234,7 @@ require (
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -322,8 +330,8 @@ require (
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto v0.0.0-20231212172506-995d672761c0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917 // indirect
+	google.golang.org/genproto v0.0.0-20240108191215-35c7eff3a6b1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240108191215-35c7eff3a6b1 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect

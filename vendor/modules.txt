@@ -708,8 +708,8 @@ github.com/grpc-ecosystem/go-grpc-middleware/util/metautils
 github.com/grpc-ecosystem/grpc-gateway/internal
 github.com/grpc-ecosystem/grpc-gateway/runtime
 github.com/grpc-ecosystem/grpc-gateway/utilities
-# github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0
-## explicit; go 1.17
+# github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0
+## explicit; go 1.19
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
 github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2/options
 github.com/grpc-ecosystem/grpc-gateway/v2/runtime
@@ -831,6 +831,9 @@ github.com/jetstack/cert-manager/pkg/client/clientset/versioned
 github.com/jetstack/cert-manager/pkg/client/clientset/versioned/scheme
 github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/acme/v1
 github.com/jetstack/cert-manager/pkg/client/clientset/versioned/typed/certmanager/v1
+# github.com/jinzhu/copier v0.4.0
+## explicit; go 1.13
+github.com/jinzhu/copier
 # github.com/jmespath/go-jmespath v0.4.0
 ## explicit; go 1.14
 github.com/jmespath/go-jmespath
@@ -1086,6 +1089,35 @@ github.com/moul/http2curl
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
+# github.com/nxadm/tail v1.4.8
+## explicit; go 1.13
+github.com/nxadm/tail
+github.com/nxadm/tail/ratelimiter
+github.com/nxadm/tail/util
+github.com/nxadm/tail/watch
+github.com/nxadm/tail/winfile
+# github.com/onsi/ginkgo v1.16.5
+## explicit; go 1.16
+github.com/onsi/ginkgo
+github.com/onsi/ginkgo/config
+github.com/onsi/ginkgo/formatter
+github.com/onsi/ginkgo/internal/codelocation
+github.com/onsi/ginkgo/internal/containernode
+github.com/onsi/ginkgo/internal/failer
+github.com/onsi/ginkgo/internal/global
+github.com/onsi/ginkgo/internal/leafnodes
+github.com/onsi/ginkgo/internal/remote
+github.com/onsi/ginkgo/internal/spec
+github.com/onsi/ginkgo/internal/spec_iterator
+github.com/onsi/ginkgo/internal/specrunner
+github.com/onsi/ginkgo/internal/suite
+github.com/onsi/ginkgo/internal/testingtproxy
+github.com/onsi/ginkgo/internal/writer
+github.com/onsi/ginkgo/reporters
+github.com/onsi/ginkgo/reporters/stenographer
+github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
+github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty
+github.com/onsi/ginkgo/types
 # github.com/onsi/ginkgo/v2 v2.15.0
 ## explicit; go 1.20
 github.com/onsi/ginkgo/v2
@@ -1184,9 +1216,10 @@ github.com/portworx/kvdb
 github.com/portworx/kvdb/api/bootstrap
 github.com/portworx/kvdb/common
 github.com/portworx/kvdb/mem
-# github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
-## explicit; go 1.17
+# github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e
+## explicit; go 1.21.4
 github.com/portworx/pds-api-go-client/pds/v1alpha1
+github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20231011130438-812370c309e7
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1
@@ -1264,6 +1297,25 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
+# github.com/pure-px/apis v0.0.0-20240219053634-348bdc2a3d67
+## explicit; go 1.20
+github.com/pure-px/apis/public/portworx/common/apiv1
+github.com/pure-px/apis/public/portworx/pds/deployment/apiv1
+github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1
+github.com/pure-px/apis/public/portworx/platform/account/apiv1
+github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1
+github.com/pure-px/apis/public/portworx/platform/cloudcredential/apiv1
+github.com/pure-px/apis/public/portworx/platform/iam/apiv1
+github.com/pure-px/apis/public/portworx/platform/namespace/apiv1
+github.com/pure-px/apis/public/portworx/platform/serviceaccount/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
+github.com/pure-px/apis/public/portworx/platform/targetclusterregistrationmanifest/apiv1
+github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
+github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
+# github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
+## explicit; go 1.21.4
+github.com/pure-px/platform-api-go-client/v1alpha1
 # github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 ## explicit; go 1.19
 github.com/rancher/norman/clientbase
@@ -1742,20 +1794,20 @@ google.golang.org/appengine/internal/modules
 google.golang.org/appengine/internal/remote_api
 google.golang.org/appengine/internal/urlfetch
 google.golang.org/appengine/urlfetch
-# google.golang.org/genproto v0.0.0-20231212172506-995d672761c0
+# google.golang.org/genproto v0.0.0-20240108191215-35c7eff3a6b1
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/iam/credentials/v1
 google.golang.org/genproto/googleapis/type/date
 google.golang.org/genproto/googleapis/type/expr
 google.golang.org/genproto/internal
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/genproto/googleapis/api v0.0.0-20231212172506-995d672761c0
+# google.golang.org/genproto/googleapis/api v0.0.0-20240108191215-35c7eff3a6b1
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/expr/v1alpha1
 google.golang.org/genproto/googleapis/api/httpbody
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20240102182953-50ed04b92917
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20240108191215-35c7eff3a6b1
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/errdetails
@@ -1886,6 +1938,9 @@ gopkg.in/natefinch/lumberjack.v2
 gopkg.in/square/go-jose.v2
 gopkg.in/square/go-jose.v2/cipher
 gopkg.in/square/go-jose.v2/json
+# gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
+## explicit
+gopkg.in/tomb.v1
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2

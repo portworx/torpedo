@@ -1,0 +1,188 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/targetclusterregistrationmanifest/apiv1/targetclusterregistrationmanifest.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "TargetClusterRegistrationManifestService"
+        }
+    ],
+    "paths": {
+        "/v1/tenants/{tenantId}:registrationManifests": {
+            "post": {
+                "summary": "GetTargetClusterRegistrationManifest fetches registration manifest for the given request",
+                "operationId": "TargetClusterRegistrationManifestService_GenerateTargetClusterRegistrationManifest",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1TargetClusterRegistrationManifest"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "tenanat_id is the id of the tenant for which manifest is requested",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "TargetClusterRegistrationManifestService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody": {
+                "type": "object",
+                "properties": {
+                    "clusterName": {
+                        "type": "string",
+                        "title": "cluster_name which the user wants to use"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    }
+                },
+                "title": "GetTargetClusterRegistrationManifestRequest is the request message to the GetTargetClusterRegistrationManifest API"
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "customImageRegistryConfig": {
+                        "$ref": "#/components/schemas/v1CustomImageRegistryConfig"
+                    },
+                    "proxyConfig": {
+                        "$ref": "#/components/schemas/v1ProxyConfig"
+                    }
+                },
+                "title": "Configuration of the target cluster registration manifest"
+            },
+            "v1CustomImageRegistryConfig": {
+                "type": "object",
+                "properties": {
+                    "registryUrl": {
+                        "type": "string",
+                        "title": "registry url/domain, e.g. - in org.example.com/namespace/sub-namespace/repo:tag, here `org.example.com` is\nthe registry url"
+                    },
+                    "registryNamespace": {
+                        "type": "string",
+                        "title": "registry namespace, e.g. - in org.example.com/namespace/sub-namespace/repo:tag, here `namespace/sub-namespace` is\nthe registry namespace"
+                    },
+                    "username": {
+                        "type": "string",
+                        "title": "username for authenticating to a private registry"
+                    },
+                    "password": {
+                        "type": "string",
+                        "title": "password for authenticating to a private registry"
+                    },
+                    "caCert": {
+                        "type": "string",
+                        "title": "ca cert of the registry server"
+                    }
+                },
+                "title": "CustomImageRegistryConfig holds image registry credential configs"
+            },
+            "v1ProxyConfig": {
+                "type": "object",
+                "properties": {
+                    "httpUrl": {
+                        "type": "string",
+                        "title": "http proxy url with port, e.g. - http://192.168.0.1:1234"
+                    },
+                    "httpsUrl": {
+                        "type": "string",
+                        "title": "https proxy url with port, e.g. - https://192.168.0.1:4567"
+                    },
+                    "username": {
+                        "type": "string",
+                        "title": "username for authenticating to the proxy server"
+                    },
+                    "password": {
+                        "type": "string",
+                        "title": "password for authenticating to the proxy server"
+                    },
+                    "noProxy": {
+                        "type": "string",
+                        "title": "comma separated no proxy urls list, e.g. - 127.0.0.1,localhost,.svc,192.168.0.1/16,github.com,KUBERNETES_SERVICE_HOST"
+                    },
+                    "caCert": {
+                        "type": "string",
+                        "title": "ca cert of the proxy server"
+                    }
+                },
+                "title": "ProxyConfig holds proxy configs"
+            },
+            "v1TargetClusterRegistrationManifest": {
+                "type": "object",
+                "properties": {
+                    "manifest": {
+                        "type": "string",
+                        "title": "manifest contains the yaml string of the registration manifest"
+                    }
+                },
+                "title": "TargetClusterRegistrationManifest is the response message of the GetTargetClusterRegistrationManifest API"
+            }
+        }
+    }
+}

@@ -1,0 +1,269 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.iam.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/iam/apiv1;iam";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.iam.v1";
+option java_outer_classname = "IAMProto";
+
+// IAM service provides APIs to interact with the IAM role bindings
+service IAMService {
+  // CreateIAM API creates a new IAM rolebinding
+  rpc CreateIAM(CreateIAMRequest)
+      returns(IAM) {
+    option(google.api.http) = {
+      post: "/v1/iam"
+      body: "iam"
+    };
+  }
+
+  // GrantIAM API creates new IAM rolebinding at tenant, project and account level
+  rpc GrantIAM(GrantIAMRequest)
+    returns(GrantIAMResponse) {
+      option(google.api.http) = {
+        post: "/v1/iam/{iam.config.actor_id}:grant"
+        body: "*"
+      };
+    }
+
+   // RevokeIAM API delete IAM rolebinding at tenant, project and account level
+   rpc RevokeIAM(RevokeIAMRequest)
+   returns(RevokeIAMResponse) {
+     option(google.api.http) = {
+       post: "/v1/iam/{iam.config.actor_id}:revoke"
+       body: "*"
+     };
+   }
+
+  // GetIAM API returns the info about IAM for given IAM id
+  rpc GetIAM(GetIAMRequest)
+      returns(IAM) {
+    option(google.api.http) = {
+      get: "/v1/iam/{actor_id}"
+    };
+  }
+
+  // ListIAMPermissions API list permissions for Roles in IAM
+  // (-- api-linter: core::0132::request-message-name=disabled
+  //     aip.dev/not-precedent: We need to do this because reasons. we don't need any parameter in request --)
+  rpc ListIAMPermissions(google.protobuf.Empty)
+  returns(ListIAMPermissionsResponse) {
+    option(google.api.http) = {
+      get: "/v1/iam/permissions"
+    };
+  }
+
+  // UpdateIAM API updates IAM with the new set of role bindings. The request replaces the existing set of bindings.
+  rpc UpdateIAM(UpdateIAMRequest)
+      returns(IAM) {
+    option(google.api.http) = {
+      put: "/v1/iam/{iam.meta.uid}"
+      body: "iam"
+    };
+  }
+
+  // DeleteIAM API delete IAM, currently required only for name
+  rpc DeleteIAM(DeleteIAMRequest)
+      returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/v1/iam/{actor_id}"
+    };
+  }
+
+  // ListIAM API lists the role bindings
+  rpc ListIAM(ListIAMRequest)
+      returns(ListIAMResponse) {
+    option(google.api.http) = {
+      get: "/v1/iam"
+    };
+  }
+}
+
+// CreateIAMRequest to create a role binding
+message CreateIAMRequest {
+  // IAM to be created
+  IAM iam = 1;
+}
+
+// GrantIAMRequest to grant/add a new role binding at tenant, project or account
+message GrantIAMRequest {
+
+  // Specifies the resource ID under which a new role binding needs to be added.
+  // Choose one of the following identifiers: account_id, tenant_id, or project_id.
+  oneof resource_id {
+    // Account UID under which user wants to add role binding
+    string account_id = 101 ;
+
+    // Tenant UID  under which user wants to add role binding
+    string tenant_id = 102 ;
+
+    // Project UID under which user wants to add role binding
+    string project_id = 103 ;
+  }
+
+  // Specifies the IAM role binding that needs to be added or granted for the user.
+  IAM iam = 1;
+}
+
+// GrantIAMResponse is response for GrantIAM API
+message GrantIAMResponse {
+  // Any error or success message to show for GrantIAM response
+  string message = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+
+// RevokeIAMRequest to revoke/delete a role binding at tenant, project or account
+message RevokeIAMRequest {
+
+  // Specifies the resource ID from which role binding needs to be deleted/revoke.
+  // Choose one of the following identifiers: account_id, tenant_id, or project_id.
+  oneof resource_id {
+    // Account UID under which user wants to delete role binding
+    string account_id = 101 ;
+
+    // Tenant UID  under which user wants to delete role binding
+    string tenant_id = 102 ;
+
+    // Project UID under which user wants to delete role binding
+    string project_id = 103 ;
+  }
+
+  // Specifies the IAM role binding that needs to be deleted/revoked for the user.
+  IAM iam = 1;
+}
+
+// GrantIAMResponse is response for GrantIAM API
+message RevokeIAMResponse {
+  // Any error or success message to show for GrantIAM response
+  string message = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+
+// GetIAMRequest is the request message to GetIAM API
+message GetIAMRequest {
+  // Actor ID for which the details need to be fetched
+  string actor_id = 2;
+}
+
+// ListIAMPermissionsResponse is response which contains permission for actor
+message ListIAMPermissionsResponse {
+  // permssions is list of permissions
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to list permissions for roles in IAM. --)
+  repeated string permissions = 1;
+}
+
+// UpdateIAMRequest replaces the existing role binding.
+message UpdateIAMRequest {
+  // IAM to be updated
+  IAM iam = 1;
+}
+
+// DeleteIAMRequest is the request message to DeleteIAM API
+message DeleteIAMRequest {
+  // Actor ID for which the IAM should be deleted.
+  string actor_id = 2;
+}
+
+// ListIAMRequest is an empty request to the ListIAM API
+message ListIAMRequest {
+  // Actor ID for which the IAM should be listed
+  string actor_id=1;
+
+  oneof resource_id {
+    // Account UID for which the IAM should be listed
+    string account_id = 101 ;
+
+    // Tenant UID for which the IAM should be listed
+    string tenant_id = 102 ;
+
+    // Project UID for which the IAM should be listed
+    string project_id = 103 ;
+  }
+
+   // Pagination parameters for listing IAM.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2;
+}
+
+// ListIAMResponse is the response to the ListIAM API and contains the list of IAMs visible to the caller
+message ListIAMResponse {
+  // the list of IAMs
+  repeated IAM iam = 1;
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  // Pagination metadata for this response.
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// IAM returns the created IAM for given data
+message IAM {
+  // Metadata for IAM
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the IAM
+  Config config = 2;
+}
+
+// Config represents the details of the data for IAM across different levels
+message Config {
+  // Actor ID for the associated actor
+  string actor_id = 1;
+
+  // Actor Type gives the actor type for the concerned actor_id
+  string actor_type = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Actor email for actorType USER
+  string actor_email = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Created/updated IAM
+  AccessPolicy access_policy = 4;
+}
+
+// Access Policy controls access to control plane resources. With IAM, one can centrally manage permissions that control which resources users can access.
+message AccessPolicy {
+  // Global scope represents the global role names
+  repeated string global_scope = 1;
+
+  // Account represents the account role names
+  repeated string account = 2;
+
+  // Tenant represents the tenant level role bindings and resource IDs
+  repeated RoleBinding tenant = 3;
+
+  // Project represents the project level role bindings and resource IDS
+  repeated RoleBinding project = 4;
+
+  // Namespace represents the namespace level role bindings and resource IDS
+  repeated RoleBinding namespace = 5;
+}
+
+// RoleBinding represents the tenant/project/namespace level role bindings and resource IDS.
+message RoleBinding {
+  // Role name represents the role for a tenant/project/namespace.
+  string role_name = 1;
+
+  // Resource IDs represent the IDs bounded for the given role.
+  repeated string resource_ids = 2;
+}

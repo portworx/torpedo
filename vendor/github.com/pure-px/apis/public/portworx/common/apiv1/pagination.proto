@@ -1,0 +1,52 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.common.v1;
+
+option go_package = "github.com/pure-px/apis/public/portworx/common/apiv1;common";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.common.v1";
+option java_outer_classname = "PaginationProto";
+
+// Request parameters for page-based pagination
+message PageBasedPaginationRequest {
+    // Page number is the page number to return based on the size
+    int64 page_number = 1;
+
+    // Page size is the maximum number of records to include per page
+    int64 page_size = 2;
+}
+
+// Metadata related to page based pagination for paginated API responses
+message PageBasedPaginationResponse {
+    // Total records without pagination available in the dataset
+    int64 total_records = 1;
+
+    // Current page number for this paginated response
+    int64 current_page = 2;
+
+    // Page size used for pagination
+    int64 page_size = 3;
+
+    // Total pages based on the page_size provided in the request
+    int64 total_pages = 4;
+
+    // Next page if available in the dataset, -1 if unavailable
+    int64 next_page = 5;
+
+    // Previous page if available in the dataset, -1 if unavailable
+    int64 prev_page = 6;
+}

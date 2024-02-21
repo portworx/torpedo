@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"math/rand"
+	"os"
 	"strconv"
 	"time"
 
@@ -285,4 +286,14 @@ func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
 	randomFileCommands["delete"] = deleteCommands
 
 	return randomFileCommands
+}
+
+// Function to get environment variable and fall back to default value if not found
+func GetEnv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		log.Infof("Unable to find [%v] in the env variables, falling back to [%s]", fallback)
+		return fallback
+	}
+	return value
 }

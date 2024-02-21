@@ -19,6 +19,7 @@ type ModelsDeploymentTargetCapabilities struct {
 	Backup *string `json:"backup,omitempty"`
 	Capabilities *string `json:"capabilities,omitempty"`
 	Cassandra *string `json:"cassandra,omitempty"`
+	Cockroachdb *string `json:"cockroachdb,omitempty"`
 	Consul *string `json:"consul,omitempty"`
 	Couchbase *string `json:"couchbase,omitempty"`
 	CrdReporting *string `json:"crd_reporting,omitempty"`
@@ -29,6 +30,7 @@ type ModelsDeploymentTargetCapabilities struct {
 	Kafka *string `json:"kafka,omitempty"`
 	Mongodb *string `json:"mongodb,omitempty"`
 	Mysql *string `json:"mysql,omitempty"`
+	Neo4j *string `json:"neo4j,omitempty"`
 	Postgresql *string `json:"postgresql,omitempty"`
 	Rabbitmq *string `json:"rabbitmq,omitempty"`
 	Redis *string `json:"redis,omitempty"`
@@ -149,6 +151,38 @@ func (o *ModelsDeploymentTargetCapabilities) HasCassandra() bool {
 // SetCassandra gets a reference to the given string and assigns it to the Cassandra field.
 func (o *ModelsDeploymentTargetCapabilities) SetCassandra(v string) {
 	o.Cassandra = &v
+}
+
+// GetCockroachdb returns the Cockroachdb field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetCapabilities) GetCockroachdb() string {
+	if o == nil || o.Cockroachdb == nil {
+		var ret string
+		return ret
+	}
+	return *o.Cockroachdb
+}
+
+// GetCockroachdbOk returns a tuple with the Cockroachdb field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetCapabilities) GetCockroachdbOk() (*string, bool) {
+	if o == nil || o.Cockroachdb == nil {
+		return nil, false
+	}
+	return o.Cockroachdb, true
+}
+
+// HasCockroachdb returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetCapabilities) HasCockroachdb() bool {
+	if o != nil && o.Cockroachdb != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetCockroachdb gets a reference to the given string and assigns it to the Cockroachdb field.
+func (o *ModelsDeploymentTargetCapabilities) SetCockroachdb(v string) {
+	o.Cockroachdb = &v
 }
 
 // GetConsul returns the Consul field value if set, zero value otherwise.
@@ -471,6 +505,38 @@ func (o *ModelsDeploymentTargetCapabilities) SetMysql(v string) {
 	o.Mysql = &v
 }
 
+// GetNeo4j returns the Neo4j field value if set, zero value otherwise.
+func (o *ModelsDeploymentTargetCapabilities) GetNeo4j() string {
+	if o == nil || o.Neo4j == nil {
+		var ret string
+		return ret
+	}
+	return *o.Neo4j
+}
+
+// GetNeo4jOk returns a tuple with the Neo4j field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ModelsDeploymentTargetCapabilities) GetNeo4jOk() (*string, bool) {
+	if o == nil || o.Neo4j == nil {
+		return nil, false
+	}
+	return o.Neo4j, true
+}
+
+// HasNeo4j returns a boolean if a field has been set.
+func (o *ModelsDeploymentTargetCapabilities) HasNeo4j() bool {
+	if o != nil && o.Neo4j != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetNeo4j gets a reference to the given string and assigns it to the Neo4j field.
+func (o *ModelsDeploymentTargetCapabilities) SetNeo4j(v string) {
+	o.Neo4j = &v
+}
+
 // GetPostgresql returns the Postgresql field value if set, zero value otherwise.
 func (o *ModelsDeploymentTargetCapabilities) GetPostgresql() string {
 	if o == nil || o.Postgresql == nil {
@@ -706,6 +772,9 @@ func (o ModelsDeploymentTargetCapabilities) MarshalJSON() ([]byte, error) {
 	if o.Cassandra != nil {
 		toSerialize["cassandra"] = o.Cassandra
 	}
+	if o.Cockroachdb != nil {
+		toSerialize["cockroachdb"] = o.Cockroachdb
+	}
 	if o.Consul != nil {
 		toSerialize["consul"] = o.Consul
 	}
@@ -735,6 +804,9 @@ func (o ModelsDeploymentTargetCapabilities) MarshalJSON() ([]byte, error) {
 	}
 	if o.Mysql != nil {
 		toSerialize["mysql"] = o.Mysql
+	}
+	if o.Neo4j != nil {
+		toSerialize["neo4j"] = o.Neo4j
 	}
 	if o.Postgresql != nil {
 		toSerialize["postgresql"] = o.Postgresql

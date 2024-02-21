@@ -1,0 +1,378 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/namespace/apiv1/namespace.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "NamespaceService"
+        }
+    ],
+    "paths": {
+        "/v1/clusters/{clusterId}/namespaces": {
+            "get": {
+                "summary": "ListNamespaces API will return all the namespaces on the control plane",
+                "operationId": "NamespaceService_ListNamespaces",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListNamespacesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "clusterId",
+                        "description": "cluster ID for which namespaces need to be fetched",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tenantId",
+                        "description": "tenant ID for which namespace need to be fetched",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "project ID for which namespaces need to be fetched",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "label",
+                        "description": "for label based filtering of the namespaces",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "NamespaceService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "NamespacePhasePhase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "AVAILABLE",
+                    "RESERVED",
+                    "UNAVAILABLE"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "- PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - AVAILABLE: Available namespaces can be used to deploy applications, they have \"<platform-domain>/available: true\" label\n - RESERVED: Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have \"<platform-domain>/reserved: true\" label\n - UNAVAILABLE: Unavailable namespaces are the ones deleted by user with active deployments or by removing available label",
+                "title": "Phase is the status of the namespace based on the label type"
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1ListNamespacesResponse": {
+                "type": "object",
+                "properties": {
+                    "namespaces": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Namespace"
+                        },
+                        "title": "list of namespaces"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "title": "ListNamespacesResponse response message for the ListNamespaces API"
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1Namespace": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/v1NamespaceStatus"
+                    }
+                },
+                "description": "A managed Kubernetes namespace."
+            },
+            "v1NamespaceStatus": {
+                "type": "object",
+                "properties": {
+                    "phase": {
+                        "$ref": "#/components/schemas/NamespacePhasePhase"
+                    }
+                },
+                "title": "NamespaceStatus represents the status of the namespace resource"
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page number is the page number to return based on the size"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size is the maximum number of records to include per page"
+                    }
+                },
+                "title": "Request parameters for page-based pagination"
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total records without pagination available in the dataset"
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Current page number for this paginated response"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size used for pagination"
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total pages based on the page_size provided in the request"
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Next page if available in the dataset, -1 if unavailable"
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                    }
+                },
+                "title": "Metadata related to page based pagination for paginated API responses"
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            }
+        }
+    }
+}
