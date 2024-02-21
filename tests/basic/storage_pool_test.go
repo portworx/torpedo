@@ -10830,13 +10830,24 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	})
 
 	var contexts []*scheduler.Context
+	var vol *volume.Volume
+	var volDetails *api.Volume
 
 	itLog := "PoolResizeInTrashCanNode"
 	It(itLog, func() {
 		log.InfoD(itLog)
+		stepLog := "Enable trashCan for the cluster"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			currNode := node.GetStorageDriverNodes()[0]
+			err := Inst().V.SetClusterOptsWithConfirmation(currNode, map[string]string{
+				"--volume-expiration-minutes": "600",
+			})
+			log.FailOnError(err, "Failed to enable trashCan")
+		})
 
 		// Deploy apps
-		stepLog := "Schedule application"
+		stepLog = "Schedule application"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -10846,17 +10857,59 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 		ValidateApplications(contexts)
 		defer ValidateAndDestroy(contexts, nil)
 
-		stepLog = "Get a volume and locate the node where this is attached"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
+		stepLog = "Get a volume, locate the node where this is attached and enable trashcan in that node"
+		for _, eachContext := range contexts {
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
 
-		})
+				vols, err := Inst().S.GetVolumes(eachContext)
+				log.FailOnError(err, "Failed to get volumes from context")
 
+				//Pick a random volume
+				vol = vols[rand.Intn(len(vols))]
+
+				//Get the node where the volume is attached
+				volDetails, err = Inst().V.InspectVolume(vol.ID)
+				log.FailOnError(err, "Failed to inspect volume: %v", vol.Name)
+				log.InfoD("Volume attached on node: %v", volDetails.AttachedOn)
+
+				nodeToEnableTrashCan, err := node.GetNodeByName(volDetails.AttachedOn)
+
+				//Enable trashcan in the node
+				err = Inst().V.SetClusterOptsWithConfirmation(nodeToEnableTrashCan, map[string]string{
+					"--volume-expiration-minutes": "600",
+				})
+				log.FailOnError(err, "error while enabling trashcan")
+				log.InfoD("Trashcan is successfully enabled on node: %v", nodeToEnableTrashCan.Name)
+
+			})
+
+			stepLog = "Delete the volume and let it be placed in trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().V.DeleteVolume(vol.ID)
+				log.FailOnError(err, "Failed to delete volume: %v", vol.Name)
+				log.InfoD("Volume is successfully deleted and placed in trashcan")
+			})
+
+			stepLog = "Expand pool using resize"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				pool, err := GetStoragePoolByUUID(volDetails.ReplicaSets[0].PoolUuids[0])
+				log.FailOnError(err, "Failed to get pool using UUID %s", volDetails.ReplicaSets[0].PoolUuids[0])
+
+				expectedSize := (pool.TotalSize / units.GiB) + 100
+				err = Inst().V.ExpandPool(volDetails.ReplicaSets[0].PoolUuids[0], api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to initiate pool resize")
+
+				//wait for pool expand to complete
+				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+			})
+		}
 	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts)
 	})
-
 })
