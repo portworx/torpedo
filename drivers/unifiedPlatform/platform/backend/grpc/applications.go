@@ -12,12 +12,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-type ApplicationGrpc struct {
-	ApiClientV1 *grpc.ClientConn
-}
-
 // getApplicationClientForTenant updates the header with bearer token and returns the new client
-func (ApplicationGrpcV1 *ApplicationGrpc) getAppClientForTenant() (context.Context, publicAppsApitenant.ApplicationServiceClient, string, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) getAppClientForTenant() (context.Context, publicAppsApitenant.ApplicationServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 
 	var ApplicationGrpcV1Client publicAppsApitenant.ApplicationServiceClient
@@ -38,7 +34,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) getAppClientForTenant() (context.Conte
 }
 
 // getApplicationClientForTenant updates the header with bearer token and returns the new client
-func (ApplicationGrpcV1 *ApplicationGrpc) getAppClientForCluster() (context.Context, publicAppsApicluster.ApplicationServiceClient, string, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) getAppClientForCluster() (context.Context, publicAppsApicluster.ApplicationServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 
 	var ApplicationGrpcV1Client publicAppsApicluster.ApplicationServiceClient
@@ -59,7 +55,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) getAppClientForCluster() (context.Cont
 }
 
 // ListAvailableApplicationsForTenant lists all application based on tenant id
-func (ApplicationGrpcV1 *ApplicationGrpc) ListAvailableApplicationsForTenant(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) ListAvailableApplicationsForTenant(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForTenant()
 	applicationResponse := []WorkFlowResponse{}
 	if err != nil {
@@ -84,7 +80,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) ListAvailableApplicationsForTenant(lis
 }
 
 // ListAllApplicationsInCluster lists all application based on clusterId id
-func (ApplicationGrpcV1 *ApplicationGrpc) ListAllApplicationsInCluster(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) ListAllApplicationsInCluster(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	applicationResponse := []WorkFlowResponse{}
 	if err != nil {
@@ -109,7 +105,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) ListAllApplicationsInCluster(listReq *
 }
 
 // GetApplicationAtClusterLevel gets the app model by its appid and the clusterId its installed in
-func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationAtClusterLevel(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) GetApplicationAtClusterLevel(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
@@ -134,7 +130,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationAtClusterLevel(getReq *W
 }
 
 // GetApplicationByAppId gets the app model by its appid
-func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationByAppId(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) GetApplicationByAppId(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
@@ -159,7 +155,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) GetApplicationByAppId(getReq *WorkFlow
 }
 
 // InstallApplication installs the app model on given clusterId
-func (ApplicationGrpcV1 *ApplicationGrpc) InstallApplication(installRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) InstallApplication(installRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
@@ -183,7 +179,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) InstallApplication(installRequest *Wor
 }
 
 // UninstallApplicationByAppId uninstalls the app model by given appId
-func (ApplicationGrpcV1 *ApplicationGrpc) UninstallApplicationByAppId(uninstallReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) UninstallApplicationByAppId(uninstallReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {
@@ -207,7 +203,7 @@ func (ApplicationGrpcV1 *ApplicationGrpc) UninstallApplicationByAppId(uninstallR
 }
 
 // UninstallAppByAppIdClusterId uninstalls the app model by given appId and clusterId
-func (ApplicationGrpcV1 *ApplicationGrpc) UninstallAppByAppIdClusterId(uninstallReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (ApplicationGrpcV1 *PlatformGrpc) UninstallAppByAppIdClusterId(uninstallReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, appClient, _, err := ApplicationGrpcV1.getAppClientForCluster()
 	appResponse := WorkFlowResponse{}
 	if err != nil {

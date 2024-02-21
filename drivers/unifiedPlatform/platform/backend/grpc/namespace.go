@@ -11,12 +11,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-type NamespaceGrpc struct {
-	ApiClientV1 *grpc.ClientConn
-}
-
 // GetClient updates the header with bearer token and returns the new client
-func (NamespaceGrpcV1 *NamespaceGrpc) getNamespaceClient() (context.Context, publicnamespaceapis.NamespaceServiceClient, string, error) {
+func (NamespaceGrpcV1 *PlatformGrpc) getNamespaceClient() (context.Context, publicnamespaceapis.NamespaceServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var accountClient publicnamespaceapis.NamespaceServiceClient
 
@@ -34,7 +30,7 @@ func (NamespaceGrpcV1 *NamespaceGrpc) getNamespaceClient() (context.Context, pub
 	return ctx, accountClient, token, nil
 }
 
-func (NamespaceGrpcV1 *NamespaceGrpc) ListNamespaces(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, nsClient, _, err := NamespaceGrpcV1.getNamespaceClient()
 	namespaceResponse := []WorkFlowResponse{}
 	if err != nil {
