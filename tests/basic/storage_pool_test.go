@@ -10855,7 +10855,6 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 			}
 		})
 		ValidateApplications(contexts)
-		defer ValidateAndDestroy(contexts, nil)
 
 		stepLog = "Get a volume, locate the node where this is attached and enable trashcan in that node"
 		for _, eachContext := range contexts {
