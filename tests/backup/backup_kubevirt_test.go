@@ -692,10 +692,8 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 	It("Verify backup and restore of Kubevirt VMs in different states", func() {
 
 		Step("Validating applications", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
 			log.InfoD("Validating applications")
-			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("SSH into the kubevirt VM", func() {
@@ -709,11 +707,6 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 				output, err := RunCmdInVM(vm, "uname -a", ctx)
 				log.InfoD("Output of command in step - [%s]", output)
 				log.FailOnError(err, "Failed to run command in VM")
-			}
-
-			for namespace, appWithData := range NamespaceAppWithDataMap {
-				log.Infof("Found vm with data in %s", namespace)
-				appWithData[0].InsertBackupData(ctx, "default", []string{})
 			}
 
 		})
