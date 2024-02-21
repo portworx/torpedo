@@ -10680,8 +10680,6 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 				// Check if Replication factor is 3. if so, then reduce the repl factor and then set repl factor to 2
 				if curReplSet == 3 {
-					//pick a random volume
-
 					inspectVol, err := Inst().V.InspectVolume(vol.ID)
 					log.FailOnError(err, "Failed to inspect volume: %v", vol.ID)
 					replicaSets := inspectVol.ReplicaSets
