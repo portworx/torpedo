@@ -36,7 +36,10 @@ func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]WorkFlowResponse
 		return nil, fmt.Errorf("Error when calling `TenantServiceListTenants2`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of tenants - [%v]", tenantsModel)
-	copier.Copy(&tenantsResponse, tenantsModel.Tenants)
+	err = copier.Copy(&tenantsResponse, tenantsModel.Tenants)
+	if err != nil {
+		return nil, err
+	}
 	log.Infof("Value of accounts after copy - [%v]", tenantsResponse)
 
 	return tenantsResponse, nil

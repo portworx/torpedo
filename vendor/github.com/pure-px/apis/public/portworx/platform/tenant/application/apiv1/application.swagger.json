@@ -1,0 +1,114 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/tenant/application/apiv1/application.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "ApplicationService"
+        }
+    ],
+    "paths": {
+        "/v1/tenants/{tenantId}:listAvailableApplications": {
+            "get": {
+                "summary": "ListAvailableApplications API lists all the applications visible to a caller",
+                "operationId": "ApplicationService_ListAvailableApplications",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListAvailableApplicationsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "tenant_id for which list of applications needs to be fetched",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "ApplicationService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1Application": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "name of the application"
+                    },
+                    "version": {
+                        "type": "string",
+                        "title": "Version of application"
+                    }
+                },
+                "title": "Application is a high level entity for the application resource"
+            },
+            "v1ListAvailableApplicationsResponse": {
+                "type": "object",
+                "properties": {
+                    "applications": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Application"
+                        },
+                        "title": "list of applications visible to the caller\n(-- api-linter: core::0132::response-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field to see all\n    the applications available to install for that tenant id. --)"
+                    }
+                },
+                "title": "ListAvailableApplicationsResponse is the request to the ListAvailableApplications API"
+            }
+        }
+    }
+}

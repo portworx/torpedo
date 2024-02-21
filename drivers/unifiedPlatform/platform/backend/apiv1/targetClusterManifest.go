@@ -34,7 +34,10 @@ func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManif
 
 	var getRequest platformv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
-	copier.Copy(&getRequest, getManifestRequest)
+	err = copier.Copy(&getRequest, getManifestRequest)
+	if err != nil {
+		return "", err
+	}
 
 	dtModels, res, err := dtClient.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestExecute(getRequest)
 	if err != nil && res.StatusCode != status.StatusOK {

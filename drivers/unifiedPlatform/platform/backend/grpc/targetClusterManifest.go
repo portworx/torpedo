@@ -37,8 +37,10 @@ func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequ
 		return "", fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 	var getTcManifestRequest *publictcapis.GenerateTargetClusterRegistrationManifestRequest
-
-	copier.Copy(&getTcManifestRequest, getManifestRequest)
+	err = copier.Copy(&getTcManifestRequest, getManifestRequest)
+	if err != nil {
+		return "", err
+	}
 	apiResponse, err := client.GenerateTargetClusterRegistrationManifest(ctx, getTcManifestRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return "", fmt.Errorf("Error when calling `GenerateTargetClusterRegistrationManifest`: %v\n.", err)
