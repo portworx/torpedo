@@ -8,9 +8,9 @@ type Platform interface {
 	AccountInterface
 	TenantInterface
 	TargetClusterInterface
-	//ApplicationInterface
-	//BackupLocationInterface
-	//CloudCredentialsInterface
+	ApplicationInterface
+	BackupLocationInterface
+	CloudCredentialsInterface
 	NamespaceInterface
 }
 
@@ -37,10 +37,10 @@ type TargetClusterManifestInterface interface {
 }
 
 type ApplicationInterface interface {
-	ListAllApplicationsInCluster(*WorkFlowResponse) ([]WorkFlowResponse, error)
-	ListAvailableApplicationsForTenant(*WorkFlowResponse) ([]WorkFlowResponse, error)
-	GetApplicationAtClusterLevel(*WorkFlowResponse) (*WorkFlowResponse, error)
-	GetApplicationByAppId(*WorkFlowResponse) (*WorkFlowResponse, error)
+	ListAllApplicationsInCluster(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListAvailableApplicationsForTenant(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	GetApplicationAtClusterLevel(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GetApplicationByAppId(*WorkFlowRequest) (*WorkFlowResponse, error)
 	InstallApplication(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UninstallApplicationByAppId(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UninstallAppByAppIdClusterId(*WorkFlowRequest) (*WorkFlowResponse, error)
@@ -48,7 +48,7 @@ type ApplicationInterface interface {
 
 type BackupLocationInterface interface {
 	ListBackupLocations() ([]WorkFlowResponse, error)
-	GetBackupLocation(*WorkFlowResponse) (*WorkFlowResponse, error)
+	GetBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
 	CreateBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
 	DeleteBackupLocation(*WorkFlowRequest) error
@@ -66,21 +66,21 @@ type NamespaceInterface interface {
 }
 
 type IamRoleBindings interface {
-	ListIamRoleBindings(*WorkFlowResponse) ([]WorkFlowResponse, error)
-	CreateIamRoleBinding(*WorkFlowResponse) (*WorkFlowResponse, error)
-	UpdateIamRoleBindings(*WorkFlowResponse) (*WorkFlowResponse, error)
-	GetIamRoleBindingByID(*WorkFlowResponse) (*WorkFlowResponse, error)
-	GrantIAMRoles(*WorkFlowResponse) (*WorkFlowResponse, error)
-	RevokeAccessForIAM(*WorkFlowResponse) (*WorkFlowResponse, error)
-	DeleteIamRoleBinding(*WorkFlowResponse) error
+	ListIamRoleBindings(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	CreateIamRoleBinding(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateIamRoleBindings(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GetIamRoleBindingByID(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GrantIAMRoles(*WorkFlowRequest) (*WorkFlowResponse, error)
+	RevokeAccessForIAM(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteIamRoleBinding(*WorkFlowRequest) error
 }
 
 type ServiceAccounts interface {
-	ListAllServiceAccounts(*WorkFlowResponse) ([]WorkFlowResponse, error)
-	GetServiceAccount(*WorkFlowResponse) (*WorkFlowResponse, error)
-	CreateServiceAccount(*WorkFlowResponse) (*WorkFlowResponse, error)
-	RegenerateServiceAccountSecret(*WorkFlowResponse) (*WorkFlowResponse, error)
-	UpdateServiceAccount(*WorkFlowResponse) (*WorkFlowResponse, error)
-	GenerateServiceAccountAccessToken(*WorkFlowResponse) (*WorkFlowResponse, error)
-	DeleteServiceAccount(*WorkFlowResponse) error
+	ListAllServiceAccounts(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	GetServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	RegenerateServiceAccountSecret(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GenerateServiceAccountAccessToken(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteServiceAccount(*WorkFlowRequest) error
 }

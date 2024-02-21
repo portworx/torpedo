@@ -11,12 +11,8 @@ import (
 	"google.golang.org/grpc"
 )
 
-type BackupLocGrpc struct {
-	ApiClientV1 *grpc.ClientConn
-}
-
 // getBackupLocClient updates the header with bearer token and returns the new client
-func (BackupLocGrpcV1 *BackupLocGrpc) getBackupLocClient() (context.Context, publicbackuplocapi.BackupLocationServiceClient, string, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) getBackupLocClient() (context.Context, publicbackuplocapi.BackupLocationServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var backupLocClient publicbackuplocapi.BackupLocationServiceClient
 
@@ -35,7 +31,7 @@ func (BackupLocGrpcV1 *BackupLocGrpc) getBackupLocClient() (context.Context, pub
 }
 
 // ListBackupLocations return lis of backup locations
-func (BackupLocGrpcV1 *BackupLocGrpc) ListBackupLocations() ([]WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations() ([]WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResponse := []WorkFlowResponse{}
 	if err != nil {
@@ -55,7 +51,7 @@ func (BackupLocGrpcV1 *BackupLocGrpc) ListBackupLocations() ([]WorkFlowResponse,
 }
 
 // GetBackupLocation get backup location model by its ID.
-func (BackupLocGrpcV1 *BackupLocGrpc) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -80,7 +76,7 @@ func (BackupLocGrpcV1 *BackupLocGrpc) GetBackupLocation(getReq *WorkFlowRequest)
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
@@ -104,7 +100,7 @@ func (BackupLocGrpcV1 *BackupLocGrpc) CreateBackupLocation(createRequest *WorkFl
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
@@ -131,7 +127,7 @@ func (BackupLocGrpcV1 *BackupLocGrpc) UpdateBackupLocation(updateRequest *WorkFl
 // SyncToBackupLocation returned synced backup location model.
 
 // DeleteBackupLocation delete backup location and return status.
-func (BackupLocGrpcV1 *BackupLocGrpc) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
+func (BackupLocGrpcV1 *PlatformGrpc) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
