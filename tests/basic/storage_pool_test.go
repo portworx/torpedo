@@ -10826,7 +10826,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	*/
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("PoolDeleteServiceDisruption", "Pool delete with service disruption", nil, 0)
+		StartTorpedoTest("PoolResizeInTrashCanNode", "Pool resize with volumes in trashcan", nil, 0)
 	})
 
 	var contexts []*scheduler.Context
@@ -10873,7 +10873,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 				log.FailOnError(err, "Failed to inspect volume: %v", vol.Name)
 				log.InfoD("Volume attached on node: %v", volDetails.AttachedOn)
 
-				nodeToEnableTrashCan, err := node.GetNodeByName(volDetails.AttachedOn)
+				nodeToEnableTrashCan, err := node.GetNodeByIP(volDetails.AttachedOn)
 
 				//Enable trashcan in the node
 				err = Inst().V.SetClusterOptsWithConfirmation(nodeToEnableTrashCan, map[string]string{
