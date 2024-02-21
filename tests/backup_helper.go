@@ -19,9 +19,9 @@ import (
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
-	"github.com/portworx/torpedo/drivers/backup/portworx"
-
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	appsapi "k8s.io/api/apps/v1"
 
@@ -2203,7 +2203,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
-func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, appContext context1.Context,
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, context context1.Context,
 	backupName string, namespaceMapping map[string]string, startTime time.Time) error {
 	var k8sCore = core.Instance()
 	var allBackupNamespaces []string
@@ -2218,19 +2218,19 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		Name:  restoreName,
 		OrgId: BackupOrgID,
 	}
-	restoreInspectResponse, err := backupDriver.InspectRestore(appContext, restoreInspectRequest)
+	restoreInspectResponse, err := backupDriver.InspectRestore(context, restoreInspectRequest)
 	if err != nil {
 		return err
 	}
 
-	backupUid, err := backupDriver.GetBackupUID(appContext, backupName, BackupOrgID)
+	backupUid, err := backupDriver.GetBackupUID(context, backupName, BackupOrgID)
 
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
 		Uid:   backupUid,
 		OrgId: BackupOrgID,
 	}
-	backupInspectResponse, _ := backupDriver.InspectBackup(appContext, backupInspectRequest)
+	backupInspectResponse, _ := backupDriver.InspectBackup(context, backupInspectRequest)
 	theBackup := backupInspectResponse.GetBackup()
 	allBackupNamespaces = theBackup.Namespaces
 	theRestore := restoreInspectResponse.GetRestore()
@@ -2289,7 +2289,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	log.Infof("Namespace Mapping - [%+v]", namespaceMapping)
 	for _, ctx := range expectedRestoredAppContexts {
 
-		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
 		if err != nil {
 			allErrors = append(allErrors, err.Error())
 		}
@@ -2302,7 +2302,9 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.Port,
 				appInfo.DBName,
 				appInfo.NodePort,
-				appInfo.Namespace)
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
 
 			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
 			if err != nil {
@@ -2327,7 +2329,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		// TODO: This needs to be fixed later in case of multiple apps in one namsespace
 		if len(dataBeforeBackup) != 0 {
 			log.InfoD("Validating data inserted before backup")
-			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], context)
 			if err != nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
@@ -2337,7 +2339,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 
 		if len(dataAfterBackup) != 0 {
 			log.InfoD("Validating data inserted after backup")
-			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], context)
 			if err == nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Rows Found - [%v]", dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()]))
 			}
@@ -7211,5 +7213,61 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
+	return nil
+}
+
+// ScaleApplicationToDesiredReplicas scales Application to desired replicas for migrated application namespace.
+func ScaleApplicationToDesiredReplicas(namespace string) error {
+	var options metav1.ListOptions
+	var parsedReplicas int
+	deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+	if err != nil {
+		return err
+	}
+	statefulSetList, err := apps.Instance().ListStatefulSets(namespace, options)
+	if err != nil {
+		return err
+	}
+	if len(deploymentList.Items) != 0 {
+		deployments := deploymentList.Items
+		for _, deployment := range deployments {
+			if replicas, present := deployment.Annotations[migration.StorkMigrationReplicasAnnotation]; present {
+				parsedReplicas, _ = strconv.Atoi(replicas)
+
+			}
+			deploymentObj, err := apps.Instance().GetDeployment(deployment.Name, namespace)
+			if err != nil {
+				return err
+			}
+			*deploymentObj.Spec.Replicas = int32(parsedReplicas)
+			updatedBackupDeploymentobj, err := apps.Instance().UpdateDeployment(deploymentObj)
+			if err != nil {
+				return err
+			}
+			log.Infof("Deployment [%s] replica count after scaling to %d  is %v", deployment.Name, int32(parsedReplicas), *updatedBackupDeploymentobj.Spec.Replicas)
+		}
+	}
+
+	if len(statefulSetList.Items) != 0 {
+		statefulSets := statefulSetList.Items
+		for _, statefulSet := range statefulSets {
+			if replicas, present := statefulSet.Annotations[migration.StorkMigrationReplicasAnnotation]; present {
+				parsedReplicas, _ = strconv.Atoi(replicas)
+
+			}
+			statefulSetObj, err := apps.Instance().GetStatefulSet(statefulSet.Name, namespace)
+			if err != nil {
+				return err
+			}
+			*statefulSetObj.Spec.Replicas = int32(parsedReplicas)
+			updatedBackupstatefulSetobj, err := apps.Instance().UpdateStatefulSet(statefulSetObj)
+			if err != nil {
+				return err
+			}
+			log.Infof("statefulSet [%s] replica count after scaling to %d  is %v", statefulSet.Name, int32(parsedReplicas), *updatedBackupstatefulSetobj.Spec.Replicas)
+		}
+
+	}
+
 	return nil
 }
