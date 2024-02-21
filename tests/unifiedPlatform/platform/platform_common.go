@@ -1,4 +1,4 @@
-package platform
+package tests
 
 import (
 	"encoding/json"

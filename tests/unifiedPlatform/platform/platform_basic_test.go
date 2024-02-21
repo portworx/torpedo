@@ -1,9 +1,7 @@
-package platform
+package tests
 
 import (
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
@@ -44,15 +42,15 @@ var _ = AfterSuite(func() {
 	log.InfoD("Test Finished")
 })
 
-func TestDataService(t *testing.T) {
-	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : platform", specReporters)
-
-}
+//func TestDataService(t *testing.T) {
+//	RegisterFailHandler(Fail)
+//
+//	var specReporters []Reporter
+//	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
+//	specReporters = append(specReporters, junitReporter)
+//	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : platform", specReporters)
+//
+//}
 
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
