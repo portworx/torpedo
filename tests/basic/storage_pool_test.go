@@ -10830,7 +10830,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	var vol *volume.Volume
+	var vol string
 	var volDetails *api.Volume
 
 	itLog := "PoolResizeInTrashCanNode"
@@ -10847,65 +10847,55 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 		})
 
 		// Deploy apps
-		stepLog = "Schedule application"
+		stepLog = "Create volume using pxctl"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			for i := 0; i < Inst().GlobalScaleFactor; i++ {
-				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("trash-can-pool-exopand-%d", i))...)
-			}
+			vol, err = Inst().V.CreateVolume("poolresizeintrashcan", 10, 2)
+			log.FailOnError(err, "Failed to create volume")
+			log.InfoD("Successfully created volume: %v", vol)
 		})
-		ValidateApplications(contexts)
-		defer ValidateAndDestroy(contexts, nil)
 
 		stepLog = "Get a volume, locate the node where this is attached and enable trashcan in that node"
-		for _, eachContext := range contexts {
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 
-				vols, err := Inst().S.GetVolumes(eachContext)
-				log.FailOnError(err, "Failed to get volumes from context")
+			//Get the node where the volume is attached
+			volDetails, err = Inst().V.InspectVolume(vol)
+			log.FailOnError(err, "Failed to inspect volume: %v", vol)
+			log.InfoD("Volume attached on node: %v", volDetails.AttachedOn)
 
-				//Pick a random volume
-				vol = vols[rand.Intn(len(vols))]
+			nodeToEnableTrashCan, err := node.GetNodeByIP(volDetails.AttachedOn)
 
-				//Get the node where the volume is attached
-				volDetails, err = Inst().V.InspectVolume(vol.ID)
-				log.FailOnError(err, "Failed to inspect volume: %v", vol.Name)
-				log.InfoD("Volume attached on node: %v", volDetails.AttachedOn)
-
-				nodeToEnableTrashCan, err := node.GetNodeByIP(volDetails.AttachedOn)
-
-				//Enable trashcan in the node
-				err = Inst().V.SetClusterOptsWithConfirmation(nodeToEnableTrashCan, map[string]string{
-					"--volume-expiration-minutes": "600",
-				})
-				log.FailOnError(err, "error while enabling trashcan")
-				log.InfoD("Trashcan is successfully enabled on node: %v", nodeToEnableTrashCan.Name)
-
+			//Enable trashcan in the node
+			err = Inst().V.SetClusterOptsWithConfirmation(nodeToEnableTrashCan, map[string]string{
+				"--volume-expiration-minutes": "600",
 			})
+			log.FailOnError(err, "error while enabling trashcan")
+			log.InfoD("Trashcan is successfully enabled on node: %v", nodeToEnableTrashCan.Name)
 
-			stepLog = "Delete the volume and let it be placed in trashcan"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				err := Inst().V.DeleteVolume(vol.ID)
-				log.FailOnError(err, "Failed to delete volume: %v", vol.Name)
-				log.InfoD("Volume is successfully deleted and placed in trashcan")
-			})
+		})
 
-			stepLog = "Expand pool using resize"
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				pool, err := GetStoragePoolByUUID(volDetails.ReplicaSets[0].PoolUuids[0])
-				log.FailOnError(err, "Failed to get pool using UUID %s", volDetails.ReplicaSets[0].PoolUuids[0])
+		stepLog = "Delete the volume and let it be placed in trashcan"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().V.DeleteVolume(vol)
+			log.FailOnError(err, "Failed to delete volume: %v", vol)
+			log.InfoD("Volume is successfully deleted and placed in trashcan")
+		})
 
-				expectedSize := (pool.TotalSize / units.GiB) + 100
-				err = Inst().V.ExpandPool(volDetails.ReplicaSets[0].PoolUuids[0], api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
-				log.FailOnError(err, "Failed to initiate pool resize")
+		stepLog = "Expand pool using resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			pool, err := GetStoragePoolByUUID(volDetails.ReplicaSets[0].PoolUuids[0])
+			log.FailOnError(err, "Failed to get pool using UUID %s", volDetails.ReplicaSets[0].PoolUuids[0])
 
-				//wait for pool expand to complete
-				err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
-			})
-		}
+			expectedSize := (pool.TotalSize / units.GiB) + 100
+			err = Inst().V.ExpandPool(volDetails.ReplicaSets[0].PoolUuids[0], api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+			log.FailOnError(err, "Failed to initiate pool resize")
+
+			//wait for pool expand to complete
+			err = waitForPoolToBeResized(expectedSize, pool.Uuid, false)
+		})
 	})
 
 	JustAfterEach(func() {
