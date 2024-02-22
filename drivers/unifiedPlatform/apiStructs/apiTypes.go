@@ -16,9 +16,9 @@ type Meta struct {
 }
 
 type Config struct {
-	UserEmail            *string              `copier:"must"`
-	DnsName              *string              `copier:"must"`
-	DisplayName          *string              `copier:"must"`
+	UserEmail            *string              `copier:"must,nopanic"`
+	DnsName              *string              `copier:"must,nopanic"`
+	DisplayName          *string              `copier:"must,nopanic"`
 	TlsEnabled           *bool                `copier:"must,nopanic"`
 	Reference            *Reference           `copier:"must,nopanic"`
 	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`

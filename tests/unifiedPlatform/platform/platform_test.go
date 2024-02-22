@@ -10,40 +10,40 @@ import (
 
 //var targetCluster tc.TargetCluster
 
-//var _ = Describe("{TenantsCRUD}", func() {
-//	steplog := "Tenants CRUD"
-//	JustBeforeEach(func() {
-//		StartTorpedoTest("ListTenants", "Create and Get the Tenant", nil, 0)
-//	})
-//
-//	It("Tenants", func() {
-//		steplog = "ListTenants"
-//		Step(steplog, func() {
-//			log.InfoD(steplog)
-//			var tenantId string
-//			accList, err := platformLibs.GetAccountListv1()
-//			log.FailOnError(err, "error while getting account list")
-//			accID := platformLibs.GetPlatformAccountID(accList, defaultTestAccount)
-//			log.Infof("account ID [%s]", accID)
-//			tenantList, err := platformLibs.GetTenantListV1(accID)
-//			log.FailOnError(err, "error while getting tenant list")
-//			for _, tenant := range tenantList {
-//				log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accID)
-//				tenantId = *tenant.Meta.Uid
-//				break
-//			}
-//			log.Infof("TenantID [%s]", tenantId)
-//			//err = targetCluster.RegisterToControlPlane("1.0.0", tenantId, "")
-//			//if err != nil {
-//			//	log.FailOnError(err, "Failed to register Target Cluster to Control plane")
-//			//}
-//		})
-//	})
-//
-//	JustAfterEach(func() {
-//		defer EndTorpedoTest()
-//	})
-//})
+var _ = Describe("{TenantsCRUD}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("TenantsCRUD", "Create and Get the Tenant", pdsLabels, 0)
+	})
+
+	It("Tenants", func() {
+		steplog := "Tenants CRUD"
+		Step(steplog, func() {
+			log.InfoD(steplog)
+			var tenantId string
+			accID := "acc:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
+			//accList, err := platformLibs.GetAccountListv1()
+			//log.FailOnError(err, "error while getting account list")
+			//accID := platformLibs.GetPlatformAccountID(accList, defaultTestAccount)
+			//log.Infof("account ID [%s]", accID)
+			tenantList, err := platformLibs.GetTenantListV1(accID)
+			log.FailOnError(err, "error while getting tenant list")
+			for _, tenant := range tenantList {
+				log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accID)
+				tenantId = *tenant.Meta.Uid
+				break
+			}
+			log.Infof("TenantID [%s]", tenantId)
+			//err = targetCluster.RegisterToControlPlane("1.0.0", tenantId, "")
+			//if err != nil {
+			//	log.FailOnError(err, "Failed to register Target Cluster to Control plane")
+			//}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
 
 //var _ = Describe("{WhoamI}", func() {
 //	steplog := "WhoamI"

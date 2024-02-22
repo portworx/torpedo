@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
@@ -16,12 +17,15 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD("Get Account ID")
+
 		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
+
 		accList, err := platformUtils.GetAccountListv1()
 		log.FailOnError(err, "error while getting account list")
 		accID := platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
 		log.Infof("AccountID - [%s]", accID)
+
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
 		log.FailOnError(err, "error while initialising api components")
 
@@ -42,15 +46,10 @@ var _ = AfterSuite(func() {
 	log.InfoD("Test Finished")
 })
 
-//func TestDataService(t *testing.T) {
-//	RegisterFailHandler(Fail)
-//
-//	var specReporters []Reporter
-//	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-//	specReporters = append(specReporters, junitReporter)
-//	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : platform", specReporters)
-//
-//}
+func TestDataService(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Torpedo : pds")
+}
 
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags

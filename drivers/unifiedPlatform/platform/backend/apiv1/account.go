@@ -42,11 +42,19 @@ func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]WorkFlowResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	accountList, res, err := client.AccountServiceListAccounts(ctx).Execute()
+
+	var getRequest platformv1.ApiAccountServiceListAccountsRequest
+	getRequest = getRequest.ApiService.AccountServiceListAccounts(ctx)
+	accountList, res, err := client.AccountServiceListAccountsExecute(getRequest)
+
+	//accountList, res, err := client.AccountServiceListAccounts(ctx).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of accounts - [%v]", accountsResponse)
+
+	log.Infof("Accounts - [%v]", accountList)
+
+	log.Infof("Value of accounts - [%+v]", accountList.Accounts[0].Meta.Name)
 	err = copier.Copy(&accountsResponse, accountList.Accounts)
 	if err != nil {
 		return nil, err
