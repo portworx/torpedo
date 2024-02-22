@@ -10,14 +10,14 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Note: Define arguments to specify dependency versions,
 # to facilitate building of images with different versions without modifying the Dockerfile.
 
-# Install the Go Programming Language.
 ARG GO_VERSION="1.21.6"
+
+# Install the Go Programming Language.
+ENV GOROOT="/usr/local/go"
+ENV GOPATH="/go"
 RUN wget https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz -O go.tar.gz \
     && tar -C /usr/local -xzf go.tar.gz \
     && rm go.tar.gz
-# Set the environment variables required for Go.
-ENV GOPATH="/go"
-ENV GOROOT="/usr/local/go"
 ENV PATH="$PATH:$GOROOT/bin:$GOPATH/bin"
 
 # KUBECTL_VERSION specifies the kubectl version to be installed.
