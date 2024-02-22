@@ -10932,11 +10932,26 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 
 				dash.VerifyFatal(len(trashcanVolsAfterPoolExpand) > 0, true, "validate volumes exist in trashcan")
 				dash.VerifyFatal(len(trashcanVolsAfterPoolExpand) == len(trashcanVolsBeforePoolExpand), true, "trashcan size same before and after pool expand")
-
-				// check if the values are same before and after pool expand
-				for i := 0; i < len(trashcanVolsAfterPoolExpand); i++ {
-					log.Infof("trashcanVolsBeforePoolExpand: %v trashcanVolsAfterPoolExpand: %v", trashcanVolsBeforePoolExpand[i], trashcanVolsAfterPoolExpand[i])
+				// Create a exist map to check if all the volumes in trashcan are present
+				trashCanMap := map[string]bool{}
+				for _, vol := range trashcanVolsAfterPoolExpand {
+					if vol != "" {
+						trashCanMap[vol] = true
+					}
 				}
+				//print trashcanmap
+				for k, v := range trashCanMap {
+					log.Infof("trashcanMap: %v %v", k, v)
+				}
+				// check if the values are same before and after pool expand
+				for _, vol := range trashcanVolsBeforePoolExpand {
+					if vol != "" {
+						if trashCanMap[vol] == false {
+							log.Errorf("Volume not present in trashcan after pool expand: %v", vol)
+						}
+					}
+				}
+				log.InfoD("Succesfully verified all the volumes in trashcan after pool expand")
 			})
 		}
 	})
