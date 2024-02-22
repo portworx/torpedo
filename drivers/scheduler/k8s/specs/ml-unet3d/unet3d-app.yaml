@@ -10,10 +10,13 @@ spec:
           image: portworx/ml-workload:mlcommons-unet3d
           command: ["/bin/bash"]
           args:
-            - "-c"
-            - |
-              ./benchmark.sh datagen --workload unet3d --num-parallel 8 --param dataset.num_subfolders_train=10 --param dataset.data_folder=/data/unet3d_data &&
-              ./benchmark.sh run --workload unet3d --num-accelerators 4 --results-dir /data/unet3d_results --param dataset.data_folder=/data/unet3d_data
+          - "-c"
+          - |
+            ./benchmark.sh datagen --workload unet3d --num-parallel 8 --param dataset.num_files_train=3200 &&
+            while true; do
+              ./benchmark.sh run --workload unet3d --num-accelerators 8 --param dataset.num_files_train=3200
+              sleep 60
+            done
           volumeMounts:
             - name: mlperf-data
               mountPath: /data
