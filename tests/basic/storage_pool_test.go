@@ -10939,10 +10939,6 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 						trashCanMap[vol] = true
 					}
 				}
-				//print trashcanmap
-				for k, v := range trashCanMap {
-					log.Infof("trashcanMap: %v %v", k, v)
-				}
 				// check if the values are same before and after pool expand
 				for _, vol := range trashcanVolsBeforePoolExpand {
 					if vol != "" {
