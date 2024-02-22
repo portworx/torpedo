@@ -10832,6 +10832,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 	var contexts []*scheduler.Context
 	var vol *volume.Volume
 	var volDetails *api.Volume
+	var trashcanVolsBeforePoolExpand []string
 
 	itLog := "PoolResizeInTrashCanNode"
 	It(itLog, func() {
@@ -10891,21 +10892,17 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 				DestroyApps(destroyContext, nil)
 			})
 
-			stepLog = "Check if volumes are in trashcan"
+			stepLog = "Check if volumes are in trashcan before pool expand"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				// wait for few seconds for pvc to get deleted and volume to get detached
 				time.Sleep(30 * time.Second)
 				node := node.GetStorageDriverNodes()[0]
 				log.InfoD(stepLog)
-				trashcanVols, err := Inst().V.GetTrashCanVolumeIds(node)
-				log.Infof("volume id: %v", volDetails.Id)
-				for _, trashcanVol := range trashcanVols {
-					log.Infof("Trashcan id: %v", trashcanVol)
-				}
+				trashcanVolsBeforePoolExpand, err = Inst().V.GetTrashCanVolumeIds(node)
 				log.FailOnError(err, "error While getting trashcan volumes")
-				log.Infof("trashcan len: %d", len(trashcanVols))
-				dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+				log.Infof("trashcan len before pool expand: %d", len(trashcanVolsBeforePoolExpand))
+				dash.VerifyFatal(len(trashcanVolsBeforePoolExpand) > 0, true, "validate volumes exist in trashcan")
 
 			})
 
@@ -10921,6 +10918,27 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 
 				//wait for pool expand to complete
 				err = waitForPoolToBeResized(expectedSize, pool.Uuid, true)
+			})
+
+			stepLog = "Check trashcan after pool expand"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				node := node.GetStorageDriverNodes()[0]
+				log.InfoD(stepLog)
+				trashcanVolsAfterPoolExpand, err := Inst().V.GetTrashCanVolumeIds(node)
+				log.FailOnError(err, "error While getting trashcan volumes")
+
+				log.Infof("trashcan len after pool expand: %d", len(trashcanVolsAfterPoolExpand))
+
+				dash.VerifyFatal(len(trashcanVolsAfterPoolExpand) > 0, true, "validate volumes exist in trashcan")
+				dash.VerifyFatal(len(trashcanVolsAfterPoolExpand) == len(trashcanVolsBeforePoolExpand), true, "trashcan size same before and after pool expand")
+
+				// check if the values are same before and after pool expand
+				for i := 0; i < len(trashcanVolsAfterPoolExpand); i++ {
+					if trashcanVolsAfterPoolExpand[i] != trashcanVolsBeforePoolExpand[i] {
+						dash.VerifyFatal(false, true, "trashcan volumes are not same before and after pool expand")
+					}
+				}
 			})
 		}
 	})
