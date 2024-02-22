@@ -10891,6 +10891,24 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 				DestroyApps(destroyContext, nil)
 			})
 
+			stepLog = "Check if volumes are in trashcan"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				// wait for few seconds for pvc to get deleted and volume to get detached
+				time.Sleep(30 * time.Second)
+				node := node.GetStorageDriverNodes()[0]
+				log.InfoD(stepLog)
+				trashcanVols, err := Inst().V.GetTrashCanVolumeIds(node)
+				log.Infof("volume id: %v", vol.ID)
+				for _, trashcanVol := range trashcanVols {
+					log.Infof("Trashcan id: %v", trashcanVol)
+				}
+				log.FailOnError(err, "error While getting trashcan volumes")
+				log.Infof("trashcan len: %d", len(trashcanVols))
+				dash.VerifyFatal(len(trashcanVols) > 0, true, "validate volumes exist in trashcan")
+
+			})
+
 			stepLog = "Expand pool using resize"
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
