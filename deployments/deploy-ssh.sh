@@ -67,9 +67,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
@@ -172,6 +172,11 @@ fi
 APP_DESTROY_TIMEOUT_ARG=""
 if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
+fi
+
+SCALE_APP_TIMEOUT_ARG=""
+if [ -n "${SCALE_APP_TIMEOUT}" ]; then
+    SCALE_APP_TIMEOUT_ARG="--scale-app-timeout=$SCALE_APP_TIMEOUT"
 fi
 
 if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
@@ -303,6 +308,11 @@ VOLUMES="${TESTRESULTS_VOLUME}"
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUMES="${VOLUMES},${AWS_VOLUME}"
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
+fi
+
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+if [ "${SCHEDULER}" == "openshift" ]; then
+ JUNIT_REPORT_PATH="/tmp/junit_basic.xml"
 fi
 
 if [ -n "${PROVIDERS}" ]; then
@@ -495,7 +505,8 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
+            "--poll-progress-after", "10m",
+            --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
@@ -565,6 +576,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCALE_APP_TIMEOUT_ARG",
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -653,6 +665,8 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
+    - name: VSPHERE_DATACENTER
+      value: "${VSPHERE_DATACENTER}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
     - name: CONTROL_PLANE_URL

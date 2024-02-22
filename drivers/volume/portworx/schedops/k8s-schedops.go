@@ -2,6 +2,7 @@ package schedops
 
 import (
 	"fmt"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"regexp"
 	"strconv"
 	"strings"
@@ -810,7 +811,31 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	kubeNode := node.(*corev1.Node)
 	// if node has px/enabled label set to false or node-type public or
 	// has any taints then px is disabled on node
-	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" || len(kubeNode.Spec.Taints) > 0 {
+	if kubeNode.Labels[PXEnabledLabelKey] == "false" || kubeNode.Labels[dcosNodeType] == "public" {
+		log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		return false, nil
+	}
+
+	var namespace string
+
+	if namespace, err = k.GetPortworxNamespace(); err != nil {
+		log.Errorf("Failed to get portworx namespace. Error : %v", err)
+		return false, nil
+	}
+	var isPXOnControlplane = false
+	pxOperator := operator.Instance()
+	stcList, err := pxOperator.ListStorageClusters(namespace)
+	if err == nil {
+		stc, err := pxOperator.GetStorageCluster(stcList.Items[0].Name, stcList.Items[0].Namespace)
+		if err != nil {
+			return false, fmt.Errorf("failed to get StorageCluster [%s] from namespace [%s], Err: %v", stcList.Items[0].Name, stcList.Items[0].Namespace, err.Error())
+		}
+		isPXOnControlplane, _ = strconv.ParseBool(stc.Annotations["portworx.io/run-on-master"])
+	} else {
+		log.Warnf("no storage clusters found, assuming it is daemonset deployment")
+	}
+
+	if !isPXOnControlplane && len(kubeNode.Spec.Taints) > 0 {
 		log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
 		return false, nil
 	}

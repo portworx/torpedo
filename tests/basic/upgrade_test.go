@@ -3,7 +3,6 @@ package tests
 import (
 	"fmt"
 	"go.uber.org/multierr"
-	"golang.org/x/sync/errgroup"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -19,7 +18,7 @@ import (
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -49,9 +48,8 @@ var _ = Describe("{UpgradeStork}", func() {
 	})
 	var contexts []*scheduler.Context
 
-	for i := 0; i < Inst().GlobalScaleFactor; i++ {
-
-		It("upgrade Stork and ensure everything is running fine", func() {
+	It("upgrade Stork and ensure everything is running fine", func() {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			log.InfoD("upgrade Stork and ensure everything is running fine")
 			contexts = make([]*scheduler.Context, 0)
 			contexts = append(contexts, ScheduleApplications(fmt.Sprintf("upgradestork-%d", i))...)
@@ -97,9 +95,9 @@ var _ = Describe("{UpgradeStork}", func() {
 					TearDownContext(ctx, opts)
 				}
 			})
+		}
 
-		})
-	}
+	})
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -155,6 +153,14 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
 			}
 
+			stopSignal := make(chan struct{})
+
+			var mError error
+			go doAppsValidation(contexts, stopSignal, &mError)
+			defer func() {
+				close(stopSignal)
+			}()
+
 			// Perform upgrade hops of volume driver based on a given list of upgradeEndpoints passed
 			for _, upgradeHop := range strings.Split(Inst().UpgradeStorageDriverEndpointList, ",") {
 				var volName string
@@ -181,8 +187,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 					log.FailOnError(err, fmt.Sprintf("error running fio command on node %s", n.Name))
 				}
 
-				done := make(chan bool)
-				eg := errgroup.Group{}
 				currPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
 				if err != nil {
 					log.Warnf("error getting driver version, Err: %v", err)
@@ -190,32 +194,6 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				timeBeforeUpgrade = time.Now()
 				isDmthinBeforeUpgrade, errDmthinCheck := IsDMthin()
 				dash.VerifyFatal(errDmthinCheck, nil, "verified is setup dmthin before upgrade? ")
-
-				//validating the apps during the PX upgrade
-				eg.Go(func() error {
-					defer GinkgoRecover()
-					var mError error
-					for {
-						select {
-						case <-done:
-							return nil
-						default:
-							for _, ctx := range contexts {
-								errorChan := make(chan error, len(contexts))
-								ValidateContext(ctx, &errorChan)
-								for err := range errorChan {
-									mError = multierr.Append(mError, err)
-								}
-							}
-
-							if mError != nil {
-								return mError
-							}
-							time.Sleep(30 * time.Second)
-						}
-					}
-
-				})
 
 				err = Inst().V.UpgradeDriver(upgradeHop)
 				timeAfterUpgrade = time.Now()
@@ -247,21 +225,16 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 				statsData["duration"] = fmt.Sprintf("%d mins", durationInMins)
 				statsData["status"] = upgradeStatus
 				dash.UpdateStats("px-upgrade-stats", "px-enterprise", "upgrade", majorVersion, statsData)
-				//end the apps validation loop
-				done <- true
-
-				if err = eg.Wait(); err != nil {
-					dash.VerifyFatal(err, nil, "validate apps status during upgrade")
-				}
 
 				if attachedNode != nil {
 					err = readFIOData(volName, fioJobName, *attachedNode)
 					log.FailOnError(err, fmt.Sprintf("error while reading fio data on node %s", attachedNode.Name))
 				}
-
-				// Validate Apps after volume driver upgrade
-				ValidateApplications(contexts)
+				if mError != nil {
+					break
+				}
 			}
+			dash.VerifyFatal(mError, nil, "validate apps during PX upgrade")
 		})
 
 		Step("Destroy apps", func() {
@@ -279,6 +252,33 @@ var _ = Describe("{UpgradeVolumeDriver}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+func doAppsValidation(contexts []*scheduler.Context, stopSignal <-chan struct{}, mError *error) {
+
+	itr := 1
+	for {
+		log.Infof("Apps validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting app validations routine")
+			return
+		default:
+			for _, ctx := range contexts {
+				errorChan := make(chan error, 50)
+				ValidateContext(ctx, &errorChan)
+				for err := range errorChan {
+					*mError = multierr.Append(*mError, err)
+				}
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(30 * time.Second)
+		}
+	}
+
+}
 
 func writeFIOData(volName, fioJobName string, n node.Node) error {
 	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)

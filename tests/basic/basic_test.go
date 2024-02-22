@@ -7,8 +7,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo"
-	"github.com/onsi/ginkgo/reporters"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/portworx/torpedo/tests"
 )
@@ -40,39 +39,44 @@ var dash *aetosutil.Dashboard
 
 func TestBasic(t *testing.T) {
 	RegisterFailHandler(Fail)
-
-	var specReporters []Reporter
-	junitReporter := reporters.NewJUnitReporter("/testresults/junit_basic.xml")
-	specReporters = append(specReporters, junitReporter)
-	RunSpecsWithDefaultAndCustomReporters(t, "Torpedo : Basic", specReporters)
+	RunSpecs(t, "Torpedo : Backup")
 }
 
 var _ = BeforeSuite(func() {
 	dash = Inst().Dash
 	log.Infof("Init instance")
-	InitInstance()
-	dash.TestSetBegin(dash.TestSet)
-	EnableAutoFSTrim()
+	value, exists := os.LookupEnv("NOMAD_ADDR")
+	if !exists {
+		InitInstance()
+		dash.TestSetBegin(dash.TestSet)
+		EnableAutoFSTrim()
+	} else {
+		log.Infof("Value set for Nomad cluster is: %v", value)
+		dash.TestSetBegin(dash.TestSet)
+	}
 })
 
 var _ = AfterSuite(func() {
-	TestLogger = CreateLogger("SystemCheck.log")
-	defer dash.TestSetEnd()
-	defer CloseLogger(TestLogger)
-	defer dash.TestCaseEnd()
-	// making sure validate clean up executed even if systemcheck failed
-	defer func() {
-		if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
-			dash.TestCaseBegin("Validate Cleanup", "Validating clean up", "", nil)
-			ValidateCleanup()
-		}
-	}()
+	_, exists := os.LookupEnv("NOMAD_ADDR")
+	if !exists {
+		TestLogger = CreateLogger("SystemCheck.log")
+		defer dash.TestSetEnd()
+		defer CloseLogger(TestLogger)
+		defer dash.TestCaseEnd()
+		// making sure validate clean up executed even if systemcheck failed
+		defer func() {
+			if wantAllAfterSuiteActions || wantAfterSuiteValidateCleanup {
+				dash.TestCaseBegin("Validate Cleanup", "Validating clean up", "", nil)
+				ValidateCleanup()
+			}
+		}()
 
-	log.SetTorpedoFileOutput(TestLogger)
-	if !Inst().SkipSystemChecks {
-		if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
-			dash.TestCaseBegin("System Checks", "Perform system checks", "", nil)
-			PerformSystemCheck()
+		log.SetTorpedoFileOutput(TestLogger)
+		if !Inst().SkipSystemChecks {
+			if wantAllAfterSuiteActions || wantAfterSuiteSystemCheck {
+				dash.TestCaseBegin("System Checks", "Perform system checks", "", nil)
+				PerformSystemCheck()
+			}
 		}
 	}
 })
