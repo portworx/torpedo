@@ -10899,7 +10899,7 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 				node := node.GetStorageDriverNodes()[0]
 				log.InfoD(stepLog)
 				trashcanVols, err := Inst().V.GetTrashCanVolumeIds(node)
-				log.Infof("volume id: %v", vol.Name)
+				log.Infof("volume id: %v", volDetails.Id)
 				for _, trashcanVol := range trashcanVols {
 					log.Infof("Trashcan id: %v", trashcanVol)
 				}
