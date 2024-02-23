@@ -11,5 +11,5 @@ spec:
       protocol: TCP
       targetPort: 22
   selector:
-    kubevirt-key: kubevirt-val
+    app: vm-ubuntu-pvc
   type: NodePort

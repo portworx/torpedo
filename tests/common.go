@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bufio"
-	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -10,44 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
-	"github.com/portworx/torpedo/drivers/node/gke"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-
-	"github.com/portworx/torpedo/pkg/stats"
-
-	optest "github.com/libopenstorage/operator/pkg/util/test"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-
-	kubevirtv1 "kubevirt.io/api/core/v1"
-
-	"math/rand"
-	"net/http"
-	"regexp"
-	"runtime"
-
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
-
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -58,14 +19,40 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"math/rand"
+	"net/http"
+	"regexp"
+	"runtime"
 
+	"cloud.google.com/go/storage"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"github.com/portworx/torpedo/pkg/stats"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"go.uber.org/multierr"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/pborman/uuid"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/pds"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"github.com/portworx/torpedo/pkg/s3utils"
-
 	storageapi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/Azure/azure-storage-blob-go/azblob"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -78,7 +65,7 @@ import (
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
-	"github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -92,9 +79,11 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -108,17 +97,18 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	context1 "context"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
 
-	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
+	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import gke driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
@@ -137,10 +127,18 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
-	// import scheduler drivers to invoke it's init
+	// import ocp scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
-	"github.com/portworx/torpedo/drivers/volume"
+
+	// import aks scheduler driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import gke scheduler driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
+	// import rke scheduler drivers to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
@@ -171,12 +169,6 @@ import (
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
-
-	context1 "context"
-
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -580,6 +572,16 @@ func InitInstance() {
 		t.Tags["px-version"] = pxVersion
 	}
 
+	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], "pxctl status", node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	})
+	if err != nil {
+		log.Errorf("failed to get pxctl status, Err: %v", err)
+	}
+	log.Infof(output)
 	ns, err := Inst().V.GetVolumeDriverNamespace()
 	log.FailOnError(err, "Error occured while getting volume driver namespace")
 	installGrafana(ns)
@@ -631,7 +633,7 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 		}
 	}()
 
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		stepLog := fmt.Sprintf("check health status of %s app", ctx.App.Key)
 
 		Step(stepLog, func() {
@@ -657,7 +659,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -821,7 +823,7 @@ func ValidateContextForPureVolumesSDK(ctx *scheduler.Context, errChan ...*chan e
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		var isRaw bool
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -939,7 +941,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 			close(*errChan[0])
 		}
 	}()
-	ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 		var timeout time.Duration
 		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
 		if ctx.ReadinessTimeout == time.Duration(0) {
@@ -1028,7 +1030,7 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			var vols []*volume.Volume
@@ -1097,7 +1099,7 @@ func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
 func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1152,7 +1154,7 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureVolumesPXCTL is the ginkgo spec for validating FA/FB DA volumes using PXCTL for a context
 func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1177,7 +1179,7 @@ func ValidatePureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureSnapshotsPXCTL is the ginkgo spec for validating FADA volume snapshots using PXCTL for a context
 func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an app's volumes", func() {
+	Step("For validation of an app's volumes", func() {
 		var (
 			err  error
 			vols map[string]map[string]string
@@ -1219,7 +1221,7 @@ func ValidatePureSnapshotsPXCTL(ctx *scheduler.Context, errChan ...*chan error) 
 
 // ValidateResizePurePVC is the ginkgo spec for validating resize of volumes
 func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+	Step("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1244,7 +1246,7 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureVolumeNoReplicaSet is the ginko spec for validating empty replicaset for pure volumes
 func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an resizing pvc", func() {
+	Step("For validation of an resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1265,7 +1267,7 @@ func ValidatePureVolumeNoReplicaSet(ctx *scheduler.Context, errChan ...*chan err
 
 // ValidatePureVolumeStatisticsDynamicUpdate is the ginkgo spec for validating dynamic update of byteUsed statistic for pure volumes
 func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of a resizing pvc", func() {
+	Step("For validation of a resizing pvc", func() {
 		var err error
 		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 			appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1307,7 +1309,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 
 // ValidateCSISnapshotAndRestore is the ginkgo spec for validating actually creating a FADA snapshot, restoring and verifying the content
 func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an snapshot and restoring", func() {
+	Step("For validation of an snapshot and restoring", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "-" + timestamp
@@ -1358,7 +1360,7 @@ func ValidateCSISnapshotAndRestore(ctx *scheduler.Context, errChan ...*chan erro
 
 // ValidateCSIVolumeClone is the ginkgo spec for cloning a volume and verifying the content
 func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an cloning", func() {
+	Step("For validation of an cloning", func() {
 		var err error
 		var vols []*volume.Volume
 		Step(fmt.Sprintf("get %s app's pure volumes", ctx.App.Key), func() {
@@ -1388,7 +1390,7 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 
 // ValidatePureVolumeLargeNumOfClones is the ginkgo spec for restoring a snapshot to many volumes
 func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an restoring large number of volumes from a snapshot", func() {
+	Step("For validation of an restoring large number of volumes from a snapshot", func() {
 		var err error
 		timestamp := strconv.Itoa(int(time.Now().Unix()))
 		snapShotClassName := PureSnapShotClass + "." + timestamp
@@ -1427,7 +1429,7 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 
 // ValidatePoolExpansionWithPureVolumes is the ginkgo spec for executing a pool expansion when FA/FB volumes is attached
 func ValidatePoolExpansionWithPureVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	context("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
+	Step("For validation of an expanding storage pools while FA/FB volumes are attached", func() {
 		pools, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 		if err != nil {
 			err = fmt.Errorf("error getting storage pools list. Err: %v", err)
@@ -1578,7 +1580,7 @@ func ValidateRestoredApplications(contexts []*scheduler.Context, volumeParameter
 	volOptsMap[SkipClusterScopedObjects] = true
 
 	for _, ctx := range contexts {
-		ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 			Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 				appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -1656,7 +1658,7 @@ func ValidateFastpathVolume(ctx *scheduler.Context, expectedStatus opsapi.Fastpa
 // StorageClass has to be deleted last because it has information that is required for when deleting PVC, if StorageClass objects are deleted before
 // deleting PVCs, especially with CSI + Auth enabled, PVC deletion will fail as Auth params are stored inside StorageClass objects
 func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
-	context("For tearing down of an app context", func() {
+	Step("For tearing down of an app context", func() {
 		var err error
 		var originalSkipClusterScopedObjects bool
 
@@ -1940,7 +1942,7 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
 	// Resetting the global map before starting the new App Validations
 	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
@@ -1948,17 +1950,17 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 	log.InfoD("Validate applications")
 	for _, ctx := range contexts {
 		ValidateContext(ctx)
-		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
 		if err != nil {
 			log.InfoD("Some error occurred - [%s]", err)
 		}
 		log.InfoD("App Info - [%+v]", appInfo)
-		if appContext == nil {
-			log.Warnf("App Context is not proper - [%v]", appContext)
+		if context == nil {
+			log.Warnf("App Context is not proper - [%v]", context)
 			continue
 		}
 		if appInfo.StartDataSupport {
-			appHandler, _ := appDriver.GetApplicationDriver(
+			appHandler, err := appDriver.GetApplicationDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -1966,7 +1968,16 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 				appInfo.Port,
 				appInfo.DBName,
 				appInfo.NodePort,
-				appInfo.Namespace)
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
+			if err != nil {
+				log.Infof("Error - %s", err.Error())
+			}
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				log.FailOnError(err, "Some error occured while starting the VM")
+			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 		}
@@ -1979,7 +1990,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 		for _, handler := range allhandler {
 			currentHandler := handler
 			errGroup.Go(func() error {
-				err := currentHandler.StartData(controlChannel, appContext)
+				err := currentHandler.StartData(controlChannel, context)
 				return err
 			})
 		}
@@ -1997,7 +2008,7 @@ func StartVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("starting volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("start volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.Infof(stepLog)
@@ -2027,7 +2038,7 @@ func StopVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("stopping volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("stop volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.Infof(stepLog)
@@ -2054,7 +2065,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("crashing volume driver %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash volume driver on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2081,7 +2092,7 @@ func CrashPXDaemonAndWait(appNodes []node.Node, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	context(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
+	Step(fmt.Sprintf("crashing px daemon %s", Inst().V.String()), func() {
 		stepLog := fmt.Sprintf("crash px daemon  on nodes: %v", appNodes)
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2151,6 +2162,10 @@ func DestroyAppsWithData(contexts []*scheduler.Context, opts map[string]bool, co
 
 	log.InfoD("Destroying apps")
 	for _, ctx := range contexts {
+		// In case of tektoncd skip the volume validation
+		if Contains(Inst().AppList, "tektoncd") {
+			ctx.SkipVolumeValidation = true
+		}
 		TearDownContext(ctx, opts)
 	}
 
@@ -2386,7 +2401,7 @@ func TogglePrometheusInStc() error {
 
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
-	context("Validating portworx pods restart count ...", func() {
+	Step("Validating portworx pods restart count ...", func() {
 		Step("Getting current restart counts for portworx pods and matching", func() {
 			pxLabel := make(map[string]string)
 			pxLabel[labelNameKey] = defaultStorageProvisioner
@@ -2429,8 +2444,8 @@ func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
 func DescribeNamespace(contexts []*scheduler.Context) {
-	context("generating namespace info...", func() {
-		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentGinkgoTestDescription().TestText), func() {
+	Step("generating namespace info...", func() {
+		Step(fmt.Sprintf("Describe Namespace objects for test %s \n", ginkgo.CurrentSpecReport().LeafNodeText), func() {
 			for _, ctx := range contexts {
 				filename := fmt.Sprintf("%s/%s-%s.namespace.log", defaultBundleLocation, ctx.App.Key, ctx.UID)
 				namespaceDescription, err := Inst().S.Describe(ctx)
@@ -2490,7 +2505,7 @@ func GetStorageNodes() ([]node.Node, error) {
 
 // CollectSupport creates a support bundle
 func CollectSupport() {
-	context("generating support bundle...", func() {
+	Step("generating support bundle...", func() {
 		log.InfoD("generating support bundle...")
 		skipStr := os.Getenv(envSkipDiagCollection)
 		skipSystemCheck := false
@@ -2606,7 +2621,7 @@ func runCmdWithNoSudo(cmd string, n node.Node) error {
 
 // PerformSystemCheck check if core files are present on each node
 func PerformSystemCheck() {
-	context("checking for core files...", func() {
+	Step("checking for core files...", func() {
 		log.Info("checking for core files...")
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
@@ -2765,6 +2780,18 @@ func CloneSpec(spec interface{}) (interface{}, error) {
 		clone := *specObj
 		return &clone, nil
 	} else if specObj, ok := spec.(*kubevirtv1.VirtualMachine); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		clone := *specObj
+		return &clone, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
 		clone := *specObj
 		return &clone, nil
 	} else if specObj, ok := spec.(*apiextensionsv1.CustomResourceDefinition); ok {
@@ -3017,6 +3044,26 @@ func UpdateNamespace(in interface{}, namespaceMapping map[string]string) error {
 			specObj.SetNamespace(namespace)
 		}
 		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.PipelineRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
+	} else if specObj, ok := in.(*tektoncdv1.TaskRun); ok {
+		if namespace, ok := namespaceMapping[specObj.GetNamespace()]; ok {
+			specObj.SetNamespace(namespace)
+		}
+		return nil
 	}
 
 	return fmt.Errorf("unsupported object while setting namespace: %v", reflect.TypeOf(in))
@@ -3110,6 +3157,14 @@ func GetSpecNameKindNamepace(specObj interface{}) (string, string, string, error
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
 	} else if obj, ok := specObj.(*kubevirtv1.VirtualMachine); ok {
 		return obj.GetName(), obj.GroupVersionKind().Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
+	} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
+		return obj.GetName(), obj.Kind, obj.GetNamespace(), nil
 	}
 
 	return "", "", "", fmt.Errorf("unsupported object while obtaining spec details: %v", reflect.TypeOf(specObj))
@@ -3165,9 +3220,9 @@ func ValidateVolumeParametersGetErr(volParam map[string]map[string]string) error
 // AfterEachTest runs collect support bundle after each test when it fails
 func AfterEachTest(contexts []*scheduler.Context, ids ...int) {
 	testStatus := "Pass"
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 		CollectSupport()
 		DescribeNamespace(contexts)
 		testStatus = "Fail"
@@ -3248,10 +3303,10 @@ func SetClusterContext(clusterConfigPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
-	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
-		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
+	} else if gkeSchedDriver, ok := Inst().S.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeSchedDriver.SSH)
 		if err != nil {
-			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+			return fmt.Errorf("failed to switch to context. RefreshDriver (gkeSchedDriver.SSH) Error: [%v]", err)
 		}
 	}
 
@@ -3475,7 +3530,7 @@ func ValidateRestoredApplicationsGetErr(contexts []*scheduler.Context, volumePar
 			if err, ok := bkpErrors[namespace]; ok {
 				log.Infof("Skipping validating namespace %s because %s", namespace, err)
 			} else {
-				ginkgo.Describe(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+				Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
 
 					Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
 						appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
@@ -4401,7 +4456,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
+		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
@@ -7449,11 +7504,10 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		AfterEachTest(contexts, CurrentTestRailTestCaseId, RunIdForSuite)
 	}
 
-	ginkgoTestDescr := ginkgo.CurrentGinkgoTestDescription()
-	if ginkgoTestDescr.Failed {
-		log.Infof(">>>> FAILED TEST: %s", ginkgoTestDescr.FullTestText)
+	currentSpecReport := ginkgo.CurrentSpecReport()
+	if currentSpecReport.Failed() {
+		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-
 	// Cleanup all the namespaces created by the testcase
 	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
@@ -7475,12 +7529,11 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
-
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
-		log.Infof(">>>> Collecting logs for testcase : %s", ginkgoTestDescr.FullTestText)
-		testCaseName := ginkgoTestDescr.FullTestText
-		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(ginkgoTestDescr.FullTestText)
+		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
+		testCaseName := currentSpecReport.FullText()
+		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
 		if len(matches) > 1 {
 			testCaseName = matches[1]
 		}
@@ -9235,7 +9288,7 @@ func runDataIntegrityValidation(testName string) bool {
 }
 
 func ValidateDataIntegrity(contexts *[]*scheduler.Context) (mError error) {
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
 		testName = runtime.FuncForPC(pc).Name()
@@ -9596,7 +9649,7 @@ func validateDmthinVolumeDataIntegrity(inspectVolume *opsapi.Volume, nodeDetail 
 // GetContextsOnNode returns the contexts which have volumes attached on the given node.
 func GetContextsOnNode(contexts *[]*scheduler.Context, n *node.Node) ([]*scheduler.Context, error) {
 	contextsOnNode := make([]*scheduler.Context, 0)
-	testName := ginkgo.CurrentGinkgoTestDescription().FullTestText
+	testName := ginkgo.CurrentSpecReport().FullText()
 
 	if strings.Contains(testName, "Longevity") || strings.Contains(testName, "Trigger") {
 		pc, _, _, _ := runtime.Caller(1)
