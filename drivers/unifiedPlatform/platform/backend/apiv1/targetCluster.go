@@ -27,18 +27,21 @@ func (tc *PLATFORM_API_V1) getTargetClusterClient() (context.Context, *platformv
 }
 
 // ListTargetClusters return deployment targets models.
-func (tc *PLATFORM_API_V1) ListTargetClusters() ([]WorkFlowResponse, error) {
+func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	tcResponse := []WorkFlowResponse{}
-	ctx, dtClient, err := tc.getTargetClusterClient()
+	tenantId := tcRequest.TenantId
+	_, dtClient, err := tc.getTargetClusterClient()
+
+	var req platformv1.ApiTargetClusterServiceListTargetClustersRequest
+	req = req.TenantId(tenantId)
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	dtModels, res, err := dtClient.TargetClusterServiceListTargetClusters(ctx).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
+	dtModels, res, err := dtClient.TargetClusterServiceListTargetClustersExecute(req)
+	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TargetClusterServiceListTargetClusters`: %v\n.Full HTTP response: %v", err, res)
 	}
-
-	err = copier.Copy(&tcResponse, dtModels)
+	err = copier.Copy(&tcResponse, dtModels.Clusters)
 	if err != nil {
 		return nil, err
 	}

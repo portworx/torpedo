@@ -30,9 +30,8 @@ func (tcGrpc *PlatformGrpc) getTargetClusterClient() (context.Context, publictca
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) ListTargetClusters() ([]WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	tcResponse := []WorkFlowResponse{}
-
 	ctx, client, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)

@@ -30,7 +30,7 @@ func (tcGrpc *PlatformGrpc) getTargetClusterManifestClient() (context.Context, p
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest WorkFlowRequest) (string, error) {
+func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *WorkFlowRequest) (string, error) {
 
 	ctx, client, _, err := tcGrpc.getTargetClusterManifestClient()
 	if err != nil {

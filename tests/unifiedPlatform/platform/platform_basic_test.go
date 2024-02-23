@@ -18,6 +18,8 @@ var _ = BeforeSuite(func() {
 	Step(steplog, func() {
 		log.InfoD("Get Account ID")
 
+		accID := "acc:2199f82a-9c39-4070-a431-4a8c8b1c2ca7"
+
 		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 
