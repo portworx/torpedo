@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/node"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -719,5 +721,258 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 			//}
 
 		})
+	})
+})
+
+// This testcase verifies backup and restore of Kubevirt VMs in different states like Running, Stopped, Restarting
+var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
+
+	var (
+		backupNames                  []string
+		restoreNames                 []string
+		scheduledAppContexts         []*scheduler.Context
+		sourceClusterUid             string
+		cloudCredName                string
+		cloudCredUID                 string
+		backupLocationUID            string
+		backupLocationName           string
+		backupLocationMap            map[string]string
+		providers                    []string
+		namespacewithcorrectlabels   []string
+		namespacewithincorrectlabels []string
+		//controlChannel               chan string
+		//errorGroup                   *errgroup.Group
+		nodeSelectorPresent    map[string]string
+		nodeSelectorNotPresent map[string]string
+		nodeToBeUsed           node.Node
+		namespaces             []string
+	)
+
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithDifferentStates", "Verify backup and restore of Kubevirt VMs in different states", nil, 93011, Mkoppal, Q3FY24)
+
+		backupLocationMap = make(map[string]string)
+		providers = GetBackupProviders()
+		nodeSelectorPresent = make(map[string]string)
+		nodeSelectorNotPresent = make(map[string]string)
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < 4; i++ {
+			taskName := fmt.Sprintf("%d-%d", 93011, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				if i%2 == 0 {
+					namespacewithcorrectlabels = append(namespacewithcorrectlabels, appCtx.ScheduleOptions.Namespace)
+				} else {
+					namespacewithincorrectlabels = append(namespacewithincorrectlabels, appCtx.ScheduleOptions.Namespace)
+				}
+			}
+		}
+
+		nodeSelectorPresent[fmt.Sprintf("node_selector_%s", RandomString(4))] = fmt.Sprintf("value_%s", RandomString(6))
+		nodeSelectorNotPresent[fmt.Sprintf("node_selector_%s", RandomString(4))] = fmt.Sprintf("value_%s", RandomString(6))
+	})
+
+	It("Verify backup and restore of Kubevirt VMs in different states", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ctx, _ := backup.GetAdminCtxFromSecret()
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+		})
+
+		Step("Getting the number of worker nodes in destination cluster and applying label to one of the worker nodes", func() {
+			defer func() {
+				log.InfoD("switching to source context")
+				err := SetSourceKubeConfig()
+				log.FailOnError(err, "failed to SetClusterContext to source cluster")
+			}()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "Switching context to destination cluster failed")
+			log.InfoD("Getting the total number of worker nodes in source cluster")
+			clusterWorkerNodes := node.GetWorkerNodes()
+			log.InfoD("Total number of worker nodes in source cluster are %v", len(clusterWorkerNodes))
+			log.Infof("Selecting a random node out of all worker nodes")
+			nodeToBeUsed = clusterWorkerNodes[rand.Intn(len(clusterWorkerNodes))]
+			log.Infof("Applying label [%v] to [%s] the worker node on source cluster", nodeSelectorPresent, nodeToBeUsed.Name)
+			for key, value := range nodeSelectorPresent {
+				err = Inst().S.AddLabelOnNode(nodeToBeUsed, key, value)
+				log.FailOnError(err, fmt.Sprintf("Failed to apply label [%s:%s] to source cluster worker node %v", key, value, nodeToBeUsed.Name))
+			}
+		})
+
+		Step("Adding correct node selector to VMs", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			for _, namespace := range namespacewithcorrectlabels {
+				vms, err := GetAllVMsInNamespace(namespace)
+				if err != nil {
+					return
+				}
+				for _, vm := range vms {
+					err = AddNodeToVirtualMachine(vm, nodeSelectorPresent, ctx)
+					log.FailOnError(err, "Unable to apply node selector to VM")
+				}
+			}
+		})
+
+		Step("Adding incorrect node selector to VMs", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			for _, namespace := range namespacewithincorrectlabels {
+				vms, err := GetAllVMsInNamespace(namespace)
+				if err != nil {
+					return
+				}
+				for _, vm := range vms {
+					err = AddNodeToVirtualMachine(vm, nodeSelectorPresent, ctx)
+					log.FailOnError(err, "Unable to apply node selector to VM")
+				}
+			}
+		})
+
+		Step("Take backup of all namespaces with VMs in Running and Stopped state", func() {
+			log.InfoD("Take backup of all namespaces with VMs in Running and Stopped state")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, appCtx := range scheduledAppContexts {
+				namespaces = append(namespaces, appCtx.ScheduleOptions.Namespace)
+			}
+			backupName := fmt.Sprintf("%s-%s", "auto-backup-all", RandomString(6))
+			backupNames = append(backupNames, backupName)
+			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
+				nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupName))
+		})
+
+		Step("Restoring backup taken when VMs were in Running and Stopped state", func() {
+			log.InfoD("Restoring backup taken when VMs were in Running and Stopped state")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			restoreAll := fmt.Sprintf("%s-%s", "auto-restore-all", RandomString(6))
+			restoreNames = append(restoreNames, restoreAll)
+			log.InfoD("Restoring the [%s] backup", backupNames[0])
+			err = CreateRestoreWithValidation(ctx, restoreAll, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreAll, backupNames[0]))
+		})
+
+	})
+
+	JustAfterEach(func() {
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//
+		//log.Info("Destroying scheduled apps on source cluster")
+		//DestroyApps(scheduledAppContexts, opts)
+		//
+		//log.InfoD("switching to destination context")
+		//err = SetDestinationKubeConfig()
+		//log.FailOnError(err, "failed to switch to context to destination cluster")
+		//
+		//log.InfoD("Destroying restored apps on destination clusters")
+		//restoredAppContexts := make([]*scheduler.Context, 0)
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingMixed, make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingStopped, make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMappingRestart, make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
+		//
+		//log.InfoD("switching to default context")
+		//err = SetClusterContext("")
+		//log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		//
+		//log.Info("Deleting restored namespaces")
+		//for _, restoreName := range restoreNames {
+		//	err = DeleteRestore(restoreName, BackupOrgID, ctx)
+		//	dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		//}
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
