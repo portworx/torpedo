@@ -709,12 +709,14 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 				output, err := RunCmdInVM(vm, "uname -a", ctx)
 				log.InfoD("Output of command in step - [%s]", output)
 				log.FailOnError(err, "Failed to run command in VM")
+				err = AddNodeSelectorToApps(vm, map[string]string{"test": "NodeSelector"}, ctx)
+				log.FailOnError(err, "Unable to apply node selector to VM")
 			}
 
-			for namespace, appWithData := range NamespaceAppWithDataMap {
-				log.Infof("Found vm with data in %s", namespace)
-				appWithData[0].InsertBackupData(ctx, "default", []string{})
-			}
+			//for namespace, appWithData := range NamespaceAppWithDataMap {
+			//	log.Infof("Found vm with data in %s", namespace)
+			//	appWithData[0].InsertBackupData(ctx, "default", []string{})
+			//}
 
 		})
 	})
