@@ -6266,7 +6266,7 @@ func (k *K8s) createPodDisruptionBudgetObjects(
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
-	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+	if obj, ok := spec.(*policyv1.PodDisruptionBudget); ok {
 		if obj.Namespace == "" {
 			obj.Namespace = ns.Name
 		}
