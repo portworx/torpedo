@@ -2292,12 +2292,14 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADAVolMigrateValidation", "Attach FADA PVC on Node 1, confirm proper attachment. Stop PX on Node 1, ensure volume persistence in multipath -ll. Move deployment to Node 2, validate successful pod startup. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.", nil, 0)
 	})
-	//get device path of the volume
-	devicePaths := make([]string, 0)
 
 	stepLog = "Schedule apps, migrate apps from node 1 to node 2 and check if new multipath has been updated and old multipath has been erased"
 	It(stepLog, func() {
 		log.InfoD(stepLog)
+
+		//get device path of the volume
+		devicePaths := make([]string, 0)
+
 		stepLog = "Schedule fada deployment apps"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -2409,7 +2411,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			stepLog = "run the multipath -ll command on the node where the pods were scheduled before deleting"
 			Step(stepLog, func() {
 				// sleep for 60 seconds for all the entries to update
-				time.Sleep(60 * time.Second)
+				time.Sleep(30 * time.Second)
 				log.InfoD("Sleeping for 30 seconds for all the entries to update")
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
@@ -2450,6 +2452,13 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 					if strings.Contains(output, devicePath) {
 						log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
 					}
+				}
+				output, err = runCmd(cmd, selectedNode)
+				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
+				log.InfoD("Output of multipath on provisioned node -ll command: %v", output)
+				//check if the device path is present in multipath
+				if strings.Contains(output, "failed faulty running") {
+					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
 				}
 				log.InfoD("Successfully validated that the old multipath device is deleted")
 			})
