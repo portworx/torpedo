@@ -37,20 +37,17 @@ func NewNomadClient() (*NomadClient, error) {
 			return nil, err
 		}
 		_, err = task.DoRetryWithTimeout(func() (interface{}, bool, error) {
-			status, err := newClient.ValidateCsiPluginStatus("portworx")
+			_, err := newClient.ValidateCsiPluginStatus("portworx")
 			if err != nil {
-				return nil, true, fmt.Errorf("error validating CSI plugin status: %v", err)
-			}
-			if !status {
-				return nil, true, fmt.Errorf("Portworx CSI plugin not registered yet")
+				log.Infof("Retry on error: %v", err)
+				return nil, true, err
 			}
 			return nil, false, nil
 		}, 5*time.Minute, 30*time.Second)
 
 		if err != nil {
-			return nil, fmt.Errorf("Portworx CSI plugin did not register within the expected time: %v", err)
+			return nil, fmt.Errorf("Portworx CSI plugin did not become ready within the expected time: %v", err)
 		}
-
 	}
 	return newClient, nil
 }
@@ -101,7 +98,14 @@ func (n *NomadClient) ValidateCsiPluginStatus(pluginID string) (bool, error) {
 
 	for _, plugin := range plugins {
 		if plugin.ID == pluginID {
-			return true, nil
+			expected := plugin.ControllersExpected
+			healthy := plugin.ControllersHealthy
+
+			if healthy == expected && expected > 0 {
+				return true, nil
+			}
+
+			return false, fmt.Errorf("plugin found but controllers are not healthy/expected: %d/%d", healthy, expected)
 		}
 	}
 
