@@ -7271,3 +7271,22 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 
 	return nil
 }
+
+// AddNodeSelectorToApps applies node selector to the spec section for apps
+func AddNodeSelectorToApps(vm kubevirtv1.VirtualMachine, nodeSelector map[string]string, ctx context1.Context) error {
+	k8sKubevirt := kubevirt.Instance()
+	vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
+	if err != nil {
+		return err
+	}
+	vmInstance.Spec.NodeSelector = nodeSelector
+
+	vmInstanceUpdates, err := k8sKubevirt.UpdateVirtualMachineInstance(ctx, vmInstance)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Node selector for [%s] is updated successfully to [%v]", vmInstanceUpdates.Name, vmInstanceUpdates.Spec.NodeSelector)
+
+	return nil
+}
