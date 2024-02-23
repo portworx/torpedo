@@ -2322,6 +2322,9 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 
 			stepLog = "Check if the old multipath device entry is deleted from the node where the volume was attached"
 			Step(stepLog, func() {
+				//sleep for some time for the entries to update
+				time.Sleep(30 * time.Second)
+				
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
