@@ -267,9 +267,6 @@ github.com/bytedance/sonic/loader
 github.com/bytedance/sonic/option
 github.com/bytedance/sonic/unquote
 github.com/bytedance/sonic/utf8
-# github.com/cenkalti/backoff v2.2.1+incompatible
-## explicit
-github.com/cenkalti/backoff
 # github.com/cenkalti/backoff/v3 v3.2.2
 ## explicit; go 1.12
 github.com/cenkalti/backoff/v3
@@ -932,7 +929,6 @@ github.com/libopenstorage/openstorage/cluster
 github.com/libopenstorage/openstorage/objectstore
 github.com/libopenstorage/openstorage/osdconfig
 github.com/libopenstorage/openstorage/pkg/auth
-github.com/libopenstorage/openstorage/pkg/chattr
 github.com/libopenstorage/openstorage/pkg/clusterdomain
 github.com/libopenstorage/openstorage/pkg/correlation
 github.com/libopenstorage/openstorage/pkg/dbg
@@ -941,17 +937,13 @@ github.com/libopenstorage/openstorage/pkg/diags
 github.com/libopenstorage/openstorage/pkg/grpcserver
 github.com/libopenstorage/openstorage/pkg/grpcutil
 github.com/libopenstorage/openstorage/pkg/job
-github.com/libopenstorage/openstorage/pkg/keylock
-github.com/libopenstorage/openstorage/pkg/mount
 github.com/libopenstorage/openstorage/pkg/nodedrain
-github.com/libopenstorage/openstorage/pkg/options
 github.com/libopenstorage/openstorage/pkg/parser
 github.com/libopenstorage/openstorage/pkg/sched
 github.com/libopenstorage/openstorage/pkg/storagepool
 github.com/libopenstorage/openstorage/pkg/units
 github.com/libopenstorage/openstorage/schedpolicy
 github.com/libopenstorage/openstorage/secrets
-github.com/libopenstorage/openstorage/volume
 # github.com/libopenstorage/operator v0.0.0-20240206041752-d8569d10595c
 ## explicit; go 1.21
 github.com/libopenstorage/operator/api/px
@@ -1055,9 +1047,6 @@ github.com/moby/locker
 ## explicit; go 1.13
 github.com/moby/spdystream
 github.com/moby/spdystream/spdy
-# github.com/moby/sys/mountinfo v0.6.2
-## explicit; go 1.16
-github.com/moby/sys/mountinfo
 # github.com/moby/term v0.0.0-20221205130635-1aeaba878587
 ## explicit; go 1.18
 github.com/moby/term
@@ -1192,7 +1181,7 @@ github.com/portworx/pds-api-go-client/pds/v1alpha1
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240223053730-fac348212c3b
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240223063007-35a543fdccdc
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions
