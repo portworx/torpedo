@@ -98,11 +98,11 @@ func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
 		log.Infof("check polling status...")
 		restore, err := restoreClient.Components.Restore.GetRestore(restoreDepId)
-		state := restore.GetStatus()
 		if err != nil {
 			log.Errorf("failed during fetching the restore object, %v", err)
 			return false, err
 		}
+		state := restore.GetStatus()
 		log.Infof("Restore status -  %v", state)
 		if strings.ToLower(state) != strings.ToLower("Successful") {
 			return false, nil
