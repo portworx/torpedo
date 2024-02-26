@@ -184,7 +184,7 @@ func (app *KubevirtConfig) GetRandomDataCommands(count int) map[string][]string 
 
 // Update the existing file io commands
 func (app *KubevirtConfig) UpdateDataCommands(count int, identifier string) {
-	app.DataCommands[identifier] = GenerateRandomSQLCommands(count, MySql)
+	app.DataCommands[identifier] = GenerateRandomCommandToCreateFiles(count)
 	log.InfoD("Data Commands updated")
 }
 
