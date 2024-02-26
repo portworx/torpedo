@@ -785,8 +785,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplications(scheduledAppContexts)
 		})
 
 		Step("Creating backup location and cloud setting", func() {
