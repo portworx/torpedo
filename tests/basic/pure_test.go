@@ -2347,6 +2347,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			})
 			stepLog = "Destroy apps"
 			Step(stepLog, func() {
+				log.InfoD(stepLog)
 				DestroyApps(contexts, nil)
 			})
 
