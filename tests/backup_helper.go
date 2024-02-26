@@ -7295,10 +7295,25 @@ func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[stri
 }
 
 // Compare nodes
-func CompareNodesOfVM(expectedNode node.Node, actualNodes []node.Node) error {
-	if expectedNode.Name == actualNodes[0].Name {
-		return nil
-	} else {
-		return fmt.Errorf("Expected Node - [%s], Actual Node - [%s]", expectedNode.Name, actualNodes[0].Name)
+func CompareNodeAndStatusOfVMInNamespace(namespace string, expectedNode node.Node, expectedState string, ctx context1.Context) error {
+	k8sKubevirt := kubevirt.Instance()
+
+	allVmsInNamespaces, err := GetAllVMsInNamespace(namespace)
+	if err != nil {
+		return err
 	}
+
+	for _, eachVM := range allVmsInNamespaces {
+		vmi, err := k8sKubevirt.GetVirtualMachineInstance(ctx, eachVM.Name, eachVM.Namespace)
+		if err != nil {
+			return err
+		}
+		log.Infof("State of VM - [%v]", vmi.Status.Phase)
+		log.Infof("VM Details - [%+v]", vmi.Status)
+		if vmi.Status.NodeName != expectedNode.Name {
+			return fmt.Errorf("Node Validation failed for [%s]. Expected Node - [%s], Node Found [%s]", vmi.Name, expectedNode.Name, vmi.Status.NodeName)
+		}
+	}
+
+	return nil
 }
