@@ -310,6 +310,11 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+if [ "${SCHEDULER}" == "openshift" ]; then
+ JUNIT_REPORT_PATH="/tmp/junit_basic.xml"
+fi
+
 if [ -n "${PROVIDERS}" ]; then
   echo "Create configs for providers",${PROVIDERS}
   for i in ${PROVIDERS//,/ };do
@@ -374,14 +379,9 @@ K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
     NODE_DRIVER="ssh"
 fi
+
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
-        aks)
-            NODE_DRIVER="aks"
-            ;;
         oracle)
             NODE_DRIVER="oracle"
             ;;
@@ -501,7 +501,7 @@ spec:
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--poll-progress-after", "10m",
-            --junit-report=/testresults/junit_basic.xml,
+            --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,

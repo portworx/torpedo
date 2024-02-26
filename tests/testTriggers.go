@@ -7357,11 +7357,15 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 			err := asyncdr.WriteKubeconfigToFiles()
 			if err != nil {
 					log.Errorf("Failed to write kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 			}
 
 			err = SetSourceKubeConfig()
 			if err != nil {
 					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 			}
 			UpdateOutcome(event, err)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7413,10 +7417,12 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 			if err != nil {
 					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+					return
 			}
 			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
 			if err != nil {
 					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+					return
 			}
 			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
@@ -7461,11 +7467,15 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 			err := asyncdr.WriteKubeconfigToFiles()
 			if err != nil {
 					log.Errorf("Failed to write kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 			}
 
 			err = SetSourceKubeConfig()
 			if err != nil {
 					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 			}
 			UpdateOutcome(event, err)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7503,6 +7513,8 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 				err = SetDestinationKubeConfig()
 				if err != nil {
 					log.Errorf("Failed to Set destinayion kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 				}
 				nodes := node.GetStorageDriverNodes()
 				nodeIndex := rand.Intn(len(nodes))
@@ -7525,10 +7537,12 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 			if err != nil {
 					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+					return
 			}
 			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
 			if err != nil {
 					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+					return
 			}
 			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
@@ -7573,11 +7587,15 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 			err := asyncdr.WriteKubeconfigToFiles()
 			if err != nil {
 					log.Errorf("Failed to write kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 			}
 
 			err = SetSourceKubeConfig()
 			if err != nil {
 					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
 			}
 			UpdateOutcome(event, err)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7642,10 +7660,12 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 			if err != nil {
 					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+					return
 			}
 			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
 			if err != nil {
 					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+					return
 			}
 			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
