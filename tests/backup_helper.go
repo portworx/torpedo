@@ -3,6 +3,7 @@ package tests
 import (
 	context1 "context"
 	"fmt"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -2305,7 +2306,12 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.Namespace,
 				appInfo.IPAddress,
 				Inst().N)
-
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				if err != nil {
+					return fmt.Errorf("Unable to boot VM on destination. Error - [%s]", err.Error())
+				}
+			}
 			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
 			if err != nil {
 				return err
