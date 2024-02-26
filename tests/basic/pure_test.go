@@ -2168,9 +2168,17 @@ func faLUNExists(faVolList []string, pvc string) bool {
 }
 
 var _ = Describe("{FADAVolMigrateValidation}", func() {
+
+	/* 
+          1. Attach FADA PVC on Node 1, confirm proper attachment. 
+	  2. Stop PX on Node 1, ensure volume persistence in multipath -ll. 
+          3. Move deployment to Node 2, validate successful pod startup. 
+	  4. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.
+
+        */
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
-		StartTorpedoTest("FADAVolMigrateValidation", "Attach FADA PVC on Node 1, confirm proper attachment. Stop PX on Node 1, ensure volume persistence in multipath -ll. Move deployment to Node 2, validate successful pod startup. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.", nil, 0)
+		StartTorpedoTest("FADAVolMigrateValidation", "Migrate pods from node 1 to node and check multipath consistency", nil, 0)
 	})
 
 	stepLog = "Schedule apps, migrate apps from node 1 to node 2 and check if new multipath has been updated and old multipath has been erased"
