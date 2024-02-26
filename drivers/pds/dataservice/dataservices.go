@@ -70,6 +70,7 @@ const (
 	maxtimeInterval                = 30 * time.Second
 	validateDeploymentTimeInterval = 60 * time.Second
 	timeOut                        = 30 * time.Minute
+	validateDeploymentTimeOut      = 50 * time.Minute
 	pdsWorkloadImage               = "portworx/pds-loadtests:sample-load-pds-qa"
 	PdsDeploymentAvailable         = "Available"
 )
@@ -94,13 +95,14 @@ type TestParams struct {
 }
 
 type PDSDataService struct {
-	Name          string "json:\"Name\""
-	Version       string "json:\"Version\""
-	Image         string "json:\"Image\""
-	Replicas      int    "json:\"Replicas\""
-	ScaleReplicas int    "json:\"ScaleReplicas\""
-	OldVersion    string "json:\"OldVersion\""
-	OldImage      string "json:\"OldImage\""
+	Name                  string "json:\"Name\""
+	Version               string "json:\"Version\""
+	Image                 string "json:\"Image\""
+	Replicas              int    "json:\"Replicas\""
+	ScaleReplicas         int    "json:\"ScaleReplicas\""
+	OldVersion            string "json:\"OldVersion\""
+	OldImage              string "json:\"OldImage\""
+	DataServiceEnabledTLS bool   "json:\"DataServiceEnabledTLS\""
 }
 
 // GetVersionsImage returns the required Image of dataservice version
@@ -196,6 +198,21 @@ func GetLatestVersionsImage(dsVersion string, dataServiceID string) (string, str
 }
 
 // UpdateDataServices modifies the existing deployment
+func (d *DataserviceType) UpdateDataServicesWithTLS(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string, enableTLS bool) (*pds.ModelsDeployment, error) {
+	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
+	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+		log.Debugf("Updating deployment [%s]", deploymentID)
+		deployment, err = components.DataServiceDeployment.UpdateDeploymentWithTls(deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID, enableTLS)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	})
+
+	return deployment, nil
+}
+
+// UpdateDataServices modifies the existing deployment
 func (d *DataserviceType) UpdateDataServices(deploymentID string, appConfigID string, imageID string, nodeCount int32, resourceTemplateID, namespace string) (*pds.ModelsDeployment, error) {
 	log.Infof("depID %v appConfID %v imageID %v nodeCount %v resourceTemplateID %v", deploymentID, appConfigID, imageID, nodeCount, resourceTemplateID)
 	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
@@ -227,7 +244,7 @@ func (d *DataserviceType) GetDataServiceID(ds string) (string, error) {
 // DeployDS deploys dataservices its internally used function
 func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, deploymentName, namespaceID, dataServiceDefaultAppConfigID string,
 	replicas int32, serviceType, dataServiceDefaultResourceTemplateID, storageTemplateID, dsVersion,
-	dsBuild, namespace string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
+	dsBuild, namespace string, enableTLS bool) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 
 	currentReplicas = replicas
 
@@ -292,7 +309,9 @@ func (d *DataserviceType) DeployDS(ds, projectID, deploymentTargetID, dnsZone, d
 		currentReplicas,
 		serviceType,
 		dataServiceDefaultResourceTemplateID,
-		storageTemplateID)
+		storageTemplateID,
+		enableTLS,
+	)
 
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("An Error Occured while creating deployment %v", err)
@@ -359,6 +378,7 @@ func (d *DataserviceType) TriggerDeployDataService(ds PDSDataService, namespace,
 		dsVersion,
 		dsImage,
 		namespace,
+		ds.DataServiceEnabledTLS,
 	)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error while deploying data services %v", err)
@@ -452,7 +472,7 @@ func (d *DataserviceType) DeployPDSDataservices() ([]*pds.ModelsDeployment, erro
 func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDeployment, namespace string) error {
 	var ss *v1.StatefulSet
 	log.Debugf("deployment name [%s] in namespace [%s]", deployment.GetClusterResourceName(), namespace)
-	err = wait.Poll(validateDeploymentTimeInterval, timeOut, func() (bool, error) {
+	err = wait.Poll(validateDeploymentTimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		ss, err = k8sApps.GetStatefulSet(deployment.GetClusterResourceName(), namespace)
 		if err != nil {
 			log.Warnf("An Error Occured while getting statefulsets %v", err)
@@ -466,13 +486,13 @@ func (d *DataserviceType) ValidateDataServiceDeployment(deployment *pds.ModelsDe
 	}
 
 	//validate the statefulset deployed in the k8s namespace
-	err = k8sApps.ValidateStatefulSet(ss, timeOut)
+	err = k8sApps.ValidateStatefulSet(ss, validateDeploymentTimeOut)
 	if err != nil {
 		log.Errorf("An Error Occured while validating statefulsets %v", err)
 		return err
 	}
 
-	err = wait.Poll(maxtimeInterval, timeOut, func() (bool, error) {
+	err = wait.Poll(maxtimeInterval, validateDeploymentTimeOut, func() (bool, error) {
 		status, res, err := components.DataServiceDeployment.GetDeploymentStatus(deployment.GetId())
 		log.Infof("Health status -  %v", status.GetHealth())
 		if err != nil {

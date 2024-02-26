@@ -5,7 +5,7 @@ metadata:
     kubevirt.io/vm: ubuntu-vm-dvtemplate
   name: ubuntu-vm-dvtemplate
 spec:
-  running: false
+  running: true
   template:
     metadata:
       labels:
@@ -22,7 +22,7 @@ spec:
             masquerade: {}
         resources:
           requests:
-            memory: 64M
+            memory: 1024M
       networks:
       - name: default
         pod: {}

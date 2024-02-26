@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/libopenstorage/openstorage/api"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -97,6 +97,7 @@ var _ = Describe("{DecommissionNode}", func() {
 				stepLog = fmt.Sprintf("check if node %s was decommissioned", nodeToDecommission.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
+					result := false
 					t := func() (interface{}, bool, error) {
 						status, err := Inst().V.GetNodeStatus(nodeToDecommission)
 						if err != nil {
@@ -109,7 +110,10 @@ var _ = Describe("{DecommissionNode}", func() {
 					}
 					decommissioned, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval)
 					log.FailOnError(err, "Failed to get decommissioned node status")
-					dash.VerifyFatal(decommissioned.(bool), true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
+					result = decommissioned.(bool)
+
+					dash.VerifyFatal(result, true, fmt.Sprintf("Validate node [%s] is decommissioned", nodeToDecommission.Name))
+
 				})
 			})
 			stepLog = fmt.Sprintf("Rejoin node %s", nodeToDecommission.Name)

@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	"github.com/portworx/sched-ops/k8s/storage"
+	"github.com/portworx/torpedo/drivers/node"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	restoreBkp "github.com/portworx/torpedo/drivers/pds/pdsrestore"
 	"github.com/portworx/torpedo/drivers/volume"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strconv"
 	"strings"
@@ -37,13 +39,14 @@ import (
 )
 
 type PDSDataService struct {
-	Name          string "json:\"Name\""
-	Version       string "json:\"Version\""
-	Image         string "json:\"Image\""
-	Replicas      int    "json:\"Replicas\""
-	ScaleReplicas int    "json:\"ScaleReplicas\""
-	OldVersion    string "json:\"OldVersion\""
-	OldImage      string "json:\"OldImage\""
+	Name                  string "json:\"Name\""
+	Version               string "json:\"Version\""
+	Image                 string "json:\"Image\""
+	Replicas              int    "json:\"Replicas\""
+	ScaleReplicas         int    "json:\"ScaleReplicas\""
+	OldVersion            string "json:\"OldVersion\""
+	OldImage              string "json:\"OldImage\""
+	DataServiceEnabledTLS bool   "json:\"DataServiceEnabledTLS\""
 }
 
 type TestParams struct {
@@ -56,38 +59,53 @@ type TestParams struct {
 	ServiceType        string
 }
 
+type validateStorageIncrease struct {
+	UpdatedDeployment    *pds.ModelsDeployment
+	StConfigUpdated      *pds.ModelsStorageOptionsTemplate
+	ResConfigUpdated     *pds.ModelsResourceSettingsTemplate
+	InitialCapacity      uint64
+	IncreasedStorageSize uint64
+	BeforeResizePodAge   float64
+}
+
 const (
-	pdsNamespace                     = "pds-system"
-	deploymentName                   = "qa"
-	envDeployAllDataService          = "DEPLOY_ALL_DATASERVICE"
-	postgresql                       = "PostgreSQL"
-	cassandra                        = "Cassandra"
-	elasticSearch                    = "Elasticsearch"
-	couchbase                        = "Couchbase"
-	redis                            = "Redis"
-	rabbitmq                         = "RabbitMQ"
-	mongodb                          = "MongoDB"
-	mysql                            = "MySQL"
-	kafka                            = "Kafka"
-	zookeeper                        = "ZooKeeper"
-	consul                           = "Consul"
-	pdsNamespaceLabel                = "pds.portworx.com/available"
-	timeOut                          = 30 * time.Minute
-	maxtimeInterval                  = 30 * time.Second
-	timeInterval                     = 1 * time.Second
-	ActiveNodeRebootDuringDeployment = "active-node-reboot-during-deployment"
-	RebootNodeDuringAppVersionUpdate = "reboot-node-during-app-version-update"
-	KillDeploymentControllerPod      = "kill-deployment-controller-pod-during-deployment"
-	RestartPxDuringDSScaleUp         = "restart-portworx-during-ds-scaleup"
-	RestartAppDuringResourceUpdate   = "restart-app-during-resource-update"
-	BackUpCRD                        = "backups.pds.io"
-	DeploymentCRD                    = "deployments.pds.io"
-	RebootNodesDuringDeployment      = "reboot-multiple-nodes-during-deployment"
-	KillAgentPodDuringDeployment     = "kill-agent-pod-during-deployment"
-	KillTeleportPodDuringDeployment  = "kill-teleport-pod-during-deployment"
-	RestoreDSDuringPXPoolExpansion   = "restore-ds-during-px-pool-expansion"
-	RestoreDSDuringKVDBFailOver      = "restore-ds-during-kvdb-fail-over"
-	RestoreDuringAllNodesReboot      = "restore-ds-during-node-reboot"
+	pdsNamespace                        = "pds-system"
+	deploymentName                      = "qa"
+	envDeployAllDataService             = "DEPLOY_ALL_DATASERVICE"
+	postgresql                          = "PostgreSQL"
+	cassandra                           = "Cassandra"
+	elasticSearch                       = "Elasticsearch"
+	couchbase                           = "Couchbase"
+	redis                               = "Redis"
+	rabbitmq                            = "RabbitMQ"
+	mongodb                             = "MongoDB Enterprise"
+	mysql                               = "MySQL"
+	kafka                               = "Kafka"
+	zookeeper                           = "ZooKeeper"
+	consul                              = "Consul"
+	pdsNamespaceLabel                   = "pds.portworx.com/available"
+	timeOut                             = 30 * time.Minute
+	maxtimeInterval                     = 30 * time.Second
+	timeInterval                        = 1 * time.Second
+	SocketError                         = "socket was unexpectedly closed"
+	ServerSelectionError                = "server selection timeout"
+	ActiveNodeRebootDuringDeployment    = "active-node-reboot-during-deployment"
+	RebootNodeDuringAppVersionUpdate    = "reboot-node-during-app-version-update"
+	KillDeploymentControllerPod         = "kill-deployment-controller-pod-during-deployment"
+	RestartPxDuringDSScaleUp            = "restart-portworx-during-ds-scaleup"
+	RestartAppDuringResourceUpdate      = "restart-app-during-resource-update"
+	BackUpCRD                           = "backups.pds.io"
+	DeploymentCRD                       = "deployments.pds.io"
+	RebootNodesDuringDeployment         = "reboot-multiple-nodes-during-deployment"
+	KillAgentPodDuringDeployment        = "kill-agent-pod-during-deployment"
+	KillTeleportPodDuringDeployment     = "kill-teleport-pod-during-deployment"
+	KillPdsAgentPodDuringAppScaleUp     = "kill-pds-agent-pod-during-app-scale-up"
+	RebootNodeDuringAppResourceUpdate   = "reboot-node-during-app-resource-update"
+	RestoreDSDuringPXPoolExpansion      = "restore-ds-during-px-pool-expansion"
+	RestoreDSDuringKVDBFailOver         = "restore-ds-during-kvdb-fail-over"
+	StopPXDuringStorageResize           = "stop-px-during-storage-resize"
+	KillDbMasterNodeDuringStorageResize = "kill-db-master-node-during-storage-resize"
+	RestoreDuringAllNodesReboot         = "restore-ds-during-node-reboot"
 )
 
 var (
@@ -99,6 +117,7 @@ var (
 	projectID                               string
 	serviceType                             string
 	deploymentTargetID                      string
+	bucketName                              string
 	replicas                                int32
 	err                                     error
 	supportedDataServices                   []string
@@ -282,7 +301,7 @@ func ScaleUpDeployments(tenantID string, deployments map[PDSDataService]*pds.Mod
 
 		_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 		log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+		dash.VerifyFatal(int32(ds.ScaleReplicas), config.Replicas, "Validating replicas after scaling up of dataservice")
 	}
 }
 
@@ -325,27 +344,23 @@ func GetPvsAndPVCsfromDeployment(namespace string, deployment *pds.ModelsDeploym
 }
 
 // Check the DS related PV usage and resize in case of 90% full
-func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeployment) error {
+func CheckStorageFullCondition(namespace string, deployment *pds.ModelsDeployment, thresholdPercentage float64) error {
 	log.Infof("Check PVC Usage")
 	f := func() (interface{}, bool, error) {
-		_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
-		for _, vol := range vols {
-			appVol, err := Inst().V.InspectVolume(vol.ID)
-			if err != nil {
-				return nil, true, err
-			}
-			pvcCapacity := appVol.Spec.Size / units.GiB
-			usedGiB := appVol.GetUsage() / units.GiB
-			threshold := pvcCapacity - 1
-			if usedGiB >= threshold {
-				log.Infof("The PVC is consumed upto threshold . PVC capacity was %vGB , the consumed PVC is %vGB", pvcCapacity, usedGiB)
-				return nil, false, nil
-			}
+		initialCapacity, _ := GetVolumeCapacityInGB(namespace, deployment)
+		floatCapacity := float64(initialCapacity)
+		log.FailOnError(err, "unable to calculate vol capacity")
+		consumedCapacity, err := GetVolumeUsage(namespace, deployment)
+		log.FailOnError(err, "unable to calculate vol usage")
+		threshold := thresholdPercentage * (floatCapacity / 100)
+		log.InfoD("threshold value calculated is- [%v]", threshold)
+		if consumedCapacity >= threshold {
+			log.Infof("The PVC capacity was %v , the consumed PVC in floating point value is- %v", initialCapacity, consumedCapacity)
+			return nil, false, nil
 		}
 		return nil, true, fmt.Errorf("threshold not achieved for the PVC, ")
 	}
-	_, err := task.DoRetryWithTimeout(f, 30*time.Minute, 15*time.Second)
-
+	_, err := task.DoRetryWithTimeout(f, 35*time.Minute, 20*time.Second)
 	return err
 }
 
@@ -406,7 +421,21 @@ func GetVolumeCapacityInGB(namespace string, deployment *pds.ModelsDeployment) (
 	return pvcCapacity, err
 }
 
-func CleanUpBackUpTargets(projectID, prefix string) error {
+func GetVolumeUsage(namespace string, deployment *pds.ModelsDeployment) (float64, error) {
+	var pvcUsage float64
+	_, vols := GetPvsAndPVCsfromDeployment(namespace, deployment)
+	for _, vol := range vols {
+		appVol, err := Inst().V.InspectVolume(vol.ID)
+		if err != nil {
+			return 0, err
+		}
+		pvcUsage = float64(appVol.GetUsage())
+	}
+	log.InfoD("Amount of PVC consumed is- [%v]", pvcUsage)
+	return pvcUsage, err
+}
+
+func CleanUpBackUpTargets(projectID, objectStore, prefix string) error {
 	bkpClient, err := pdsbkp.InitializePdsBackup()
 	if err != nil {
 		return err
@@ -414,9 +443,11 @@ func CleanUpBackUpTargets(projectID, prefix string) error {
 	bkpTargets, err := bkpClient.GetAllBackUpTargets(projectID, prefix)
 	for _, bkpTarget := range bkpTargets {
 		log.Debugf("Deleting bkptarget %s", bkpTarget.GetName())
-		err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
-		if err != nil {
-			return err
+		if objectStore == "s3" {
+			err = bkpClient.DeleteAwsS3BackupCredsAndTarget(bkpTarget.GetId())
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -503,6 +534,45 @@ func GetReplicaNodes(appVolume *volume.Volume) ([]string, []string, error) {
 	return replPools, replicaNodes, nil
 }
 
+// GetVolumeNodesOnWhichPxIsRunning fetches the lit of Volnodes on which PX is running
+func GetVolumeNodesOnWhichPxIsRunning() []node.Node {
+	var (
+		nodesToStopPx []node.Node
+		stopPxNode    []node.Node
+	)
+	stopPxNode = node.GetStorageNodes()
+	if err != nil {
+		log.FailOnError(err, "Error while getting PX Node to Restart")
+	}
+	log.InfoD("PX the node with vol running found is-  %v ", stopPxNode)
+	nodesToStopPx = append(nodesToStopPx, stopPxNode[0])
+	return nodesToStopPx
+}
+
+// StopPxOnReplicaVolumeNode is used to STOP PX on the given list of nodes
+func StopPxOnReplicaVolumeNode(nodesToStopPx []node.Node) error {
+	err = Inst().V.StopDriver(nodesToStopPx, true, nil)
+	if err != nil {
+		log.FailOnError(err, "Error while trying to STOP PX on the volNode- [%v]", nodesToStopPx)
+	}
+	log.InfoD("PX stopped successfully on node %v", nodesToStopPx)
+	return nil
+}
+
+// StartPxOnReplicaVolumeNode is used to START PX on the given list of nodes
+func StartPxOnReplicaVolumeNode(nodesToStartPx []node.Node) error {
+	for _, nodeName := range nodesToStartPx {
+		log.InfoD("Going ahead and re-starting PX the node %v as there is an ", nodeName)
+		err = Inst().V.StartDriver(nodeName)
+		if err != nil {
+			log.FailOnError(err, "Error while trying to Start PX on the volNode- [%v]", nodeName)
+			return err
+		}
+		log.InfoD("PX ReStarted successfully on node %v", nodeName)
+	}
+	return nil
+}
+
 func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCleaned []string, actorID string) {
 	log.InfoD("Starting to delete the Iam Roles first...")
 	for _, iam := range iamRolesToBeCleaned {
@@ -526,6 +596,9 @@ func CleanupServiceIdentitiesAndIamRoles(siToBeCleaned []string, iamRolesToBeCle
 func DeleteAllDsBackupEntities(dsInstance *pds.ModelsDeployment) error {
 	log.Infof("Fetch backups associated to the deployment %v ",
 		dsInstance.GetClusterResourceName())
+
+	//ListBackup api uses older way of finding the backups
+	//we need to delete backup jobs
 	backups, err := components.Backup.ListBackup(dsInstance.GetId())
 	if err != nil {
 		return fmt.Errorf("failed while fetching the backup objects.Err - %v", err)
@@ -581,24 +654,101 @@ func GetDbMasterNode(namespace string, dsName string, deployment *pds.ModelsDepl
 	return dbMaster, true
 }
 
+func KillDbMasterNodeDuringStorageIncrease(dsName string, nsName string, deployment *pds.ModelsDeployment, sourceTarget *targetcluster.TargetCluster) error {
+	dbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+	log.InfoD("dbMaster Node is - %v", dbMaster)
+	log.FailOnError(err, "Failed while fetching db master node.")
+	err = sourceTarget.DeleteK8sPods(dbMaster, nsName)
+	log.FailOnError(err, "Failed while deleting db master pod.")
+	newDbMaster, _ := GetDbMasterNode(nsName, dsName, deployment, sourceTarget)
+	log.InfoD("DB MasterNode- [%v] Successfully killed", dbMaster)
+	err = dsTest.ValidateDataServiceDeployment(deployment, nsName)
+	log.FailOnError(err, "Failed while validating the deployment pods, post pod deletion.")
+	if dbMaster == newDbMaster {
+		log.FailOnError(fmt.Errorf("leader node is not reassigned"), fmt.Sprintf("Leader pod %v", dbMaster))
+	}
+	log.InfoD("New DB MasterNode- [%v] is created.", newDbMaster)
+	return nil
+}
+
+// GetDeploymentsPodRestartCount to calculate pods restart count from deployment
+func GetDeploymentsPodRestartCount(deployment *pds.ModelsDeployment, namespace string) (int32, error) {
+	var restartCount int32
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	pdsPodRestartCountMap, err := Inst().S.GetPodsRestartCount(namespace, labelSelector)
+	log.FailOnError(err, "unable to get pod restart count from the deployment")
+	for pod, value := range pdsPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		log.FailOnError(err, "unable to get node from nodeIP")
+		n.PxPodRestartCount = value
+		restartCount = n.PxPodRestartCount
+	}
+	return restartCount, nil
+}
+
+// GetDeploymentPods returns the pods list for a given deployment and given namespace
+func GetDeploymentPods(deployment *pds.ModelsDeployment, namespace string) ([]corev1.Pod, error) {
+	labelSelector := make(map[string]string)
+	labelSelector["name"] = deployment.GetClusterResourceName()
+	depPods := make([]corev1.Pod, 0)
+	pods, err := pdslib.GetPods(namespace)
+	if err != nil {
+		log.FailOnError(err, "failed to get deployment pods")
+	}
+	for _, pod := range pods.Items {
+		log.Infof("%v", pod.Name)
+		if strings.Contains(pod.Name, *deployment.Name) {
+			depPods = append(depPods, pod)
+		}
+
+	}
+	return depPods, nil
+}
+
+// GetPodAge gets the pod age of pods of a given deployment and namespace
+func GetPodAge(deployment *pds.ModelsDeployment, namespace string) (float64, error) {
+	var podAge time.Duration
+	pods, err := GetDeploymentPods(deployment, namespace)
+	log.FailOnError(err, "Unable to fetch deployment pods")
+	for _, pod := range pods {
+		currentTime := metav1.Now()
+		podCreationTime := pod.GetCreationTimestamp().Time
+		podAge = currentTime.Time.Sub(podCreationTime)
+	}
+	podAgeInt := podAge.Minutes()
+	return podAgeInt, nil
+}
+
 // ValidateDepConfigPostStorageIncrease Verifies the storage and other config values after storage resize
-func ValidateDepConfigPostStorageIncrease(ds PDSDataService, updatedDeployment *pds.ModelsDeployment, stConfigUpdated *pds.ModelsStorageOptionsTemplate, resConfigUpdated *pds.ModelsResourceSettingsTemplate, initialCapacity, updatedPvcSize uint64) error {
+func ValidateDepConfigPostStorageIncrease(ds PDSDataService, stIncrease *validateStorageIncrease) error {
 	log.InfoD("Get updated template ids from the storageModel and the resourceModel")
-	newResourceTemplateID := resConfigUpdated.GetId()
-	newStorageTemplateID := stConfigUpdated.GetId()
-	_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
+	newResourceTemplateID := stIncrease.ResConfigUpdated.GetId()
+	newStorageTemplateID := stIncrease.StConfigUpdated.GetId()
+	_, _, config, err := pdslib.ValidateDataServiceVolumes(stIncrease.UpdatedDeployment, ds.Name, newResourceTemplateID, newStorageTemplateID, params.InfraToTest.Namespace)
 	log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-	log.InfoD("resConfigModel.StorageRequest val is- %v and updated config val is- %v", *resConfigUpdated.StorageRequest, config.Spec.Resources.Requests.Storage)
-	dash.VerifyFatal(config.Spec.Resources.Requests.Storage, *resConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
-	dash.VerifyFatal(config.Spec.StorageOptions.Filesystem, *stConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
-	stringRelFactor := strconv.Itoa(int(*stConfigUpdated.Repl))
-	dash.VerifyFatal(config.Spec.StorageOptions.Replicas, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
-	if updatedPvcSize > initialCapacity {
+	log.InfoD("Original resConfigModel.StorageRequest val is- [%v] and Updated resConfigModel.StorageRequest val is- [%v]", *stIncrease.ResConfigUpdated.StorageRequest, config.Resources.Requests.EphemeralStorage)
+	dash.VerifyFatal(config.Resources.Requests.EphemeralStorage, *stIncrease.ResConfigUpdated.StorageRequest, "Validating the storage size is updated in the config post resize (STS-LEVEL)")
+	dash.VerifyFatal(config.Parameters.Fs, *stIncrease.StConfigUpdated.Fs, "Validating the File System Type post storage resize (FileSystem-LEVEL)")
+	stringRelFactor := strconv.Itoa(int(*stIncrease.StConfigUpdated.Repl))
+	dash.VerifyFatal(config.Parameters.Repl, stringRelFactor, "Validating the Replication Factor count post storage resize (RepelFactor-LEVEL)")
+	if stIncrease.IncreasedStorageSize > stIncrease.InitialCapacity {
 		flag := true
 		dash.VerifyFatal(flag, true, "Validating the storage size is updated in the config post resize (PV/PVC-LEVEL)")
-		log.InfoD("Initial PVC Capacity is- %v and Updated PVC Capacity is- %v", initialCapacity, updatedPvcSize)
+		log.InfoD("Initial PVC Capacity is- [%v] and Updated PVC Capacity is- [%v]", stIncrease.InitialCapacity, stIncrease.IncreasedStorageSize)
 	} else {
 		log.FailOnError(err, "Failed to verify Storage Resize at PV/PVC level")
 	}
+	afterResizePodAge, err := GetPodAge(deployment, params.InfraToTest.Namespace)
+	log.FailOnError(err, "unable to get pods restart count before PVC resize")
+	log.InfoD("Pods Age after storage resize is- [%v]Min", afterResizePodAge)
+	if stIncrease.BeforeResizePodAge < afterResizePodAge {
+		flagCount := true
+		dash.VerifyFatal(flagCount, true, "Validating NO pod restarts occurred while storage resize")
+
+	} else {
+		log.FailOnError(err, "Pods restarted after storage resize, Please check the logs manually")
+	}
+	log.InfoD("Successfully validated that NO pod restarted while/after storage resize")
 	return nil
 }

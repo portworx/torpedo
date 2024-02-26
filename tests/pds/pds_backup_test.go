@@ -2,13 +2,14 @@ package tests
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	pdsbkp "github.com/portworx/torpedo/drivers/pds/pdsbackup"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -16,7 +17,6 @@ var (
 	bkpClient                                     *pdsbkp.BackupClient
 	awsBkpTargets, azureBkpTargets, gcpBkpTargets []*pds.ModelsBackupTarget
 	bkpTargetName                                 = "automation--"
-	bucket                                        = "pds-qa-automation"
 )
 
 var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
@@ -24,13 +24,14 @@ var _ = Describe("{ValidateBackupTargetsOnSupportedObjectStores}", func() {
 		StartTorpedoTest("ValidateBackupTargetsOnSupportedObjectStores", "Validate backup targets for all supported object stores.", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bucketName = strings.ToLower("pds-automation-" + pdsbkp.RandString(5))
 	})
 
 	It("Add all supported Object stores as backup target for data services", func() {
 		stepLog := "Create AWS S3 Backup target."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), bucketName, deploymentTargetID)
 			log.FailOnError(err, "Failed to create AWS backup target.")
 			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 			awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -64,13 +65,14 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 		StartTorpedoTest("DeleteDataServiceAndValidateBackupAtObjectStore", "Delete the PDS data service should not delete the backups in backend", pdsLabels, 0)
 		bkpClient, err = pdsbkp.InitializePdsBackup()
 		log.FailOnError(err, "Failed to initialize backup for pds.")
+		bucketName = strings.ToLower("pds-automation-" + pdsbkp.RandString(5))
 	})
 
 	It("Delete the PDS data service should not delete the backups in backend", func() {
 		stepLog := "Create backup target."
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), deploymentTargetID)
+			bkpTarget, err := bkpClient.CreateAwsS3BackupCredsAndTarget(tenantID, fmt.Sprintf("%v-aws", bkpTargetName), bucketName, deploymentTargetID)
 			log.FailOnError(err, "Failed to create S3 backup target.")
 			log.InfoD("AWS S3 target - %v created successfully", bkpTarget.GetName())
 			awsBkpTargets = append(awsBkpTargets, bkpTarget)
@@ -124,7 +126,7 @@ var _ = Describe("{DeleteDataServiceAndValidateBackupAtObjectStore}", func() {
 		})
 	})
 	JustAfterEach(func() {
-		err := bkpClient.AWSStorageClient.DeleteBucket()
+		err := bkpClient.AWSStorageClient.DeleteBucket(bucketName)
 		log.FailOnError(err, "Failed while deleting the bucket")
 		EndTorpedoTest()
 	})

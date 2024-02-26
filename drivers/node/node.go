@@ -140,6 +140,9 @@ type Driver interface {
 	// RebootNode reboots the given node
 	RebootNode(node Node, options RebootNodeOpts) error
 
+	// RebootNodeAndWait reboots a given node and waits for the node to be ready.
+	RebootNodeAndWait(n Node) error
+
 	// CrashNode Crashes the given node
 	CrashNode(node Node, options CrashNodeOpts) error
 
@@ -218,6 +221,9 @@ type Driver interface {
 	// delayInMilliseconds => 1 to 1000
 	InjectNetworkError(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
 
+	// InjectNetworkErrorWithRebootFallback by dropping packets or introdiucing delay in packet tramission and reboot nodes during fallback
+	InjectNetworkErrorWithRebootFallback(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
+
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
 
@@ -229,6 +235,8 @@ type Driver interface {
 
 	// GetNodeState returns current state of the given node
 	GetNodeState(n Node) (string, error)
+	// GetSupportedDriveTypes returns the types of drives supported by the provider
+	GetSupportedDriveTypes() ([]string, error)
 }
 
 // Register registers the given node driver
@@ -273,6 +281,13 @@ func (d *notSupportedDriver) RebootNode(node Node, options RebootNodeOpts) error
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "RebootNode()",
+	}
+}
+
+func (d *notSupportedDriver) RebootNodeAndWait(node Node) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "RebootNodeAndWait()",
 	}
 }
 
@@ -475,6 +490,14 @@ func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType
 	}
 }
 
+func (d *notSupportedDriver) InjectNetworkErrorWithRebootFallback(nodes []Node, errorInjectionType string, operationType string,
+	dropPercentage int, delayInMilliseconds int) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InjectNetworkErrorWithRebootFallback()",
+	}
+}
+
 func (d *notSupportedDriver) RebalanceWorkerPool() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
@@ -486,5 +509,12 @@ func (d *notSupportedDriver) GetNodeState(Node) (string, error) {
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "GetNodeState()",
+	}
+}
+
+func (d *notSupportedDriver) GetSupportedDriveTypes() ([]string, error) {
+	return []string{}, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetSupportedDriveTypes()",
 	}
 }

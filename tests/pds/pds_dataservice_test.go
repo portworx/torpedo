@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/pds/controlplane"
 	"math/rand"
 	"net/http"
 	"os"
@@ -14,15 +15,15 @@ import (
 
 	"github.com/portworx/torpedo/drivers/pds/dataservice"
 
-	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
-
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	pds "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	"github.com/portworx/torpedo/drivers/node"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
+	tc "github.com/portworx/torpedo/drivers/pds/targetcluster"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -39,9 +40,9 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 		StartTorpedoTest("ValidateDNSEndpoint", "validate dns endpoitns", pdsLabels, 0)
 	})
 
-	Step(steplog, func() {
+	It(steplog, func() {
 		log.InfoD(steplog)
-		It("validate dns endpoints", func() {
+		Step("validate dns endpoints", func() {
 			var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
 			var dsVersions = make(map[string]map[string][]string)
 
@@ -75,6 +76,26 @@ var _ = Describe("{ValidateDNSEndpoint}", func() {
 					log.InfoD("DNS endpoint is reachable and ready to accept connections")
 				}
 			})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{PingTest}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("PingTest", "It calls the whoami api and validates the api response", pdsLabels, 0)
+	})
+
+	steplog := "Invoke whoami api and validate the api response "
+	It(steplog, func() {
+		log.InfoD(steplog)
+		Step("validate api response", func() {
+			_, httpResp, err := controlPlane.WhoAmI()
+			log.FailOnError(err, "Error while fetching user details")
+			dash.VerifyFatal(httpResp.StatusCode, 200, "validating whoami api response")
 		})
 	})
 
@@ -776,7 +797,7 @@ var _ = Describe("{ScaleUPDataServices}", func() {
 
 					_, _, config, err := pdslib.ValidateDataServiceVolumes(updatedDeployment, ds.Name, dataServiceDefaultResourceTemplateID, storageTemplateID, namespace)
 					log.FailOnError(err, "error on ValidateDataServiceVolumes method")
-					dash.VerifyFatal(int32(ds.ScaleReplicas), config.Spec.Nodes, "Validating replicas after scaling up of dataservice")
+					dash.VerifyFatal(int32(ds.ScaleReplicas), int32(config.Replicas), "Validating replicas after scaling up of dataservice")
 				}
 			})
 		})
@@ -871,11 +892,11 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 		for _, ds := range params.DataServiceToTest {
 			if ds.Name == postgresql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas), ds.DataServiceEnabledTLS)
 			}
 			if ds.Name == mysql {
 				log.InfoD("Deploying, Validating and Running TPCC Workload on %v Data Service ", ds.Name)
-				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas))
+				deployAndTriggerTpcc(ds.Name, ds.Version, ds.Image, ds.Version, ds.Image, int32(ds.Replicas), ds.DataServiceEnabledTLS)
 			}
 		}
 	})
@@ -886,7 +907,7 @@ var _ = Describe("{RunTpccWorkloadOnDataServices}", func() {
 
 // This module deploys a data service, validates it, Prepares the data service with 4 districts and 2 warehouses
 // and runs TPCC Workload for a default time of 2 minutes
-func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32) {
+func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string, replicas int32, enableTLS bool) {
 	Step("Deploy and Validate Data Service and run TPCC Workload", func() {
 		isDeploymentsDeleted = false
 		dataServiceDefaultResourceTemplateID, err = controlPlane.GetResourceTemplate(tenantID, dataservice)
@@ -911,6 +932,7 @@ func deployAndTriggerTpcc(dataservice, Version, Image, dsVersion, dsBuild string
 			Version,
 			Image,
 			namespace,
+			enableTLS,
 		)
 		log.FailOnError(err, "Error while deploying data services")
 		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
@@ -1227,87 +1249,6 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	})
 })
 
-var _ = Describe("{DeployAllDataServices}", func() {
-
-	JustBeforeEach(func() {
-		Step("Get All Supported Dataservices and Versions", func() {
-			supportedDataServicesNameIDMap = pdslib.GetAllSupportedDataServices()
-			for dsName := range supportedDataServicesNameIDMap {
-				supportedDataServices = append(supportedDataServices, dsName)
-			}
-			for index := range supportedDataServices {
-				log.Infof("supported data service %v ", supportedDataServices[index])
-			}
-			Step("Get the resource and app config template for supported dataservice", func() {
-				dataServiceDefaultResourceTemplateIDMap, dataServiceNameIDMap, err = pdslib.GetAllDataserviceResourceTemplate(tenantID, supportedDataServices)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceDefaultResourceTemplateIDMap).NotTo(BeEmpty())
-				Expect(dataServiceNameIDMap).NotTo(BeEmpty())
-
-				dataServiceNameDefaultAppConfigMap, err = pdslib.GetAllDataServiceAppConfTemplate(tenantID, dataServiceNameIDMap)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(dataServiceNameDefaultAppConfigMap).NotTo(BeEmpty())
-			})
-		})
-	})
-
-	It("Deploy All SupportedDataServices", func() {
-		Step("Deploy All Supported Data Services", func() {
-			replicas = 3
-			log.InfoD("Deploying All Supported DataService")
-			deployments, _, _, err := pdslib.DeployAllDataServices(supportedDataServicesNameIDMap, projectID,
-				deploymentTargetID,
-				dnsZone,
-				deploymentName,
-				namespaceID,
-				dataServiceNameDefaultAppConfigMap,
-				replicas,
-				serviceType,
-				dataServiceDefaultResourceTemplateIDMap,
-				storageTemplateID,
-				namespace,
-			)
-			Expect(err).NotTo(HaveOccurred())
-			Step("Validate Storage Configurations", func() {
-				for ds, deployment := range deployments {
-					for index := range deployment {
-						log.Infof("data service deployed %v ", ds)
-						resourceTemp, storageOp, config, err := pdslib.ValidateAllDataServiceVolumes(deployment[index], ds, dataServiceDefaultResourceTemplateIDMap, storageTemplateID)
-						Expect(err).NotTo(HaveOccurred())
-						log.Infof("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-						log.Infof("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-						log.Infof("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-						log.Infof("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-						log.Infof("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-						log.Infof("No of nodes requested %v ", config.Spec.Nodes)
-						log.Infof("volume group %v ", storageOp.VolumeGroup)
-
-						Expect(resourceTemp.Resources.Requests.CPU).Should(Equal(config.Spec.Resources.Requests.CPU))
-						Expect(resourceTemp.Resources.Requests.Memory).Should(Equal(config.Spec.Resources.Requests.Memory))
-						Expect(resourceTemp.Resources.Requests.Storage).Should(Equal(config.Spec.Resources.Requests.Storage))
-						Expect(resourceTemp.Resources.Limits.CPU).Should(Equal(config.Spec.Resources.Limits.CPU))
-						Expect(resourceTemp.Resources.Limits.Memory).Should(Equal(config.Spec.Resources.Limits.Memory))
-						repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(storageOp.Replicas).Should(Equal(int32(repl)))
-						Expect(storageOp.Filesystem).Should(Equal(config.Spec.StorageOptions.Filesystem))
-						Expect(config.Spec.Nodes).Should(Equal(replicas))
-					}
-				}
-			})
-			defer func() {
-				Step("Delete created deployments")
-				for _, dep := range deployments {
-					for index := range dep {
-						_, err := pdslib.DeleteDeployment(dep[index].GetId())
-						Expect(err).NotTo(HaveOccurred())
-					}
-				}
-			}()
-		})
-	})
-})
-
 func DeployandValidateDataServices(ds dataservice.PDSDataService, namespace, tenantID, projectID string) (*pds.ModelsDeployment, map[string][]string, map[string][]string, error) {
 
 	steplog := "Validate the deployment target is healthy in the control plane"
@@ -1363,6 +1304,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 			oldVersion,
 			oldImage,
 			namespace,
+			ds.DataServiceEnabledTLS,
 		)
 		log.FailOnError(err, "Error while deploying data services")
 		err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
@@ -1439,7 +1381,7 @@ func UpgradeDataService(dataservice, oldVersion, oldImage, dsVersion, dsBuild st
 		}
 
 		ValidateDeployments(resourceTemp, storageOp, config, int(replicas), dsVersionBuildMap)
-		dash.VerifyFatal(config.Spec.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
+		dash.VerifyFatal(config.Version, dsVersion+"-"+dsBuild, "validating ds build and version")
 	})
 
 	Step("Delete Deployments", func() {
@@ -1725,27 +1667,27 @@ var _ = Describe("{RestartPXPods}", func() {
 })
 
 func ValidateDeployments(resourceTemp pdslib.ResourceSettingTemplate, storageOp pdslib.StorageOptions, config pdslib.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
-	log.InfoD("filesystem used %v ", config.Spec.StorageOptions.Filesystem)
-	log.InfoD("storage replicas used %v ", config.Spec.StorageOptions.Replicas)
-	log.InfoD("cpu requests used %v ", config.Spec.Resources.Requests.CPU)
-	log.InfoD("memory requests used %v ", config.Spec.Resources.Requests.Memory)
-	log.InfoD("storage requests used %v ", config.Spec.Resources.Requests.Storage)
-	log.InfoD("No of nodes requested %v ", config.Spec.Nodes)
+	log.InfoD("filesystem used %v ", config.Parameters.Fs)
+	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
+	log.InfoD("cpu requests used %v ", config.Resources.Requests.CPU)
+	log.InfoD("memory requests used %v ", config.Resources.Requests.Memory)
+	log.InfoD("storage requests used %v ", config.Resources.Requests.EphemeralStorage)
+	log.InfoD("No of nodes requested %v ", config.Replicas)
 	log.InfoD("volume group %v ", storageOp.VolumeGroup)
 
-	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Spec.Resources.Requests.CPU, "Validating CPU Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Spec.Resources.Requests.Memory, "Validating Memory Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Spec.Resources.Requests.Storage, "Validating storage")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Spec.Resources.Limits.CPU, "Validating CPU Limits")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Spec.Resources.Limits.Memory, "Validating Memory Limits")
-	repl, err := strconv.Atoi(config.Spec.StorageOptions.Replicas)
+	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Resources.Requests.CPU, "Validating CPU Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Resources.Requests.Memory, "Validating Memory Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Resources.Requests.EphemeralStorage, "Validating storage")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Resources.Limits.CPU, "Validating CPU Limits")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Resources.Limits.Memory, "Validating Memory Limits")
+	repl, err := strconv.Atoi(config.Parameters.Repl)
 	log.FailOnError(err, "failed on atoi method")
 	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
-	dash.VerifyFatal(storageOp.Filesystem, config.Spec.StorageOptions.Filesystem, "Validating filesystems")
-	dash.VerifyFatal(config.Spec.Nodes, int32(replicas), "Validating node replicas")
+	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
+	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
 
 	for version, build := range dataServiceVersionBuildMap {
-		dash.VerifyFatal(config.Spec.Version, version+"-"+build[0], "validating ds build and version")
+		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
 	}
 }
 
@@ -1900,7 +1842,7 @@ var _ = Describe("{AddAndValidateUserRoles}", func() {
 var _ = Describe("{GetPvcToFullCondition}", func() {
 
 	JustBeforeEach(func() {
-		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once trhreshold is met", pdsLabels, 0)
+		StartTorpedoTest("GetPvcToFullCondition", "Deploys and increases the pvc size of DS once threshold is met", pdsLabels, 0)
 		wkloadParams = pdsdriver.LoadGenParams{
 			LoadGenDepName: params.LoadGen.LoadGenDepName,
 			Namespace:      params.InfraToTest.Namespace,
@@ -1914,83 +1856,86 @@ var _ = Describe("{GetPvcToFullCondition}", func() {
 	})
 
 	It("Deploy Dataservices", func() {
-		var generateWorkloads = make(map[string]string)
-		var deployments = make(map[PDSDataService]*pds.ModelsDeployment)
-		var dsVersions = make(map[string]map[string][]string)
-		var depList []*pds.ModelsDeployment
-		var dsName string
+		var (
+			wlDeploymentsToBeCleaned []*v1.Deployment
+			deployments              = make(map[PDSDataService]*pds.ModelsDeployment)
+			stIds                    []string
+			resIds                   []string
+			stIDs                    []string
+			resConfigModel           *pds.ModelsResourceSettingsTemplate
+			stConfigModel            *pds.ModelsStorageOptionsTemplate
+			newResourceTemplateID    string
+			newStorageTemplateID     string
+		)
 
 		Step("Deploy Data Services", func() {
 			for _, ds := range params.DataServiceToTest {
-				if ds.Name == postgresql {
-					Step("Deploy and validate data service", func() {
-						isDeploymentsDeleted = false
-						controlPlane.UpdateResourceTemplateName("pds-auto-pvcFullCondition")
-						deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-						log.FailOnError(err, "Error while deploying data services")
-						deployments[ds] = deployment
-						dsVersions[ds.Name] = dataServiceVersionBuildMap
-						depList = append(depList, deployment)
-						dsName = ds.Name
-
-					})
-				}
-			}
-			defer func() {
-				for _, newDeployment := range deployments {
-					Step("Delete created deployments")
-					resp, err := pdslib.DeleteDeployment(newDeployment.GetId())
-					log.FailOnError(err, "Error while deleting data services")
-					dash.VerifyFatal(resp.StatusCode, http.StatusAccepted, "validating the status response")
-				}
-			}()
-
-			// This testcase is currently applicable only for postgresql ds deployments
-			if dsName == postgresql {
-				Step("Running Workloads before scaling up PVC ", func() {
-					for ds, deployment := range deployments {
-						if Contains(dataServicePodWorkloads, ds.Name) || Contains(dataServiceDeploymentWorkloads, ds.Name) {
-							log.InfoD("Running Workloads on DataService %v ", ds.Name)
-							_, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
-							log.FailOnError(err, "Error while genearating workloads")
-							generateWorkloads[ds.Name] = wlDep.Name
-							for dsName, workloadContainer := range generateWorkloads {
-								log.Debugf("dsName %s, workloadContainer %s", dsName, workloadContainer)
-							}
-						}
+				stIDs, resIds = nil, nil
+				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+				wlDeploymentsToBeCleaned = []*v1.Deployment{}
+				Step("Deploy and validate data service", func() {
+					dataserviceID, _ := dsTest.GetDataServiceID(ds.Name)
+					newTemplateName := "autoTemp-" + strconv.Itoa(rand.Int())
+					newTemplateConfig := controlplane.Templates{
+						Name:           newTemplateName,
+						CpuLimit:       params.StorageConfigurations.CpuLimit,
+						CpuRequest:     params.StorageConfigurations.CpuRequest,
+						DataServiceID:  dataserviceID,
+						MemoryLimit:    "2G",
+						MemoryRequest:  "1G",
+						StorageRequest: "2G",
+						FsType:         "xfs",
+						ReplFactor:     1,
+						Provisioner:    "pxd.portworx.com",
+						Secure:         false,
+						VolGroups:      false,
 					}
+					stConfigModel, resConfigModel, err = controlPlane.CreateCustomResourceTemplate(tenantID, newTemplateConfig)
+					log.FailOnError(err, "Unable to update template")
+					log.InfoD("Successfully updated the template with ID- %v", resConfigModel.GetId())
+					newResourceTemplateID = resConfigModel.GetId()
+					newStorageTemplateID = stConfigModel.GetId()
+					stIDs = append(stIDs, newStorageTemplateID)
+					resIds = append(resIds, newResourceTemplateID)
+					controlPlane.UpdateResourceTemplateName(newTemplateName)
+					deployment, _, dataServiceVersionBuildMap, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+					log.FailOnError(err, "Error while deploying data services")
+					deployments[ds] = deployment
 				})
-
-				defer func() {
-					for dsName, workloadContainer := range generateWorkloads {
-						Step("Delete the workload generating deployments", func() {
-							if Contains(dataServiceDeploymentWorkloads, dsName) {
-								log.InfoD("Deleting Workload Generating deployment %v ", workloadContainer)
-								err = pdslib.DeleteK8sDeployments(workloadContainer, namespace)
-							} else if Contains(dataServicePodWorkloads, dsName) {
-								log.InfoD("Deleting Workload Generating pod %v ", workloadContainer)
-								err = pdslib.DeleteK8sPods(workloadContainer, namespace)
-							}
-							log.FailOnError(err, "error deleting workload generating pods")
-						})
+				Step("Running Workloads to fill up the PVC ", func() {
+					wkloadParams.Mode = "write"
+					_, wldep, err := dsTest.GenerateWorkload(deployment, wkloadParams)
+					if err != nil {
+						log.FailOnError(err, "Unable to run workloads")
 					}
-				}()
-
+					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wldep)
+				})
 				Step("Checking the PVC usage", func() {
 					log.FailOnError(err, "Unable to create scheduler context")
-					err = CheckStorageFullCondition(namespace, deployment)
+					err = CheckStorageFullCondition(namespace, deployment, 85)
 					log.FailOnError(err, "Failing while filling the PVC to 90 percentage of its capacity due to ...")
 					_, err = IncreasePVCby1Gig(namespace, deployment, 1)
 					log.FailOnError(err, "Failing while Increasing the PVC name...")
-					controlPlane.UpdateResourceTemplateName("Small")
 				})
-
 				Step("Validate Deployments after PVC Resize", func() {
 					for ds, deployment := range deployments {
 						err = dsTest.ValidateDataServiceDeployment(deployment, namespace)
 						log.FailOnError(err, "Error while validating dataservices")
 						log.InfoD("Data-service: %v is up and healthy", ds.Name)
 					}
+				})
+				Step("Clean up workload deployments", func() {
+					for _, wlDep := range wlDeploymentsToBeCleaned {
+						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+						log.FailOnError(err, "Failed while deleting the workload deployment")
+					}
+
+				})
+				Step("Delete Deployments", func() {
+					CleanupDeployments(deploymentsToBeCleaned)
+					err := controlPlane.CleanupCustomTemplates(stIds, resIds)
+					log.FailOnError(err, "Failed to delete custom templates")
+					controlPlane.UpdateResourceTemplateName("Small")
 				})
 			}
 

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"time"
 
-	pxapi "github.com/portworx/torpedo/porx/px/api"
+	pxapi "github.com/libopenstorage/operator/api/px"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
@@ -63,6 +63,12 @@ type DiagOps struct {
 	Async bool
 	// PxIsStopped
 	PxStopped bool
+
+	// PxDir is a directory where PX bits are installed
+	PxDir string
+
+	// PxDiagDir is a directory where PX diags are collected
+	PxDiagDir string
 }
 
 // MetadataNode TODO temporary solution until sdk supports metadataNode response
@@ -120,6 +126,14 @@ func (d *DefaultDriver) CreateVolume(volName string, size uint64, haLevel int64)
 	return "", &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "CreateVolume()",
+	}
+}
+
+// CreateVolumeUsingPxctlCmd resizes a pool of a given UUID using CLI command
+func (d *DefaultDriver) CreateVolumeUsingPxctlCmd(n node.Node, volName string, size uint64, haLevel int64) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "CreateVolumeUsingPxctlCmd()",
 	}
 }
 
@@ -295,6 +309,14 @@ func (d *DefaultDriver) GetNodePoolsStatus(n node.Node) (map[string]string, erro
 	}
 }
 
+// GetNodePoolsStatus returns latest map of pool UUID and id
+func (d *DefaultDriver) GetNodePools(n node.Node) (map[string]string, error) {
+	return nil, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetNodePools()",
+	}
+}
+
 // GetDriverVersion Returns the pxctl version
 func (d *DefaultDriver) GetDriverVersion() (string, error) {
 	return "", &errors.ErrNotSupported{
@@ -399,6 +421,22 @@ func (d *DefaultDriver) ValidatePureVolumesNoReplicaSets(volumeName string, para
 	}
 }
 
+// InitializePureLocalVolumePaths sets the baseline for how many Pure devices are already attached to the node
+func (d *DefaultDriver) InitializePureLocalVolumePaths() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "InitializePureLocalVolumePaths()",
+	}
+}
+
+// ValidatePureLocalVolumePaths checks that the given volumes all have the proper local paths present, *and that no other unexpected ones are present*
+func (d *DefaultDriver) ValidatePureLocalVolumePaths() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "ValidatePureLocalVolumePaths()",
+	}
+}
+
 // ValidateUpdateVolume validates if volume changes has been applied
 func (d *DefaultDriver) ValidateUpdateVolume(vol *Volume, params map[string]string) error {
 	return &errors.ErrNotSupported{
@@ -452,6 +490,14 @@ func (d *DefaultDriver) StopDriver(nodes []node.Node, force bool, triggerOpts *d
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "StopDriver()",
+	}
+}
+
+// KillPXDaemon must kill px -daemon on a given node,the volume driver should get killed ungracefully
+func (d *DefaultDriver) KillPXDaemon(nodes []node.Node, triggerOpts *driver_api.TriggerOptions) error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "KillPXDaemon()",
 	}
 }
 
@@ -669,7 +715,7 @@ func (d *DefaultDriver) CollectDiags(n node.Node, config *DiagRequestConfig, dia
 }
 
 // ValidateDiagsOnS3 validates the diags or diags file on S3 bucket
-func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile string) error {
+func (d *DefaultDriver) ValidateDiagsOnS3(n node.Node, diagsFile, pxDir string) error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "ValidateDiagsOnS3()",

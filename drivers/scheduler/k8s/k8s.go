@@ -34,6 +34,7 @@ import (
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
+	osapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/units"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	admissionregistration "github.com/portworx/sched-ops/k8s/admissionregistration"
@@ -54,6 +55,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/sched-ops/k8s/stork"
+	tektoncd "github.com/portworx/sched-ops/k8s/tektoncd"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
@@ -64,6 +66,7 @@ import (
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	appsapi "k8s.io/api/apps/v1"
@@ -126,6 +129,14 @@ const (
 	NodeType = "node-type"
 	//FastpathNodeType fsatpath node type value
 	FastpathNodeType = "fastpath"
+	// PureDAVolumeLabel is the label added to a volume only if the volume is a Pure Direct Access (FADA/FBDA) volume
+	PureDAVolumeLabel = "pure_direct_access"
+	// PureDAVolumeLabelValueFA is the value added for the PureDAVolumeLabel key if the volume is an FADA volume
+	PureDAVolumeLabelValueFA = "fada"
+	// PureDAVolumeLabelValueFB is the value added for the PureDAVolumeLabel key if the volume is an FBDA volume
+	PureDAVolumeLabelValueFB = "fbda"
+	// FADAVolumeSerialLabel is the label added to a volume (only if FlashArray Direct Access) that holds the volume serial
+	FADAVolumeSerialLabel = "fada_volume_serial"
 
 	//ReplVPS volume placement strategy node label value
 	ReplVPS = "replvps"
@@ -223,6 +234,7 @@ var (
 	k8sApiExtensions         = apiextensions.Instance()
 	k8sOperator              = operator.Instance()
 	k8sKubevirt              = kubevirt.Instance()
+	k8stektoncd              = tektoncd.Instance()
 
 	// k8sExternalsnap is a instance of csisnapshot instance
 	k8sExternalsnap = csisnapshot.Instance()
@@ -383,6 +395,7 @@ func (k *K8s) SetConfig(kubeconfigPath string) error {
 	k8sApiExtensions.SetConfig(config)
 	k8sOperator.SetConfig(config)
 	k8sKubevirt.SetConfig(config)
+	k8stektoncd.SetConfig(config)
 
 	return nil
 }
@@ -683,6 +696,9 @@ func decodeSpec(specContents []byte) (runtime.Object, error) {
 		if err := kubevirtv1.AddToScheme(schemeObj); err != nil {
 			return nil, err
 		}
+		if err := tektoncdv1.AddToScheme(schemeObj); err != nil {
+			return nil, err
+		}
 
 		codecs := serializer.NewCodecFactory(schemeObj)
 		obj, _, err = codecs.UniversalDeserializer().Decode([]byte(specContents), nil, nil)
@@ -783,6 +799,10 @@ func validateSpec(in interface{}) (interface{}, error) {
 	} else if specObj, ok := in.(*corev1.PersistentVolume); ok {
 		return specObj, nil
 	} else if specObj, ok := in.(*kubevirtv1.VirtualMachine); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*tektoncdv1.Task); ok {
+		return specObj, nil
+	} else if specObj, ok := in.(*tektoncdv1.Pipeline); ok {
 		return specObj, nil
 	}
 
@@ -917,7 +937,6 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		if len(options.TopologyLabels) > 1 {
 			rotateTopologyArray(&options)
 		}
-
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
 			return nil, err
@@ -1073,25 +1092,7 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
-			obj, err := k.createCoreObject(appSpec, ns, app, options)
-			if err != nil {
-				return nil, true, err
-			}
-			return obj, false, nil
-		}
-
-		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
-		if err != nil {
-			return nil, err
-		}
-
-		if obj != nil {
-			specObjects = append(specObjects, obj)
-		}
-	}
-	for _, appSpec := range app.SpecList {
-		t := func() (interface{}, bool, error) {
-			obj, err := k.createBackupObjects(appSpec, ns, app)
+			obj, err := k.createTektonObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
 			}
@@ -1120,6 +1121,41 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 			return nil, err
 		}
 
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createCoreObject(appSpec, ns, app, options)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
+
+		if obj != nil {
+			specObjects = append(specObjects, obj)
+		}
+	}
+	for _, appSpec := range app.SpecList {
+		t := func() (interface{}, bool, error) {
+			obj, err := k.createBackupObjects(appSpec, ns, app)
+			if err != nil {
+				return nil, true, err
+			}
+			return obj, false, nil
+		}
+		obj, err := task.DoRetryWithTimeout(t, k8sObjectCreateTimeout, DefaultRetryInterval)
+		if err != nil {
+			return nil, err
+		}
 		if obj != nil {
 			specObjects = append(specObjects, obj)
 		}
@@ -1432,6 +1468,12 @@ SPECS:
 				}
 			} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
 				if removeObj, ok := removeSpec.(*appsapi.StatefulSet); ok {
+					if specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
+				if removeObj, ok := removeSpec.(*storkapi.ClusterPair); ok {
 					if specObj.Name == removeObj.Name {
 						continue SPECS
 					}
@@ -1758,6 +1800,34 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Pipeline); ok {
+		obj, err := k8stektoncd.GetPipeline(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.Kind = "Pipeline"
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.Task); ok {
+		obj, err := k8stektoncd.GetTask(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.Kind = "Task"
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.TaskRun); ok {
+		obj, err := k8stektoncd.GetTaskRun(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.Kind = "TaskRun"
+		return obj, nil
+	} else if specObj, ok := spec.(*tektoncdv1.PipelineRun); ok {
+		obj, err := k8stektoncd.GetPipelineRun(specObj.Namespace, specObj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.Kind = "PipelineRun"
 		return obj, nil
 	}
 
@@ -3179,7 +3249,7 @@ func (k *K8s) Destroy(ctx *scheduler.Context, opts map[string]bool) error {
 	if apRule.Name != "" {
 		if err := k8sOps.DeleteAutopilotRule(apRule.ObjectMeta.Name); err != nil {
 			if err != nil {
-				if strings.Contains(err.Error(), "not found"){
+				if strings.Contains(err.Error(), "not found") {
 					log.Infof("deletion of AR failed: %s, expected since we dont deploy new AR", apRule.ObjectMeta.Name)
 					return nil
 				}
@@ -3798,6 +3868,19 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					return err
 				}
 			}
+			autopilotLabels := make(map[string]string)
+			autopilotLabels["name"] = "autopilot"
+			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
+			if err != nil {
+				return err
+			}
+			prometheusLabels := make(map[string]string)
+			prometheusLabels["app.kubernetes.io/name"] = "prometheus"
+			prometheusPods, err := k8sCore.GetPods(autopilotDefaultNamespace, prometheusLabels)
+			if err != nil {
+				return err
+			}
+			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
 			if autopilotEnabled {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
@@ -3814,6 +3897,8 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					}
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
+			} else {
+				log.Infof("[%v] Autopilot is not enabled, skipping PVC: %v size validation", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
@@ -4137,6 +4222,42 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		return vols, nil
 	}
 
+	labels := pvc.Labels
+
+	if pvc.Spec.VolumeName != "" {
+		// If this is a Pure volume, run some extra checks to get more information.
+		// Store them as labels as they are not applicable to all volume types.
+		driver, err := volume.Get(k.VolDriverName)
+		if err != nil {
+			return nil, err
+		}
+
+		inspectedVol, err := driver.InspectVolume(pvc.Spec.VolumeName)
+		if err != nil {
+			if _, ok := err.(*errors.ErrNotSupported); !ok {
+				return nil, fmt.Errorf("failed to inspect volume %s: %v", pvc.Name, err)
+			}
+			// If the driver doesn't support InspectVolume, then it's definitely not a Pure volume. Do nothing special
+		} else {
+			// If this is a Pure volume, run some extra checks to get more information.
+			// Store them as labels as they are not applicable to all volume types.
+			if labels == nil {
+				labels = make(map[string]string)
+			}
+			if inspectedVol.Spec.IsPureVolume() {
+				switch inspectedVol.Spec.ProxySpec.ProxyProtocol {
+				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFA
+					labels[FADAVolumeSerialLabel] = inspectedVol.Spec.ProxySpec.PureBlockSpec.SerialNum
+				case osapi.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					labels[PureDAVolumeLabel] = PureDAVolumeLabelValueFB
+				default:
+					return nil, fmt.Errorf("unknown proxy type %v for Pure volume", inspectedVol.Spec.ProxySpec.ProxyProtocol)
+				}
+			}
+		}
+	}
+
 	pvcSizeObj := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
 	pvcSize, _ := pvcSizeObj.AsInt64()
 	isRaw := pvc.Spec.VolumeMode != nil && *pvc.Spec.VolumeMode == corev1.PersistentVolumeBlock
@@ -4146,7 +4267,7 @@ func (k *K8s) appendVolForPVC(vols []*volume.Volume, pvc *v1.PersistentVolumeCla
 		Namespace:   pvc.Namespace,
 		Shared:      k.isPVCShared(pvc),
 		Annotations: pvc.Annotations,
-		Labels:      pvc.Labels,
+		Labels:      labels,
 		Size:        uint64(pvcSize),
 		Raw:         isRaw,
 	}
@@ -4222,6 +4343,27 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
 					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
+						want = true
+					}
+				}
+				if !want {
+					continue
+				}
+				vols, err = k.appendVolForPVC(vols, &pvc)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
+			}
+			for _, pvc := range pvcList.Items {
+				// check if the pvc has our VM as the owner
+				want := false
+				for _, ownerRef := range pvc.OwnerReferences {
+					if ownerRef.Kind == pipeline.Kind && ownerRef.Name == pipeline.Name {
 						want = true
 					}
 				}
@@ -4925,6 +5067,58 @@ func (k *K8s) Describe(ctx *scheduler.Context) (string, error) {
 			buf.WriteString(fmt.Sprintf("%+v\n", virtualMachine))
 			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "VirtualMachine", obj.Name)))
 			buf.WriteString(insertLineBreak("END VirtualMachine"))
+		} else if obj, ok := specObj.(*tektoncdv1.Pipeline); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("Pipeline: [%s] %s", obj.Namespace, obj.Name)))
+			var pipeline *tektoncdv1.Pipeline
+			if pipeline, err = k8stektoncd.GetPipeline(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get Pipeline: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", pipeline))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Pipeline", obj.Name)))
+			buf.WriteString(insertLineBreak("END Pipeline"))
+		} else if obj, ok := specObj.(*tektoncdv1.Task); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("Task: [%s] %s", obj.Namespace, obj.Name)))
+			var task *tektoncdv1.Task
+			if task, err = k8stektoncd.GetTask(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get Task: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", task))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "Task", obj.Name)))
+			buf.WriteString(insertLineBreak("END Task"))
+		} else if obj, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("PipelineRun: [%s] %s", obj.Namespace, obj.Name)))
+			var pipelineRun *tektoncdv1.PipelineRun
+			if pipelineRun, err = k8stektoncd.GetPipelineRun(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get PipelineRun: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", pipelineRun))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "PipelineRun", obj.Name)))
+			buf.WriteString(insertLineBreak("END PipelineRun"))
+		} else if obj, ok := specObj.(*tektoncdv1.TaskRun); ok {
+			buf.WriteString(insertLineBreak(fmt.Sprintf("TaskRun: [%s] %s", obj.Namespace, obj.Name)))
+			var taskRun *tektoncdv1.TaskRun
+			if taskRun, err = k8stektoncd.GetTaskRun(obj.Namespace, obj.Name); err != nil {
+				buf.WriteString(fmt.Sprintf("%v", &scheduler.ErrFailedToGetCustomSpec{
+					Name:  obj.Name,
+					Cause: fmt.Sprintf("Failed to get TaskRun: %v. Err: %v", obj.Name, err),
+					Type:  obj,
+				}))
+			}
+			buf.WriteString(fmt.Sprintf("%+v\n", taskRun))
+			buf.WriteString(fmt.Sprintf("%v", dumpEvents(obj.Namespace, "TaskRun", obj.Name)))
+			buf.WriteString(insertLineBreak("END TaskRun"))
 		} else {
 			log.Warnf("Object type unknown/not supported: %v", obj)
 		}
@@ -5217,6 +5411,63 @@ func (k *K8s) createVirtualMachineObjects(
 		}
 		log.Infof("[%v] Created VirtualMachine: %v", app.Key, obj.Name)
 		return vm, nil
+	}
+
+	return nil, nil
+}
+
+// createTektonObjects creates the Tektoncd objects
+func (k *K8s) createTektonObjects(
+	spec interface{},
+	ns *corev1.Namespace,
+	app *spec.AppSpec,
+) (interface{}, error) {
+	if obj, ok := spec.(*tektoncdv1.Task); ok {
+
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		task, err := k8stektoncd.CreateTask(obj, obj.Namespace)
+		if k8serrors.IsAlreadyExists(err) {
+			if task, err = k8stektoncd.GetTask(obj.Namespace, obj.Name); err == nil {
+				log.Infof("[%v] Found existing task: %v", app.Key, obj.Name)
+				return task, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create task: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created task: %v", app.Key, obj.Name)
+		return task, nil
+	} else if obj, ok := spec.(*tektoncdv1.Pipeline); ok {
+
+		// Create VirtualMachine Spec
+		if obj.Namespace != "kube-system" {
+			obj.Namespace = ns.Name
+		}
+		pipeline, err := k8stektoncd.CreatePipeline(obj, obj.Namespace)
+		if k8serrors.IsAlreadyExists(err) {
+			if pipeline, err = k8stektoncd.GetPipeline(obj.Namespace, obj.Name); err == nil {
+				log.Infof("[%v] Found existing pipeline: %v", app.Key, obj.Name)
+				return pipeline, nil
+			}
+		}
+
+		if err != nil {
+			return nil, &scheduler.ErrFailedToScheduleApp{
+				App:   app,
+				Cause: fmt.Sprintf("Failed to create pipeline: %v, Err: %v", obj.Name, err),
+			}
+		}
+		log.Infof("[%v] Created pipeline: %v", app.Key, obj.Name)
+		return pipeline, nil
+	} else {
+		log.Infof("Object type unknown/not supported: %v", obj)
 	}
 
 	return nil, nil
@@ -6918,7 +7169,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 	}
 
 	// Wait for PVC to be bound
-	err = k.waitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(restoredPVCName, restoredPVC.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", restoredPVCName, err)
 	}
@@ -6944,7 +7195,7 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
 		if data != fileContent {
-			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+			return fmt.Errorf("compared data of text file & data copied to device path is not same")
 		}
 	} else {
 		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
@@ -6955,7 +7206,32 @@ func (k *K8s) snapshotAndVerify(size resource.Quantity, data, snapName, namespac
 			return fmt.Errorf("restored volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
-	log.Info("Validation complete")
+
+	log.Info("Validation complete, deleting restored pods")
+	err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), restoredPod.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("error deleting restored pod: %s", err)
+	}
+
+	// Wait for the pod to be actually gone, checking by pod UID in case it gets recreated (deployment in the future?)
+	t := func() (interface{}, bool, error) {
+		existingPods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to list pods in ns %s. Error: %v", namespace, err)
+		}
+
+		for _, pod := range existingPods.Items {
+			if pod.UID == restoredPod.UID {
+				return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
+			}
+		}
+		return nil, false, nil // Pod is now successfully gone
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -6978,7 +7254,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 	}
 
 	// Wait for PVC to be bound
-	err = k.waitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
+	err = k.WaitForSinglePVCToBound(clonedPVCName, clonedPVC.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to wait for cloned PVC %s to bind: %v", clonedPVCName, err)
 	}
@@ -7004,7 +7280,7 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("error checking content of cloned PVC: %s. Output: %s", err, string(fileContent))
 		}
 		if data != fileContent {
-			return fmt.Errorf("Compared data of text file & data copied to device path is not same")
+			return fmt.Errorf("compared data of text file & data copied to device path is not same")
 		}
 	} else {
 		fileContent, err := k.readDataFromPod(restoredPod.Name, namespace, "/mnt/volume1/aaaa.txt")
@@ -7015,7 +7291,29 @@ func (k *K8s) cloneAndVerify(size resource.Quantity, data, namespace, storageCla
 			return fmt.Errorf("cloned volume does NOT contain data from original volume: expected to contain '%s', got '%s'", data, string(fileContent))
 		}
 	}
-	log.Info("Validation complete")
+
+	log.Info("Validation complete, deleting restored pods")
+	err = clientset.CoreV1().Pods(namespace).Delete(context.TODO(), restoredPod.Name, metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return fmt.Errorf("error deleting restored pod: %s", err)
+	}
+
+	// Wait for the pod to be actually gone
+	t := func() (interface{}, bool, error) {
+		var err error
+		if _, err = clientset.CoreV1().Pods(namespace).Get(context.TODO(), restoredPod.Name, metav1.GetOptions{}); err != nil {
+			if k8serrors.IsNotFound(err) {
+				return nil, false, nil // Pod is now successfully gone
+			}
+			return nil, true, fmt.Errorf("failed to check that pod %s in ns %s is gone. Err: %v", restoredPod.Name, restoredPod.Namespace, err)
+		}
+		return nil, true, fmt.Errorf("pod %s in ns %s still exists", restoredPod.Name, restoredPod.Namespace)
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, time.Minute*2, DefaultRetryInterval); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -7454,8 +7752,8 @@ func (k *K8s) waitForPodToBeReady(podname string, namespace string) error {
 	return nil
 }
 
-// waitForRestoredPVCsToBound retries and waits up to 30 minutes for a single PVC to be bound
-func (k *K8s) waitForSinglePVCToBound(pvcName, namespace string) error {
+// WaitForSinglePVCToBound retries and waits up to 30 minutes for a single PVC to be bound
+func (k *K8s) WaitForSinglePVCToBound(pvcName, namespace string) error {
 	var pvc *v1.PersistentVolumeClaim
 	var err error
 	kubeClient, err := k.getKubeClient("")

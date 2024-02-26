@@ -12,7 +12,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -26,6 +26,10 @@ const (
 	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
+	podDestroyTimeout     = 5 * time.Minute
+	maximumChaosLevel     = 10
+	defaultChaosLevel     = 0
+	defaultBaseInterval   = 60 * time.Minute
 )
 
 var (
@@ -62,6 +66,7 @@ var _ = Describe("{Longevity}", func() {
 		RebootNode:       TriggerRebootNodes,
 		ValidatePdsApps:  TriggerValidatePdsApps,
 		CrashNode:        TriggerCrashNodes,
+		CrashPXDaemon:    TriggerCrashPXDaemon,
 		RestartVolDriver: TriggerRestartVolDriver,
 		CrashVolDriver:   TriggerCrashVolDriver,
 		HAIncrease:       TriggerHAIncrease,
@@ -122,6 +127,13 @@ var _ = Describe("{Longevity}", func() {
 		AddStorageNode:           TriggerAddOCPStorageNode,
 		AddStoragelessNode:       TriggerAddOCPStoragelessNode,
 		OCPStorageNodeRecycle:    TriggerOCPStorageNodeRecycle,
+		HAIncreaseAndCrashPX:     TriggerHAIncreaseAndCrashPX,
+		HAIncreaseAndRestartPX:   TriggerHAIncreaseAndPXRestart,
+		NodeMaintenanceCycle:     TriggerNodeMaintenanceCycle,
+		PoolMaintenanceCycle:     TriggerPoolMaintenanceCycle,
+		StorageFullPoolExpansion: TriggerStorageFullPoolExpansion,
+		HAIncreaseWithPVCResize:  TriggerHAIncreasWithPVCResize,
+		ReallocateSharedMount:    TriggerReallocSharedMount,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -165,6 +177,7 @@ var _ = Describe("{Longevity}", func() {
 
 		Inst().IsHyperConverged = hyperConvergedTypeEnabled
 
+		enableNFSProxyValidation()
 		TriggerDeployNewApps(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
@@ -204,6 +217,34 @@ var _ = Describe("{Longevity}", func() {
 	})
 })
 
+func enableNFSProxyValidation() {
+	masterNodes := node.GetMasterNodes()
+	if len(masterNodes) == 0 {
+		log.Errorf("no master nodes found")
+		return
+	}
+
+	masterNode := masterNodes[0]
+	err = SetupProxyServer(masterNode)
+	if err != nil {
+		log.Errorf("error setting up proxy server on master node %s, Err:%s", masterNode.Name, err.Error())
+		return
+	}
+
+	addresses := masterNode.Addresses
+	if len(addresses) == 0 {
+		log.Errorf("no addresses found for node [%s]", masterNode.Name)
+		return
+	}
+	err = CreateNFSProxyStorageClass("portworx-proxy-volume-volume", addresses[0], "/exports/testnfsexportdir")
+	if err != nil {
+		log.Errorf("error creating storage class for proxy volume, Err: %s", err.Error())
+		return
+	}
+	Inst().AppList = append(Inst().AppList, "nginx-proxy-deployment")
+
+}
+
 var _ = Describe("{UpgradeLongevity}", func() {
 	var (
 		triggerLock                sync.Mutex
@@ -216,12 +257,13 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		wg                         sync.WaitGroup
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
 		upgradeExecutionThreshold int
+		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
+		disruptiveTriggerWrapper func(fn TriggerFunction) TriggerFunction
 	)
 
 	JustBeforeEach(func() {
 		contexts = make([]*scheduler.Context, 0)
 		triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
-			RestartVolDriver:     TriggerRestartVolDriver,
 			CloudSnapShot:        TriggerCloudSnapShot,
 			HAIncrease:           TriggerHAIncrease,
 			PoolAddDisk:          TriggerPoolAddDisk,
@@ -232,21 +274,14 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			LocalSnapShotRestore: TriggerLocalSnapshotRestore,
 			AddStorageNode:       TriggerAddOCPStorageNode,
 		}
-		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper := func(fn TriggerFunction) TriggerFunction {
-			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
-				triggerLock.Lock()
-				defer triggerLock.Unlock()
-				fn(contexts, recordChan)
-			}
-		}
 		// disruptiveTriggerFunctions are mapped to their respective handlers and are invoked by a separate testTrigger
 		disruptiveTriggerFunctions = map[string]TriggerFunction{
-			RebootNode:           disruptiveTriggerWrapper(TriggerRebootNodes),
-			CrashNode:            disruptiveTriggerWrapper(TriggerCrashNodes),
-			RestartKvdbVolDriver: disruptiveTriggerWrapper(TriggerRestartKvdbVolDriver),
-			NodeDecommission:     disruptiveTriggerWrapper(TriggerNodeDecommission),
-			AppTasksDown:         disruptiveTriggerWrapper(TriggerAppTasksDown),
+			RebootNode:           TriggerRebootNodes,
+			RestartVolDriver:     TriggerRestartVolDriver,
+			CrashNode:            TriggerCrashNodes,
+			RestartKvdbVolDriver: TriggerRestartKvdbVolDriver,
+			NodeDecommission:     TriggerNodeDecommission,
+			AppTasksDown:         TriggerAppTasksDown,
 		}
 		// Creating a distinct trigger to make sure email triggers at regular intervals
 		emailTriggerFunction = map[string]func(){
@@ -268,9 +303,16 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		if Inst().MinRunTimeMins != 0 {
 			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
 		}
-		upgradeExecutionThreshold = 4 // default value
+		upgradeExecutionThreshold = 1 // default value
 		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
 			upgradeExecutionThreshold = val
+		}
+		disruptiveTriggerWrapper = func(fn TriggerFunction) TriggerFunction {
+			return func(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+				triggerLock.Lock()
+				defer triggerLock.Unlock()
+				fn(contexts, recordChan)
+			}
 		}
 	})
 
@@ -315,7 +357,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			for triggerType, triggerFunc := range disruptiveTriggerFunctions {
 				log.InfoD("Registering disruptive trigger: [%v]", triggerType)
 				wg.Add(1)
-				go testTrigger(&wg, &contexts, triggerType, triggerFunc, &disruptiveTriggerLock, &triggerEventsChan)
+				go testTrigger(&wg, &contexts, triggerType, disruptiveTriggerWrapper(triggerFunc), &disruptiveTriggerLock, &triggerEventsChan)
 			}
 			log.InfoD("Finished registering disruptive test triggers")
 		})
@@ -337,54 +379,46 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					defer wg.Done()
 					start := time.Now().Local()
 					timeout := Inst().MinRunTimeMins * 60
-					upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 					currentEndpointIndex := 0
 					for {
+						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
 						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d  minutes", Inst().MinRunTimeMins)
+							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 							break
 						}
 						if currentEndpointIndex >= len(upgradeEndpoints) {
-							log.Infof("All endpoints have been processed, exiting the trigger function for [%s]\n", triggerType)
-							break // break if all upgrade endpoints are processed
+							continue
 						}
-						testExecSum := 0 // total test execution count
 						minTestExecCount := math.MaxInt32
 						// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
 						for trigger := range triggerFunctions {
-							count := TestExecutionCountMap[trigger]
-							testExecSum += count
+							count := TestExecutionCounter.GetCount(trigger)
 							if count < minTestExecCount {
 								minTestExecCount = count
 							}
 						}
 						// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
 						for trigger := range disruptiveTriggerFunctions {
-							count := TestExecutionCountMap[trigger]
-							testExecSum += count
-							if count < minTestExecCount {
-								minTestExecCount = count
+							if ChaosMap[trigger] != 0 {
+								count := TestExecutionCounter.GetCount(trigger)
+								if count < minTestExecCount {
+									minTestExecCount = count
+								}
 							}
 						}
-						// Determining whether to trigger based on minimum execution count
-						shouldTrigger := minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold
-						// Proceeding with upgrade if testExecSum is much higher than expected
-						if !shouldTrigger && testExecSum >= (currentEndpointIndex+1)*(upgradeExecutionThreshold+1) {
-							shouldTrigger = true
-							// Logging a warning as TestExecutionCountMap might not be accurate
-							log.Warnf("Triggering %s based on testExecSum %v. The tests might not be executing in order: %+v", triggerType, testExecSum, TestExecutionCountMap)
-						}
-						if shouldTrigger {
+						if minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold {
 							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
+							currentEndpointIndex++
 							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
 							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
 							disruptiveTriggerLock.Lock()
 							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+							log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
 							triggerFunc(&contexts, &triggerEventsChan)
 							log.Infof("Trigger Function completed for [%s]\n", triggerType)
 							disruptiveTriggerLock.Unlock()
 							log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
-							currentEndpointIndex++
+							Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
 						}
 						time.Sleep(controlLoopSleepTime)
 					}
@@ -589,6 +623,7 @@ func populateDisruptiveTriggers() {
 		ResizeDiskAndReboot:             true,
 		VolumeCreatePxRestart:           true,
 		OCPStorageNodeRecycle:           true,
+		CrashPXDaemon:                   true,
 	}
 }
 
@@ -606,6 +641,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationInterval(configData)
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
+	setUpgradeStorageDriverEndpointList(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -724,12 +760,29 @@ func setSendGridEmailAPIKey(configData *map[string]string) error {
 		SendGridEmailAPIKeyField, testTriggersConfigMap, configMapNS)
 }
 
+func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
+	// Get upgrade endpoints from configMap
+	if upgradeEndpoints, ok := (*configData)[UpgradeEndpoints]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.", UpgradeEndpoints, testTriggersConfigMap, configMapNS)
+	} else if upgradeEndpoints != "" {
+		currentCount := len(strings.Split(Inst().UpgradeStorageDriverEndpointList, ","))
+		newCount := len(strings.Split(upgradeEndpoints, ","))
+		if Inst().UpgradeStorageDriverEndpointList == "" || newCount >= currentCount {
+			Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints
+		} else {
+			log.Warnf("upgradeEndpoints reduced from [%s] to [%s], removal not supported.", Inst().UpgradeStorageDriverEndpointList, upgradeEndpoints)
+		}
+		log.Infof("The UpgradeStorageDriverEndpointList is set to %s", Inst().UpgradeStorageDriverEndpointList)
+	}
+	delete(*configData, UpgradeEndpoints)
+}
+
 func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
 		if err != nil {
-			return fmt.Errorf("Failed to get chaos levels from configMap [%s] in [%s] namespace. Error:[%v]",
-				testTriggersConfigMap, configMapNS, err)
+			return fmt.Errorf("failed to get chaos levels for [%s] from configMap [%s] in [%s] namespace. Error: [%v]",
+				triggerType, testTriggersConfigMap, configMapNS, err)
 		}
 		ChaosMap[triggerType] = chaosLevelInt
 		if triggerType == BackupScheduleAll || triggerType == BackupScheduleScale {
@@ -827,6 +880,18 @@ func SetTopologyLabelsOnNodes() ([]map[string]string, error) {
 	return topologyLabels, nil
 }
 
+// GetWaitTime returns the wait time based on the given chaos level and base interval of test trigger
+func GetWaitTime(chaosLevel int, baseInterval time.Duration) time.Duration {
+	switch {
+	case chaosLevel <= 0:
+		return 0
+	case chaosLevel < maximumChaosLevel:
+		return 3 * baseInterval * time.Duration(maximumChaosLevel-chaosLevel+1)
+	default:
+		return baseInterval
+	}
+}
+
 func populateIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[ValidatePdsApps] = map[int]time.Duration{}
@@ -903,12 +968,18 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart] = make(map[int]time.Duration)
 	triggerInterval[CloudSnapShotRestore] = make(map[int]time.Duration)
 	triggerInterval[LocalSnapShotRestore] = make(map[int]time.Duration)
-
 	triggerInterval[AggrVolDepReplResizeOps] = make(map[int]time.Duration)
-
 	triggerInterval[AddStorageNode] = make(map[int]time.Duration)
 	triggerInterval[AddStoragelessNode] = make(map[int]time.Duration)
 	triggerInterval[OCPStorageNodeRecycle] = make(map[int]time.Duration)
+	triggerInterval[HAIncreaseAndCrashPX] = make(map[int]time.Duration)
+	triggerInterval[HAIncreaseAndRestartPX] = make(map[int]time.Duration)
+	triggerInterval[CrashPXDaemon] = make(map[int]time.Duration)
+	triggerInterval[NodeMaintenanceCycle] = make(map[int]time.Duration)
+	triggerInterval[PoolMaintenanceCycle] = make(map[int]time.Duration)
+	triggerInterval[StorageFullPoolExpansion] = make(map[int]time.Duration)
+	triggerInterval[HAIncreaseWithPVCResize] = make(map[int]time.Duration)
+	triggerInterval[ReallocateSharedMount] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1242,6 +1313,72 @@ func populateIntervals() {
 	triggerInterval[CrashNode][2] = 24 * baseInterval
 	triggerInterval[CrashNode][1] = 27 * baseInterval
 
+	triggerInterval[CrashPXDaemon][10] = 1 * baseInterval
+	triggerInterval[CrashPXDaemon][9] = 3 * baseInterval
+	triggerInterval[CrashPXDaemon][8] = 6 * baseInterval
+	triggerInterval[CrashPXDaemon][7] = 9 * baseInterval
+	triggerInterval[CrashPXDaemon][6] = 12 * baseInterval
+	triggerInterval[CrashPXDaemon][5] = 15 * baseInterval
+	triggerInterval[CrashPXDaemon][4] = 18 * baseInterval
+	triggerInterval[CrashPXDaemon][3] = 21 * baseInterval
+	triggerInterval[CrashPXDaemon][2] = 24 * baseInterval
+	triggerInterval[CrashPXDaemon][1] = 27 * baseInterval
+
+	triggerInterval[NodeMaintenanceCycle][10] = 1 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][9] = 3 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][8] = 6 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][7] = 9 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][6] = 12 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][5] = 15 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][4] = 18 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][3] = 21 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][2] = 24 * baseInterval
+	triggerInterval[NodeMaintenanceCycle][1] = 27 * baseInterval
+
+	triggerInterval[PoolMaintenanceCycle][10] = 1 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][9] = 3 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][8] = 6 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][7] = 9 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][6] = 12 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][5] = 15 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][4] = 18 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][3] = 21 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][2] = 24 * baseInterval
+	triggerInterval[PoolMaintenanceCycle][1] = 27 * baseInterval
+
+	triggerInterval[StorageFullPoolExpansion][10] = 1 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][9] = 3 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][8] = 6 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][7] = 9 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][6] = 12 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][5] = 15 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][4] = 18 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][3] = 21 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][2] = 24 * baseInterval
+	triggerInterval[StorageFullPoolExpansion][1] = 27 * baseInterval
+
+	triggerInterval[HAIncreaseAndCrashPX][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][5] = 15 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseAndCrashPX][1] = 27 * baseInterval
+
+	triggerInterval[HAIncreaseWithPVCResize][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][5] = 15 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseWithPVCResize][1] = 27 * baseInterval
+
 	triggerInterval[CrashVolDriver][10] = 1 * baseInterval
 	triggerInterval[CrashVolDriver][9] = 3 * baseInterval
 	triggerInterval[CrashVolDriver][8] = 6 * baseInterval
@@ -1318,6 +1455,17 @@ func populateIntervals() {
 	triggerInterval[HADecrease][3] = 21 * baseInterval
 	triggerInterval[HADecrease][2] = 24 * baseInterval
 	triggerInterval[HADecrease][1] = 27 * baseInterval
+
+	triggerInterval[HAIncreaseAndRestartPX][10] = 1 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][9] = 3 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][8] = 6 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][7] = 9 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][6] = 12 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][5] = 15 * baseInterval // Default global chaos level, 1.5 hrs
+	triggerInterval[HAIncreaseAndRestartPX][4] = 18 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][3] = 21 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][2] = 24 * baseInterval
+	triggerInterval[HAIncreaseAndRestartPX][1] = 27 * baseInterval
 
 	triggerInterval[VolumeClone][10] = 1 * baseInterval
 	triggerInterval[VolumeClone][9] = 3 * baseInterval
@@ -1579,6 +1727,17 @@ func populateIntervals() {
 	triggerInterval[VolumeCreatePxRestart][2] = 9 * baseInterval
 	triggerInterval[VolumeCreatePxRestart][1] = 10 * baseInterval
 
+	triggerInterval[ReallocateSharedMount][10] = 1 * baseInterval
+	triggerInterval[ReallocateSharedMount][9] = 3 * baseInterval
+	triggerInterval[ReallocateSharedMount][8] = 6 * baseInterval
+	triggerInterval[ReallocateSharedMount][7] = 9 * baseInterval
+	triggerInterval[ReallocateSharedMount][6] = 12 * baseInterval
+	triggerInterval[ReallocateSharedMount][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[ReallocateSharedMount][4] = 18 * baseInterval
+	triggerInterval[ReallocateSharedMount][3] = 21 * baseInterval
+	triggerInterval[ReallocateSharedMount][2] = 24 * baseInterval
+	triggerInterval[ReallocateSharedMount][1] = 27 * baseInterval
+
 	baseInterval = 300 * time.Minute
 
 	triggerInterval[UpgradeStork][10] = 1 * baseInterval
@@ -1793,19 +1952,27 @@ func populateIntervals() {
 	triggerInterval[AddStoragelessNode][0] = 0
 	triggerInterval[OCPStorageNodeRecycle][0] = 0
 	triggerInterval[NodeDecommission][0] = 0
+	triggerInterval[HAIncreaseAndRestartPX][0] = 0
+	triggerInterval[HAIncreaseAndCrashPX][0] = 0
+	triggerInterval[CrashPXDaemon][0] = 0
+	triggerInterval[NodeMaintenanceCycle][0] = 0
+	triggerInterval[PoolMaintenanceCycle][0] = 0
+	triggerInterval[StorageFullPoolExpansion][0] = 0
+	triggerInterval[HAIncreaseWithPVCResize][0] = 0
+	triggerInterval[ReallocateSharedMount][0] = 0
 }
 
 func isTriggerEnabled(triggerType string) (time.Duration, bool) {
-	var chaosLevel int
-	var ok bool
-	chaosLevel, ok = ChaosMap[triggerType]
+	chaosLevel, ok := ChaosMap[triggerType]
 	if !ok {
-		chaosLevel = Inst().ChaosLevel
-		log.Warnf("Chaos level for trigger [%s] not found in chaos map. Using global chaos level [%d]",
-			triggerType, Inst().ChaosLevel)
+		chaosLevel = defaultChaosLevel
 	}
-	if triggerInterval[triggerType][chaosLevel] != 0 {
-		return triggerInterval[triggerType][chaosLevel], true
+	if chaosLevel == 0 {
+		return 0, false
 	}
-	return triggerInterval[triggerType][chaosLevel], false
+	if baseInterval, ok := ChaosMap[BaseInterval]; ok {
+		return GetWaitTime(chaosLevel, time.Duration(baseInterval)*time.Minute), true
+	} else {
+		return GetWaitTime(chaosLevel, defaultBaseInterval), true
+	}
 }

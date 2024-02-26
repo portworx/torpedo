@@ -2,12 +2,13 @@ package tests
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/sched-ops/k8s/storage"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -77,8 +78,26 @@ var _ = Describe("{CreateAndRunMultipleFioOnVcluster}", func() {
 	vc := &vcluster.VCluster{}
 	var scName string
 	var appNS string
-	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 5      // Number of FIO Pods to run in parallel in a single iteration
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	batchCount := 2
+	totalIterations := 1
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
+	}
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",
@@ -220,7 +239,7 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 		NumJobs:   1,
 		Size:      "500m",
 		TimeBased: true,
-		Runtime:   "100s",
+		Runtime:   "600s",
 		EndFsync:  1,
 	}
 	JustBeforeEach(func() {
@@ -272,12 +291,39 @@ var _ = Describe("{CreateAndRunFioOnVclusterRWX}", func() {
 })
 
 var _ = Describe("{CreateAndRunMultipleFioOnManyVclusters}", func() {
-	const totalVclusters = 3
+	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	totalVclusters := 1
+	batchCount := 2
+	totalIterations := 1
+	if envValueVcluster != "" {
+		var err error
+		totalVclusters, err = strconv.Atoi(envValueVcluster)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
+			totalVclusters = 1
+		}
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
+	}
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
+	}
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
-	const totalIterations = 2 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 2      // Number of FIO Pods to run in parallel in a single iteration
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",
@@ -1071,13 +1117,40 @@ var _ = Describe("{AutopilotMultiplePvcResizeTestVCluster}", func() {
 })
 
 var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
-	const totalVclusters = 3
+	envValueVcluster := vcluster.ReadEnvVariable("NUM_VCLUSTERS")
+	envValueBatch := vcluster.ReadEnvVariable("VCLUSTER_PARALLEL_APPS")
+	envValueIterations := vcluster.ReadEnvVariable("VCLUSTER_TOTAL_ITERATIONS")
+	totalVclusters := 1
+	batchCount := 2
+	totalIterations := 1
+	if envValueVcluster != "" {
+		var err error
+		totalVclusters, err = strconv.Atoi(envValueVcluster)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueVcluster, err)
+			totalVclusters = 1
+		}
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			batchCount = 2
+		}
+	}
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			totalIterations = 1
+		}
+	}
 	var vClusters []*vcluster.VCluster
 	var scName string
 	var appNS string
 	var apRules []apapi.AutopilotRule
-	const totalIterations = 1 // Number of Iterations we want to run the FIO Pods for
-	const batchCount = 2      // Number of FIO Pods to run in parallel in a single iteration
 	fioOptions := vcluster.FIOOptions{
 		Name:      "mytest",
 		IOEngine:  "libaio",
@@ -1188,6 +1261,21 @@ var _ = Describe("{AutopilotMultipleFioOnManyVclusters}", func() {
 		for _, apRule := range apRules {
 			Inst().S.DeleteAutopilotRule(apRule.ObjectMeta.Name)
 			log.Errorf("Failed to delete Rule %v", apRule.ObjectMeta.Name)
+		}
+	})
+})
+
+var _ = Describe("{DeployMultipleKubevirtApps}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployMultipleKubevirtApps", "Create, Connect and run Multiple Kubevirt VMs", nil, 0)
+	})
+	It("Create Multiple FIO apps on VCluster and run it for 10 minutes", func() {
+		Inst().AppList = []string{"kubevirt-cloudsnap", "kubevirt-localsnap", "kubevirt-multi-disk", "kubevirt-ssie-vm", "kubevirt-ssie-io", "kubevirt-vm-pvc"}
+
+		for i := 1; i <= 20; i++ {
+			taskName := fmt.Sprintf("ssie-load-%d", i)
+			appNamespace := fmt.Sprintf("%v-%v", "multi-kubevirt-app", time.Now().Unix())
+			_ = ScheduleApplicationsOnNamespace(appNamespace, taskName)
 		}
 	})
 })

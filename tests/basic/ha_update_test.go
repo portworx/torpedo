@@ -6,7 +6,7 @@ import (
 
 	"github.com/portworx/torpedo/pkg/log"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/volume"
@@ -121,17 +121,13 @@ func performHaIncreaseRebootTest(testName string) {
 					}
 
 					if testName == "ha-inc-reboot-src" {
-						restartPX := false
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, REBOOT)
 					} else if testName == "ha-inc-restartpx-src" {
-						restartPX := true
-						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootSourceNode(nil, ctx, v, storageNodeMap, PX_RESTART)
 					} else if testName == "ha-inc-restartpx-tgt" {
-						restartPX := true
-						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, PX_RESTART)
 					} else {
-						restartPX := false
-						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, restartPX)
+						HaIncreaseRebootTargetNode(nil, ctx, v, storageNodeMap, REBOOT)
 					}
 				}
 			}

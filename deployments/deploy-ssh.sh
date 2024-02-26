@@ -4,6 +4,10 @@ if [ -z "${ENABLE_DASH}" ]; then
     ENABLE_DASH=true
 fi
 
+if [ -z "${ENABLE_GRAFANA}" ]; then
+    ENABLE_GRAFANA=false
+fi
+
 if [ -z "${DATA_INTEGRITY_VALIDATION_TESTS}" ]; then
     DATA_INTEGRITY_VALIDATION_TESTS=""
 fi
@@ -63,9 +67,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
@@ -170,6 +174,11 @@ if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
 fi
 
+SCALE_APP_TIMEOUT_ARG=""
+if [ -n "${SCALE_APP_TIMEOUT}" ]; then
+    SCALE_APP_TIMEOUT_ARG="--scale-app-timeout=$SCALE_APP_TIMEOUT"
+fi
+
 if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
     LICENSE_EXPIRY_TIMEOUT_HOURS="1h0m0s"
     echo "Using default license expiry timeout of ${LICENSE_EXPIRY_TIMEOUT_HOURS}"
@@ -218,11 +227,9 @@ if [ -z "$TORPEDO_JOB_NAME" ]; then
     TORPEDO_JOB_NAME="torpedo-daily-job"
 fi
 
-ANTHOS_ADMIN_WS_NODE=""
 if [ -n "$ANTHOS_ADMIN_WS_NODE" ]; then
     ANTHOS_ADMIN_WS_NODE="${ANTHOS_ADMIN_WS_NODE}"
 fi
-ANTHOS_INST_PATH=""
 if [ -n "$ANTHOS_INST_PATH" ]; then
     ANTHOS_INST_PATH="${ANTHOS_INST_PATH}"
 fi
@@ -303,6 +310,11 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+if [ "${SCHEDULER}" == "openshift" ]; then
+ JUNIT_REPORT_PATH="/tmp/junit_basic.xml"
+fi
+
 if [ -n "${PROVIDERS}" ]; then
   echo "Create configs for providers",${PROVIDERS}
   for i in ${PROVIDERS//,/ };do
@@ -367,14 +379,9 @@ K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
     NODE_DRIVER="ssh"
 fi
+
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
-        aks)
-            NODE_DRIVER="aks"
-            ;;
         oracle)
             NODE_DRIVER="oracle"
             ;;
@@ -493,7 +500,8 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
+            "--poll-progress-after", "10m",
+            --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
@@ -563,6 +571,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCALE_APP_TIMEOUT_ARG",
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -607,6 +616,14 @@ spec:
       value: "${AWS_SECRET_ACCESS_KEY}"
     - name: AWS_REGION
       value: "${AWS_REGION}"
+    - name: AWS_MINIO_ACCESS_KEY_ID
+      value: "${AWS_MINIO_ACCESS_KEY_ID}"
+    - name: AWS_MINIO_SECRET_ACCESS_KEY
+      value: "${AWS_MINIO_SECRET_ACCESS_KEY}"
+    - name: AWS_MINIO_REGION
+      value: "${AWS_MINIO_REGION}"
+    - name: AWS_MINIO_ENDPOINT
+      value: "${AWS_MINIO_ENDPOINT}"
     - name: KUBECONFIGS
       value: "${CLUSTER_CONFIGS}"
     - name: S3_ENDPOINT
@@ -643,6 +660,8 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
+    - name: VSPHERE_DATACENTER
+      value: "${VSPHERE_DATACENTER}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
     - name: CONTROL_PLANE_URL
@@ -721,6 +740,24 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: NUM_VCLUSTERS
+      value: "${NUM_VCLUSTERS}"
+    - name: VCLUSTER_PARALLEL_APPS
+      value: "${VCLUSTER_PARALLEL_APPS}"
+    - name: VCLUSTER_TOTAL_ITERATIONS
+      value: "${VCLUSTER_TOTAL_ITERATIONS}"
+    - name: NUM_ML_WORKLOADS
+      value: "${NUM_ML_WORKLOADS}"
+    - name: ML_WORKLOAD_RUNTIME
+      value: "${ML_WORKLOAD_RUNTIME}"
+    - name: KUBEVIRT_UPGRADE_VERSION
+      value: "${KUBEVIRT_UPGRADE_VERSION}"
+    - name: PX_BACKUP_MONGODB_USERNAME
+      value: "${PX_BACKUP_MONGODB_USERNAME}"
+    - name: PX_BACKUP_MONGODB_PASSWORD
+      value: "${PX_BACKUP_MONGODB_PASSWORD}"
+    - name: ENABLE_GRAFANA
+      value: "${ENABLE_GRAFANA}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
@@ -741,22 +778,54 @@ function describe_pod_then_exit {
   exit 1
 }
 
-for i in $(seq 1 900) ; do
-  printf .
-  state=`kubectl get pod torpedo | grep -v NAME | awk '{print $3}'`
-  if [ "$state" == "Error" ]; then
-    echo "Error: Torpedo finished with $state state"
+function terminate_pod_then_exit {
+    echo "Terminating Ginkgo test in Torpedo pod..."
+    # Fetch the PID of the Ginkgo test process
+    local test_pid
+    test_pid=$(kubectl exec torpedo -- pgrep -f 'torpedo/bin')
+    if [ "$test_pid" ]; then
+        # Using SIGKILL instead of SIGTERM to immediately stop the process.
+        # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
+        # but the intention here is to stop the process immediately.
+        echo "Sending SIGKILL to terminate Ginkgo test process with PID: $test_pid"
+        kubectl exec torpedo -- kill -SIGKILL "$test_pid"
+    fi
+    exit 1
+}
+
+trap terminate_pod_then_exit SIGTERM
+
+# The for loop is run in a background process (subshell) to allow the main script
+# to remain responsive to signals (SIGTERM, SIGINT) while the loop is executing.
+(
+    first_iteration=true
+    for i in $(seq 1 900); do
+        echo "Iteration: $i"
+        state=$(kubectl get pod torpedo | grep -v NAME | awk '{print $3}')
+
+        if [ "$state" == "Error" ]; then
+            echo "Error: Torpedo finished with $state state"
+            describe_pod_then_exit
+        elif [ "$state" == "Running" ]; then
+            # For the first iteration, display all logs. Later, only from 1 minute ago
+            if [ "$first_iteration" = true ]; then
+                echo "Logs from first iteration"
+                kubectl logs -f torpedo
+                first_iteration=false
+            else
+                echo "Logs from iteration: $i"
+                kubectl logs -f --since=1m torpedo
+            fi
+        elif [ "$state" == "Completed" ]; then
+            echo "Success: Torpedo finished with $state state"
+            exit 0
+        fi
+
+        sleep 1
+    done
+
+    echo "Error: Failed to wait for torpedo to start running..."
     describe_pod_then_exit
-  elif [ "$state" == "Running" ]; then
-    echo ""
-    kubectl logs -f torpedo
-  elif [ "$state" == "Completed" ]; then
-    echo "Success: Torpedo finished with $state state"
-    exit 0
-  fi
+) &
 
-  sleep 1
-done
-
-echo "Error: Failed to wait for torpedo to start running..."
-describe_pod_then_exit
+wait $!
