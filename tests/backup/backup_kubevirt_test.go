@@ -740,6 +740,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 		providers                    []string
 		namespacewithcorrectlabels   []string
 		namespacewithincorrectlabels []string
+		contextswithcorrectlabels    []*scheduler.Context
+		contextswithincorrectlabels  []*scheduler.Context
 		//controlChannel               chan string
 		//errorGroup                   *errgroup.Group
 		nodeSelectorPresent    map[string]string
@@ -766,8 +768,10 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
 				if i%2 == 0 {
 					namespacewithcorrectlabels = append(namespacewithcorrectlabels, appCtx.ScheduleOptions.Namespace)
+					contextswithcorrectlabels = append(contextswithcorrectlabels, appCtx)
 				} else {
 					namespacewithincorrectlabels = append(namespacewithincorrectlabels, appCtx.ScheduleOptions.Namespace)
+					contextswithincorrectlabels = append(contextswithincorrectlabels, appCtx)
 				}
 			}
 		}
@@ -899,8 +903,31 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 			restoreAll := fmt.Sprintf("%s-%s", "auto-restore-all", RandomString(6))
 			restoreNames = append(restoreNames, restoreAll)
 			log.InfoD("Restoring the [%s] backup", backupNames[0])
-			err = CreateRestoreWithValidation(ctx, restoreAll, backupNames[0], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+			err = CreateRestore(restoreAll, backupNames[0], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreAll, backupNames[0]))
+		})
+
+		Step("Verifying contexts only for the VMs expected to be running", func() {
+			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range contextswithcorrectlabels {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+			}
+			for _, eachRestoreContext := range expectedRestoredAppContexts {
+				errorChan := make(chan error, 50)
+				ValidateContext(eachRestoreContext, &errorChan)
+				for err := range errorChan {
+					log.FailOnError(err, "Expected this context to be successfully restored")
+				}
+			}
+		})
+
+		Step("Validating nodes for for all pods", func() {
+			log.Infof("Just adding a placeholder for now")
 		})
 
 	})
