@@ -872,7 +872,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 					return
 				}
 				for _, vm := range vms {
-					err = AddNodeToVirtualMachine(vm, nodeSelectorPresent, ctx)
+					err = AddNodeToVirtualMachine(vm, nodeSelectorNotPresent, ctx)
 					log.FailOnError(err, "Unable to apply node selector to VM")
 				}
 			}
