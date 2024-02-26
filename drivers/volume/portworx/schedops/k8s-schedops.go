@@ -256,7 +256,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 				return nil, true, fmt.Errorf("failed to validate mount in pod. Err: %v", err)
 			}
 		}
-
+		log.Infof("Snigdha14")
 		lenValidatedPods := len(resp)
 		lenExpectedPods := len(pods)
 		// in case we have a Deployment/ReplicaSet or StatefulSet the expected pods are the same as set in
@@ -280,6 +280,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 					lenExpectedPods = int(*st.Spec.Replicas)
 				}
 			}
+			log.Infof("Snigdha15")
 			// in case we have more pods for a non shared volume we expect only one of them to be ready
 			if !vol.Shared {
 				lenExpectedPods = 1
@@ -295,7 +296,7 @@ func (k *k8sSchedOps) ValidateVolumeSetup(vol *volume.Volume, d node.Driver) err
 	if _, err := task.DoRetryWithTimeout(t, defaultTimeout, defaultRetryInterval); err != nil {
 		return err
 	}
-
+	log.Infof("Snigdha3")
 	return nil
 }
 

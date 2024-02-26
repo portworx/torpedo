@@ -10,48 +10,22 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"math/rand"
-	"net/http"
-	"regexp"
-	"runtime"
 
 	"cloud.google.com/go/storage"
-	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-	"github.com/portworx/torpedo/pkg/stats"
-	optest "github.com/libopenstorage/operator/pkg/util/test"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	kubevirtv1 "kubevirt.io/api/core/v1"
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"github.com/portworx/torpedo/pkg/s3utils"
-	storageapi "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	context1 "context"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -62,28 +36,54 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/pborman/uuid"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
-	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/pkg/jirautils"
-	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/drivers/volume"
+	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/sirupsen/logrus"
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -94,13 +94,13 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	context1 "context"
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
@@ -659,88 +659,77 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
-		var timeout time.Duration
-		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
-		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if Inst().ScaleAppTimeout != time.Duration(0) {
-			timeout = Inst().ScaleAppTimeout
-		} else if ctx.ReadinessTimeout == time.Duration(0) {
-			timeout = appScaleFactor * defaultTimeout
-		} else {
-			timeout = appScaleFactor * ctx.ReadinessTimeout
+	log.Infof("Snigdha1")
+	var timeout time.Duration
+	log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
+	appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+	if Inst().ScaleAppTimeout != time.Duration(0) {
+		timeout = Inst().ScaleAppTimeout
+	} else if ctx.ReadinessTimeout == time.Duration(0) {
+		timeout = appScaleFactor * defaultTimeout
+	} else {
+		timeout = appScaleFactor * ctx.ReadinessTimeout
+	}
+	log.Infof("Snigdha2")
+	if !ctx.SkipVolumeValidation {
+		log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
+		ValidateVolumes(ctx, errChan...)
+	}
+	log.Infof("Snigdha311")
+
+	err1 := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+	if err1 != nil {
+		PrintDescribeContext(ctx)
+		processError(err1, errChan...)
+		return
+	}
+	log.Infof("Snigdha3")
+
+	// Validating Topology Labels for apps if Topology is enabled
+	if len(Inst().TopologyLabels) > 0 {
+
+		err := Inst().S.ValidateTopologyLabel(ctx)
+		if err != nil {
+			processError(err, errChan...)
+			return
 		}
 
-		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
-				ValidateVolumes(ctx, errChan...)
-			}
-		})
+	}
+	//stepLog = fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key)
 
-		stepLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
+	if ctx.SkipVolumeValidation {
+		return
+	}
+	log.Infof("Snigdha10")
+	log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			if err != nil {
-				PrintDescribeContext(ctx)
-				processError(err, errChan...)
-				return
-			}
-		})
-
-		// Validating Topology Labels for apps if Topology is enabled
-		if len(Inst().TopologyLabels) > 0 {
-			stepLog = fmt.Sprintf("validate topology labels for %s app", ctx.App.Key)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				err := Inst().S.ValidateTopologyLabel(ctx)
-				if err != nil {
-					processError(err, errChan...)
-					return
-				}
-			})
+	var vols []*volume.Volume
+	var err error
+	t := func() (interface{}, bool, error) {
+		vols, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", true, err
 		}
-		stepLog = fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key)
+		return "", false, nil
+	}
+	log.Infof("Snigdha11")
+	if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+		log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+		processError(err, errChan...)
+	}
 
-		Step(stepLog, func() {
-			if ctx.SkipVolumeValidation {
-				return
-			}
-			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
+	for _, vol := range vols {
 
-			var vols []*volume.Volume
-			var err error
-			t := func() (interface{}, bool, error) {
-				vols, err = Inst().S.GetVolumes(ctx)
-				if err != nil {
-					return "", true, err
-				}
-				return "", false, nil
-			}
+		err := Inst().V.ValidateVolumeSetup(vol)
+		if err != nil {
+			processError(err, errChan...)
+		}
 
-			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
-				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-				processError(err, errChan...)
-			}
+	}
+	log.Infof("Snigdha12 end ")
 
-			for _, vol := range vols {
-				stepLog = fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol)
-				Step(stepLog, func() {
-					log.Infof(stepLog)
-					err := Inst().V.ValidateVolumeSetup(vol)
-					if err != nil {
-						processError(err, errChan...)
-					}
-				})
-			}
-		})
+	ValidatePxPodRestartCount(ctx, errChan...)
 
-		Step("Validate Px pod restart count", func() {
-			ValidatePxPodRestartCount(ctx, errChan...)
-		})
-	})
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -1030,71 +1019,69 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	Step("For validation of an app's volumes", func() {
-		var err error
-		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			var vols []*volume.Volume
-			t := func() (interface{}, bool, error) {
-				vols, err = Inst().S.GetVolumes(ctx)
-				if err != nil {
-					return "", true, err
-				}
-				return "", false, nil
-			}
 
-			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
-				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-				processError(err, errChan...)
-			}
-			volScaleFactor := 1
-			if len(vols) > 10 {
-				// Take into account the number of volumes in the app. More volumes will
-				// take longer to format if the backend storage has limited bandwidth. Even if the
-				// GlobalScaleFactor is 1, high number of volumes in a single app instance
-				// may slow things down.
-				volScaleFactor = len(vols) / 10
-				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
-			}
-			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-			// If provisioner is IBM increase the timeout to 8 min
-			if Inst().Provisioner == "ibm" {
-				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
-			} else {
-				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
-			}
-			if err != nil {
-				PrintDescribeContext(ctx)
-				processError(err, errChan...)
-			}
-		})
+	var err error
 
-		var vols map[string]map[string]string
-		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
-			vols, err = Inst().S.GetVolumeParameters(ctx)
-			if err != nil {
-				processError(err, errChan...)
-			}
-		})
-
-		for vol, params := range vols {
-			if Inst().ConfigMap != "" {
-				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				if err != nil {
-					processError(err, errChan...)
-				}
-			}
-			if ctx.RefreshStorageEndpoint {
-				params["refresh-endpoint"] = "true"
-			}
-			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateVolume(vol, params)
-				if err != nil {
-					PrintDescribeContext(ctx)
-					processError(err, errChan...)
-				}
-			})
+	var vols1 []*volume.Volume
+	t := func() (interface{}, bool, error) {
+		vols1, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", true, err
 		}
-	})
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+		log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+		processError(err, errChan...)
+	}
+	volScaleFactor := 1
+	if len(vols1) > 10 {
+		// Take into account the number of volumes in the app. More volumes will
+		// take longer to format if the backend storage has limited bandwidth. Even if the
+		// GlobalScaleFactor is 1, high number of volumes in a single app instance
+		// may slow things down.
+		volScaleFactor = len(vols1) / 10
+		log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+	}
+	scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
+	// If provisioner is IBM increase the timeout to 8 min
+	if Inst().Provisioner == "ibm" {
+		err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+	} else {
+		err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+	}
+	if err != nil {
+		PrintDescribeContext(ctx)
+		processError(err, errChan...)
+	}
+
+	var vols map[string]map[string]string
+
+	vols, err = Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		processError(err, errChan...)
+	}
+
+	for vol, params := range vols {
+		if Inst().ConfigMap != "" {
+			params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			if err != nil {
+				processError(err, errChan...)
+			}
+		}
+		if ctx.RefreshStorageEndpoint {
+			params["refresh-endpoint"] = "true"
+		}
+
+		err = Inst().V.ValidateCreateVolume(vol, params)
+		if err != nil {
+			PrintDescribeContext(ctx)
+			processError(err, errChan...)
+		}
+
+	}
+
 }
 
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
@@ -1710,6 +1697,7 @@ func PrintDescribeContext(ctx *scheduler.Context) {
 		log.Warnf("Context %s Details:", ctx.App.Key)
 		log.Warnf(descOut)
 	}
+	log.Infof("Snigdha4")
 
 }
 
@@ -1817,7 +1805,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 			StorageProvisioner: Inst().Provisioner,
 			Namespace:          namespace,
 		}
-		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged")
+		log.Infof("ScheduleOptions: Scheduling Apps with hyper-converged %v", options)
 		return options
 	}
 }
@@ -1832,30 +1820,29 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var contexts []*scheduler.Context
 	var taskName string
 	var err error
-	Step("schedule applications", func() {
-		if Inst().IsPDSApps {
-			log.InfoD("Scheduling PDS Apps...")
-			pdsapps, err := Inst().Pds.DeployPDSDataservices()
-			if err != nil {
-				processError(err, errChan...)
-			}
-			contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
-			if err != nil {
-				processError(err, errChan...)
-			}
-		} else {
-			options := CreateScheduleOptions("", errChan...)
-			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-			contexts, err = Inst().S.Schedule(taskName, options)
-			// Need to check err != nil before calling processError
-			if err != nil {
-				processError(err, errChan...)
-			}
+
+	if Inst().IsPDSApps {
+		log.InfoD("Scheduling PDS Apps...")
+		pdsapps, err := Inst().Pds.DeployPDSDataservices()
+		if err != nil {
+			processError(err, errChan...)
 		}
-		if len(contexts) == 0 {
-			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+		contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+		if err != nil {
+			processError(err, errChan...)
 		}
-	})
+	} else {
+		options := CreateScheduleOptions("", errChan...)
+		taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		contexts, err = Inst().S.Schedule(taskName, options)
+		// Need to check err != nil before calling processError
+		if err != nil {
+			processError(err, errChan...)
+		}
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
 
 	return contexts
 }
@@ -2401,45 +2388,44 @@ func TogglePrometheusInStc() error {
 
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
-	Step("Validating portworx pods restart count ...", func() {
-		Step("Getting current restart counts for portworx pods and matching", func() {
-			pxLabel := make(map[string]string)
-			pxLabel[labelNameKey] = defaultStorageProvisioner
-			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
-			if err != nil {
-				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
-			}
 
-			// Validate portworx pod restart count after test
-			for pod, value := range pxPodRestartCountMap {
-				n, err := node.GetNodeByIP(pod.Status.HostIP)
-				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
-				if n.PxPodRestartCount != value {
-					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
-					if Inst().PortworxPodRestartCheck {
-						log.Fatalf("portworx pods restart [%d] times", value)
-					}
-				}
-			}
+	pxLabel := make(map[string]string)
+	pxLabel[labelNameKey] = defaultStorageProvisioner
+	pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+	//Using fatal verification will abort longevity runs
+	if err != nil {
+		log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+	}
 
-			// Validate portworx operator pod check
-			pxLabel[labelNameKey] = portworxOperatorName
-			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
-			if err != nil {
-				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+	// Validate portworx pod restart count after test
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
+		if n.PxPodRestartCount != value {
+			log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
+			if Inst().PortworxPodRestartCheck {
+				log.Fatalf("portworx pods restart [%d] times", value)
 			}
-			for _, v := range pxPodRestartCountMap {
-				if v > 0 {
-					log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
-					if Inst().PortworxPodRestartCheck {
-						log.Fatalf("portworx operator pods restart [%d] times", v)
-					}
-				}
+		}
+	}
+
+	// Validate portworx operator pod check
+	pxLabel[labelNameKey] = portworxOperatorName
+	pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+	//Using fatal verification will abort longevity runs
+	if err != nil {
+		log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+	}
+	for _, v := range pxPodRestartCountMap {
+		if v > 0 {
+			log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
+			if Inst().PortworxPodRestartCheck {
+				log.Fatalf("portworx operator pods restart [%d] times", v)
 			}
-		})
-	})
+		}
+	}
+	log.Infof("Snigdha end of validate")
+
 }
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.

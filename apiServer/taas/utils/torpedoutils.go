@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
 	"math/rand"
 	"net/http"
@@ -165,6 +166,8 @@ func CollectSupport(c *gin.Context) {
 // ScheduleAppsAndValidate : This API schedules multiple applications on the cluster and validates them
 // context is created as a global context to be accessed later in further tests
 func ScheduleAppsAndValidate(c *gin.Context) {
+	var errors []error
+	errChan = make(chan error, 1000)
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Errorf("Error happened while doing InitInstance()"),
@@ -172,25 +175,36 @@ func ScheduleAppsAndValidate(c *gin.Context) {
 		return
 	}
 	appToRun := c.Param("appName")
+	log.Infof("The appname is %v", appToRun)
 	tests.Inst().AppList = []string{appToRun}
+	log.Infof("The applist is %v", tests.Inst().AppList)
 	context = tests.ScheduleApplications(testName)
+
 	for _, ctx := range context {
 		tests.ValidateContext(ctx, &errChan)
 	}
+
+	log.Infof("Snigdha1 Reached")
 	for err := range errChan {
+		log.Infof("Snigdha1 err channel")
 		errors = append(errors, err)
 	}
+	log.Infof("Snigdha2 err channel")
 	errStrings := make([]string, 0)
 	for _, err := range errors {
+		log.Infof("Snigdha3 err channel")
 		if err != nil {
 			errStrings = append(errStrings, err.Error())
 		}
 	}
+	log.Infof("Snigdha4 err channel")
 	if len(errStrings) > 0 {
+		log.Infof("Snigdha5 err channel")
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": errStrings,
 		})
 	} else {
+		log.Infof("Snigdha6 err channel")
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Apps Created and Validated successfully",
 		})
