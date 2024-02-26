@@ -105,8 +105,6 @@ var AllBuilders = map[string]PxBackupEventBuilder{
 	EventRestore:                        eventRestore,
 }
 
-var ctx, _ = backup.GetAdminCtxFromSecret()
-
 type PxBackupEventBuilder func(*PxBackupLongevity) (error, string, EventData)
 
 func GetLongevityInputParams() PxBackupLongevity {
@@ -152,10 +150,7 @@ func GetLongevityEventResponse() EventResponse {
 	return eventResponse
 }
 
-// All longevity utilities
-
-// ...
-
+// GetRandomNamespacesForBackup returns random namespace(s) for backup
 func GetRandomNamespacesForBackup() []string {
 	var allNamespacesForBackupMap = make(map[string]bool)
 	var allNamepsacesForBackup []string
@@ -195,7 +190,6 @@ func UpdateEventResponse(eventResponse *EventResponse) {
 	} else {
 		eventResponse.Status = true
 	}
-	// LogEventData(eventResponse)
 }
 
 // All longevity events
@@ -228,6 +222,8 @@ func eventScheduleApps(inputsForEventBuilder *PxBackupLongevity) (error, string,
 // Event to validate app but later will be changed to create handler and start data for app
 func eventValidateScheduleApplication(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
 	eventData := &EventData{}
 	_, _ = ValidateApplicationsStartData(inputsForEventBuilder.ApplicationData.SchedulerContext, ctx)
 	return nil, "", *eventData
@@ -241,6 +237,9 @@ func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevit
 	var cloudCredUidList []string
 	var providers = GetBackupProviders()
 	var backupLocationUID string
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	log.InfoD("Creating cloud credentials and backup location")
 	for _, provider := range providers {
@@ -272,9 +271,11 @@ func eventAddCredentialandBackupLocation(inputsForEventBuilder *PxBackupLongevit
 func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 	eventData := &EventData{}
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	log.Infof("Adding Clusters for backup")
-	err := CreateApplicationClusters(BackupOrgID, "", "", ctx)
+	err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 	if err != nil {
 		return err, "", *eventData
 	}
@@ -283,7 +284,7 @@ func eventAddSourceAndDestinationCluster(inputsForEventBuilder *PxBackupLongevit
 		return err, "", *eventData
 	}
 	if clusterStatus != api.ClusterInfo_StatusInfo_Online {
-		return fmt.Errorf("Cluster %s is not online", SourceClusterName), fmt.Sprintf("Cluster added but not online"), *eventData
+		return fmt.Errorf("Cluster %s is not online. Cluster Status: [%s]", SourceClusterName, clusterStatus), fmt.Sprintf("Cluster added but not online"), *eventData
 	}
 
 	clusterUid, err := Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
@@ -301,6 +302,8 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 
 	eventData := &EventData{}
 	var backupNames []string
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
 
 	log.Infof("Creating a manual backup")
 	for _, namespace := range inputsForEventBuilder.BackupData.Namespaces {
@@ -332,11 +335,14 @@ func eventCreateBackup(inputsForEventBuilder *PxBackupLongevity) (error, string,
 func eventRestore(inputsForEventBuilder *PxBackupLongevity) (error, string, EventData) {
 	defer GinkgoRecover()
 
+	ctx, err := backup.GetAdminCtxFromSecret()
+	log.FailOnError(err, "Fetching px-central-admin ctx")
+
 	eventData := &EventData{}
 
 	restoreName := fmt.Sprintf("%s-%s-%s", RestoreNamePrefix, inputsForEventBuilder.BackupData.BackupName, RandomString(5))
 	appContextsExpectedInBackup := FilterAppContextsByNamespace(inputsForEventBuilder.ApplicationData.SchedulerContext, inputsForEventBuilder.BackupData.Namespaces)
-	err := CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
+	err = CreateRestoreWithValidation(ctx, restoreName, inputsForEventBuilder.BackupData.BackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, appContextsExpectedInBackup)
 	if err != nil {
 		return err, fmt.Sprintf("Restore failed for %s", restoreName), *eventData
 	}
