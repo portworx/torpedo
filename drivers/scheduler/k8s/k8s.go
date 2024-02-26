@@ -309,8 +309,10 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 
 	nodes, err := k8sCore.GetNodes()
 	if err != nil {
+		log.Infof("Nodes Init Error: %v", err)
 		return err
 	}
+	log.Infof("Nodes Init: [%v - %v]", len(nodes.Items), nodes.Items)
 
 	for _, n := range nodes.Items {
 		if err = k.AddNewNode(n); err != nil {

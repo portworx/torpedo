@@ -7452,6 +7452,7 @@ func StartTorpedoTest(testName, testDescription string, tags map[string]string, 
 // enableAutoFSTrim on supported PX version.
 func EnableAutoFSTrim() {
 	nodes := node.GetWorkerNodes()
+	log.Infof("Nodes EnableAutoFSTrim: [%v - %v]", len(nodes), nodes)
 	var isPXNodeAvailable bool
 	for _, pxNode := range nodes {
 		isPxInstalled, err := Inst().V.IsDriverInstalled(pxNode)
