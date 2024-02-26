@@ -908,6 +908,15 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 		})
 
 		Step("Verifying contexts only for the VMs expected to be running", func() {
+			defer func() {
+				log.InfoD("switching to default context")
+				err := SetClusterContext("")
+				log.FailOnError(err, "failed to SetClusterContext to default cluster")
+			}()
+
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+
 			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 			for _, scheduledAppContext := range contextswithcorrectlabels {
 				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
@@ -923,11 +932,35 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 				for err := range errorChan {
 					log.FailOnError(err, "Expected this context to be successfully restored")
 				}
+				err = CompareNodesOfVM(nodeToBeUsed, eachRestoreContext.ScheduleOptions.Nodes)
+				log.FailOnError(err, "Nodes are not assigned as per node selector defined")
+
 			}
 		})
 
-		Step("Validating nodes for for all pods", func() {
-			log.Infof("Just adding a placeholder for now")
+		Step("Verifying contexts only for the VMs are NOT expected to be running", func() {
+			defer func() {
+				log.InfoD("switching to default context")
+				err := SetClusterContext("")
+				log.FailOnError(err, "failed to SetClusterContext to default cluster")
+			}()
+			err := SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+
+			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range contextswithincorrectlabels {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+			}
+			for _, eachRestoreContext := range expectedRestoredAppContexts {
+				log.Infof("Nodes - [%+v]", eachRestoreContext.ScheduleOptions.Nodes)
+				log.Infof("Whole - [%+v]", eachRestoreContext)
+
+			}
 		})
 
 	})

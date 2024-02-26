@@ -7293,3 +7293,12 @@ func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[stri
 
 	return nil
 }
+
+// Compare nodes
+func CompareNodesOfVM(expectedNode node.Node, actualNodes []node.Node) error {
+	if expectedNode.Name == actualNodes[0].Name {
+		return nil
+	} else {
+		return fmt.Errorf("Expected Node - [%s], Actual Node - [%s]", expectedNode.Name, actualNodes[0].Name)
+	}
+}
