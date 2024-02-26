@@ -9,47 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
-	"cloud.google.com/go/storage"
-	k8storage "github.com/portworx/sched-ops/k8s/storage"
-
-	"github.com/portworx/torpedo/drivers/node/gke"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-
-	"github.com/portworx/torpedo/pkg/stats"
-
-	optest "github.com/libopenstorage/operator/pkg/util/test"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-
-	kubevirtv1 "kubevirt.io/api/core/v1"
-
-	"math/rand"
-	"net/http"
-	"regexp"
-	"runtime"
-
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
-
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -60,14 +19,44 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"math/rand"
+	"net/http"
+	"regexp"
+	"runtime"
 
+	"cloud.google.com/go/storage"
+	k8storage "github.com/portworx/sched-ops/k8s/storage"
+
+	"github.com/portworx/torpedo/drivers/node/gke"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"github.com/portworx/torpedo/pkg/stats"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
+	"github.com/portworx/sched-ops/k8s/operator"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	kubevirtv1 "kubevirt.io/api/core/v1"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
+	"go.uber.org/multierr"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/pborman/uuid"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
+	"github.com/portworx/torpedo/drivers/pds"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"github.com/portworx/sched-ops/k8s/apps"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"github.com/portworx/torpedo/pkg/s3utils"
-
 	storageapi "k8s.io/api/storage/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/Azure/azure-storage-blob-go/azblob"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -94,6 +83,7 @@ import (
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/jirautils"
 	"github.com/portworx/torpedo/pkg/osutils"
+	"github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/pkg/pureutils"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -111,17 +101,18 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	context1 "context"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
 
-	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
+	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import gke driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
@@ -140,10 +131,18 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
-	// import scheduler drivers to invoke it's init
+	// import ocp scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
-	"github.com/portworx/torpedo/drivers/volume"
+
+	// import aks scheduler driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import gke scheduler driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
+	// import rke scheduler drivers to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
@@ -174,12 +173,6 @@ import (
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
-
-	context1 "context"
-
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -1953,7 +1946,8 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-func ValidateApplicationsStartData(schedulerContexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
+
+func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
 	log.Infof("Is backup longevity run [%v]", IsBackupLongevityRun)
 	// Skipping map reset in case of longevity run
@@ -1965,7 +1959,7 @@ func ValidateApplicationsStartData(schedulerContexts []*scheduler.Context, conte
 	log.InfoD("Validate applications")
 	for _, ctx := range schedulerContexts {
 		ValidateContext(ctx)
-		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
 		if err != nil {
 			log.InfoD("Some error occurred - [%s]", err)
 		}
@@ -1975,7 +1969,7 @@ func ValidateApplicationsStartData(schedulerContexts []*scheduler.Context, conte
 			continue
 		}
 		if appInfo.StartDataSupport {
-			appHandler, _ := appDriver.GetApplicationDriver(
+			appHandler, err := appDriver.GetApplicationDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -1983,7 +1977,16 @@ func ValidateApplicationsStartData(schedulerContexts []*scheduler.Context, conte
 				appInfo.Port,
 				appInfo.DBName,
 				appInfo.NodePort,
-				appInfo.Namespace)
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
+			if err != nil {
+				log.Infof("Error - %s", err.Error())
+			}
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				log.FailOnError(err, "Some error occured while starting the VM")
+			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 		}
@@ -3309,10 +3312,10 @@ func SetClusterContext(clusterConfigPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
-	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
-		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
+	} else if gkeSchedDriver, ok := Inst().S.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeSchedDriver.SSH)
 		if err != nil {
-			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+			return fmt.Errorf("failed to switch to context. RefreshDriver (gkeSchedDriver.SSH) Error: [%v]", err)
 		}
 	}
 
@@ -4462,7 +4465,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
+		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
@@ -7514,7 +7517,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if currentSpecReport.Failed() {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-
 	// Cleanup all the namespaces created by the testcase
 	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
@@ -7536,7 +7538,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
-
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
