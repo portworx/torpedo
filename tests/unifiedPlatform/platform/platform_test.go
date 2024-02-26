@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
@@ -66,6 +67,25 @@ var _ = Describe("{TenantsCRUD}", func() {
 //		defer EndTorpedoTest()
 //	})
 //})
+
+var _ = Describe("{DeployDataServicesOnDemand}", func() {
+	steplog := "Data service deployment"
+	JustBeforeEach(func() {
+		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
+	})
+
+	log.InfoD(steplog)
+	It("Deploy and Validate DataService", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			_, err := dslibs.DeployDataService(ds)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
 
 var _ = Describe("{CreateAccount}", func() {
 	JustBeforeEach(func() {

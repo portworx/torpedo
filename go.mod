@@ -1,6 +1,8 @@
 module github.com/portworx/torpedo
 
-go 1.21
+go 1.21.4
+
+toolchain go1.21.7
 
 require (
 	cloud.google.com/go/storage v1.30.1

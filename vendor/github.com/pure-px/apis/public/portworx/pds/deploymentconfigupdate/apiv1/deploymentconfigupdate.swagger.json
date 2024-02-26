@@ -1,0 +1,713 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/pds/deploymentconfigupdate/apiv1/deploymentconfigupdate.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "DeploymentConfigUpdateService"
+        }
+    ],
+    "paths": {
+        "/pds/v1/deploymentConfigUpdates": {
+            "get": {
+                "summary": "ListDeploymentConfigUpdates API returns a list of deployment config updates",
+                "operationId": "DeploymentConfigUpdateService_ListDeploymentConfigUpdates",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListDeploymentConfigUpdatesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "deploymentId",
+                        "description": "UID of the deployment",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "DeploymentConfigUpdateService"
+                ]
+            }
+        },
+        "/pds/v1/deploymentConfigUpdates/{id}": {
+            "get": {
+                "summary": "GetDeploymentConfigUpdate API returns a deployment config update by id",
+                "operationId": "DeploymentConfigUpdateService_GetDeploymentConfigUpdate",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1DeploymentConfigUpdate"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the deployment config update",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "DeploymentConfigUpdateService"
+                ]
+            }
+        },
+        "/pds/v1/deploymentConfigUpdates/{id}:retry": {
+            "post": {
+                "summary": "RetryDeploymentConfigUpdate API retries a deployment config update",
+                "operationId": "DeploymentConfigUpdateService_RetryDeploymentConfigUpdate",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1DeploymentConfigUpdate"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the deployment config update",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DeploymentConfigUpdateServiceRetryDeploymentConfigUpdateBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "DeploymentConfigUpdateService"
+                ]
+            }
+        },
+        "/pds/v1/deployments/{deploymentConfigUpdate.config.deploymentMeta.uid}/deploymentConfigUpdates": {
+            "put": {
+                "summary": "CreateDeploymentConfigUpdate API creates a deployment config update\n(-- api-linter: core::0133::http-method=disabled\n    aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)",
+                "operationId": "DeploymentConfigUpdateService_CreateDeploymentConfigUpdate",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1DeploymentConfigUpdate"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "deploymentConfigUpdate.config.deploymentMeta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "$ref": "#/components/schemas/v1Meta"
+                                    },
+                                    "config": {
+                                        "type": "object",
+                                        "properties": {
+                                            "deploymentMeta": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string",
+                                                        "description": "Name of the resource."
+                                                    },
+                                                    "description": {
+                                                        "type": "string",
+                                                        "description": "Description of the resource."
+                                                    },
+                                                    "resourceVersion": {
+                                                        "type": "string",
+                                                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                                                    },
+                                                    "createTime": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "description": "Creation time of the object.",
+                                                        "readOnly": true
+                                                    },
+                                                    "updateTime": {
+                                                        "type": "string",
+                                                        "format": "date-time",
+                                                        "description": "Update time of the object.",
+                                                        "readOnly": true
+                                                    },
+                                                    "labels": {
+                                                        "type": "object",
+                                                        "additionalProperties": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": "Labels to apply to the object."
+                                                    },
+                                                    "annotations": {
+                                                        "type": "object",
+                                                        "additionalProperties": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": "Annotations for the object."
+                                                    },
+                                                    "parentReference": {
+                                                        "$ref": "#/components/schemas/v1Reference"
+                                                    },
+                                                    "resourceNames": {
+                                                        "type": "object",
+                                                        "additionalProperties": {
+                                                            "type": "string"
+                                                        },
+                                                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                        "readOnly": true
+                                                    }
+                                                },
+                                                "title": "Metadata of the deployment resource"
+                                            },
+                                            "deploymentConfig": {
+                                                "$ref": "#/components/schemas/pdsdeploymentv1Config"
+                                            }
+                                        },
+                                        "title": "Config of the deployment for which config update is requested"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1Status"
+                                    }
+                                },
+                                "title": "Config of the deployment for which config update is requested"
+                            }
+                        }
+                    },
+                    "description": "Config of the deployment for which config update is requested",
+                    "required": true
+                },
+                "tags": [
+                    "DeploymentConfigUpdateService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "DeploymentConfigUpdateServiceRetryDeploymentConfigUpdateBody": {
+                "type": "object",
+                "title": "RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate"
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "pdsdeploymentconfigupdatev1Config": {
+                "type": "object",
+                "properties": {
+                    "deploymentMeta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "deploymentConfig": {
+                        "$ref": "#/components/schemas/pdsdeploymentv1Config"
+                    }
+                },
+                "title": "Config of the desired deployment configuration"
+            },
+            "pdsdeploymentconfigupdatev1Status": {
+                "type": "object",
+                "properties": {
+                    "errorCode": {
+                        "type": "string",
+                        "description": "Error Code is a short string that represents the error."
+                    },
+                    "errorMessage": {
+                        "type": "string",
+                        "description": "Error Message is a description of the error."
+                    },
+                    "retryCount": {
+                        "type": "integer",
+                        "format": "int32",
+                        "title": "Number of times the deployment config update has been retried"
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1StatusPhase"
+                    }
+                },
+                "title": "Status of the deployment config update"
+            },
+            "pdsdeploymentconfigupdatev1StatusPhase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "FAILED",
+                    "QUEUED",
+                    "COMPLETED",
+                    "REQUEUED"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "Enum for Phase of the Deployment config update.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - FAILED: Deployment config update failed.\n - QUEUED: Deployment config update is queued.\n - COMPLETED: Deployment config update is completed.\n - REQUEUED: Deployment config update is requeued."
+            },
+            "pdsdeploymentv1Config": {
+                "type": "object",
+                "properties": {
+                    "references": {
+                        "$ref": "#/components/schemas/v1References"
+                    },
+                    "tlsEnabled": {
+                        "type": "boolean",
+                        "description": "Flag to enable TLS for the Data Service."
+                    },
+                    "deploymentTopologies": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1DeploymentTopology"
+                        },
+                        "description": "A deployment topology contains a number of nodes that have various attributes as a collective group."
+                    }
+                },
+                "description": "Desired configuration of the Deployment."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string",
+                        "description": "A URL/resource name that uniquely identifies the type of the serialized\nprotocol buffer message. This string must contain at least\none \"/\" character. The last segment of the URL's path must represent\nthe fully qualified name of the type (as in\n`path/google.protobuf.Duration`). The name should be in a canonical form\n(e.g., leading \".\" is not accepted).\n\nIn practice, teams usually precompile into the binary all types that they\nexpect it to use in the context of Any. However, for URLs which use the\nscheme `http`, `https`, or no scheme, one can optionally set up a type\nserver that maps type URLs to message definitions as follows:\n\n* If no scheme is provided, `https` is assumed.\n* An HTTP GET on the URL must yield a [google.protobuf.Type][]\n  value in binary format, or produce an error.\n* Applications are allowed to cache lookup results based on the\n  URL, or have them precompiled into a binary to avoid any\n  lookup. Therefore, binary compatibility needs to be preserved\n  on changes to types. (Use versioned type names to manage\n  breaking changes.)\n\nNote: this functionality is not currently available in the official\nprotobuf release, and it is not used for type URLs beginning with\ntype.googleapis.com. As of May 2023, there are no widely used type server\nimplementations and no plans to implement one.\n\nSchemes other than `http`, `https` (or the empty scheme) might be\nused with implementation specific semantics."
+                    }
+                },
+                "additionalProperties": {},
+                "description": "`Any` contains an arbitrary serialized protocol buffer message along with a\nURL that describes the type of the serialized message.\n\nProtobuf library provides support to pack/unpack Any values in the form\nof utility functions or additional generated methods of the Any type.\n\nExample 1: Pack and unpack a message in C++.\n\n    Foo foo = ...;\n    Any any;\n    any.PackFrom(foo);\n    ...\n    if (any.UnpackTo(&foo)) {\n      ...\n    }\n\nExample 2: Pack and unpack a message in Java.\n\n    Foo foo = ...;\n    Any any = Any.pack(foo);\n    ...\n    if (any.is(Foo.class)) {\n      foo = any.unpack(Foo.class);\n    }\n    // or ...\n    if (any.isSameTypeAs(Foo.getDefaultInstance())) {\n      foo = any.unpack(Foo.getDefaultInstance());\n    }\n\n Example 3: Pack and unpack a message in Python.\n\n    foo = Foo(...)\n    any = Any()\n    any.Pack(foo)\n    ...\n    if any.Is(Foo.DESCRIPTOR):\n      any.Unpack(foo)\n      ...\n\n Example 4: Pack and unpack a message in Go\n\n     foo := &pb.Foo{...}\n     any, err := anypb.New(foo)\n     if err != nil {\n       ...\n     }\n     ...\n     foo := &pb.Foo{}\n     if err := any.UnmarshalTo(foo); err != nil {\n       ...\n     }\n\nThe pack methods provided by protobuf library will by default use\n'type.googleapis.com/full.type.name' as the type URL and the unpack\nmethods only use the fully qualified type name after the last '/'\nin the type URL, for example \"foo.bar.com/x/y.z\" will yield type\nname \"y.z\".\n\nJSON\n====\nThe JSON representation of an `Any` value uses the regular\nrepresentation of the deserialized, embedded message, with an\nadditional field `@type` which contains the type URL. Example:\n\n    package google.profile;\n    message Person {\n      string first_name = 1;\n      string last_name = 2;\n    }\n\n    {\n      \"@type\": \"type.googleapis.com/google.profile.Person\",\n      \"firstName\": <string>,\n      \"lastName\": <string>\n    }\n\nIf the embedded message type is well-known and has a custom JSON\nrepresentation, that representation will be embedded adding a field\n`value` which holds the custom JSON in addition to the `@type`\nfield. Example (for message [google.protobuf.Duration][]):\n\n    {\n      \"@type\": \"type.googleapis.com/google.protobuf.Duration\",\n      \"value\": \"1.212s\"\n    }"
+            },
+            "v1DeploymentConfigUpdate": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1Status"
+                    }
+                },
+                "title": "DeploymentConfigUpdate represents a deployment config update resource"
+            },
+            "v1DeploymentTopology": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the deployment topology."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the deployment topology."
+                    },
+                    "replicas": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Number of replicas of data services."
+                    },
+                    "serviceType": {
+                        "type": "string",
+                        "description": "Service type are standard Kubernetes service types such as clusterIP, NodePort, load balancers, etc."
+                    },
+                    "serviceName": {
+                        "type": "string",
+                        "description": "Service name is the name of service as provided by user."
+                    },
+                    "loadBalancerSourceRanges": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Source IP ranges to use for the deployed Load Balancer."
+                    },
+                    "resourceTemplate": {
+                        "$ref": "#/components/schemas/v1Template"
+                    },
+                    "applicationTemplate": {
+                        "$ref": "#/components/schemas/v1Template"
+                    },
+                    "storageTemplate": {
+                        "$ref": "#/components/schemas/v1Template"
+                    }
+                },
+                "description": "A deployment topology contains a number of nodes that have various attributes as a collective group.\nThis is consumed in a deployment and the functionality is being controlled by the CRUD APIs of deployment."
+            },
+            "v1ListDeploymentConfigUpdatesResponse": {
+                "type": "object",
+                "properties": {
+                    "deploymentConfigUpdates": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1DeploymentConfigUpdate"
+                        },
+                        "title": "List of deployment config updates"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "title": "ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates"
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page number is the page number to return based on the size"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size is the maximum number of records to include per page"
+                    }
+                },
+                "title": "Request parameters for page-based pagination"
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total records without pagination available in the dataset"
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Current page number for this paginated response"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size used for pagination"
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total pages based on the page_size provided in the request"
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Next page if available in the dataset, -1 if unavailable"
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                    }
+                },
+                "title": "Metadata related to page based pagination for paginated API responses"
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+            },
+            "v1References": {
+                "type": "object",
+                "properties": {
+                    "targetClusterId": {
+                        "type": "string",
+                        "description": "UID of the target cluster in which Data Service will be deployed."
+                    },
+                    "imageId": {
+                        "type": "string",
+                        "description": "UID of the image to be used for the Data Service Deployment."
+                    },
+                    "projectId": {
+                        "type": "string",
+                        "description": "UID of the project to which DataService Deployment associated."
+                    },
+                    "restoreId": {
+                        "type": "string",
+                        "description": "UID of the restore id for the Deployment.",
+                        "readOnly": true
+                    }
+                },
+                "description": "References to other resources."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1Template": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "UID of the Template."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "Resource version of the template.",
+                        "readOnly": true
+                    },
+                    "values": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        },
+                        "description": "Values required for template."
+                    }
+                },
+                "description": "Template."
+            }
+        }
+    }
+}
