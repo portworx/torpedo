@@ -2344,9 +2344,6 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 						log.FailOnError(fmt.Errorf("Multipath device %v is still present", devicePath), "Multipath device %v should be deleted", devicePath)
 					}
 				}
-				output, err = runCmd(cmd, selectedNode)
-				log.FailOnError(err, "Failed to run multipath -ll command on node %v", selectedNode.Name)
-				log.InfoD("Output of multipath on provisioned node -ll command: %v", output)
 				//check if the device path is present in multipath
 				if strings.Contains(output, "failed faulty running") {
 					log.FailOnError(fmt.Errorf("Multipath device error not detected"), "Multipath device error should be detected")
