@@ -7278,7 +7278,7 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 	return nil
 }
 
-// AddNodeSelectorToApps applies node selector to the spec section for apps
+// AddNodeSelectorToApps applies node selector to the virtual machine
 func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[string]string, ctx context1.Context) error {
 	k8sKubevirt := kubevirt.Instance()
 
@@ -7294,7 +7294,7 @@ func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[stri
 	return nil
 }
 
-// Compare nodes
+// CompareNodeAndStatusOfVMInNamespace compares the status and Nodes of the VMI from a particular namespace
 func CompareNodeAndStatusOfVMInNamespace(namespace string, expectedNode node.Node, expectedState string, ctx context1.Context) error {
 	k8sKubevirt := kubevirt.Instance()
 
@@ -7308,8 +7308,15 @@ func CompareNodeAndStatusOfVMInNamespace(namespace string, expectedNode node.Nod
 		if err != nil {
 			return err
 		}
-		log.Infof("State of VM - [%v]", vmi.Status.Phase)
-		log.Infof("VM Details - [%+v]", vmi.Status)
+		log.Infof("Current state of [%s] is [%s]", vmi.Name, vmi.Status.Phase)
+		log.Infof("Node of [%s] is [%s]", vmi.Name, vmi.Status.NodeName)
+		if string(vmi.Status.Phase) == expectedState {
+			if expectedState == "Scheduling" {
+				return nil
+			}
+		} else {
+			return fmt.Errorf("VMI state Validation failed for [%s]. Expected State - [%s], State Found [%s]", vmi.Name, expectedState, vmi.Status.Phase)
+		}
 		if vmi.Status.NodeName != expectedNode.Name {
 			return fmt.Errorf("Node Validation failed for [%s]. Expected Node - [%s], Node Found [%s]", vmi.Name, expectedNode.Name, vmi.Status.NodeName)
 		}
