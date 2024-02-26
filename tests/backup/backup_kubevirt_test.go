@@ -711,20 +711,18 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 				output, err := RunCmdInVM(vm, "uname -a", ctx)
 				log.InfoD("Output of command in step - [%s]", output)
 				log.FailOnError(err, "Failed to run command in VM")
-				err = AddNodeToVirtualMachine(vm, map[string]string{"test": "NodeSelectorNew"}, ctx)
-				log.FailOnError(err, "Unable to apply node selector to VM")
 			}
 
-			//for namespace, appWithData := range NamespaceAppWithDataMap {
-			//	log.Infof("Found vm with data in %s", namespace)
-			//	appWithData[0].InsertBackupData(ctx, "default", []string{})
-			//}
+			for namespace, appWithData := range NamespaceAppWithDataMap {
+				log.Infof("Found vm with data in %s", namespace)
+				appWithData[0].InsertBackupData(ctx, "default", []string{})
+			}
 
 		})
 	})
 })
 
-// This testcase verifies backup and restore of Kubevirt VMs in different states like Running, Stopped, Restarting
+// This testcase verifies backup and restore of Kubevirt VMs in with node selector
 var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 
 	var (
@@ -973,7 +971,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 		log.FailOnError(err, "Unable to fetch backup UID")
 		// Delete backup to confirm that the user cannot delete the backup
 		_, err = DeleteBackup(backupNames[0], backupUid, BackupOrgID, ctx)
-		log.Infof("Error message - %s", err.Error())
+		log.FailOnError(err, "Unable to delete backups")
 
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
