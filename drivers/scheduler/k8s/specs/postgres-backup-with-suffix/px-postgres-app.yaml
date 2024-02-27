@@ -1,7 +1,10 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
+  {{ if .Suffix }}
   name: postgres-data-{{ .Suffix }}
+  {{ else }}
+  name: postgres-data-no-suffix {{ end }}
 spec:
   storageClassName: postgres-sc
   accessModes:
@@ -32,7 +35,10 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres-{{ .Suffix }}
+  {{ if .Suffix }}
+  name: postgres-data-{{ .Suffix }}
+  {{ else }}
+  name: postgres-data-no-suffix {{ end }}
 spec:
   strategy:
     rollingUpdate:
@@ -80,4 +86,7 @@ spec:
       volumes:
         - name: postgredb
           persistentVolumeClaim:
+            { { if .Suffix } }
             claimName: postgres-data-{{ .Suffix }}
+            { { else } }
+            claimName: postgres-data-no-suffix {{ end }}

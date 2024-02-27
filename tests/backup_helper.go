@@ -2539,11 +2539,10 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 		// VALIDATION OF VOLUMES
 		log.InfoD("Validating Restored Volumes for the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 
-		// Collect all volumes belonging to a context (namespace)
+		// Collect all volumes belonging to a namespace
 		log.Infof("getting the volumes bounded to the PVCs in the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		actualVolumeMap := make(map[string]*volume.Volume)
 		for _, appContext := range expectedRestoredAppContexts {
-			log.Infof("appContext.App.NameSpace [%s] expectedRestoredAppContextNamespace [%s] == [%v]", appContext.App.NameSpace, expectedRestoredAppContextNamespace, appContext.App.NameSpace == expectedRestoredAppContextNamespace)
 			if appContext.App.NameSpace == expectedRestoredAppContextNamespace {
 				actualRestoredVolumes, err := Inst().S.GetVolumes(appContext)
 				if err != nil {
