@@ -7,12 +7,15 @@ type WorkFlowResponse struct {
 }
 
 type WorkFlowRequest struct {
-	Deployment PDSDeployment `copier:"must,nopanic"`
-	Meta       Meta          `copier:"must,nopanic"`
-	Config     Config        `copier:"must,nopanic"`
-	Id         string        `copier:"must,nopanic"`
-	ClusterId  string        `copier:"must,nopanic"`
-	TenantId   string        `copier:"must,nopanic"`
-	PdsAppId   string        `copier:"must,nopanic"`
-	Pagination PaginationRequest
+	Deployment   PDSDeployment
+	BackupConfig PDSBackupConfig
+	Backup       PDSBackup
+	Restore      PDSRestore
+	Meta         Meta
+	Config       Config
+	Id           string
+	ClusterId    string
+	TenantId     string
+	PdsAppId     string
+	Pagination   PaginationRequest
 }
