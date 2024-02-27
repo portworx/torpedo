@@ -844,8 +844,12 @@ spec:
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
     - name: ENABLE_GRAFANA
       value: "${ENABLE_GRAFANA}"
-    - name: AWS_CLUSTER_NAME
-      value: "${AWS_CLUSTER_NAME}"
+    - name: EKS_CLUSTER_NAME
+      value: "${EKS_CLUSTER_NAME}"
+    - name: EKS_CLUSTER_REGION
+      value: "${EKS_CLUSTER_REGION}"
+    - name: EKS_PX_NODEGROUP_NAME
+      value: "${EKS_PX_NODEGROUP_NAME}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
