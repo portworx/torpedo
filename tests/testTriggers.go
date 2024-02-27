@@ -7367,7 +7367,6 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 					UpdateOutcome(event, err)
                     return
 			}
-			UpdateOutcome(event, err)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
 					log.Infof("Task name %s\n", taskName)
@@ -7397,6 +7396,7 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+			return
 		} else {
 			allMigrations = append(allMigrations, currMig)
 			Step("Restart Portworx", func() {
@@ -7477,7 +7477,6 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, err)
                     return
 			}
-			UpdateOutcome(event, err)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
 					log.Infof("Task name %s\n", taskName)
@@ -7507,12 +7506,13 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+				return
 		} else {
 			allMigrations = append(allMigrations, currMig)
 			Step("Restart Portworx", func() {
 				err = SetDestinationKubeConfig()
 				if err != nil {
-					log.Errorf("Failed to Set destinayion kubeconfig: %v", err)
+					log.Errorf("Failed to Set destination kubeconfig: %v", err)
 					UpdateOutcome(event, err)
                     return
 				}
@@ -7527,6 +7527,7 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 				err = SetSourceKubeConfig()
 				if err != nil {
 					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					return
 				}
 			})
 		}
@@ -7597,7 +7598,6 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 					UpdateOutcome(event, err)
                     return
 			}
-			UpdateOutcome(event, err)
 			for i := 0; i < Inst().GlobalScaleFactor; i++ {
 					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
 					log.Infof("Task name %s\n", taskName)
@@ -7622,18 +7622,17 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 	log.InfoD("Collect KVDB node")
 	kvdbNodes, err := GetAllKvdbNodes()
 	if err != nil {
-			return
+		log.Infof("Getting kvdb nodes throwing error, err: %v", err)
+		return
 	}
 	stNodes := node.GetNodesByVoDriverNodeID()
 	var appNode node.Node
 	for _, kvdbNode := range kvdbNodes {
-			var ok bool
-			appNode, ok = stNodes[kvdbNode.ID]
-			if !ok {
-					continue
-			} else {
-					break
-			}
+		var ok bool
+		appNode, ok = stNodes[kvdbNode.ID]
+		if ok {
+			break
+		}
 	}
 
 	log.InfoD("Start migration")
@@ -7643,6 +7642,7 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
 		if err != nil {
 				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+				return
 		} else {
 				allMigrations = append(allMigrations, currMig)
 				Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
