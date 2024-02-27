@@ -140,10 +140,6 @@ const (
 
 	//ReplVPS volume placement strategy node label value
 	ReplVPS = "replvps"
-	// PxLabelNameKey is key for map
-	PxLabelNameKey = "name"
-	// PxLabelValue portworx pod label
-	PxLabelValue = "portworx"
 )
 
 const (
@@ -316,26 +312,6 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		if err = k.AddNewNode(n); err != nil {
 			return err
 		}
-	}
-
-	// Update node PxPodRestartCount during init
-	namespace, err := k.GetAutopilotNamespace()
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("%v", err))
-	}
-	pxLabel := make(map[string]string)
-	pxLabel[PxLabelNameKey] = PxLabelValue
-	pxPodRestartCountMap, err := k.GetPodsRestartCount(namespace, pxLabel)
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("%v", err))
-	}
-
-	for pod, value := range pxPodRestartCountMap {
-		n, err := node.GetNodeByIP(pod.Status.HostIP)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("%v", err))
-		}
-		n.PxPodRestartCount = value
 	}
 
 	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)

@@ -38,6 +38,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedok8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -105,6 +106,8 @@ const (
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
+	PxLabelNameKey                            = "name"
+	PxLabelValue                              = "portworx"
 )
 
 const (
@@ -454,7 +457,37 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 }
 
 func (d *portworx) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
-	return d.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, DriverName)
+	if err := d.init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, DriverName); err != nil {
+		return err
+	}
+	// Update node PxPodRestartCount during init
+	k8s, err := scheduler.Get(sched)
+	if err != nil {
+		return fmt.Errorf("scheduler with name: [%s] not found. Error: [%v]", sched, err)
+	}
+	schedOps, err := schedops.Get(sched)
+	if err != nil {
+		return err
+	}
+	namespace, err := schedOps.GetPortworxNamespace()
+	if err != nil {
+		return fmt.Errorf("failed to get portworx namespace. Error: [%v]", err)
+	}
+	pxLabel := make(map[string]string)
+	pxLabel[PxLabelNameKey] = PxLabelValue
+	pxPodRestartCountMap, err := k8s.GetPodsRestartCount(namespace, pxLabel)
+	if err != nil {
+		return fmt.Errorf("unable to get portworx pods restart count. Error: [%v]", err)
+	}
+
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		if err != nil {
+			log.Fatalf(fmt.Sprintf("%v", err))
+		}
+		n.PxPodRestartCount = value
+	}
+	return nil
 }
 
 func (d *portworx) RefreshDriverEndpoints() error {
