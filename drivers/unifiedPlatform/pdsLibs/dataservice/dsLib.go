@@ -95,3 +95,17 @@ func intToPointerString(n int) *string {
 	// Return the pointer to the string
 	return ptr
 }
+
+func intToPointerInt(n int32) *int32 {
+	// Create a pointer to the string
+	ptr := &n
+	// Return the pointer to the string
+	return ptr
+}
+
+func PointerBool(n bool) *bool {
+	// Create a pointer to the string
+	ptr := &n
+	// Return the pointer to the string
+	return ptr
+}
