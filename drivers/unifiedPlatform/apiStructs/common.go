@@ -33,3 +33,8 @@ type Config struct {
 	Reference            *Reference           `copier:"must,nopanic"`
 	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
+
+type v1Deployment struct {
+	Meta   Meta   `copier:"must,nopanic"`
+	Config Config `copier:"must,nopanic"`
+}

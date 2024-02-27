@@ -37,27 +37,20 @@ func (ds *PDSV2_API) GetDeploymentClient() (context.Context, *pdsv2.DeploymentSe
 // CreateDeployment return newly created deployment model.
 func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
+	DeploymentRequestBody = pdsv2.V1Deployment{}
+	CreateRequest = pdsv2.ApiDeploymentServiceCreateDeploymentRequest{}
 
-	_, dsClient, err := ds.GetDeploymentClient()
+	ctx, dsClient, err := ds.GetDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	//This copy works
-	err = copier.Copy(&DeploymentRequestBody, createDeploymentRequest.Deployment)
-	if err != nil {
-		return nil, fmt.Errorf("Error occured while copying createDeploymentRequest %v\n", err)
-	}
-
-	CreateRequest = CreateRequest.V1Deployment(DeploymentRequestBody)
-
-	//Test Print
-	fmt.Println("DeploymentRequestBody Name ", *DeploymentRequestBody.Meta.Name)
-	fmt.Println("Storage Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].StorageTemplate.Id)
-	fmt.Println("App Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
-	fmt.Println("Resource Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	CreateRequest = dsClient.DeploymentServiceCreateDeployment(ctx, "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6")
+	fmt.Println("Create Request ", CreateRequest)
 
 	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(CreateRequest)
+	fmt.Println("error", err)
+	fmt.Println("res ", res)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}

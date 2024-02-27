@@ -48,20 +48,20 @@ func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 	// Get ProjectID
 	// Get App, Resource and storage Template Ids
 
-	depInputs.Deployment.Config.DeploymentTopologies = []apiStructs.DeploymentTopology{{}}
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []apiStructs.DeploymentTopology{{}}
 
-	depInputs.Deployment.Meta.Name = &ds.DeploymentName
-	depInputs.Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &apiStructs.Template{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.Config.DeploymentTopologies[0].StorageTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &apiStructs.Template{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,
@@ -69,11 +69,12 @@ func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 
 	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
 
-	log.Infof("deployment name  [%s]", *depInputs.Deployment.Meta.Name)
-	log.Infof("app template ids [%s]", *depInputs.Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
-	log.Infof("resource template ids [%s]", *depInputs.Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
-	log.Infof("storage template ids [%s]", *depInputs.Deployment.Config.DeploymentTopologies[0].StorageTemplate.Id)
+	log.Infof("deployment name  [%s]", *depInputs.Deployment.V1Deployment.Meta.Name)
+	log.Infof("app template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
+	log.Infof("resource template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	log.Infof("storage template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate.Id)
 
+	log.Infof("depInputs [+%v]", depInputs.Deployment)
 	deployment, err := v2Components.PDS.CreateDeployment(&depInputs)
 	if err != nil {
 		return nil, err

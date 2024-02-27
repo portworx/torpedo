@@ -38,6 +38,6 @@ type Reference struct {
 }
 
 type PDSDeployment struct {
-	Meta   Meta   `json:"meta,omitempty"`
-	Config Config `json:"config,omitempty"`
+	NamespaceID  *string
+	V1Deployment v1Deployment
 }
