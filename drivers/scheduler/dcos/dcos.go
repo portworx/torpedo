@@ -101,6 +101,14 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 	}
 }
 
+// WaitForRebalanceToComplete validates autopilot rule objects
+func (d *dcos) WaitForRebalanceAROToComplete() error {
+	return &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "WaitForRebalanceAROToComplete()",
+	}
+}
+
 // GetSnapShotData retruns given snapshots
 func (d *dcos) GetSnapShotData(ctx *scheduler.Context, snapshotName, snapshotNameSpace string) (*snapv1.VolumeSnapshotData, error) {
 	return nil, &errors.ErrNotSupported{

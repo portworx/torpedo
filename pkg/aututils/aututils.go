@@ -8,6 +8,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/autopilot"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/pkg/log"
 
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -349,7 +350,13 @@ func WaitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages [
 			return nil, false, err
 		}
 
+		log.InfoD("Rule events %v ", ruleEvents)
+
 		for _, ruleEvent := range ruleEvents.Items {
+
+			log.InfoD("Rule event triggered %v ", ruleEvent)
+			log.InfoD("EXPECTED Message %v", messages)
+
 			// skip old events and verify only events which were in last 20 seconds
 			if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-20 {
 				continue
@@ -384,6 +391,102 @@ func WaitForAutopilotEvent(apRule apapi.AutopilotRule, reason string, messages [
 	}
 	return nil
 }
+
+// // WaitForRebalanceComplete
+// func WaitForRebalanceToComplete(apRule apapi.AutopilotRule, reason string, messages []string) error {
+// 	// TODO: Implement ARO validation for specific pool if autopilot rule has pool LabelSelector
+
+// 	namespace, err := k.GetAutopilotNamespace()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	expectedAroStates := []apapi.RuleState{
+// 		apapi.RuleStateTriggered,
+// 		apapi.RuleStateActiveActionsPending,
+// 		apapi.RuleStateActiveActionsInProgress,
+// 		apapi.RuleStateActiveActionsTaken,
+// 		apapi.RuleStateNormal,
+// 	}
+
+// 	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if len(listAutopilotRuleObjects.Items) == 0 {
+// 		log.Warnf("the list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+// 		return nil
+// 	}
+// 	for _, aro := range listAutopilotRuleObjects.Items {
+// 		var aroStates []apapi.RuleState
+// 		for _, aroStatusItem := range aro.Status.Items {
+// 			if aroStatusItem.State == "" {
+// 				continue
+// 			}
+// 			aroStates = append(aroStates, aroStatusItem.State)
+// 		}
+// 		if reflect.DeepEqual(aroStates, expectedAroStates) {
+// 			log.Debugf("autopilot rule object: %s has all expected states", aro.Name)
+// 		} else {
+// 			formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+// 			log.Debugf("autopilot rule objects items: %s", string(formattedObject))
+// 			return fmt.Errorf("autopilot rule object: %s doesn't have all expected states", aro.Name)
+// 		}
+// 	}
+// 	return nil
+
+// 	t := func() (interface{}, bool, error) {
+// 		ruleEvents, err := core.Instance().ListEvents("", meta_v1.ListOptions{
+// 			FieldSelector: fmt.Sprintf("involvedObject.kind=AutopilotRule,involvedObject.name=%s", apRule.Name),
+// 		})
+
+// 		if err != nil {
+// 			return nil, false, err
+// 		}
+
+// 		log.InfoD("Rule events %v ", ruleEvents)
+
+// 		for _, ruleEvent := range ruleEvents.Items {
+
+// 			log.InfoD("Rule event triggered %v ", ruleEvent)
+// 			log.InfoD("EXPECTED Message %v", messages)
+
+// 			// skip old events and verify only events which were in last 20 seconds
+// 			if ruleEvent.LastTimestamp.Unix() < meta_v1.Now().Unix()-20 {
+// 				continue
+// 			}
+// 			ruleReasonFound := false
+// 			ruleMessageFound := false
+
+// 			if reason != "" {
+// 				if strings.Contains(ruleEvent.Reason, reason) {
+// 					ruleReasonFound = true
+// 				}
+// 			} else {
+// 				ruleReasonFound = true
+// 			}
+// 			for _, message := range messages {
+// 				if !strings.Contains(ruleEvent.Message, message) {
+// 					ruleMessageFound = false
+// 					break
+// 				} else {
+// 					ruleMessageFound = true
+// 					//TODO need to check message contains
+
+// 				}
+// 			}
+// 			if ruleReasonFound && ruleMessageFound {
+// 				return nil, false, nil
+// 			}
+// 		}
+
+// 		return nil, true, fmt.Errorf("autopilot rule has no event with %s reason and %v message", reason, messages)
+// 	}
+// 	if _, err := task.DoRetryWithTimeout(t, eventCheckTimeout, eventCheckInterval); err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
 // WaitForActionApprovalsObjects waits until action approvals object shows up
 // if name is supplied it will wait for action approval object for the given name
