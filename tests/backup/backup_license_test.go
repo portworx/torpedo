@@ -2,6 +2,8 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -47,12 +49,21 @@ var _ = Describe("{NodeCountForLicensing}", func() {
 		Step("Getting the total number of worker nodes in source and destination cluster", func() {
 			log.InfoD("Getting the total number of worker nodes in source and destination cluster")
 			sourceClusterWorkerNodes = node.GetWorkerNodes()
+			if len(sourceClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				sourceClusterWorkerNodes = node.GetNodes()
+			}
 			log.InfoD("Total number of worker nodes in source cluster are %v", len(sourceClusterWorkerNodes))
 			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, sourceClusterWorkerNodes...)
 			log.InfoD("Switching cluster context to destination cluster")
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			destinationClusterWorkerNodes = node.GetWorkerNodes()
+			if len(destinationClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				destinationClusterWorkerNodes = node.GetNodes()
+			}
+			if len(destinationClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				destinationClusterWorkerNodes = node.GetNodes()
+			}
 			log.InfoD("Total number of worker nodes in destination cluster are %v", len(destinationClusterWorkerNodes))
 			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, destinationClusterWorkerNodes...)
 			log.InfoD("Total number of worker nodes in source and destination cluster are %v", len(totalNumberOfWorkerNodes))
@@ -204,6 +215,9 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 		Step("Getting the number of worker nodes in source cluster and applying label portworx.io/nobackup=true to all its worker nodes", func() {
 			log.InfoD("Getting the total number of worker nodes in source cluster")
 			sourceClusterWorkerNodes = node.GetWorkerNodes()
+			if len(sourceClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				sourceClusterWorkerNodes = node.GetNodes()
+			}
 			log.InfoD("Total number of worker nodes in source cluster are %v", len(sourceClusterWorkerNodes))
 			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, sourceClusterWorkerNodes...)
 
@@ -219,6 +233,9 @@ var _ = Describe("{LicensingCountWithNodeLabelledBeforeClusterAddition}", func()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			log.InfoD("Getting the total number of worker nodes in destination cluster")
 			destinationClusterWorkerNodes = node.GetWorkerNodes()
+			if len(destinationClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				destinationClusterWorkerNodes = node.GetNodes()
+			}
 			log.InfoD("Total number of worker nodes in destination cluster are %v", len(destinationClusterWorkerNodes))
 			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, destinationClusterWorkerNodes...)
 			log.InfoD("Total number of worker nodes in source and destination cluster are %v", len(totalNumberOfWorkerNodes))
@@ -345,12 +362,18 @@ var _ = Describe("{LicensingCountBeforeAndAfterBackupPodRestart}", func() {
 		Step("Getting the total number of worker nodes in source and destination cluster", func() {
 			log.InfoD("Getting the total number of worker nodes in source and destination cluster")
 			sourceClusterWorkerNodes = node.GetWorkerNodes()
+			if len(sourceClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				sourceClusterWorkerNodes = node.GetNodes()
+			}
 			log.InfoD("Total number of worker nodes in source cluster are %v", len(sourceClusterWorkerNodes))
 			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, sourceClusterWorkerNodes...)
 			log.InfoD("Switching cluster context to destination cluster")
 			err := SetDestinationKubeConfig()
 			log.FailOnError(err, "Switching context to destination cluster failed")
 			destinationClusterWorkerNodes = node.GetWorkerNodes()
+			if len(destinationClusterWorkerNodes) == 0 && os.Getenv("CLUSTER_PROVIDER") == drivers.ProviderIbm {
+				destinationClusterWorkerNodes = node.GetNodes()
+			}
 			log.InfoD("Total number of worker nodes in destination cluster are %v", len(destinationClusterWorkerNodes))
 			totalNumberOfWorkerNodes = append(totalNumberOfWorkerNodes, destinationClusterWorkerNodes...)
 			log.InfoD("Total number of worker nodes in source and destination cluster are %v", len(totalNumberOfWorkerNodes))
