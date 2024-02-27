@@ -3861,9 +3861,9 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 
 			log.Infof("[%v] Validated PVC: %v, Namespace: %v", ctx.App.Key, obj.Name, obj.Namespace)
 
-			autopilotEnabled := false
+			autopilotEnabledOnPvc := false
 			if pvcAnnotationValue, ok := obj.Annotations[autopilotEnabledAnnotationKey]; ok {
-				autopilotEnabled, err = strconv.ParseBool(pvcAnnotationValue)
+				autopilotEnabledOnPvc, err = strconv.ParseBool(pvcAnnotationValue)
 				if err != nil {
 					return err
 				}
@@ -3872,16 +3872,10 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			autopilotLabels["name"] = "autopilot"
 			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get [autopilot] pods, Err: %v", err)
 			}
-			prometheusLabels := make(map[string]string)
-			prometheusLabels["app.kubernetes.io/name"] = "prometheus"
-			prometheusPods, err := k8sCore.GetPods(autopilotDefaultNamespace, prometheusLabels)
-			if err != nil {
-				return err
-			}
-			autopilotEnabled = autopilotEnabled && !(len(autopilotPods.Items) == 0) && !(len(prometheusPods.Items) == 0)
-			if autopilotEnabled {
+			autopilotEnabledOnPvc = autopilotEnabledOnPvc && !(len(autopilotPods.Items) == 0)
+			if autopilotEnabledOnPvc {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
 					return err
@@ -3898,7 +3892,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				}
 				log.Infof("[%v] Validated PVC: %v size based on Autopilot rules", ctx.App.Key, obj.Name)
 			} else {
-				log.Infof("[%v] Autopilot is not enabled, skipping PVC: %v size validation", ctx.App.Key, obj.Name)
+				log.Warnf("[%v] Autopilot is not enabled, PVC: %v size validation is not possible", ctx.App.Key, obj.Name)
 			}
 		} else if obj, ok := specObj.(*snapv1.VolumeSnapshot); ok {
 			if err := k8sExternalStorage.ValidateSnapshot(obj.Metadata.Name, obj.Metadata.Namespace, true, timeout,
