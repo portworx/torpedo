@@ -14,6 +14,7 @@ type BackupConfig struct {
 	ReclaimPolicy    *pdsv2.ConfigReclaimPolicyType
 }
 
+// CreateBackupConfig created backup config for the deployment
 func CreateBackupConfig(backupConfig BackupConfig, ctx context.Context) (*apiStructs.WorkFlowResponse, error) {
 
 	createBackupRequest := apiStructs.WorkFlowRequest{}
