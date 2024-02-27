@@ -349,7 +349,7 @@ if [ -n "${KUBECONFIGS}" ]; then
   done
   kubectl create configmap kubeconfigs ${FROM_FILE}
 fi
-
+NODE_DRIVER="ssh"
 cat > torpedo.yaml <<EOF
 ---
 apiVersion: v1
