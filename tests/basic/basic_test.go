@@ -43,6 +43,7 @@ func TestBasic(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	log.Infof("The value of Inst() is %v", Inst())
 	dash = Inst().Dash
 	log.Infof("Init instance")
 	value, exists := os.LookupEnv("NOMAD_ADDR")

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"net/url"
 	"os/exec"
 	"strings"
@@ -65,12 +66,13 @@ var _ = Describe("{UpgradeCluster}", func() {
 			Step("start scheduler upgrade", func() {
 				err := Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				if Inst().S.String() == aks.SchedName {
-					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, AKS creates extra node, this node then becomes PX node. "+
-						"After the Node Pool upgrade is complete, AKS deletes this extra node, but PX Storage object still around for about ~20-30 mins. "+
+				for _, schedName := range []string{aks.SchedName, eks.SchedName} {
+					schedName = strings.ToUpper(Inst().S.String())
+					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, %s creates an extra node, this node then becomes a PX node. "+
+						"After the Node Pool upgrade is complete, %s deletes this extra node, but PX Storage object still remains around for about ~20-30 mins. "+
 						"Recommended config is that you deploy PX with 6 nodes in 3 zones and set MaxStorageNodesPerZone to 2, "+
-						"so when extra AKS node gets created, PX gets deployed as Storageless node, otherwise if PX gets deployed as Storage node, "+
-						"PX storage objects will never be deleted and validation might fail!", Inst().S.String())
+						"so when an extra %s node gets created, PX gets deployed as a Storageless node, otherwise, if PX gets deployed as a Storage node, "+
+						"PX storage objects will never be deleted and validation might fail!", Inst().S.String(), schedName, schedName, schedName)
 					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(30 * time.Minute)
 				}

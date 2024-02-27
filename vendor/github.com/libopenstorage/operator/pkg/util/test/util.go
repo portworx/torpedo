@@ -1415,8 +1415,9 @@ func validatePortworxNodes(cluster *corev1.StorageCluster, expectedNodes int) er
 	}
 
 	actualNodes := len(nodeEnumerateResp.GetNodeIds())
+	
 	if actualNodes != expectedNodes {
-		return fmt.Errorf("expected nodes: %v. actual nodes: %v", expectedNodes, actualNodes)
+		return fmt.Errorf("expected nodes: %v. actual nodes: %v -- actual node ids -- %v", expectedNodes, actualNodes, fmt.Sprintf("%#v", nodeEnumerateResp.GetNodeIds()))
 	}
 
 	// TODO: Validate Portworx is started with correct params. Check individual options

@@ -146,6 +146,9 @@ import (
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
 
 	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+
+	// import scheduler drivers to invoke it's init
 	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
 	"github.com/portworx/torpedo/drivers/volume"
 

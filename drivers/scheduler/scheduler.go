@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/pkg/log"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -474,6 +475,7 @@ type HelmRepo struct {
 // Register registers the given scheduler driver
 func Register(name string, d Driver) error {
 	if _, ok := schedulers[name]; !ok {
+		log.Infof("Registering scheduler [%s]", name)
 		schedulers[name] = d
 	} else {
 		return fmt.Errorf("scheduler driver: %s is already registered", name)
