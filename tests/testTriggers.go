@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"container/ring"
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
@@ -34,34 +35,41 @@ import (
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	"github.com/onsi/ginkgo/v2"
-
+  
 	opsapi "github.com/libopenstorage/openstorage/api"
+	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/onsi/ginkgo"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/task"
-
-	apios "github.com/libopenstorage/openstorage/api"
-	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
-	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
+	"github.com/portworx/sched-ops/k8s/operator"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"github.com/portworx/torpedo/drivers/backup"
-	"github.com/portworx/torpedo/drivers/monitor/prometheus"
-	"github.com/portworx/torpedo/drivers/node"
-	"github.com/portworx/torpedo/drivers/scheduler"
-	"github.com/portworx/torpedo/drivers/scheduler/k8s"
-	"github.com/portworx/torpedo/drivers/scheduler/spec"
-	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/sched-ops/task"
+	"gopkg.in/natefinch/lumberjack.v2"
 	appsapi "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	storageapi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/portworx/torpedo/drivers/backup"
+	"github.com/portworx/torpedo/drivers/monitor/prometheus"
+	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler"
+	"github.com/portworx/torpedo/drivers/scheduler/k8s"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/drivers/scheduler/spec"
+	"github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
 	"github.com/portworx/torpedo/pkg/asyncdr"
+	"github.com/portworx/torpedo/pkg/aututils"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 )
 
 const (
@@ -7247,11 +7255,8 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(ctx, false, true, defaultClusterPairDir, false)
 			}
-			Step("Create cluster pair between source and destination clusters", func() {
-				// Set cluster context to cluster where torpedo is running
-				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-			})
 		}
 
 		log.Infof("Migration Namespaces: %v", migrationNamespaces)
@@ -7361,11 +7366,8 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(ctx, true, true, defaultClusterPairDir, false)
 			}
-			Step("Create cluster pair between source and destination clusters", func() {
-				// Set cluster context to cluster where torpedo is running
-				ScheduleValidateClusterPair(appContexts[0], true, true, defaultClusterPairDir, false)
-			})
 		}
 
 		log.Infof("Migration Namespaces: %v", migrationNamespaces)
@@ -7454,15 +7456,10 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
-			}
-			Step("Create cluster pair between source and destination clusters", func() {
-				// Set cluster context to cluster where torpedo is running
 				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-			})
+			}
 		}
-
 		log.InfoD("Volume-only Migration Namespaces: %v", migrationNamespaces)
-
 	})
 
 	time.Sleep(5 * time.Minute)
@@ -8275,6 +8272,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(ctx, false, true, defaultClusterPairDir, false)
 				// Get Autofstrim status for vols
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				if err != nil {
@@ -8292,10 +8290,6 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 						return
 					}
 				}
-				Step("Create cluster pair between source and destination clusters", func() {
-					// Set cluster context to cluster where torpedo is running
-					ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-				})
 			}
 		}
 	})
@@ -8398,6 +8392,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(ctx, false, true, defaultClusterPairDir, false)
 				// Get Autofstrim status for vols
 				appVolumes, err = Inst().S.GetVolumes(ctx)
 				if err != nil {
@@ -8417,10 +8412,6 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 					expected_iot = cVol.Spec.IoThrottle
 					break
 				}
-				Step("Create cluster pair between source and destination clusters", func() {
-					// Set cluster context to cluster where torpedo is running
-					ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-				})
 			}
 		}
 	})
@@ -8567,11 +8558,8 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(ctx, false, true, defaultClusterPairDir, false)
 			}
-			Step("Create cluster pair between source and destination clusters", func() {
-				// Set cluster context to cluster where torpedo is running
-				ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
-			})
 		}
 		log.InfoD("Migration Namespaces: %v", migrationNamespaces)
 	})
@@ -8724,11 +8712,8 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				ctx.ReadinessTimeout = appReadinessTimeout
 				namespace := GetAppNamespace(ctx, taskName)
 				migrationNamespaces = append(migrationNamespaces, namespace)
+				ScheduleValidateClusterPair(ctx, true, true, defaultClusterPairDir, false)
 			}
-			Step("Create cluster pair between source and destination clusters", func() {
-				// Set cluster context to cluster where torpedo is running
-				ScheduleValidateClusterPair(appContexts[0], true, true, defaultClusterPairDir, false)
-			})
 		}
 		log.InfoD("Migration Namespaces: %v", migrationNamespaces)
 	})
