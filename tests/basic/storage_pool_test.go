@@ -10983,7 +10983,7 @@ var _ = Describe("{CheckPoolOffline}", func() {
 			selectedNode = GetNodeWithLeastSize()
 
 			AppList := Inst().AppList
-			Inst().AppList = []string{"fio"}
+			Inst().AppList = []string{"fio-fastpath-repl1"}
 
 			var err error
 			defer func() {
@@ -11018,6 +11018,7 @@ var _ = Describe("{CheckPoolOffline}", func() {
 						log.Infof("Pool %s is offline", offlinePool.Uuid)
 						// Used storage should be greater than 80 percentage
 						if (offlinePool.Used) >= (offlinePool.TotalSize*80)/100 {
+							log.Infof("Pool %s is offline and used storage is greater than 80 percentage", offlinePool.Uuid)
 							return nil, false, nil
 						}
 						return nil, true, fmt.Errorf("Pool %s is offline but used storage is less than 80 percentage", offlinePool.Uuid)
