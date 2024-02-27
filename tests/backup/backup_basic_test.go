@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -229,6 +230,33 @@ var _ = BeforeSuite(func() {
 		}
 	} else {
 		log.Infof("Locked bucket name not provided")
+	}
+
+	// Create Global pre-rule and post-rule for the application used
+	flagFromEnv := os.Getenv("USE_GLOBAL_RULES")
+	if flagFromEnv == "" {
+		FlagUseGlobalRule = false
+	} else {
+		FlagUseGlobalRule, err = strconv.ParseBool(flagFromEnv)
+		dash.VerifyFatal(err, nil, "Parsing USE_GLOBAL_RULES environment variable")
+	}
+
+	if FlagUseGlobalRule {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		GlobalPreRuleName, GlobalPostRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of pre and post exec rules for applications from px-admin"))
+
+		if GlobalPreRuleName != "" {
+			GlobalPreRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, GlobalPreRuleName)
+			log.FailOnError(err, "Fetching pre backup rule [%s] uid", GlobalPreRuleName)
+			log.Infof("Pre backup rule [%s] uid: [%s]", GlobalPreRuleName, GlobalPreRuleUid)
+		}
+		if GlobalPostRuleName != "" {
+			GlobalPostRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, GlobalPostRuleName)
+			log.FailOnError(err, "Fetching post backup rule [%s] uid", GlobalPostRuleName)
+			log.Infof("Post backup rule [%s] uid: [%s]", GlobalPostRuleName, GlobalPostRuleUid)
+		}
 	}
 })
 

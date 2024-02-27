@@ -762,6 +762,8 @@ spec:
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
     - name: ENABLE_GRAFANA
       value: "${ENABLE_GRAFANA}"
+    - name: USE_GLOBAL_RULES
+      value: "${USE_GLOBAL_RULES}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
