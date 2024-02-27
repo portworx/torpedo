@@ -40,15 +40,8 @@ func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *apiStructs.WorkFl
 	DeploymentRequestBody = pdsv2.V1Deployment{}
 	CreateRequest = pdsv2.ApiDeploymentServiceCreateDeploymentRequest{}
 
-	ctx, dsClient, err := ds.GetDeploymentClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
-	}
-
-	CreateRequest = dsClient.DeploymentServiceCreateDeployment(ctx, "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6")
-	fmt.Println("Create Request ", CreateRequest)
-
-	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(CreateRequest)
+	dsModel, res, err := createDeploymentRequest.Deployment.V1.ApiService.DeploymentServiceCreateDeploymentExecute(
+		createDeploymentRequest.Deployment.V1)
 	fmt.Println("error", err)
 	fmt.Println("res ", res)
 	if err != nil && res.StatusCode != status.StatusOK {

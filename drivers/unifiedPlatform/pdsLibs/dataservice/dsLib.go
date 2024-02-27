@@ -1,6 +1,8 @@
 package dataservice
 
 import (
+	"context"
+	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
@@ -36,7 +38,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService, ctx context.Context) (*apiStructs.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
 	depInputs := apiStructs.WorkFlowRequest{}
@@ -48,31 +50,71 @@ func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 	// Get ProjectID
 	// Get App, Resource and storage Template Ids
 
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []apiStructs.DeploymentTopology{{}}
+	depInputs.Deployment.V1 = depInputs.Deployment.V1.ApiService.DeploymentServiceCreateDeployment(ctx, "placeholder")
 
-	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
-		Id:              intToPointerString(10),
-		ResourceVersion: nil,
-		Values:          nil,
-	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &apiStructs.Template{
-		Id:              intToPointerString(11),
-		ResourceVersion: nil,
-		Values:          nil,
-	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &apiStructs.Template{
-		Id:              intToPointerString(12),
-		ResourceVersion: nil,
-		Values:          nil,
-	}
+	depInputs.Deployment.V1 = depInputs.Deployment.V1.V1Deployment(pdsv2.V1Deployment{
+		Meta: &pdsv2.V1Meta{
+			Name: &ds.DeploymentName,
+		},
+		Config: &pdsv2.V1Config1{
+			References: &pdsv2.V1References2{
+				TargetClusterId: nil,
+				ImageId:         nil,
+				ProjectId:       nil,
+				RestoreId:       nil,
+			},
+			TlsEnabled: &ds.DataServiceEnabledTLS,
+			DeploymentTopologies: []pdsv2.V1DeploymentTopology{
+				{
+					Name:                     &ds.Name,
+					Description:              nil,
+					Replicas:                 intToPointerString(ds.Replicas),
+					ServiceType:              &ds.ServiceType,
+					ServiceName:              nil,
+					LoadBalancerSourceRanges: nil,
+					ResourceTemplate: &pdsv2.V1Template{
+						Id:              intToPointerString(10),
+						ResourceVersion: nil,
+						Values:          nil,
+					},
+					ApplicationTemplate: &pdsv2.V1Template{
+						Id:              intToPointerString(11),
+						ResourceVersion: nil,
+						Values:          nil,
+					},
+					StorageTemplate: &pdsv2.V1Template{
+						Id:              intToPointerString(12),
+						ResourceVersion: nil,
+						Values:          nil,
+					},
+				},
+			},
+		},
+	})
 
-	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
+	//depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
+	//depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
+	//	Id:              intToPointerString(10),
+	//	ResourceVersion: nil,
+	//	Values:          nil,
+	//}
+	//depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &apiStructs.Template{
+	//	Id:              intToPointerString(11),
+	//	ResourceVersion: nil,
+	//	Values:          nil,
+	//}
+	//depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &apiStructs.Template{
+	//	Id:              intToPointerString(12),
+	//	ResourceVersion: nil,
+	//	Values:          nil,
+	//}
+	//
+	////TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
 
-	log.Infof("deployment name  [%s]", *depInputs.Deployment.V1Deployment.Meta.Name)
-	log.Infof("app template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
-	log.Infof("resource template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
-	log.Infof("storage template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate.Id)
+	//log.Infof("deployment name  [%s]", *depInputs.Deployment.V1Deployment.Meta.Name)
+	//log.Infof("app template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
+	//log.Infof("resource template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	//log.Infof("storage template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate.Id)
 
 	log.Infof("depInputs [+%v]", depInputs.Deployment)
 	deployment, err := v2Components.PDS.CreateDeployment(&depInputs)

@@ -1,5 +1,7 @@
 package apiStructs
 
+import pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
+
 type DeploymentTopology struct {
 	Name *string `copier:"must,nopanic"`
 	// Description of the deployment topology.
@@ -38,6 +40,6 @@ type Reference struct {
 }
 
 type PDSDeployment struct {
-	NamespaceID  *string
-	V1Deployment v1Deployment
+	V1   pdsv2.ApiDeploymentServiceCreateDeploymentRequest
+	GRPC pdsv2.ApiDeploymentServiceCreateDeploymentRequest
 }
