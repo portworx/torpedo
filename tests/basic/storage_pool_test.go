@@ -10983,7 +10983,7 @@ var _ = Describe("{CheckPoolOffline}", func() {
 			selectedNode = GetNodeWithLeastSize()
 
 			AppList := Inst().AppList
-			Inst().AppList = []string{"fio-fastpath-repl1"}
+			Inst().AppList = []string{"fio"}
 
 			var err error
 			defer func() {
