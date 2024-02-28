@@ -2,7 +2,6 @@ package schedops
 
 import (
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/batch"
 	"github.com/portworx/sched-ops/k8s/core"
 	k8serrors "github.com/portworx/sched-ops/k8s/errors"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/k8s/rbac"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
@@ -836,7 +836,7 @@ func (k *k8sSchedOps) IsPXEnabled(n node.Node) (bool, error) {
 	}
 
 	if !isPXOnControlplane && len(kubeNode.Spec.Taints) > 0 {
-		log.Infof("PX is not enabled on node %v. Will be skipped for tests.", n.Name)
+		log.Infof("PX is not enabled on node %v due to taints [%v]. Will be skipped for tests.", n.Name, kubeNode.Spec.Taints)
 		return false, nil
 	}
 
