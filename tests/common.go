@@ -2,7 +2,6 @@ package tests
 
 import (
 	"bufio"
-	"cloud.google.com/go/storage"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/csv"
@@ -10,62 +9,24 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
-	"github.com/portworx/torpedo/drivers/node/gke"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
-
-	"github.com/portworx/torpedo/pkg/stats"
-
-	optest "github.com/libopenstorage/operator/pkg/util/test"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-
-	kubevirtv1 "kubevirt.io/api/core/v1"
-
+	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"regexp"
-	"runtime"
-
-	storkops "github.com/portworx/sched-ops/k8s/stork"
-	"go.uber.org/multierr"
-
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-
-	"github.com/pborman/uuid"
-	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
-	"github.com/portworx/torpedo/drivers/pds"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-
-	"github.com/portworx/sched-ops/k8s/apps"
-	"github.com/portworx/torpedo/pkg/aetosutil"
-	"github.com/portworx/torpedo/pkg/asyncdr"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
+	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/portworx/torpedo/pkg/s3utils"
-
-	storageapi "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
+	"cloud.google.com/go/storage"
+	context1 "context"
 	"github.com/Azure/azure-storage-blob-go/azblob"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -75,27 +36,54 @@ import (
 	apapi "github.com/libopenstorage/autopilot-api/pkg/apis/autopilot/v1alpha1"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/libopenstorage/openstorage/pkg/sched"
+	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+	"github.com/pborman/uuid"
+	pdsv1 "github.com/portworx/pds-api-go-client/pds/v1alpha1"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
+	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/sched-ops/k8s/operator"
+	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 	appDriver "github.com/portworx/torpedo/drivers/applications/driver"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/pds"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	appUtils "github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/drivers/volume"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/jirautils"
+	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	"github.com/portworx/torpedo/pkg/pureutils"
+	"github.com/portworx/torpedo/pkg/s3utils"
+	"github.com/portworx/torpedo/pkg/stats"
 	"github.com/portworx/torpedo/pkg/testrailuttils"
+	"github.com/portworx/torpedo/pkg/units"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/sirupsen/logrus"
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
+	"go.uber.org/multierr"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"gopkg.in/natefinch/lumberjack.v2"
+	yaml "gopkg.in/yaml.v2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsapi "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -106,20 +94,21 @@ import (
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	// import aks driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/aks"
+	// import ssh driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/node/ssh"
 
 	// import backup driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/backup/portworx"
 	// import aws driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/aws"
-	// import gke driver to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/node/gke"
 	// import vsphere driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/node/vsphere"
 	// import ibm driver to invoke it's init
@@ -138,10 +127,18 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 
-	// import scheduler drivers to invoke it's init
+	// import ocp scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
-	rke "github.com/portworx/torpedo/drivers/scheduler/rke"
-	"github.com/portworx/torpedo/drivers/volume"
+
+	// import aks scheduler driver to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import gke scheduler driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/gke"
+	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
+
+	// import rke scheduler drivers to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/rke"
 
 	// import portworx driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/portworx"
@@ -172,12 +169,6 @@ import (
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
-
-	context1 "context"
-
-	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	"gopkg.in/natefinch/lumberjack.v2"
-	yaml "gopkg.in/yaml.v2"
 )
 
 const (
@@ -581,19 +572,28 @@ func InitInstance() {
 		t.Tags["px-version"] = pxVersion
 	}
 
-	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], "pxctl status", node.ConnectionOpts{
+	PrintPxctlStatus()
+	ns, err := Inst().V.GetVolumeDriverNamespace()
+	log.FailOnError(err, "Error occured while getting volume driver namespace")
+	installGrafana(ns)
+}
+
+func PrintPxctlStatus() {
+	PrintCommandOutput("pxctl status")
+}
+
+func PrintCommandOutput(cmnd string) {
+	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
 		TimeBeforeRetry: defaultRetryInterval,
 		Timeout:         defaultTimeout,
 		Sudo:            true,
 	})
 	if err != nil {
-		log.Errorf("failed to get pxctl status, Err: %v", err)
+		log.Errorf("failed to run command [%s], Err: %v", cmnd, err)
 	}
 	log.Infof(output)
-	ns, err := Inst().V.GetVolumeDriverNamespace()
-	log.FailOnError(err, "Error occured while getting volume driver namespace")
-	installGrafana(ns)
+
 }
 
 // ValidateCleanup checks that there are no resource leaks after the test run
@@ -1951,7 +1951,7 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
-func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext context1.Context) (chan string, *errgroup.Group) {
+func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
 	// Resetting the global map before starting the new App Validations
 	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
@@ -1959,17 +1959,17 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 	log.InfoD("Validate applications")
 	for _, ctx := range contexts {
 		ValidateContext(ctx)
-		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
 		if err != nil {
 			log.InfoD("Some error occurred - [%s]", err)
 		}
 		log.InfoD("App Info - [%+v]", appInfo)
-		if appContext == nil {
-			log.Warnf("App Context is not proper - [%v]", appContext)
+		if context == nil {
+			log.Warnf("App Context is not proper - [%v]", context)
 			continue
 		}
 		if appInfo.StartDataSupport {
-			appHandler, _ := appDriver.GetApplicationDriver(
+			appHandler, err := appDriver.GetApplicationDriver(
 				appInfo.AppType,
 				appInfo.Hostname,
 				appInfo.User,
@@ -1977,7 +1977,16 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 				appInfo.Port,
 				appInfo.DBName,
 				appInfo.NodePort,
-				appInfo.Namespace)
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
+			if err != nil {
+				log.Infof("Error - %s", err.Error())
+			}
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				log.FailOnError(err, "Some error occured while starting the VM")
+			}
 			log.InfoD("App handler created for [%s]", appInfo.Hostname)
 			NamespaceAppWithDataMap[appInfo.Namespace] = append(NamespaceAppWithDataMap[appInfo.Namespace], appHandler)
 		}
@@ -1990,7 +1999,7 @@ func ValidateApplicationsStartData(contexts []*scheduler.Context, appContext con
 		for _, handler := range allhandler {
 			currentHandler := handler
 			errGroup.Go(func() error {
-				err := currentHandler.StartData(controlChannel, appContext)
+				err := currentHandler.StartData(controlChannel, context)
 				return err
 			})
 		}
@@ -3303,10 +3312,10 @@ func SetClusterContext(clusterConfigPath string) error {
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
 		}
-	} else if gkeNodeDriver, ok := Inst().N.(*gke.Gke); ok {
-		err = ssh.RefreshDriver(&gkeNodeDriver.SSH)
+	} else if gkeSchedDriver, ok := Inst().S.(*gke.Gke); ok {
+		err = ssh.RefreshDriver(&gkeSchedDriver.SSH)
 		if err != nil {
-			return fmt.Errorf("failed to switch to context. RefreshDriver (Node) Error: [%v]", err)
+			return fmt.Errorf("failed to switch to context. RefreshDriver (gkeSchedDriver.SSH) Error: [%v]", err)
 		}
 	}
 
@@ -4456,7 +4465,7 @@ func CreateBackupLocation(provider, name, uid, credName, credUID, bucketName, or
 	case drivers.ProviderAws:
 		err = CreateS3BackupLocation(name, uid, credName, credUID, bucketName, orgID, encryptionKey, validate)
 	case drivers.ProviderAzure:
-		err = CreateAzureBackupLocation(name, uid, credName, CloudCredUID, bucketName, orgID, validate)
+		err = CreateAzureBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderGke:
 		err = CreateGCPBackupLocation(name, uid, credName, credUID, bucketName, orgID, validate)
 	case drivers.ProviderNfs:
@@ -6651,6 +6660,9 @@ func ParseFlags() {
 				IsPDSApps:                           deployPDSApps,
 				SkipSystemChecks:                    skipSystemChecks,
 			}
+			if instance.S.String() == "openshift" {
+				instance.LogLoc = "/mnt"
+			}
 		})
 	}
 	printFlags()
@@ -7508,7 +7520,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if currentSpecReport.Failed() {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-
 	// Cleanup all the namespaces created by the testcase
 	err := DeleteAllNamespacesCreatedByTestCase()
 	if err != nil {
@@ -7530,7 +7541,6 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
-
 	masterNodes := node.GetMasterNodes()
 	if len(masterNodes) > 0 {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
@@ -7786,7 +7796,7 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
-	var maxCloudDrives int32
+	var maxCloudDrives int
 
 	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
 		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
@@ -7800,32 +7810,15 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 		return nil, err
 	}
 
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         2 * time.Minute,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-	drivesMap, err := Inst().N.GetBlockDrives(*stNode, systemOpts)
+	var currentNodeDrives int
+
+	drvM, err := Inst().V.GetPoolDrives(stNode)
 	if err != nil {
 		return nil, fmt.Errorf("error getting block drives from node %s, Err :%v", stNode.Name, err)
 	}
-	var currentNodeDrives int32
 
-	driveCountMap := make(map[string]int32, 0)
-
-	for _, b := range drivesMap {
-		labels := b.Labels
-		for k, v := range labels {
-			if k == "pxpool" {
-				driveCountMap[v] += 1
-			}
-		}
-	}
-
-	for _, vals := range driveCountMap {
-		currentNodeDrives += vals
+	for _, devices := range drvM {
+		currentNodeDrives += len(devices)
 	}
 	eligibilityMap := make(map[string]bool)
 
@@ -7834,13 +7827,21 @@ func GetPoolExpansionEligibility(stNode *node.Node) (map[string]bool, error) {
 	if currentNodeDrives == maxCloudDrives {
 		eligibilityMap[stNode.Id] = false
 	}
+	nodePoolStatus, err := Inst().V.GetNodePoolsStatus(*stNode)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, pool := range stNode.StoragePools {
 		eligibilityMap[pool.Uuid] = true
 
-		d := driveCountMap[fmt.Sprintf("%d", pool.ID)]
-		log.Infof("pool %s has %d drives", pool.Uuid, d)
-		if d == POOL_MAX_CLOUD_DRIVES {
+		d := drvM[fmt.Sprintf("%d", pool.ID)]
+		log.Infof("pool %s has %d drives", pool.Uuid, len(d))
+		if len(d) == POOL_MAX_CLOUD_DRIVES {
+			eligibilityMap[pool.Uuid] = false
+		}
+
+		if nodePoolStatus[pool.Uuid] == "Offline" {
 			eligibilityMap[pool.Uuid] = false
 		}
 	}
