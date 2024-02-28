@@ -8,17 +8,14 @@
 
 
 - Messages
-    - [ResourceSelector](#resourceselector)
-    - [ResourceSelector.ResourceFilter](#resourceselectorresourcefilter)
-    - [Selector](#selector)
-    - [Selector.Filter](#selectorfilter)
+    - [GetRevisionRequest](#getrevisionrequest)
+    - [GetRevisionRequest.NameSemanticVersion](#getrevisionrequestnamesemanticversion)
+    - [ListRevisionsRequest](#listrevisionsrequest)
+    - [ListRevisionsResponse](#listrevisionsresponse)
+    - [Revision](#revision)
+    - [RevisionInfo](#revisioninfo)
   
 
-
-- Enums
-    - [RespData](#respdata)
-    - [Selector.Operator](#selectoroperator)
-  
 
 
 - [Scalar Value Types](#scalar-value-types)
@@ -30,80 +27,81 @@
 ## Messages
 
 
-### ResourceSelector {#resourceselector}
-ResourceSelector is used to query resources using the associated infra resources
+### GetRevisionRequest {#getrevisionrequest}
+GetRevisionRequest is the request body to get a revision
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| infra_resource_filters | [repeated ResourceSelector.ResourceFilter](#resourceselectorresourcefilter) | Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource Each filter will have AND relationship |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) get_by.uid | [ string](#string) | UID of the revision (-- api-linter: core::0148::uid-format=disabled aip.dev/not-precedent: We need to do this because of prefix. --) |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) get_by.name_semantic_version | [ GetRevisionRequest.NameSemanticVersion](#getrevisionrequestnamesemanticversion) | Name and semantic version of the revision |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### ResourceSelector.ResourceFilter {#resourceselectorresourcefilter}
-ResourceFilter is filter for a given resource type
+### GetRevisionRequest.NameSemanticVersion {#getrevisionrequestnamesemanticversion}
+Name and semantic version of the revision
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| resource_type | [ InfraResource.Type](#infraresourcetype) | Key of key,value pair against which filtering needs to be performs based on associated infra resource type |
-| op | [ Selector.Operator](#selectoroperator) | Op provides the relationship between the key,value pair in the resp element(s) |
-| values | [repeated string](#string) | Value of key,value pair against which filtering needs to be performs |
+| name | [ string](#string) | Name(kind) of the revision |
+| semantic_version | [ string](#string) | Version of the revision |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Selector {#selector}
-Selector is used to query resources using the associated labels or field names
+### ListRevisionsRequest {#listrevisionsrequest}
+Request parameters for listing revisions
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| filters | [repeated Selector.Filter](#selectorfilter) | FilterList is the list of all filters that should be applied |
+| field_selector | [ Selector](#selector) | Filtering list of revisions based on the provided column filters. |
+| sort | [ Sort](#sort) | Sort parameters for listing revisions |
+| pagination | [ PageBasedPaginationRequest](#pagebasedpaginationrequest) | Pagination parameters for listing revisions. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Selector.Filter {#selectorfilter}
-Filter for a given key
+### ListRevisionsResponse {#listrevisionsresponse}
+Revisions listing response
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| key | [ string](#string) | Key of key,value pair against which filtering needs to be performs |
-| op | [ Selector.Operator](#selectoroperator) | Op provides the relationship between the key,value pair in the resp element(s) |
-| values | [repeated string](#string) | Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array |
+| revisions | [repeated Revision](#revision) | Revisions is the list of revisions |
+| pagination | [ PageBasedPaginationResponse](#pagebasedpaginationresponse) | Pagination metadata for this response. (-- api-linter: core::0132::response-unknown-fields=disabled aip.dev/not-precedent: We need this field for pagination. --) |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### Revision {#revision}
+Revision holds the template schema along with version details
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| meta | [ Meta](#meta) | Metadata of the revision |
+| info | [ RevisionInfo](#revisioninfo) | Info of the revision |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### RevisionInfo {#revisioninfo}
+RevisionInfo contains info
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| semantic_version | [ string](#string) | Semantic version of the revision: 1.2 (major.minor - patch version not required) |
+| deprecated | [ bool](#bool) | Whether this revision has been deprecated |
+| schema | [ google.protobuf.Struct](#googleprotobufstruct) | Schema of the revision, if schema is backward compatible, update the revision, else upgrade |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->
 
 ## Enums
-
-
-### RespData {#respdata}
-RespData provides flags which provides info about the fields that should be populated in the response
-
-| Name | Number | Description |
-| ---- | ------ | ----------- |
-| RESP_DATA_UNSPECIFIED | 0 | RespData Unspecified. complete resource will be populated |
-| INDEX | 1 | only uid, name, labels should be populated |
-| LITE | 2 | only meta data should be populated |
-| FULL | 3 | complete resource should be populated |
-
-
-
-
-### Selector.Operator {#selectoroperator}
-Operator specifies the relationship between the provided (key,value) pairs in the response
-
-| Name | Number | Description |
-| ---- | ------ | ----------- |
-| OPERATOR_UNSPECIFIED | 0 | Unspecified, do not use. |
-| IN | 1 | IN specifies that the key should be associated with atleast 1 of the element in value list |
-| NOT_IN | 2 | NOT_IN specifies that the key should not be associated with any of the element in value list |
-
-
  <!-- end Enums -->
  <!-- end Files -->
 

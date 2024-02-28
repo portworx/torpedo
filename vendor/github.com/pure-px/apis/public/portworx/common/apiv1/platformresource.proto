@@ -60,7 +60,7 @@ message ApplicationResource {
     // PDS application resource of type deployment.
     PDS_DEPLOYMENT = 1;
     // PDS application resource of type backup.
-    PDS_BACKUP = 2;
+    PDS_BACKUPCONFIG = 2;
     // PDS application resource of type restore.
     PDS_RESTORE = 3;
     // List of supported BAAS application resources.

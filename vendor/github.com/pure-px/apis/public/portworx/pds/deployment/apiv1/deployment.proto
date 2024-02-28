@@ -118,13 +118,13 @@ message Config {
 // References to other resources.
 message References {
     // UID of the target cluster in which Data Service will be deployed.
-    string target_cluster_id = 1;
+    string target_cluster_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
 
     // UID of the image to be used for the Data Service Deployment.
     string image_id = 2;
 
     // UID of the project to which DataService Deployment associated.
-    string project_id = 3;
+    string project_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 
     // UID of the restore id for the Deployment.
     string restore_id = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
@@ -155,26 +155,29 @@ message Status {
     // Phase is unspecified.
     PHASE_UNSPECIFIED = 0;
 
-    // Deployment is initializing.
-    INITIALIZING = 1;
-
     // Restore of Deployment is in progress.
-    RESTORING = 2;
+    RESTORING = 1;
 
     // Deployment is Failed.
-    FAILED = 3;
+    FAILED = 2;
 
     // Deployment is being deleted.
-    DELETING = 4;
+    DELETING = 3;
 
     // Deployment is Preparing.
-    PREPARING = 5;
+    PREPARING = 4;
+
+    // Deployment is Deploying.
+    DEPLOYING = 5;
 
     // Deployment is Deployed.
     DEPLOYED = 6;
 
+    // Deployment is Updating.
+    UPDATING = 7;
+
     // Deployment is Timeout.
-    TIMED_OUT = 7;
+    TIMED_OUT = 8;
   }
 
   // Status of the Deployment.
@@ -217,8 +220,13 @@ message CreateDeploymentRequest {
   //     the resource in the namespace context. --)
   string namespace_id = 1;
 
+  // UID of the project.
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to know the project with which the deployment is associated with. --)
+  string project_id = 2;
+
   // Deployment resource.
-  Deployment deployment = 2;
+  Deployment deployment = 3;
 }
 
 // Request to update the Deployment resource.

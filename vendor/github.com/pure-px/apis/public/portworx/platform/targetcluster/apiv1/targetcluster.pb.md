@@ -19,6 +19,7 @@
     - [ListTargetClustersRequest](#listtargetclustersrequest)
     - [ListTargetClustersResponse](#listtargetclustersresponse)
     - [Metadata](#metadata)
+    - [PXEMetadata](#pxemetadata)
     - [Status](#status)
     - [Status.ApplicationsEntry](#statusapplicationsentry)
     - [TargetCluster](#targetcluster)
@@ -41,6 +42,11 @@ TargetCluster service provides APIs to interact with the TargetCluster entity
 > **rpc** ListTargetClusters([ListTargetClustersRequest](#listtargetclustersrequest))
     [ListTargetClustersResponse](#listtargetclustersresponse)
 
+(-- api-linter: core::0132::http-body=disabled
+    api-linter: core::0132::http-method=disabled
+    aip.dev/not-precedent: We need to do this because 
+we can't have advance filters as query params. 
+--)
 ListTargetCluster API lists the TargetClusters visible to the caller
 ### GetTargetCluster {#methodpublicportworxplatformtargetclusterv1targetclusterservicegettargetcluster}
 
@@ -59,7 +65,7 @@ DeleteTargetCluster API deletes the specified TargetCluster
 > **rpc** UpdateTargetCluster([UpdateTargetClusterRequest](#updatetargetclusterrequest))
     [TargetCluster](#targetcluster)
 
-UpdateTargetCluster API updates the metadata(e.g name or labels) of the specified TargetCluster
+UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster
  <!-- end methods -->
  <!-- end services -->
 
@@ -137,6 +143,22 @@ TargetClusterMetadata represents the metadata of a cluster
 | ----- | ---- | ----------- |
 | kube_server_version | [ string](#string) | Version of kubernetes api server |
 | kube_platform | [ KubePlatform.Type](#kubeplatformtype) | Platform of the kubernetes eg: aws, ocp, etc |
+| pxe_metadata | [ PXEMetadata](#pxemetadata) | Metadata of portworx enterprise on the target cluster |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### PXEMetadata {#pxemetadata}
+PX Enterprise metadata on the target cluster
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| csi_enabled | [ bool](#bool) | CSIEnabled flag depicts if csi is supported on the target cluster |
+| service_name | [ string](#string) | Name of portworx api service on the target cluster |
+| service_namespace | [ string](#string) | Namespace of portworx api service on the target cluster |
+| storage_cluster_phase | [ string](#string) | Phase of storage cluster on the target cluster |
+| version | [ string](#string) | Version of PXE installed on the target cluster |
  <!-- end Fields -->
  <!-- end HasFields -->
 

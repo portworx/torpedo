@@ -172,8 +172,9 @@ Enum for Phase of the Deployment config update.
 | PHASE_UNSPECIFIED | 0 | Phase is unspecified. |
 | FAILED | 1 | Deployment config update failed. |
 | QUEUED | 2 | Deployment config update is queued. |
-| COMPLETED | 3 | Deployment config update is completed. |
-| REQUEUED | 4 | Deployment config update is requeued. |
+| IN_PROGRESS | 3 | Deployment config update is in progress. |
+| COMPLETED | 4 | Deployment config update is completed. |
+| REQUEUED | 5 | Deployment config update is requeued. |
 
 
  <!-- end Enums -->

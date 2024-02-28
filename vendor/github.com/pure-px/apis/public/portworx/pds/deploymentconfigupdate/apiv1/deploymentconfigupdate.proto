@@ -140,10 +140,12 @@ message Status {
     FAILED = 1;
     // Deployment config update is queued.
     QUEUED = 2;
+    // Deployment config update is in progress.
+    IN_PROGRESS = 3;
     // Deployment config update is completed.
-    COMPLETED = 3;
+    COMPLETED = 4;
     // Deployment config update is requeued.
-    REQUEUED  = 4;
+    REQUEUED  = 5;
   }
 
   // Phase of the deployment config update

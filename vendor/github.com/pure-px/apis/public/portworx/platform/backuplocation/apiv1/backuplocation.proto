@@ -214,8 +214,10 @@ message ListBackupLocationsRequest {
   // Supported infra resource filters: PROJECT
   // To filter by credentials, use field_selector filter
   public.portworx.common.v1.ResourceSelector infra_resource_selector = 5;
+  // Response data flags for listing backup locations
+  public.portworx.common.v1.RespData resp_data= 6;
   // Sorting details using which requested list of backup locations to be sorted.
-  public.portworx.common.v1.Sort sort = 6;
+  public.portworx.common.v1.Sort sort = 7;
 }
 
 // Response of list backup locations

@@ -411,11 +411,12 @@
                     "PHASE_UNSPECIFIED",
                     "FAILED",
                     "QUEUED",
+                    "IN_PROGRESS",
                     "COMPLETED",
                     "REQUEUED"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for Phase of the Deployment config update.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - FAILED: Deployment config update failed.\n - QUEUED: Deployment config update is queued.\n - COMPLETED: Deployment config update is completed.\n - REQUEUED: Deployment config update is requeued."
+                "description": "Enum for Phase of the Deployment config update.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - FAILED: Deployment config update failed.\n - QUEUED: Deployment config update is queued.\n - IN_PROGRESS: Deployment config update is in progress.\n - COMPLETED: Deployment config update is completed.\n - REQUEUED: Deployment config update is requeued."
             },
             "pdsdeploymentv1Config": {
                 "type": "object",
@@ -656,7 +657,8 @@
                 "properties": {
                     "targetClusterId": {
                         "type": "string",
-                        "description": "UID of the target cluster in which Data Service will be deployed."
+                        "description": "UID of the target cluster in which Data Service will be deployed.",
+                        "readOnly": true
                     },
                     "imageId": {
                         "type": "string",
@@ -664,7 +666,8 @@
                     },
                     "projectId": {
                         "type": "string",
-                        "description": "UID of the project to which DataService Deployment associated."
+                        "description": "UID of the project to which DataService Deployment associated.",
+                        "readOnly": true
                     },
                     "restoreId": {
                         "type": "string",

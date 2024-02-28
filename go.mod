@@ -127,7 +127,7 @@ require (
 	github.com/jetstack/cert-manager v1.7.3
 	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo/v2 v2.15.0
-	github.com/pure-px/apis v0.0.0-20240219053634-348bdc2a3d67
+	github.com/pure-px/apis v0.0.0-20240228050538-620a493c606d
 	github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.13.0

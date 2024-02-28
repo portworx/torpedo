@@ -174,6 +174,7 @@ Request to list the cloud credentials for a tenant or a project
 | label_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Provides the key in labels and associated values for which cloud credentials need to be listed |
 | field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter cloud credentials based on the fields in the cloud credential's proto message |
 | infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter cloud credentials based on the infra resources associated with the cloud credentials Supported infra resource filters: PROJECT |
+| resp_data | [ public.portworx.common.v1.RespData](#publicportworxcommonv1respdata) | Response data flags for listing cloud credentials |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of cloud credentials to be sorted. |
  <!-- end Fields -->
  <!-- end HasFields -->

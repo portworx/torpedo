@@ -64,3 +64,15 @@ message ResourceSelector{
   // Each filter will have AND relationship
   repeated ResourceFilter infra_resource_filters = 1;
 }
+
+// RespData provides flags which provides info about the fields that should be populated in the response
+enum RespData {
+  // RespData Unspecified. complete resource will be populated
+  RESP_DATA_UNSPECIFIED = 0;
+  // only uid, name, labels should be populated
+  INDEX = 1;
+  // only meta data should be populated
+  LITE = 2;
+  // complete resource should be populated
+  FULL = 3;
+}

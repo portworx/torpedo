@@ -12,7 +12,7 @@
     "paths": {
         "/v1/clusters": {
             "get": {
-                "summary": "ListTargetCluster API lists the TargetClusters visible to the caller",
+                "summary": "List API lists all the target clusters for a tenant",
                 "operationId": "TargetClusterService_ListTargetClusters",
                 "responses": {
                     "200": {
@@ -197,8 +197,8 @@
             }
         },
         "/v1/clusters/{targetCluster.meta.uid}": {
-            "patch": {
-                "summary": "UpdateTargetCluster API updates the metadata(e.g name or labels) of the specified TargetCluster",
+            "put": {
+                "summary": "UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster",
                 "operationId": "TargetClusterService_UpdateTargetCluster",
                 "responses": {
                     "200": {
@@ -312,6 +312,48 @@
                     "TargetClusterService"
                 ]
             }
+        },
+        "/v1/clusters:search": {
+            "post": {
+                "summary": "List API lists all the target clusters for a tenant",
+                "operationId": "TargetClusterService_ListTargetClusters2",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListTargetClustersResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1ListTargetClustersRequest"
+                            }
+                        }
+                    },
+                    "description": "ListTargetClusterRequest is a request message to the List TargetCluster API.",
+                    "required": true
+                },
+                "tags": [
+                    "TargetClusterService"
+                ]
+            }
         }
     },
     "components": {
@@ -377,16 +419,6 @@
                 ],
                 "default": "FIELD_UNSPECIFIED",
                 "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
-            },
-            "SortOrderValue": {
-                "type": "string",
-                "enum": [
-                    "VALUE_UNSPECIFIED",
-                    "ASC",
-                    "DESC"
-                ],
-                "default": "VALUE_UNSPECIFIED",
-                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             },
             "googlerpcStatus": {
                 "type": "object",
@@ -491,6 +523,34 @@
                 "description": "- TYPE_UNSPECIFIED: Unsepecified\n - AWS: Aws platform\n - AZURE: Azure platform\n - OCP: Openshift cloud platform\n - GCP: Google cloud platform\n - VSPHERE: VMware vSphere\n - UNKNOWN: Unknown platform",
                 "title": "kubeplatform values"
             },
+            "v1ListTargetClustersRequest": {
+                "type": "object",
+                "properties": {
+                    "tenantId": {
+                        "type": "string",
+                        "title": "List target clusters associated with a tenant"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
+                    },
+                    "labelSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "fieldSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "infraResourceSelector": {
+                        "$ref": "#/components/schemas/v1ResourceSelector"
+                    },
+                    "sort": {
+                        "$ref": "#/components/schemas/v1Sort"
+                    }
+                },
+                "description": "ListTargetClusterRequest is a request message to the List TargetCluster API.",
+                "required": [
+                    "tenantId"
+                ]
+            },
             "v1ListTargetClustersResponse": {
                 "type": "object",
                 "properties": {
@@ -575,9 +635,38 @@
                     },
                     "kubePlatform": {
                         "$ref": "#/components/schemas/v1KubePlatformType"
+                    },
+                    "pxeMetadata": {
+                        "$ref": "#/components/schemas/v1PXEMetadata"
                     }
                 },
                 "title": "TargetClusterMetadata represents the metadata of a cluster"
+            },
+            "v1PXEMetadata": {
+                "type": "object",
+                "properties": {
+                    "csiEnabled": {
+                        "type": "boolean",
+                        "title": "CSIEnabled flag depicts if csi is supported on the target cluster"
+                    },
+                    "serviceName": {
+                        "type": "string",
+                        "title": "Name of portworx api service on the target cluster"
+                    },
+                    "serviceNamespace": {
+                        "type": "string",
+                        "title": "Namespace of portworx api service on the target cluster"
+                    },
+                    "storageClusterPhase": {
+                        "type": "string",
+                        "title": "Phase of storage cluster on the target cluster"
+                    },
+                    "version": {
+                        "type": "string",
+                        "title": "Version of PXE installed on the target cluster"
+                    }
+                },
+                "title": "PX Enterprise metadata on the target cluster"
             },
             "v1PageBasedPaginationRequest": {
                 "type": "object",
@@ -682,10 +771,20 @@
                         "$ref": "#/components/schemas/SortByField"
                     },
                     "sortOrder": {
-                        "$ref": "#/components/schemas/SortOrderValue"
+                        "$ref": "#/components/schemas/v1SortOrderValue"
                     }
                 },
                 "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             },
             "v1TargetCluster": {
                 "type": "object",

@@ -418,6 +418,15 @@
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "UID of the project.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to know the project with which the deployment is associated with. --)",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "requestBody": {
@@ -873,7 +882,8 @@
                 "properties": {
                     "targetClusterId": {
                         "type": "string",
-                        "description": "UID of the target cluster in which Data Service will be deployed."
+                        "description": "UID of the target cluster in which Data Service will be deployed.",
+                        "readOnly": true
                     },
                     "imageId": {
                         "type": "string",
@@ -881,7 +891,8 @@
                     },
                     "projectId": {
                         "type": "string",
-                        "description": "UID of the project to which DataService Deployment associated."
+                        "description": "UID of the project to which DataService Deployment associated.",
+                        "readOnly": true
                     },
                     "restoreId": {
                         "type": "string",
@@ -918,16 +929,17 @@
                 "type": "string",
                 "enum": [
                     "PHASE_UNSPECIFIED",
-                    "INITIALIZING",
                     "RESTORING",
                     "FAILED",
                     "DELETING",
                     "PREPARING",
+                    "DEPLOYING",
                     "DEPLOYED",
+                    "UPDATING",
                     "TIMED_OUT"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - INITIALIZING: Deployment is initializing.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYED: Deployment is Deployed.\n - TIMED_OUT: Deployment is Timeout."
+                "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYING: Deployment is Deploying.\n - DEPLOYED: Deployment is Deployed.\n - UPDATING: Deployment is Updating.\n - TIMED_OUT: Deployment is Timeout."
             },
             "v1Template": {
                 "type": "object",
