@@ -10962,7 +10962,7 @@ var _ = Describe("{OnlineJournalAddCheck}", func() {
 	})
 
 	var contexts []*scheduler.Context
-	var selectedNode node.Node
+	var selectedNode = node.Node{}
 	var lsblkOutput string
 
 	itLog := "OnlineJournalAddCheck"
@@ -10978,6 +10978,24 @@ var _ = Describe("{OnlineJournalAddCheck}", func() {
 		ValidateApplications(contexts)
 		defer DestroyApps(contexts, nil)
 
+		stepLog = "select a node where there is no journal device"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				output, err := runCmd("pxctl status", node)
+				log.FailOnError(err, "Failed to run pxctl status on node: %v", node.Name)
+				log.Infof("pxctl status output: %v", output)
+
+				if !strings.Contains(output, "Journal Device") {
+					selectedNode = node
+					break
+				}
+			}
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("No node found without journal device"), "No node found without journal device")
+			}
+		})
 		stepLog = "Check lsblk state before addition of drive add of journal device"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
