@@ -50,7 +50,7 @@ func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []apiStructs.DeploymentTopology{{}}
 
 	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
-	depInputs.Deployment.NamespaceID = "nam:placeholder"
+	depInputs.Deployment.NamespaceID = "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
 	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
@@ -80,7 +80,6 @@ func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 		return nil, err
 	}
 	return deployment, err
-
 }
 
 func ValidateDataServiceDeployment() {

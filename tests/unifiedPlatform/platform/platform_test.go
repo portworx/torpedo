@@ -2,7 +2,6 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
@@ -77,7 +76,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	log.InfoD(steplog)
 	It("Deploy and Validate DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := dslibs.DeployDataService(ds)
+			_, err := stworkflows.DeployDataservice(ds)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 	})
