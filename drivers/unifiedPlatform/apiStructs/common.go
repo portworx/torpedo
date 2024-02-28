@@ -43,3 +43,7 @@ type V1Deployment struct {
 	Meta   Meta      `copier:"must,nopanic"`
 	Config V1Config1 `copier:"must,nopanic"`
 }
+
+type Status struct {
+	Phase string
+}
