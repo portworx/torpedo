@@ -1,36 +1,101 @@
 package apiStructs
 
-import pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
+import (
+	"time"
+)
+
+type ConfigBackupType string
+
+type ConfigBackupLevel string
+
+type ConfigReclaimPolicyType string
 
 type PDSBackupConfig struct {
-	Create CreatePDSBackupConfig
-	Get    GetPDSBackupConfig
-	Update UpdatePDSBackupConfig
-	Delete DeletePDSBackupConfig
-	List   ListPDSBackupConfig
+	Create BackupConfigCreate
+	Update BackupConfigUpdate
+	Get    BackupConfigGet
+	Delete BackupConfigDelete
+	List   BackupConfigList
 }
 
-type CreatePDSBackupConfig struct {
-	V1   pdsv2.ApiBackupConfigServiceCreateBackupConfigRequest
-	GRPC pdsv2.ApiBackupConfigServiceCreateBackupConfigRequest
+type BackupConfigCreate struct {
+	ProjectId      string
+	DeploymentId   *string
+	V1BackupConfig *V1BackupConfig
 }
 
-type UpdatePDSBackupConfig struct {
-	V1   pdsv2.ApiBackupConfigServiceUpdateBackupConfigRequest
-	GRPC pdsv2.ApiBackupConfigServiceUpdateBackupConfigRequest
+type BackupConfigUpdate struct {
+	BackupConfigMetaUid        string
+	DesiredBackupConfiguration *DesiredBackupConfiguration
 }
 
-type DeletePDSBackupConfig struct {
-	V1   pdsv2.ApiBackupConfigServiceDeleteBackupConfigRequest
-	GRPC pdsv2.ApiBackupConfigServiceDeleteBackupConfigRequest
+type BackupConfigGet struct {
+	Id string
 }
 
-type GetPDSBackupConfig struct {
-	V1   pdsv2.ApiBackupConfigServiceGetBackupConfigRequest
-	GRPC pdsv2.ApiBackupConfigServiceGetBackupConfigRequest
+type BackupConfigDelete struct {
+	Id string
 }
 
-type ListPDSBackupConfig struct {
-	V1   pdsv2.ApiBackupConfigServiceListBackupConfigsRequest
-	GRPC pdsv2.ApiBackupConfigServiceListBackupConfigsRequest
+type BackupConfigList struct {
+	AccountId            *string
+	TenantId             *string
+	ProjectId            *string
+	TargetClusterId      *string
+	NamespaceId          *string
+	DeploymentId         *string
+	PaginationPageNumber *string
+	PaginationPageSize   *string
+	SortSortBy           *string
+	SortSortOrder        *string
+}
+
+type V1BackupConfig struct {
+	Meta   Meta                  `json:"meta,omitempty"`
+	Config Config                `json:"config,omitempty"`
+	Status *Backupconfigv1Status `json:"status,omitempty"`
+}
+
+type Backupconfigv1Status struct {
+	Phase                  *StatusPhase          `json:"phase,omitempty"`
+	CustomResourceName     *string               `json:"customResourceName,omitempty"`
+	IsScheduleSynchronized *bool                 `json:"isScheduleSynchronized,omitempty"`
+	DeploymentMetaData     *V1DeploymentMetaData `json:"deploymentMetaData,omitempty"`
+}
+
+type MetadataOfTheBackupConfiguration struct {
+	Name            *string            `json:"name,omitempty"`
+	Description     *string            `json:"description,omitempty"`
+	ResourceVersion *string            `json:"resourceVersion,omitempty"`
+	CreateTime      *time.Time         `json:"createTime,omitempty"`
+	UpdateTime      *time.Time         `json:"updateTime,omitempty"`
+	Labels          *map[string]string `json:"labels,omitempty"`
+	Annotations     *map[string]string `json:"annotations,omitempty"`
+}
+
+type DesiredBackupConfiguration struct {
+	Meta   *MetadataOfTheBackupConfiguration `json:"meta,omitempty"`
+	Config *BackupV1Config                   `json:"config,omitempty"`
+	Status *Backupconfigv1Status             `json:"status,omitempty"`
+}
+
+type BackupV1Config struct {
+	References      *BackupV1References1     `json:"references,omitempty"`
+	JobHistoryLimit *int32                   `json:"jobHistoryLimit,omitempty"`
+	Schedule        *BackupV1Schedule        `json:"schedule,omitempty"`
+	Suspend         *bool                    `json:"suspend,omitempty"`
+	BackupType      *ConfigBackupType        `json:"backupType,omitempty"`
+	BackupLevel     *ConfigBackupLevel       `json:"backupLevel,omitempty"`
+	ReclaimPolicy   *ConfigReclaimPolicyType `json:"reclaimPolicy,omitempty"`
+}
+
+type BackupV1References1 struct {
+	DeploymentId     *string `json:"deploymentId,omitempty"`
+	BackupLocationId *string `json:"backupLocationId,omitempty"`
+	DataServiceId    *string `json:"dataServiceId,omitempty"`
+}
+
+type BackupV1Schedule struct {
+	Id              *string `json:"id,omitempty"`
+	ResourceVersion *string `json:"resourceVersion,omitempty"`
 }

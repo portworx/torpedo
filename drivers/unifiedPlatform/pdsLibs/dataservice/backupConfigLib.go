@@ -8,7 +8,7 @@ import (
 
 type BackupConfig struct {
 	ProjectId        string
-	DeploymentID     string
+	DeploymentID     *string
 	BackupConfigType *pdsv2.ConfigBackupType
 	BackupLevel      *pdsv2.ConfigBackupLevel
 	ReclaimPolicy    *pdsv2.ConfigReclaimPolicyType
@@ -19,22 +19,9 @@ func CreateBackupConfig(backupConfig BackupConfig, ctx context.Context) (*apiStr
 
 	createBackupRequest := apiStructs.WorkFlowRequest{}
 
-	createBackupRequest.BackupConfig.Create.V1 = createBackupRequest.BackupConfig.Create.V1.ApiService.
-		BackupConfigServiceCreateBackupConfig(ctx, backupConfig.ProjectId)
-
-	createBackupRequest.BackupConfig.Create.V1.DeploymentId(backupConfig.DeploymentID)
-	createBackupRequest.BackupConfig.Create.V1.V1BackupConfig(pdsv2.V1BackupConfig{
-		Config: &pdsv2.V1Config{
-			JobHistoryLimit: intToPointerInt(5),
-			Schedule: &pdsv2.V1Schedule{
-				Id: intToPointerString(1),
-			},
-			Suspend:       PointerBool(false),
-			BackupType:    backupConfig.BackupConfigType,
-			BackupLevel:   backupConfig.BackupLevel,
-			ReclaimPolicy: backupConfig.ReclaimPolicy,
-		},
-	})
+	createBackupRequest.BackupConfig.Create.V1BackupConfig = &apiStructs.V1BackupConfig{}
+	createBackupRequest.BackupConfig.Create.DeploymentId = backupConfig.DeploymentID
+	createBackupRequest.BackupConfig.Create.ProjectId = backupConfig.ProjectId
 
 	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupRequest)
 	if err != nil {

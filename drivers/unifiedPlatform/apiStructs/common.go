@@ -34,7 +34,17 @@ type Config struct {
 	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
 
-type v1Deployment struct {
+type V1Deployment struct {
 	Meta   Meta   `copier:"must,nopanic"`
 	Config Config `copier:"must,nopanic"`
 }
+
+type V1DeploymentMetaData struct {
+	Name                 *string `copier:"must,nopanic"`
+	CustomResourceName   *string `copier:"must,nopanic"`
+	DeploymentTargetName *string `copier:"must,nopanic"`
+	NamespaceName        *string `copier:"must,nopanic"`
+	TlsEnabled           *bool   `copier:"must,nopanic"`
+}
+
+type StatusPhase string

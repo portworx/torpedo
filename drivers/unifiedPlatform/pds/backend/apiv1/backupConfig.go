@@ -7,6 +7,7 @@ import (
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/portworx/torpedo/drivers/utilities"
 	status "net/http"
 )
 
@@ -27,12 +28,19 @@ func (ds *PDSV2_API) getBackupConfigClient() (context.Context, *pdsv2.BackupConf
 func (ds *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := apiStructs.WorkFlowResponse{}
 
-	_, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := ds.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigModel, res, err := backupClient.BackupConfigServiceCreateBackupConfigExecute(createBackupConfigRequest.BackupConfig.Create.V1)
+	backupConfigCreateRequest := backupClient.BackupConfigServiceCreateBackupConfig(ctx, createBackupConfigRequest.BackupConfig.Create.ProjectId)
+
+	err = utilities.CopyStruct(backupConfigCreateRequest, createBackupConfigRequest.BackupConfig.Create)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
+	backupConfigModel, res, err := backupClient.BackupConfigServiceCreateBackupConfigExecute(backupConfigCreateRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceCreateBackupConfigExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -45,16 +53,27 @@ func (ds *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiStructs.Wo
 func (ds *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := apiStructs.WorkFlowResponse{}
 
-	_, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := ds.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigModel, res, err := backupClient.BackupConfigServiceUpdateBackupConfigExecute(updateBackupConfigRequest.BackupConfig.Update.V1)
+	backupConfigUpdateRequest := backupClient.BackupConfigServiceUpdateBackupConfig(ctx, updateBackupConfigRequest.BackupConfig.Update.BackupConfigMetaUid)
+	err = utilities.CopyStruct(backupConfigUpdateRequest, updateBackupConfigRequest.BackupConfig.Update)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
+	backupConfigModel, res, err := backupClient.BackupConfigServiceUpdateBackupConfigExecute(backupConfigUpdateRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceUpdateBackupConfigExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&backupConfigResponse, backupConfigModel)
+
+	err = utilities.CopyStruct(&backupConfigResponse, backupConfigModel)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
 	return &backupConfigResponse, err
 
 }
@@ -63,16 +82,26 @@ func (ds *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.Wo
 func (ds *PDSV2_API) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := apiStructs.WorkFlowResponse{}
 
-	_, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := ds.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigModel, res, err := backupClient.BackupConfigServiceGetBackupConfigExecute(getBackupConfigRequest.BackupConfig.Get.V1)
+	backupConfigGetRequest := backupClient.BackupConfigServiceGetBackupConfig(ctx, getBackupConfigRequest.BackupConfig.Get.Id)
+	err = utilities.CopyStruct(backupConfigGetRequest, getBackupConfigRequest.BackupConfig.Get)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
+	backupConfigModel, res, err := backupClient.BackupConfigServiceGetBackupConfigExecute(backupConfigGetRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceGetBackupConfigExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&backupConfigResponse, backupConfigModel)
+	err = utilities.CopyStruct(&backupConfigResponse, backupConfigModel)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
 	return &backupConfigResponse, err
 
 }
@@ -80,12 +109,18 @@ func (ds *PDSV2_API) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlow
 // DeleteBackupConfig will delete backup config for a given deployment
 func (ds *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 
-	_, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := ds.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	_, res, err := backupClient.BackupConfigServiceDeleteBackupConfigExecute(deleteBackupConfigRequest.BackupConfig.Delete.V1)
+	backupConfigDeleteRequest := backupClient.BackupConfigServiceDeleteBackupConfig(ctx, deleteBackupConfigRequest.BackupConfig.Delete.Id)
+	err = utilities.CopyStruct(backupConfigDeleteRequest, deleteBackupConfigRequest.BackupConfig.Delete)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
+	_, res, err := backupClient.BackupConfigServiceDeleteBackupConfigExecute(backupConfigDeleteRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceDeleteBackupConfigExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -98,16 +133,27 @@ func (ds *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.Wo
 func (ds *PDSV2_API) ListBackupConfig(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := []apiStructs.WorkFlowResponse{}
 
-	_, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := ds.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigModel, res, err := backupClient.BackupConfigServiceListBackupConfigsExecute(listBackupConfigRequest.BackupConfig.List.V1)
+	backupConfigListRequest := backupClient.BackupConfigServiceListBackupConfigs(ctx)
+	err = utilities.CopyStruct(backupConfigListRequest, listBackupConfigRequest.BackupConfig.List)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
+	backupConfigModel, res, err := backupClient.BackupConfigServiceListBackupConfigsExecute(backupConfigListRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `BackupConfigServiceListBackupConfigsExecute`: %v\n.Full HTTP response: %v", err, res)
 	}
-	copier.Copy(&backupConfigResponse, backupConfigModel)
+
+	err = utilities.CopyStruct(&backupConfigResponse, backupConfigModel)
+	if err != nil {
+		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
+	}
+
 	return backupConfigResponse, err
 
 }

@@ -3,6 +3,7 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"github.com/jinzhu/copier"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
@@ -296,4 +297,12 @@ func GetEnv(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// Func to copy one struct to another and raise error if failed
+func CopyStruct(fromValue interface{}, toValue interface{}) error {
+	log.Infof("Copying from [%+v]", fromValue)
+	log.Infof("Copying to [%+v]", toValue)
+	err := copier.Copy(fromValue, toValue)
+	return err
 }
