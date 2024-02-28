@@ -747,7 +747,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithNodeSelector", "Verify backup and restore of Kubevirt VMs in with node selector specified", nil, 0, ATrivedi, Q1FY25)
+		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithNodeSelector", "Verify backup and restore of Kubevirt VMs with node selector specified", nil, 0, ATrivedi, Q1FY25)
 
 		backupLocationMap = make(map[string]string)
 		providers = GetBackupProviders()
@@ -778,7 +778,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 		nodeSelectorNotPresent[fmt.Sprintf("node_selector_%s", RandomString(4))] = fmt.Sprintf("value_%s", RandomString(6))
 	})
 
-	It("Verify backup and restore of Kubevirt VMs in different states", func() {
+	It("Verify backup and restore of Kubevirt VMs with node selector specified", func() {
 		defer func() {
 			log.InfoD("switching to default context")
 			err := SetClusterContext("")
