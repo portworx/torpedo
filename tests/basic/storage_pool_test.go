@@ -10995,13 +10995,11 @@ var _ = Describe("{OnlineJournalAddCheck}", func() {
 			if selectedNode.Name == "" {
 				log.FailOnError(fmt.Errorf("No node found without journal device"), "No node found without journal device")
 			}
+			log.Infof("Selected Node for add journal device: %v", selectedNode.Name)
 		})
 		stepLog = "Check lsblk state before addition of drive add of journal device"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			selectedNode = node.GetStorageDriverNodes()[0]
-			log.InfoD("Selected node: %v", selectedNode.Name)
-
 			//run lsblk command to check the state of the journal device
 			cmd := "lsblk"
 			lsblkOutput, err = runCmd(cmd, selectedNode)
