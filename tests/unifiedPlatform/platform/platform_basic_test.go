@@ -23,9 +23,9 @@ var _ = BeforeSuite(func() {
 		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 
-		accList, err := platformUtils.GetAccountListv1()
-		log.FailOnError(err, "error while getting account list")
-		accID := platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
+		// accList, err := platformUtils.GetAccountListv1()
+		// log.FailOnError(err, "error while getting account list")
+		// accID = platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
 		log.Infof("AccountID - [%s]", accID)
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)

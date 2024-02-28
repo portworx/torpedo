@@ -4,6 +4,7 @@ type WorkFlowResponse struct {
 	Meta   Meta   `copier:"must,nopanic"`
 	Config Config `copier:"must,nopanic"`
 	Id     string `copier:"must,nopanic"`
+	Status Status
 }
 
 type WorkFlowRequest struct {
