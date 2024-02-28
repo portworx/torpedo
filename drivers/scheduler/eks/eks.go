@@ -12,6 +12,7 @@ import (
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -56,6 +57,10 @@ func (e *EKS) Init(schedOpts scheduler.InitOptions) (err error) {
 		return fmt.Errorf("unable to load default SDK config. Err: [%v]", err)
 	}
 	e.eksClient = eks.NewFromConfig(e.config)
+	err = e.K8s.Init(schedOpts)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -108,14 +113,16 @@ func (e *EKS) WaitForControlPlaneToUpgrade(version string) error {
 			return nil, false, err
 		}
 		if eksDescribeClusterOutput.Cluster == nil {
-			return "", false, fmt.Errorf("failed to describe EKS cluster [%s], cluster not found", e.clusterName)
+			return nil, false, fmt.Errorf("failed to describe EKS cluster [%s], cluster not found", e.clusterName)
 		}
 		status := eksDescribeClusterOutput.Cluster.Status
-		if status != expectedUpgradeStatus {
-			return nil, true, fmt.Errorf("waiting for EKS Control Plane upgrade to [%s] to complete, expected status [%s], actual status [%s]", version, expectedUpgradeStatus, status)
+		currentVersion := aws.ToString(eksDescribeClusterOutput.Cluster.Version)
+		if status == expectedUpgradeStatus && currentVersion == version {
+			log.Infof("EKS Control Plane upgrade to [%s] completed successfully. Current status: [%s], version: [%s].", version, status, currentVersion)
+			return nil, false, nil
+		} else {
+			return nil, true, fmt.Errorf("waiting for EKS Control Plane upgrade to [%s] to complete, expected status [%s], actual status [%s], current version [%s]", version, expectedUpgradeStatus, status, currentVersion)
 		}
-		log.Infof("Upgrade status for EKS Control Plane to [%s] is [%s]", version, status)
-		return nil, false, nil
 	}
 	_, err := task.DoRetryWithTimeout(t, defaultEKSUpgradeTimeout, defaultEKSUpgradeRetryInterval)
 	if err != nil {
@@ -155,16 +162,23 @@ func (e *EKS) WaitForNodeGroupToUpgrade(nodeGroupName string, version string) er
 		if err != nil {
 			return nil, false, err
 		}
-		status := eksDescribeNodegroupOutput.Nodegroup.Status
-		if status != expectedUpgradeStatus {
-			return nil, true, fmt.Errorf("waiting for EKS Node Group [%s] upgrade to [%s] to complete, expected status [%s], actual status [%s]", nodeGroupName, version, expectedUpgradeStatus, status)
+		if eksDescribeNodegroupOutput.Nodegroup == nil {
+			return nil, false, fmt.Errorf("failed to describe EKS Node Group [%s], node group not found", nodeGroupName)
 		}
-		log.Infof("Upgrade status for EKS Node Group [%s] to [%s] is [%s]", nodeGroupName, version, status)
-		return nil, false, nil
+		status := eksDescribeNodegroupOutput.Nodegroup.Status
+		releaseVersion := aws.ToString(eksDescribeNodegroupOutput.Nodegroup.ReleaseVersion)
+		// The release version comparison using strings.HasPrefix is necessary because
+		// EKS appends a suffix to the version (e.g., "1.27.9-20240213").
+		if status == expectedUpgradeStatus && strings.HasPrefix(releaseVersion, version) {
+			log.Infof("EKS Node Group [%s] successfully upgraded to version [%s]. Current status: [%s], release version: [%s].", nodeGroupName, version, status, releaseVersion)
+			return nil, false, nil
+		} else {
+			return nil, true, fmt.Errorf("waiting for EKS Node Group [%s] upgrade to [%s] to complete, expected status [%s], actual status [%s], current release version [%s]", nodeGroupName, version, expectedUpgradeStatus, status, releaseVersion)
+		}
 	}
 	_, err := task.DoRetryWithTimeout(t, defaultEKSUpgradeTimeout, defaultEKSUpgradeRetryInterval)
 	if err != nil {
-		return fmt.Errorf("failed to upgrade EKS Node Group [%s] version to [%s], Err: [%v]", nodeGroupName, version, err)
+		return fmt.Errorf("failed to upgrade EKS Node Group [%s] to version [%s], Err: [%v]", nodeGroupName, version, err)
 	}
 	log.Infof("Successfully upgraded EKS Node Group [%s] to [%s]", nodeGroupName, version)
 	return nil
