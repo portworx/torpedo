@@ -10946,3 +10946,113 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+var _ = Describe("{OnlineJournalAddCheck}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-15712
+			1. Deploy apps
+			2. Check lsblk state before addition of drive add of journal device
+		    3. Add a cloud drive as a journal device without pool in maintenance mode
+		    4. The request must be rejected and the journal device should not be added in lsblk
+		    5. Now put pool in maintenance mode and add a cloud drive as a journal device this should go through successfully
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("OnlineJournalAddCheck", "Online journal add check", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var selectedNode node.Node
+	var lsblkOutput string
+
+	itLog := "OnlineJournalAddCheck"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("online-journal-add-check-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "Check lsblk state before addition of drive add of journal device"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode = node.GetStorageDriverNodes()[0]
+			log.InfoD("Selected node: %v", selectedNode.Name)
+
+			//run lsblk command to check the state of the journal device
+			cmd := "lsblk"
+			lsblkOutput, err = runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Failed to run command: %v", cmd)
+			log.InfoD("lsblk output: %v", lsblkOutput)
+
+		})
+
+		stepLog = "Add a cloud drive as a journal device without pool in maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Add a cloud drive as a journal device without pool in maintenance mode
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			devicespecjournal := deviceSpec + " --journal"
+
+			err = Inst().V.AddCloudDrive(&selectedNode, devicespecjournal, -1)
+			if err == nil {
+				log.FailOnError(fmt.Errorf("adding cloud drive with journal expected ? Error: [%v]", err),
+					"adding cloud drive with journal failed ?")
+			}
+			log.InfoD("adding journal failed as expected. verifying the error")
+
+			re := regexp.MustCompile(".*Requires pool maintenance mode*")
+			if !re.MatchString(err.Error()) {
+				log.FailOnError(err, "Requires pool maintenance mode alert is not received")
+			}
+			//Check lsblk output this should be same as the old output
+			time.Sleep(30 * time.Second)
+			cmd := "lsblk"
+			output, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Failed to run command: %v", cmd)
+			log.InfoD("lsblk output after trying drive add in pool maintenance mode: %v", output)
+			if output != lsblkOutput {
+				log.FailOnError(fmt.Errorf("lsblk output after trying drive add in pool maintenance mode is not same as the old output"), "lsblk output not consistent with old output")
+			}
+		})
+
+		stepLog = "Put pool in maintenance mode and add a cloud drive as a journal device"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Put pool in maintenance mode
+			err := EnterPoolMaintenance(selectedNode)
+			log.FailOnError(err, "Failed to enter pool maintenance mode")
+
+			//Add a cloud drive as a journal device
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			devicespecjournal := deviceSpec + " --journal"
+
+			err = Inst().V.AddCloudDrive(&selectedNode, devicespecjournal, -1)
+			log.FailOnError(err, "Failed to add cloud drive as a journal device")
+
+			//run lsblk command to check the state of the journal device
+			cmd := "lsblk"
+			output, err := runCmd(cmd, selectedNode)
+			log.FailOnError(err, "Failed to run command: %v", cmd)
+			log.InfoD("lsblk output after adding journal device: %v", output)
+			if output == lsblkOutput {
+				log.FailOnError(fmt.Errorf("lsblk output after adding journal device is same as the old output"), "lsblk output consistent with old output")
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
