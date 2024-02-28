@@ -64,8 +64,16 @@ var _ = Describe("{UpgradeCluster}", func() {
 				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
 			}
 			Step("start scheduler upgrade", func() {
+
+				_, x := core.Instance().GetNodes()
+				log.Errorf("first core.Instance().GetNodes() got error : %v", x)
+
 				err := Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+
+				_, x = core.Instance().GetNodes()
+				log.Errorf("after upgrade core.Instance().GetNodes() got error :  %v", x)
+
 				for _, schedName := range []string{aks.SchedName, eks.SchedName} {
 					schedName = strings.ToUpper(Inst().S.String())
 					log.Warnf("Warning! This is [%s] scheduler, during Node Pool upgrades, %s creates an extra node, this node then becomes a PX node. "+
@@ -76,14 +84,23 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(30 * time.Minute)
 				}
+
+				_, x = core.Instance().GetNodes()
+				log.Errorf("second core.Instance().GetNodes() got error : %v", x)
 			})
 
 			Step("validate storage components", func() {
+				_, x := core.Instance().GetNodes()
+				log.Errorf("third core.Instance().GetNodes() got error : %v", x)
+
 				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 				u, err := url.Parse(urlToParse)
 				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
 				err = Inst().V.ValidateDriver(u.String(), true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+
+				_, x = core.Instance().GetNodes()
+				log.Errorf("fourth core.Instance().GetNodes() got error : %v", x)
 			})
 
 			// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
