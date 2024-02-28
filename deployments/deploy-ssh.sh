@@ -80,8 +80,12 @@ fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
+    focusRegex="$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')"
     FOCUS_ARG="--focus={$focusRegex}"
+fi
+
+if [ -n "$LABEL_FILTER" ]; then
+    FOCUS_ARG="--label-filter=$LABEL_FILTER"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
@@ -312,7 +316,7 @@ fi
 
 JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
 if [ "${SCHEDULER}" == "openshift" ]; then
- JUNIT_REPORT_PATH="/tmp/junit_basic.xml"
+    SECURITY_CONTEXT=true
 fi
 
 if [ -n "${PROVIDERS}" ]; then
