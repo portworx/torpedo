@@ -67,9 +67,9 @@ if [ -z "${MIN_RUN_TIME}" ]; then
 fi
 
 if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
-    FAIL_FAST="--failFast"
+    FAIL_FAST="--fail-fast"
 else
-    FAIL_FAST="-keepGoing"
+    FAIL_FAST="-keep-going"
 fi
 
 SKIP_ARG=""
@@ -80,8 +80,12 @@ fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
+    focusRegex="$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')"
     FOCUS_ARG="--focus={$focusRegex}"
+fi
+
+if [ -n "$LABEL_FILTER" ]; then
+    FOCUS_ARG="--label-filter=$LABEL_FILTER"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
@@ -172,6 +176,11 @@ fi
 APP_DESTROY_TIMEOUT_ARG=""
 if [ -n "${APP_DESTROY_TIMEOUT}" ]; then
     APP_DESTROY_TIMEOUT_ARG="--destroy-app-timeout=$APP_DESTROY_TIMEOUT"
+fi
+
+SCALE_APP_TIMEOUT_ARG=""
+if [ -n "${SCALE_APP_TIMEOUT}" ]; then
+    SCALE_APP_TIMEOUT_ARG="--scale-app-timeout=$SCALE_APP_TIMEOUT"
 fi
 
 if [ -z "$LICENSE_EXPIRY_TIMEOUT_HOURS" ]; then
@@ -305,6 +314,11 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+if [ "${SCHEDULER}" == "openshift" ]; then
+    SECURITY_CONTEXT=true
+fi
+
 if [ -n "${PROVIDERS}" ]; then
   echo "Create configs for providers",${PROVIDERS}
   for i in ${PROVIDERS//,/ };do
@@ -369,14 +383,9 @@ K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
     NODE_DRIVER="ssh"
 fi
+
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
-        aks)
-            NODE_DRIVER="aks"
-            ;;
         oracle)
             NODE_DRIVER="oracle"
             ;;
@@ -495,7 +504,8 @@ spec:
     args: [ "--trace",
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
-            "--slowSpecThreshold", "600",
+            "--poll-progress-after", "10m",
+            --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
@@ -565,6 +575,7 @@ spec:
             "--torpedo-job-type=$TORPEDO_JOB_TYPE",
             "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
             "$APP_DESTROY_TIMEOUT_ARG",
+            "$SCALE_APP_TIMEOUT_ARG",
     ]
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
@@ -653,6 +664,8 @@ spec:
       value: "${VSPHERE_PWD}"
     - name: VSPHERE_HOST_IP
       value: "${VSPHERE_HOST_IP}"
+    - name: VSPHERE_DATACENTER
+      value: "${VSPHERE_DATACENTER}"
     - name: IBMCLOUD_API_KEY
       value: "${IBMCLOUD_API_KEY}"
     - name: CONTROL_PLANE_URL

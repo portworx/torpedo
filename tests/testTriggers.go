@@ -3,10 +3,6 @@ package tests
 import (
 	"bytes"
 	"fmt"
-	"github.com/portworx/sched-ops/k8s/operator"
-	"github.com/portworx/torpedo/drivers/node/vsphere"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	"math"
 	"math/rand"
 	"os"
@@ -19,33 +15,37 @@ import (
 	"sync"
 	"text/template"
 	"time"
-
-	"github.com/portworx/torpedo/pkg/stats"
-
-	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
-
-	"github.com/portworx/torpedo/pkg/applicationbackup"
-	"github.com/portworx/torpedo/pkg/aututils"
-	"github.com/portworx/torpedo/pkg/log"
-	"github.com/portworx/torpedo/pkg/units"
-	"gopkg.in/natefinch/lumberjack.v2"
-
 	"container/ring"
 
+	"github.com/portworx/sched-ops/k8s/operator"
+	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
+	"gopkg.in/natefinch/lumberjack.v2"
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
-	"github.com/onsi/ginkgo"
-
+	"github.com/onsi/ginkgo/v2"
 	opsapi "github.com/libopenstorage/openstorage/api"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
-
 	apios "github.com/libopenstorage/openstorage/api"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	storage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
+	appsapi "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	storageapi "k8s.io/api/storage/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/portworx/torpedo/drivers/node/vsphere"
+	"github.com/portworx/torpedo/drivers/scheduler/openshift"
+	"github.com/portworx/torpedo/pkg/aetosutil"
+	"github.com/portworx/torpedo/pkg/stats"
+	"github.com/portworx/torpedo/pkg/applicationbackup"
+	"github.com/portworx/torpedo/pkg/aututils"
+	"github.com/portworx/torpedo/pkg/log"
+	"github.com/portworx/torpedo/pkg/units"
 	"github.com/portworx/torpedo/drivers/backup"
 	"github.com/portworx/torpedo/drivers/monitor/prometheus"
 	"github.com/portworx/torpedo/drivers/node"
@@ -53,12 +53,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/drivers/scheduler/spec"
 	"github.com/portworx/torpedo/drivers/volume"
-	appsapi "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
-	storageapi "k8s.io/api/storage/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/portworx/torpedo/pkg/asyncdr"
 	"github.com/portworx/torpedo/pkg/email"
 	"github.com/portworx/torpedo/pkg/errors"
@@ -459,7 +453,7 @@ const (
 	//BackupUsingLabelOnCluster backs up resources on a cluster using a specific label
 	BackupUsingLabelOnCluster = "backupUsingLabelOnCluster"
 	//BackupRestartPX restarts Portworx during a backup
-	BackupRestartPX = "backupRestartPX"
+	BackupRestartPortworx = "backupRestartPX"
 	//BackupRestartNode restarts a node with PX during a backup
 	BackupRestartNode = "backupRestartNode"
 	// BackupDeleteBackupPod deletes px-backup pod during a backup
@@ -494,7 +488,13 @@ const (
 	// MetroDRMigrationSchedule runs Metro DR migration schedule between two clusters
 	MetroDRMigrationSchedule = "metrodrmigrationschedule"
 	// AsyncDR runs Async DR between two clusters
-	AsyncDR = "asyncdr"
+	AsyncDR = "asyncdr"	
+	// AsyncDR PX restart on source runs Async DR migration between two clusters with px restart
+	AsyncDRPXRestartSource = "asyncdrpxrestartsource"
+	// AsyncDR PX restart on destination runs Async DR migration between two clusters with px restart
+	AsyncDRPXRestartDest = "asyncdrpxrestartdest"
+	// AsyncDR PX restart on destination runs Async DR migration between two clusters with kvdb restart
+	AsyncDRPXRestartKvdb = "asyncdrpxrestartkvdb"
 	// AsyncDRMigrationSchedule runs AsyncDR Migrationschedule between two clusters
 	AsyncDRMigrationSchedule = "asyncdrmigrationschedule"
 	// ConfluentAsyncDR runs Async DR between two clusters for Confluent kafka CRD
@@ -584,7 +584,7 @@ func TriggerCoreChecker(contexts *[]*scheduler.Context, recordChan *chan *EventR
 	coresMap = make(map[string]string)
 	setMetrics(*event)
 
-	context("checking for core files...", func() {
+	Step("checking for core files...", func() {
 		Step("verifying if core files are present on each node", func() {
 			log.InfoD("verifying if core files are present on each node")
 			nodes := node.GetStorageDriverNodes()
@@ -929,6 +929,12 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 		UpdateOutcome(event, err)
 
 		for _, n := range storageNodes {
+			//selecting healthy nodes for repl add operation
+			err = isNodeHealthy(n, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			storageNodeMap[n.Id] = n
 		}
 
@@ -936,7 +942,6 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 
 		for _, ctx := range *contexts {
 			var appVolumes []*volume.Volume
-			var err error
 			stepLog = fmt.Sprintf("get volumes for %s app", ctx.App.Key)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -972,9 +977,7 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 		}
 
 		if selctx != nil {
-
 			var appVolumes []*volume.Volume
-			var err error
 			stepLog = fmt.Sprintf("get volumes for %s app", selctx.App.Key)
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
@@ -987,30 +990,50 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 			})
 
 			for _, v := range appVolumes {
-
 				currRep, err := Inst().V.GetReplicationFactor(v)
 				UpdateOutcome(event, err)
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					log.Error(err)
+					UpdateOutcome(event, err)
+					continue
+				}
+				if replStatus != "Up" {
+					continue
+				}
 
 				if currRep != 0 {
-					//Changing replication factor to 1
-					if currRep > 1 {
-						log.Infof("Current replication is > 1, reducing it before proceeding")
-						opts := volume.Options{
-							ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
-						}
-						dashStats := make(map[string]string)
-						dashStats["volume-name"] = v.Name
-						dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
-						dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
-						updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
-						err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
-						if err != nil {
-							log.Errorf("There is an error decreasing repl [%v]", err.Error())
-							UpdateOutcome(event, err)
-						}
+					for {
 
-						log.Infof("waiting for 5 mins for data to deleted completely")
-						time.Sleep(5 * time.Minute)
+						//Changing replication factor to 1
+						if currRep > 1 {
+							log.Infof("Current replication is > 1, reducing it before proceeding")
+							opts := volume.Options{
+								ValidateReplicationUpdateTimeout: validateReplicationUpdateTimeout,
+							}
+							dashStats := make(map[string]string)
+							dashStats["volume-name"] = v.Name
+							dashStats["curr-repl-factor"] = strconv.FormatInt(currRep, 10)
+							dashStats["new-repl-factor"] = strconv.FormatInt(currRep-1, 10)
+							updateLongevityStats(event.Event.Type, stats.HADecreaseEventName, dashStats)
+							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
+							if err != nil {
+								log.Errorf("There is an error decreasing repl [%v]", err.Error())
+								UpdateOutcome(event, err)
+								return
+							}
+
+							log.Infof("waiting for 5 mins for data to deleted completely")
+							time.Sleep(5 * time.Minute)
+							currRep, err = Inst().V.GetReplicationFactor(v)
+							if err != nil {
+								log.Errorf("There is an error getting  repl  factor for vol [%s],err:[%v]", v.Name, err.Error())
+								UpdateOutcome(event, err)
+								return
+							}
+						} else {
+							break
+						}
 					}
 				}
 
@@ -1074,6 +1097,14 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				}
 				if isPureVol {
 					log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
+					continue
+				}
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+				if replStatus != "Up" {
 					continue
 				}
 				MaxRF := Inst().V.GetMaxReplicationFactor()
@@ -1259,6 +1290,15 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 				}
 				if isPureVol {
 					log.Warnf("Repl increase on Pure DA Volume [%s] not supported. Skipping this operation", v.Name)
+					continue
+				}
+				replStatus, err := GetVolumeReplicationStatus(v)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+
+				if replStatus != "Up" {
 					continue
 				}
 				stepLog = fmt.Sprintf("repl increase volume driver %s on app %s's volume: %v",
@@ -1553,6 +1593,11 @@ func TriggerCrashVolDriver(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, appNode := range node.GetStorageDriverNodes() {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			stepLog = fmt.Sprintf("crash volume driver %s on node: %v",
 				Inst().V.String(), appNode.Name)
 			nodeContexts, err := GetContextsOnNode(contexts, &appNode)
@@ -1919,11 +1964,6 @@ func TriggerStorageFullPoolExpansion(contexts *[]*scheduler.Context, recordChan 
 		log.InfoD(stepLog)
 		for _, appNode := range node.GetStorageNodes() {
 
-			err := isNodeHealthy(appNode, event.Event.Type)
-			if err != nil {
-				UpdateOutcome(event, err)
-				continue
-			}
 			poolsStatus, err := Inst().V.GetNodePoolsStatus(appNode)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -2091,18 +2131,17 @@ func TriggerRestartManyVolDriver(contexts *[]*scheduler.Context, recordChan *cha
 	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, appNode := range driverNodesToRestart {
+			err := isNodeHealthy(appNode, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			dashStats := make(map[string]string)
 			dashStats["node"] = appNode.Name
 			updateLongevityStats(RestartManyVolDriver, stats.PXRestartEventName, dashStats)
 			wg.Add(1)
 			go func(appNode node.Node) {
 				defer wg.Done()
-				err := isNodeHealthy(appNode, event.Event.Type)
-				if err != nil {
-					UpdateOutcome(event, err)
-					return
-				}
-
 				stepLog = fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name)
 				Step(stepLog, func() {
 					log.InfoD(stepLog)
@@ -2398,6 +2437,11 @@ func TriggerRebootManyNodes(contexts *[]*scheduler.Context, recordChan *chan *Ev
 		nodesToReboot := getNodesByChaosLevel(RebootManyNodes)
 		selectedNodes := make([]string, len(nodesToReboot))
 		for _, n := range nodesToReboot {
+			err := isNodeHealthy(n, event.Event.Type)
+			if err != nil {
+				UpdateOutcome(event, err)
+				continue
+			}
 			selectedNodes = append(selectedNodes, n.Name)
 		}
 		// Reboot node and check driver status
@@ -4628,7 +4672,7 @@ func TriggerBackupRestartPX(contexts *[]*scheduler.Context, recordChan *chan *Ev
 	event := &EventRecord{
 		Event: Event{
 			ID:   GenerateUUID(),
-			Type: BackupRestartPX,
+			Type: BackupRestartPortworx,
 		},
 		Start:   time.Now().Format(time.RFC1123),
 		Outcome: []error{},
@@ -5188,6 +5232,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 	if err != nil {
 		log.Error(err.Error())
 		UpdateOutcome(event, err)
+		return
 	}
 
 	expansionType := "resize-disk"
@@ -5198,6 +5243,7 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 
 	if poolValidity {
 		initialPoolSize := pool.TotalSize / units.GiB
+		var pNode *node.Node
 
 		dashStats := make(map[string]string)
 		dashStats["pool-uuid"] = pool.Uuid
@@ -5207,6 +5253,22 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		if resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK {
 			statType = stats.ResizeDiskEventName
 		}
+		isDmthin, _ := IsDMthin()
+		if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+			pNode, err = GetNodeFromPoolUUID(pool.Uuid)
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+				return
+			}
+			err = EnterPoolMaintenance(*pNode)
+			if err != nil {
+				log.Error(err.Error())
+				UpdateOutcome(event, err)
+				return
+			}
+		}
+
 		updateLongevityStats(event.Event.Type, statType, dashStats)
 		err = Inst().V.ResizeStoragePoolByPercentage(pool.Uuid, resizeOperationType, uint64(chaosLevel))
 		if err != nil {
@@ -5216,27 +5278,43 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 		} else {
 			if doNodeReboot {
 				err = WaitForExpansionToStart(pool.Uuid)
-				log.Error(err.Error())
-				UpdateOutcome(event, err)
-				if err == nil {
-					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
+				if err != nil {
 					log.Error(err.Error())
 					UpdateOutcome(event, err)
+				}
+
+				if err == nil {
+					storageNode, err := GetNodeWithGivenPoolID(pool.Uuid)
+					if err != nil {
+						log.Error(err.Error())
+						UpdateOutcome(event, err)
+					}
 					dashStats = make(map[string]string)
 					dashStats["node"] = storageNode.Name
 
 					updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
 					err = RebootNodeAndWait(*storageNode)
-					log.Error(err.Error())
-					UpdateOutcome(event, err)
+					if err != nil {
+						log.Error(err.Error())
+						UpdateOutcome(event, err)
+					}
 				}
 
 			}
 			err = waitForPoolToBeResized(initialPoolSize, pool.Uuid)
 			if err != nil {
 				err = fmt.Errorf("pool [%v] %v failed. Error: %v", pool.Uuid, expansionType, err)
+				UpdateOutcome(event, err)
+			}
+
+		}
+
+		if pNode != nil {
+			err := ExitPoolMaintenance(*pNode)
+			if err != nil {
 				log.Error(err.Error())
 				UpdateOutcome(event, err)
+				return
 			}
 		}
 	}
@@ -5546,7 +5624,7 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 	setMetrics(*event)
 
 	stepLog := "upgrade volume driver"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		if len(Inst().UpgradeStorageDriverEndpointList) == 0 {
 			log.Fatalf("Unable to perform volume driver upgrade hops, none were given")
 		}
@@ -5633,7 +5711,7 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 	setMetrics(*event)
 
 	stepLog := "Validate AutoFsTrim of the volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		stepLog = "enable auto fstrim "
 		Step(stepLog,
@@ -5646,7 +5724,6 @@ func TriggerAutoFsTrim(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling auto fstrim, Error:%v", err)
-						log.Error(err.Error())
 						UpdateOutcome(event, err)
 					} else {
 						log.InfoD("AutoFsTrim is successfully enabled")
@@ -5739,7 +5816,7 @@ func TriggerVolumeUpdate(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	setMetrics(*event)
 	stepLog := "Validate update of the volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		stepLog = "Update Io priority on volumes "
 		Step(stepLog,
@@ -5771,7 +5848,7 @@ func TriggerVolumeIOProfileUpdate(contexts *[]*scheduler.Context, recordChan *ch
 	}()
 	setMetrics(*event)
 	stepLog := "Validate IO profile update on volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		Step(stepLog,
 			func() {
@@ -6111,7 +6188,7 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 
 	stepLog := "Validate Trashcan feature of the volumes"
 
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		if !isTrashcanEnabled {
 			stepLog = "enable trashcan"
@@ -6124,7 +6201,6 @@ func TriggerTrashcan(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 					})
 					if err != nil {
 						err = fmt.Errorf("error while enabling trashcan, Error:%v", err)
-						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					} else {
@@ -6203,7 +6279,7 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 	setMetrics(*event)
 
 	stepLog := "Validate Relaxed Reclaim of the volumes"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		if !isRelaxedReclaimEnabled {
 			stepLog = "enable relaxed reclaim "
@@ -6215,8 +6291,8 @@ func TriggerRelaxedReclaim(contexts *[]*scheduler.Context, recordChan *chan *Eve
 						"--relaxedreclaim-delete-seconds": "600",
 					})
 					if err != nil {
+						log.Errorf(err.Error())
 						err = fmt.Errorf("error while enabling relaxed reclaim, Error:%v", err)
-						log.Error(err.Error())
 						UpdateOutcome(event, err)
 
 					} else {
@@ -6330,6 +6406,10 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			} else {
 				decommissionedNode = nodeToDecomm
 			}
+			err = Inst().S.RefreshNodeRegistry()
+			UpdateOutcome(event, err)
+			err = Inst().V.RefreshDriverEndpoints()
+			UpdateOutcome(event, err)
 			err = ValidateDataIntegrity(&nodeContexts)
 			UpdateOutcome(event, err)
 		})
@@ -6759,7 +6839,7 @@ func TriggerKVDBFailover(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	setMetrics(*event)
 	stepLog := "perform kvdb failover in a cyclic manner"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		stepLog = "Get KVDB nodes and perform failover"
 		Step(stepLog, func() {
@@ -6946,7 +7026,7 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 
 	chaosLevel := ChaosMap[AppTasksDown]
 	stepLog := "deletes all pods from a given app and validate if they recover"
-	context(stepLog, func() {
+	Step(stepLog, func() {
 		log.InfoD(stepLog)
 		for _, ctx := range *contexts {
 			for i := 0; i < chaosLevel; i++ {
@@ -7315,6 +7395,359 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
 		}
 		dash.UpdateStats("longevity-migration-metrodr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+	}
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRPXRestartSource triggers Async DR with PX restart on source
+func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRPXRestartSource)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("Async DR PX restart on source trigger triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+			Event: Event{
+					ID:   GenerateUUID(),
+					Type: AsyncDRPXRestartSource,
+			},
+			Start:   time.Now().Format(time.RFC1123),
+			Outcome: []error{},
+	}
+	defer func() {
+			event.End = time.Now().Format(time.RFC1123)
+			*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRPXRestartSource]
+	var (
+			migrationNamespaces   []string
+			taskNamePrefix        = "async-dr-pxrs"
+			allMigrations         []*storkapi.Migration
+			includeVolumesFlag    = true
+			includeResourcesFlag  = true
+			startApplicationsFlag = false
+	)
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			err := asyncdr.WriteKubeconfigToFiles()
+			if err != nil {
+					log.Errorf("Failed to write kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+			}
+
+			err = SetSourceKubeConfig()
+			if err != nil {
+					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+			}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+					log.Infof("Task name %s\n", taskName)
+					appContexts := ScheduleApplications(taskName)
+					*contexts = append(*contexts, appContexts...)
+					ValidateApplications(*contexts)
+					for _, ctx := range appContexts {
+							// Override default App readiness time out of 5 mins with 10 mins
+							ctx.ReadinessTimeout = appReadinessTimeout
+							namespace := GetAppNamespace(ctx, taskName)
+							migrationNamespaces = append(migrationNamespaces, namespace)
+					}
+					Step("Create cluster pair between source and destination clusters", func() {
+							// Set cluster context to cluster where torpedo is running
+							ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+					})
+			}
+
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+
+	})
+
+	log.InfoD("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+			UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+			return
+		} else {
+			allMigrations = append(allMigrations, currMig)
+			Step("Restart Portworx", func() {
+				nodes := node.GetStorageDriverNodes()
+				nodeIndex := rand.Intn(len(nodes))
+				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+				StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+				log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+				StartVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+				log.Infof("Giving a few seconds for volume driver to stabilize")
+				time.Sleep(20 * time.Second)
+			})
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+					return
+			}
+			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+			if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+					return
+			}
+			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+	}
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRPXRestartDest triggers Async DR with PX restart on destination
+func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRPXRestartDest)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("Async DR PX restart on destination trigger triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+			Event: Event{
+					ID:   GenerateUUID(),
+					Type: AsyncDRPXRestartDest,
+			},
+			Start:   time.Now().Format(time.RFC1123),
+			Outcome: []error{},
+	}
+	defer func() {
+			event.End = time.Now().Format(time.RFC1123)
+			*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRPXRestartDest]
+	var (
+			migrationNamespaces   []string
+			taskNamePrefix        = "async-dr-pxrd"
+			allMigrations         []*storkapi.Migration
+			includeVolumesFlag    = true
+			includeResourcesFlag  = true
+			startApplicationsFlag = false
+	)
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			err := asyncdr.WriteKubeconfigToFiles()
+			if err != nil {
+					log.Errorf("Failed to write kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+			}
+
+			err = SetSourceKubeConfig()
+			if err != nil {
+					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+			}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+					log.Infof("Task name %s\n", taskName)
+					appContexts := ScheduleApplications(taskName)
+					*contexts = append(*contexts, appContexts...)
+					ValidateApplications(*contexts)
+					for _, ctx := range appContexts {
+							// Override default App readiness time out of 5 mins with 10 mins
+							ctx.ReadinessTimeout = appReadinessTimeout
+							namespace := GetAppNamespace(ctx, taskName)
+							migrationNamespaces = append(migrationNamespaces, namespace)
+					}
+					Step("Create cluster pair between source and destination clusters", func() {
+							// Set cluster context to cluster where torpedo is running
+							ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+					})
+			}
+
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+
+	})
+
+	log.InfoD("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+				return
+		} else {
+			allMigrations = append(allMigrations, currMig)
+			Step("Restart Portworx", func() {
+				err = SetDestinationKubeConfig()
+				if err != nil {
+					log.Errorf("Failed to Set destination kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+				}
+				nodes := node.GetStorageDriverNodes()
+				nodeIndex := rand.Intn(len(nodes))
+				log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+				StopVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+				log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), nodes[nodeIndex].Name)
+				StartVolDriverAndWait([]node.Node{nodes[nodeIndex]})
+				log.Infof("Giving a few seconds for volume driver to stabilize")
+				time.Sleep(20 * time.Second)
+				err = SetSourceKubeConfig()
+				if err != nil {
+					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					return
+				}
+			})
+		}
+	}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+					return
+			}
+			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+			if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+					return
+			}
+			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
+	}
+	updateMetrics(*event)
+}
+
+// TriggerAsyncDRPXRestartKvdb triggers Async DR with kvdb restart
+func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer endLongevityTest()
+	startLongevityTest(AsyncDRPXRestartKvdb)
+	defer ginkgo.GinkgoRecover()
+	log.Infof("Async DR kvdb restart trigger triggered at: %v", time.Now())
+	defer ginkgo.GinkgoRecover()
+	event := &EventRecord{
+			Event: Event{
+					ID:   GenerateUUID(),
+					Type: AsyncDRPXRestartKvdb,
+			},
+			Start:   time.Now().Format(time.RFC1123),
+			Outcome: []error{},
+	}
+	defer func() {
+			event.End = time.Now().Format(time.RFC1123)
+			*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	chaosLevel := ChaosMap[AsyncDRPXRestartKvdb]
+	var (
+			migrationNamespaces   []string
+			taskNamePrefix        = "async-dr-rkvdb"
+			allMigrations         []*storkapi.Migration
+			includeVolumesFlag    = true
+			includeResourcesFlag  = true
+			startApplicationsFlag = false
+	)
+
+	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
+
+			// Write kubeconfig files after reading from the config maps created by torpedo deploy script
+			err := asyncdr.WriteKubeconfigToFiles()
+			if err != nil {
+					log.Errorf("Failed to write kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+			}
+
+			err = SetSourceKubeConfig()
+			if err != nil {
+					log.Errorf("Failed to Set source kubeconfig: %v", err)
+					UpdateOutcome(event, err)
+                    return
+			}
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+					taskName := fmt.Sprintf("%s-%d-%s", taskNamePrefix, i, time.Now().Format("15h03m05s"))
+					log.Infof("Task name %s\n", taskName)
+					appContexts := ScheduleApplications(taskName)
+					*contexts = append(*contexts, appContexts...)
+					ValidateApplications(*contexts)
+					for _, ctx := range appContexts {
+							// Override default App readiness time out of 5 mins with 10 mins
+							ctx.ReadinessTimeout = appReadinessTimeout
+							namespace := GetAppNamespace(ctx, taskName)
+							migrationNamespaces = append(migrationNamespaces, namespace)
+					}
+					Step("Create cluster pair between source and destination clusters", func() {
+							// Set cluster context to cluster where torpedo is running
+							ScheduleValidateClusterPair(appContexts[0], false, true, defaultClusterPairDir, false)
+					})
+			}
+
+			log.Infof("Migration Namespaces: %v", migrationNamespaces)
+	})
+
+	log.InfoD("Collect KVDB node")
+	kvdbNodes, err := GetAllKvdbNodes()
+	if err != nil {
+		log.Infof("Getting kvdb nodes throwing error, err: %v", err)
+		return
+	}
+	stNodes := node.GetNodesByVoDriverNodeID()
+	var appNode node.Node
+	for _, kvdbNode := range kvdbNodes {
+		var ok bool
+		appNode, ok = stNodes[kvdbNode.ID]
+		if ok {
+			break
+		}
+	}
+
+	log.InfoD("Start migration")
+
+	for i, currMigNamespace := range migrationNamespaces {
+		migrationName := migrationKey + fmt.Sprintf("%d", i) + time.Now().Format("15h03m05s")
+		currMig, err := asyncdr.CreateMigration(migrationName, currMigNamespace, asyncdr.DefaultClusterPairName, currMigNamespace, &includeVolumesFlag, &includeResourcesFlag, &startApplicationsFlag)
+		if err != nil {
+				UpdateOutcome(event, fmt.Errorf("failed to create migration: %s in namespace %s. Error: [%v]", migrationKey, currMigNamespace, err))
+				return
+		} else {
+				allMigrations = append(allMigrations, currMig)
+				Step(fmt.Sprintf("stop volume driver %s on node: %s", Inst().V.String(), appNode.Name), func() {
+					StopVolDriverAndWait([]node.Node{appNode})
+					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), appNode.Name)
+					StartVolDriverAndWait([]node.Node{appNode})
+					log.Infof("Giving a few seconds for volume driver to stabilize")
+					time.Sleep(20 * time.Second)
+				})
+			}
+		}
+
+	// Validate all migrations
+	for _, mig := range allMigrations {
+			err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
+			if err != nil {
+					UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
+					return
+			}
+			migStats, err := asyncdr.CreateStats(mig.Name, mig.Namespace, getPXVersion(node.GetStorageNodes()[0]))
+			if err != nil {
+					UpdateOutcome(event, fmt.Errorf("Unable to create stats, getting error: %v", err))
+					return
+			}
+			dash.UpdateStats("longevity-migration-asyncdr", "stork", "migrationstatslongevity", migStats["StorkVersion"], migStats)
 	}
 	updateMetrics(*event)
 }
@@ -8953,7 +9386,7 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 		if int(maxStorageNodesPerZone) < numOfStorageNodes {
 			//updating max per zone
-			updatedMaxStorageNodesPerZone = uint32(numOfStorageNodes)
+			updatedMaxStorageNodesPerZone = uint32(numOfStorageNodes) + 1
 		}
 		if updatedMaxStorageNodesPerZone != 0 {
 
@@ -9011,7 +9444,11 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 	UpdateOutcome(event, err)
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
-	dash.VerifySafely(numOfStorageNodes+1, updatedStorageNodesCount, "verify new storage node is added")
+	expectedStorageNodeCount := numOfStorageNodes + 1
+	if updatedStorageNodesCount != expectedStorageNodeCount {
+		PrintPxctlStatus()
+	}
+	dash.VerifySafely(updatedStorageNodesCount, expectedStorageNodeCount, "verify new storage node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
@@ -9119,7 +9556,12 @@ func TriggerAddOCPStoragelessNode(contexts *[]*scheduler.Context, recordChan *ch
 	UpdateOutcome(event, err)
 
 	updatedStoragelessNodesCount := len(node.GetStorageLessNodes())
-	dash.VerifySafely(numOfStoragelessNodes+1, updatedStoragelessNodesCount, "verify new storageless node is added")
+
+	expectedStorageLessNodeCount := numOfStoragelessNodes + 1
+	if updatedStoragelessNodesCount != expectedStorageLessNodeCount {
+		PrintPxctlStatus()
+	}
+	dash.VerifySafely(updatedStoragelessNodesCount, expectedStorageLessNodeCount, "verify new storageless node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
@@ -9308,14 +9750,16 @@ func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan 
 					log.InfoD("wait for %v for node reboot", 1*time.Minute)
 					time.Sleep(1 * time.Minute)
 
-					// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
-					err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
-						Action: "start",
-						ConnectionOpts: node.ConnectionOpts{
-							Timeout:         5 * time.Minute,
-							TimeBeforeRetry: 10 * time.Second,
-						}})
-					UpdateOutcome(event, err)
+					if Inst().S.String() != openshift.SchedName {
+						// Start NFS server to avoid pods stuck in terminating state (PWX-24274)
+						err = Inst().N.Systemctl(*n, "nfs-server.service", node.SystemctlOpts{
+							Action: "start",
+							ConnectionOpts: node.ConnectionOpts{
+								Timeout:         5 * time.Minute,
+								TimeBeforeRetry: 10 * time.Second,
+							}})
+						UpdateOutcome(event, err)
+					}
 
 					ctx.RefreshStorageEndpoint = true
 					n2, err := Inst().V.GetNodeForVolume(vol, 1*time.Minute, 10*time.Second)

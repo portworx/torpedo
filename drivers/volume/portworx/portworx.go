@@ -115,7 +115,7 @@ const (
 	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
-	validateDeleteVolumeTimeout       = 6 * time.Minute
+	validateDeleteVolumeTimeout       = 15 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
@@ -721,6 +721,10 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 						log.Warnf("Can not check if node [%s] is a metadata node", n.Name)
 					}
 					n.IsMetadataNode = isMetadataNode
+
+					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
+						log.Infof("Updating node [%s] as storage node", n.Name)
+					}
 
 					if n.StoragePools == nil {
 						for _, pxNodePool := range pxNode.Pools {
@@ -5657,25 +5661,41 @@ func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error)
 
 // GetPoolDrives returns the map of poolID and drive name
 func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         startDriverTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-	poolDrives := make(map[string][]string, 0)
-	log.Infof("Getting available block drives on node [%s]", n.Name)
-	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
+	poolDrives := make(map[string][]string, 0)
+
+	connectionOps := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	output, err := d.nodeDriver.RunCommand(*n, "pxctl status", connectionOps)
 	if err != nil {
 		return poolDrives, err
 	}
-	for _, v := range blockDrives {
-		labelsMap := v.Labels
-		if pm, ok := labelsMap["pxpool"]; ok {
-			poolDrives[pm] = append(poolDrives[pm], v.Path)
+	log.Infof("got output: %s", output)
+	re := regexp.MustCompile(`\b\d+:\d+\b.*`)
+	matches := re.FindAllString(output, -1)
+
+	for _, match := range matches {
+		log.Debugf("Extracting pool details from [%s]", match)
+		pVals := make([]string, 0)
+		tempVals := strings.Fields(match)
+		for _, tv := range tempVals {
+			if strings.Contains(tv, ":") || strings.Contains(tv, "/") {
+				pVals = append(pVals, tv)
+			}
 		}
+
+		if len(pVals) >= 2 {
+			tempPoolId := pVals[0]
+			poolId := strings.Split(tempPoolId, ":")[0]
+			drvPath := pVals[1]
+
+			poolDrives[poolId] = append(poolDrives[poolId], drvPath)
+		}
+
 	}
 	return poolDrives, nil
 }
