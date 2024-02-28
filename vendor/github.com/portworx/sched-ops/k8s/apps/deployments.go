@@ -54,7 +54,6 @@ func (c *Client) GetDeployment(name, namespace string) (*appsv1.Deployment, erro
 	if err := c.initClient(); err != nil {
 		return nil, err
 	}
-
 	return c.apps.Deployments(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 

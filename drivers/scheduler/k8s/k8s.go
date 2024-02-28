@@ -924,11 +924,12 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 	} else {
 		apps = k.SpecFactory.GetAll()
 	}
-
+	log.Infof("Reached till Schedule1")
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
 	for _, app := range apps {
 		appNamespace := app.GetID(instanceID)
+		log.Infof("Reached till Schedule2 %v", appNamespace)
 		if options.Namespace != "" {
 			appNamespace = options.Namespace
 		} else {
@@ -937,16 +938,18 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		if len(options.TopologyLabels) > 1 {
 			rotateTopologyArray(&options)
 		}
+		log.Infof("Reached till Schedule3")
 		specObjects, err := k.CreateSpecObjects(app, appNamespace, options)
 		if err != nil {
 			return nil, err
 		}
+		log.Infof("Reached till Schedule4")
 
 		helmSpecObjects, err := k.HelmSchedule(app, appNamespace, options)
 		if err != nil {
 			return nil, err
 		}
-
+		log.Infof("Reached till Schedule5")
 		specObjects = append(specObjects, helmSpecObjects...)
 		ctx := &scheduler.Context{
 			UID: instanceID,
@@ -962,7 +965,7 @@ func (k *K8s) Schedule(instanceID string, options scheduler.ScheduleOptions) ([]
 		contexts = append(contexts, ctx)
 		options.Namespace = oldOptionsNamespace
 	}
-
+	log.Infof("Reached till Schedule")
 	return contexts, nil
 }
 
@@ -2908,6 +2911,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 			}
 			nodeAff := dep.Spec.Template.Spec.Affinity.NodeAffinity
 			labels := getLabelsFromNodeAffinity(nodeAff)
+			log.Infof("Snigdha6")
 			zone = labels[TopologyZoneK8sNodeLabel]
 			if podList, err = k8sCore.GetPods(obj.Namespace, nil); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
@@ -2915,6 +2919,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 					Cause:     err,
 				}
 			}
+			log.Infof("Snigdha7")
 			if err = k.validatePodsTopology(podList, zone); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
 					NameSpace: obj.Namespace,
@@ -2938,6 +2943,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 					Cause:     err,
 				}
 			}
+			log.Infof("Snigdha8")
 			if err = k.validatePodsTopology(podList, zone); err != nil {
 				return &scheduler.ErrFailedToValidateTopologyLabel{
 					NameSpace: obj.Namespace,
@@ -2946,6 +2952,7 @@ func (k *K8s) ValidateTopologyLabel(ctx *scheduler.Context) error {
 			}
 		}
 	}
+	log.Infof("Snigdha9")
 	return nil
 }
 

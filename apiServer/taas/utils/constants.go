@@ -25,7 +25,7 @@ const (
 
 var (
 	errors  []error
-	errChan = make(chan error, 100)
+	errChan = make(chan error, 1000)
 	k8sCore = core.Instance()
 )
 
