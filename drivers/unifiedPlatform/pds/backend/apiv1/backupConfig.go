@@ -12,30 +12,30 @@ import (
 )
 
 // getBackupConfigClient updates the header with bearer token and returns the new client
-func (ds *PDSV2_API) getBackupConfigClient() (context.Context, *pdsv2.BackupConfigServiceAPIService, error) {
+func (backupConf *PDSV2_API) getBackupConfigClient() (context.Context, *pdsv2.BackupConfigServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	ds.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	ds.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
-	client := ds.ApiClientV2.BackupConfigServiceAPI
+	backupConf.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	backupConf.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = backupConf.AccountID
+	client := backupConf.ApiClientV2.BackupConfigServiceAPI
 
 	return ctx, client, nil
 }
 
 // CreateBackupConfig will create backup config for a given deployment
-func (ds *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := apiStructs.WorkFlowResponse{}
 
-	ctx, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := backupConf.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigCreateRequest := backupClient.BackupConfigServiceCreateBackupConfig(ctx, createBackupConfigRequest.BackupConfig.Create.ProjectId)
+	backupConfigCreateRequest := backupClient.BackupConfigServiceCreateBackupConfig(ctx, createBackupConfigRequest.BackupConfig.V1.Create.ProjectId)
 
-	err = utilities.CopyStruct(backupConfigCreateRequest, createBackupConfigRequest.BackupConfig.Create)
+	err = utilities.CopyStruct(backupConfigCreateRequest, createBackupConfigRequest.BackupConfig.V1.Create)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
 	}
@@ -50,16 +50,16 @@ func (ds *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiStructs.Wo
 }
 
 // UpdateBackupConfig will update backup config for a given deployment
-func (ds *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := apiStructs.WorkFlowResponse{}
 
-	ctx, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := backupConf.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigUpdateRequest := backupClient.BackupConfigServiceUpdateBackupConfig(ctx, updateBackupConfigRequest.BackupConfig.Update.BackupConfigMetaUid)
-	err = utilities.CopyStruct(backupConfigUpdateRequest, updateBackupConfigRequest.BackupConfig.Update)
+	backupConfigUpdateRequest := backupClient.BackupConfigServiceUpdateBackupConfig(ctx, updateBackupConfigRequest.BackupConfig.V1.Update.BackupConfigMetaUid)
+	err = utilities.CopyStruct(backupConfigUpdateRequest, updateBackupConfigRequest.BackupConfig.V1.Update)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
 	}
@@ -79,16 +79,16 @@ func (ds *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.Wo
 }
 
 // GetBackupConfig will fetch backup config for a given deployment
-func (ds *PDSV2_API) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := apiStructs.WorkFlowResponse{}
 
-	ctx, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := backupConf.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigGetRequest := backupClient.BackupConfigServiceGetBackupConfig(ctx, getBackupConfigRequest.BackupConfig.Get.Id)
-	err = utilities.CopyStruct(backupConfigGetRequest, getBackupConfigRequest.BackupConfig.Get)
+	backupConfigGetRequest := backupClient.BackupConfigServiceGetBackupConfig(ctx, getBackupConfigRequest.BackupConfig.V1.Get.Id)
+	err = utilities.CopyStruct(backupConfigGetRequest, getBackupConfigRequest.BackupConfig.V1.Get)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
 	}
@@ -107,15 +107,15 @@ func (ds *PDSV2_API) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlow
 }
 
 // DeleteBackupConfig will delete backup config for a given deployment
-func (ds *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 
-	ctx, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := backupConf.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigDeleteRequest := backupClient.BackupConfigServiceDeleteBackupConfig(ctx, deleteBackupConfigRequest.BackupConfig.Delete.Id)
-	err = utilities.CopyStruct(backupConfigDeleteRequest, deleteBackupConfigRequest.BackupConfig.Delete)
+	backupConfigDeleteRequest := backupClient.BackupConfigServiceDeleteBackupConfig(ctx, deleteBackupConfigRequest.BackupConfig.V1.Delete.Id)
+	err = utilities.CopyStruct(backupConfigDeleteRequest, deleteBackupConfigRequest.BackupConfig.V1.Delete)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
 	}
@@ -130,16 +130,16 @@ func (ds *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.Wo
 }
 
 // ListBackupConfig will list backup config for a given deployment
-func (ds *PDSV2_API) ListBackupConfig(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) ListBackupConfig(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
 	backupConfigResponse := []apiStructs.WorkFlowResponse{}
 
-	ctx, backupClient, err := ds.getBackupConfigClient()
+	ctx, backupClient, err := backupConf.getBackupConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
 	backupConfigListRequest := backupClient.BackupConfigServiceListBackupConfigs(ctx)
-	err = utilities.CopyStruct(backupConfigListRequest, listBackupConfigRequest.BackupConfig.List)
+	err = utilities.CopyStruct(backupConfigListRequest, listBackupConfigRequest.BackupConfig.V1.List)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
 	}

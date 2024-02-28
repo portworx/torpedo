@@ -48,3 +48,25 @@ type V1DeploymentMetaData struct {
 }
 
 type StatusPhase string
+
+type V1Meta struct {
+	Uid             *string            `json:"uid,omitempty"`
+	Name            *string            `json:"name,omitempty"`
+	Description     *string            `json:"description,omitempty"`
+	ResourceVersion *string            `json:"resourceVersion,omitempty"`
+	CreateTime      *time.Time         `json:"createTime,omitempty"`
+	UpdateTime      *time.Time         `json:"updateTime,omitempty"`
+	Labels          *map[string]string `json:"labels,omitempty"`
+	Annotations     *map[string]string `json:"annotations,omitempty"`
+	ParentReference *V1Reference       `json:"parentReference,omitempty"`
+}
+
+type V1ErrorCode string
+
+type V1Phase string
+
+type V1Reference struct {
+	Type    *string `json:"type,omitempty"`
+	Version *string `json:"version,omitempty"`
+	Uid     *string `json:"uid,omitempty"`
+}

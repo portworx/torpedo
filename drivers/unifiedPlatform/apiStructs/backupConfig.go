@@ -11,33 +11,46 @@ type ConfigBackupLevel string
 type ConfigReclaimPolicyType string
 
 type PDSBackupConfig struct {
-	Create BackupConfigCreate
-	Update BackupConfigUpdate
-	Get    BackupConfigGet
-	Delete BackupConfigDelete
-	List   BackupConfigList
+	V1   PDSBackupConfigV1
+	GRPC PDSBackupConfigGRPC
 }
 
-type BackupConfigCreate struct {
+type PDSBackupConfigV1 struct {
+	Create CreatePDSBackupConfig
+	Update UpdatePDSBackupConfig
+	Get    GetPDSBackupConfig
+	Delete DeletePDSBackupConfig
+	List   ListPDSBackupConfig
+}
+
+type PDSBackupConfigGRPC struct {
+	Create CreatePDSBackupConfig
+	Update UpdatePDSBackupConfig
+	Get    GetPDSBackupConfig
+	Delete DeletePDSBackupConfig
+	List   ListPDSBackupConfig
+}
+
+type CreatePDSBackupConfig struct {
 	ProjectId      string
 	DeploymentId   *string
 	V1BackupConfig *V1BackupConfig
 }
 
-type BackupConfigUpdate struct {
+type UpdatePDSBackupConfig struct {
 	BackupConfigMetaUid        string
 	DesiredBackupConfiguration *DesiredBackupConfiguration
 }
 
-type BackupConfigGet struct {
+type GetPDSBackupConfig struct {
 	Id string
 }
 
-type BackupConfigDelete struct {
+type DeletePDSBackupConfig struct {
 	Id string
 }
 
-type BackupConfigList struct {
+type ListPDSBackupConfig struct {
 	AccountId            *string
 	TenantId             *string
 	ProjectId            *string

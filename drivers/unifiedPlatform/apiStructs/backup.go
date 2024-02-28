@@ -1,24 +1,39 @@
 package apiStructs
 
-import pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-
 type PDSBackup struct {
+	V1   PDSBackupV1
+	GRPC PDSBackupGRPC
+}
+
+type PDSBackupV1 struct {
 	Get    GetPDSBackup
 	Delete DeletePDSBackup
 	List   ListPDSBackup
 }
 
-type DeletePDSBackup struct {
-	V1   pdsv2.ApiBackupServiceDeleteBackupRequest
-	GRPC pdsv2.ApiBackupServiceDeleteBackupRequest
+type PDSBackupGRPC struct {
+	Get    GetPDSBackup
+	Delete DeletePDSBackup
+	List   ListPDSBackup
 }
 
 type GetPDSBackup struct {
-	V1   pdsv2.ApiBackupServiceGetBackupRequest
-	GRPC pdsv2.ApiBackupServiceGetBackupRequest
+	Id string
+}
+
+type DeletePDSBackup struct {
+	Id string
 }
 
 type ListPDSBackup struct {
-	V1   pdsv2.ApiBackupServiceListBackupsRequest
-	GRPC pdsv2.ApiBackupServiceListBackupsRequest
+	AccountId            *string
+	TenantId             *string
+	ClusterId            *string
+	NamespaceId          *string
+	ProjectId            *string
+	BackupConfigId       *string
+	PaginationPageNumber *string
+	PaginationPageSize   *string
+	SortSortBy           *string
+	SortSortOrder        *string
 }
