@@ -86,7 +86,7 @@ spec:
       volumes:
         - name: postgredb
           persistentVolumeClaim:
-            {{ if .Suffix } }
+            {{ if .Suffix }}
               claimName: postgres-data-{{ .Suffix }}
-            {{ else } }
+            {{ else }}
               claimName: postgres-data-no-suffix{{ end }}
