@@ -1,7 +1,6 @@
 package dataservice
 
 import (
-	"context"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 )
@@ -15,13 +14,13 @@ type BackupConfig struct {
 }
 
 // CreateBackupConfig created backup config for the deployment
-func CreateBackupConfig(backupConfig BackupConfig, ctx context.Context) (*apiStructs.WorkFlowResponse, error) {
+func CreateBackupConfig(backupConfig BackupConfig) (*apiStructs.WorkFlowResponse, error) {
 
 	createBackupRequest := apiStructs.WorkFlowRequest{}
 
-	createBackupRequest.BackupConfig.Create.V1BackupConfig = &apiStructs.V1BackupConfig{}
-	createBackupRequest.BackupConfig.Create.DeploymentId = backupConfig.DeploymentID
-	createBackupRequest.BackupConfig.Create.ProjectId = backupConfig.ProjectId
+	createBackupRequest.BackupConfig.V1.Create.V1BackupConfig = &apiStructs.V1BackupConfig{}
+	createBackupRequest.BackupConfig.V1.Create.DeploymentId = backupConfig.DeploymentID
+	createBackupRequest.BackupConfig.V1.Create.ProjectId = backupConfig.ProjectId
 
 	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupRequest)
 	if err != nil {

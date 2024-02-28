@@ -75,6 +75,10 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	})
 
 	log.InfoD(steplog)
+	backupConfig := dslibs.BackupConfig{
+		ProjectId: "ProjectId",
+	}
+	ds.CR
 	It("Deploy and Validate DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			_, err := dslibs.DeployDataService(ds)
