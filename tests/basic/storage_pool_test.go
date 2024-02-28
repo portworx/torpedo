@@ -11046,6 +11046,10 @@ var _ = Describe("{OnlineJournalAddCheck}", func() {
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			//Put pool in maintenance mode
+			defer func() {
+				err := ExitPoolMaintenance(selectedNode)
+				log.FailOnError(err, "Failed to exit pool maintenance mode")
+			}()
 			err := EnterPoolMaintenance(selectedNode)
 			log.FailOnError(err, "Failed to enter pool maintenance mode")
 
