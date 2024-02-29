@@ -349,7 +349,21 @@ if [ -n "${KUBECONFIGS}" ]; then
   done
   kubectl create configmap kubeconfigs ${FROM_FILE}
 fi
-NODE_DRIVER="ssh"
+
+K8S_VENDOR_KEY=""
+if [ -z "${NODE_DRIVER}" ]; then
+    NODE_DRIVER="ssh"
+fi
+if [ -n "${K8S_VENDOR}" ]; then
+    case "$K8S_VENDOR" in
+        aks)
+            NODE_DRIVER="aks"
+            ;;
+        oracle)
+            NODE_DRIVER="oracle"
+            ;;
+    esac
+fi
 cat > torpedo.yaml <<EOF
 ---
 apiVersion: v1
