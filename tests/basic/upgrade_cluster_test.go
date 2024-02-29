@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/multierr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -57,7 +59,16 @@ var _ = Describe("{UpgradeCluster}", func() {
 
 		for _, version := range versions {
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
+				stopSignal := make(chan struct{})
+
+				var mError error
+				go doPDBValidation(stopSignal, &mError)
+				defer func() {
+					close(stopSignal)
+				}()
+
 				err := Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(mError, nil, "validate PDB during PX upgrade")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
 				// Sleep needed for AKS cluster upgrades
@@ -160,6 +171,7 @@ func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	for {
 		log.Infof("K8s node validation. iteration: #%d", itr)
 		select {
+		// if it gets any value from stopSignal channel, it will exit
 		case <-stopSignal:
 			log.Infof("Exiting node validations routine")
 			return
@@ -235,4 +247,39 @@ func printK8sCluterInfo() {
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
+}
+func doPDBValidation(stopSignal <-chan struct{}, mError *error) {
+	pdbValue, allowedDisruptions := GetPDBValue()
+	isClusterParallelyUpgraded := false
+	nodes, err := Inst().V.GetDriverNodes()
+	if err != nil {
+		*mError = multierr.Append(*mError, err)
+		return
+	}
+	totalNodes := len(nodes)
+	itr := 1
+	for {
+		log.Infof("PDB validation iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting PDB validation routine")
+			return
+		default:
+			errorChan := make(chan error, 50)
+			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
+			if !isClusterParallelyUpgraded {
+				err := fmt.Errorf("Cluster is not parallely upgraded")
+				*mError = multierr.Append(*mError, err)
+			}
+			for err := range errorChan {
+				*mError = multierr.Append(*mError, err)
+			}
+			if *mError != nil {
+				return
+			}
+			itr++
+			time.Sleep(7 * time.Second)
+		}
+	}
+
 }
