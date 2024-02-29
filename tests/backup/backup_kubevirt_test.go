@@ -483,7 +483,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 93013, Mkoppal, Q3FY24)
+		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 293013, Mkoppal, Q3FY24)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
@@ -721,6 +721,7 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 	})
 })
 
+// This testcase verifies Simultaneous backups/ Simultaneous Backup and Restore/ Simultaneous Restore and Source Virtual Machine Deletion
 var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 	var (
 		backupNames          []string
@@ -891,32 +892,30 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		})
 
 		// TODO: This steps needs to be uncommented once the Node Port issue for VM restore is fixed
-		//Step("Verifying contexts for all Virtual Machine Instances restored - Simultaneous restore with backup", func() {
-		//	defer func() {
-		//		log.InfoD("switching to default context")
-		//		err := SetClusterContext("")
-		//		log.FailOnError(err, "failed to SetClusterContext to default cluster")
-		//	}()
-		//	err := SetDestinationKubeConfig()
-		//	log.FailOnError(err, "failed to switch to context to destination cluster")
-		//
-		//	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
-		//	for _, scheduledAppContext := range scheduledAppContexts {
-		//		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-		//		if err != nil {
-		//			log.Errorf("TransformAppContextWithMappings: %v", err)
-		//			continue
-		//		}
-		//		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
-		//	}
-		//	for _, eachRestoreContext := range expectedRestoredAppContexts {
-		//		errorChan := make(chan error, 50)
-		//		ValidateContext(eachRestoreContext, &errorChan)
-		//		for err := range errorChan {
-		//			log.FailOnError(err, "Expected context to be successfully restored")
-		//		}
-		//	}
-		//})
+		Step("Validating restore for all Virtual Machine Instances restored - Simultaneous restore with backup", func() {
+			defer func() {
+				log.InfoD("switching to default context")
+				err := SetClusterContext("")
+				log.FailOnError(err, "failed to SetClusterContext to default cluster")
+			}()
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed to switch to context to destination cluster")
+
+			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range scheduledAppContexts {
+				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+			}
+
+			err = ValidateRestore(ctx, restoreNames[0], BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
+			log.FailOnError(err, "Restore Validation Failed for [%s]", restoreNames[0])
+		})
 
 		Step("Triggering new restore and deleting source VM simultaneously on the same Virtual machine", func() {
 			log.InfoD("Taking backup of virtual machines and deleting the source simultaneously")
@@ -963,14 +962,16 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 
 		})
 
-		// TODO: This steps needs to be uncommented once the Node Port issue for VM restore is fixed
-		//Step("Verifying contexts for all Virtual Machine Instances restored - Simultaneous restore with deletion", func() {
+		//TODO: This steps needs to be uncommented once the Node Port issue for VM restore is fixed
+		//Step("Validating contexts for all Virtual Machine Instances restored - Simultaneous restore with deletion", func() {
 		//	defer func() {
 		//		log.InfoD("switching to default context")
 		//		err := SetClusterContext("")
 		//		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		//	}()
-		//	err := SetDestinationKubeConfig()
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Fetching px-central-admin ctx")
+		//	err = SetDestinationKubeConfig()
 		//	log.FailOnError(err, "failed to switch to context to destination cluster")
 		//
 		//	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
@@ -982,14 +983,63 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		//		}
 		//		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 		//	}
-		//	for _, eachRestoreContext := range expectedRestoredAppContexts {
-		//		errorChan := make(chan error, 50)
-		//		ValidateContext(eachRestoreContext, &errorChan)
-		//		for err := range errorChan {
-		//			log.FailOnError(err, "Expected context to be successfully restored")
-		//		}
-		//	}
+		//err = ValidateRestore(ctx, restoreNames[1], BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
+		//log.FailOnError(err, "Restore Validation Failed for [%s]", restoreNames[1])
 		//})
 
+	})
+
+	JustAfterEach(func() {
+		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		for _, eachBackup := range backupNames {
+			backupUid, err := Inst().Backup.GetBackupUID(ctx, eachBackup, BackupOrgID)
+			log.FailOnError(err, "Unable to fetch backup UID")
+			// Delete backup to confirm that the user cannot delete the backup
+			_, err = DeleteBackup(eachBackup, backupUid, BackupOrgID, ctx)
+			log.FailOnError(err, "Unable to delete backups")
+		}
+
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+
+		log.Info("Destroying scheduled apps on source cluster")
+		DestroyApps(scheduledAppContexts, opts)
+		log.FailOnError(err, "Data validations failed")
+
+		log.InfoD("switching to destination context")
+		err = SetDestinationKubeConfig()
+		log.FailOnError(err, "failed to switch to context to destination cluster")
+
+		log.InfoD("Destroying restored apps on destination clusters")
+		restoredAppContexts := make([]*scheduler.Context, 0)
+		for _, scheduledAppContext := range scheduledAppContexts {
+			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+			if err != nil {
+				log.Errorf("TransformAppContextWithMappings: %v", err)
+				continue
+			}
+			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		}
+		DestroyApps(restoredAppContexts, opts)
+
+		log.InfoD("switching to default context")
+		err = SetClusterContext("")
+		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+
+		log.Info("Deleting restored namespaces")
+		for _, restoreName := range restoreNames {
+			err = DeleteRestore(restoreName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+		}
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
