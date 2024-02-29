@@ -7410,3 +7410,20 @@ func ScaleApplicationToDesiredReplicas(namespace string) error {
 
 	return nil
 }
+
+// DeleteAllVMsInNamespace delete all the Kubevirt VMs in the given namespace
+func DeleteAllVMsInNamespace(namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		err := k8sKubevirt.DeleteVirtualMachine(vm.Name, namespace)
+		if err != nil {
+			return err
+		}
+		log.Infof("Deleted vm - %s", vm.Name)
+	}
+	return nil
+}

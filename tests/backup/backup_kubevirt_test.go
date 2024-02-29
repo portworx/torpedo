@@ -723,9 +723,9 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 
 var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 	var (
-		backupNames    []string
-		labelSelectors map[string]string
-		//restoreNames         []string
+		backupNames          []string
+		labelSelectors       map[string]string
+		restoreNames         []string
 		allVirtualMachines   []kubevirtv1.VirtualMachine
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string
@@ -735,12 +735,14 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		backupLocationName   string
 		backupLocationMap    map[string]string
 		providers            []string
+		bkpNamespaces        []string
 	)
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtVMSshTest", "Verify backup and restore of a VM if a backup or VM deletion is already inprogress", nil, 296425, ATrivedi, Q1FY25)
+		StartPxBackupTorpedoTest("KubevirtVMBackupOrDeleteionInProgress", "Verify backup and restore of a VM if a backup or VM deletion is already inprogress", nil, 296425, ATrivedi, Q1FY25)
 		labelSelectors = make(map[string]string)
 		providers = GetBackupProviders()
 		backupLocationMap = make(map[string]string)
+		bkpNamespaces = make([]string, 0)
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -750,8 +752,16 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+				bkpNamespaces = append(bkpNamespaces, appCtx.ScheduleOptions.Namespace)
 			}
 		}
+
+		for _, appCtx := range scheduledAppContexts {
+			allVms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+			log.FailOnError(err, "Unable to get Virtual Machines from [%s]", appCtx.ScheduleOptions.Namespace)
+			allVirtualMachines = append(allVirtualMachines, allVms...)
+		}
+
 	})
 
 	It("Verify backup and restore of a VM if a backup or VM deletion is already inprogress", func() {
@@ -803,23 +813,17 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
 		})
 
-		Step("Triggering two backups simultaneously on the Same VM", func() {
-			log.InfoD("taking backup of virtual machines")
+		Step("Triggering two backups simultaneously on the Same virtual machines", func() {
+			log.InfoD("Taking backup of virtual machines")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			var wg sync.WaitGroup
 			var mutex sync.Mutex
 			errors := make([]string, 0)
-			for _, appCtx := range scheduledAppContexts {
-				allVms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
-				log.FailOnError(err, "Unable to get Virtual Machines from [%s]", appCtx.ScheduleOptions.Namespace)
-				allVirtualMachines = append(allVirtualMachines, allVms...)
-			}
 
 			backupNames = make([]string, 0)
 			for i := 0; i < 4; i++ {
 				wg.Add(1)
-				time.Sleep(50 * time.Millisecond)
 				log.Infof("Triggering backup of Virtual Machine [%v] time", i+1)
 				backupName := fmt.Sprintf("%s-%v-%s", "parallel-vm-backup", time.Now().Unix(), RandomString(5))
 				go func(backupName string) {
@@ -836,8 +840,156 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 				}(backupName)
 			}
 			wg.Wait()
-			log.Infof("Errors - [%v]", errors)
+			dash.VerifyFatal(len(errors), 0, fmt.Sprintf("Simultaneous backup failed with below errors - \n\n%s", strings.Join(errors, "\n")))
+		})
+
+		Step("Triggering backup and restore simultaneously on the same Virtual machine", func() {
+			log.InfoD("Taking backup of virtual machines and restoring simultaneously")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var mutex sync.Mutex
+			errorBackup := make([]string, 0)
+			errorRestore := make([]string, 0)
+
+			log.Infof("Triggering backup of Virtual Machine [%v] time")
+			backupName := fmt.Sprintf("%s-%v-%s", "vm-backup-with-restore", time.Now().Unix(), RandomString(5))
+			wg.Add(1)
+			go func(backupName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of virtualMachines [%v], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, allVirtualMachines, backupLocationName)
+				err := CreateVMBackup(backupName, allVirtualMachines, SourceClusterName, backupLocationName, backupLocationUID, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, ctx)
+				backupNames = append(backupNames, backupName)
+				if err != nil {
+					mutex.Lock()
+					errorBackup = append(errorBackup, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
+					mutex.Unlock()
+				}
+			}(backupName)
+
+			restoreName := fmt.Sprintf("%s-%v-%s", "vm-restore-with-backup", time.Now().Unix(), RandomString(5))
+			wg.Add(1)
+			go func(restoreName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				restoreNames = append(restoreNames, restoreName)
+				log.InfoD("Restoring the [%s] backup", backupNames[0])
+				err = CreateRestore(restoreName, backupNames[0], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+				if err != nil {
+					mutex.Lock()
+					errorRestore = append(errorRestore, fmt.Sprintf("Failed to restore from [%s]. Error - [%s]", backupNames[0], err.Error()))
+					mutex.Unlock()
+				}
+			}(restoreName)
+
+			wg.Wait()
+
+			dash.VerifyFatal(len(errorBackup), 0, fmt.Sprintf("Simultaneous backup with restore failed with below errors - \n\n%s", strings.Join(errorBackup, "\n")))
+			dash.VerifyFatal(len(errorRestore), 0, fmt.Sprintf("Simultaneous restore with backup failed with below errors - \n\n%s", strings.Join(errorRestore, "\n")))
 
 		})
+
+		// TODO: This steps needs to be uncommented once the Node Port issue for VM restore is fixed
+		//Step("Verifying contexts for all Virtual Machine Instances restored - Simultaneous restore with backup", func() {
+		//	defer func() {
+		//		log.InfoD("switching to default context")
+		//		err := SetClusterContext("")
+		//		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		//	}()
+		//	err := SetDestinationKubeConfig()
+		//	log.FailOnError(err, "failed to switch to context to destination cluster")
+		//
+		//	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+		//	for _, scheduledAppContext := range scheduledAppContexts {
+		//		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//		if err != nil {
+		//			log.Errorf("TransformAppContextWithMappings: %v", err)
+		//			continue
+		//		}
+		//		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+		//	}
+		//	for _, eachRestoreContext := range expectedRestoredAppContexts {
+		//		errorChan := make(chan error, 50)
+		//		ValidateContext(eachRestoreContext, &errorChan)
+		//		for err := range errorChan {
+		//			log.FailOnError(err, "Expected context to be successfully restored")
+		//		}
+		//	}
+		//})
+
+		Step("Triggering new restore and deleting source VM simultaneously on the same Virtual machine", func() {
+			log.InfoD("Taking backup of virtual machines and deleting the source simultaneously")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var mutex sync.Mutex
+			errordeleteVM := make([]string, 0)
+			errorRestore := make([]string, 0)
+
+			log.Infof("Deleting VMs from source namespace")
+			wg.Add(1)
+			go func() {
+				defer GinkgoRecover()
+				defer wg.Done()
+				log.InfoD("Deleting the kubevirt VMs from the namespace")
+				for _, namespace := range bkpNamespaces {
+					err := DeleteAllVMsInNamespace(namespace)
+					if err != nil {
+						errordeleteVM = append(errordeleteVM, err.Error())
+					}
+				}
+			}()
+
+			restoreName := fmt.Sprintf("%s-%v-%s", "vm-restore-with-backup", time.Now().Unix(), RandomString(5))
+			wg.Add(1)
+			go func(restoreName string) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				restoreNames = append(restoreNames, restoreName)
+				log.InfoD("Restoring the [%s] backup", backupNames[1])
+				err = CreateRestore(restoreName, backupNames[1], make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string))
+				if err != nil {
+					mutex.Lock()
+					errorRestore = append(errorRestore, fmt.Sprintf("Failed to restore from [%s]. Error - [%s]", backupNames[1], err.Error()))
+					mutex.Unlock()
+				}
+			}(restoreName)
+
+			wg.Wait()
+
+			dash.VerifyFatal(len(errordeleteVM), 0, fmt.Sprintf("Simultaneous backup with restore failed with below errors - \n\n%s", strings.Join(errordeleteVM, "\n")))
+			dash.VerifyFatal(len(errorRestore), 0, fmt.Sprintf("Simultaneous restore with backup failed with below errors - \n\n%s", strings.Join(errorRestore, "\n")))
+
+		})
+
+		// TODO: This steps needs to be uncommented once the Node Port issue for VM restore is fixed
+		//Step("Verifying contexts for all Virtual Machine Instances restored - Simultaneous restore with deletion", func() {
+		//	defer func() {
+		//		log.InfoD("switching to default context")
+		//		err := SetClusterContext("")
+		//		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		//	}()
+		//	err := SetDestinationKubeConfig()
+		//	log.FailOnError(err, "failed to switch to context to destination cluster")
+		//
+		//	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+		//	for _, scheduledAppContext := range scheduledAppContexts {
+		//		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//		if err != nil {
+		//			log.Errorf("TransformAppContextWithMappings: %v", err)
+		//			continue
+		//		}
+		//		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+		//	}
+		//	for _, eachRestoreContext := range expectedRestoredAppContexts {
+		//		errorChan := make(chan error, 50)
+		//		ValidateContext(eachRestoreContext, &errorChan)
+		//		for err := range errorChan {
+		//			log.FailOnError(err, "Expected context to be successfully restored")
+		//		}
+		//	}
+		//})
+
 	})
 })
