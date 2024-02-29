@@ -46,17 +46,23 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 		return nil, fmt.Errorf("Error while c: %v\n", err)
 	}
 
+	log.Infof("Account ID: [%s]", deployment.AccountId)
+
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
 
 	copier.Copy(&createRequest, createDeploymentRequest.Deployment)
+
+	log.Infof("Value of request app template after copy - [%v]", createRequest.Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
 
 	apiResponse, err := client.CreateDeployment(ctx, &createRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting the account: %v\n", err)
 	}
-	log.Infof("Value of accounts before copy - [%v]", apiResponse.Meta.Name)
+	log.Infof("api response [+%v]", apiResponse)
+
 	copier.Copy(&depResponse, apiResponse)
-	log.Infof("Value of accounts after copy - [%v]", *depResponse.Meta.Name)
+
+	log.Infof("Value of response app template after copy - [%v]", depResponse)
 
 	return &depResponse, nil
 
