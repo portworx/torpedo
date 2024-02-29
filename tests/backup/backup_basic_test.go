@@ -251,11 +251,15 @@ var _ = BeforeSuite(func() {
 			GlobalPreRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, GlobalPreRuleName)
 			log.FailOnError(err, "Fetching pre backup rule [%s] uid", GlobalPreRuleName)
 			log.Infof("Pre backup rule [%s] uid: [%s]", GlobalPreRuleName, GlobalPreRuleUid)
+			err = AddRuleOwnership(GlobalPreRuleName, GlobalPreRuleUid, nil, nil, Invalid, Admin, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global pre-rule of application"))
 		}
 		if GlobalPostRuleName != "" {
 			GlobalPostRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, GlobalPostRuleName)
 			log.FailOnError(err, "Fetching post backup rule [%s] uid", GlobalPostRuleName)
 			log.Infof("Post backup rule [%s] uid: [%s]", GlobalPostRuleName, GlobalPostRuleUid)
+			err = AddRuleOwnership(GlobalPostRuleName, GlobalPostRuleUid, nil, nil, Invalid, Admin, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
 		}
 	}
 })
