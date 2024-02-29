@@ -747,7 +747,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithNodeSelector", "Verify backup and restore of Kubevirt VMs with node selector specified", nil, 0, ATrivedi, Q1FY25)
+		StartPxBackupTorpedoTest("KubevirtVMBackupRestoreWithNodeSelector", "Verify backup and restore of Kubevirt VMs with node selector specified", nil, 296426, ATrivedi, Q1FY25)
 
 		backupLocationMap = make(map[string]string)
 		providers = GetBackupProviders()
@@ -909,8 +909,11 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s from backup %s", restoreAll, backupNames[0]))
 		})
 
-		Step("Verifying contexts for all Virtual Machine Instances expected to be running", func() {
-			err := SetDestinationKubeConfig()
+		Step("Validating restore for all Virtual Machine Instances expected to be running", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = SetDestinationKubeConfig()
 			log.FailOnError(err, "failed to switch to context to destination cluster")
 
 			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
@@ -922,13 +925,8 @@ var _ = Describe("{KubevirtVMBackupRestoreWithNodeSelector}", func() {
 				}
 				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
 			}
-			for _, eachRestoreContext := range expectedRestoredAppContexts {
-				errorChan := make(chan error, 50)
-				ValidateContext(eachRestoreContext, &errorChan)
-				for err := range errorChan {
-					log.FailOnError(err, "Expected context to be successfully restored")
-				}
-			}
+			err = ValidateRestore(ctx, restoreNames[0], BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Restore Validation Failed for [%s]", restoreNames[0]))
 		})
 
 		Step("Verifying state and nodes for all restored Virtual Machine Instances", func() {
