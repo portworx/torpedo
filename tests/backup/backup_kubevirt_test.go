@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/pborman/uuid"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
 	"github.com/portworx/torpedo/drivers/backup"
@@ -667,5 +667,55 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+	})
+})
+
+var _ = Describe("{KubevirtVMSshTest}", func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtVMSshTest", "Verify SSH to kubevirt VM", nil, 0, Mkoppal, Q1FY25)
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 93013, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify backup and restore of Kubevirt VMs in different states", func() {
+
+		Step("Validating applications", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			log.InfoD("Validating applications")
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+		})
+
+		Step("SSH into the kubevirt VM", func() {
+			ctx, err := backup.GetAdminCtxFromSecret()
+			vms, err := GetAllVMsInNamespace(scheduledAppContexts[0].ScheduleOptions.Namespace)
+			if err != nil {
+				return
+			}
+			for _, vm := range vms {
+				log.Infof("Running command for VM [%s]", vm.Name)
+				output, err := RunCmdInVM(vm, "uname -a", ctx)
+				log.InfoD("Output of command in step - [%s]", output)
+				log.FailOnError(err, "Failed to run command in VM")
+			}
+
+			for namespace, appWithData := range NamespaceAppWithDataMap {
+				log.Infof("Found vm with data in %s", namespace)
+				appWithData[0].InsertBackupData(ctx, "default", []string{})
+			}
+
+		})
 	})
 })
