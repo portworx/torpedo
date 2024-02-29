@@ -22,7 +22,7 @@ import (
 var dash *aetosutil.Dashboard
 
 const (
-	testTriggersConfigMap = "pxb-longevity-triggers"
+	testTriggersConfigMap = "longevity-triggers"
 	configMapNS           = "default"
 	controlLoopSleepTime  = time.Second * 15
 	maximumChaosLevel     = 10
