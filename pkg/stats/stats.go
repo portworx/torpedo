@@ -80,7 +80,7 @@ func GetStorkMigrationStats(mig *storkv1.Migration) (sts map[string]string, err 
 	resp, get_mig_err := storkops.Instance().GetMigration(mig.Name, mig.Namespace)
 	if get_mig_err != nil {
 		log.Infof("failed to get migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, get_mig_err)
-		return nil, err
+		return nil, get_mig_err
 	}
 	migStats["numberOfResourcesMigrated"] = strconv.Itoa(int(resp.Status.Summary.NumberOfMigratedResources))
 	migStats["numberOfVolumesMigrated"] = strconv.Itoa(int(resp.Status.Summary.NumberOfMigratedVolumes))

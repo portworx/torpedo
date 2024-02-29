@@ -7284,7 +7284,10 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 		}
 		log.InfoD("Log line is above dashstats")
 		dashStats, err := stats.GetStorkMigrationStats(mig)
-		log.InfoD("Stats are: %v", dashStats)
+		if err != nil {
+			log.InfoD("Error is: %v", err)
+		}
+		log.InfoD("Stats are as follows: %v", dashStats)
 		updateLongevityStats(AsyncDR, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
