@@ -367,6 +367,48 @@ var _ = AfterSuite(func() {
 			}
 		}
 
+		// Cleanup all backup created native resources
+		allBackups, err = GetAllBackupsAdmin()
+		backupDriver := Inst().Backup
+		for _, backupName := range allBackups {
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+			dash.VerifySafely(err, nil, fmt.Sprintf("Getting backuip UID for backup %s", backupName))
+			backupInspectRequest := &api.BackupInspectRequest{
+				Name:  backupName,
+				Uid:   backupUID,
+				OrgId: BackupOrgID,
+			}
+			backupInspectResponse, _ := backupDriver.InspectBackup(ctx, backupInspectRequest)
+			theBackup := backupInspectResponse.GetBackup()
+			allBackupNamespaces := theBackup.Namespaces
+			err = VerifyBackupCreatedNativeResources(allBackupNamespaces)
+			if err != nil {
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Native backup resources found after cleanup"))
+			}
+		}
+
+		// Cleanup all restore created native resources
+		var allRestoredNamespaces []string
+		allRestores, err = GetAllRestoresAdmin()
+		backupDriver = Inst().Backup
+
+		for _, restoreName := range allRestores {
+			restoreInspectRequest := &api.RestoreInspectRequest{
+				Name:  restoreName,
+				OrgId: BackupOrgID,
+			}
+			restoreInspectResponse, _ := backupDriver.InspectRestore(ctx, restoreInspectRequest)
+			theRestore := restoreInspectResponse.GetRestore()
+			restoreNamespaceMapping := theRestore.NamespaceMapping
+			for _, value := range restoreNamespaceMapping {
+				allRestoredNamespaces = append(allRestoredNamespaces, value)
+			}
+			err = VerifyBackupCreatedNativeResources(allRestoredNamespaces)
+			if err != nil {
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Native backup resources found after cleanup"))
+			}
+		}
+
 		// Deleting clusters and the corresponding cloud cred
 		for _, kubeconfig := range kubeconfigList {
 			clusterName := strings.Split(kubeconfig, "-")[0] + "-cluster"

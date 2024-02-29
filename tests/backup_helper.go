@@ -7529,6 +7529,42 @@ func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
 	return allBackupCrs
 }
 
+// VerifyBackupCreatedNativeResources returns an error or nil based on the presence of native resources in the namespace
+func VerifyBackupCreatedNativeResources(namespaces []string) error {
+	var k8sCore = core.Instance()
+	var secretFound, serviceAccountFound bool
+
+	for _, namespace := range namespaces {
+		// Reset found flags for each namespace
+		secretFound = false
+		serviceAccountFound = false
+
+		fmt.Printf("Validating the secrets in namespace %s\n", namespace)
+		secret, err := k8sCore.GetSecret("", namespace)
+		if err != nil {
+			return err
+		}
+		if secret != nil {
+			secretFound = true
+		}
+
+		fmt.Printf("Validating the service accounts in namespace %s\n", namespace)
+		serviceAccount, err := k8sCore.GetServiceAccount("default", namespace)
+		if err != nil {
+			return err
+		}
+		if serviceAccount != nil {
+			serviceAccountFound = true
+		}
+
+		// Report error if either secret or service account found
+		if secretFound || serviceAccountFound {
+			return fmt.Errorf("secret or service account found in namespace %s", namespace)
+		}
+	}
+	return nil
+}
+
 // ScaleApplicationToDesiredReplicas scales Application to desired replicas for migrated application namespace.
 func ScaleApplicationToDesiredReplicas(namespace string) error {
 	var options metav1.ListOptions
