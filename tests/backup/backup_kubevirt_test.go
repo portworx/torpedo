@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 	"strings"
 	"sync"
 	"time"
@@ -715,6 +716,127 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 				log.Infof("Found vm with data in %s", namespace)
 				appWithData[0].InsertBackupData(ctx, "default", []string{})
 			}
+
+		})
+	})
+})
+
+var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
+	var (
+		backupNames    []string
+		labelSelectors map[string]string
+		//restoreNames         []string
+		allVirtualMachines   []kubevirtv1.VirtualMachine
+		scheduledAppContexts []*scheduler.Context
+		sourceClusterUid     string
+		cloudCredName        string
+		cloudCredUID         string
+		backupLocationUID    string
+		backupLocationName   string
+		backupLocationMap    map[string]string
+		providers            []string
+	)
+	JustBeforeEach(func() {
+		StartPxBackupTorpedoTest("KubevirtVMSshTest", "Verify backup and restore of a VM if a backup or VM deletion is already inprogress", nil, 296425, ATrivedi, Q1FY25)
+		labelSelectors = make(map[string]string)
+		providers = GetBackupProviders()
+		backupLocationMap = make(map[string]string)
+
+		log.InfoD("scheduling applications")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 93013, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify backup and restore of a VM if a backup or VM deletion is already inprogress", func() {
+		defer func() {
+			log.InfoD("switching to default context")
+			err := SetClusterContext("")
+			log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		}()
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("Creating backup location and cloud setting", func() {
+			log.InfoD("Creating backup location and cloud setting")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for _, provider := range providers {
+				cloudCredName = fmt.Sprintf("%s-%s-%v", "cred", provider, RandomString(6))
+				backupLocationName = fmt.Sprintf("%s-%v", getGlobalBucketName(provider), RandomString(6))
+				cloudCredUID = uuid.New()
+				backupLocationUID = uuid.New()
+				backupLocationMap[backupLocationUID] = backupLocationName
+				err := CreateCloudCredential(provider, cloudCredName, cloudCredUID, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of cloud credential named [%s] for org [%s] with [%s] as provider", cloudCredName, BackupOrgID, provider))
+				err = CreateBackupLocation(provider, backupLocationName, backupLocationUID, cloudCredName, cloudCredUID, getGlobalBucketName(provider), BackupOrgID, "", true)
+				dash.VerifyFatal(err, nil, "Creating backup location")
+			}
+		})
+
+		Step("Registering cluster for backup", func() {
+			log.InfoD("Registering cluster for backup")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
+			dash.VerifyFatal(err, nil, "Creating source and destination cluster")
+
+			clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			sourceClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+
+			clusterStatus, err = Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
+			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
+			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
+		})
+
+		Step("Triggering two backups simultaneously on the Same VM", func() {
+			log.InfoD("taking backup of virtual machines")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			var wg sync.WaitGroup
+			var mutex sync.Mutex
+			errors := make([]string, 0)
+			for _, appCtx := range scheduledAppContexts {
+				allVms, err := GetAllVMsInNamespace(appCtx.ScheduleOptions.Namespace)
+				log.FailOnError(err, "Unable to get Virtual Machines from [%s]", appCtx.ScheduleOptions.Namespace)
+				allVirtualMachines = append(allVirtualMachines, allVms...)
+			}
+
+			backupNames = make([]string, 0)
+			for i := 0; i < 4; i++ {
+				wg.Add(1)
+				time.Sleep(50 * time.Millisecond)
+				log.Infof("Triggering backup of Virtual Machine [%v] time", i+1)
+				backupName := fmt.Sprintf("%s-%v-%s", "parallel-vm-backup", time.Now().Unix(), RandomString(5))
+				go func(backupName string) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of virtualMachines [%v], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, allVirtualMachines, backupLocationName)
+					err := CreateVMBackup(backupName, allVirtualMachines, SourceClusterName, backupLocationName, backupLocationUID, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", false, ctx)
+					backupNames = append(backupNames, backupName)
+					if err != nil {
+						mutex.Lock()
+						errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
+						mutex.Unlock()
+					}
+				}(backupName)
+			}
+			wg.Wait()
+			log.Infof("Errors - [%v]", errors)
 
 		})
 	})
