@@ -8,6 +8,7 @@ type Platform interface {
 	AccountInterface
 	TenantInterface
 	TargetClusterInterface
+	TargetClusterManifestInterface
 	ApplicationInterface
 	BackupLocationInterface
 	CloudCredentialsInterface
@@ -26,7 +27,7 @@ type TenantInterface interface {
 }
 
 type TargetClusterInterface interface {
-	ListTargetClusters() ([]WorkFlowResponse, error)
+	ListTargetClusters(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetTarget(*WorkFlowRequest) (*WorkFlowResponse, error)
 	PatchTargetCluster(*WorkFlowRequest) (*WorkFlowResponse, error)
 	DeleteTarget(request *WorkFlowRequest) error
