@@ -182,7 +182,7 @@ container-pds:
 	@echo "Building pds.test container "$(TORPEDO_IMG)
 	sudo DOCKER_BUILDKIT=1 docker build --tag $(TORPEDO_IMG) --build-arg MAKE_TARGET=build-pds -f Dockerfile .
 
-# this target builds a container with unifiedPlatform.test binary only. Repo is hardcoded to ".../torpedo-unifiedPlatform".
+# this target builds a container with platform.test binary only. Repo is hardcoded to ".../torpedo-unifiedPlatform".
 container-unifiedPlatform: TORPEDO_IMG=$(DOCKER_HUB_REPO)/torpedo-pds:$(DOCKER_HUB_TAG)
 container-unifiedPlatform:
 	@echo "Building unifiedPlatform.test container "$(TORPEDO_IMG)
