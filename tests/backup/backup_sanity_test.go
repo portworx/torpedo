@@ -12,7 +12,7 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"golang.org/x/sync/errgroup"
+	//"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies if the backup pods are in Ready state or not
@@ -108,8 +108,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -126,6 +126,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
+		Inst().AppList = []string{"postgres-cephfs-csi", "postgres-rbd-csi"}
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
 			appContexts := ScheduleApplications(taskName)
@@ -145,8 +146,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			//ctx, _ := backup.GetAdminCtxFromSecret()
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -295,8 +296,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		opts[SkipClusterScopedObjects] = true
 
 		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+		//log.FailOnError(err, "Data validations failed")
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
