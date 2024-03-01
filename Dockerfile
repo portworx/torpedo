@@ -56,6 +56,10 @@ COPY --from=alpine/helm:latest /usr/bin/helm /usr/local/bin/helm
 # Install dependancy for OCP 4.14 CLI
 RUN apk --update add gcompat
 
+COPY run-torpedo.sh run-torpedo.sh
+
 # Clone and build the Torpedo repository
 RUN git clone "https://github.com/portworx/torpedo.git" && \
-    cd torpedo && make all
+    cd torpedo && make all \
+
+CMD ["/bin/bash", "run-torpedo.sh"]
