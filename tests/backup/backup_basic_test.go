@@ -235,13 +235,13 @@ var _ = BeforeSuite(func() {
 	// Create Global pre-rule and post-rule for the application used
 	flagFromEnv := os.Getenv("USE_GLOBAL_RULES")
 	if flagFromEnv == "" {
-		FlagUseGlobalRule = false
+		GlobalRuleFlag = false
 	} else {
-		FlagUseGlobalRule, err = strconv.ParseBool(flagFromEnv)
+		GlobalRuleFlag, err = strconv.ParseBool(flagFromEnv)
 		dash.VerifyFatal(err, nil, "Parsing USE_GLOBAL_RULES environment variable")
 	}
 
-	if FlagUseGlobalRule {
+	if GlobalRuleFlag {
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		GlobalPreRuleName, GlobalPostRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, ctx)

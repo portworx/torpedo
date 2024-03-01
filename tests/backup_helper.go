@@ -149,7 +149,7 @@ var (
 	GlobalPostRuleName          string
 	GlobalPreRuleUid            string
 	GlobalPostRuleUid           string
-	FlagUseGlobalRule           bool
+	GlobalRuleFlag              bool
 	cloudProviders              = []string{"aws"}
 	CommonPassword              string
 	backupPodLabels             = []map[string]string{
@@ -550,7 +550,7 @@ func CreateBackupWithCustomResourceTypeWithoutValidation(backupName string, clus
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, resourceTypes []string, ctx context1.Context) error {
 
-	if FlagUseGlobalRule {
+	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
 		if GlobalPreRuleName != "" {
 			preRuleUid = GlobalPreRuleUid
@@ -714,7 +714,7 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) (*api.BackupInspectResponse, error) {
 
-	if FlagUseGlobalRule {
+	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
 		if GlobalPreRuleName != "" {
 			preRuleUid = GlobalPreRuleUid
@@ -888,7 +888,7 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
 
-	if FlagUseGlobalRule {
+	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
 		if GlobalPreRuleName != "" {
 			preRuleUid = GlobalPreRuleUid
@@ -3571,7 +3571,7 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context1.Context) (*api.BackupInspectResponse, error) {
 
-	if FlagUseGlobalRule {
+	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
 		if GlobalPreRuleName != "" {
 			preRuleUid = GlobalPreRuleUid
@@ -3637,7 +3637,7 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 // CreateScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
 func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
 
-	if FlagUseGlobalRule {
+	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
 		if GlobalPreRuleName != "" {
 			preRuleUid = GlobalPreRuleUid
