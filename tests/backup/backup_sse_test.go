@@ -520,8 +520,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
-		// Delete backup schedule policy
-		log.Infof("Deleting backup schedule policy")
+		// Delete backup schedule
+		log.Infof("Deleting backup schedule")
 		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)
