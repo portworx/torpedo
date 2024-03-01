@@ -144,3 +144,36 @@ var _ = Describe("{ListAccounts}", func() {
 		defer EndTorpedoTest()
 	})
 })
+
+var _ = Describe("{ServiceAccountsCRUD}", func() {
+	steplog := "ServiceAccounts CRUD"
+	JustBeforeEach(func() {
+		StartTorpedoTest("ListSaAccounts", "Create and List Service Accounts", nil, 0)
+	})
+
+	Step(steplog, func() {
+		log.InfoD(steplog)
+		It("Service Accounts", func() {
+			Step("create Service accounts", func() {
+				saAcc, err := stworkflows.WorkflowCreateServiceAccount("Automation")
+				log.FailOnError(err, "Unable to create serviceAccounts due to- %v", err)
+				rbacToken, err := stworkflows.WorkflowCreateIAMRolesAndGenerateJWTTokenNsLevel("Automation", saAcc)
+				log.FailOnError(err, "error while fetching Rbac context")
+				steplog = "Create IAM roles for the service account"
+				log.InfoD(steplog)
+				stworkflows.SetRbacWithSAToken(true, rbacToken)
+			})
+
+			//blocked from here -
+			//create rbac enabled deployment
+			//take ad-hoc backup
+			//perform 1-click-restore
+			//cleanup
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
