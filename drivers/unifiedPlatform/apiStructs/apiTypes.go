@@ -24,4 +24,5 @@ type WorkFlowRequest struct {
 	V1IAM                      V1IAM                      `copier:"must,nopanic"`
 	Pagination                 PaginationRequest
 	TargetClusterManifest      TargetClusterManifest
+	ListNamespacesRequest      ListNamespacesRequest `copier:"must,nopanic"`
 }

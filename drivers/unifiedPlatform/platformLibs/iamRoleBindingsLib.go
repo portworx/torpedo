@@ -5,8 +5,7 @@ import (
 )
 
 var (
-	iamInputs        *apiStructs.WorkFlowRequest
-	iamCreateRequest apiStructs.CreateIAM
+	iamInputs *apiStructs.WorkFlowRequest
 )
 
 // CreatePlatformServiceAccountIamRoles creates IAM roles for given Namespace role binding and ActorId

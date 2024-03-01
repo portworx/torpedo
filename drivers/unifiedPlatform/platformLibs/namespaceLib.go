@@ -1,11 +1,8 @@
 package platformLibs
 
 import (
-	"context"
-	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -24,7 +21,6 @@ const (
 
 var (
 	nsInputs           *apiStructs.WorkFlowRequest
-	nsListRequest      platformv1.ApiNamespaceServiceListNamespacesRequest
 	pdsLabel           = "pds.portworx.com/available"
 	namespaceNameIDMap = make(map[string]string)
 )
@@ -74,10 +70,8 @@ func CreatePdsNamespace() (*corev1.Namespace, bool, error) {
 func GetPdsLabeledNamespaceId(tenantId, deploymentTargetID, namespace string) (string, error) {
 	var namespaceID string
 	err = wait.Poll(timeInterval, timeOut, func() (bool, error) {
-		nsListRequest = nsListRequest.Label(pdsLabel)
-		nsListRequest = nsListRequest.TenantId(tenantId)
-		nsListRequest = nsListRequest.ApiService.NamespaceServiceListNamespaces(context.Background(), deploymentTargetID)
-		copier.Copy(&nsInputs, nsListRequest)
+		nsInputs.ListNamespacesRequest.Label = pdsLabel
+		nsInputs.ListNamespacesRequest.TenantId = tenantId
 		namespaces, err := v2Components.Platform.ListNamespaces(nsInputs)
 		for i := 0; i < len(namespaces); i++ {
 			nsName := namespaces[i].Meta.Name
