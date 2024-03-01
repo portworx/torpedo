@@ -127,9 +127,10 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
 		Inst().AppList = []string{"postgres-cephfs-csi", "postgres-rbd-csi"}
-		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+		namespace := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
+		for i := 0; i < len(Inst().AppList); i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
-			appContexts := ScheduleApplications(taskName)
+			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
