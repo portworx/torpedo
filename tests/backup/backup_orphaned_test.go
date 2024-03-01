@@ -1,6 +1,5 @@
 package tests
 
-//Te
 import (
 	"context"
 	"fmt"
