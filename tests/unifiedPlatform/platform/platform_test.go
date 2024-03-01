@@ -84,7 +84,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			log.Infof("Error Details - [%s]", err.Error())
 		}
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := dslibs.DeployDataService(ds)
+			_, err := stworkflows.DeployDataservice(ds)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 	})

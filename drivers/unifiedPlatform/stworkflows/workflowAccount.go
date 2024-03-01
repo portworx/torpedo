@@ -2,6 +2,7 @@ package stworkflows
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 )
@@ -29,4 +30,13 @@ func WorkflowCreateAndListAccounts() (map[string][]apiStructs.WorkFlowResponse, 
 	addResultToResponse(accList, GetAccountListv1, resultMap)
 
 	return resultMap, nil
+}
+
+func DeployDataservice(ds dslibs.PDSDataService) (*apiStructs.WorkFlowResponse, error) {
+	deployment, err := dslibs.DeployDataService(ds)
+	if err != nil {
+		return nil, err
+	}
+	return deployment, nil
+
 }

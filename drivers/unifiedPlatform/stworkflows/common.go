@@ -12,8 +12,9 @@ const (
 )
 
 const (
-	CreatePlatformAccountV1 = "CreatePlatformAccountV1"
-	GetAccountListv1        = "GetAccountListv1"
+	CreatePlatformAccountV1    = "CreatePlatformAccountV1"
+	GetAccountListv1           = "GetAccountListv1"
+	DeployeDataserviceOnDemand = "DeployeDataserviceOnDemand"
 )
 
 func startStep(name string) {

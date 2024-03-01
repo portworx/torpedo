@@ -26,17 +26,22 @@ type Meta struct {
 }
 
 type Config struct {
-	UserEmail            *string              `copier:"must,nopanic"`
-	DnsName              *string              `copier:"must,nopanic"`
-	DisplayName          *string              `copier:"must,nopanic"`
-	TlsEnabled           *bool                `copier:"must,nopanic"`
-	Reference            *Reference           `copier:"must,nopanic"`
+	UserEmail   *string `copier:"must,nopanic"`
+	DnsName     *string `copier:"must,nopanic"`
+	DisplayName *string `copier:"must,nopanic"`
+}
+
+type V1Config1 struct {
+	References *Reference `copier:"must,nopanic"`
+	// Flag to enable TLS for the Data Service.
+	TlsEnabled *bool `copier:"must,nopanic"`
+	// A deployment topology contains a number of nodes that have various attributes as a collective group.
 	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
 
 type V1Deployment struct {
-	Meta   Meta   `copier:"must,nopanic"`
-	Config Config `copier:"must,nopanic"`
+	Meta   Meta      `copier:"must,nopanic"`
+	Config V1Config1 `copier:"must,nopanic"`
 }
 
 type V1DeploymentMetaData struct {

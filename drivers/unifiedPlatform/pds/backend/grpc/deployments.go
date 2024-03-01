@@ -48,7 +48,7 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
 
-	copier.Copy(&createRequest, createDeploymentRequest)
+	copier.Copy(&createRequest, createDeploymentRequest.Deployment)
 
 	apiResponse, err := client.CreateDeployment(ctx, &createRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {

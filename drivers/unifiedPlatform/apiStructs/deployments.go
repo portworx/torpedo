@@ -38,6 +38,6 @@ type Reference struct {
 }
 
 type PDSDeployment struct {
-	NamespaceID  *string
+	NamespaceID  string
 	V1Deployment V1Deployment
 }

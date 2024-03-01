@@ -18,7 +18,6 @@ type PDSV2_API struct {
 
 var (
 	DeploymentRequestBody pdsv2.V1Deployment
-	CreateRequest         pdsv2.ApiDeploymentServiceCreateDeploymentRequest
 )
 
 // GetClient updates the header with bearer token and returns the new client
@@ -37,21 +36,28 @@ func (ds *PDSV2_API) GetDeploymentClient() (context.Context, *pdsv2.DeploymentSe
 // CreateDeployment return newly created deployment model.
 func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
-	DeploymentRequestBody = pdsv2.V1Deployment{}
-	CreateRequest = pdsv2.ApiDeploymentServiceCreateDeploymentRequest{}
+	depCreateRequest := pdsv2.ApiDeploymentServiceCreateDeploymentRequest{}
 
-	ctx, dsClient, err := ds.GetDeploymentClient()
+	_, dsClient, err := ds.GetDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	CreateRequest = dsClient.DeploymentServiceCreateDeployment(ctx, "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6")
-	fmt.Println("Create Request ", CreateRequest)
+	err = copier.Copy(&DeploymentRequestBody, createDeploymentRequest.Deployment.V1Deployment)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying the deployment request\n")
+	}
 
-	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(CreateRequest)
-	fmt.Println("error", err)
-	fmt.Println("res ", res)
-	if err != nil && res.StatusCode != status.StatusOK {
+	//Debug Print
+	fmt.Println("DeploymentRequestBody Name ", *DeploymentRequestBody.Meta.Name)
+	fmt.Println("Storage Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].StorageTemplate.Id)
+	fmt.Println("App Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
+	fmt.Println("Resource Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+
+	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(context.Background(), createDeploymentRequest.Deployment.NamespaceID).V1Deployment(DeploymentRequestBody)
+
+	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(depCreateRequest)
+	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
