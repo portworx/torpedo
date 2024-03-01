@@ -83,12 +83,8 @@ var _ = Describe("{CreateAndValidateNomadVolume}", func() {
 				}
 				return nil, false, nil // false indicates no further retries are needed
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: Volume %v could not be deleted after retries: %v", volume.ID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v after retries", volume.ID)
-			}
+			log.FailOnError(err, "Final error: Volume %v could not be deleted after retries: %v", volume.ID, err)
+			log.Infof("Successfully deleted volume %v after retries", volume.ID)
 		}
 	})
 })
@@ -249,12 +245,8 @@ var _ = Describe("{RunMultipleFioJobsOnNomad}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete Fio job %v: %v", jobID, err)
-			} else {
-				log.Infof("Successfully deleted Fio job %v", jobID)
-			}
+			log.FailOnError(err, "Final error: failed to delete Fio job %v: %v", jobID, err)
+			log.Infof("Successfully deleted Fio job %v", jobID)
 		}
 
 		// Delete volumes with retry
@@ -267,12 +259,8 @@ var _ = Describe("{RunMultipleFioJobsOnNomad}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete volume %v: %v", volumeID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v", volumeID)
-			}
+			log.FailOnError(err, "Final error: failed to delete volume %v: %v", volumeID, err)
+			log.Infof("Successfully deleted volume %v", volumeID)
 		}
 	})
 })
@@ -352,11 +340,9 @@ var _ = Describe("{ScaleFioJobOnNomad}", func() {
 
 	AfterEach(func() {
 		err = client.DeleteJob(jobID)
-		if err != nil {
-			log.Errorf("Failed to delete job: %v", err)
-		} else {
-			log.Infof("Successfully deleted job %v", jobID)
-		}
+		log.FailOnError(err, "Failed to delete job %v", jobID)
+		log.Infof("Successfully delete job: %v", jobID)
+
 		err = client.DeleteVolume(volumeID)
 		if err != nil {
 			log.Errorf("Failed to delete volume: %v. Will retry in 5 more seconds.", err)
@@ -556,11 +542,8 @@ var _ = Describe("{RunMultipleFioJobsOnSharedRWXVolume}", func() {
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
 
-			if err != nil {
-				log.Errorf("Final error: failed to delete Fio job %v: %v", jobID, err)
-			} else {
-				log.Infof("Successfully deleted Fio job %v", jobID)
-			}
+			log.FailOnError(err, "Final error: failed to delete Fio job %v", jobID)
+			log.Infof("Successfully deleted Fio job %v", jobID)
 		}
 
 		// Delete volumes with retry
@@ -573,12 +556,8 @@ var _ = Describe("{RunMultipleFioJobsOnSharedRWXVolume}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete volume %v: %v", volumeID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v", volumeID)
-			}
+			log.FailOnError(err, "Final error: failed to delete volume %v", volumeID)
+			log.Infof("Successfully deleted volume %v", volumeID)
 		}
 	})
 })
@@ -694,12 +673,8 @@ var _ = Describe("{KillPxWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete Fio job %v: %v", jobID, err)
-			} else {
-				log.Infof("Successfully deleted Fio job %v", jobID)
-			}
+			log.FailOnError(err, "Final error: failed to delete Fio job %v", jobID)
+			log.Infof("Successfully deleted Fio job %v", jobID)
 		}
 
 		// Delete volumes with retry
@@ -712,12 +687,8 @@ var _ = Describe("{KillPxWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete volume %v: %v", volumeID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v", volumeID)
-			}
+			log.FailOnError(err, "Final error: failed to delete volume %v", volumeID)
+			log.Infof("Successfully deleted volume %v", volumeID)
 		}
 	})
 })
@@ -771,11 +742,8 @@ var _ = Describe("{AdjustVolumeReplFactor}", func() {
 
 	AfterEach(func() {
 		err = client.DeleteVolume(volumeID)
-		if err != nil {
-			log.Errorf("Failed to delete volume %v: %v", volumeID, err)
-		} else {
-			log.Infof("Successfully deleted volume %v", volumeID)
-		}
+		log.FailOnError(err, "Failed to delete volume %v", volumeID)
+		log.Infof("Successfully deleted volume %v", volumeID)
 	})
 })
 
@@ -890,12 +858,8 @@ var _ = Describe("{LongStopPxWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete Fio job %v: %v", jobID, err)
-			} else {
-				log.Infof("Successfully deleted Fio job %v", jobID)
-			}
+			log.FailOnError(err, "Final error: failed to delete Fio job %v", jobID)
+			log.Infof("Successfully deleted Fio job %v", jobID)
 		}
 
 		// Delete volumes with retry
@@ -908,12 +872,8 @@ var _ = Describe("{LongStopPxWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete volume %v: %v", volumeID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v", volumeID)
-			}
+			log.FailOnError(err, "Final error: failed to delete volume %v", volumeID)
+			log.Infof("Successfully deleted volume %v", volumeID)
 		}
 	})
 })
@@ -1034,12 +994,8 @@ var _ = Describe("{RebootNodeWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete Fio job %v: %v", jobID, err)
-			} else {
-				log.Infof("Successfully deleted Fio job %v", jobID)
-			}
+			log.FailOnError(err, "Final error: failed to delete Fio job %v", jobID)
+			log.Infof("Successfully deleted Fio job %v", jobID)
 		}
 
 		// Delete volumes with retry
@@ -1052,12 +1008,8 @@ var _ = Describe("{RebootNodeWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete volume %v: %v", volumeID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v", volumeID)
-			}
+			log.FailOnError(err, "Final error: failed to delete volume %v", volumeID)
+			log.Infof("Successfully deleted volume %v", volumeID)
 		}
 	})
 })
@@ -1119,11 +1071,8 @@ var _ = Describe("{AdjustVolumeReplFactorAndVolumeResize}", func() {
 
 	AfterEach(func() {
 		err = client.DeleteVolume(volumeID)
-		if err != nil {
-			log.Errorf("Failed to delete volume %v: %v", volumeID, err)
-		} else {
-			log.Infof("Successfully deleted volume %v", volumeID)
-		}
+		log.FailOnError(err, "Failed to delete volume %v", volumeID)
+		log.Infof("Successfully deleted volume %v", volumeID)
 	})
 })
 
@@ -1234,12 +1183,8 @@ var _ = Describe("{PoolExpandWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete Fio job %v: %v", jobID, err)
-			} else {
-				log.Infof("Successfully deleted Fio job %v", jobID)
-			}
+			log.FailOnError(err, "Final error: failed to delete Fio job %v", jobID)
+			log.Infof("Successfully deleted Fio job %v", jobID)
 		}
 
 		// Delete volumes with retry
@@ -1252,12 +1197,8 @@ var _ = Describe("{PoolExpandWhileAppsAreRunning}", func() {
 				}
 				return nil, false, nil
 			}, 2*time.Minute, 20*time.Second)
-
-			if err != nil {
-				log.Errorf("Final error: failed to delete volume %v: %v", volumeID, err)
-			} else {
-				log.Infof("Successfully deleted volume %v", volumeID)
-			}
+			log.FailOnError(err, "Final error: failed to delete volume %v", volumeID)
+			log.Infof("Successfully deleted volume %v", volumeID)
 		}
 	})
 })
