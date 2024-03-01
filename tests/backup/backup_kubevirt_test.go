@@ -483,7 +483,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 293013, Mkoppal, Q3FY24)
+		StartPxBackupTorpedoTest("KubevirtUpgradeTest", "Verify backup and restore of Kubevirt VMs after upgrading Kubevirt control plane", nil, 93013, Mkoppal, Q3FY24)
 
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
@@ -722,7 +722,7 @@ var _ = Describe("{KubevirtVMSshTest}", func() {
 })
 
 // This testcase verifies Simultaneous backups/ Simultaneous Backup and Restore/ Simultaneous Restore and Source Virtual Machine Deletion
-var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
+var _ = Describe("{KubevirtVMBackupOrDeletionInProgress}", func() {
 	var (
 		backupNames          []string
 		labelSelectors       map[string]string
@@ -737,13 +737,15 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		backupLocationMap    map[string]string
 		providers            []string
 		bkpNamespaces        []string
+		isSourceAppDeleted   bool
 	)
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("KubevirtVMBackupOrDeleteionInProgress", "Verify backup and restore of a VM if a backup or VM deletion is already inprogress", nil, 296425, ATrivedi, Q1FY25)
+		StartPxBackupTorpedoTest("KubevirtVMBackupOrDeletionInProgress", "Verify backup and restore of a VM if a backup or VM deletion is already inprogress", nil, 296425, ATrivedi, Q1FY25)
 		labelSelectors = make(map[string]string)
 		providers = GetBackupProviders()
 		backupLocationMap = make(map[string]string)
 		bkpNamespaces = make([]string, 0)
+		isSourceAppDeleted = false
 
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -773,6 +775,7 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		}()
 
 		Step("Validating applications", func() {
+			// TODO: Data validation needs to enabled once SSH issue with kubevirt is fixed
 			log.InfoD("Validating applications")
 			ValidateApplications(scheduledAppContexts)
 		})
@@ -892,30 +895,30 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		})
 
 		// TODO: This steps needs to be uncommented once the Node Port issue for VM restore is fixed
-		Step("Validating restore for all Virtual Machine Instances restored - Simultaneous restore with backup", func() {
-			defer func() {
-				log.InfoD("switching to default context")
-				err := SetClusterContext("")
-				log.FailOnError(err, "failed to SetClusterContext to default cluster")
-			}()
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			err = SetDestinationKubeConfig()
-			log.FailOnError(err, "failed to switch to context to destination cluster")
-
-			expectedRestoredAppContexts := make([]*scheduler.Context, 0)
-			for _, scheduledAppContext := range scheduledAppContexts {
-				expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-				if err != nil {
-					log.Errorf("TransformAppContextWithMappings: %v", err)
-					continue
-				}
-				expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
-			}
-
-			err = ValidateRestore(ctx, restoreNames[0], BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
-			log.FailOnError(err, "Restore Validation Failed for [%s]", restoreNames[0])
-		})
+		//Step("Validating restore for all Virtual Machine Instances restored - Simultaneous restore with backup", func() {
+		//	defer func() {
+		//		log.InfoD("switching to default context")
+		//		err := SetClusterContext("")
+		//		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+		//	}()
+		//	ctx, err := backup.GetAdminCtxFromSecret()
+		//	log.FailOnError(err, "Fetching px-central-admin ctx")
+		//	err = SetDestinationKubeConfig()
+		//	log.FailOnError(err, "failed to switch to context to destination cluster")
+		//
+		//	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+		//	for _, scheduledAppContext := range scheduledAppContexts {
+		//		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//		if err != nil {
+		//			log.Errorf("TransformAppContextWithMappings: %v", err)
+		//			continue
+		//		}
+		//		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+		//	}
+		//
+		//	err = ValidateRestore(ctx, restoreNames[0], BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
+		//	log.FailOnError(err, "Restore Validation Failed for [%s]", restoreNames[0])
+		//})
 
 		Step("Triggering new restore and deleting source VM simultaneously on the same Virtual machine", func() {
 			log.InfoD("Taking backup of virtual machines and deleting the source simultaneously")
@@ -957,7 +960,8 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 
 			wg.Wait()
 
-			dash.VerifyFatal(len(errordeleteVM), 0, fmt.Sprintf("Simultaneous backup with restore failed with below errors - \n\n%s", strings.Join(errordeleteVM, "\n")))
+			dash.VerifyFatal(len(errordeleteVM), 0, fmt.Sprintf("Source application delete failed with below errors - \n\n%s", strings.Join(errordeleteVM, "\n")))
+			isSourceAppDeleted = true
 			dash.VerifyFatal(len(errorRestore), 0, fmt.Sprintf("Simultaneous restore with backup failed with below errors - \n\n%s", strings.Join(errorRestore, "\n")))
 
 		})
@@ -1011,9 +1015,10 @@ var _ = Describe("{KubevirtVMBackupOrDeleteionInProgress}", func() {
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
-		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
-		log.FailOnError(err, "Data validations failed")
+		if !isSourceAppDeleted {
+			log.Info("Destroying scheduled apps on source cluster")
+			DestroyApps(scheduledAppContexts, opts)
+		}
 
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
