@@ -11,6 +11,10 @@ import (
 	status "net/http"
 )
 
+var (
+	BackupRequestBody pdsv2.V1BackupConfig
+)
+
 // getBackupConfigClient updates the header with bearer token and returns the new client
 func (backupConf *PDSV2_API) getBackupConfigClient() (context.Context, *pdsv2.BackupConfigServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
@@ -33,12 +37,12 @@ func (backupConf *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiSt
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	backupConfigCreateRequest := backupClient.BackupConfigServiceCreateBackupConfig(ctx, createBackupConfigRequest.BackupConfig.V1.Create.ProjectId)
-
-	err = utilities.CopyStruct(backupConfigCreateRequest, createBackupConfigRequest.BackupConfig.V1.Create)
+	err = utilities.CopyStruct(createBackupConfigRequest.BackupConfig.V1.Create.V1BackupConfig, &BackupRequestBody)
 	if err != nil {
 		return nil, fmt.Errorf("Error occurred while copying structs: %v\n", err)
 	}
+
+	backupConfigCreateRequest := backupClient.BackupConfigServiceCreateBackupConfig(ctx, createBackupConfigRequest.BackupConfig.V1.Create.ProjectId).V1BackupConfig(BackupRequestBody)
 
 	backupConfigModel, res, err := backupClient.BackupConfigServiceCreateBackupConfigExecute(backupConfigCreateRequest)
 	if err != nil && res.StatusCode != status.StatusOK {

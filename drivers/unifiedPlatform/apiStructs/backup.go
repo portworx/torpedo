@@ -1,39 +1,39 @@
 package apiStructs
 
 type PDSBackup struct {
-	V1   PDSBackupV1
-	GRPC PDSBackupGRPC
+	V1   PDSBackupV1   `copier:"must,nopanic"`
+	GRPC PDSBackupGRPC `copier:"must,nopanic"`
 }
 
 type PDSBackupV1 struct {
-	Get    GetPDSBackup
-	Delete DeletePDSBackup
-	List   ListPDSBackup
+	Get    GetPDSBackup    `copier:"must,nopanic"`
+	Delete DeletePDSBackup `copier:"must,nopanic"`
+	List   ListPDSBackup   `copier:"must,nopanic"`
 }
 
 type PDSBackupGRPC struct {
-	Get    GetPDSBackup
-	Delete DeletePDSBackup
-	List   ListPDSBackup
+	Get    GetPDSBackup    `copier:"must,nopanic"`
+	Delete DeletePDSBackup `copier:"must,nopanic"`
+	List   ListPDSBackup   `copier:"must,nopanic"`
 }
 
 type GetPDSBackup struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type DeletePDSBackup struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type ListPDSBackup struct {
-	AccountId            *string
-	TenantId             *string
-	ClusterId            *string
-	NamespaceId          *string
-	ProjectId            *string
-	BackupConfigId       *string
-	PaginationPageNumber *string
-	PaginationPageSize   *string
-	SortSortBy           *string
-	SortSortOrder        *string
+	AccountId            *string `copier:"must,nopanic"`
+	TenantId             *string `copier:"must,nopanic"`
+	ClusterId            *string `copier:"must,nopanic"`
+	NamespaceId          *string `copier:"must,nopanic"`
+	ProjectId            *string `copier:"must,nopanic"`
+	BackupConfigId       *string `copier:"must,nopanic"`
+	PaginationPageNumber *string `copier:"must,nopanic"`
+	PaginationPageSize   *string `copier:"must,nopanic"`
+	SortSortBy           *string `copier:"must,nopanic"`
+	SortSortOrder        *string `copier:"must,nopanic"`
 }

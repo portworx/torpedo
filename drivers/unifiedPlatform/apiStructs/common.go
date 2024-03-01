@@ -55,15 +55,15 @@ type V1DeploymentMetaData struct {
 type StatusPhase string
 
 type V1Meta struct {
-	Uid             *string            `json:"uid,omitempty"`
-	Name            *string            `json:"name,omitempty"`
-	Description     *string            `json:"description,omitempty"`
-	ResourceVersion *string            `json:"resourceVersion,omitempty"`
-	CreateTime      *time.Time         `json:"createTime,omitempty"`
-	UpdateTime      *time.Time         `json:"updateTime,omitempty"`
-	Labels          *map[string]string `json:"labels,omitempty"`
-	Annotations     *map[string]string `json:"annotations,omitempty"`
-	ParentReference *V1Reference       `json:"parentReference,omitempty"`
+	Uid             *string            `copier:"must,nopanic"`
+	Name            *string            `copier:"must,nopanic"`
+	Description     *string            `copier:"must,nopanic"`
+	ResourceVersion *string            `copier:"must,nopanic"`
+	CreateTime      *time.Time         `copier:"must,nopanic"`
+	UpdateTime      *time.Time         `copier:"must,nopanic"`
+	Labels          *map[string]string `copier:"must,nopanic"`
+	Annotations     *map[string]string `copier:"must,nopanic"`
+	ParentReference *V1Reference       `copier:"must,nopanic"`
 }
 
 type V1ErrorCode string
@@ -71,7 +71,11 @@ type V1ErrorCode string
 type V1Phase string
 
 type V1Reference struct {
-	Type    *string `json:"type,omitempty"`
-	Version *string `json:"version,omitempty"`
-	Uid     *string `json:"uid,omitempty"`
+	Type    *string `copier:"must,nopanic"`
+	Version *string `copier:"must,nopanic"`
+	Uid     *string `copier:"must,nopanic"`
+}
+
+type Status struct {
+	Phase string `copier:"must,nopanic"`
 }

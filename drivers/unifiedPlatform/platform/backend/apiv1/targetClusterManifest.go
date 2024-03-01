@@ -3,12 +3,12 @@ package apiv1
 import (
 	"context"
 	"fmt"
-	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	status "net/http"
+	"time"
 )
 
 // GetClient updates the header with bearer token and returns the new client
@@ -27,23 +27,29 @@ func (tcManifest *PLATFORM_API_V1) getTargetClusterManifestClient() (context.Con
 }
 
 func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *apiStructs.WorkFlowRequest) (string, error) {
+
+	var tcManifestRequest platformv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
+
+	clusterName := getManifestRequest.TargetClusterManifest.ClusterName
+	tenantId := getManifestRequest.TargetClusterManifest.TenantId
+
+	tcManifestRequest = tcManifestRequest.ApiService.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest(context.Background(), tenantId)
+
+	if clusterName == "" {
+		clusterName = fmt.Sprintf("Cluster_%v", time.Now().Unix())
+	}
+
+	tcManifestRequest = tcManifestRequest.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody(
+		platformv1.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody{
+			ClusterName: &clusterName,
+		})
+
 	_, dtClient, err := tcManifest.getTargetClusterManifestClient()
-	if err != nil {
-		return "", fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
+	dtModels, res, err := dtClient.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestExecute(tcManifestRequest)
 
-	var getRequest platformv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
-
-	err = copier.Copy(&getRequest, getManifestRequest)
-	if err != nil {
-		return "", err
-	}
-
-	dtModels, res, err := dtClient.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestExecute(getRequest)
-	if err != nil && res.StatusCode != status.StatusOK {
+	if err != nil || res.StatusCode != status.StatusOK {
 		return "", fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
 	}
-
 	return *dtModels.Manifest, nil
 
 }

@@ -9,7 +9,7 @@ import (
 	. "github.com/portworx/torpedo/tests"
 )
 
-//var targetCluster tc.TargetCluster
+var tc platformLibs.TargetCluster
 
 var _ = Describe("{TenantsCRUD}", func() {
 	JustBeforeEach(func() {
@@ -20,8 +20,9 @@ var _ = Describe("{TenantsCRUD}", func() {
 		steplog := "Tenants CRUD"
 		Step(steplog, func() {
 			log.InfoD(steplog)
+			var tc platformLibs.TargetCluster
 			var tenantId string
-			accID := "acc:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
+			accID := "acc:2199f82a-9c39-4070-a431-4a8c8b1c2ca7"
 			//accList, err := platformLibs.GetAccountListv1()
 			//log.FailOnError(err, "error while getting account list")
 			//accID := platformLibs.GetPlatformAccountID(accList, defaultTestAccount)
@@ -34,10 +35,11 @@ var _ = Describe("{TenantsCRUD}", func() {
 				break
 			}
 			log.Infof("TenantID [%s]", tenantId)
-			//err = targetCluster.RegisterToControlPlane("1.0.0", tenantId, "")
-			//if err != nil {
-			//	log.FailOnError(err, "Failed to register Target Cluster to Control plane")
-			//}
+			clusterId, err := tc.RegisterToControlPlane("1.0.0", tenantId)
+			if err != nil {
+				log.FailOnError(err, "Failed to register Target Cluster to Control plane")
+			}
+			log.Infof("Registered Cluster ID is: %v\n", clusterId)
 		})
 	})
 

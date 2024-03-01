@@ -38,6 +38,6 @@ type Reference struct {
 }
 
 type PDSDeployment struct {
-	NamespaceID  string
-	V1Deployment V1Deployment
+	NamespaceID  string       `copier:"must,nopanic"`
+	V1Deployment V1Deployment `copier:"must,nopanic"`
 }

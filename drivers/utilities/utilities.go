@@ -303,6 +303,6 @@ func GetEnv(key, fallback string) string {
 func CopyStruct(fromValue interface{}, toValue interface{}) error {
 	log.Infof("Copying from [%+v]", fromValue)
 	log.Infof("Copying to [%+v]", toValue)
-	err := copier.Copy(fromValue, toValue)
+	err := copier.CopyWithOption(toValue, fromValue, copier.Option{CaseSensitive: false})
 	return err
 }

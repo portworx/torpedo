@@ -11,79 +11,79 @@ type ConfigBackupLevel string
 type ConfigReclaimPolicyType string
 
 type PDSBackupConfig struct {
-	V1   PDSBackupConfigV1
-	GRPC PDSBackupConfigGRPC
+	V1   PDSBackupConfigV1   `copier:"must,nopanic"`
+	GRPC PDSBackupConfigGRPC `copier:"must,nopanic"`
 }
 
 type PDSBackupConfigV1 struct {
-	Create CreatePDSBackupConfig
-	Update UpdatePDSBackupConfig
-	Get    GetPDSBackupConfig
-	Delete DeletePDSBackupConfig
-	List   ListPDSBackupConfig
+	Create CreatePDSBackupConfig `copier:"must,nopanic"`
+	Update UpdatePDSBackupConfig `copier:"must,nopanic"`
+	Get    GetPDSBackupConfig    `copier:"must,nopanic"`
+	Delete DeletePDSBackupConfig `copier:"must,nopanic"`
+	List   ListPDSBackupConfig   `copier:"must,nopanic"`
 }
 
 type PDSBackupConfigGRPC struct {
-	Create CreatePDSBackupConfig
-	Update UpdatePDSBackupConfig
-	Get    GetPDSBackupConfig
-	Delete DeletePDSBackupConfig
-	List   ListPDSBackupConfig
+	Create CreatePDSBackupConfig `copier:"must,nopanic"`
+	Update UpdatePDSBackupConfig `copier:"must,nopanic"`
+	Get    GetPDSBackupConfig    `copier:"must,nopanic"`
+	Delete DeletePDSBackupConfig `copier:"must,nopanic"`
+	List   ListPDSBackupConfig   `copier:"must,nopanic"`
 }
 
 type CreatePDSBackupConfig struct {
-	ProjectId      string
-	DeploymentId   *string
-	V1BackupConfig *V1BackupConfig
+	ProjectId      string          `copier:"must,nopanic"`
+	DeploymentId   *string         `copier:"must,nopanic"`
+	V1BackupConfig *V1BackupConfig `copier:"must,nopanic"`
 }
 
 type UpdatePDSBackupConfig struct {
-	BackupConfigMetaUid        string
-	DesiredBackupConfiguration *DesiredBackupConfiguration
+	BackupConfigMetaUid        string                      `copier:"must,nopanic"`
+	DesiredBackupConfiguration *DesiredBackupConfiguration `copier:"must,nopanic"`
 }
 
 type GetPDSBackupConfig struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type DeletePDSBackupConfig struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type ListPDSBackupConfig struct {
-	AccountId            *string
-	TenantId             *string
-	ProjectId            *string
-	TargetClusterId      *string
-	NamespaceId          *string
-	DeploymentId         *string
-	PaginationPageNumber *string
-	PaginationPageSize   *string
-	SortSortBy           *string
-	SortSortOrder        *string
+	AccountId            *string `copier:"must,nopanic"`
+	TenantId             *string `copier:"must,nopanic"`
+	ProjectId            *string `copier:"must,nopanic"`
+	TargetClusterId      *string `copier:"must,nopanic"`
+	NamespaceId          *string `copier:"must,nopanic"`
+	DeploymentId         *string `copier:"must,nopanic"`
+	PaginationPageNumber *string `copier:"must,nopanic"`
+	PaginationPageSize   *string `copier:"must,nopanic"`
+	SortSortBy           *string `copier:"must,nopanic"`
+	SortSortOrder        *string `copier:"must,nopanic"`
 }
 
 type V1BackupConfig struct {
-	Meta   Meta                  `json:"meta,omitempty"`
-	Config Config                `json:"config,omitempty"`
-	Status *Backupconfigv1Status `json:"status,omitempty"`
+	Meta   Meta                  `copier:"must,nopanic"`
+	Config Config                `copier:"must,nopanic"`
+	Status *Backupconfigv1Status `copier:"must,nopanic"`
 }
 
 type Backupconfigv1Status struct {
-	Phase                  *StatusPhase          `json:"phase,omitempty"`
-	CustomResourceName     *string               `json:"customResourceName,omitempty"`
-	IsScheduleSynchronized *bool                 `json:"isScheduleSynchronized,omitempty"`
-	DeploymentMetaData     *V1DeploymentMetaData `json:"deploymentMetaData,omitempty"`
+	Phase                  *StatusPhase          `copier:"must,nopanic"`
+	CustomResourceName     *string               `copier:"must,nopanic"`
+	IsScheduleSynchronized *bool                 `copier:"must,nopanic"`
+	DeploymentMetaData     *V1DeploymentMetaData `copier:"must,nopanic"`
 }
 
 type MetadataOfTheBackupConfiguration struct {
-	Name            *string            `json:"name,omitempty"`
-	Description     *string            `json:"description,omitempty"`
-	ResourceVersion *string            `json:"resourceVersion,omitempty"`
-	CreateTime      *time.Time         `json:"createTime,omitempty"`
-	UpdateTime      *time.Time         `json:"updateTime,omitempty"`
-	Labels          *map[string]string `json:"labels,omitempty"`
-	Annotations     *map[string]string `json:"annotations,omitempty"`
+	Name            *string            `copier:"must,nopanic"`
+	Description     *string            `copier:"must,nopanic"`
+	ResourceVersion *string            `copier:"must,nopanic"`
+	CreateTime      *time.Time         `copier:"must,nopanic"`
+	UpdateTime      *time.Time         `copier:"must,nopanic"`
+	Labels          *map[string]string `copier:"must,nopanic"`
+	Annotations     *map[string]string `copier:"must,nopanic"`
 }
 
 type DesiredBackupConfiguration struct {

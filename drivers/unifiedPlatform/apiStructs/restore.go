@@ -5,54 +5,54 @@ import (
 )
 
 type PDSRestore struct {
-	V1   PDSRestoreV1
-	GRPC PDSRestoreGRPC
+	V1   PDSRestoreV1   `copier:"must,nopanic"`
+	GRPC PDSRestoreGRPC `copier:"must,nopanic"`
 }
 
 type PDSRestoreV1 struct {
-	Create   CreatePDSRestore
-	ReCreate ReCreatePDSRestore
-	Get      GetPDSRestore
-	List     ListPDSRestore
-	Delete   DeletePDSRestore
+	Create   CreatePDSRestore   `copier:"must,nopanic"`
+	ReCreate ReCreatePDSRestore `copier:"must,nopanic"`
+	Get      GetPDSRestore      `copier:"must,nopanic"`
+	List     ListPDSRestore     `copier:"must,nopanic"`
+	Delete   DeletePDSRestore   `copier:"must,nopanic"`
 }
 
 type PDSRestoreGRPC struct {
-	Create   CreatePDSRestore
-	ReCreate ReCreatePDSRestore
-	Get      GetPDSRestore
-	List     ListPDSRestore
-	Delete   DeletePDSRestore
+	Create   CreatePDSRestore   `copier:"must,nopanic"`
+	ReCreate ReCreatePDSRestore `copier:"must,nopanic"`
+	Get      GetPDSRestore      `copier:"must,nopanic"`
+	List     ListPDSRestore     `copier:"must,nopanic"`
+	Delete   DeletePDSRestore   `copier:"must,nopanic"`
 }
 
 type CreatePDSRestore struct {
-	NamespaceId string
-	V1Restore   *V1Restore
+	NamespaceId string     `copier:"must,nopanic"`
+	V1Restore   *V1Restore `copier:"must,nopanic"`
 }
 
 type ReCreatePDSRestore struct {
-	Id                                string
-	RestoreServiceRecreateRestoreBody *RestoreServiceRecreateRestoreBody
+	Id                                string                             `copier:"must,nopanic"`
+	RestoreServiceRecreateRestoreBody *RestoreServiceRecreateRestoreBody `copier:"must,nopanic"`
 }
 
 type GetPDSRestore struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type ListPDSRestore struct {
-	accountId            *string
-	tenantId             *string
-	projectId            *string
-	deploymentId         *string
-	backupId             *string
-	sortSortBy           *string
-	sortSortOrder        *string
-	paginationPageNumber *string
-	paginationPageSize   *string
+	accountId            *string `copier:"must,nopanic"`
+	tenantId             *string `copier:"must,nopanic"`
+	projectId            *string `copier:"must,nopanic"`
+	deploymentId         *string `copier:"must,nopanic"`
+	backupId             *string `copier:"must,nopanic"`
+	sortSortBy           *string `copier:"must,nopanic"`
+	sortSortOrder        *string `copier:"must,nopanic"`
+	paginationPageNumber *string `copier:"must,nopanic"`
+	paginationPageSize   *string `copier:"must,nopanic"`
 }
 
 type DeletePDSRestore struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type V1Restore struct {
