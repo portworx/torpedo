@@ -863,7 +863,7 @@ var _ = Describe("{RestartPXWhileVolCreate}", func() {
 		Inst().AppList = []string{"nginx-fada-repl-vps"}
 		err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.ReplVPS)
 		log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
-		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
+		Provisioner := fmt.Sprintf("%v", "pxd.portworx.com")
 
 		//Number of times portworx has to be restarted
 		n := 3
