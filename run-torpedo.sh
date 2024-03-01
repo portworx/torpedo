@@ -1,4 +1,37 @@
-#!/bin/bash
+#!/bin/bash -x
+
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+TIMEOUT="720h"
+FAIL_FAST="-keep-going"
+CONTAINER_TARGET="build-backup"
+TEST_SUITE="bin/backup.test"
+SPEC_DIR="../drivers/scheduler/k8s/specs"
+DEPLOY_PDS_APPS="false"
+MAX_STORAGE_NODES_PER_AZ="2"
+BACKUP_DRIVER="pxb"
+LOGLEVEL="debug"
+IS_HYPER_CONVERGED="true"
+PX_POD_RESTART_CHECK="false"
+MIN_RUN_TIME="0"
+DRIVER_START_TIMEOUT="30m"
+CHAOS_LEVEL="5"
+STORAGENODE_RECOVERY_TIMEOUT="35m"
+SECRET_TYPE="k8s"
+IS_PURE_VOLUMES="false"
+PURE_FA_CLONE_MANY_TEST="false"
+PURE_SAN_TYPE="ISCSI"
+LICENSE_EXPIRY_TIMEOUT_HOURS="1h"
+METERING_INTERVAL_MINS="10m"
+ENABLE_DASH="true"
+TEST_DESCRIPTION="px-backup-system-test-e7e13303"
+TEST_TYPE="system-tests"
+TEST_TAGS="flavour:vanilla,provisioner:vcenter,cadence:on-demand"
+DASH_UID="0"
+PRODUCT="px-backup"
+TORPEDO_JOB_NAME="torpedo-daily-job"
+TORPEDO_JOB_TYPE="functional"
+TORPEDO_SKIP_SYSTEM_CHECKS="true"
+ENABLE_STORK_UPGRADE="false"
 
 cd ./torpedo || exit
 git status
