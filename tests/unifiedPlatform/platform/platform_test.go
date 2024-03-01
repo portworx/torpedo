@@ -74,15 +74,15 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
 	})
 
-	log.InfoD(steplog)
-	backupConfig := dslibs.BackupConfig{
-		ProjectId: "ProjectId",
-	}
-	_, err := dslibs.CreateBackupConfig(backupConfig)
-	if err != nil {
-		log.Infof("Error Details - [%s]", err.Error())
-	}
 	It("Deploy and Validate DataService", func() {
+		log.InfoD(steplog)
+		backupConfig := dslibs.BackupConfig{
+			ProjectId: "ProjectId",
+		}
+		_, err := dslibs.CreateBackupConfig(backupConfig)
+		if err != nil {
+			log.Infof("Error Details - [%s]", err.Error())
+		}
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			_, err := dslibs.DeployDataService(ds)
 			log.FailOnError(err, "Error while deploying ds")
