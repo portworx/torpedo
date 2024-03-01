@@ -3,6 +3,12 @@ package tests
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -12,11 +18,6 @@ import (
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"os"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 )
 
 var dash *aetosutil.Dashboard
@@ -521,6 +522,9 @@ func populateIntervals() {
 	triggerInterval[ValidateDeviceMapper] = make(map[int]time.Duration)
 	triggerInterval[MetroDR] = make(map[int]time.Duration)
 	triggerInterval[MetroDRMigrationSchedule] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRPXRestartSource] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRPXRestartDest] = make(map[int]time.Duration)
+	triggerInterval[AsyncDRPXRestartKvdb] = make(map[int]time.Duration)
 	triggerInterval[AsyncDR] = make(map[int]time.Duration)
 	triggerInterval[AsyncDRMigrationSchedule] = make(map[int]time.Duration)
 	triggerInterval[DeleteOldNamespaces] = make(map[int]time.Duration)
@@ -709,6 +713,39 @@ func populateIntervals() {
 	triggerInterval[AsyncDR][3] = 21 * baseInterval
 	triggerInterval[AsyncDR][2] = 24 * baseInterval
 	triggerInterval[AsyncDR][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRPXRestartSource][10] = 1 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][9] = 3 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][8] = 6 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][7] = 9 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][6] = 12 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][5] = 15 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][4] = 18 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][3] = 21 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][2] = 24 * baseInterval
+	triggerInterval[AsyncDRPXRestartSource][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRPXRestartDest][10] = 1 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][9] = 3 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][8] = 6 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][7] = 9 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][6] = 12 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][5] = 15 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][4] = 18 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][3] = 21 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][2] = 24 * baseInterval
+	triggerInterval[AsyncDRPXRestartDest][1] = 27 * baseInterval
+
+	triggerInterval[AsyncDRPXRestartKvdb][10] = 1 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][9] = 3 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][8] = 6 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][7] = 9 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][6] = 12 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][5] = 15 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][4] = 18 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][3] = 21 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][2] = 24 * baseInterval
+	triggerInterval[AsyncDRPXRestartKvdb][1] = 27 * baseInterval
 
 	triggerInterval[AsyncDRMigrationSchedule][10] = 1 * baseInterval
 	triggerInterval[AsyncDRMigrationSchedule][9] = 3 * baseInterval
@@ -1082,6 +1119,17 @@ func populateIntervals() {
 	triggerInterval[CloudSnapShot][2] = 24 * baseInterval
 	triggerInterval[CloudSnapShot][1] = 27 * baseInterval
 
+	triggerInterval[CloudSnapShotRestore][10] = 1 * baseInterval
+	triggerInterval[CloudSnapShotRestore][9] = 3 * baseInterval
+	triggerInterval[CloudSnapShotRestore][8] = 6 * baseInterval
+	triggerInterval[CloudSnapShotRestore][7] = 9 * baseInterval
+	triggerInterval[CloudSnapShotRestore][6] = 12 * baseInterval
+	triggerInterval[CloudSnapShotRestore][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CloudSnapShotRestore][4] = 18 * baseInterval
+	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
+	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
+	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
+
 	triggerInterval[LocalSnapShot][10] = 1 * baseInterval
 	triggerInterval[LocalSnapShot][9] = 3 * baseInterval
 	triggerInterval[LocalSnapShot][8] = 6 * baseInterval
@@ -1398,17 +1446,6 @@ func populateIntervals() {
 	triggerInterval[AddDrive][6] = 5 * baseInterval
 	triggerInterval[AddDrive][5] = 6 * baseInterval
 
-	triggerInterval[CloudSnapShotRestore][10] = 1 * baseInterval
-	triggerInterval[CloudSnapShotRestore][9] = 3 * baseInterval
-	triggerInterval[CloudSnapShotRestore][8] = 6 * baseInterval
-	triggerInterval[CloudSnapShotRestore][7] = 9 * baseInterval
-	triggerInterval[CloudSnapShotRestore][6] = 12 * baseInterval
-	triggerInterval[CloudSnapShotRestore][5] = 15 * baseInterval // Default global chaos level, 3 hrs
-	triggerInterval[CloudSnapShotRestore][4] = 18 * baseInterval
-	triggerInterval[CloudSnapShotRestore][3] = 21 * baseInterval
-	triggerInterval[CloudSnapShotRestore][2] = 24 * baseInterval
-	triggerInterval[CloudSnapShotRestore][1] = 27 * baseInterval
-
 	triggerInterval[AggrVolDepReplResizeOps][10] = 1 * baseInterval
 	triggerInterval[AggrVolDepReplResizeOps][9] = 2 * baseInterval
 	triggerInterval[AggrVolDepReplResizeOps][8] = 3 * baseInterval
@@ -1497,6 +1534,9 @@ func populateIntervals() {
 	triggerInterval[KVDBFailover][0] = 0
 	triggerInterval[ValidateDeviceMapper][0] = 0
 	triggerInterval[AsyncDR][0] = 0
+	triggerInterval[AsyncDRPXRestartSource][0] = 0
+	triggerInterval[AsyncDRPXRestartDest][0] = 0
+	triggerInterval[AsyncDRPXRestartKvdb][0] = 0
 	triggerInterval[MetroDR][0] = 0
 	triggerInterval[MetroDRMigrationSchedule][0] = 0
 	triggerInterval[AsyncDRMigrationSchedule][0] = 0

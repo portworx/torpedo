@@ -748,9 +748,12 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 
-		Step("Validate Px pod restart count", func() {
-			ValidatePxPodRestartCount(ctx, errChan...)
-		})
+		// Validating px pod restart count only for portworx volume driver
+		if Inst().V.String() == "pxd" {
+			Step("Validate Px pod restart count", func() {
+				ValidatePxPodRestartCount(ctx, errChan...)
+			})
+		}
 	})
 }
 
