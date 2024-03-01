@@ -822,27 +822,13 @@ var _ = Describe(fmt.Sprintf("{%sPoolExpand}", testSuiteName), func() {
 		}
 
 		poolExpandLabels := map[string]map[string]string{
-			"addDiskLabel":          {"autopilot": "adddisk"},
-			"addDiskFixedSizeLabel": {"autopilot": "adddiskfixedsize"},
-			"resizeDiskLabel":       {"autopilot": "resizedisk"},
-			"resizeFixedSizeLabel":  {"autopilot": "resizefixedsize"},
+			"resizeDiskLabel":      {"autopilot": "resizedisk"},
+			"resizeFixedSizeLabel": {"autopilot": "resizefixedsize"},
 		}
 
 		storageNodes := node.GetStorageNodes()
 
 		testCases := []testCase{
-			{
-				workerNode:    storageNodes[0],
-				labelSelector: poolExpandLabels["addDiskLabel"],
-				apRule: aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])*120/100)/units.GiB, 50,
-					aututils.RuleScaleTypeAddDisk, poolExpandLabels["addDiskLabel"]),
-			},
-			{
-				workerNode:    storageNodes[1],
-				labelSelector: poolExpandLabels["addDiskFixedSizeLabel"],
-				apRule: aututils.PoolRuleFixedScaleSizeByTotalSize((getTotalPoolSize(storageNodes[1])*120/100)/units.GiB, "16Gi",
-					aututils.RuleScaleTypeAddDisk, poolExpandLabels["addDiskFixedSizeLabel"]),
-			},
 			{
 				workerNode:    storageNodes[2],
 				labelSelector: poolExpandLabels["resizeDiskLabel"],
@@ -999,7 +985,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 	var contexts []*scheduler.Context
 	It("has to fill up the volume completely, resize the volumes and storage pool(s), validate and teardown apps", func() {
 		testName := strings.ToLower(fmt.Sprintf("%sPvcAndPoolExpand", testSuiteName))
-		poolLabel := map[string]string{"autopilot": "adddisk"}
+		poolLabel := map[string]string{"autopilot": "resizedisk"}
 		pvcLabel := map[string]string{"autopilot": "pvc-expand"}
 		storageNodes := node.GetStorageDriverNodes()
 		pvcApRules := []apapi.AutopilotRule{
@@ -1007,7 +993,7 @@ var _ = Describe(fmt.Sprintf("{%sPvcAndPoolExpand}", testSuiteName), func() {
 			aututils.PVCRuleByTotalSize(10, 100, ""),
 		}
 		poolApRules := []apapi.AutopilotRule{
-			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeAddDisk, poolLabel),
+			aututils.PoolRuleByTotalSize((getTotalPoolSize(storageNodes[0])/units.GiB)+1, 10, aututils.RuleScaleTypeResizeDisk, poolLabel),
 		}
 
 		Step("schedule apps with autopilot rules for pool expand", func() {

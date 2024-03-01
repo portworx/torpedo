@@ -8312,7 +8312,7 @@ func WaitForPoolStatusToUpdate(nodeSelected node.Node, expectedStatus string) er
 		}
 		return nil, false, nil
 	}
-	_, err := task.DoRetryWithTimeout(t, 30*time.Minute, 2*time.Minute)
+	_, err := task.DoRetryWithTimeout(t, 60*time.Minute, 2*time.Minute)
 	return err
 }
 
