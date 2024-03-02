@@ -73,7 +73,7 @@ func getRebootStats(rebootTime, nodeID, pxVersion string) (map[string]string, er
 	return rebootExportable, nil
 }
 
-func GetStorkMigrationStats(mig *storkv1.Migration) (sts map[string]string, err error) {
+func GetStorkMigrationStats(mig *storkv1.Migration) map[string]string {
 	migStats := make(map[string]string)
 	migStats["MigrationName"] = mig.Name
 	migStats["MigrationNamespace"] = mig.Namespace
@@ -81,10 +81,10 @@ func GetStorkMigrationStats(mig *storkv1.Migration) (sts map[string]string, err 
 	migStats["NumberOfVolumesMigrated"] = strconv.Itoa(int(mig.Status.Summary.NumberOfMigratedVolumes))
 	migStats["TimeElapsedVolumes"] = mig.Status.Summary.ElapsedTimeForVolumeMigration
 	migStats["TimeElapsedResources"] = mig.Status.Summary.ElapsedTimeForResourceMigration
-	return migStats, nil
+	return migStats
 }
 
-func GetStorkBackupStats(name, namespace string) (sts map[string]string, err error) {
+func GetStorkBackupStats(name, namespace string) (map[string]string, error) {
 	bkp, err := storkops.Instance().GetApplicationBackup(name, namespace)
 	if err != nil {
 		return nil, err
