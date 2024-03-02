@@ -7314,10 +7314,7 @@ func TriggerAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		dashStats, err := stats.GetStorkMigrationStats(mig)
-		if err != nil {
-			log.InfoD("Not able to get stats, err: %v", err)
-		}
+		dashStats := stats.GetStorkMigrationStats(mig)
 		updateLongevityStats(AsyncDR, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
@@ -7429,10 +7426,7 @@ func TriggerMetroDR(contexts *[]*scheduler.Context, recordChan *chan *EventRecor
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		dashStats, err := stats.GetStorkMigrationStats(mig)
-		if err != nil {
-			log.InfoD("Not able to get stats, err: %v", err)
-		}
+		dashStats := stats.GetStorkMigrationStats(mig)
 		updateLongevityStats(MetroDR, stats.MetroDREventName, dashStats)
 	}
 	updateMetrics(*event)
@@ -7538,10 +7532,7 @@ func TriggerAsyncDRPXRestartSource(contexts *[]*scheduler.Context, recordChan *c
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		dashStats, err := stats.GetStorkMigrationStats(mig)
-		if err != nil {
-			log.InfoD("Not able to get stats, err: %v", err)
-		}
+		dashStats := stats.GetStorkMigrationStats(mig)
 		updateLongevityStats(AsyncDRPXRestartSource, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
@@ -7658,10 +7649,7 @@ func TriggerAsyncDRPXRestartDest(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		dashStats, err := stats.GetStorkMigrationStats(mig)
-		if err != nil {
-			log.InfoD("Not able to get stats, err: %v", err)
-		}
+		dashStats := stats.GetStorkMigrationStats(mig)
 		updateLongevityStats(AsyncDRPXRestartDest, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
@@ -7779,10 +7767,7 @@ func TriggerAsyncDRPXRestartKvdb(contexts *[]*scheduler.Context, recordChan *cha
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
 			return
 		}
-		dashStats, err := stats.GetStorkMigrationStats(mig)
-		if err != nil {
-			log.InfoD("Not able to get stats, err: %v", err)
-		}
+		dashStats := stats.GetStorkMigrationStats(mig)
 		updateLongevityStats(AsyncDRPXRestartKvdb, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
@@ -7887,10 +7872,7 @@ func TriggerAsyncDRVolumeOnly(contexts *[]*scheduler.Context, recordChan *chan *
 		} else {
 			log.InfoD("Number of resources migrated: %d", resourcesMigrated)
 		}
-		dashStats, err := stats.GetStorkMigrationStats(mig)
-		if err != nil {
-			log.InfoD("Not able to get stats, err: %v", err)
-		}
+		dashStats := stats.GetStorkMigrationStats(mig)
 		updateLongevityStats(AsyncDRVolumeOnly, stats.AsyncDREventName, dashStats)
 	}
 	updateMetrics(*event)
@@ -8735,10 +8717,7 @@ func TriggerAutoFsTrimAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-			dashStats, err := stats.GetStorkMigrationStats(mig)
-			if err != nil {
-				log.InfoD("Not able to get stats, err: %v", err)
-			}
+			dashStats := stats.GetStorkMigrationStats(mig)
 			updateLongevityStats(AutoFsTrimAsyncDR, stats.AsyncDREventName, dashStats)
 		}
 	}
@@ -8868,10 +8847,7 @@ func TriggerIopsBwAsyncDR(contexts *[]*scheduler.Context, recordChan *chan *Even
 		err := storkops.Instance().ValidateMigration(mig.Name, mig.Namespace, migrationRetryTimeout, migrationRetryInterval)
 		if err != nil {
 			UpdateOutcome(event, fmt.Errorf("failed to validate migration: %s in namespace %s. Error: [%v]", mig.Name, mig.Namespace, err))
-			dashStats, err := stats.GetStorkMigrationStats(mig)
-			if err != nil {
-				log.InfoD("Not able to get stats, err: %v", err)
-			}
+			dashStats := stats.GetStorkMigrationStats(mig)
 			updateLongevityStats(IopsBwAsyncDR, stats.AsyncDREventName, dashStats)
 		}
 	}
