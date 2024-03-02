@@ -6065,6 +6065,7 @@ var _ = Describe("{PoolResizeSameSize}", func() {
 
 			// expand pool should error when trying to expand pool of 2 GiB size when minimum expansion size is 4.0 GiB
 			err = Inst().V.ExpandPool(selectedNodePool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, false)
+			log.Errorf("The error is %v", err)
 			dash.VerifyFatal(err != nil, true,
 				fmt.Sprintf("verify pool expansion using resize-disk with same size failed on pool [%s] in node [%s]",
 					selectedNodePool.Uuid, stNode.Name))
