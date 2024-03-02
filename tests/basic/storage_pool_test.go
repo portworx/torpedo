@@ -11023,3 +11023,60 @@ var _ = Describe("{CheckPoolOffline}", func() {
 	})
 
 })
+
+//[DMThin + cloud drive + Pool delete + Max drive ] : Even after Pool delete, we are unable to add new cloud drive “ProviderInternal Error: No more free devices” error seen [PWX-28328]
+
+var _ = Describe("{PoolDeleteMaxDrive}", func() {
+	/*
+								1. Enter pool maintenance and create 4 pool with 2 drives - total of 8 drives
+							    2. Delete 2 pools ( i.e Pool 4 and Pool 3)
+						        3. Run pxctl command and check if the drives are deleted.
+					            4. Try adding a new drive cloud drive in the maintenance mode
+				                5. Retry adding a new drive cloud drive in maintenance mode , drive add fails
+			                    6. Exit Maintenance mode and retry adding a new drive cloud drive online
+		           Result: Drive add should not fail in both maintenance and online mode with free “: No more free devices Failed to add cloud drive”
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("PoolDeleteMaxDrive", "Pool delete with max drive", nil, 0)
+	})
+
+	itLog := "PoolDeleteMaxDrive"
+	It(itLog, func() {
+		stepLog := "Check how many more pools to create and how many drives to add"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			// Get the node with the least number of pools
+			selectedNode := GetNodeWithLeastPools()
+			log.InfoD("Selected Node: %v", selectedNode.Name)
+
+			numberOfPools := len(selectedNode.StoragePools)
+			log.InfoD("Number of pools: %v", numberOfPools)
+
+			drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
+			log.FailOnError(err, "error getting pool drives from node [%s]", selectedNode.Name)
+
+			pools, err := GetPoolsDetailsOnNode(selectedNode)
+			log.FailOnError(err, "Failed to get pool details on node: %v", selectedNode.Name)
+
+			for _, pool := range pools {
+				drvs := drvMap[fmt.Sprintf("%d", pool.ID)]
+				if len(drvs) > (POOL_MAX_CLOUD_DRIVES - 2) {
+					continue
+				}
+				break
+			}
+
+		})
+	})
+})
+
+func GetNodeWithLeastPools() node.Node {
+	nodes := node.GetStorageDriverNodes()
+	selectedNode := nodes[0]
+	for _, n := range nodes {
+		if len(n.StoragePools) < len(selectedNode.StoragePools) {
+			selectedNode = n
+		}
+	}
+	return selectedNode
+}
