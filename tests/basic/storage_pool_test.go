@@ -9733,7 +9733,7 @@ func waitForOngoingPoolExpansionToComplete(poolIDToResize string) error {
 			return nil, false, fmt.Errorf("pool to expand not found")
 		}
 		if expandedPool.LastOperation == nil {
-			return nil, false, nil
+			return nil, false, fmt.Errorf("no pool resize operation in progress")
 		}
 		log.Infof("Pool Resize Status: %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 		switch expandedPool.LastOperation.Status {
