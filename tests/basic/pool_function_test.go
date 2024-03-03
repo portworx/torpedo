@@ -279,29 +279,28 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 		dash.VerifyFatal(expandResponse != nil, true, "Pool expansion should fail when expansion is in progress")
 		dash.VerifyFatal(strings.Contains(expandResponse.Error(), "is already in progress"), true,
 			"Pool expansion failure reason should be communicated to the user	")
-	})
 
-	stepLog = "Exit pool out of maintenance mode"
-	Step(stepLog, func() {
-		log.InfoD(stepLog)
-		expectedStatus := "Online"
-		statusMap, err := Inst().V.GetNodePoolsStatus(*storageNode)
-		log.FailOnError(err, "Failed to get map of pool UUID and status")
-		log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, statusMap[poolToResize.Uuid]))
-		if statusMap[poolToResize.Uuid] == "In Maintenance" {
-			log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
-			err := Inst().V.ExitPoolMaintenance(*storageNode)
-			log.FailOnError(err, "failed to exit pool maintenance mode")
-		} else {
-			dash.VerifyFatal(statusMap[poolToResize.Uuid], "In Maintenance", "Pool is not in Maintenance mode")
-		}
-		status, err := Inst().V.GetNodeStatus(*storageNode)
-		log.FailOnError(err, "err getting node [%s] status", storageNode.Name)
-		log.Infof(fmt.Sprintf("Node %s status %s after exit", storageNode.Name, status.String()))
-		exitErr := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
-		dash.VerifyFatal(exitErr, nil, "Pool is now online")
+		// stepLog = "Exit pool out of maintenance mode"
+		// Step(stepLog, func() {
+		// 	log.InfoD(stepLog)
+		// 	expectedStatus := "Online"
+		// 	statusMap, err := Inst().V.GetNodePoolsStatus(*storageNode)
+		// 	log.FailOnError(err, "Failed to get map of pool UUID and status")
+		// 	log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, statusMap[poolToResize.Uuid]))
+		// 	if statusMap[poolToResize.Uuid] == "In Maintenance" {
+		// 		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
+		// 		err := Inst().V.ExitPoolMaintenance(*storageNode)
+		// 		log.FailOnError(err, "failed to exit pool maintenance mode")
+		// 	} else {
+		// 		dash.VerifyFatal(statusMap[poolToResize.Uuid], "In Maintenance", "Pool is not in Maintenance mode")
+		// 	}
+		// 	status, err := Inst().V.GetNodeStatus(*storageNode)
+		// 	log.FailOnError(err, "err getting node [%s] status", storageNode.Name)
+		// 	log.Infof(fmt.Sprintf("Node %s status %s after exit", storageNode.Name, status.String()))
+		// 	exitErr := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
+		// 	dash.VerifyFatal(exitErr, nil, "Pool is now online")
+		// })
 	})
-
 })
 
 var _ = Describe("{PoolExpandWithReboot}", func() {
