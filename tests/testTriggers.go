@@ -5166,28 +5166,58 @@ func isPoolResizePossible(poolToBeResized *opsapi.StoragePool) (bool, error) {
 
 func waitForPoolToBeResized(initialSize uint64, poolIDToResize string) error {
 
+	cnt := 0
+	currentLastMsg := ""
 	f := func() (interface{}, bool, error) {
-		pools, err := Inst().V.ListStoragePools(meta_v1.LabelSelector{})
+		expandedPool, err := GetStoragePoolByUUID(poolIDToResize)
 		if err != nil {
-			return nil, false, fmt.Errorf("error getting pools list, Error :%v", err)
+			return nil, true, fmt.Errorf("error getting pool by using id %s", poolIDToResize)
 		}
 
-		expandedPool := pools[poolIDToResize]
+		if expandedPool == nil {
+			return nil, false, fmt.Errorf("expanded pool value is nil")
+		}
 		if expandedPool.LastOperation != nil {
-			log.InfoD("Current pool %s last operation status : %v", poolIDToResize, expandedPool.LastOperation.Status)
+			log.Infof("Pool Resize Status : %v, Message : %s", expandedPool.LastOperation.Status, expandedPool.LastOperation.Msg)
 			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_FAILED {
-				return nil, false, fmt.Errorf("PoolResize for %s has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+				return nil, false, fmt.Errorf("pool %s expansion has failed. Error: %s", poolIDToResize, expandedPool.LastOperation)
+			}
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_PENDING {
+				return nil, true, fmt.Errorf("pool %s is in pending state, waiting to start", poolIDToResize)
+			}
+			if expandedPool.LastOperation.Status == opsapi.SdkStoragePool_OPERATION_IN_PROGRESS {
+				if strings.Contains(expandedPool.LastOperation.Msg, "Rebalance in progress") {
+					if currentLastMsg == expandedPool.LastOperation.Msg {
+						cnt += 1
+					} else {
+						cnt = 0
+					}
+					if cnt == 5 {
+						return nil, false, fmt.Errorf("pool rebalance stuck at %s", currentLastMsg)
+					}
+					currentLastMsg = expandedPool.LastOperation.Msg
+
+					return nil, true, fmt.Errorf("wait for pool rebalance to complete")
+				}
+
+				if strings.Contains(expandedPool.LastOperation.Msg, "No pending operation pool status: Maintenance") ||
+					strings.Contains(expandedPool.LastOperation.Msg, "Storage rebalance complete pool status: Maintenance") {
+					return nil, false, nil
+				}
+
+				return nil, true, fmt.Errorf("waiting for pool status to update")
 			}
 		}
-
 		newPoolSize := expandedPool.TotalSize / units.GiB
-		if newPoolSize > initialSize {
+
+		if newPoolSize >= initialSize {
 			// storage pool resize has been completed
-			return nil, true, nil
+			return nil, false, nil
 		}
-		return nil, true, fmt.Errorf("pool %s not been resized .Current size is %d", poolIDToResize, newPoolSize)
+		return nil, true, fmt.Errorf("pool has not been resized. Waiting...Current size is %d", newPoolSize)
 	}
-	_, err := task.DoRetryWithTimeout(f, time.Minute*120, 2*time.Minute)
+
+	_, err := task.DoRetryWithTimeout(f, 120*time.Minute, 2*time.Minute)
 	return err
 }
 
@@ -9467,10 +9497,26 @@ func TriggerAddOCPStorageNode(contexts *[]*scheduler.Context, recordChan *chan *
 
 	updatedStorageNodesCount := len(node.GetStorageNodes())
 	expectedStorageNodeCount := numOfStorageNodes + 1
+	//In some cases after new storage node is added, existing storageless node is converted to storage, and this needs some time to repo to update
+	t := func() (interface{}, bool, error) {
+		err := Inst().V.RefreshDriverEndpoints()
+		if err != nil {
+			log.Warnf("failed to refesh node drivers, err: %v", err)
+			return nil, true, err
+		}
+		updatedStorageNodesCount = len(node.GetStorageNodes())
+		if updatedStorageNodesCount != expectedStorageNodeCount {
+			return nil, true, fmt.Errorf("storage nodes [%d] didnt match with expected [%d]. Retrying the check after 30 secs", updatedStorageNodesCount, expectedStorageNodeCount)
+		}
+
+		return nil, false, nil
+	}
+	_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 30*time.Second)
 	if updatedStorageNodesCount != expectedStorageNodeCount {
+		log.Errorf(fmt.Sprintf("storage nodes [%d] didnt match with expected [%d]. Retrying the check after 30 secs", updatedStorageNodesCount, expectedStorageNodeCount))
 		PrintPxctlStatus()
 	}
-	dash.VerifySafely(updatedStorageNodesCount, expectedStorageNodeCount, "verify new storage node is added")
+	dash.VerifySafely(err, nil, "verify new storage node is added")
 
 	validateContexts(event, contexts)
 	updateMetrics(*event)
