@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -39,6 +40,7 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
+	opsv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
@@ -10626,4 +10628,193 @@ func installGrafana(namespace string) {
 		log.Infof(output)
 	}
 
+}
+
+func HasOCPPrereq(ocpVer string) bool {
+
+	if strings.Contains(ocpVer, "stable-") {
+		ocpVer = strings.Split(ocpVer, "-")[1]
+	}
+	parsedVersion, err := semver.NewVersion(ocpVer)
+	log.FailOnError(err, fmt.Sprintf("error parsion ocp version [%s]", ocpVer))
+	compareVersion, _ := semver.NewVersion("4.12") //giving compare version as 4.11 will make below condition true for 4.11.X
+	if parsedVersion.Equal(compareVersion) || parsedVersion.GreaterThan(compareVersion) {
+		return true
+	}
+	return false
+}
+
+func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
+	stNodes := node.GetStorageNodes()
+
+	nodeSchedulableStatus := make(map[string]string)
+	stNodeNames := make(map[string]bool)
+
+	for _, stNode := range stNodes {
+		stNodeNames[stNode.Name] = true
+	}
+
+	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	kvdbNodes, _ := GetAllKvdbNodes()
+	for _, kvdbNode := range kvdbNodes {
+		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+		if err == nil {
+			stNodeNames[sNode.Name] = true
+		} else {
+			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
+		}
+	}
+
+	log.Infof("stnodes are %#v", stNodeNames)
+	itr := 1
+	for {
+		log.Infof("K8s node validation. iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting node validations routine")
+			return
+		default:
+			nodeList, err := core.Instance().GetNodes()
+			if err != nil {
+				log.Errorf("Got error : %s", err.Error())
+				*mError = err
+				return
+			}
+
+			nodeNotReadyeCount := 0
+			for _, k8sNode := range nodeList.Items {
+				for _, status := range k8sNode.Status.Conditions {
+					if status.Type == v1.NodeReady {
+						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
+						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
+							nodeNotReadyeCount += 1
+						}
+						break
+					}
+				}
+
+			}
+			if nodeNotReadyeCount > 1 {
+				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
+					"node status:%#v", nodeSchedulableStatus)
+				log.Errorf("Got error : %s", err.Error())
+				log.Infof("Node Details: %#v", nodeList.Items)
+				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
+					IgnoreError:     false,
+					TimeBeforeRetry: defaultRetryInterval,
+					Timeout:         defaultTimeout,
+					Sudo:            true,
+				})
+				if err != nil {
+					log.Errorf("failed to get pxctl status, Err: %v", err)
+				}
+				log.Infof(output)
+				*mError = err
+				return
+			}
+		}
+		itr++
+		time.Sleep(30 * time.Second)
+	}
+}
+
+func OcpPrometheusPrereq() error {
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return err
+	}
+
+	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
+	if stc.Spec.Autopilot.Enabled {
+		if err = createClusterMonitoringConfig(); err != nil {
+			return err
+		}
+
+		if err = updatePrometheusAndAutopilot(stc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// printK8sClusterInfo prints info about K8s cluster nodes
+func PrintK8sCluterInfo() {
+	log.Info("Get cluster info..")
+	t := func() (interface{}, bool, error) {
+		nodeList, err := core.Instance().GetNodes()
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
+		}
+		if len(nodeList.Items) > 0 {
+			for _, node := range nodeList.Items {
+				nodeType := "Worker"
+				if core.Instance().IsNodeMaster(node) {
+					nodeType = "Master"
+				}
+				log.Infof(
+					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
+					node.Name, nodeType,
+					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
+					node.Status.NodeInfo.ContainerRuntimeVersion)
+			}
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("no nodes were found in the cluster")
+	}
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		log.Warnf("failed to get k8s cluster info, Err: %v", err)
+	}
+}
+
+func createClusterMonitoringConfig() error {
+	// Create configmap
+	ocpConfigmap := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-monitoring-config",
+			Namespace: "openshift-monitoring",
+		},
+		Data: map[string]string{
+			"config.yaml": "enableUserWorkload: true",
+		},
+	}
+
+	_, err := core.Instance().CreateConfigMap(ocpConfigmap)
+	return err
+}
+
+func updatePrometheusAndAutopilot(stc *opsv1.StorageCluster) error {
+	thanosQuerierHostCmd := `kubectl get route thanos-querier -n openshift-monitoring -o json | jq -r '.spec.host'`
+	var output []byte
+
+	output, err := exec.Command("sh", "-c", thanosQuerierHostCmd).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get thanos querier host , Err: %v", err)
+	}
+	thanosQuerierHost := strings.TrimSpace(string(output))
+	log.Infof("Thanos Querier Host:%s", thanosQuerierHost)
+	thanosQuerierHostUrl := fmt.Sprintf("https://%s", thanosQuerierHost)
+
+	if stc.Spec.Monitoring.Prometheus.Enabled {
+		stc.Spec.Monitoring.Prometheus.Enabled = false
+	}
+
+	dataProviders := stc.Spec.Autopilot.Providers
+
+	for _, dataProvider := range dataProviders {
+		if dataProvider.Type == "prometheus" {
+			isUrlUpdated := false
+			if val, ok := dataProvider.Params["url"]; ok {
+				if val == thanosQuerierHostUrl {
+					isUrlUpdated = true
+				}
+			}
+			if !isUrlUpdated {
+				dataProvider.Params["url"] = thanosQuerierHostUrl
+			}
+		}
+
+	}
+	pxOperator := operator.Instance()
+	_, err = pxOperator.UpdateStorageCluster(stc)
+	return err
 }
