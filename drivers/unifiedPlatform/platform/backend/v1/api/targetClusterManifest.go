@@ -1,4 +1,4 @@
-package apiv1
+package api
 
 import (
 	"context"
