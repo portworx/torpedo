@@ -561,24 +561,6 @@ const (
 
 	// ReallocateSharedMount reallocated shared mount volumes
 	ReallocateSharedMount = "reallocateSharedMount"
-
-	// AddBackupCluster adds source and destination cluster
-	AddBackupCluster = "addBackupCluster"
-
-	//SetupBackupBucketAndCreds add creds and adds bucket for backup
-	SetupBackupBucketAndCreds = "setupBackupBucketAndCreds"
-
-	// DeployBackup Apps deploys backup application
-	DeployBackupApps = "deployBackupApps"
-
-	// CreateBackup creates backup for longevity
-	CreatePxBackup = "createPxBackup"
-
-	// CreateBackupAndRestore creates backup and Restores the backup
-	CreatePxBackupAndRestore = "createBackupAndRestore"
-
-	// CreateBackupAndRestore creates backup and Restores the backup
-	CreateRandomRestore = "createRandomRestore"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -9033,7 +9015,7 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				UpdateOutcome(event, fmt.Errorf("0 migrations have yet run for the migration schedule"))
 				return
 			}
-			expectedMigs, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
+			expectedMigs, migScheduleStats, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("couldn't complete %v migrations due to error: %v", MigrationsCount, err))
 				return
@@ -9046,6 +9028,9 @@ func TriggerAsyncDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				}
 			}
 			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
+			for _ , dashStats := range migScheduleStats {
+				updateLongevityStats(AsyncDRMigrationSchedule, stats.AsyncDREventName, dashStats)
+			}
 		}
 	})
 
@@ -9125,7 +9110,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 		return
 	}
 
-	chaosLevel := ChaosMap[AsyncDRMigrationSchedule]
+	chaosLevel := ChaosMap[MetroDRMigrationSchedule]
 
 	Step(fmt.Sprintf("Deploy applications for migration, with frequency: %v", chaosLevel), func() {
 		err = asyncdr.WriteKubeconfigToFiles()
@@ -9190,7 +9175,7 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				UpdateOutcome(event, fmt.Errorf("0 migrations have yet run for the migration schedule"))
 				return
 			}
-			expectedMigs, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
+			expectedMigs, migScheduleStats, err := asyncdr.WaitForNumOfMigration(migSchedResp.Name, currMigNamespace, MigrationsCount, MigrationInterval)
 			if err != nil {
 				UpdateOutcome(event, fmt.Errorf("couldn't complete %v migrations due to error: %v", MigrationsCount, err))
 				return
@@ -9203,6 +9188,9 @@ func TriggerMetroDRMigrationSchedule(contexts *[]*scheduler.Context, recordChan 
 				}
 			}
 			storkops.Instance().ValidateMigrationSchedule(migSchedResp.Name, currMigNamespace, migrationRetryTimeout, migrationRetryInterval)
+			for _ , dashStats := range migScheduleStats {
+				updateLongevityStats(MetroDRMigrationSchedule, stats.MetroDREventName, dashStats)
+			}
 		}
 	})
 

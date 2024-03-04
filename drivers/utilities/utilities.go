@@ -3,13 +3,14 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strconv"
+	"time"
+
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
 	kubevirtv1 "kubevirt.io/api/core/v1"
-	"math/rand"
-	"strconv"
-	"time"
 
 	"github.com/portworx/sched-ops/k8s/core"
 	. "github.com/portworx/torpedo/drivers/applications/apptypes"
