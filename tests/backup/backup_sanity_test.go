@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/volume/ocp"
 	"strings"
 	"time"
 
@@ -125,33 +124,33 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
-		log.InfoD("scheduling applications")
-		scheduledAppContexts = make([]*scheduler.Context, 0)
-		Inst().AppList = []string{"postgres-rbd-csi"}
-		namespace := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
-		Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-		for i := 0; i < len(Inst().AppList); i++ {
-			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
-			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
-			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = AppReadinessTimeout
-				scheduledAppContexts = append(scheduledAppContexts, appCtx)
-			}
-		}
+		/*		log.InfoD("scheduling applications")
+				scheduledAppContexts = make([]*scheduler.Context, 0)
+				Inst().AppList = []string{"postgres-rbd-csi"}
+				namespace := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
+				Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+				for i := 0; i < len(Inst().AppList); i++ {
+					taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+					appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+					for _, appCtx := range appContexts {
+						appCtx.ReadinessTimeout = AppReadinessTimeout
+						scheduledAppContexts = append(scheduledAppContexts, appCtx)
+					}
+				}
 
-		scheduledAppContexts = make([]*scheduler.Context, 0)
-		Inst().AppList = []string{"postgres-cephfs-csi"}
-		Inst().V.(*ocp.Ocp).UpdateProvisioner("openshift-storage.cephfs.csi.ceph.com")
-		Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
-		namespace2 := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
-		for i := 0; i < len(Inst().AppList); i++ {
-			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
-			appContexts := ScheduleApplicationsOnNamespace(namespace2, taskName)
-			for _, appCtx := range appContexts {
-				appCtx.ReadinessTimeout = AppReadinessTimeout
-				scheduledAppContexts = append(scheduledAppContexts, appCtx)
-			}
-		}
+				scheduledAppContexts = make([]*scheduler.Context, 0)
+				Inst().AppList = []string{"postgres-cephfs-csi"}
+				Inst().V.(*ocp.Ocp).UpdateProvisioner("openshift-storage.cephfs.csi.ceph.com")
+				Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
+				namespace2 := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
+				for i := 0; i < len(Inst().AppList); i++ {
+					taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+					appContexts := ScheduleApplicationsOnNamespace(namespace2, taskName)
+					for _, appCtx := range appContexts {
+						appCtx.ReadinessTimeout = AppReadinessTimeout
+						scheduledAppContexts = append(scheduledAppContexts, appCtx)
+					}
+				}*/
 
 		/*		log.InfoD("scheduling applications")
 				scheduledAppContexts = make([]*scheduler.Context, 0)
@@ -163,6 +162,15 @@ var _ = Describe("{BasicBackupCreation}", func() {
 						scheduledAppContexts = append(scheduledAppContexts, appCtx)
 					}
 				}*/
+
+		taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, Inst().InstanceID)
+		appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys:            []string{"postgres-cephfs-csi"},
+			StorageProvisioner: "openshift-storage.cephfs.csi.ceph.com",
+		})
+		appCtx[0].ReadinessTimeout = AppReadinessTimeout
+		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
+		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 	})
 
 	It("Basic Backup Creation", func() {
