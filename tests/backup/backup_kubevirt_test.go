@@ -2,12 +2,9 @@ package tests
 
 import (
 	"fmt"
-<<<<<<< HEAD
 	"github.com/portworx/torpedo/drivers/node"
-	"math/rand"
-=======
 	kubevirtv1 "kubevirt.io/api/core/v1"
->>>>>>> master
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
