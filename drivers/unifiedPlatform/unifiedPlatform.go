@@ -57,6 +57,8 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		pdsApiConf.Scheme = endpointURL.Scheme
 		pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
 
+		log.Infof("Generating REST(V1) client for controlplane [%s]", endpointURL)
+
 		return &UnifiedPlatformComponents{
 			Platform: &PLATFORM_API_V1{
 				ApiClientV1: platformV2apiClient,
@@ -98,6 +100,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		return &UnifiedPlatformComponents{
 			Platform: &platformGrpc.PlatformGrpc{
 				ApiClientV1: grpcClient,
+				AccountId:   AccountId,
 			},
 			PDS: &pdsGrpc.PdsGrpc{
 				ApiClientV2: grpcClient,
