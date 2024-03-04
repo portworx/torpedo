@@ -317,6 +317,7 @@ func WaitForNumOfMigration(schedName string, schedNamespace string, count int, m
 				expectedMigrations[migration.Name] = fmt.Sprintf("Migration failed with error: %v", err)
 			}
 			expectedMigrations[migration.Name] = "Successful"
+			// Getting migration stats
 			migstats := stats.GetStorkMigrationStats(migration)
 			migschedulestats = append(migschedulestats, migstats)
 		}
