@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 )
 
 const (
@@ -66,6 +68,16 @@ func GetBearerToken() (context.Context, string, error) {
 	url := fmt.Sprintf("%s/login", issuerURL)
 
 	log.Infof("issuer url %s", issuerURL)
+
+	currentTestDescription := ginkgo.CurrentGinkgoTestDescription()
+	testName := strings.Split(currentTestDescription.FullTestText, " ")[0]
+	var rbacToken SetRbacToken
+	sidFlag := rbacToken.SetRbac
+	RbacJwtToken := rbacToken.JwtToken
+	if (sidFlag == true) && (strings.Contains(testName, "ServiceIdentity")) {
+		log.InfoD("Setting RBAC Token for execution")
+		return context.Background(), RbacJwtToken, nil
+	}
 
 	postBody, err := json.Marshal(map[string]string{
 		"email":    username,

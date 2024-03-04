@@ -11,7 +11,13 @@ import (
 	status "net/http"
 )
 
-// GetIamClient updates the header with bearer token and returns the new client
+var (
+	SiToken       string
+	SiFlag        bool
+	SaRequestBody platformv1.V1ServiceAccount
+)
+
+// GetSAClient updates the header with bearer token and returns the new client
 func (sa *PLATFORM_API_V1) GetSAClient() (context.Context, *platformv1.ServiceAccountServiceAPIService, error) {
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -40,12 +46,12 @@ func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]W
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceListServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of iam - [%v]", saModel)
+	log.Infof("Value of ServiceAccount - [%v]", saModel)
 	err = copier.Copy(&saResponse, saModel.ServiceAccounts)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
+	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return saResponse, nil
 }
 
@@ -65,38 +71,40 @@ func (sa *PLATFORM_API_V1) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowRe
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceGetServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of iam - [%v]", saModel)
+	log.Infof("Value of ServiceAccount - [%v]", saModel)
 	err = copier.Copy(&saResponse, saModel)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
+	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
 
 // CreateServiceAccount return new service account model.
-func (sa *PLATFORM_API_V1) CreateServiceAccount(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, client, err := sa.GetSAClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
+func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+
 	saResponse := WorkFlowResponse{}
-	var createIamRequest platformv1.ApiServiceAccountServiceCreateServiceAccountRequest
-	err = copier.Copy(&createIamRequest, createReq)
+	saCreateRequest := platformv1.ApiServiceAccountServiceCreateServiceAccountRequest{}
+
+	_, saClient, err := sa.GetSAClient()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	saModel, res, err := client.ServiceAccountServiceCreateServiceAccountExecute(createIamRequest)
-	if res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceCreateServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
-	}
-	log.Infof("Value of iam - [%v]", saModel)
-	err = copier.Copy(&saResponse, saModel)
+
+	err = copier.Copy(&SaRequestBody, createSaReq.ServiceAccountRequest.V1ServiceAccount)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error while copying the deployment request\n")
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
-	return &saResponse, nil
+
+	saCreateRequest = saClient.ServiceAccountServiceCreateServiceAccount(context.Background(), createSaReq.TenantId).V1ServiceAccount(SaRequestBody)
+
+	dsModel, res, err := saClient.ServiceAccountServiceCreateServiceAccountExecute(saCreateRequest)
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	copier.Copy(&saResponse, dsModel)
+	return &saResponse, err
 }
 
 // DeleteServiceAccount delete service account and return status.
@@ -115,12 +123,12 @@ func (sa *PLATFORM_API_V1) DeleteServiceAccount(saId *WorkFlowRequest) error {
 	if res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `ApiServiceAccountServiceDeleteServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of iam - [%v]", saModel)
+	log.Infof("Value of ServiceAccount - [%v]", saModel)
 	err = copier.Copy(&saResponse, saModel)
 	if err != nil {
 		return err
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
+	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return nil
 }
 
@@ -140,12 +148,12 @@ func (sa *PLATFORM_API_V1) RegenerateServiceAccountSecret(saId *WorkFlowRequest)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceRegenerateServiceAccountSecretRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of iam - [%v]", saModel)
+	log.Infof("Value of ServiceAccount - [%v]", saModel)
 	err = copier.Copy(&saResponse, saModel)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
+	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
 
@@ -165,12 +173,12 @@ func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlo
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceUpdateServiceAccountRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of iam - [%v]", saModel)
+	log.Infof("Value of ServiceAccount - [%v]", saModel)
 	err = copier.Copy(&saResponse, saModel)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
+	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
 
@@ -181,19 +189,22 @@ func (sa *PLATFORM_API_V1) GenerateServiceAccountAccessToken(tokenReq *WorkFlowR
 	}
 	saResponse := WorkFlowResponse{}
 	var tokenIamRequest platformv1.ApiServiceAccountServiceGetAccessTokenRequest
+	tokenIamRequest = tokenIamRequest.ApiService.ServiceAccountServiceGetAccessToken(context.Background(), tokenReq.TenantId)
 	err = copier.Copy(&tokenIamRequest, tokenReq)
 	if err != nil {
 		return nil, err
 	}
-	saModel, res, err := client.ServiceAccountServiceGetAccessTokenExecute(tokenIamRequest)
+	tokenModel, res, err := client.ServiceAccountServiceGetAccessTokenExecute(tokenIamRequest)
 	if res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApiServiceAccountServiceGetAccessTokenRequest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Value of iam - [%v]", saModel)
-	err = copier.Copy(&saResponse, saModel)
+	log.Infof("Value of ServiceAccount - [%v]", tokenModel)
+	err = copier.Copy(&saResponse, tokenModel)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of iam after copy - [%v]", saResponse)
+	SiFlag = true
+	SiToken = tokenModel.GetToken()
+	log.Infof("Value of ServiceAccount after copy - [%v]", saResponse)
 	return &saResponse, nil
 }
