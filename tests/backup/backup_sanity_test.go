@@ -171,6 +171,15 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		appCtx[0].ReadinessTimeout = AppReadinessTimeout
 		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
 		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+
+		taskName = fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+		appCtx, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+			AppKeys:            []string{"postgres-rbd-csi"},
+			StorageProvisioner: "openshift-storage.rbd.csi.ceph.com",
+		})
+		appCtx[0].ReadinessTimeout = AppReadinessTimeout
+		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
+		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 	})
 
 	It("Basic Backup Creation", func() {
