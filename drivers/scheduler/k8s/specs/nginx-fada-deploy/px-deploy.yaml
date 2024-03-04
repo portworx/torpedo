@@ -19,14 +19,6 @@ spec:
       labels:
         app: poc1
     spec:
-      nodeSelector:
-        apptype: fada
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                topologyKey: kubernetes.io/hostname
-              weight: 100
       containers:
         - command:
             - /bin/sh

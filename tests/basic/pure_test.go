@@ -2166,3 +2166,171 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{ReDistributeFADAVol}", func() {
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20638
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/87945
+	*/
+	var contexts []*scheduler.Context
+	var nodeToCordon string
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("ReDistributeFADAVol", "Create apps with FADA vol and check if they are distributed to other nodes", nil, 87495)
+	})
+	stepLog = "create apps with FADA vol and check if they are distributed to other nodes when the initial node is cordoned and pods are deleted from that node"
+	It(stepLog, func() {
+		//Number of apps to be deployed
+		NumberOfDeployments := 10
+		//Map of "pod" -> {"node":nodename,"namespace":ns}
+		podNodeMap := make(map[string]map[string]string)
+		// createPodNodeMap returns podNodeMap which maps pod to its scheduled node and namespace
+		createPodNodeMap := func(podNodeMap map[string]map[string]string, namespace string) error {
+			pods, err := core.Instance().GetPods(namespace, nil)
+			log.Infof("Number of pods in namespace [%s] : %v", namespace, len(pods.Items))
+			nodeAndNsList := make(map[string]string, 0)
+			if err != nil {
+				return fmt.Errorf("failed to get pods in namespace [%s] or the namespace doesn't exist", namespace)
+			}
+			for _, pod := range pods.Items {
+				log.Infof("Pod name: %v, Node name: %v", pod.Name, pod.Spec.NodeName)
+				nodeAndNsList["node"] = pod.Spec.NodeName
+				nodeAndNsList["namespace"] = namespace
+				podNodeMap[pod.Name] = nodeAndNsList
+			}
+			return nil
+		}
+		//select the node where the highest number of pods are created
+		selectNode := func(podNodeMap map[string]map[string]string) (string, error) {
+			nodeMap := make(map[string]int)
+			for _, node := range podNodeMap {
+				nodeMap[node["node"]]++
+			}
+			var max_count int
+			var node string
+			for k, v := range nodeMap {
+				if v > max_count {
+					max_count = v
+					node = k
+				}
+			}
+			log.Infof("Node with highest number of pods: %v", node)
+			return node, nil
+		}
+
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for j := 0; j < NumberOfDeployments; j++ {
+				taskName := fmt.Sprintf("test-%v", j)
+				context, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys: Inst().AppList,
+				})
+				log.FailOnError(err, "Failed to schedule application of %v namespace", taskName)
+				contexts = append(contexts, context...)
+			}
+			ValidateApplications(contexts)
+		})
+
+		stepLog = "Get the pods from the created namespaces"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, context := range contexts {
+				err := createPodNodeMap(podNodeMap, context.App.NameSpace)
+				log.FailOnError(err, "Failed to create podNodeMap")
+			}
+		})
+
+		stepLog = "select the node with highest number of pods and cordon that node"
+		Step(stepLog, func() {
+			nodeToCordon, err = selectNode(podNodeMap)
+			log.FailOnError(err, "Failed to select node with highest number of pods")
+			log.InfoD("Node with highest number of pods: %v", nodeToCordon)
+			//cordon node with the highest number of pods
+			defer func() {
+				err = core.Instance().UnCordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
+				log.FailOnError(err, "Failed to uncordon node %v", nodeToCordon)
+				log.Infof("uncordoned node %v", nodeToCordon)
+			}()
+			err = core.Instance().CordonNode(nodeToCordon, defaultCommandTimeout, defaultCommandRetry)
+			log.FailOnError(err, "Failed to cordon node %v", nodeToCordon)
+			log.InfoD("cordoned node %v", nodeToCordon)
+			//delete pods from the cordoned node
+			for pod, node := range podNodeMap {
+				log.Infof("delete node name:%v , pod name:%v, %v", node["node"], pod, nodeToCordon)
+				if node["node"] == nodeToCordon {
+					err = core.Instance().DeletePod(pod, node["namespace"], true)
+					log.FailOnError(err, "Failed to delete pod %v", pod)
+					log.Infof("deleted pod:%v and namespace:%v", pod, node["namespace"])
+				}
+			}
+			podNameSpace := ""
+			podName := ""
+			//Wait for pods to be deleted
+			t := func() (interface{}, bool, error) {
+				labelSelector := make(map[string]string, 0)
+				pods, err := core.Instance().GetPods(podNameSpace, labelSelector)
+				log.FailOnError(err, "Failed to get pods from namespace: %v", podNameSpace)
+				for _, pod := range pods.Items {
+					if pod.Name == podName {
+						log.InfoD("pod : %s still present in the system", podName)
+						return "", true, nil
+					}
+				}
+				return "", false, nil
+			}
+			for pod, node := range podNodeMap {
+				podNameSpace = node["namespace"]
+				podName = pod
+				if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 20*time.Second); err != nil {
+					fmt.Errorf("pod not able to delete  : [%s]. Error: [%v]", podName, err)
+				}
+			}
+		})
+
+		stepLog = "Verify if pods are scheduled on other nodes"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//get the pods from the deleted namespace and check if they are scheduled on other nodes
+			for _, node := range podNodeMap {
+				pods, err := core.Instance().GetPods(node["namespace"], nil)
+				log.FailOnError(err, "Failed to get pods in namespace %v", node["namespace"])
+				for _, pod := range pods.Items {
+					log.Infof("Pod name: %v, Node name: %v, %v", pod.Name, pod.Spec.NodeName, nodeToCordon)
+					if pod.Spec.NodeName == nodeToCordon {
+						log.FailOnError(fmt.Errorf("pod %v is still running on node %v", pod.Name, nodeToCordon), "Pod should not be running on node %v", nodeToCordon)
+					}
+				}
+			}
+		})
+		stepLog = "Validate application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			ValidateApplications(contexts)
+		})
+		stepLog = "Destroy applications"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			var wg sync.WaitGroup
+			for _, ctx := range contexts {
+				wg.Add(1)
+				go func(ctx *scheduler.Context) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					nameSpace := ctx.App.NameSpace
+					//delete namespace
+					err = core.Instance().DeleteNamespace(nameSpace)
+					log.FailOnError(err, fmt.Sprintf("error deleting namespace [%s]", nameSpace))
+					log.Infof("Deleted namespace %v", nameSpace)
+				}(ctx)
+			}
+			wg.Wait()
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+
+	})
+})
