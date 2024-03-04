@@ -1,10 +1,8 @@
 package ocp
 
 import (
-	"fmt"
 	"github.com/libopenstorage/openstorage/api"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
-	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/errors"
 	"github.com/portworx/torpedo/pkg/log"
@@ -33,17 +31,17 @@ type ocp struct {
 
 func (o *ocp) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
 	log.Infof("Using the OCP volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
-	torpedovolume.StorageDriver = OcpDriverName
+	//torpedovolume.StorageDriver = OcpDriverName
 	// Set provisioner for torpedo
-	if storageProvisioner != "" {
-		if p, ok := provisionersForOcp[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
-			torpedovolume.StorageProvisioner = p
+	/*	if storageProvisioner != "" {
+			if p, ok := provisionersForOcp[torpedovolume.StorageProvisionerType(storageProvisioner)]; ok {
+				torpedovolume.StorageProvisioner = p
+			} else {
+				return fmt.Errorf("driver %s, does not support provisioner %s", portworx.DriverName, storageProvisioner)
+			}
 		} else {
-			return fmt.Errorf("driver %s, does not support provisioner %s", portworx.DriverName, storageProvisioner)
-		}
-	} else {
-		return fmt.Errorf("Provisioner is empty for volume driver: %s", portworx.DriverName)
-	}
+			return fmt.Errorf("Provisioner is empty for volume driver: %s", portworx.DriverName)
+		}*/
 	return nil
 }
 
