@@ -15,6 +15,7 @@ import (
 // AccountV2 struct
 type PlatformGrpc struct {
 	ApiClientV1 *grpc.ClientConn
+	AccountId   string
 }
 
 // GetClient updates the header with bearer token and returns the new client

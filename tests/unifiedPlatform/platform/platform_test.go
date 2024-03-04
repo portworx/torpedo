@@ -70,12 +70,10 @@ var _ = Describe("{TenantsCRUD}", func() {
 //})
 
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
-	steplog := "Data service deployment"
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
 	})
 
-	log.InfoD(steplog)
 	It("Deploy and Validate DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			_, err := stworkflows.DeployDataservice(ds)

@@ -41,6 +41,8 @@ func (Tenantgrpc *PlatformGrpc) ListTenants(accountID string) ([]WorkFlowRespons
 		Pagination: NewPaginationRequest(1, 50),
 	}
 
+	ctx = WithAccountIDMetaCtx(ctx, Tenantgrpc.AccountId)
+
 	apiResponse, err := client.ListTenants(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListTenants`: %v\n.", err)

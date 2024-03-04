@@ -41,6 +41,8 @@ func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *WorkFlowRequest) ([]Wo
 		Pagination: NewPaginationRequest(1, 50),
 	}
 
+	ctx = WithAccountIDMetaCtx(ctx, tcGrpc.AccountId)
+
 	apiResponse, err := client.ListTargetClusters(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `ListTargetClusters`: %v\n.", err)

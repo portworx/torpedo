@@ -35,10 +35,13 @@ func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequ
 	if err != nil {
 		return "", fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	var getTcManifestRequest *publictcapis.GenerateTargetClusterRegistrationManifestRequest
 
-	getTcManifestRequest.ClusterName = getManifestRequest.TargetClusterManifest.ClusterName
-	getTcManifestRequest.TenantId = getManifestRequest.TargetClusterManifest.TenantId
+	getTcManifestRequest := &publictcapis.GenerateTargetClusterRegistrationManifestRequest{
+		ClusterName: getManifestRequest.TargetClusterManifest.ClusterName,
+		TenantId:    getManifestRequest.TargetClusterManifest.TenantId,
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, tcGrpc.AccountId)
 
 	apiResponse, err := client.GenerateTargetClusterRegistrationManifest(ctx, getTcManifestRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
