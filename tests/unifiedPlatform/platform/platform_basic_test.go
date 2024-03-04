@@ -16,11 +16,19 @@ var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run platform tests"
 	log.InfoD(steplog)
 	Step(steplog, func() {
-		log.InfoD("Get Account ID")
 
+		// Read pds params from the configmap
+		var err error
+		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
+		NewPdsParams, err = ReadNewParams(pdsparams)
+		log.FailOnError(err, "Failed to read params from json file")
+		infraParams := NewPdsParams.InfraToTest
+		pdsLabels["clusterType"] = infraParams.ClusterType
+
+		log.InfoD("Get Account ID")
 		accID := "acc:2199f82a-9c39-4070-a431-4a8c8b1c2ca7"
 
-		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
+		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 
 		// accList, err := platformUtils.GetAccountListv1()
@@ -28,19 +36,12 @@ var _ = BeforeSuite(func() {
 		// accID = platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
 		log.Infof("AccountID - [%s]", accID)
 
-		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
+		err = platformUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, accID)
 		log.FailOnError(err, "error while initialising api components")
 
 		//Initialising UnifiedApiComponents in ds utils
-		err = dsUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), accID)
+		err = dsUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, accID)
 		log.FailOnError(err, "error while initialising api components in ds utils")
-
-		// Read pds params from the configmap
-		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-		NewPdsParams, err = ReadNewParams(pdsparams)
-		log.FailOnError(err, "Failed to read params from json file")
-		infraParams := NewPdsParams.InfraToTest
-		pdsLabels["clusterType"] = infraParams.ClusterType
 	})
 })
 

@@ -1,6 +1,6 @@
 // +build skipcompile
 
-
+package kubecli
 
 import (
 	"errors"

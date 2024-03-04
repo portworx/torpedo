@@ -26,8 +26,8 @@ import (
 
 const (
 	UNIFIED_PLATFORM_INTERFACE = "BACKEND_TYPE"
-	API_V1                     = "v1"
-	GRPC                       = "grpc"
+	REST_API                   = "REST_API"
+	GRPC                       = "GRPC"
 	GRPC_PORT                  = "443"
 )
 
@@ -37,10 +37,10 @@ type UnifiedPlatformComponents struct {
 }
 
 func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*UnifiedPlatformComponents, error) {
-	VARIABLE_FROM_JENKINS := GetEnv(UNIFIED_PLATFORM_INTERFACE, API_V1)
+	VARIABLE_FROM_JENKINS := GetEnv(UNIFIED_PLATFORM_INTERFACE, REST_API)
 
 	switch VARIABLE_FROM_JENKINS {
-	case API_V1:
+	case REST_API:
 		//generate platform api_v1 client
 		platformApiConf := platformv1.NewConfiguration()
 		endpointURL, err := url.Parse(controlPlaneURL)

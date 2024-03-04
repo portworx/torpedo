@@ -706,6 +706,8 @@ spec:
       value: "${PX_CENTRAL_PASSWORD}"
     - name: PX_CENTRAL_API
       value: "${PX_CENTRAL_API}"
+    - name: BACKEND_TYPE
+      value: "${BACKEND_TYPE}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
