@@ -95,6 +95,11 @@ func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 	}
 }
 
+func (i *ibm) RestoreSnapshot(snapshotId string, volumeId string) (*api.SdkVolumeSnapshotRestoreResponse, error) {
+	log.Warnf("RestoreSnapshot function has not been implemented for volume driver - %s", i.String())
+	return nil, nil
+}
+
 func init() {
 	log.Infof("Registering pso driver")
 	torpedovolume.Register(IbmDriverName, provisionersForIKS, &ibm{})
