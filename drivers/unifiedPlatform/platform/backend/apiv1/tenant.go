@@ -33,7 +33,7 @@ func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]WorkFlowResponse
 	}
 	// tenantsModel, res, err := tenantClient.TenantServiceListTenants2(ctx, accountID).Execute()
 	tenantsModel, res, err := tenantClient.TenantServiceListTenants(ctx).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
+	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TenantServiceListTenants2`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of tenants - [%v]", tenantsModel)

@@ -700,6 +700,12 @@ spec:
       value: "${PDS_PARAM_CM}"
     - name: PDS_ISSUER_URL
       value: "${PDS_ISSUER_URL}"
+    - name: PX_CENTRAL_USERNAME
+      value: "${PX_CENTRAL_USERNAME}"
+    - name: PX_CENTRAL_PASSWORD
+      value: "${PX_CENTRAL_PASSWORD}"
+    - name: PX_CENTRAL_API
+      value: "${PX_CENTRAL_API}"
     - name: CLUSTER_TYPE
       value: "${CLUSTER_TYPE}"
     - name: TARGET_KUBECONFIG
