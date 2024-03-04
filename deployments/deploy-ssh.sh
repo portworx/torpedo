@@ -80,8 +80,12 @@ fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
+    focusRegex="$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')"
     FOCUS_ARG="--focus={$focusRegex}"
+fi
+
+if [ -n "$LABEL_FILTER" ]; then
+    FOCUS_ARG="--label-filter=$LABEL_FILTER"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
@@ -247,7 +251,7 @@ done
 
 echo "checking if we need to override test suite: ${TEST_SUITE}"
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]]; then
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 
@@ -312,7 +316,7 @@ fi
 
 JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
 if [ "${SCHEDULER}" == "openshift" ]; then
- JUNIT_REPORT_PATH="/tmp/junit_basic.xml"
+    SECURITY_CONTEXT=true
 fi
 
 if [ -n "${PROVIDERS}" ]; then
@@ -540,6 +544,7 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
+            "--px-cluster-opts=$PX_CLUSTER_OPTS",
             "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
             "--anthos-inst-path=$ANTHOS_INST_PATH",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
@@ -758,6 +763,8 @@ spec:
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
     - name: ENABLE_GRAFANA
       value: "${ENABLE_GRAFANA}"
+    - name: USE_GLOBAL_RULES
+      value: "${USE_GLOBAL_RULES}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
