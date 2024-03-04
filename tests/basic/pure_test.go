@@ -1602,7 +1602,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 		contexts            []*scheduler.Context
 		appSpecMap          = make(map[string]*spec.AppSpec)
 		volCountFromSpecMap = make(map[string]int)
-		approxVolCount      = 2
+		approxVolCount      = 500
 		exceedVolCount      = true
 		backend             = BackendUnknown
 		volDriverNamespace  string
@@ -1804,6 +1804,7 @@ var _ = Describe("{CreateAndDeleteMultipleVolumesInParallel}", func() {
 				dash.VerifyFatal(len(vols), volCountFromSpecMap[ctx.App.Key], fmt.Sprintf("Verifying volume count for app [%s]", ctx.App.Key))
 			}
 		})
+
 		Step("Identify backend and categorize volumes", func() {
 			log.InfoD("Identifying backend")
 			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
@@ -2166,3 +2167,156 @@ func faLUNExists(faVolList []string, pvc string) bool {
 	}
 	return false
 }
+
+var _ = Describe("{CloneVolumeAndValidate}", func() {
+
+	/*
+		PTX:
+			https://portworx.atlassian.net/browse/PTX-20635
+		TestRail:
+			https://portworx.testrail.net/index.php?/cases/view/92873
+			https://portworx.testrail.net/index.php?/cases/view/92876
+	*/
+
+	// Backend represents the cloud storage provider for volume provisioning
+	type Backend string
+
+	const (
+		BackendPure    Backend = "PURE"
+		BackendVSphere Backend = "VSPHERE"
+		BackendUnknown Backend = "UNKNOWN"
+	)
+
+	// VolumeType represents the type of provisioned volume
+	type VolumeType string
+
+	const (
+		VolumeFADA    VolumeType = "FADA"
+		VolumeFBDA    VolumeType = "FBDA"
+		VolumeFACD    VolumeType = "FACD"
+		VolumeVsCD    VolumeType = "VsCD"
+		VolumeUnknown VolumeType = "UNKNOWN"
+	)
+
+	var (
+		contexts       []*scheduler.Context
+		backend        = BackendUnknown
+		volumeMap      = make(map[VolumeType][]*api.Volume)
+		volumeCloneMap = make(map[VolumeType][]*api.Volume)
+	)
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("CloneVolumeAndValidate", "Validate clone creation, and deletion", nil, 92870)
+	})
+
+	It("Validates clone creation and deletion", func() {
+		// getPureVolumeType determines the type of the volume based on the proxy spec
+		getPureVolumeType := func(vol *volume.Volume) (VolumeType, error) {
+			proxySpec, err := Inst().V.GetProxySpecForAVolume(vol)
+			if err != nil {
+				return "", fmt.Errorf("failed to get proxy spec for the volume [%s/%s]. Err: [%v]", vol.Namespace, vol.Name, err)
+			}
+			if proxySpec != nil {
+				switch proxySpec.ProxyProtocol {
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_FILE:
+					return VolumeFBDA, nil
+				case api.ProxyProtocol_PROXY_PROTOCOL_PURE_BLOCK:
+					return VolumeFADA, nil
+				default:
+					return VolumeUnknown, nil
+				}
+			} else {
+				return VolumeFACD, nil
+			}
+		}
+
+		Step("Schedule applications", func() {
+			log.InfoD("Scheduling applications")
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				taskName := fmt.Sprintf("clone-validate-%d", i)
+				for _, ctx := range ScheduleApplications(taskName) {
+					ctx.ReadinessTimeout = appReadinessTimeout
+					contexts = append(contexts, ctx)
+				}
+			}
+		})
+		Step("Validate applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(contexts)
+		})
+		Step("Identify backend and categorize volumes", func() {
+			log.InfoD("Identifying backend")
+			volDriverNamespace, err := Inst().V.GetVolumeDriverNamespace()
+			log.FailOnError(err, "failed to get volume driver [%s] namespace", Inst().V.String())
+			secretList, err := core.Instance().ListSecret(volDriverNamespace, metav1.ListOptions{})
+			log.FailOnError(err, "failed to get secret list from namespace [%s]", volDriverNamespace)
+			for _, secret := range secretList.Items {
+				switch secret.Name {
+				case PX_PURE_SECRET_NAME:
+					backend = BackendPure
+					break
+				case PX_VSPHERE_SCERET_NAME:
+					backend = BackendVSphere
+					break
+				}
+			}
+			log.InfoD("Backend: %v", backend)
+			log.InfoD("Categorizing volumes")
+			for _, ctx := range contexts {
+				volumes, err := Inst().S.GetVolumes(ctx)
+				log.FailOnError(err, "failed to get volumes for app [%s/%s]", ctx.App.NameSpace, ctx.App.Key)
+				dash.VerifyFatal(len(volumes) > 0, true, "Verifying if volumes exist for creating clone")
+				// The CloudStorage.Provider in StorageCluster Spec is not accurate
+				for _, vol := range volumes {
+					apiVol, err := Inst().V.InspectVolume(vol.ID)
+					log.FailOnError(err, "failed to inspect volume [%s/%s]", vol.Name, vol.ID)
+					switch backend {
+					case BackendPure:
+						volType, err := getPureVolumeType(vol)
+						log.FailOnError(err, "failed to get pure volume type for volume [%+v]", vol)
+						volumeMap[volType] = append(volumeMap[volType], apiVol)
+					case BackendVSphere:
+						volumeMap[VolumeVsCD] = append(volumeMap[VolumeVsCD], apiVol)
+					default:
+						volumeMap[VolumeUnknown] = append(volumeMap[VolumeUnknown], apiVol)
+					}
+				}
+			}
+		})
+
+		Step(fmt.Sprintf("Create a clone for each volume"), func() {
+			log.InfoD("Create a clone for each volume")
+			for volType, vols := range volumeMap {
+				for _, vol := range vols {
+					cloneName := fmt.Sprintf("%s-clone", vol.Locator.Name)
+					log.Infof("Create clone [%s] for [%s] volume [%s/%s]", cloneName, volType, vol.Id, vol.Locator.Name)
+					clone, err := Inst().V.CloneVolume(vol.Id)
+					log.FailOnError(err, "failed to create clone  for [%s] volume [%s/%s]", volType, vol.Id, vol.Locator.Name)
+					cloneInspect, err := Inst().V.InspectVolume(clone)
+					log.FailOnError(err, "failed to inspect clone [%s]  for [%s] volume [%s/%s]", cloneInspect.Id, volType, vol.Id, vol.Locator.Name)
+					volumeCloneMap[volType] = append(volumeCloneMap[volType], cloneInspect)
+				}
+			}
+
+		})
+		Step("Delete clones of all volume", func() {
+			log.InfoD("Deleting clones of all volume")
+			for cloneType, clones := range volumeCloneMap {
+				for _, clone := range clones {
+					log.Infof("Deleting clone [%s] for [%s] volume [%s/%s]", clone, cloneType, clone.Id, clone.Locator.Name)
+					err := Inst().V.DeleteVolume(clone.Id)
+					log.FailOnError(err, "failed to delete clone  for [%s] volume [%s/%s]", cloneType, clone.Id, clone.Locator.Name)
+				}
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		opts := make(map[string]bool)
+		opts[SkipClusterScopedObjects] = true
+		log.InfoD("Destroying applications")
+		DestroyApps(contexts, opts)
+	})
+
+})
