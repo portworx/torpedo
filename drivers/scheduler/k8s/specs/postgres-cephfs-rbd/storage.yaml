@@ -1,0 +1,25 @@
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-data-cephfs
+spec:
+  storageClassName: postgres-sc-cephfs
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2G
+---
+##### Portworx persistent volume claim
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-data-rbd
+spec:
+  storageClassName: postgres-sc-rbd
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2G
