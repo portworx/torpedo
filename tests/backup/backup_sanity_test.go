@@ -124,13 +124,24 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
+		/*		log.InfoD("scheduling applications")
+				scheduledAppContexts = make([]*scheduler.Context, 0)
+				Inst().AppList = []string{"postgres-cephfs-csi", "postgres-rbd-csi"}
+				namespace := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
+				for i := 0; i < len(Inst().AppList); i++ {
+					taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
+					appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+					for _, appCtx := range appContexts {
+						appCtx.ReadinessTimeout = AppReadinessTimeout
+						scheduledAppContexts = append(scheduledAppContexts, appCtx)
+					}
+				}*/
+
 		log.InfoD("scheduling applications")
 		scheduledAppContexts = make([]*scheduler.Context, 0)
-		Inst().AppList = []string{"postgres-cephfs-csi", "postgres-rbd-csi"}
-		namespace := fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
-		for i := 0; i < len(Inst().AppList); i++ {
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
 			taskName := fmt.Sprintf("%s-%d", TaskNamePrefix, i)
-			appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+			appContexts := ScheduleApplications(taskName)
 			for _, appCtx := range appContexts {
 				appCtx.ReadinessTimeout = AppReadinessTimeout
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
