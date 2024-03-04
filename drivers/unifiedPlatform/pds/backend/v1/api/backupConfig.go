@@ -16,6 +16,7 @@ var (
 // getBackupConfigClient updates the header with bearer token and returns the new client
 func (backupConf *PDSV2_API) getBackupConfigClient() (context.Context, *pdsv2.BackupConfigServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
+
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}

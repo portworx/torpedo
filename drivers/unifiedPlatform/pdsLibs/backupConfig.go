@@ -18,9 +18,13 @@ func CreateBackupConfig(backupConfig BackupConfig) (*apiStructs.WorkFlowResponse
 
 	createBackupRequest := apiStructs.WorkFlowRequest{}
 
-	createBackupRequest.BackupConfig.V1.Create.V1BackupConfig = &apiStructs.V1BackupConfig{}
-	createBackupRequest.BackupConfig.V1.Create.DeploymentId = backupConfig.DeploymentID
-	createBackupRequest.BackupConfig.V1.Create.ProjectId = backupConfig.ProjectId
+	createBackupRequest.BackupConfig.GRPC.Create.V1BackupConfig = &apiStructs.V1BackupConfig{
+		Meta:   &apiStructs.Meta{},
+		Config: &apiStructs.Config{},
+		Status: &apiStructs.Backupconfigv1Status{},
+	}
+	createBackupRequest.BackupConfig.GRPC.Create.DeploymentId = backupConfig.DeploymentID
+	createBackupRequest.BackupConfig.GRPC.Create.ProjectId = backupConfig.ProjectId
 
 	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupRequest)
 	if err != nil {

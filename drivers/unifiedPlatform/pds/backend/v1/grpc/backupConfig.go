@@ -28,6 +28,8 @@ func (backupConf *PdsGrpc) getBackupConfigClient() (context.Context, publicBacku
 
 // CreateBackupConfig will create backup config for a given deployment
 func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+	log.Infof("Backup Config - [%+v]", createBackupConfigRequest.BackupConfig.GRPC.Create.V1BackupConfig)
+
 	response := &apiStructs.WorkFlowResponse{}
 
 	backupConfig := &publicBackupConfigapis.BackupConfig{}
