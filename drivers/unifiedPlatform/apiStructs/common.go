@@ -47,3 +47,35 @@ type V1Deployment struct {
 type Status struct {
 	Phase string
 }
+
+type StatusPhase string
+
+type V1Meta struct {
+	Uid             *string            `copier:"must,nopanic"`
+	Name            *string            `copier:"must,nopanic"`
+	Description     *string            `copier:"must,nopanic"`
+	ResourceVersion *string            `copier:"must,nopanic"`
+	CreateTime      *time.Time         `copier:"must,nopanic"`
+	UpdateTime      *time.Time         `copier:"must,nopanic"`
+	Labels          *map[string]string `copier:"must,nopanic"`
+	Annotations     *map[string]string `copier:"must,nopanic"`
+	ParentReference *V1Reference       `copier:"must,nopanic"`
+}
+
+type V1ErrorCode string
+
+type V1Phase string
+
+type V1Reference struct {
+	Type    *string `copier:"must,nopanic"`
+	Version *string `copier:"must,nopanic"`
+	Uid     *string `copier:"must,nopanic"`
+}
+
+type V1DeploymentMetaData struct {
+	Name                 *string `copier:"must,nopanic"`
+	CustomResourceName   *string `copier:"must,nopanic"`
+	DeploymentTargetName *string `copier:"must,nopanic"`
+	NamespaceName        *string `copier:"must,nopanic"`
+	TlsEnabled           *bool   `copier:"must,nopanic"`
+}

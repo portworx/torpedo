@@ -7,6 +7,7 @@ import (
 type Pds interface {
 	Deployment
 	DeploymentConfig
+	BackupConfig
 }
 
 type Deployment interface {
@@ -15,4 +16,12 @@ type Deployment interface {
 
 type DeploymentConfig interface {
 	UpdateDeploymentConfig(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+}
+
+type BackupConfig interface {
+	CreateBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GetBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
+	ListBackupConfig(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }

@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
@@ -79,6 +80,24 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			_, err := stworkflows.DeployDataservice(ds)
 			log.FailOnError(err, "Error while deploying ds")
 		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{CreateBackupConfig}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateBackupConfig", "Creates a backup config", nil, 0)
+	})
+
+	It("Create Backup Config", func() {
+		_, err := dslibs.CreateBackupConfig(dslibs.BackupConfig{
+			ProjectId:    "someprojectId",
+			DeploymentID: "SomedeploymentId",
+		})
+		log.FailOnError(err, "Error while creating backup config")
 	})
 
 	JustAfterEach(func() {
