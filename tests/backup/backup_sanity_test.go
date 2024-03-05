@@ -125,7 +125,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 
 		provisionerVolumeSnapshotClassMap = map[string]string{
 			"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
-			"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-cephfsplugin-snapclass",
+			"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-rbdsplugin-snapclass",
 		}
 
 		taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
@@ -250,6 +250,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 					provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
 				}
 				for key, value := range provisionerVolumeSnapshotClassSubMap {
+					fmt.Println("provisioner mapping")
 					fmt.Println(key, ":", value)
 				}
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
