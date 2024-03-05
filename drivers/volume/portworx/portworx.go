@@ -115,7 +115,7 @@ const (
 	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
-	validateDeleteVolumeTimeout       = 15 * time.Minute
+	validateDeleteVolumeTimeout       = 30 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
