@@ -1,7 +1,13 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
+  {{ if .ClaimsCount }}
+    {{- range $val := Iterate .ClaimsCount }}
+    - name: postgres-{{ $val }}
+  {{- end }}
+  {{- else }}
+    - name: postgres
+  {{- end }}
 spec:
   strategy:
     rollingUpdate:
@@ -18,16 +24,6 @@ spec:
         app: postgres
     spec:
       schedulerName: stork
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: "app"
-                    operator: In
-                    values:
-                      - postgres
-              topologyKey: "kubernetes.io/hostname"
       containers:
         - name: postgres
           image: postgres:9.5
