@@ -10911,3 +10911,18 @@ func updatePrometheusAndAutopilot(stc *opsv1.StorageCluster) error {
 	return err
 }
 
+func ExportSourceKubeConfig() error {
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
+}
+
+func ExportDestinationKubeConfig() error {
+	DestinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
+}
