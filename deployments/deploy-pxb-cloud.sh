@@ -364,6 +364,7 @@ if [ -n "${K8S_VENDOR}" ]; then
             ;;
     esac
 fi
+
 cat > torpedo.yaml <<EOF
 ---
 apiVersion: v1
