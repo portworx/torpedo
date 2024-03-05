@@ -242,14 +242,13 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", func() {
 			Inst().AppList = appList
 		}()
 		namespace = fmt.Sprintf("multiple-app-ns-%s", RandomString(6))
-		Inst().AppList = []string{"postgres-backup-with-suffix"}
-		Inst().CustomAppConfig["postgres-backup-with-suffix"] = scheduler.AppConfig{
+		Inst().AppList = []string{"postgres-backup-multivol"}
+		Inst().CustomAppConfig["postgres-backup-multivol"] = scheduler.AppConfig{
 			ClaimsCount: numberOfVolumes,
 		}
 		err := Inst().S.RescanSpecs(Inst().SpecDir, Inst().V.String())
 		log.FailOnError(err, "Failed to rescan specs from %s for storage provider %s", Inst().SpecDir, Inst().V.String())
-		taskName := fmt.Sprintf("%s", TaskNamePrefix)
-		appContexts := ScheduleApplicationsOnNamespace(namespace, taskName)
+		appContexts := ScheduleApplicationsOnNamespace(namespace, TaskNamePrefix)
 		for _, appCtx := range appContexts {
 			appCtx.ReadinessTimeout = AppReadinessTimeout
 			scheduledAppContexts = append(scheduledAppContexts, appCtx)
