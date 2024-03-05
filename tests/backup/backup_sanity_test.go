@@ -249,10 +249,6 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 				if value, ok := provisionerVolumeSnapshotClassMap[appCtx.ScheduleOptions.StorageProvisioner]; ok {
 					provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
 				}
-				for key, value := range provisionerVolumeSnapshotClassSubMap {
-					fmt.Println("provisioner mapping")
-					fmt.Println(key, ":", value)
-				}
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
 				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
