@@ -1051,6 +1051,22 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				err := SetDestinationKubeConfig()
 				log.FailOnError(err, "Switching context to destination cluster failed")
 
+				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
+					err := OcpPrometheusPrereq()
+					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
+				}
+
+				err = Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+				PrintK8sCluterInfo()
+
+				err = SetSourceKubeConfig()
+				log.FailOnError(err, "Switching context to Source cluster failed")
+			})
+			Step("validate storage components", func() {
+				err := SetDestinationKubeConfig()
+				log.FailOnError(err, "Switching context to destination cluster failed")
+
 				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 				u, err := url.Parse(urlToParse)
 				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
@@ -1068,9 +1084,9 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 			Step("update node drive endpoints", func() {
 				err := SetDestinationKubeConfig()
 				log.FailOnError(err, "Switching context to destination cluster failed")
-				
+
 				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
-				err := Inst().S.RefreshNodeRegistry()
+				err = Inst().S.RefreshNodeRegistry()
 				log.FailOnError(err, "Refresh Node Registry failed")
 
 				// Refresh Driver Endpoints
