@@ -22,7 +22,7 @@ var _ = Describe("{TenantsCRUD}", func() {
 			log.InfoD(steplog)
 			var tc platformLibs.TargetCluster
 			var tenantId string
-			accID := "acc:2199f82a-9c39-4070-a431-4a8c8b1c2ca7"
+			accID := "acc:a7e9dff1-a2f4-40ce-b8cf-09d27deff80e"
 			//accList, err := platformLibs.GetAccountListv1()
 			//log.FailOnError(err, "error while getting account list")
 			//accID := platformLibs.GetPlatformAccountID(accList, defaultTestAccount)
