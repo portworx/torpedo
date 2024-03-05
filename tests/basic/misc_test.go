@@ -1,6 +1,7 @@
 package tests
 
 import (
+	context1 "context"
 	"fmt"
 	"math/rand"
 	"path"
@@ -1153,5 +1154,50 @@ var _ = Describe("{AutoFSTrimReplAddWithNoPool0}", func() {
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 		AfterEachTest(contexts, testrailID, runID)
+	})
+})
+
+var _ = Describe("{PXKubevirtVMSshTest}", func() {
+	var (
+		scheduledAppContexts []*scheduler.Context
+	)
+	JustBeforeEach(func() {
+		StartTorpedoTest("PXKubevirtVMSshTest", "Verify SSH to kubevirt VM", nil, 0)
+
+		log.InfoD("scheduling applications on PXKubevirtVMSshTest")
+		scheduledAppContexts = make([]*scheduler.Context, 0)
+		for i := 0; i < Inst().GlobalScaleFactor; i++ {
+			taskName := fmt.Sprintf("%d-%d", 93013, i)
+			appContexts := ScheduleApplications(taskName)
+			for _, appCtx := range appContexts {
+				appCtx.ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+			}
+		}
+	})
+
+	It("Verify backup and restore of Kubevirt VMs in different states", func() {
+
+		Step("Validating applications", func() {
+			log.InfoD("Validating applications")
+			ValidateApplications(scheduledAppContexts)
+		})
+
+		Step("SSH into the kubevirt VM", func() {
+			vms, err := GetAllVMsInNamespace(scheduledAppContexts[0].ScheduleOptions.Namespace)
+			if err != nil {
+				return
+			}
+			for _, vm := range vms {
+				log.Infof("Running command for VM [%s]", vm.Name)
+				output, err := RunCmdInVM(vm, "uname -a", context1.TODO())
+				log.InfoD("Output of command in step - [%s]", output)
+				log.FailOnError(err, "Failed to run command in VM")
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
 	})
 })
