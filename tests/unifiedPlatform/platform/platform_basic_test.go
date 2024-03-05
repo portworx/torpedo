@@ -26,7 +26,7 @@ var _ = BeforeSuite(func() {
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
 		log.InfoD("Get Account ID")
-		accID := "acc:a7e9dff1-a2f4-40ce-b8cf-09d27deff80e"
+		accID = "acc:a7e9dff1-a2f4-40ce-b8cf-09d27deff80e"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")

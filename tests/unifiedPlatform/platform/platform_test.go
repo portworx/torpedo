@@ -22,11 +22,6 @@ var _ = Describe("{TenantsCRUD}", func() {
 			log.InfoD(steplog)
 			var tc platformLibs.TargetCluster
 			var tenantId string
-			accID := "acc:a7e9dff1-a2f4-40ce-b8cf-09d27deff80e"
-			//accList, err := platformLibs.GetAccountListv1()
-			//log.FailOnError(err, "error while getting account list")
-			//accID := platformLibs.GetPlatformAccountID(accList, defaultTestAccount)
-			//log.Infof("account ID [%s]", accID)
 			tenantList, err := platformLibs.GetTenantListV1(accID)
 			log.FailOnError(err, "error while getting tenant list")
 			for _, tenant := range tenantList {
@@ -129,6 +124,27 @@ var _ = Describe("{CreateBackupConfig}", func() {
 		Step("List Backup Config", func() {
 			_, err := dslibs.ListBackupConfig(dslibs.WorkflowBackupInput{})
 			log.Infof("Error while listing backup config - %s", err.Error())
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{ListTenants}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ListTenants", "List Tenants", nil, 0)
+	})
+
+	It("Tenants", func() {
+		Step("Create and List Accounts", func() {
+			workflowResponse, err := stworkflows.WorkflowListTenants(accID)
+			log.FailOnError(err, "Some error occurred while running WorkflowCreateAndListAccounts")
+			tenantList := workflowResponse[stworkflows.GetTenantListV1]
+			for _, tenant := range tenantList {
+				log.Infof("Available Tenant [%s] under account [%s]", *tenant.Meta.Name, accID)
+			}
 		})
 	})
 
