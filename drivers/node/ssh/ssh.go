@@ -428,9 +428,36 @@ func (s *SSH) InjectNetworkErrorWithRebootFallback(nodes []node.Node, errorInjec
 			if strings.Contains(err.Error(), "no usable address found") {
 				log.Infof("Node %s [is] unreachable. Rebooting the node to recover", n.Name)
 				// recover the VM if it went unreachable by rebooting
-				rebootErr := s.RebootNodeAndWait(n)
-				if rebootErr != nil {
-					return fmt.Errorf("failed to reboot node %s: %v", n.Name, rebootErr)
+				var schedOpts scheduler.InitOptions
+				nodeObj, err := node.Get(schedOpts.NodeDriverName)
+				if err != nil {
+					return err
+				}
+				err = nodeObj.RebootNode(n, node.RebootNodeOpts{
+					Force: true,
+					ConnectionOpts: node.ConnectionOpts{
+						Timeout:         10 * time.Minute,
+						TimeBeforeRetry: 5 * time.Second,
+					},
+				})
+				if err != nil {
+					return err
+				}
+				d, err := scheduler.Get(k8s_driver.SchedName)
+				if err != nil {
+					return err
+				}
+				err = d.IsNodeReady(n)
+				if err != nil {
+					return err
+				}
+				v, err := volumedriver.Get(schedOpts.VolDriverName)
+				if err != nil {
+					return err
+				}
+				err = v.WaitDriverUpOnNode(n, 10*time.Minute)
+				if err != nil {
+					return err
 				}
 				log.Infof("Retrying network error injection on node [%s] after reboot", n.Name)
 				err = s.InjectNetworkError([]node.Node{n}, errorInjectionType, operationType, dropPercentage, delayInMilliseconds)
