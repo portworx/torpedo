@@ -469,6 +469,26 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 			log.FailOnError(err, "Timed out waiting for expansion to start")
 			err = Inst().V.RestartDriver(*storageNode, nil)
 			log.FailOnError(err, fmt.Sprintf("Error restarting px on node [%s]", storageNode.Name))
+
+			//"Exit pool out of maintenance mode"
+			log.InfoD(stepLog)
+			expectedStatus := "Online"
+			statusMap, err := Inst().V.GetNodePoolsStatus(*storageNode)
+			log.FailOnError(err, "Failed to get map of pool UUID and status")
+			log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, statusMap[poolToResize.Uuid]))
+			if statusMap[poolToResize.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
+				err := Inst().V.ExitPoolMaintenance(*storageNode)
+				log.FailOnError(err, "failed to exit pool maintenance mode")
+			} else {
+				dash.VerifyFatal(statusMap[poolToResize.Uuid], "In Maintenance", "Pool is not in Maintenance mode")
+			}
+			status, err := Inst().V.GetNodeStatus(*storageNode)
+			log.FailOnError(err, "err getting node [%s] status", storageNode.Name)
+			log.Infof(fmt.Sprintf("Node %s status %s after exit", storageNode.Name, status.String()))
+			exitErr := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
+			dash.VerifyFatal(exitErr, nil, "Pool is now online")
+
 			err = Inst().V.WaitDriverUpOnNode(*storageNode, addDriveUpTimeOut)
 			log.FailOnError(err, fmt.Sprintf("Timed out waiting for px to come up on node [%s]", storageNode.Name))
 		})
