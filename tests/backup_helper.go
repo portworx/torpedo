@@ -527,7 +527,7 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 }
 
 // CreateBackupWithValidationWithPerovisionerVscMapping creates backup, checks for success, and validates the backup
-func CreateBackupWithValidationWithPerovisionerVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string) error {
+func CreateBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string) error {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -699,7 +699,7 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 }
 
 // CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
-func CreateScheduleBackupWithValidationWithProvisionerVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string) (string, error) {
+func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
