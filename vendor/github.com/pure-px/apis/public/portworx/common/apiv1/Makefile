@@ -1,4 +1,10 @@
-PROTO_FILES = pagination.proto secrets.proto meta.proto sort.proto platformresource.proto selector.proto
+PROTO_FILES = pagination.proto \
+              secrets.proto \
+              meta.proto \
+              sort.proto \
+              platformresource.proto \
+              selector.proto \
+			  revision.proto
 
 all: $(PROTO_FILES)
 

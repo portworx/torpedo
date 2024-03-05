@@ -1,0 +1,88 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+syntax = "proto3";
+
+package public.portworx.common.v1;
+
+import "google/protobuf/struct.proto";
+import "google/api/field_behavior.proto";
+
+
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/sort.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/common/apiv1;common";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.common.v1";
+option java_outer_classname = "RevisionProto";
+
+// Revision holds the template schema along with version details.
+message Revision {
+  // Metadata of the revision.
+  public.portworx.common.v1.Meta meta = 1;
+  // Info of the revision.
+  RevisionInfo info = 2;
+}
+
+// RevisionInfo contains info.
+message RevisionInfo {
+  // Semantic version of the revision: 1.2 (major.minor - patch version not required).
+  string semantic_version = 1 [(google.api.field_behavior) = REQUIRED];
+  // Whether this revision has been deprecated.
+  bool deprecated = 2;
+  // Schema of the revision, if schema is backward compatible, update the revision, else upgrade.
+  google.protobuf.Struct schema = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetRevisionRequest is the request body to get a revision.
+message GetRevisionRequest {
+  // Get the revision by uid or name_semantic_version.
+  oneof get_by{
+    // UID of the revision.
+    // (-- api-linter: core::0148::uid-format=disabled
+    //     aip.dev/not-precedent: We need to do this because of prefix. --)
+    string uid = 1 ;
+    // Name and semantic version of the revision.
+    NameSemanticVersion name_semantic_version = 2;
+  }
+  // Name and semantic version of the revision.
+  message NameSemanticVersion{
+    // Name(kind) of the revision.
+    string name = 1 [(google.api.field_behavior) = REQUIRED];
+    // Version of the revision.
+    string semantic_version = 2 [(google.api.field_behavior) = REQUIRED];
+  }
+}
+
+// Request parameters for listing revisions.
+message ListRevisionsRequest {
+  // Filtering list of revisions based on the provided column filters.
+  public.portworx.common.v1.Selector field_selector = 1 [(google.api.field_behavior) = OPTIONAL];
+  // Sort parameters for listing revisions.
+  public.portworx.common.v1.Sort sort = 2;
+  // Pagination parameters for listing revisions.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 3;
+}
+
+// Revisions listing response.
+message ListRevisionsResponse {
+  // Revisions is the list of revisions.
+  repeated Revision revisions = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}

@@ -27,12 +27,15 @@ func (tenant *PLATFORM_API_V1) getTenantClient() (context.Context, *platformv1.T
 // ListTenants return pds tenants models.
 func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]WorkFlowResponse, error) {
 	tenantsResponse := []WorkFlowResponse{}
-	ctx, tenantClient, err := tenant.getTenantClient()
+	_, tenantClient, err := tenant.getTenantClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	// tenantsModel, res, err := tenantClient.TenantServiceListTenants2(ctx, accountID).Execute()
-	tenantsModel, res, err := tenantClient.TenantServiceListTenants(ctx).Execute()
+	var req platformv1.ApiTenantServiceListTenantsRequest
+	req = req.AccountId(accountID)
+
+	tenantsModel, res, err := tenantClient.TenantServiceListTenantsExecute(req)
+	//tenantsModel, res, err := tenantClient.TenantServiceListTenants(ctx).Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TenantServiceListTenants2`: %v\n.Full HTTP response: %v", err, res)
 	}

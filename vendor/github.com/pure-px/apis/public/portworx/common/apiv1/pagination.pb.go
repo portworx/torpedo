@@ -35,15 +35,15 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Request parameters for page-based pagination
+// Request parameters for page-based pagination.
 type PageBasedPaginationRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Page number is the page number to return based on the size
+	// Page number is the page number to return based on the size.
 	PageNumber int64 `protobuf:"varint,1,opt,name=page_number,json=pageNumber,proto3" json:"page_number,omitempty"`
-	// Page size is the maximum number of records to include per page
+	// Page size is the maximum number of records to include per page.
 	PageSize int64 `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 }
 
@@ -93,23 +93,23 @@ func (x *PageBasedPaginationRequest) GetPageSize() int64 {
 	return 0
 }
 
-// Metadata related to page based pagination for paginated API responses
+// Metadata related to page based pagination for paginated API responses.
 type PageBasedPaginationResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// Total records without pagination available in the dataset
+	// Total records without pagination available in the dataset.
 	TotalRecords int64 `protobuf:"varint,1,opt,name=total_records,json=totalRecords,proto3" json:"total_records,omitempty"`
-	// Current page number for this paginated response
+	// Current page number for this paginated response.
 	CurrentPage int64 `protobuf:"varint,2,opt,name=current_page,json=currentPage,proto3" json:"current_page,omitempty"`
-	// Page size used for pagination
+	// Page size used for pagination.
 	PageSize int64 `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	// Total pages based on the page_size provided in the request
+	// Total pages based on the page_size provided in the request.
 	TotalPages int64 `protobuf:"varint,4,opt,name=total_pages,json=totalPages,proto3" json:"total_pages,omitempty"`
-	// Next page if available in the dataset, -1 if unavailable
+	// Next page if available in the dataset, -1 if unavailable.
 	NextPage int64 `protobuf:"varint,5,opt,name=next_page,json=nextPage,proto3" json:"next_page,omitempty"`
-	// Previous page if available in the dataset, -1 if unavailable
+	// Previous page if available in the dataset, -1 if unavailable.
 	PrevPage int64 `protobuf:"varint,6,opt,name=prev_page,json=prevPage,proto3" json:"prev_page,omitempty"`
 }
 

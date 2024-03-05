@@ -172,6 +172,7 @@ Request to list the backup locations for a tenant or a project
 | label_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Provides the key in labels and associated values for which backup locations need to be listed |
 | field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter backup locations based on the fields in the backup locations's proto message |
 | infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter backup location based on the infra resources associated with the backup location Supported infra resource filters: PROJECT To filter by credentials, use field_selector filter |
+| resp_data | [ public.portworx.common.v1.RespData](#publicportworxcommonv1respdata) | Response data flags for listing backup locations |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of backup locations to be sorted. |
  <!-- end Fields -->
  <!-- end HasFields -->

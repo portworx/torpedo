@@ -28,9 +28,9 @@ option java_multiple_files = true;
 option java_package = "com.public.portworx.pds.deploymentconfigupdate.v1";
 option java_outer_classname = "DeploymentConfigUpdateProto";
 
-// DeploymentConfigUpdateService provides APIs to interact with the data service deployment config update
+// DeploymentConfigUpdateService provides APIs to interact with the data service deployment config update.
 service DeploymentConfigUpdateService {
-  // CreateDeploymentConfigUpdate API creates a deployment config update
+  // CreateDeploymentConfigUpdate API creates a deployment config update.
   // (-- api-linter: core::0133::http-method=disabled
   //     aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)
   rpc CreateDeploymentConfigUpdate(CreateDeploymentConfigUpdateRequest)
@@ -41,7 +41,7 @@ service DeploymentConfigUpdateService {
     };
   }
 
-  // GetDeploymentConfigUpdate API returns a deployment config update by id
+  // GetDeploymentConfigUpdate API returns a deployment config update by id.
   rpc GetDeploymentConfigUpdate(GetDeploymentConfigUpdateRequest) 
     returns (DeploymentConfigUpdate) {
     option (google.api.http) = {
@@ -49,7 +49,7 @@ service DeploymentConfigUpdateService {
     };
   }
 
-  // ListDeploymentConfigUpdates API returns a list of deployment config updates
+  // ListDeploymentConfigUpdates API returns a list of deployment config updates.
   rpc ListDeploymentConfigUpdates(ListDeploymentConfigUpdatesRequest) 
     returns (ListDeploymentConfigUpdatesResponse) {
     option (google.api.http) = {
@@ -57,7 +57,7 @@ service DeploymentConfigUpdateService {
     };
   }
 
-  // RetryDeploymentConfigUpdate API retries a deployment config update
+  // RetryDeploymentConfigUpdate API retries a deployment config update.
   rpc RetryDeploymentConfigUpdate(RetryDeploymentConfigUpdateRequest) 
     returns (DeploymentConfigUpdate) {
     option (google.api.http) = {
@@ -67,21 +67,21 @@ service DeploymentConfigUpdateService {
   }
 }
 
-// CreateDeploymentConfigUpdateRequest is the request for CreateDeploymentConfigUpdate
+// CreateDeploymentConfigUpdateRequest is the request for CreateDeploymentConfigUpdate.
 message CreateDeploymentConfigUpdateRequest {
-  // Config of the deployment for which config update is requested
+  // Config of the deployment for which config update is requested.
   DeploymentConfigUpdate deployment_config_update = 1;
 }
 
-// GetDeploymentConfigUpdateRequest is the request for GetDeploymentConfigUpdate
+// GetDeploymentConfigUpdateRequest is the request for GetDeploymentConfigUpdate.
 message GetDeploymentConfigUpdateRequest {
-  // UID of the deployment config update
+  // UID of the deployment config update.
   string id = 1;
 }
 
-// ListDeploymentConfigUpdatesRequest is the request for ListDeploymentConfigUpdates
+// ListDeploymentConfigUpdatesRequest is the request for ListDeploymentConfigUpdates.
 message ListDeploymentConfigUpdatesRequest {
-  // UID of the deployment
+  // UID of the deployment.
   string deployment_id = 1 [(google.api.field_behavior) = OPTIONAL];
   // Sorting details using which requested list to be sorted.
   public.portworx.common.v1.Sort sort = 2;
@@ -89,9 +89,9 @@ message ListDeploymentConfigUpdatesRequest {
   public.portworx.common.v1.PageBasedPaginationRequest pagination = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
-// ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates
+// ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates.
 message ListDeploymentConfigUpdatesResponse {
-  // List of deployment config updates
+  // List of deployment config updates.
   repeated DeploymentConfigUpdate deployment_config_updates = 1;
   // Pagination metadata for this response.
   // (-- api-linter: core::0132::response-unknown-fields=disabled
@@ -99,37 +99,37 @@ message ListDeploymentConfigUpdatesResponse {
   public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
 }
 
-// RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate
+// RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate.
 message RetryDeploymentConfigUpdateRequest {
-  // UID of the deployment config update
+  // UID of the deployment config update.
   string id = 1;
 }
 
-// DeploymentConfigUpdate represents a deployment config update resource
+// DeploymentConfigUpdate represents a deployment config update resource.
 message DeploymentConfigUpdate {
-  // Metadata of the deployment config update request
+  // Metadata of the deployment config update request.
   portworx.common.v1.Meta meta = 1;
-  // Config of the deployment for which config update is requested
+  // Config of the deployment for which config update is requested.
   Config config = 2;
-  // Status of the deployment config update
+  // Status of the deployment config update.
   Status status = 3;
 }
 
-// Config of the desired deployment configuration
+// Config of the desired deployment configuration.
 message Config {
-  // Metadata of the deployment resource
+  // Metadata of the deployment resource.
   portworx.common.v1.Meta deployment_meta = 1;
-  // Deployment config represents desired Deployment Configuration
+  // Deployment config represents desired Deployment Configuration.
   public.portworx.pds.deployment.v1.Config deployment_config = 2;
 }
 
-// Status of the deployment config update
+// Status of the deployment config update.
 message Status {
   // Error Code is a short string that represents the error.
   string error_code = 1;
   // Error Message is a description of the error.
   string error_message = 2;
-  // Number of times the deployment config update has been retried
+  // Number of times the deployment config update has been retried.
   int32 retry_count = 3;
 
   // Enum for Phase of the Deployment config update.
@@ -140,13 +140,15 @@ message Status {
     FAILED = 1;
     // Deployment config update is queued.
     QUEUED = 2;
+    // Deployment config update is in progress.
+    IN_PROGRESS = 3;
     // Deployment config update is completed.
-    COMPLETED = 3;
+    COMPLETED = 4;
     // Deployment config update is requeued.
-    REQUEUED  = 4;
+    REQUEUED  = 5;
   }
 
-  // Phase of the deployment config update
+  // Phase of the deployment config update.
   Phase phase = 4;
 }
 

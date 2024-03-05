@@ -45,13 +45,20 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TargetClusterServiceClient interface {
+	// (-- api-linter: core::0132::http-body=disabled
+	//
+	//	api-linter: core::0132::http-method=disabled
+	//	aip.dev/not-precedent: We need to do this because
+	//
+	// we can't have advance filters as query params.
+	// --)
 	// ListTargetCluster API lists the TargetClusters visible to the caller
 	ListTargetClusters(ctx context.Context, in *ListTargetClustersRequest, opts ...grpc.CallOption) (*ListTargetClustersResponse, error)
 	// GetTargetCluster API returns the info about the TargetCluster for given name
 	GetTargetCluster(ctx context.Context, in *GetTargetClusterRequest, opts ...grpc.CallOption) (*TargetCluster, error)
 	// DeleteTargetCluster API deletes the specified TargetCluster
 	DeleteTargetCluster(ctx context.Context, in *DeleteTargetClusterRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	// UpdateTargetCluster API updates the metadata(e.g name or labels) of the specified TargetCluster
+	// UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster
 	UpdateTargetCluster(ctx context.Context, in *UpdateTargetClusterRequest, opts ...grpc.CallOption) (*TargetCluster, error)
 }
 
@@ -103,13 +110,20 @@ func (c *targetClusterServiceClient) UpdateTargetCluster(ctx context.Context, in
 // All implementations must embed UnimplementedTargetClusterServiceServer
 // for forward compatibility
 type TargetClusterServiceServer interface {
+	// (-- api-linter: core::0132::http-body=disabled
+	//
+	//	api-linter: core::0132::http-method=disabled
+	//	aip.dev/not-precedent: We need to do this because
+	//
+	// we can't have advance filters as query params.
+	// --)
 	// ListTargetCluster API lists the TargetClusters visible to the caller
 	ListTargetClusters(context.Context, *ListTargetClustersRequest) (*ListTargetClustersResponse, error)
 	// GetTargetCluster API returns the info about the TargetCluster for given name
 	GetTargetCluster(context.Context, *GetTargetClusterRequest) (*TargetCluster, error)
 	// DeleteTargetCluster API deletes the specified TargetCluster
 	DeleteTargetCluster(context.Context, *DeleteTargetClusterRequest) (*emptypb.Empty, error)
-	// UpdateTargetCluster API updates the metadata(e.g name or labels) of the specified TargetCluster
+	// UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster
 	UpdateTargetCluster(context.Context, *UpdateTargetClusterRequest) (*TargetCluster, error)
 	mustEmbedUnimplementedTargetClusterServiceServer()
 }

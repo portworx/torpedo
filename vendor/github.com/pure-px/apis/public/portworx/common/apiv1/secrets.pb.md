@@ -24,8 +24,7 @@
 
 
 ### SecretConfig {#secretconfig}
-SecretConfig comprises of credentials which gives permission for Portworx
-deployment to invoke platform/cloud APIs.
+SecretConfig comprises of credentials which gives permission for Portworx deployment to invoke platform/cloud APIs.
 
 
 | Field | Type | Description |
@@ -36,14 +35,14 @@ deployment to invoke platform/cloud APIs.
 
 
 ### SecretConfig.AWSSecrets {#secretconfigawssecrets}
-AWSSecrets defines the credentials required for invoking AWS APIs
+AWSSecrets defines the credentials required for invoking AWS APIs.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| aws_access_key_id | [ string](#string) | AWS_ACCESS_KEY |
-| aws_secret_access_key | [ string](#string) | AWS_SECRET_KEY |
-| aws_region | [ string](#string) | AWS_REGION |
+| aws_access_key_id | [ string](#string) | AWS_ACCESS_KEY. |
+| aws_secret_access_key | [ string](#string) | AWS_SECRET_KEY. |
+| aws_region | [ string](#string) | AWS_REGION. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->

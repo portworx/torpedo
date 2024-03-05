@@ -35,8 +35,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// SecretConfig comprises of credentials which gives permission for Portworx
-// deployment to invoke platform/cloud APIs.
+// SecretConfig comprises of credentials which gives permission for Portworx deployment to invoke platform/cloud APIs.
 type SecretConfig struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -85,17 +84,17 @@ func (x *SecretConfig) GetAwsSecrets() *SecretConfig_AWSSecrets {
 	return nil
 }
 
-// AWSSecrets defines the credentials required for invoking AWS APIs
+// AWSSecrets defines the credentials required for invoking AWS APIs.
 type SecretConfig_AWSSecrets struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// AWS_ACCESS_KEY
+	// AWS_ACCESS_KEY.
 	AwsAccessKeyId string `protobuf:"bytes,1,opt,name=aws_access_key_id,json=awsAccessKeyId,proto3" json:"aws_access_key_id,omitempty"`
-	// AWS_SECRET_KEY
+	// AWS_SECRET_KEY.
 	AwsSecretAccessKey string `protobuf:"bytes,2,opt,name=aws_secret_access_key,json=awsSecretAccessKey,proto3" json:"aws_secret_access_key,omitempty"`
-	// AWS_REGION
+	// AWS_REGION.
 	AwsRegion string `protobuf:"bytes,3,opt,name=aws_region,json=awsRegion,proto3" json:"aws_region,omitempty"`
 }
 

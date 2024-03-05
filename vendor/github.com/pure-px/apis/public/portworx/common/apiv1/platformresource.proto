@@ -12,7 +12,6 @@
 //        "files.trimTrailingWhitespace": true
 //    }
 //
-
 syntax = "proto3";
 
 package public.portworx.common.v1;
@@ -47,6 +46,8 @@ message InfraResource {
     BACKUP_LOCATION = 7;
     // Infra resource of type backup policy.
     BACKUP_POLICY = 8;
+    // Infra resource of type template.
+    TEMPLATE = 9;
   }
 }
 
@@ -60,7 +61,7 @@ message ApplicationResource {
     // PDS application resource of type deployment.
     PDS_DEPLOYMENT = 1;
     // PDS application resource of type backup.
-    PDS_BACKUP = 2;
+    PDS_BACKUPCONFIG = 2;
     // PDS application resource of type restore.
     PDS_RESTORE = 3;
     // List of supported BAAS application resources.

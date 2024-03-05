@@ -57,7 +57,7 @@ type DeploymentServiceClient interface {
 	DeleteDeployment(ctx context.Context, in *DeleteDeploymentRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// ListDeployments API lists the Deployment resources.
 	ListDeployments(ctx context.Context, in *ListDeploymentsRequest, opts ...grpc.CallOption) (*ListDeploymentsResponse, error)
-	// GetDeploymentCredentials API returns the Credentials to be used to access the Deployment .
+	// GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.
 	GetDeploymentCredentials(ctx context.Context, in *GetDeploymentCredentialsRequest, opts ...grpc.CallOption) (*DeploymentCredentials, error)
 }
 
@@ -137,7 +137,7 @@ type DeploymentServiceServer interface {
 	DeleteDeployment(context.Context, *DeleteDeploymentRequest) (*emptypb.Empty, error)
 	// ListDeployments API lists the Deployment resources.
 	ListDeployments(context.Context, *ListDeploymentsRequest) (*ListDeploymentsResponse, error)
-	// GetDeploymentCredentials API returns the Credentials to be used to access the Deployment .
+	// GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.
 	GetDeploymentCredentials(context.Context, *GetDeploymentCredentialsRequest) (*DeploymentCredentials, error)
 	mustEmbedUnimplementedDeploymentServiceServer()
 }

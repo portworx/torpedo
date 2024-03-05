@@ -44,40 +44,40 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 	}
 }
 
-// GetAccountList returns the list of accounts
-func (AccountV1 *PlatformGrpc) GetAccountList() ([]WorkFlowResponse, error) {
-	accountsResponse := []WorkFlowResponse{}
-
-	ctx, client, _, err := AccountV1.getAccountClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-	}
-
-	firstPageRequest := &publicaccountapis.ListAccountsRequest{
-		Pagination: NewPaginationRequest(1, 50),
-	}
-
-	apiResponse, err := client.ListAccounts(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
-	if err != nil {
-		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.", err)
-	}
-
-	for _, acc := range apiResponse.Accounts {
-		log.Infof("accounts - [%v]", acc.Meta.Name)
-	}
-
-	err = copier.Copy(&accountsResponse, apiResponse.Accounts)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Infof("Value of accounts after copy - [%v]", accountsResponse)
-	for _, acc := range accountsResponse {
-		log.Infof("accounts - [%v]", acc.Meta.Name)
-	}
-
-	return accountsResponse, nil
-}
+//// GetAccountList returns the list of accounts
+//func (AccountV1 *PlatformGrpc) GetAccountList() ([]WorkFlowResponse, error) {
+//	accountsResponse := []WorkFlowResponse{}
+//
+//	ctx, client, _, err := AccountV1.getAccountClient()
+//	if err != nil {
+//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+//	}
+//
+//	firstPageRequest := &publicaccountapis.ListAccountsRequest{
+//		Pagination: NewPaginationRequest(1, 50),
+//	}
+//
+//	apiResponse, err := client.ListAccounts(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
+//	if err != nil {
+//		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.", err)
+//	}
+//
+//	for _, acc := range apiResponse.Accounts {
+//		log.Infof("accounts - [%v]", acc.Meta.Name)
+//	}
+//
+//	err = copier.Copy(&accountsResponse, apiResponse.Accounts)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	log.Infof("Value of accounts after copy - [%v]", accountsResponse)
+//	for _, acc := range accountsResponse {
+//		log.Infof("accounts - [%v]", acc.Meta.Name)
+//	}
+//
+//	return accountsResponse, nil
+//}
 
 func (AccountV1 *PlatformGrpc) GetAccount(accountID string) (*WorkFlowResponse, error) {
 	accountsResponse := WorkFlowResponse{}

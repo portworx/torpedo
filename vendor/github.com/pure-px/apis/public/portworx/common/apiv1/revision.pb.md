@@ -8,11 +8,12 @@
 
 
 - Messages
-    - [Meta](#meta)
-    - [Meta.AnnotationsEntry](#metaannotationsentry)
-    - [Meta.LabelsEntry](#metalabelsentry)
-    - [Meta.ResourceNamesEntry](#metaresourcenamesentry)
-    - [Reference](#reference)
+    - [GetRevisionRequest](#getrevisionrequest)
+    - [GetRevisionRequest.NameSemanticVersion](#getrevisionrequestnamesemanticversion)
+    - [ListRevisionsRequest](#listrevisionsrequest)
+    - [ListRevisionsResponse](#listrevisionsresponse)
+    - [Revision](#revision)
+    - [RevisionInfo](#revisioninfo)
   
 
 
@@ -26,71 +27,76 @@
 ## Messages
 
 
-### Meta {#meta}
-Meta holds general resource metadata.
+### GetRevisionRequest {#getrevisionrequest}
+GetRevisionRequest is the request body to get a revision.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| uid | [ string](#string) | UID of the resource of the format <resource prefix>-<uuid>. |
-| name | [ string](#string) | Name of the resource. |
-| description | [ string](#string) | Description of the resource. |
-| resource_version | [ string](#string) | A string that identifies the version of this object that can be used by clients to determine when objects have changed. This value must be passed unmodified back to the server by the client. |
-| create_time | [ google.protobuf.Timestamp](#googleprotobuftimestamp) | Creation time of the object. |
-| update_time | [ google.protobuf.Timestamp](#googleprotobuftimestamp) | Update time of the object. |
-| labels | [map Meta.LabelsEntry](#metalabelsentry) | Labels to apply to the object. |
-| annotations | [map Meta.AnnotationsEntry](#metaannotationsentry) | Annotations for the object. |
-| parent_reference | [ Reference](#reference) | Reference to parent object of this resource. |
-| resource_names | [map Meta.ResourceNamesEntry](#metaresourcenamesentry) | Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) get_by.uid | [ string](#string) | UID of the revision. (-- api-linter: core::0148::uid-format=disabled aip.dev/not-precedent: We need to do this because of prefix. --) |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) get_by.name_semantic_version | [ GetRevisionRequest.NameSemanticVersion](#getrevisionrequestnamesemanticversion) | Name and semantic version of the revision. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Meta.AnnotationsEntry {#metaannotationsentry}
-
+### GetRevisionRequest.NameSemanticVersion {#getrevisionrequestnamesemanticversion}
+Name and semantic version of the revision.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| key | [ string](#string) | none |
-| value | [ string](#string) | none |
+| name | [ string](#string) | Name(kind) of the revision. |
+| semantic_version | [ string](#string) | Version of the revision. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Meta.LabelsEntry {#metalabelsentry}
-
+### ListRevisionsRequest {#listrevisionsrequest}
+Request parameters for listing revisions.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| key | [ string](#string) | none |
-| value | [ string](#string) | none |
+| field_selector | [ Selector](#selector) | Filtering list of revisions based on the provided column filters. |
+| sort | [ Sort](#sort) | Sort parameters for listing revisions. |
+| pagination | [ PageBasedPaginationRequest](#pagebasedpaginationrequest) | Pagination parameters for listing revisions. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Meta.ResourceNamesEntry {#metaresourcenamesentry}
-
+### ListRevisionsResponse {#listrevisionsresponse}
+Revisions listing response.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| key | [ string](#string) | none |
-| value | [ string](#string) | none |
+| revisions | [repeated Revision](#revision) | Revisions is the list of revisions. |
+| pagination | [ PageBasedPaginationResponse](#pagebasedpaginationresponse) | Pagination metadata for this response. (-- api-linter: core::0132::response-unknown-fields=disabled aip.dev/not-precedent: We need this field for pagination. --) |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
-### Reference {#reference}
-Reference identifies the resource type, version of the uid and the resource.
+### Revision {#revision}
+Revision holds the template schema along with version details.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| type | [ string](#string) | API group of the resource. |
-| version | [ string](#string) | Version of the API. |
-| uid | [ string](#string) | UID of the resource. |
+| meta | [ Meta](#meta) | Metadata of the revision. |
+| info | [ RevisionInfo](#revisioninfo) | Info of the revision. |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### RevisionInfo {#revisioninfo}
+RevisionInfo contains info.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| semantic_version | [ string](#string) | Semantic version of the revision: 1.2 (major.minor - patch version not required). |
+| deprecated | [ bool](#bool) | Whether this revision has been deprecated. |
+| schema | [ google.protobuf.Struct](#googleprotobufstruct) | Schema of the revision, if schema is backward compatible, update the revision, else upgrade. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->

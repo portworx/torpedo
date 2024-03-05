@@ -10,7 +10,7 @@
         }
     ],
     "paths": {
-        "/v1/clusters/{clusterId}/namespaces": {
+        "/v1/namespaces": {
             "get": {
                 "summary": "ListNamespaces API will return all the namespaces on the control plane",
                 "operationId": "NamespaceService_ListNamespaces",
@@ -38,17 +38,17 @@
                 },
                 "parameters": [
                     {
-                        "name": "clusterId",
-                        "description": "cluster ID for which namespaces need to be fetched",
-                        "in": "path",
-                        "required": true,
+                        "name": "tenantId",
+                        "description": "tenant ID for which namespace need to be fetched",
+                        "in": "query",
+                        "required": false,
                         "schema": {
                             "type": "string"
                         }
                     },
                     {
-                        "name": "tenantId",
-                        "description": "tenant ID for which namespace need to be fetched",
+                        "name": "clusterId",
+                        "description": "cluster ID for which namespaces need to be fetched",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -107,7 +107,7 @@
                     },
                     {
                         "name": "pagination.pageNumber",
-                        "description": "Page number is the page number to return based on the size",
+                        "description": "Page number is the page number to return based on the size.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -117,7 +117,7 @@
                     },
                     {
                         "name": "pagination.pageSize",
-                        "description": "Page size is the maximum number of records to include per page",
+                        "description": "Page size is the maximum number of records to include per page.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -228,7 +228,7 @@
                     },
                     "resourceVersion": {
                         "type": "string",
-                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
                     },
                     "createTime": {
                         "type": "string",
@@ -297,15 +297,15 @@
                     "pageNumber": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page number is the page number to return based on the size"
+                        "description": "Page number is the page number to return based on the size."
                     },
                     "pageSize": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page size is the maximum number of records to include per page"
+                        "description": "Page size is the maximum number of records to include per page."
                     }
                 },
-                "title": "Request parameters for page-based pagination"
+                "description": "Request parameters for page-based pagination."
             },
             "v1PageBasedPaginationResponse": {
                 "type": "object",
@@ -313,35 +313,35 @@
                     "totalRecords": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Total records without pagination available in the dataset"
+                        "description": "Total records without pagination available in the dataset."
                     },
                     "currentPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Current page number for this paginated response"
+                        "description": "Current page number for this paginated response."
                     },
                     "pageSize": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page size used for pagination"
+                        "description": "Page size used for pagination."
                     },
                     "totalPages": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Total pages based on the page_size provided in the request"
+                        "description": "Total pages based on the page_size provided in the request."
                     },
                     "nextPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Next page if available in the dataset, -1 if unavailable"
+                        "description": "Next page if available in the dataset, -1 if unavailable."
                     },
                     "prevPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
                     }
                 },
-                "title": "Metadata related to page based pagination for paginated API responses"
+                "description": "Metadata related to page based pagination for paginated API responses."
             },
             "v1Reference": {
                 "type": "object",
@@ -359,7 +359,7 @@
                         "description": "UID of the resource."
                     }
                 },
-                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+                "description": "Reference identifies the resource type, version of the uid and the resource."
             },
             "v1Sort": {
                 "type": "object",

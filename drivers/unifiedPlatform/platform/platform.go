@@ -16,7 +16,7 @@ type Platform interface {
 }
 
 type AccountInterface interface {
-	GetAccountList() ([]WorkFlowResponse, error)
+	//GetAccountList() ([]WorkFlowResponse, error)
 	GetAccount(string) (*WorkFlowResponse, error)
 	CreateAccount(string, string, string) (WorkFlowResponse, error)
 	DeleteAccount(string) error

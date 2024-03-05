@@ -12,7 +12,7 @@
     "paths": {
         "/pds/v1/deploymentConfigUpdates": {
             "get": {
-                "summary": "ListDeploymentConfigUpdates API returns a list of deployment config updates",
+                "summary": "ListDeploymentConfigUpdates API returns a list of deployment config updates.",
                 "operationId": "DeploymentConfigUpdateService_ListDeploymentConfigUpdates",
                 "responses": {
                     "200": {
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "deploymentId",
-                        "description": "UID of the deployment",
+                        "description": "UID of the deployment.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -80,7 +80,7 @@
                     },
                     {
                         "name": "pagination.pageNumber",
-                        "description": "Page number is the page number to return based on the size",
+                        "description": "Page number is the page number to return based on the size.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -90,7 +90,7 @@
                     },
                     {
                         "name": "pagination.pageSize",
-                        "description": "Page size is the maximum number of records to include per page",
+                        "description": "Page size is the maximum number of records to include per page.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -106,7 +106,7 @@
         },
         "/pds/v1/deploymentConfigUpdates/{id}": {
             "get": {
-                "summary": "GetDeploymentConfigUpdate API returns a deployment config update by id",
+                "summary": "GetDeploymentConfigUpdate API returns a deployment config update by id.",
                 "operationId": "DeploymentConfigUpdateService_GetDeploymentConfigUpdate",
                 "responses": {
                     "200": {
@@ -133,7 +133,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "UID of the deployment config update",
+                        "description": "UID of the deployment config update.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -148,7 +148,7 @@
         },
         "/pds/v1/deploymentConfigUpdates/{id}:retry": {
             "post": {
-                "summary": "RetryDeploymentConfigUpdate API retries a deployment config update",
+                "summary": "RetryDeploymentConfigUpdate API retries a deployment config update.",
                 "operationId": "DeploymentConfigUpdateService_RetryDeploymentConfigUpdate",
                 "responses": {
                     "200": {
@@ -175,7 +175,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "UID of the deployment config update",
+                        "description": "UID of the deployment config update.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -200,7 +200,7 @@
         },
         "/pds/v1/deployments/{deploymentConfigUpdate.config.deploymentMeta.uid}/deploymentConfigUpdates": {
             "put": {
-                "summary": "CreateDeploymentConfigUpdate API creates a deployment config update\n(-- api-linter: core::0133::http-method=disabled\n    aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)",
+                "summary": "CreateDeploymentConfigUpdate API creates a deployment config update.\n(-- api-linter: core::0133::http-method=disabled\n    aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)",
                 "operationId": "DeploymentConfigUpdateService_CreateDeploymentConfigUpdate",
                 "responses": {
                     "200": {
@@ -260,7 +260,7 @@
                                                     },
                                                     "resourceVersion": {
                                                         "type": "string",
-                                                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                                                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
                                                     },
                                                     "createTime": {
                                                         "type": "string",
@@ -300,23 +300,25 @@
                                                         "readOnly": true
                                                     }
                                                 },
-                                                "title": "Metadata of the deployment resource"
+                                                "description": "Metadata of the deployment resource.",
+                                                "title": "Metadata of the deployment resource."
                                             },
                                             "deploymentConfig": {
                                                 "$ref": "#/components/schemas/pdsdeploymentv1Config"
                                             }
                                         },
-                                        "title": "Config of the deployment for which config update is requested"
+                                        "description": "Config of the deployment for which config update is requested.",
+                                        "title": "Config of the deployment for which config update is requested."
                                     },
                                     "status": {
                                         "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1Status"
                                     }
                                 },
-                                "title": "Config of the deployment for which config update is requested"
+                                "title": "Config of the deployment for which config update is requested."
                             }
                         }
                     },
-                    "description": "Config of the deployment for which config update is requested",
+                    "description": "Config of the deployment for which config update is requested.",
                     "required": true
                 },
                 "tags": [
@@ -329,7 +331,7 @@
         "schemas": {
             "DeploymentConfigUpdateServiceRetryDeploymentConfigUpdateBody": {
                 "type": "object",
-                "title": "RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate"
+                "description": "RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate."
             },
             "SortByField": {
                 "type": "string",
@@ -381,7 +383,7 @@
                         "$ref": "#/components/schemas/pdsdeploymentv1Config"
                     }
                 },
-                "title": "Config of the desired deployment configuration"
+                "description": "Config of the desired deployment configuration."
             },
             "pdsdeploymentconfigupdatev1Status": {
                 "type": "object",
@@ -397,13 +399,13 @@
                     "retryCount": {
                         "type": "integer",
                         "format": "int32",
-                        "title": "Number of times the deployment config update has been retried"
+                        "description": "Number of times the deployment config update has been retried."
                     },
                     "phase": {
                         "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1StatusPhase"
                     }
                 },
-                "title": "Status of the deployment config update"
+                "description": "Status of the deployment config update."
             },
             "pdsdeploymentconfigupdatev1StatusPhase": {
                 "type": "string",
@@ -411,11 +413,12 @@
                     "PHASE_UNSPECIFIED",
                     "FAILED",
                     "QUEUED",
+                    "IN_PROGRESS",
                     "COMPLETED",
                     "REQUEUED"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for Phase of the Deployment config update.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - FAILED: Deployment config update failed.\n - QUEUED: Deployment config update is queued.\n - COMPLETED: Deployment config update is completed.\n - REQUEUED: Deployment config update is requeued."
+                "description": "Enum for Phase of the Deployment config update.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - FAILED: Deployment config update failed.\n - QUEUED: Deployment config update is queued.\n - IN_PROGRESS: Deployment config update is in progress.\n - COMPLETED: Deployment config update is completed.\n - REQUEUED: Deployment config update is requeued."
             },
             "pdsdeploymentv1Config": {
                 "type": "object",
@@ -461,7 +464,7 @@
                         "$ref": "#/components/schemas/pdsdeploymentconfigupdatev1Status"
                     }
                 },
-                "title": "DeploymentConfigUpdate represents a deployment config update resource"
+                "description": "DeploymentConfigUpdate represents a deployment config update resource."
             },
             "v1DeploymentTopology": {
                 "type": "object",
@@ -514,13 +517,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1DeploymentConfigUpdate"
                         },
-                        "title": "List of deployment config updates"
+                        "description": "List of deployment config updates."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates"
+                "description": "ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates."
             },
             "v1Meta": {
                 "type": "object",
@@ -539,7 +542,7 @@
                     },
                     "resourceVersion": {
                         "type": "string",
-                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
                     },
                     "createTime": {
                         "type": "string",
@@ -587,15 +590,15 @@
                     "pageNumber": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page number is the page number to return based on the size"
+                        "description": "Page number is the page number to return based on the size."
                     },
                     "pageSize": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page size is the maximum number of records to include per page"
+                        "description": "Page size is the maximum number of records to include per page."
                     }
                 },
-                "title": "Request parameters for page-based pagination"
+                "description": "Request parameters for page-based pagination."
             },
             "v1PageBasedPaginationResponse": {
                 "type": "object",
@@ -603,35 +606,35 @@
                     "totalRecords": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Total records without pagination available in the dataset"
+                        "description": "Total records without pagination available in the dataset."
                     },
                     "currentPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Current page number for this paginated response"
+                        "description": "Current page number for this paginated response."
                     },
                     "pageSize": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page size used for pagination"
+                        "description": "Page size used for pagination."
                     },
                     "totalPages": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Total pages based on the page_size provided in the request"
+                        "description": "Total pages based on the page_size provided in the request."
                     },
                     "nextPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Next page if available in the dataset, -1 if unavailable"
+                        "description": "Next page if available in the dataset, -1 if unavailable."
                     },
                     "prevPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
                     }
                 },
-                "title": "Metadata related to page based pagination for paginated API responses"
+                "description": "Metadata related to page based pagination for paginated API responses."
             },
             "v1Reference": {
                 "type": "object",
@@ -649,14 +652,15 @@
                         "description": "UID of the resource."
                     }
                 },
-                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+                "description": "Reference identifies the resource type, version of the uid and the resource."
             },
             "v1References": {
                 "type": "object",
                 "properties": {
                     "targetClusterId": {
                         "type": "string",
-                        "description": "UID of the target cluster in which Data Service will be deployed."
+                        "description": "UID of the target cluster in which Data Service will be deployed.",
+                        "readOnly": true
                     },
                     "imageId": {
                         "type": "string",
@@ -664,7 +668,8 @@
                     },
                     "projectId": {
                         "type": "string",
-                        "description": "UID of the project to which DataService Deployment associated."
+                        "description": "UID of the project to which DataService Deployment associated.",
+                        "readOnly": true
                     },
                     "restoreId": {
                         "type": "string",

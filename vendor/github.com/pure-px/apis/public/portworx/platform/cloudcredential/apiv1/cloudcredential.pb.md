@@ -36,26 +36,26 @@
 
 
 ## CloudCredentialService {#servicepublicportworxplatformcloudcredentialv1cloudcredentialservice}
-CloudCredentialService serves and manages cloud credentials
+CloudCredentialService serves and manages cloud credentials.
 
 ### GetCloudCredential {#methodpublicportworxplatformcloudcredentialv1cloudcredentialservicegetcloudcredential}
 
 > **rpc** GetCloudCredential([GetCloudCredentialRequest](#getcloudcredentialrequest))
     [CloudCredential](#cloudcredential)
 
-Get API returns the cloud credential details sans the actual credentials
+Get API returns the cloud credential details sans the actual credentials.
 ### CreateCloudCredential {#methodpublicportworxplatformcloudcredentialv1cloudcredentialservicecreatecloudcredential}
 
 > **rpc** CreateCloudCredential([CreateCloudCredentialRequest](#createcloudcredentialrequest))
     [CloudCredential](#cloudcredential)
 
-Create API creates a set of cloud credentials for a tenant
+Create API creates a set of cloud credentials for a tenant.
 ### UpdateCloudCredential {#methodpublicportworxplatformcloudcredentialv1cloudcredentialserviceupdatecloudcredential}
 
 > **rpc** UpdateCloudCredential([UpdateCloudCredentialRequest](#updatecloudcredentialrequest))
     [CloudCredential](#cloudcredential)
 
-Update API updates a cloud credential
+Update API updates a cloud credential.
 ### ListCloudCredentials {#methodpublicportworxplatformcloudcredentialv1cloudcredentialservicelistcloudcredentials}
 
 > **rpc** ListCloudCredentials([ListCloudCredentialsRequest](#listcloudcredentialsrequest))
@@ -64,13 +64,13 @@ Update API updates a cloud credential
 (-- api-linter: core::0132::http-body=disabled
     api-linter: core::0132::http-method=disabled
     aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
-List API lists all the cloud credentials for a tenant
+List API lists all the cloud credentials for a tenant.
 ### DeleteCloudCredential {#methodpublicportworxplatformcloudcredentialv1cloudcredentialservicedeletecloudcredential}
 
 > **rpc** DeleteCloudCredential([DeleteCloudCredentialRequest](#deletecloudcredentialrequest))
     [.google.protobuf.Empty](#googleprotobufempty)
 
-Delete API deletes the cloud credentials
+Delete API deletes the cloud credentials.
  <!-- end methods -->
  <!-- end services -->
 
@@ -78,24 +78,24 @@ Delete API deletes the cloud credentials
 
 
 ### AzureCredentials {#azurecredentials}
-Azure Credentials
+Azure Credentials.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| storage_account_name | [ string](#string) | Name of account |
-| storage_account_key | [ string](#string) | Key used to connect |
+| storage_account_name | [ string](#string) | Name of account. |
+| storage_account_key | [ string](#string) | Key used to connect. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### CloudCredential {#cloudcredential}
-Resource representing a Cloud Credential
+Resource representing a Cloud Credential.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the resource |
+| meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the resource. |
 | config | [ Config](#config) | Desired configuration of the Cloud Credential. |
  <!-- end Fields -->
  <!-- end HasFields -->
@@ -107,120 +107,121 @@ Desired configuration of the Cloud Credential.
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| provider | [ Provider](#provider) | Type of cloud credential |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.azure_credentials | [ AzureCredentials](#azurecredentials) | Azure Credentials |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.google_credentials | [ GoogleCredentials](#googlecredentials) | Google Credentials |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.s3_credentials | [ S3Credentials](#s3credentials) | S3 or S3 compatible credentials |
-| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.unstructured_credentials | [ UnstructuredCredentials](#unstructuredcredentials) | Untructured credentials |
+| provider | [ Provider](#provider) | Type of cloud credential. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.azure_credentials | [ AzureCredentials](#azurecredentials) | Azure Credentials. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.google_credentials | [ GoogleCredentials](#googlecredentials) | Google Credentials. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.s3_credentials | [ S3Credentials](#s3credentials) | S3 or S3 compatible credentials. |
+| [**oneof**](https://developers.google.com/protocol-buffers/docs/proto3#oneof) Credentials.unstructured_credentials | [ UnstructuredCredentials](#unstructuredcredentials) | Untructured credentials. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### CreateCloudCredentialRequest {#createcloudcredentialrequest}
-Request to create a cloud credential
+Request to create a cloud credential.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| tenant_id | [ string](#string) | The parent tenant id under which cloud credential will be created (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We need this field for to support creation of the resource in the tenant context. --) |
-| cloud_credential | [ CloudCredential](#cloudcredential) | Cloud credential configuration |
+| tenant_id | [ string](#string) | The parent tenant id under which cloud credential will be created. (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We need this field for to support creation of the resource in the tenant context. --) |
+| cloud_credential | [ CloudCredential](#cloudcredential) | Cloud credential configuration. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### DeleteCloudCredentialRequest {#deletecloudcredentialrequest}
-Request to delete a cloud credential
+Request to delete a cloud credential.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| id | [ string](#string) | ID of the cloud credential |
+| id | [ string](#string) | ID of the cloud credential. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### GetCloudCredentialRequest {#getcloudcredentialrequest}
-Request to get a cloud credential
+Request to get a cloud credential.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| id | [ string](#string) | ID of the cloud credential |
-| include_config | [ bool](#bool) | Specifies option to include configuration details excluding sensitive information |
+| id | [ string](#string) | ID of the cloud credential. |
+| include_config | [ bool](#bool) | Specifies option to include configuration details excluding sensitive information. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### GoogleCredentials {#googlecredentials}
-Google Credentials
+Google Credentials.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| project_id | [ string](#string) | Project ID |
-| json_key | [ string](#string) | JSON Key used to connect |
+| project_id | [ string](#string) | Project ID. |
+| json_key | [ string](#string) | JSON Key used to connect. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### ListCloudCredentialsRequest {#listcloudcredentialsrequest}
-Request to list the cloud credentials for a tenant or a project
+Request to list the cloud credentials for a tenant or a project.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| tenant_id | [ string](#string) | Tenant ID for which the credentials will be listed |
+| tenant_id | [ string](#string) | Tenant ID for which the credentials will be listed. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination metadata for this response. |
-| label_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Provides the key in labels and associated values for which cloud credentials need to be listed |
-| field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter cloud credentials based on the fields in the cloud credential's proto message |
-| infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter cloud credentials based on the infra resources associated with the cloud credentials Supported infra resource filters: PROJECT |
+| label_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Provides the key in labels and associated values for which cloud credentials need to be listed. |
+| field_selector | [ public.portworx.common.v1.Selector](#publicportworxcommonv1selector) | Field selector is used to filter cloud credentials based on the fields in the cloud credential's proto message. |
+| infra_resource_selector | [ public.portworx.common.v1.ResourceSelector](#publicportworxcommonv1resourceselector) | Infra_resource_selector is used to filter cloud credentials based on the infra resources associated with the cloud credentials. Supported infra resource filters: PROJECT. |
+| resp_data | [ public.portworx.common.v1.RespData](#publicportworxcommonv1respdata) | Response data flags for listing cloud credentials. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list of cloud credentials to be sorted. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### ListCloudCredentialsResponse {#listcloudcredentialsresponse}
-Response of list cloud credentials
+Response of list cloud credentials.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| cloud_credentials | [repeated CloudCredential](#cloudcredential) | The list of cloud credentials scoped to a tenant or a project |
+| cloud_credentials | [repeated CloudCredential](#cloudcredential) | The list of cloud credentials scoped to a tenant or a project. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationResponse](#publicportworxcommonv1pagebasedpaginationresponse) | Pagination metadata for this response. (-- api-linter: core::0132::response-unknown-fields=disabled aip.dev/not-precedent: We need this field for pagination. --) |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### Provider {#provider}
-Provider associated with created credentials
+Provider associated with created credentials.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| cloud_provider | [ Provider.Type](#providertype) | Type of cloud credential |
+| cloud_provider | [ Provider.Type](#providertype) | Type of cloud credential. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### S3Credentials {#s3credentials}
-S3 or S3 compatible credentials
+S3 or S3 compatible credentials.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| access_key | [ string](#string) | Access key used to connect |
-| secret_key | [ string](#string) | Secret key used to connect |
+| access_key | [ string](#string) | Access key used to connect. |
+| secret_key | [ string](#string) | Secret key used to connect. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### UnstructuredCredentials {#unstructuredcredentials}
-Unstructured Credentials
+Unstructured Credentials.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| credential_data | [map UnstructuredCredentials.CredentialDataEntry](#unstructuredcredentialscredentialdataentry) | Credentials in key value format |
+| credential_data | [map UnstructuredCredentials.CredentialDataEntry](#unstructuredcredentialscredentialdataentry) | Credentials in key value format. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
@@ -238,14 +239,14 @@ Unstructured Credentials
 
 
 ### UpdateCloudCredentialRequest {#updatecloudcredentialrequest}
-Request to update a cloud credential
+Request to update a cloud credential.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| update_mask | [ google.protobuf.FieldMask](#googleprotobuffieldmask) | Specifies the field that should be updated to the value specified in cloud_credentials |
-| id | [ string](#string) | id of the cloud credential to be updated |
-| cloud_credential | [ CloudCredential](#cloudcredential) | Desired cloud credential configuration |
+| update_mask | [ google.protobuf.FieldMask](#googleprotobuffieldmask) | Specifies the field that should be updated to the value specified in cloud_credentials. |
+| id | [ string](#string) | ID of the cloud credential to be updated. |
+| cloud_credential | [ CloudCredential](#cloudcredential) | Desired cloud credential configuration. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->
@@ -254,15 +255,15 @@ Request to update a cloud credential
 
 
 ### Provider.Type {#providertype}
-Type of provider
+Type of provider.
 
 | Name | Number | Description |
 | ---- | ------ | ----------- |
-| TYPE_UNSPECIFIED | 0 | Type unspecified |
-| AZURE | 1 | Azure Cloud |
-| GOOGLE | 2 | Google Cloud |
-| S3COMPATIBLE | 3 | S3 Compatible |
-| UNSTRUCTURED | 4 | Unstructured credentials |
+| TYPE_UNSPECIFIED | 0 | Type unspecified. |
+| AZURE | 1 | Azure Cloud. |
+| GOOGLE | 2 | Google Cloud. |
+| S3COMPATIBLE | 3 | S3 Compatible. |
+| UNSTRUCTURED | 4 | Unstructured credentials. |
 
 
  <!-- end Enums -->

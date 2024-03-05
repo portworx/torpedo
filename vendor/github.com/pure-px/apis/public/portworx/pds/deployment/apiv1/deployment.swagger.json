@@ -84,7 +84,7 @@
                     },
                     {
                         "name": "pagination.pageNumber",
-                        "description": "Page number is the page number to return based on the size",
+                        "description": "Page number is the page number to return based on the size.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -94,7 +94,7 @@
                     },
                     {
                         "name": "pagination.pageSize",
-                        "description": "Page size is the maximum number of records to include per page",
+                        "description": "Page size is the maximum number of records to include per page.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -196,7 +196,7 @@
                                             },
                                             "resourceVersion": {
                                                 "type": "string",
-                                                "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
                                             },
                                             "createTime": {
                                                 "type": "string",
@@ -343,7 +343,7 @@
         },
         "/pds/v1/deployments/{id}:credentials": {
             "get": {
-                "summary": "GetDeploymentCredentials API returns the Credentials to be used to access the Deployment .",
+                "summary": "GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.",
                 "operationId": "DeploymentService_GetDeploymentCredentials",
                 "responses": {
                     "200": {
@@ -415,6 +415,15 @@
                         "description": "UID of the namespace resource where this deployment will be created.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the namespace context. --)",
                         "in": "path",
                         "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "UID of the project.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to know the project with which the deployment is associated with. --)",
+                        "in": "query",
+                        "required": false,
                         "schema": {
                             "type": "string"
                         }
@@ -604,7 +613,7 @@
                         "$ref": "#/components/schemas/deploymentv1Status"
                     }
                 },
-                "title": "Resource representing a Data Service Deployment"
+                "description": "Resource representing a Data Service Deployment."
             },
             "v1DeploymentCredentials": {
                 "type": "object",
@@ -614,7 +623,7 @@
                         "description": "secret to access the resource."
                     }
                 },
-                "title": "Credentials to access a Data Service Deployment"
+                "description": "Credentials to access a Data Service Deployment."
             },
             "v1DeploymentTopology": {
                 "type": "object",
@@ -738,7 +747,7 @@
                     },
                     "resourceVersion": {
                         "type": "string",
-                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
                     },
                     "createTime": {
                         "type": "string",
@@ -786,15 +795,15 @@
                     "pageNumber": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page number is the page number to return based on the size"
+                        "description": "Page number is the page number to return based on the size."
                     },
                     "pageSize": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page size is the maximum number of records to include per page"
+                        "description": "Page size is the maximum number of records to include per page."
                     }
                 },
-                "title": "Request parameters for page-based pagination"
+                "description": "Request parameters for page-based pagination."
             },
             "v1PageBasedPaginationResponse": {
                 "type": "object",
@@ -802,35 +811,35 @@
                     "totalRecords": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Total records without pagination available in the dataset"
+                        "description": "Total records without pagination available in the dataset."
                     },
                     "currentPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Current page number for this paginated response"
+                        "description": "Current page number for this paginated response."
                     },
                     "pageSize": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Page size used for pagination"
+                        "description": "Page size used for pagination."
                     },
                     "totalPages": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Total pages based on the page_size provided in the request"
+                        "description": "Total pages based on the page_size provided in the request."
                     },
                     "nextPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Next page if available in the dataset, -1 if unavailable"
+                        "description": "Next page if available in the dataset, -1 if unavailable."
                     },
                     "prevPage": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
                     }
                 },
-                "title": "Metadata related to page based pagination for paginated API responses"
+                "description": "Metadata related to page based pagination for paginated API responses."
             },
             "v1PodInfo": {
                 "type": "object",
@@ -866,14 +875,15 @@
                         "description": "UID of the resource."
                     }
                 },
-                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+                "description": "Reference identifies the resource type, version of the uid and the resource."
             },
             "v1References": {
                 "type": "object",
                 "properties": {
                     "targetClusterId": {
                         "type": "string",
-                        "description": "UID of the target cluster in which Data Service will be deployed."
+                        "description": "UID of the target cluster in which Data Service will be deployed.",
+                        "readOnly": true
                     },
                     "imageId": {
                         "type": "string",
@@ -881,7 +891,8 @@
                     },
                     "projectId": {
                         "type": "string",
-                        "description": "UID of the project to which DataService Deployment associated."
+                        "description": "UID of the project to which DataService Deployment associated.",
+                        "readOnly": true
                     },
                     "restoreId": {
                         "type": "string",
@@ -918,16 +929,17 @@
                 "type": "string",
                 "enum": [
                     "PHASE_UNSPECIFIED",
-                    "INITIALIZING",
                     "RESTORING",
                     "FAILED",
                     "DELETING",
                     "PREPARING",
+                    "DEPLOYING",
                     "DEPLOYED",
+                    "UPDATING",
                     "TIMED_OUT"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - INITIALIZING: Deployment is initializing.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYED: Deployment is Deployed.\n - TIMED_OUT: Deployment is Timeout."
+                "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYING: Deployment is Deploying.\n - DEPLOYED: Deployment is Deployed.\n - UPDATING: Deployment is Updating.\n - TIMED_OUT: Deployment is Timeout."
             },
             "v1Template": {
                 "type": "object",

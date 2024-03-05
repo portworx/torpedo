@@ -24,29 +24,29 @@
 
 
 ### PageBasedPaginationRequest {#pagebasedpaginationrequest}
-Request parameters for page-based pagination
+Request parameters for page-based pagination.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| page_number | [ int64](#int64) | Page number is the page number to return based on the size |
-| page_size | [ int64](#int64) | Page size is the maximum number of records to include per page |
+| page_number | [ int64](#int64) | Page number is the page number to return based on the size. |
+| page_size | [ int64](#int64) | Page size is the maximum number of records to include per page. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### PageBasedPaginationResponse {#pagebasedpaginationresponse}
-Metadata related to page based pagination for paginated API responses
+Metadata related to page based pagination for paginated API responses.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| total_records | [ int64](#int64) | Total records without pagination available in the dataset |
-| current_page | [ int64](#int64) | Current page number for this paginated response |
-| page_size | [ int64](#int64) | Page size used for pagination |
-| total_pages | [ int64](#int64) | Total pages based on the page_size provided in the request |
-| next_page | [ int64](#int64) | Next page if available in the dataset, -1 if unavailable |
-| prev_page | [ int64](#int64) | Previous page if available in the dataset, -1 if unavailable |
+| total_records | [ int64](#int64) | Total records without pagination available in the dataset. |
+| current_page | [ int64](#int64) | Current page number for this paginated response. |
+| page_size | [ int64](#int64) | Page size used for pagination. |
+| total_pages | [ int64](#int64) | Total pages based on the page_size provided in the request. |
+| next_page | [ int64](#int64) | Next page if available in the dataset, -1 if unavailable. |
+| prev_page | [ int64](#int64) | Previous page if available in the dataset, -1 if unavailable. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->

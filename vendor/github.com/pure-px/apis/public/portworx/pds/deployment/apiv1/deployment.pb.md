@@ -72,7 +72,7 @@ ListDeployments API lists the Deployment resources.
 > **rpc** GetDeploymentCredentials([GetDeploymentCredentialsRequest](#getdeploymentcredentialsrequest))
     [DeploymentCredentials](#deploymentcredentials)
 
-GetDeploymentCredentials API returns the Credentials to be used to access the Deployment .
+GetDeploymentCredentials API returns the Credentials to be used to access the Deployment.
  <!-- end methods -->
  <!-- end services -->
 
@@ -99,6 +99,7 @@ Request to create the Deployment resource.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | namespace_id | [ string](#string) | UID of the namespace resource where this deployment will be created. (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We need this field for to support creation of the resource in the namespace context. --) |
+| project_id | [ string](#string) | UID of the project. (-- api-linter: core::0133::request-unknown-fields=disabled aip.dev/not-precedent: We need this field for to know the project with which the deployment is associated with. --) |
 | deployment | [ Deployment](#deployment) | Deployment resource. |
  <!-- end Fields -->
  <!-- end HasFields -->
@@ -116,7 +117,7 @@ Request to delete the Deployment resource.
 
 
 ### Deployment {#deployment}
-Resource representing a Data Service Deployment
+Resource representing a Data Service Deployment.
 
 
 | Field | Type | Description |
@@ -129,7 +130,7 @@ Resource representing a Data Service Deployment
 
 
 ### DeploymentCredentials {#deploymentcredentials}
-Credentials to access a Data Service Deployment
+Credentials to access a Data Service Deployment.
 
 
 | Field | Type | Description |
@@ -264,13 +265,14 @@ Enum for Status of the Deployment.
 | Name | Number | Description |
 | ---- | ------ | ----------- |
 | PHASE_UNSPECIFIED | 0 | Phase is unspecified. |
-| INITIALIZING | 1 | Deployment is initializing. |
-| RESTORING | 2 | Restore of Deployment is in progress. |
-| FAILED | 3 | Deployment is Failed. |
-| DELETING | 4 | Deployment is being deleted. |
-| PREPARING | 5 | Deployment is Preparing. |
+| RESTORING | 1 | Restore of Deployment is in progress. |
+| FAILED | 2 | Deployment is Failed. |
+| DELETING | 3 | Deployment is being deleted. |
+| PREPARING | 4 | Deployment is Preparing. |
+| DEPLOYING | 5 | Deployment is Deploying. |
 | DEPLOYED | 6 | Deployment is Deployed. |
-| TIMED_OUT | 7 | Deployment is Timeout. |
+| UPDATING | 7 | Deployment is Updating. |
+| TIMED_OUT | 8 | Deployment is Timeout. |
 
 
  <!-- end Enums -->

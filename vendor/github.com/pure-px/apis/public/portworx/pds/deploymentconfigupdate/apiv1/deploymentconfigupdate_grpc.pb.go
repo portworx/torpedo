@@ -44,16 +44,16 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DeploymentConfigUpdateServiceClient interface {
-	// CreateDeploymentConfigUpdate API creates a deployment config update
+	// CreateDeploymentConfigUpdate API creates a deployment config update.
 	// (-- api-linter: core::0133::http-method=disabled
 	//
 	//	aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)
 	CreateDeploymentConfigUpdate(ctx context.Context, in *CreateDeploymentConfigUpdateRequest, opts ...grpc.CallOption) (*DeploymentConfigUpdate, error)
-	// GetDeploymentConfigUpdate API returns a deployment config update by id
+	// GetDeploymentConfigUpdate API returns a deployment config update by id.
 	GetDeploymentConfigUpdate(ctx context.Context, in *GetDeploymentConfigUpdateRequest, opts ...grpc.CallOption) (*DeploymentConfigUpdate, error)
-	// ListDeploymentConfigUpdates API returns a list of deployment config updates
+	// ListDeploymentConfigUpdates API returns a list of deployment config updates.
 	ListDeploymentConfigUpdates(ctx context.Context, in *ListDeploymentConfigUpdatesRequest, opts ...grpc.CallOption) (*ListDeploymentConfigUpdatesResponse, error)
-	// RetryDeploymentConfigUpdate API retries a deployment config update
+	// RetryDeploymentConfigUpdate API retries a deployment config update.
 	RetryDeploymentConfigUpdate(ctx context.Context, in *RetryDeploymentConfigUpdateRequest, opts ...grpc.CallOption) (*DeploymentConfigUpdate, error)
 }
 
@@ -105,16 +105,16 @@ func (c *deploymentConfigUpdateServiceClient) RetryDeploymentConfigUpdate(ctx co
 // All implementations must embed UnimplementedDeploymentConfigUpdateServiceServer
 // for forward compatibility
 type DeploymentConfigUpdateServiceServer interface {
-	// CreateDeploymentConfigUpdate API creates a deployment config update
+	// CreateDeploymentConfigUpdate API creates a deployment config update.
 	// (-- api-linter: core::0133::http-method=disabled
 	//
 	//	aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)
 	CreateDeploymentConfigUpdate(context.Context, *CreateDeploymentConfigUpdateRequest) (*DeploymentConfigUpdate, error)
-	// GetDeploymentConfigUpdate API returns a deployment config update by id
+	// GetDeploymentConfigUpdate API returns a deployment config update by id.
 	GetDeploymentConfigUpdate(context.Context, *GetDeploymentConfigUpdateRequest) (*DeploymentConfigUpdate, error)
-	// ListDeploymentConfigUpdates API returns a list of deployment config updates
+	// ListDeploymentConfigUpdates API returns a list of deployment config updates.
 	ListDeploymentConfigUpdates(context.Context, *ListDeploymentConfigUpdatesRequest) (*ListDeploymentConfigUpdatesResponse, error)
-	// RetryDeploymentConfigUpdate API retries a deployment config update
+	// RetryDeploymentConfigUpdate API retries a deployment config update.
 	RetryDeploymentConfigUpdate(context.Context, *RetryDeploymentConfigUpdateRequest) (*DeploymentConfigUpdate, error)
 	mustEmbedUnimplementedDeploymentConfigUpdateServiceServer()
 }

@@ -37,9 +37,8 @@ message Meta {
   // Description of the resource.
   string description = 3;
 
-  // A string that identifies the version of this object that can be used by
-  // clients to determine when objects have changed. This value must be passed
-  // unmodified back to the server by the client.
+  // A string that identifies the version of this object that can be used by clients to determine when objects have changed.
+  // This value must be passed unmodified back to the server by the client.
   string resource_version = 4;
 
   // Creation time of the object.
@@ -61,8 +60,7 @@ message Meta {
   map<string, string> resource_names = 10 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
-// Reference identifies the resource type, version of the uid and
-// the resource.
+// Reference identifies the resource type, version of the uid and the resource.
 message Reference {
   // API group of the resource.
   string type = 1;

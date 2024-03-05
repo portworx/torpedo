@@ -34,7 +34,7 @@ service NamespaceService {
   rpc ListNamespaces(ListNamespacesRequest)
       returns (ListNamespacesResponse) {
     option(google.api.http) = {
-      get: "/v1/clusters/{cluster_id}/namespaces"
+      get: "/v1/namespaces"
     };
   }
 }

@@ -34,35 +34,35 @@ func (account *PLATFORM_API_V1) getAccountClient() (context.Context, *platformv1
 	return ctx, client, nil
 }
 
-// GetAccountList returns the list of accounts
-func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]WorkFlowResponse, error) {
-	ctx, client, err := AccountV1.getAccountClient()
-	accountsResponse := []WorkFlowResponse{}
-
-	if err != nil {
-		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-	}
-
-	var getRequest platformv1.ApiAccountServiceListAccountsRequest
-	getRequest = getRequest.ApiService.AccountServiceListAccounts(ctx)
-	accountList, res, err := client.AccountServiceListAccountsExecute(getRequest)
-
-	//accountList, res, err := client.AccountServiceListAccounts(ctx).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.Full HTTP response: %v", err, res)
-	}
-
-	log.Infof("Accounts - [%v]", accountList)
-
-	log.Infof("Value of accounts - [%+v]", accountList.Accounts[0].Meta.Name)
-	err = copier.Copy(&accountsResponse, accountList.Accounts)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Value of accounts after copy - [%v]", accountsResponse)
-
-	return accountsResponse, nil
-}
+//// GetAccountList returns the list of accounts
+//func (AccountV1 *PLATFORM_API_V1) GetAccountList() ([]WorkFlowResponse, error) {
+//	ctx, client, err := AccountV1.getAccountClient()
+//	accountsResponse := []WorkFlowResponse{}
+//
+//	if err != nil {
+//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+//	}
+//
+//	var getRequest platformv1.ApiAccountServiceListAccountsRequest
+//	getRequest = getRequest.ApiService.AccountServiceListAccounts(ctx)
+//	accountList, res, err := client.AccountServiceListAccountsExecute(getRequest)
+//
+//	//accountList, res, err := client.AccountServiceListAccounts(ctx).Execute()
+//	if err != nil && res.StatusCode != status.StatusOK {
+//		return nil, fmt.Errorf("Error when calling `AccountServiceListAccounts`: %v\n.Full HTTP response: %v", err, res)
+//	}
+//
+//	log.Infof("Accounts - [%v]", accountList)
+//
+//	log.Infof("Value of accounts - [%+v]", accountList.Accounts[0].Meta.Name)
+//	err = copier.Copy(&accountsResponse, accountList.Accounts)
+//	if err != nil {
+//		return nil, err
+//	}
+//	log.Infof("Value of accounts after copy - [%v]", accountsResponse)
+//
+//	return accountsResponse, nil
+//}
 
 // GetAccount return pds account model.
 func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*WorkFlowResponse, error) {

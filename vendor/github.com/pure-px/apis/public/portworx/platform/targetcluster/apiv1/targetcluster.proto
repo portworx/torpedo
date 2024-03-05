@@ -22,6 +22,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "public/portworx/common/apiv1/meta.proto";
 import "google/protobuf/timestamp.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 import "public/portworx/common/apiv1/pagination.proto";
 import "public/portworx/common/apiv1/selector.proto";
 import "public/portworx/common/apiv1/sort.proto";
@@ -35,12 +36,24 @@ option java_outer_classname = "TargetClusterProto";
 
 // TargetCluster service provides APIs to interact with the TargetCluster entity
 service TargetClusterService {
+  // (-- api-linter: core::0132::http-body=disabled
+  //     api-linter: core::0132::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because 
+  // we can't have advance filters as query params. 
+  // --)
   // ListTargetCluster API lists the TargetClusters visible to the caller
   rpc ListTargetClusters(ListTargetClustersRequest)
       returns (ListTargetClustersResponse) {
     option(google.api.http) = {
       get: "/v1/clusters"
+      additional_bindings: {
+        post: "/v1/clusters:search"
+        body: "*"
+      }
     };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List API lists all the target clusters for a tenant"
+  };
   }
 
   // GetTargetCluster API returns the info about the TargetCluster for given name
@@ -59,11 +72,11 @@ service TargetClusterService {
     };
   }
 
-  //  UpdateTargetCluster API updates the metadata(e.g name or labels) of the specified TargetCluster
+  //  UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster
   rpc UpdateTargetCluster(UpdateTargetClusterRequest)
       returns(TargetCluster) {
     option(google.api.http) = {
-      patch: "/v1/clusters/{target_cluster.meta.uid}"
+      put: "/v1/clusters/{target_cluster.meta.uid}"
       body: "target_cluster"
     };
   }
@@ -174,6 +187,8 @@ message Metadata {
   string kube_server_version = 1;
   // Platform of the kubernetes eg: aws, ocp, etc
   KubePlatform.Type kube_platform = 2;
+  // Metadata of portworx enterprise on the target cluster
+  PXEMetadata pxe_metadata = 3;
 }
 
 
@@ -196,4 +211,16 @@ message KubePlatform {
     // Unknown platform
     UNKNOWN = 6;
   }
+}
+
+// PX Enterprise metadata on the target cluster.
+message PXEMetadata {
+  // CSIEnabled flag depicts if csi is supported on the target cluster.
+  bool csi_enabled = 1;
+  // Name of portworx api service on the target cluster.
+  string service_name = 2;
+  // Namespace of portworx api service on the target cluster.
+  string service_namespace = 3;
+  // Version of PXE installed on the target cluster.
+  string version = 4;
 }

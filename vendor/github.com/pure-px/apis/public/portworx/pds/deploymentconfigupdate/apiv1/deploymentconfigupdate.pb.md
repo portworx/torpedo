@@ -30,14 +30,14 @@
 
 
 ## DeploymentConfigUpdateService {#servicepublicportworxpdsdeploymentconfigupdatev1deploymentconfigupdateservice}
-DeploymentConfigUpdateService provides APIs to interact with the data service deployment config update
+DeploymentConfigUpdateService provides APIs to interact with the data service deployment config update.
 
 ### CreateDeploymentConfigUpdate {#methodpublicportworxpdsdeploymentconfigupdatev1deploymentconfigupdateservicecreatedeploymentconfigupdate}
 
 > **rpc** CreateDeploymentConfigUpdate([CreateDeploymentConfigUpdateRequest](#createdeploymentconfigupdaterequest))
     [DeploymentConfigUpdate](#deploymentconfigupdate)
 
-CreateDeploymentConfigUpdate API creates a deployment config update
+CreateDeploymentConfigUpdate API creates a deployment config update.
 (-- api-linter: core::0133::http-method=disabled
     aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)
 ### GetDeploymentConfigUpdate {#methodpublicportworxpdsdeploymentconfigupdatev1deploymentconfigupdateservicegetdeploymentconfigupdate}
@@ -45,19 +45,19 @@ CreateDeploymentConfigUpdate API creates a deployment config update
 > **rpc** GetDeploymentConfigUpdate([GetDeploymentConfigUpdateRequest](#getdeploymentconfigupdaterequest))
     [DeploymentConfigUpdate](#deploymentconfigupdate)
 
-GetDeploymentConfigUpdate API returns a deployment config update by id
+GetDeploymentConfigUpdate API returns a deployment config update by id.
 ### ListDeploymentConfigUpdates {#methodpublicportworxpdsdeploymentconfigupdatev1deploymentconfigupdateservicelistdeploymentconfigupdates}
 
 > **rpc** ListDeploymentConfigUpdates([ListDeploymentConfigUpdatesRequest](#listdeploymentconfigupdatesrequest))
     [ListDeploymentConfigUpdatesResponse](#listdeploymentconfigupdatesresponse)
 
-ListDeploymentConfigUpdates API returns a list of deployment config updates
+ListDeploymentConfigUpdates API returns a list of deployment config updates.
 ### RetryDeploymentConfigUpdate {#methodpublicportworxpdsdeploymentconfigupdatev1deploymentconfigupdateserviceretrydeploymentconfigupdate}
 
 > **rpc** RetryDeploymentConfigUpdate([RetryDeploymentConfigUpdateRequest](#retrydeploymentconfigupdaterequest))
     [DeploymentConfigUpdate](#deploymentconfigupdate)
 
-RetryDeploymentConfigUpdate API retries a deployment config update
+RetryDeploymentConfigUpdate API retries a deployment config update.
  <!-- end methods -->
  <!-- end services -->
 
@@ -65,59 +65,59 @@ RetryDeploymentConfigUpdate API retries a deployment config update
 
 
 ### Config {#config}
-Config of the desired deployment configuration
+Config of the desired deployment configuration.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the deployment resource |
-| deployment_config | [ public.portworx.pds.deployment.v1.Config](#publicportworxpdsdeploymentv1config) | Deployment config represents desired Deployment Configuration |
+| deployment_meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the deployment resource. |
+| deployment_config | [ public.portworx.pds.deployment.v1.Config](#publicportworxpdsdeploymentv1config) | Deployment config represents desired Deployment Configuration. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### CreateDeploymentConfigUpdateRequest {#createdeploymentconfigupdaterequest}
-CreateDeploymentConfigUpdateRequest is the request for CreateDeploymentConfigUpdate
+CreateDeploymentConfigUpdateRequest is the request for CreateDeploymentConfigUpdate.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_config_update | [ DeploymentConfigUpdate](#deploymentconfigupdate) | Config of the deployment for which config update is requested |
+| deployment_config_update | [ DeploymentConfigUpdate](#deploymentconfigupdate) | Config of the deployment for which config update is requested. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### DeploymentConfigUpdate {#deploymentconfigupdate}
-DeploymentConfigUpdate represents a deployment config update resource
+DeploymentConfigUpdate represents a deployment config update resource.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the deployment config update request |
-| config | [ Config](#config) | Config of the deployment for which config update is requested |
-| status | [ Status](#status) | Status of the deployment config update |
+| meta | [ public.portworx.common.v1.Meta](#publicportworxcommonv1meta) | Metadata of the deployment config update request. |
+| config | [ Config](#config) | Config of the deployment for which config update is requested. |
+| status | [ Status](#status) | Status of the deployment config update. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### GetDeploymentConfigUpdateRequest {#getdeploymentconfigupdaterequest}
-GetDeploymentConfigUpdateRequest is the request for GetDeploymentConfigUpdate
+GetDeploymentConfigUpdateRequest is the request for GetDeploymentConfigUpdate.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| id | [ string](#string) | UID of the deployment config update |
+| id | [ string](#string) | UID of the deployment config update. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### ListDeploymentConfigUpdatesRequest {#listdeploymentconfigupdatesrequest}
-ListDeploymentConfigUpdatesRequest is the request for ListDeploymentConfigUpdates
+ListDeploymentConfigUpdatesRequest is the request for ListDeploymentConfigUpdates.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_id | [ string](#string) | UID of the deployment |
+| deployment_id | [ string](#string) | UID of the deployment. |
 | sort | [ public.portworx.common.v1.Sort](#publicportworxcommonv1sort) | Sorting details using which requested list to be sorted. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing deployment config updates. |
  <!-- end Fields -->
@@ -125,38 +125,38 @@ ListDeploymentConfigUpdatesRequest is the request for ListDeploymentConfigUpdate
 
 
 ### ListDeploymentConfigUpdatesResponse {#listdeploymentconfigupdatesresponse}
-ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates
+ListDeploymentConfigUpdatesResponse is the response for ListDeploymentConfigUpdates.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| deployment_config_updates | [repeated DeploymentConfigUpdate](#deploymentconfigupdate) | List of deployment config updates |
+| deployment_config_updates | [repeated DeploymentConfigUpdate](#deploymentconfigupdate) | List of deployment config updates. |
 | pagination | [ public.portworx.common.v1.PageBasedPaginationResponse](#publicportworxcommonv1pagebasedpaginationresponse) | Pagination metadata for this response. (-- api-linter: core::0132::response-unknown-fields=disabled aip.dev/not-precedent: We need this field for pagination. --) |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### RetryDeploymentConfigUpdateRequest {#retrydeploymentconfigupdaterequest}
-RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate
+RetryDeploymentConfigUpdateRequest is the request for RetryDeploymentConfigUpdate.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
-| id | [ string](#string) | UID of the deployment config update |
+| id | [ string](#string) | UID of the deployment config update. |
  <!-- end Fields -->
  <!-- end HasFields -->
 
 
 ### Status {#status}
-Status of the deployment config update
+Status of the deployment config update.
 
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | error_code | [ string](#string) | Error Code is a short string that represents the error. |
 | error_message | [ string](#string) | Error Message is a description of the error. |
-| retry_count | [ int32](#int32) | Number of times the deployment config update has been retried |
-| phase | [ Status.Phase](#statusphase) | Phase of the deployment config update |
+| retry_count | [ int32](#int32) | Number of times the deployment config update has been retried. |
+| phase | [ Status.Phase](#statusphase) | Phase of the deployment config update. |
  <!-- end Fields -->
  <!-- end HasFields -->
  <!-- end messages -->
@@ -172,8 +172,9 @@ Enum for Phase of the Deployment config update.
 | PHASE_UNSPECIFIED | 0 | Phase is unspecified. |
 | FAILED | 1 | Deployment config update failed. |
 | QUEUED | 2 | Deployment config update is queued. |
-| COMPLETED | 3 | Deployment config update is completed. |
-| REQUEUED | 4 | Deployment config update is requeued. |
+| IN_PROGRESS | 3 | Deployment config update is in progress. |
+| COMPLETED | 4 | Deployment config update is completed. |
+| REQUEUED | 5 | Deployment config update is requeued. |
 
 
  <!-- end Enums -->

@@ -49,9 +49,8 @@ type Meta struct {
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// Description of the resource.
 	Description string `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	// A string that identifies the version of this object that can be used by
-	// clients to determine when objects have changed. This value must be passed
-	// unmodified back to the server by the client.
+	// A string that identifies the version of this object that can be used by clients to determine when objects have changed.
+	// This value must be passed unmodified back to the server by the client.
 	ResourceVersion string `protobuf:"bytes,4,opt,name=resource_version,json=resourceVersion,proto3" json:"resource_version,omitempty"`
 	// Creation time of the object.
 	CreateTime *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
@@ -169,8 +168,7 @@ func (x *Meta) GetResourceNames() map[string]string {
 	return nil
 }
 
-// Reference identifies the resource type, version of the uid and
-// the resource.
+// Reference identifies the resource type, version of the uid and the resource.
 type Reference struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

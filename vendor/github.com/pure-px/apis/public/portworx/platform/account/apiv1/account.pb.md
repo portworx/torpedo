@@ -16,8 +16,6 @@
     - [AwsSubscriptionInfo](#awssubscriptioninfo)
     - [Config](#config)
     - [GetAccountRequest](#getaccountrequest)
-    - [ListAccountsRequest](#listaccountsrequest)
-    - [ListAccountsResponse](#listaccountsresponse)
     - [Status](#status)
     - [ZuoraSubscriptionInfo](#zuorasubscriptioninfo)
   
@@ -37,12 +35,6 @@
 ## AccountService {#servicepublicportworxplatformaccountv1accountservice}
 Account service provides APIs to interact with the Account entity
 
-### ListAccounts {#methodpublicportworxplatformaccountv1accountservicelistaccounts}
-
-> **rpc** ListAccounts([ListAccountsRequest](#listaccountsrequest))
-    [ListAccountsResponse](#listaccountsresponse)
-
-ListAccounts API lists the accounts visible to the caller
 ### GetAccount {#methodpublicportworxplatformaccountv1accountservicegetaccount}
 
 > **rpc** GetAccount([GetAccountRequest](#getaccountrequest))
@@ -107,30 +99,6 @@ GetAccountRequest is the request message to GetAccount API
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | account_id | [ string](#string) | account id for which account details need to be fetched |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
-### ListAccountsRequest {#listaccountsrequest}
-ListAccountsRequest is an empty request to the ListAccounts API.
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| pagination | [ public.portworx.common.v1.PageBasedPaginationRequest](#publicportworxcommonv1pagebasedpaginationrequest) | Pagination parameters for listing accounts |
- <!-- end Fields -->
- <!-- end HasFields -->
-
-
-### ListAccountsResponse {#listaccountsresponse}
-ListAccountsResponse is the response to the ListAccounts API and contains
-the list of accounts visible to the caller.
-
-
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| accounts | [repeated Account](#account) | the list of accounts |
-| pagination | [ public.portworx.common.v1.PageBasedPaginationResponse](#publicportworxcommonv1pagebasedpaginationresponse) | Pagination metadata for this response. (-- api-linter: core::0132::response-unknown-fields=disabled aip.dev/not-precedent: We need this field for pagination. --) |
  <!-- end Fields -->
  <!-- end HasFields -->
 

@@ -30,14 +30,6 @@ option java_outer_classname = "AccountProto";
 
 // Account service provides APIs to interact with the Account entity
 service AccountService {
-  // ListAccounts API lists the accounts visible to the caller
-  rpc ListAccounts(ListAccountsRequest)
-      returns (ListAccountsResponse) {
-    option(google.api.http) = {
-      get: "/v1/accounts"
-    };
-  }
-
   // GetAccount API returns the info about account for given account id
   rpc GetAccount(GetAccountRequest)
       returns (Account) {
@@ -45,23 +37,6 @@ service AccountService {
       get: "/v1/accounts/{account_id}"
     };
   }
-}
-
-// ListAccountsRequest is an empty request to the ListAccounts API.
-message ListAccountsRequest {
-  // Pagination parameters for listing accounts
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 1;
-}
-
-// ListAccountsResponse is the response to the ListAccounts API and contains
-// the list of accounts visible to the caller.
-message ListAccountsResponse {
-  // the list of accounts
-  repeated Account accounts = 1;
-  // Pagination metadata for this response.
-  // (-- api-linter: core::0132::response-unknown-fields=disabled
-  //     aip.dev/not-precedent: We need this field for pagination. --)
-  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
 }
 
 // GetAccountRequest is the request message to GetAccount API

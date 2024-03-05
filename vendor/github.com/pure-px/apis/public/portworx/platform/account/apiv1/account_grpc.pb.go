@@ -34,16 +34,13 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	AccountService_ListAccounts_FullMethodName = "/public.portworx.platform.account.v1.AccountService/ListAccounts"
-	AccountService_GetAccount_FullMethodName   = "/public.portworx.platform.account.v1.AccountService/GetAccount"
+	AccountService_GetAccount_FullMethodName = "/public.portworx.platform.account.v1.AccountService/GetAccount"
 )
 
 // AccountServiceClient is the client API for AccountService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AccountServiceClient interface {
-	// ListAccounts API lists the accounts visible to the caller
-	ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error)
 	// GetAccount API returns the info about account for given account id
 	GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*Account, error)
 }
@@ -54,15 +51,6 @@ type accountServiceClient struct {
 
 func NewAccountServiceClient(cc grpc.ClientConnInterface) AccountServiceClient {
 	return &accountServiceClient{cc}
-}
-
-func (c *accountServiceClient) ListAccounts(ctx context.Context, in *ListAccountsRequest, opts ...grpc.CallOption) (*ListAccountsResponse, error) {
-	out := new(ListAccountsResponse)
-	err := c.cc.Invoke(ctx, AccountService_ListAccounts_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *accountServiceClient) GetAccount(ctx context.Context, in *GetAccountRequest, opts ...grpc.CallOption) (*Account, error) {
@@ -78,8 +66,6 @@ func (c *accountServiceClient) GetAccount(ctx context.Context, in *GetAccountReq
 // All implementations must embed UnimplementedAccountServiceServer
 // for forward compatibility
 type AccountServiceServer interface {
-	// ListAccounts API lists the accounts visible to the caller
-	ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error)
 	// GetAccount API returns the info about account for given account id
 	GetAccount(context.Context, *GetAccountRequest) (*Account, error)
 	mustEmbedUnimplementedAccountServiceServer()
@@ -89,9 +75,6 @@ type AccountServiceServer interface {
 type UnimplementedAccountServiceServer struct {
 }
 
-func (UnimplementedAccountServiceServer) ListAccounts(context.Context, *ListAccountsRequest) (*ListAccountsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ListAccounts not implemented")
-}
 func (UnimplementedAccountServiceServer) GetAccount(context.Context, *GetAccountRequest) (*Account, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAccount not implemented")
 }
@@ -106,24 +89,6 @@ type UnsafeAccountServiceServer interface {
 
 func RegisterAccountServiceServer(s grpc.ServiceRegistrar, srv AccountServiceServer) {
 	s.RegisterService(&AccountService_ServiceDesc, srv)
-}
-
-func _AccountService_ListAccounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListAccountsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AccountServiceServer).ListAccounts(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AccountService_ListAccounts_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AccountServiceServer).ListAccounts(ctx, req.(*ListAccountsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _AccountService_GetAccount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -151,10 +116,6 @@ var AccountService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "public.portworx.platform.account.v1.AccountService",
 	HandlerType: (*AccountServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "ListAccounts",
-			Handler:    _AccountService_ListAccounts_Handler,
-		},
 		{
 			MethodName: "GetAccount",
 			Handler:    _AccountService_GetAccount_Handler,

@@ -21,13 +21,13 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 }
 
 // GetAccountListv1
-func GetAccountListv1() ([]apiStructs.WorkFlowResponse, error) {
-	accList, err := v2Components.Platform.GetAccountList()
-	if err != nil {
-		return nil, err
-	}
-	return accList, nil
-}
+//func GetAccountListv1() ([]apiStructs.WorkFlowResponse, error) {
+//	accList, err := v2Components.Platform.GetAccountList()
+//	if err != nil {
+//		return nil, err
+//	}
+//	return accList, nil
+//}
 
 // GetAccount
 func GetAccount(accountID string) (*apiStructs.WorkFlowResponse, error) {

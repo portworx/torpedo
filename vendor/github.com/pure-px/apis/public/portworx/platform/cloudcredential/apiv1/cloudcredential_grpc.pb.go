@@ -46,20 +46,20 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CloudCredentialServiceClient interface {
-	// Get API returns the cloud credential details sans the actual credentials
+	// Get API returns the cloud credential details sans the actual credentials.
 	GetCloudCredential(ctx context.Context, in *GetCloudCredentialRequest, opts ...grpc.CallOption) (*CloudCredential, error)
-	// Create API creates a set of cloud credentials for a tenant
+	// Create API creates a set of cloud credentials for a tenant.
 	CreateCloudCredential(ctx context.Context, in *CreateCloudCredentialRequest, opts ...grpc.CallOption) (*CloudCredential, error)
-	// Update API updates a cloud credential
+	// Update API updates a cloud credential.
 	UpdateCloudCredential(ctx context.Context, in *UpdateCloudCredentialRequest, opts ...grpc.CallOption) (*CloudCredential, error)
 	// (-- api-linter: core::0132::http-body=disabled
 	//
 	//	api-linter: core::0132::http-method=disabled
 	//	aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
 	//
-	// List API lists all the cloud credentials for a tenant
+	// List API lists all the cloud credentials for a tenant.
 	ListCloudCredentials(ctx context.Context, in *ListCloudCredentialsRequest, opts ...grpc.CallOption) (*ListCloudCredentialsResponse, error)
-	// Delete API deletes the cloud credentials
+	// Delete API deletes the cloud credentials.
 	DeleteCloudCredential(ctx context.Context, in *DeleteCloudCredentialRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -120,20 +120,20 @@ func (c *cloudCredentialServiceClient) DeleteCloudCredential(ctx context.Context
 // All implementations must embed UnimplementedCloudCredentialServiceServer
 // for forward compatibility
 type CloudCredentialServiceServer interface {
-	// Get API returns the cloud credential details sans the actual credentials
+	// Get API returns the cloud credential details sans the actual credentials.
 	GetCloudCredential(context.Context, *GetCloudCredentialRequest) (*CloudCredential, error)
-	// Create API creates a set of cloud credentials for a tenant
+	// Create API creates a set of cloud credentials for a tenant.
 	CreateCloudCredential(context.Context, *CreateCloudCredentialRequest) (*CloudCredential, error)
-	// Update API updates a cloud credential
+	// Update API updates a cloud credential.
 	UpdateCloudCredential(context.Context, *UpdateCloudCredentialRequest) (*CloudCredential, error)
 	// (-- api-linter: core::0132::http-body=disabled
 	//
 	//	api-linter: core::0132::http-method=disabled
 	//	aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
 	//
-	// List API lists all the cloud credentials for a tenant
+	// List API lists all the cloud credentials for a tenant.
 	ListCloudCredentials(context.Context, *ListCloudCredentialsRequest) (*ListCloudCredentialsResponse, error)
-	// Delete API deletes the cloud credentials
+	// Delete API deletes the cloud credentials.
 	DeleteCloudCredential(context.Context, *DeleteCloudCredentialRequest) (*emptypb.Empty, error)
 	mustEmbedUnimplementedCloudCredentialServiceServer()
 }
