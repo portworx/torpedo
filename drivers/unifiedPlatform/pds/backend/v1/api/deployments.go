@@ -33,6 +33,12 @@ func (ds *PDSV2_API) GetDeploymentClient() (context.Context, *pdsv2.DeploymentSe
 	return ctx, client, nil
 }
 
+func (ds *PDSV2_API) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
+	dsResponse := apiStructs.WorkFlowResponse{}
+
+	return &dsResponse, nil
+}
+
 // CreateDeployment return newly created deployment model.
 func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}

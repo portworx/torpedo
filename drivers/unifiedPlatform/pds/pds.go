@@ -14,5 +14,5 @@ type Deployment interface {
 }
 
 type DeploymentConfig interface {
-	UpdateDeploymentConfig(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateDeployment(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error)
 }

@@ -7,14 +7,17 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/deploymentconfigupdate/apiv1"
+	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
+	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/deployment/apiv1"
+	publicdeploymentConfigUpdate "github.com/pure-px/apis/public/portworx/pds/deploymentconfigupdate/apiv1"
+	deploymenttopology "github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1"
 	"google.golang.org/grpc"
 )
 
 // GetClient updates the header with bearer token and returns the new client
-func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicdeploymentapis.DeploymentConfigUpdateServiceClient, string, error) {
+func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicdeploymentConfigUpdate.DeploymentConfigUpdateServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
-	var depClient publicdeploymentapis.DeploymentConfigUpdateServiceClient
+	var depClient publicdeploymentConfigUpdate.DeploymentConfigUpdateServiceClient
 
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -25,30 +28,71 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 		Token: token,
 	}
 
-	depClient = publicdeploymentapis.NewDeploymentConfigUpdateServiceClient(deployment.ApiClientV2)
+	depClient = publicdeploymentConfigUpdate.NewDeploymentConfigUpdateServiceClient(deployment.ApiClientV2)
 
 	return ctx, depClient, token, nil
 }
 
-func (deployment *PdsGrpc) UpdateDeploymentConfig(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	depResponse := apiStructs.WorkFlowResponse{}
-	updateRequest := publicdeploymentapis.CreateDeploymentConfigUpdateRequest{}
+	updateRequest := &publicdeploymentConfigUpdate.CreateDeploymentConfigUpdateRequest{
+		DeploymentConfigUpdate: &publicdeploymentConfigUpdate.DeploymentConfigUpdate{
+			Meta: &commonapiv1.Meta{
+				Uid:             "",
+				Name:            "",
+				Description:     "",
+				ResourceVersion: "",
+				CreateTime:      nil,
+				UpdateTime:      nil,
+				Labels:          nil,
+				Annotations:     nil,
+				ParentReference: nil,
+				ResourceNames:   nil,
+			},
+			Config: &publicdeploymentConfigUpdate.Config{
+				DeploymentMeta: &commonapiv1.Meta{
+					Uid:             "",
+					Name:            "",
+					Description:     "",
+					ResourceVersion: "",
+					CreateTime:      nil,
+					UpdateTime:      nil,
+					Labels:          nil,
+					Annotations:     nil,
+					ParentReference: nil,
+					ResourceNames:   nil,
+				},
+				DeploymentConfig: &publicdeploymentapis.Config{
+					References: nil,
+					TlsEnabled: false,
+					DeploymentTopologies: []*deploymenttopology.DeploymentTopology{
+						{
+							Name:        "",
+							Description: "",
+							Replicas:    4,
+							ResourceTemplate: &deploymenttopology.Template{
+								Id:              "",
+								ResourceVersion: "",
+								Values:          nil,
+							},
+						},
+					},
+				},
+			},
+			Status: nil,
+		},
+	}
 
 	ctx, client, _, err := deployment.getDeploymentConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while c: %v\n", err)
 	}
 
-	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
-
-	copier.Copy(&updateRequest, updateDeploymentRequest)
-
-	apiResponse, err := client.CreateDeploymentConfigUpdate(ctx, &updateRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := client.CreateDeploymentConfigUpdate(ctx, updateRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting the account: %v\n", err)
+		return nil, fmt.Errorf("Error while updating the deployment: %v\n", err)
 	}
 	copier.Copy(&depResponse, apiResponse)
 
 	return &depResponse, nil
-
 }

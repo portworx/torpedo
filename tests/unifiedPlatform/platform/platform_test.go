@@ -76,8 +76,15 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	It("Deploy and Validate DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := stworkflows.DeployDataservice(ds)
+			_, err := stworkflows.DeployDataService(ds)
 			log.FailOnError(err, "Error while deploying ds")
+		}
+	})
+
+	It("Update DataService", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			_, err := stworkflows.UpdateDataService(ds)
+			log.FailOnError(err, "Error while updating ds")
 		}
 	})
 

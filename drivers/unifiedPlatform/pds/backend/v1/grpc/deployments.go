@@ -9,7 +9,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/deployment/apiv1"
 	deploymenttopology "github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1"
-
 	"google.golang.org/grpc"
 )
 
@@ -35,6 +34,33 @@ func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploym
 	depClient = publicdeploymentapis.NewDeploymentServiceClient(deployment.ApiClientV2)
 
 	return ctx, depClient, token, nil
+}
+
+func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {
+	depResponse := WorkFlowResponse{}
+	ctx, client, _, err := deployment.getDeploymentClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	listRequest := &publicdeploymentapis.ListDeploymentsRequest{
+		ListBy:     nil,
+		Pagination: NewPaginationRequest(1, 50),
+		Sort:       nil,
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
+	apiResponse, err := client.ListDeployments(ctx, listRequest, grpc.PerRPCCredentials(credentials))
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while creating the deployment: %v\n", err)
+	}
+	err = copier.Copy(&depResponse, apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying the response:%v\n", err)
+	}
+
+	return &depResponse, nil
 }
 
 func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowRequest) (*WorkFlowResponse, error) {

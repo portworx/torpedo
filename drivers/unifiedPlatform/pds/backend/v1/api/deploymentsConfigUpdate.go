@@ -23,7 +23,7 @@ func (ds *PDSV2_API) GetDeploymentConfigClient() (context.Context, *pdsv2.Deploy
 	return ctx, client, nil
 }
 
-func (ds *PDSV2_API) UpdateDeploymentConfig(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDSV2_API) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	var updateRequest pdsv2.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
 	dsResponse := apiStructs.WorkFlowResponse{}
 
