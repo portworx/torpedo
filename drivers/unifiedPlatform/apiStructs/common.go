@@ -24,11 +24,28 @@ type Meta struct {
 	Labels          *map[string]string `copier:"must,nopanic"`
 	Annotations     *map[string]string `copier:"must,nopanic"`
 }
+type V1Meta struct {
+	Uid             *string            `json:"uid,omitempty"`
+	Name            *string            `json:"name,omitempty"`
+	Description     *string            `json:"description,omitempty"`
+	ResourceVersion *string            `json:"resourceVersion,omitempty"`
+	CreateTime      *time.Time         `json:"createTime,omitempty"`
+	UpdateTime      *time.Time         `json:"updateTime,omitempty"`
+	Labels          *map[string]string `json:"labels,omitempty"`
+	Annotations     *map[string]string `json:"annotations,omitempty"`
+	ParentReference *V1Reference
+}
 
 type Config struct {
 	UserEmail   *string `copier:"must,nopanic"`
 	DnsName     *string `copier:"must,nopanic"`
 	DisplayName *string `copier:"must,nopanic"`
+}
+
+type V1Config3 struct {
+	ActorId      *string `json:"actorId,omitempty"`
+	ActorType    *string `json:"actorType,omitempty"`
+	AccessPolicy *V1AccessPolicy
 }
 
 type V1Config1 struct {
@@ -46,4 +63,14 @@ type V1Deployment struct {
 
 type Status struct {
 	Phase string
+}
+
+type V1Reference struct {
+	Type    *string `json:"type,omitempty"`
+	Version *string `json:"version,omitempty"`
+	Uid     *string
+}
+
+type RbacToken struct {
+	Token string
 }

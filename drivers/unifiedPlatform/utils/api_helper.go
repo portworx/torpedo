@@ -20,6 +20,13 @@ const (
 	envPxCentralAPI      = "PX_CENTRAL_API"
 )
 
+type RunWithRbac struct {
+	RbacFlag  bool
+	RbacToken string
+}
+
+var RunWithRBAC RunWithRbac
+
 type Credentials struct {
 	Token string
 }
@@ -59,14 +66,16 @@ func GetBearerToken() (context.Context, string, error) {
 	username := os.Getenv(envPXCentralUsername)
 	password := os.Getenv(envPXCentralPassword)
 	issuerURL := os.Getenv(envPxCentralAPI)
-
+	if RunWithRBAC.RbacFlag == true {
+		//Test if token is not expired.
+		return context.Background(), RunWithRBAC.RbacToken, nil
+	}
 	log.Infof("user name %s", username)
 	log.Infof("password %s", password)
 
 	url := fmt.Sprintf("%s/login", issuerURL)
 
 	log.Infof("issuer url %s", issuerURL)
-
 	postBody, err := json.Marshal(map[string]string{
 		"email":    username,
 		"password": password,
@@ -166,4 +175,8 @@ func GetContext() (context.Context, error) {
 func GetWorkflowResponseMap() map[string][]WorkFlowResponse {
 	var createdMap = make(map[string][]WorkFlowResponse)
 	return createdMap
+}
+
+func (rbac *RunWithRbac) UpdateRbacToken(jwtToken string) {
+	rbac.RbacToken = jwtToken
 }

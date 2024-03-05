@@ -177,6 +177,12 @@ type NewPDSParams struct {
 		StorageRequest string
 		Iterations     int
 	} `json:"StorageConfigurations"`
+	RbacParams struct {
+		RunWithRbac bool
+		GlobalScope string
+		RoleName    string
+		ResourceId  string
+	} `json:"RbacParams"`
 }
 
 const (

@@ -6,6 +6,7 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"os"
@@ -17,10 +18,15 @@ var _ = BeforeSuite(func() {
 	log.InfoD(steplog)
 	Step(steplog, func() {
 		log.InfoD("Get Account ID")
-
 		accID := "acc:2199f82a-9c39-4070-a431-4a8c8b1c2ca7"
-
-		err := platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
+		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
+		NewPdsParams, err := ReadNewParams(pdsparams)
+		log.FailOnError(err, "Failed to read params from json file")
+		rbacParams := NewPdsParams.RbacParams
+		if rbacParams.RunWithRbac == true {
+			stworkflows.RunTestWithRbac(NewPdsParams.InfraToTest.AccountName, rbacParams.RoleName, rbacParams.ResourceId)
+		}
+		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 
 		// accList, err := platformUtils.GetAccountListv1()
@@ -36,9 +42,7 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while initialising api components in ds utils")
 
 		// Read pds params from the configmap
-		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-		NewPdsParams, err = ReadNewParams(pdsparams)
-		log.FailOnError(err, "Failed to read params from json file")
+
 		infraParams := NewPdsParams.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
 	})
