@@ -11,19 +11,6 @@ type ConfigBackupLevel string
 type ConfigReclaimPolicyType string
 
 type PDSBackupConfig struct {
-	V1   PDSBackupConfigV1   `copier:"must,nopanic"`
-	GRPC PDSBackupConfigGRPC `copier:"must,nopanic"`
-}
-
-type PDSBackupConfigV1 struct {
-	Create CreatePDSBackupConfig `copier:"must,nopanic"`
-	Update UpdatePDSBackupConfig `copier:"must,nopanic"`
-	Get    GetPDSBackupConfig    `copier:"must,nopanic"`
-	Delete DeletePDSBackupConfig `copier:"must,nopanic"`
-	List   ListPDSBackupConfig   `copier:"must,nopanic"`
-}
-
-type PDSBackupConfigGRPC struct {
 	Create CreatePDSBackupConfig `copier:"must,nopanic"`
 	Update UpdatePDSBackupConfig `copier:"must,nopanic"`
 	Get    GetPDSBackupConfig    `copier:"must,nopanic"`
@@ -32,14 +19,13 @@ type PDSBackupConfigGRPC struct {
 }
 
 type CreatePDSBackupConfig struct {
-	ProjectId      string          `copier:"must,nopanic"`
-	DeploymentId   string          `copier:"must,nopanic"`
-	V1BackupConfig *V1BackupConfig `copier:"must,nopanic"`
+	ProjectId    string          `copier:"must,nopanic"`
+	DeploymentId string          `copier:"must,nopanic"`
+	BackupConfig *V1BackupConfig `copier:"must,nopanic"`
 }
 
 type UpdatePDSBackupConfig struct {
-	BackupConfigMetaUid        string                      `copier:"must,nopanic"`
-	DesiredBackupConfiguration *DesiredBackupConfiguration `copier:"must,nopanic"`
+	BackupConfig *V1BackupConfig `copier:"must,nopanic"`
 }
 
 type GetPDSBackupConfig struct {
@@ -51,16 +37,8 @@ type DeletePDSBackupConfig struct {
 }
 
 type ListPDSBackupConfig struct {
-	AccountId            *string `copier:"must,nopanic"`
-	TenantId             *string `copier:"must,nopanic"`
-	ProjectId            *string `copier:"must,nopanic"`
-	TargetClusterId      *string `copier:"must,nopanic"`
-	NamespaceId          *string `copier:"must,nopanic"`
-	DeploymentId         *string `copier:"must,nopanic"`
-	PaginationPageNumber *string `copier:"must,nopanic"`
-	PaginationPageSize   *string `copier:"must,nopanic"`
-	SortSortBy           *string `copier:"must,nopanic"`
-	SortSortOrder        *string `copier:"must,nopanic"`
+	Pagination *PageBasedPaginationRequest `copier:"must,nopanic"`
+	Sort       *Sort                       `copier:"must,nopanic"`
 }
 
 type V1BackupConfig struct {
@@ -84,22 +62,6 @@ type MetadataOfTheBackupConfiguration struct {
 	UpdateTime      *time.Time         `copier:"must,nopanic"`
 	Labels          *map[string]string `copier:"must,nopanic"`
 	Annotations     *map[string]string `copier:"must,nopanic"`
-}
-
-type DesiredBackupConfiguration struct {
-	Meta   *MetadataOfTheBackupConfiguration `copier:"must,nopanic"`
-	Config *BackupV1Config                   `copier:"must,nopanic"`
-	Status *Backupconfigv1Status             `copier:"must,nopanic"`
-}
-
-type BackupV1Config struct {
-	References      *BackupV1References1     `copier:"must,nopanic"`
-	JobHistoryLimit *int32                   `copier:"must,nopanic"`
-	Schedule        *BackupV1Schedule        `copier:"must,nopanic"`
-	Suspend         *bool                    `copier:"must,nopanic"`
-	BackupType      *ConfigBackupType        `copier:"must,nopanic"`
-	BackupLevel     *ConfigBackupLevel       `copier:"must,nopanic"`
-	ReclaimPolicy   *ConfigReclaimPolicyType `copier:"must,nopanic"`
 }
 
 type BackupV1References1 struct {

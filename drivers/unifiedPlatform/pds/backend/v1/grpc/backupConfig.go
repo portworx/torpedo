@@ -28,22 +28,17 @@ func (backupConf *PdsGrpc) getBackupConfigClient() (context.Context, publicBacku
 
 // CreateBackupConfig will create backup config for a given deployment
 func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
-	log.Infof("Backup Config - [%+v]", createBackupConfigRequest.BackupConfig.GRPC.Create.V1BackupConfig)
+	// log.Infof("Backup Create - [%+v]", createBackupConfigRequest.BackupConfig.Create)
 
 	response := &apiStructs.WorkFlowResponse{}
 
-	backupConfig := &publicBackupConfigapis.BackupConfig{}
-	log.Infof("Backup Config - [%v]", backupConfig)
-	err := utilities.CopyStruct(createBackupConfigRequest.BackupConfig.GRPC.Create.V1BackupConfig, backupConfig)
+	createRequest := &publicBackupConfigapis.CreateBackupConfigRequest{}
+	// log.Infof("Backup Create Request - [%v], Backup Config - [%v]", createRequest, createRequest.BackupConfig)
+	err := utilities.CopyStruct(createBackupConfigRequest.BackupConfig.Create, createRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Backup Config - [%v]", backupConfig)
-	backupRequest := &publicBackupConfigapis.CreateBackupConfigRequest{
-		DeploymentId: createBackupConfigRequest.BackupConfig.V1.Create.DeploymentId,
-		ProjectId:    createBackupConfigRequest.BackupConfig.V1.Create.ProjectId,
-		BackupConfig: backupConfig,
-	}
+	// log.Infof("Backup Create Request - [%v], Backup Config - [%v]", createRequest, createRequest.BackupConfig)
 
 	ctx, client, _, err := backupConf.getBackupConfigClient()
 	if err != nil {
@@ -52,10 +47,10 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStru
 
 	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
 
-	apiResponse, err := client.CreateBackupConfig(ctx, backupRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := client.CreateBackupConfig(ctx, createRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
-		return nil, fmt.Errorf("Error while creating the deployment: %v\n", err)
+		return nil, fmt.Errorf("Error while creating the backupConfig: %v\n", err)
 	}
 
 	err = utilities.CopyStruct(apiResponse, response)
@@ -68,28 +63,143 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStru
 
 // UpdateBackupConfig will update backup config for a given deployment
 func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
-	log.Warnf("UpdateBackupConfig is not implemented for GRPC")
-	return &apiStructs.WorkFlowResponse{}, nil
+
+	// log.Infof("Backup Update - [%+v]", updateBackupConfigRequest.BackupConfig.Update)
+
+	response := &apiStructs.WorkFlowResponse{}
+
+	updateRequest := &publicBackupConfigapis.UpdateBackupConfigRequest{}
+	// log.Infof("Backup Update - [%v], Backup Config - [%v]", updateRequest, updateRequest.BackupConfig)
+	err := utilities.CopyStruct(updateBackupConfigRequest.BackupConfig.Update, updateRequest)
+	if err != nil {
+		return response, err
+	}
+	// log.Infof("Backup Update - [%v], Backup Config - [%v]", updateRequest, updateRequest.BackupConfig)
+
+	ctx, client, _, err := backupConf.getBackupConfigClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
+
+	apiResponse, err := client.UpdateBackupConfig(ctx, updateRequest, grpc.PerRPCCredentials(credentials))
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while updating the backupConfig: %v\n", err)
+	}
+
+	err = utilities.CopyStruct(apiResponse, response)
+	if err != nil {
+		return response, err
+	}
+
+	return response, nil
 
 }
 
 // GetBackupConfig will fetch backup config for a given deployment
 func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
-	log.Warnf("GetBackupConfig is not implemented for GRPC")
-	return &apiStructs.WorkFlowResponse{}, nil
+	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
+
+	response := &apiStructs.WorkFlowResponse{}
+
+	getRequest := &publicBackupConfigapis.GetBackupConfigRequest{}
+	// log.Infof("Backup Get - [%v]", getRequest)
+	err := utilities.CopyStruct(getBackupConfigRequest.BackupConfig.Get, getRequest)
+	if err != nil {
+		return response, err
+	}
+	// log.Infof("Backup Get - [%v]", getRequest)
+
+	ctx, client, _, err := backupConf.getBackupConfigClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
+
+	apiResponse, err := client.GetBackupConfig(ctx, getRequest, grpc.PerRPCCredentials(credentials))
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while fetching the backupConfig: %v\n", err)
+	}
+
+	err = utilities.CopyStruct(apiResponse, response)
+	if err != nil {
+		return response, err
+	}
+
+	return response, nil
 
 }
 
 // DeleteBackupConfig will delete backup config for a given deployment
 func (backupConf *PdsGrpc) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
-	log.Warnf("DeleteBackupConfig is not implemented for GRPC")
-	return &apiStructs.WorkFlowResponse{}, nil
+	// log.Infof("Backup Delete - [%+v]", deleteBackupConfigRequest.BackupConfig.Delete)
 
+	response := &apiStructs.WorkFlowResponse{}
+
+	deleteRequest := &publicBackupConfigapis.DeleteBackupConfigRequest{}
+	// log.Infof("Backup Delete - [%v]", deleteRequest)
+	err := utilities.CopyStruct(deleteBackupConfigRequest.BackupConfig.Delete, deleteRequest)
+	if err != nil {
+		return response, err
+	}
+	// log.Infof("Backup Delete - [%v]", deleteRequest)
+
+	ctx, client, _, err := backupConf.getBackupConfigClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
+
+	apiResponse, err := client.DeleteBackupConfig(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while deleting the backupConfig: %v\n", err)
+	}
+
+	err = utilities.CopyStruct(apiResponse, response)
+	if err != nil {
+		return response, err
+	}
+
+	return response, nil
 }
 
 // ListBackupConfig will list backup config for a given deployment
 func (backupConf *PdsGrpc) ListBackupConfig(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
-	log.Warnf("ListBackupConfig is not implemented for GRPC")
-	return []apiStructs.WorkFlowResponse{}, nil
+	// log.Infof("Backup List - [%+v]", listBackupConfigRequest.BackupConfig.List)
 
+	response := []apiStructs.WorkFlowResponse{}
+
+	listRequest := &publicBackupConfigapis.ListBackupConfigsRequest{}
+	// log.Infof("Backup List - [%v]", listRequest)
+	err := utilities.CopyStruct(listBackupConfigRequest.BackupConfig.List, listRequest)
+	if err != nil {
+		return response, err
+	}
+	// log.Infof("Backup List - [%v]", listRequest)
+
+	ctx, client, _, err := backupConf.getBackupConfigClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
+
+	apiResponse, err := client.ListBackupConfigs(ctx, listRequest, grpc.PerRPCCredentials(credentials))
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while listing the backupConfig: %v\n", err)
+	}
+
+	err = utilities.CopyStruct(apiResponse, response)
+	if err != nil {
+		return response, err
+	}
+
+	return response, nil
 }

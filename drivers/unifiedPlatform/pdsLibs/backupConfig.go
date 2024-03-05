@@ -5,7 +5,7 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 )
 
-type BackupConfig struct {
+type WorkflowBackupInput struct {
 	ProjectId        string
 	DeploymentID     string
 	BackupConfigType *pdsv2.ConfigBackupType
@@ -14,11 +14,11 @@ type BackupConfig struct {
 }
 
 // CreateBackupConfig created backup config for the deployment
-func CreateBackupConfig(backupConfig BackupConfig) (*apiStructs.WorkFlowResponse, error) {
+func CreateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
 
 	createBackupRequest := apiStructs.WorkFlowRequest{}
 
-	createBackupRequest.BackupConfig.GRPC.Create.V1BackupConfig = &apiStructs.V1BackupConfig{
+	createBackupRequest.BackupConfig.Create.BackupConfig = &apiStructs.V1BackupConfig{
 		Meta: &apiStructs.Meta{
 			Uid: intToPointerString(10),
 		},
@@ -29,10 +29,79 @@ func CreateBackupConfig(backupConfig BackupConfig) (*apiStructs.WorkFlowResponse
 			CustomResourceName: intToPointerString(70),
 		},
 	}
-	createBackupRequest.BackupConfig.GRPC.Create.DeploymentId = backupConfig.DeploymentID
-	createBackupRequest.BackupConfig.GRPC.Create.ProjectId = backupConfig.ProjectId
+	createBackupRequest.BackupConfig.Create.DeploymentId = backupConfig.DeploymentID
+	createBackupRequest.BackupConfig.Create.ProjectId = backupConfig.ProjectId
 
 	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupResponse, err
+}
+
+// UpdateBackupConfig updates backup config of the deployment
+func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+
+	updateBackupRequest := apiStructs.WorkFlowRequest{}
+
+	updateBackupRequest.BackupConfig.Update.BackupConfig = &apiStructs.V1BackupConfig{
+		Meta: &apiStructs.Meta{
+			Uid: intToPointerString(10),
+		},
+		Config: &apiStructs.Config{
+			UserEmail: intToPointerString(15),
+		},
+		Status: &apiStructs.Backupconfigv1Status{
+			CustomResourceName: intToPointerString(70),
+		},
+	}
+
+	backupResponse, err := v2Components.PDS.UpdateBackupConfig(&updateBackupRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupResponse, err
+}
+
+// DeleteBackupConfig deletes backup config of the deployment
+func DeleteBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+
+	deleteBackupRequest := apiStructs.WorkFlowRequest{}
+
+	deleteBackupRequest.BackupConfig.Delete.Id = "SomeID"
+
+	backupResponse, err := v2Components.PDS.DeleteBackupConfig(&deleteBackupRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupResponse, err
+}
+
+// GetBackupConfig fetches backup config for the deployment
+func GetBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+
+	getBackupRequest := apiStructs.WorkFlowRequest{}
+
+	getBackupRequest.BackupConfig.Get.Id = "SomeID"
+
+	backupResponse, err := v2Components.PDS.GetBackupConfig(&getBackupRequest)
+	if err != nil {
+		return nil, err
+	}
+	return backupResponse, err
+}
+
+// ListBackupConfig lists backup config for the deployment
+func ListBackupConfig(backupConfig WorkflowBackupInput) ([]apiStructs.WorkFlowResponse, error) {
+
+	listBackupConfig := apiStructs.WorkFlowRequest{}
+
+	listBackupConfig.BackupConfig.List.Sort = &apiStructs.Sort{
+		SortBy:    apiStructs.SortBy_Field(int32(90)),
+		SortOrder: apiStructs.SortOrder_Value(int32(15)),
+	}
+
+	backupResponse, err := v2Components.PDS.ListBackupConfig(&listBackupConfig)
 	if err != nil {
 		return nil, err
 	}

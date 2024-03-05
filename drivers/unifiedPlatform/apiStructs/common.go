@@ -79,3 +79,17 @@ type V1DeploymentMetaData struct {
 	NamespaceName        *string `copier:"must,nopanic"`
 	TlsEnabled           *bool   `copier:"must,nopanic"`
 }
+
+type PageBasedPaginationRequest struct {
+	PageNumber int64 `copier:"must,nopanic"`
+	PageSize   int64 `copier:"must,nopanic"`
+}
+
+type Sort struct {
+	SortBy    SortBy_Field    `copier:"must,nopanic"`
+	SortOrder SortOrder_Value `copier:"must,nopanic"`
+}
+
+type SortBy_Field int32
+
+type SortOrder_Value int32
