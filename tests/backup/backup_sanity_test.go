@@ -296,6 +296,9 @@ var _ = Describe("{BasicBackupCreation}", func() {
 							}*/
 				var provisionerVolumeSnapshotClassMap = make(map[string]string)
 				provisionerVolumeSnapshotClassMap[cephfsProvisioner] = "ocs-storagecluster-cephfsplugin-snapclass"
+				for key, value := range provisionerVolumeSnapshotClassMap {
+					fmt.Println(key, ":", value)
+				}
 				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassMap)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)

@@ -4472,6 +4472,10 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 			return err
 		}
 		if len(provisionerVolumeSnapshotClassMap) > 0 {
+			for key, value := range provisionerVolumeSnapshotClassMap {
+				fmt.Println("In additional parameter")
+				fmt.Println(key, ":", value)
+			}
 			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
