@@ -337,6 +337,10 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", func() {
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		defer func() {
+			err := SetSourceKubeConfig()
+			log.FailOnError(err, "Unable to switch context to source cluster [%s]", SourceClusterName)
+		}()
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Deleting the restores")
@@ -347,6 +351,9 @@ var _ = Describe("{ValidateFiftyVolumeBackups}", func() {
 		log.InfoD("Deleting the deployed apps after the testcase")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
+		for _, appCntxt := range scheduledAppContexts {
+			appCntxt.SkipVolumeValidation = true
+		}
 		DestroyApps(scheduledAppContexts, opts)
 		log.InfoD("Deleting the px-backup objects")
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudCredUID, ctx)
