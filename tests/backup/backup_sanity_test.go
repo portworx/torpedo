@@ -294,7 +294,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 								"openshift-storage.rbd.csi.ceph.com":    "DEFAULT",
 							}*/
 				var provisionerVolumeSnapshotClassMap = make(map[string]string)
-				provisionerVolumeSnapshotClassMap[appCtx.ScheduleOptions.StorageProvisioner] = "DEFAULT"
+				provisionerVolumeSnapshotClassMap[appCtx.ScheduleOptions.StorageProvisioner] = "ocs-storagecluster-cephfsplugin-snapclass"
 				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassMap)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
