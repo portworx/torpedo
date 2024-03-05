@@ -4,8 +4,14 @@ import (
 	"context"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	commonapis "github.com/pure-px/apis/public/portworx/common/apiv1"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
+
+type PdsGrpc struct {
+	ApiClientV2 *grpc.ClientConn
+	AccountId   string
+}
 
 const (
 	pxAccountIDKey = "px-account-id"

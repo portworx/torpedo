@@ -2,7 +2,7 @@ package stworkflows
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs/dataservice"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 )
 
 func DeployDataService(ds dslibs.PDSDataService) (*apiStructs.WorkFlowResponse, error) {

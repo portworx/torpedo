@@ -1,4 +1,4 @@
-package dataservice
+package pdslibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
