@@ -1,44 +1,7 @@
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-  {{ if .Suffix }}
-    name: postgres-data-{{ .Suffix }}
-  {{ else }}
-    name: postgres-data-no-suffix{{ end }}
-spec:
-  storageClassName: postgres-sc
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  annotations:
-    startDataSupported: "true"
-    username: "pgbench"
-    password: "superpostgres"
-    databaseName: "postgres"
-    port: "5432"
-    appType: "postgres"
-spec:
-  type: NodePort
-  selector:
-    app: postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  {{ if .Suffix }}
-    name: postgres-{{ .Suffix }}
-  {{ else }}
-    name: postgres-no-suffix{{ end }}
+  name: postgres
 spec:
   strategy:
     rollingUpdate:
@@ -55,6 +18,16 @@ spec:
         app: postgres
     spec:
       schedulerName: stork
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                      - postgres
+              topologyKey: "kubernetes.io/hostname"
       containers:
         - name: postgres
           image: postgres:9.5
@@ -71,8 +44,15 @@ spec:
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           volumeMounts:
-            - mountPath: /var/lib/postgresql/data
-              name: postgredb
+            {{ if .ClaimsCount }}
+            {{- range $val := Iterate .ClaimsCount }}
+            - name: postgredb-{{ $val }}
+              mountPath: /var/lib/postgresql/data{{ $val }}
+            {{- end }}
+            {{ else }}
+            - name: postgredb
+              mountPath: /var/lib/postgresql/data
+            {{- end }}
           readinessProbe:
             exec:
               command: ["psql", "-U", "pgbench", "-c", "CREATE TABLE IF NOT EXISTS test_table ( test_text TEXT ); INSERT INTO test_table VALUES ( 'test_message' ); SELECT * FROM test_table; SELECT pg_sleep(1); DELETE FROM test_table;"]
@@ -84,9 +64,14 @@ spec:
             initialDelaySeconds: 45
             timeoutSeconds: 2
       volumes:
+      {{ if .ClaimsCount }}
+        {{- range $val := Iterate .ClaimsCount }}
+        - name: postgredb-{{ $val }}
+          persistentVolumeClaim:
+            claimName: postgres-data-{{ $val }}
+      {{- end }}
+      {{- else }}
         - name: postgredb
           persistentVolumeClaim:
-            {{ if .Suffix }}
-              claimName: postgres-data-{{ .Suffix }}
-            {{ else }}
-              claimName: postgres-data-no-suffix{{ end }}
+            claimName: postgres-data
+      {{- end }}
