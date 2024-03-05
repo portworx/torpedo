@@ -307,6 +307,10 @@ func getPXNamespace() string {
 
 // CreateBackup creates backup and checks for success
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string) error {
+	for key, value := range provisionerVolumeSnapshotClassMap {
+		fmt.Println("inside create backup func")
+		fmt.Println(key, ":", value)
+	}
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap)
 	if err != nil {
 		return err
@@ -499,6 +503,11 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 		if !Contains(namespaces, namespace) {
 			namespaces = append(namespaces, namespace)
 		}
+	}
+
+	for key, value := range provisionerVolumeSnapshotClassMap {
+		fmt.Println("inside create backup validation")
+		fmt.Println(key, ":", value)
 	}
 
 	// Insert data before backup which is expected to be present after restore
@@ -749,6 +758,11 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+	}
+
+	for key, value := range provisionerVolumeSnapshotClassMap {
+		fmt.Println("inside create backup func without check")
+		fmt.Println(key, ":", value)
 	}
 
 	err := AdditionalBackupRequestParams(bkpCreateRequest, provisionerVolumeSnapshotClassMap)
