@@ -172,8 +172,7 @@ func (app *MySqlConfig) StartData(command <-chan string, ctx context.Context) er
 	  )`, tableName)
 	_, err := app.ExecuteCommand([]string{createTableQuery}, ctx)
 	if err != nil {
-		log.InfoD("Error while creating table - [%s]", err.Error())
-		allErrors = append(allErrors, err.Error())
+		allErrors = append(allErrors, fmt.Sprintf("Continuity Pipeline Error - [%s] at [%s]", err.Error(), time.Now().Format("2006-01-02 15:04:05")))
 	}
 	for {
 		select {
