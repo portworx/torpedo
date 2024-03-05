@@ -16,12 +16,14 @@ import (
 	"sync"
 	"time"
 
+	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
+
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/sched-ops/k8s/storage"
 
-	"github.com/portworx/torpedo/drivers/backup/portworx"
-
+	migration "github.com/libopenstorage/stork/pkg/migration/controllers"
 	"github.com/portworx/torpedo/drivers"
+	"github.com/portworx/torpedo/drivers/backup/portworx"
 
 	appsapi "k8s.io/api/apps/v1"
 
@@ -60,6 +62,34 @@ import (
 	tektoncdv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	storageapi "k8s.io/api/storage/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
+)
+
+// TestcaseAuthor List
+const (
+	Ak             TestcaseAuthor = "ak-px"
+	Apimpalgaonkar TestcaseAuthor = "apimpalgaonkar"
+	KPhalgun       TestcaseAuthor = "kphalgun-px"
+	Kshithijiyer   TestcaseAuthor = "kshithijiyer-px"
+	Mkoppal        TestcaseAuthor = "mkoppal-px"
+	Sagrawal       TestcaseAuthor = "sagrawal-px"
+	Skonda         TestcaseAuthor = "skonda-px"
+	Sn             TestcaseAuthor = "sn-px"
+	Tthurlapati    TestcaseAuthor = "tthurlapati-px"
+	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
+	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
+	ATrivedi       TestcaseAuthor = "atrivedi-px"
+)
+
+// TestcaseQuarter List
+const (
+	Q4FY23 TestcaseQuarter = "Q4FY23"
+	Q1FY24 TestcaseQuarter = "Q1FY24"
+	Q2FY24 TestcaseQuarter = "Q2FY24"
+	Q3FY24 TestcaseQuarter = "Q3FY24"
+	Q4FY24 TestcaseQuarter = "Q4FY24"
+	Q1FY25 TestcaseQuarter = "Q1FY25"
+	Q2FY25 TestcaseQuarter = "Q2FY25"
+	Q3FY25 TestcaseQuarter = "Q3FY25"
 )
 
 const (
@@ -131,6 +161,7 @@ const (
 	backupScheduleDeleteRetryTime             = 30 * time.Second
 	sshPodName                                = "ssh-pod"
 	sshPodNamespace                           = "ssh-pod-namespace"
+	VirtLauncherContainerName                 = "compute"
 )
 
 var (
@@ -145,6 +176,11 @@ var (
 	GlobalAWSLockedBucketName   string
 	GlobalAzureLockedBucketName string
 	GlobalGCPLockedBucketName   string
+	GlobalPreRuleName           string
+	GlobalPostRuleName          string
+	GlobalPreRuleUid            string
+	GlobalPostRuleUid           string
+	GlobalRuleFlag              bool
 	cloudProviders              = []string{"aws"}
 	CommonPassword              string
 	backupPodLabels             = []map[string]string{
@@ -158,6 +194,7 @@ var (
 	NfsBackupExecutorPodLabel  = map[string]string{"kdmp.portworx.com/driver-name": "nfsbackup"}
 	NfsRestoreExecutorPodLabel = map[string]string{"kdmp.portworx.com/driver-name": "nfsrestore"}
 	queryCountForValidation    = 10
+	IsBackupLongevityRun       = false
 )
 
 type UserRoleAccess struct {
@@ -309,6 +346,23 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+
+	err = BackupSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Backup [%s] created successfully", backupName)
+	return nil
+}
+
+// CreateVMBackup creates a VM backup and checks for success
+func CreateVMBackup(backupName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string,
+	labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool, ctx context1.Context) error {
+	_, err := CreateVMBackupByNamespacesWithoutCheck(backupName, vms, clusterName, bLocation, bLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, skipVMAutoExecRules, ctx)
 	if err != nil {
 		return err
 	}
@@ -475,6 +529,50 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
+// CreateVMBackupWithValidation creates VM backup, checks for success, and validates the VM backup
+func CreateVMBackupWithValidation(ctx context1.Context, backupName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool) error {
+	namespaces := make([]string, 0)
+	var removeSpecs []interface{}
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+
+		// Removing specs which are outside the scope of VM Backup
+		for _, spec := range scheduledAppContext.App.SpecList {
+			// VM Backup will not consider service object for now
+			if appSpec, ok := spec.(*corev1.Service); ok {
+				removeSpecs = append(removeSpecs, appSpec)
+			}
+			// TODO: Add more types of specs to remove depending on the app context
+		}
+		err := Inst().S.RemoveAppSpecsByName(scheduledAppContext, removeSpecs)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Insert data before backup which is expected to be present after restore
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	}
+
+	err = CreateVMBackup(backupName, vms, clusterName, bLocation, bLocationUID, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, skipVMAutoExecRules, ctx)
+	if err != nil {
+		return err
+	}
+
+	// Insert data after backup which is expected NOT to be present after restore
+	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
+	}
+
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
+}
+
 func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred string, cloudCredUID string, ctx context1.Context) (*api.BackupUpdateResponse, error) {
 	backupDriver := Inst().Backup
 	bkpUpdateRequest := &api.BackupUpdateRequest{
@@ -497,6 +595,18 @@ func UpdateBackup(backupName string, backupUid string, orgId string, cloudCred s
 func CreateBackupWithCustomResourceTypeWithoutValidation(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, resourceTypes []string, ctx context1.Context) error {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
 
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
@@ -650,6 +760,18 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) (*api.BackupInspectResponse, error) {
 
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -702,6 +824,108 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 	return resp, nil
 }
 
+// CreateVMBackupByNamespacesWithoutCheck creates VM backup of provided namespaces without waiting for success.
+func CreateVMBackupByNamespacesWithoutCheck(backupName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string,
+	labelSelectors map[string]string, orgID string, uid string, preRuleName string,
+	preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool, ctx context1.Context) (*api.BackupInspectResponse, error) {
+
+	backupDriver := Inst().Backup
+	includeResource := GenerateResourceInfo(vms)
+	namespaces := GetNamespacesFromVMs(vms)
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		IncludeResources: includeResource,
+		BackupObjectType: &api.BackupCreateRequest_BackupObjectType{
+			Type: api.BackupCreateRequest_BackupObjectType_VirtualMachine,
+		},
+		SkipVmAutoExecRules: skipVMAutoExecRules,
+	}
+
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// GetNamespacesFromVMs get a slice of namespaces from VMs
+func GetNamespacesFromVMs(vms []kubevirtv1.VirtualMachine) []string {
+	namespaces := make([]string, 0)
+	for _, v := range vms {
+		if !Contains(namespaces, v.Namespace) {
+			namespaces = append(namespaces, v.Namespace)
+		}
+	}
+	return namespaces
+}
+
+// GetNamespacesToVMsMap gets a map of namespaces to VM names
+func GetNamespacesToVMsMap(vms []kubevirtv1.VirtualMachine) map[string][]string {
+	namespacesToVMsMap := make(map[string][]string, len(vms))
+	for _, v := range vms {
+		namespacesToVMsMap[v.Namespace] = append(namespacesToVMsMap[v.Namespace], v.Name)
+	}
+	return namespacesToVMsMap
+
+}
+
+// GenerateResourceInfo generates []*api.ResourceInfo
+func GenerateResourceInfo(vms []kubevirtv1.VirtualMachine) []*api.ResourceInfo {
+	var includeResource []*api.ResourceInfo
+
+	for _, v := range vms {
+		includeResource = append(includeResource, &api.ResourceInfo{
+			Group:     "kubevirt.io",
+			Kind:      "VirtualMachine",
+			Name:      v.Name,
+			Namespace: v.Namespace,
+			Version:   "v1",
+		})
+	}
+
+	return includeResource
+}
+
 // CreateBackupWithoutCheck creates backup without waiting for success
 func CreateBackupWithoutCheck(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string) (*api.BackupInspectResponse, error) {
 	namespaces := make([]string, 0)
@@ -719,6 +943,19 @@ func CreateBackupWithoutCheck(ctx context1.Context, backupName string, clusterNa
 func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -2203,7 +2440,7 @@ func restoreSuccessWithReplacePolicy(restoreName string, orgID string, retryDura
 	return err
 }
 
-func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, appContext context1.Context,
+func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, restoreName string, context context1.Context,
 	backupName string, namespaceMapping map[string]string, startTime time.Time) error {
 	var k8sCore = core.Instance()
 	var allBackupNamespaces []string
@@ -2218,19 +2455,19 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		Name:  restoreName,
 		OrgId: BackupOrgID,
 	}
-	restoreInspectResponse, err := backupDriver.InspectRestore(appContext, restoreInspectRequest)
+	restoreInspectResponse, err := backupDriver.InspectRestore(context, restoreInspectRequest)
 	if err != nil {
 		return err
 	}
 
-	backupUid, err := backupDriver.GetBackupUID(appContext, backupName, BackupOrgID)
+	backupUid, err := backupDriver.GetBackupUID(context, backupName, BackupOrgID)
 
 	backupInspectRequest := &api.BackupInspectRequest{
 		Name:  backupName,
 		Uid:   backupUid,
 		OrgId: BackupOrgID,
 	}
-	backupInspectResponse, _ := backupDriver.InspectBackup(appContext, backupInspectRequest)
+	backupInspectResponse, _ := backupDriver.InspectBackup(context, backupInspectRequest)
 	theBackup := backupInspectResponse.GetBackup()
 	allBackupNamespaces = theBackup.Namespaces
 	theRestore := restoreInspectResponse.GetRestore()
@@ -2289,7 +2526,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 	log.Infof("Namespace Mapping - [%+v]", namespaceMapping)
 	for _, ctx := range expectedRestoredAppContexts {
 
-		appInfo, err := appUtils.ExtractConnectionInfo(ctx)
+		appInfo, err := appUtils.ExtractConnectionInfo(ctx, context)
 		if err != nil {
 			allErrors = append(allErrors, err.Error())
 		}
@@ -2302,8 +2539,15 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 				appInfo.Port,
 				appInfo.DBName,
 				appInfo.NodePort,
-				appInfo.Namespace)
-
+				appInfo.Namespace,
+				appInfo.IPAddress,
+				Inst().N)
+			if appInfo.AppType == appType.Kubevirt && appInfo.StartDataSupport {
+				err = appHandler.WaitForVMToBoot()
+				if err != nil {
+					return fmt.Errorf("Unable to boot VM on destination. Error - [%s]", err.Error())
+				}
+			}
 			pods, err := k8sCore.GetPods(appInfo.Namespace, make(map[string]string))
 			if err != nil {
 				return err
@@ -2327,7 +2571,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 		// TODO: This needs to be fixed later in case of multiple apps in one namsespace
 		if len(dataBeforeBackup) != 0 {
 			log.InfoD("Validating data inserted before backup")
-			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			err := verifyDataPresentInApp(eachHandler, dataBeforeBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], context)
 			if err != nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Rows NOT found after restore. Error - [%s]", err.Error()))
 			}
@@ -2337,7 +2581,7 @@ func ValidateDataAfterRestore(expectedRestoredAppContexts []*scheduler.Context, 
 
 		if len(dataAfterBackup) != 0 {
 			log.InfoD("Validating data inserted after backup")
-			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], appContext)
+			err := verifyDataPresentInApp(eachHandler, dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()], context)
 			if err == nil {
 				allErrors = append(allErrors, fmt.Sprintf("Data validation failed. Unexpected Rows found after restore. Rows Found - [%v]", dataAfterBackup[eachHandler.GetNamespace()][eachHandler.GetApplicationType()]))
 			}
@@ -3030,9 +3274,9 @@ func GetPxBackupBuildDate() (string, error) {
 	return backupVersion.GetBuildDate(), nil
 }
 
-// UpgradePxBackup will perform the upgrade tasks for Px Backup to the version passed as string
+// PxBackupUpgrade will perform the upgrade tasks for Px Backup to the version passed as string
 // Eg: versionToUpgrade := "2.4.0"
-func UpgradePxBackup(versionToUpgrade string) error {
+func PxBackupUpgrade(versionToUpgrade string) error {
 	var cmd string
 
 	// Compare and validate the upgrade path
@@ -3393,6 +3637,18 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 	labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string,
 	postRuleUid string, namespaceLabel string, ctx context1.Context) (*api.BackupInspectResponse, error) {
 
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
 	backupDriver := Inst().Backup
 	bkpCreateRequest := &api.BackupCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -3446,6 +3702,19 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 
 // CreateScheduleBackupWithNamespaceLabelWithoutCheck creates a schedule backup with namespace label filter without waiting for success
 func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clusterName string, bkpLocation string, bkpLocationUID string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, namespaceLabel string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
 	backupDriver := Inst().Backup
 	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
 		CreateMetadata: &api.CreateMetadata{
@@ -4679,6 +4948,42 @@ func CreateRuleForBackupWithMultipleApplications(orgID string, appList []string,
 		}
 	}
 	return preRuleName, postRuleName, nil
+}
+
+type VMRuleType string
+
+const (
+	Freeze   VMRuleType = "freeze"
+	Unfreeze VMRuleType = "unfreeze"
+)
+
+// CreateRuleForVMBackup creates freeze/unfreeze rule for VM backup
+func CreateRuleForVMBackup(ruleName string, vms []kubevirtv1.VirtualMachine, ruleType VMRuleType, ctx context1.Context) error {
+	var rulesInfo api.RulesInfo
+	namespaceToVMs := GetNamespacesToVMsMap(vms)
+	for namespace, vmList := range namespaceToVMs {
+		for _, vm := range vmList {
+			freezeAction := fmt.Sprintf("/usr/bin/virt-freezer --%s --name %s --namespace %s", ruleType, vm, namespace)
+			ruleAction := api.RulesInfo_Action{Background: false, RunInSinglePod: false,
+				Value: freezeAction}
+			var actions = []*api.RulesInfo_Action{&ruleAction}
+
+			rulesInfo.Rules = append(rulesInfo.Rules, &api.RulesInfo_RuleItem{
+				PodSelector: map[string]string{"vm.kubevirt.io/name": vm},
+				Actions:     actions,
+				Container:   VirtLauncherContainerName,
+			})
+		}
+	}
+	RuleCreateReq := &api.RuleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  ruleName,
+			OrgId: BackupOrgID,
+		},
+		RulesInfo: &rulesInfo,
+	}
+	_, err := Inst().Backup.CreateRule(ctx, RuleCreateReq)
+	return err
 }
 
 // GetAllBackupNamesByOwnerID gets all backup names associated with the given ownerID
@@ -6030,6 +6335,8 @@ func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error)
 
 // RunCmdInVM runs a command in the VM by SSHing into it
 func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) (string, error) {
+	var username string
+	var password string
 	// Kubevirt client
 	k8sKubevirt := kubevirt.Instance()
 
@@ -6043,9 +6350,13 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	log.Infof("IP Address - %s", ipAddress)
 
 	// Getting username of the VM
-	// Username has to be added as a label to the VM Spec
-	username := vmInstance.Labels["username"]
-	log.Infof("Username - %s", username)
+	// Username has to be added as a label to the VMI Spec
+	if u, ok := vmInstance.Labels["username"]; !ok {
+		return "", fmt.Errorf("username not found in the labels of the vmi spec")
+	} else {
+		log.Infof("Username - %s", u)
+		username = u
+	}
 
 	// Get password of the VM
 	// Password has to be added as a value in the ConfigMap named kubevirt-creds whose key the name of the VM
@@ -6053,7 +6364,13 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	if err != nil {
 		return "", err
 	}
-	password := cm.Data[vm.Name]
+	if p, ok := cm.Data[vm.Name]; !ok {
+		return "", fmt.Errorf("password not found in the configmap [%s/%s] for vm - [%s]", "default", "kubevirt-creds", vm.Name)
+	} else {
+		log.Infof("Password - %s", p)
+		password = p
+
+	}
 
 	// SSH command to be executed
 	sshCmd := fmt.Sprintf("sshpass -p '%s' ssh -o StrictHostKeyChecking=no %s@%s %s", password, username, ipAddress, cmd)
@@ -6072,7 +6389,7 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 
 		// To check if the ssh server is up and running
 		t := func() (interface{}, bool, error) {
-			output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", "default")
+			output, err := k8sCore.RunCommandInPod(testCmdArgs, sshPodName, "ssh-container", sshPodNamespace)
 			if err != nil {
 				log.Infof("Error encountered")
 				if isConnectionError(err.Error()) {
@@ -6091,7 +6408,7 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 		}
 
 		// Executing the actual command
-		output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", "default")
+		output, err := k8sCore.RunCommandInPod(cmdArgs, sshPodName, "ssh-container", sshPodNamespace)
 		if err != nil {
 			return output, err
 		}
@@ -7216,5 +7533,143 @@ func ValidateCustomResourceRestores(ctx context1.Context, orgID string, resource
 	if len(errStrings) > 0 {
 		return fmt.Errorf("ValidateRestore Errors: {%s}", strings.Join(errStrings, "}\n{"))
 	}
+	return nil
+}
+
+// ScaleApplicationToDesiredReplicas scales Application to desired replicas for migrated application namespace.
+func ScaleApplicationToDesiredReplicas(namespace string) error {
+	var options metav1.ListOptions
+	var parsedReplicas int
+	deploymentList, err := apps.Instance().ListDeployments(namespace, options)
+	if err != nil {
+		return err
+	}
+	statefulSetList, err := apps.Instance().ListStatefulSets(namespace, options)
+	if err != nil {
+		return err
+	}
+	if len(deploymentList.Items) != 0 {
+		deployments := deploymentList.Items
+		for _, deployment := range deployments {
+			if replicas, present := deployment.Annotations[migration.StorkMigrationReplicasAnnotation]; present {
+				parsedReplicas, _ = strconv.Atoi(replicas)
+
+			}
+			deploymentObj, err := apps.Instance().GetDeployment(deployment.Name, namespace)
+			if err != nil {
+				return err
+			}
+			*deploymentObj.Spec.Replicas = int32(parsedReplicas)
+			updatedBackupDeploymentobj, err := apps.Instance().UpdateDeployment(deploymentObj)
+			if err != nil {
+				return err
+			}
+			log.Infof("Deployment [%s] replica count after scaling to %d  is %v", deployment.Name, int32(parsedReplicas), *updatedBackupDeploymentobj.Spec.Replicas)
+		}
+	}
+
+	if len(statefulSetList.Items) != 0 {
+		statefulSets := statefulSetList.Items
+		for _, statefulSet := range statefulSets {
+			if replicas, present := statefulSet.Annotations[migration.StorkMigrationReplicasAnnotation]; present {
+				parsedReplicas, _ = strconv.Atoi(replicas)
+
+			}
+			statefulSetObj, err := apps.Instance().GetStatefulSet(statefulSet.Name, namespace)
+			if err != nil {
+				return err
+			}
+			*statefulSetObj.Spec.Replicas = int32(parsedReplicas)
+			updatedBackupstatefulSetobj, err := apps.Instance().UpdateStatefulSet(statefulSetObj)
+			if err != nil {
+				return err
+			}
+			log.Infof("statefulSet [%s] replica count after scaling to %d  is %v", statefulSet.Name, int32(parsedReplicas), *updatedBackupstatefulSetobj.Spec.Replicas)
+		}
+
+	}
+
+	return nil
+}
+
+// AddNodeToVirtualMachine applies node selector to the virtual machine
+func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[string]string, ctx context1.Context) error {
+	k8sKubevirt := kubevirt.Instance()
+
+	vm.Spec.Template.Spec.NodeSelector = nodeSelector
+
+	vmUpdate, err := k8sKubevirt.UpdateVirtualMachine(&vm)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Node selector for [%s] is updated successfully to [%v]", vmUpdate.Name, vmUpdate.Spec.Template.Spec.NodeSelector)
+
+	return nil
+}
+
+// CompareNodeAndStatusOfVMInNamespace compares the status and Nodes of the VMI from a particular namespace
+func CompareNodeAndStatusOfVMInNamespace(namespace string, expectedNode node.Node, expectedState string, ctx context1.Context) error {
+	k8sKubevirt := kubevirt.Instance()
+
+	allVmsInNamespaces, err := GetAllVMsInNamespace(namespace)
+	if err != nil {
+		return err
+	}
+
+	for _, eachVM := range allVmsInNamespaces {
+		vmi, err := k8sKubevirt.GetVirtualMachineInstance(ctx, eachVM.Name, eachVM.Namespace)
+		if err != nil {
+			return err
+		}
+		log.Infof("Current state of [%s] is [%s]", vmi.Name, vmi.Status.Phase)
+		log.Infof("Node of [%s] is [%s]", vmi.Name, vmi.Status.NodeName)
+		if string(vmi.Status.Phase) == expectedState {
+			if expectedState == "Scheduling" {
+				return nil
+			}
+		} else {
+			return fmt.Errorf("VMI state Validation failed for [%s]. Expected State - [%s], State Found [%s]", vmi.Name, expectedState, vmi.Status.Phase)
+		}
+		if vmi.Status.NodeName != expectedNode.Name {
+			return fmt.Errorf("Node Validation failed for [%s]. Expected Node - [%s], Node Found [%s]", vmi.Name, expectedNode.Name, vmi.Status.NodeName)
+		}
+	}
+
+	return nil
+}
+
+// DeleteAllVMsInNamespace delete all the Kubevirt VMs in the given namespace
+func DeleteAllVMsInNamespace(namespace string) error {
+	k8sKubevirt := kubevirt.Instance()
+	var wg sync.WaitGroup
+	var mutex sync.Mutex
+	errors := make([]string, 0)
+
+	vms, err := k8sKubevirt.ListVirtualMachines(namespace)
+	if err != nil {
+		return err
+	}
+	for _, vm := range vms.Items {
+		wg.Add(1)
+		go func(vm kubevirtv1.VirtualMachine) {
+			defer GinkgoRecover()
+			defer wg.Done()
+			err := k8sKubevirt.DeleteVirtualMachine(vm.Name, namespace)
+			if err != nil {
+				mutex.Lock()
+				errors = append(errors, fmt.Sprintf("Failed to delete [%s]. Error - [%s]", vm.Name, err.Error()))
+				mutex.Unlock()
+			} else {
+				log.Infof("Deleted vm - %s", vm.Name)
+			}
+		}(vm)
+	}
+	wg.Wait()
+
+	if len(errors) > 0 {
+		return fmt.Errorf("Errors occured while deleting VMs. Errors:\n\n %s", strings.Join(errors, "\n"))
+	}
+
 	return nil
 }
