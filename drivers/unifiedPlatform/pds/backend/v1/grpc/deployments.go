@@ -13,11 +13,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-type PdsGrpc struct {
-	ApiClientV2 *grpc.ClientConn
-	AccountId   string
-}
-
 // GetClient updates the header with bearer token and returns the new client
 func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploymentapis.DeploymentServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")

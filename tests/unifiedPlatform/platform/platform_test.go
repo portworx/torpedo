@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
@@ -79,6 +80,49 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			_, err := stworkflows.DeployDataservice(ds)
 			log.FailOnError(err, "Error while deploying ds")
 		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{CreateBackupConfig}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateBackupConfig", "Creates a backup config", nil, 0)
+	})
+
+	It("Create Backup Config", func() {
+		Step("Create Backup Config", func() {
+			_, err := dslibs.CreateBackupConfig(dslibs.WorkflowBackupInput{
+				ProjectId:    "someprojectId",
+				DeploymentID: "SomedeploymentId",
+			})
+			log.Infof("Error while creating backup config - %s", err.Error())
+		})
+
+		Step("Update Backup Config", func() {
+			_, err := dslibs.UpdateBackupConfig(dslibs.WorkflowBackupInput{
+				ProjectId:    "someprojectId2",
+				DeploymentID: "SomedeploymentId2",
+			})
+			log.Infof("Error while updating backup config - %s", err.Error())
+		})
+
+		Step("Get Backup Config", func() {
+			_, err := dslibs.GetBackupConfig(dslibs.WorkflowBackupInput{})
+			log.Infof("Error while fetching backup config - %s", err.Error())
+		})
+
+		Step("Delete Backup Config", func() {
+			_, err := dslibs.DeleteBackupConfig(dslibs.WorkflowBackupInput{})
+			log.Infof("Error while deleting backup config - %s", err.Error())
+		})
+
+		Step("List Backup Config", func() {
+			_, err := dslibs.ListBackupConfig(dslibs.WorkflowBackupInput{})
+			log.Infof("Error while listing backup config - %s", err.Error())
+		})
 	})
 
 	JustAfterEach(func() {

@@ -3,6 +3,7 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"github.com/jinzhu/copier"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/pkg/log"
@@ -288,7 +289,7 @@ func GenerateRandomCommandToCreateFiles(count int) map[string][]string {
 	return randomFileCommands
 }
 
-// Function to get environment variable and fall back to default value if not found
+// GetEnv gets environment variable and fall back to default value if not found
 func GetEnv(key, fallback string) string {
 	value := os.Getenv(key)
 	if len(value) == 0 {
@@ -296,4 +297,12 @@ func GetEnv(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+// CopyStruct copies one struct to another and raise error if failed
+func CopyStruct(fromValue interface{}, toValue interface{}) error {
+	log.Infof("Copying from [%+v]", fromValue)
+	log.Infof("Copying to [%+v]", toValue)
+	err := copier.CopyWithOption(toValue, fromValue, copier.Option{CaseSensitive: false})
+	return err
 }

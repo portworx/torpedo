@@ -3,8 +3,14 @@ package grpc
 import (
 	"context"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
+
+type PdsGrpc struct {
+	ApiClientV2 *grpc.ClientConn
+	AccountId   string
+}
 
 const (
 	pxAccountIDKey = "px-account-id"
