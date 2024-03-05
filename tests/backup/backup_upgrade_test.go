@@ -188,7 +188,7 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
@@ -407,7 +407,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				labelSelectors := make(map[string]string, 0)
 				log.InfoD("Creating a backup of namespace [%s] with pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				err = IsFullBackup(backupName, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if backup [%s] is a full backup", backupName))
@@ -423,7 +423,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				labelSelectors := make(map[string]string, 0)
 				log.InfoD("Creating a backup of namespace [%s] without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				backupWithoutRuleNames = SafeAppend(&mutex, backupWithoutRuleNames, backupName).([]string)
 				//backupToContextMapping[backupName] = appContextsToBackup
@@ -512,7 +512,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				labelSelectors := make(map[string]string, 0)
 				log.InfoD("Creating a backup of namespace [%s] after px-backup upgrade with pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName], nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				backupAfterUpgradeWithRuleNames = SafeAppend(&mutex, backupAfterUpgradeWithRuleNames, backupName).([]string)
 				backupToContextMapping[backupName] = appContextsToBackup
@@ -524,7 +524,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 				labelSelectors := make(map[string]string, 0)
 				log.InfoD("Creating a backup of namespace [%s] after px-backup upgrade without pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
 				backupAfterUpgradeWithoutRuleNames = SafeAppend(&mutex, backupAfterUpgradeWithoutRuleNames, backupName).([]string)
 				backupToContextMapping[backupName] = appContextsToBackup

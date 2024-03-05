@@ -203,8 +203,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", infraAdminUser)
 			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser])
+			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], appContextsExpectedInBackup, nil, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[infraAdminUser], periodicSchedulePolicyUidMap[infraAdminUser], nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelString))
 			err = SuspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyNameMap[infraAdminUser], BackupOrgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, infraAdminUser))
@@ -381,7 +380,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 				backupName := fmt.Sprintf("%s-manual-single-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
 				backupNameMap[user] = backupName
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-				err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[user], SourceClusterName, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[user][SourceClusterName], preRuleNameMap[infraAdminUser], preRuleUidMap[infraAdminUser], postRuleNameMap[infraAdminUser], postRuleUidMap[infraAdminUser])
+				err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[user], SourceClusterName, backupLocationNameMap[infraAdminUser], backupLocationUIDMap[infraAdminUser], appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[user][SourceClusterName], preRuleNameMap[infraAdminUser], preRuleUidMap[infraAdminUser], postRuleNameMap[infraAdminUser], postRuleUidMap[infraAdminUser], nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, bkpNamespaces))
 				userBackupNamesMap[user] = SafeAppend(&mutex, userBackupNamesMap[user], backupNameMap[user]).([]string)
 			})
@@ -537,7 +536,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			backupNameMap[customUser] = fmt.Sprintf("%s-manual-single-ns-%s-with-rules-%s", BackupNamePrefix, customUser, RandomString(4))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[customUser], SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[customUser][SourceClusterName], "", "", "", "")
+			err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[customUser], SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[customUser][SourceClusterName], "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupNameMap[customUser], bkpNamespaces))
 		})
 
@@ -582,8 +581,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", customUser)
 			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", nsLabelStringCustomUser, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser])
+			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationNameMap[customUser], backupLocationUIDMap[customUser], appContextsExpectedInBackup, nil, BackupOrgID, "", "", "", "", nsLabelStringCustomUser, periodicSchedulePolicyNameMap[customUser], periodicSchedulePolicyUidMap[customUser], nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelStringCustomUser))
 			err = SuspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyNameMap[customUser], BackupOrgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, customUser))
@@ -933,7 +931,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 			log.FailOnError(err, "failed to fetch px-admin ctx")
 			adminBackupName = fmt.Sprintf("%s-manual-single-ns-with-rules-%s", BackupNamePrefix, RandomString(4))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, adminBackupName, SourceClusterName, adminBackupLocationName, adminBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, adminBackupName, SourceClusterName, adminBackupLocationName, adminBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", adminBackupName, bkpNamespaces))
 		})
 
@@ -993,7 +991,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 				backupName := fmt.Sprintf("%s-manual-single-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
 				backupNameMap[user] = backupName
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-				err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[user], SourceClusterName, adminBackupLocationName, adminBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[user][SourceClusterName], preRuleName, preRuleUid, postRuleName, postRuleUid)
+				err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[user], SourceClusterName, adminBackupLocationName, adminBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[user][SourceClusterName], preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, bkpNamespaces))
 				userBackupNamesMap[user] = SafeAppend(&mutex, userBackupNamesMap[user], backupNameMap[user]).([]string)
 			})
@@ -1371,7 +1369,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 				backupName := fmt.Sprintf("%s-manual-single-ns-%s-with-rules-%s", BackupNamePrefix, user, RandomString(4))
 				backupNameMap[user] = backupName
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-				err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[user], SourceClusterName, adminBackupLocationName, adminBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[user][SourceClusterName], preRuleNameMap[appAdminUser], preRuleUidMap[appAdminUser], postRuleNameMap[appAdminUser], postRuleUidMap[appAdminUser])
+				err = CreateBackupWithValidation(nonAdminCtx, backupNameMap[user], SourceClusterName, adminBackupLocationName, adminBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, userClusterMap[user][SourceClusterName], preRuleNameMap[appAdminUser], preRuleUidMap[appAdminUser], postRuleNameMap[appAdminUser], postRuleUidMap[appAdminUser], nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, bkpNamespaces))
 				userBackupNamesMap[user] = SafeAppend(&mutex, userBackupNamesMap[user], backupNameMap[user]).([]string)
 			})
@@ -1501,8 +1499,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 			log.FailOnError(err, "failed to fetch user %s ctx", appAdminUser)
 			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, appAdminBackupLocationName, appAdminBackupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[appAdminUser], periodicSchedulePolicyUidMap[appAdminUser])
+			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, appAdminBackupLocationName, appAdminBackupLocationUID, appContextsExpectedInBackup, nil, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyNameMap[appAdminUser], periodicSchedulePolicyUidMap[appAdminUser], nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelString))
 			err = SuspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyNameMap[appAdminUser], BackupOrgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, appAdminUser))
@@ -1935,8 +1932,7 @@ var _ = Describe("{VerifyRBACForAppUser}", func() {
 			log.FailOnError(err, "failed to fetch user [%s] ctx", appUser)
 			backupScheduleWithLabel = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(4))
 			appContextsExpectedInBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationName, backupLocationUID, appContextsExpectedInBackup,
-				nil, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid)
+			scheduledBackupNameWithLabel, err = CreateScheduleBackupWithNamespaceLabelWithValidation(nonAdminCtx, backupScheduleWithLabel, SourceClusterName, backupLocationName, backupLocationUID, appContextsExpectedInBackup, nil, BackupOrgID, "", "", "", "", nsLabelString, periodicSchedulePolicyName, periodicSchedulePolicyUid, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of creating first schedule backup %s with labels [%v]", backupScheduleWithLabel, nsLabelString))
 			err = SuspendBackupSchedule(backupScheduleWithLabel, periodicSchedulePolicyName, BackupOrgID, nonAdminCtx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Suspending Backup Schedule [%s] for user [%s]", backupScheduleWithLabel, appUser))

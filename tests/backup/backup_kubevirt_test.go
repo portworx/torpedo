@@ -157,7 +157,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 					postRuleUid, err := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
 					log.FailOnError(err, "Unable fetch post rule uid")
 					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, appCtx.ScheduleOptions.Namespace, backupLocationName)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, []*scheduler.Context{appCtx}, labelSelectors, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 					if err != nil {
 						mutex.Lock()
 						errors = append(errors, fmt.Sprintf("Failed while taking backup [%s]. Error - [%s]", backupName, err.Error()))
@@ -260,8 +260,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			backupWithVMMixed = fmt.Sprintf("%s-%s", "auto-backup-mixed", RandomString(6))
 			backupNames = append(backupNames, backupWithVMMixed)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMMixed, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
-			err = CreateBackupWithValidation(ctx, backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			err = CreateBackupWithValidation(ctx, backupWithVMMixed, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMMixed))
 		})
 
@@ -372,8 +371,7 @@ var _ = Describe("{KubevirtVMBackupRestoreWithDifferentStates}", func() {
 			backupWithVMStopped = fmt.Sprintf("%s-%s", "auto-backup-stopped", RandomString(6))
 			backupNames = append(backupNames, backupWithVMStopped)
 			log.InfoD("creating backup [%s] in cluster [%s] (%s), organization [%s], of namespace [%v], in backup location [%s]", backupWithVMStopped, SourceClusterName, sourceClusterUid, BackupOrgID, namespaces, backupLocationName)
-			err = CreateBackupWithValidation(ctx, backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+			err = CreateBackupWithValidation(ctx, backupWithVMStopped, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation of backup [%s]", backupWithVMStopped))
 		})
 
@@ -556,8 +554,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupPreUpgrade = fmt.Sprintf("%s-%s", "auto-pre-upgrade-backup", RandomString(6))
-			err = CreateBackupWithValidation(ctx, backupPreUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupPreUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPreUpgrade))
 		})
 
@@ -605,8 +602,7 @@ var _ = Describe("{KubevirtUpgradeTest}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupPostUpgrade = fmt.Sprintf("%s-%s", "auto-post-upgrade-backup", RandomString(6))
-			err = CreateBackupWithValidation(ctx, backupPostUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts,
-				nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupPostUpgrade, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, nil, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace", backupPostUpgrade))
 		})
 

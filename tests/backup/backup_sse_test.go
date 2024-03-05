@@ -185,7 +185,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 						defer GinkgoRecover()
 						defer wg.Done()
 						appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "", nil)
 						if err != nil {
 							mutex.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while creating backup %s . Error - [%s]", backupName, err.Error()))
@@ -211,7 +211,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 						defer GinkgoRecover()
 						defer wg.Done()
 						appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationWithSse, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationWithSse, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "", nil)
 						if err != nil {
 							mutex.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while creating backup %s . Error - [%s]", backupName, err.Error()))
@@ -371,7 +371,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 						defer GinkgoRecover()
 						defer wg.Done()
 						appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, []string{backupNameSpace})
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationWithoutSse, backupLocationUidWithoutSse, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "", nil)
 						if err != nil {
 							mutex.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while creating backup [%s]. Error - [%s]", backupName, err.Error()))
@@ -464,7 +464,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.InfoD("Taking backup of application with new BackupLocation post px-backup and stork restart")
 				backupNameAfterPxBackupRestart = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-				err = CreateBackupWithValidation(ctx, backupNameAfterPxBackupRestart, SourceClusterName, newBackupLocationWithSseAfterRestart, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupNameAfterPxBackupRestart, SourceClusterName, newBackupLocationWithSseAfterRestart, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup with new BackupLocation post px-backup and stork restart [%s]", backupNameAfterPxBackupRestart))
 			})
 			Step("Create restore with backup taken on new BackupLocation created post px-backup and stork restart", func() {
@@ -488,7 +488,7 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 				log.InfoD("Taking backup of application after removal of deny policy and sse still set to true")
 				backupNameAfterRemovalOfDenyPolicy = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-				err = CreateBackupWithValidation(ctx, backupNameAfterRemovalOfDenyPolicy, SourceClusterName, newBackupLocationWithSseAfterRestart, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupNameAfterRemovalOfDenyPolicy, SourceClusterName, newBackupLocationWithSseAfterRestart, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, clusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup after removal of deny policy and sse still set to true [%s]", backupNameAfterRemovalOfDenyPolicy))
 			})
 			Step("Create restore with replace policy set to retain after removal of deny policy", func() {
@@ -515,8 +515,8 @@ var _ = Describe("{CreateBackupAndRestoreForAllCombinationsOfSSES3AndDenyPolicy}
 		DestroyApps(scheduledAppContexts, opts)
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		// Delete backup schedule policy
-		log.Infof("Deleting backup schedule policy")
+		// Delete backup schedule
+		log.Infof("Deleting backup schedule")
 		err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Verification of deleting backup schedule - %s", scheduleName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, credName, cloudCredUID, ctx)

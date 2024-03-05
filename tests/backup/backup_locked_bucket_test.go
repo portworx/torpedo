@@ -162,7 +162,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, RandomString(5), backupLocationName)
 				backupList = append(backupList, backupName)
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
@@ -355,7 +355,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 					postRuleUid, _ := Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleNameList[0])
 					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, backupLocationName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					backupList = append(backupList, backupName)
 				}
@@ -827,7 +827,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 					defer wg.Done()
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
 					for backupLocationUID, backupLocationName := range userBackupLocationMap[user] {
-						err := CreateBackupWithValidation(nonAdminCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, userClusterMap[user][SourceClusterName], "", "", "", "")
+						err := CreateBackupWithValidation(nonAdminCtx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, make(map[string]string), BackupOrgID, userClusterMap[user][SourceClusterName], "", "", "", "", nil)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation and validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 						break
 					}
@@ -1291,7 +1291,7 @@ var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
 					backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, RandomString(5), backupLocationName)
 					clusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					backupList = append(backupList, backupName)
 				}

@@ -227,7 +227,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 		Step("Taking backup of applications", func() {
 			log.InfoD("Taking Backup of application")
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
@@ -252,8 +252,7 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 			//to duplicate shared backup internally it calls create backup api
 			log.Infof("Duplicate shared backup")
-			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
-				nil, BackupOrgID, clusterUid, "", "", "", "", ctxNonAdmin)
+			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]}, nil, BackupOrgID, clusterUid, "", "", "", "", ctxNonAdmin, nil)
 			log.Infof("user not able to duplicate shared backup without adding cluster with err - %v", err)
 			errMessage := fmt.Sprintf("NotFound desc = failed to retrieve cluster [%s]: object not found", SourceClusterName)
 			dash.VerifyFatal(strings.Contains(err.Error(), errMessage), true, "Verifying that shared backup can't be duplicated without adding cluster")
@@ -379,7 +378,7 @@ var _ = Describe("{DifferentAccessSameUser}", func() {
 		Step("Taking backup of applications", func() {
 			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Share backup with user having viewonly access", func() {
@@ -603,7 +602,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}(backupName)
 			}
@@ -1068,7 +1067,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}(backupName)
 			}
@@ -1432,7 +1431,7 @@ var _ = Describe("{CancelClusterBackupShare}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}(backupName)
 			}
@@ -1915,7 +1914,7 @@ var _ = Describe("{ShareBackupAndEdit}", func() {
 			backupName := fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			backupNames = append(backupNames, backupName)
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		Step("Share backup with user restore mode and validate", func() {
@@ -2139,7 +2138,7 @@ var _ = Describe("{SharedBackupDelete}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				}(backupName)
 			}
@@ -2512,7 +2511,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 		Step("Taking backup of applications", func() {
 			backupName = fmt.Sprintf("%s-%s", BackupNamePrefix, bkpNamespaces[0])
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 
 		})
@@ -2535,7 +2534,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 				log.InfoD("Uid of [%s] cluster by user [%s] is %s", SourceClusterName, user, clusterUid)
 				userBackupName = fmt.Sprintf("%s-%s-%s", "user", BackupNamePrefix, bkpNamespaces[0])
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-				err = CreateBackupWithValidation(ctxNonAdmin, userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctxNonAdmin, userBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", userBackupName))
 			}
 		})
@@ -2661,7 +2660,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+					err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] with namespaces (scheduled contexts) [%s]", backupName, bkpNamespaces[0]))
 				}(backupName)
 			}
@@ -2836,7 +2835,7 @@ var _ = Describe("{DeleteSharedBackup}", func() {
 						defer wg.Done()
 						defer func() { <-sem }()
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 					}(backupName)
 				}
@@ -3042,7 +3041,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of applications [%s]", backupName, bkpNamespaces[0]))
 				}(backupName)
 			}
@@ -3100,7 +3099,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 					defer wg.Done()
 					defer func() { <-sem }()
 					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, newBkpLocationName, newBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, newBkpLocationName, newBackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of applications [%s]", backupName, bkpNamespaces[0]))
 				}(backupName)
 			}
@@ -3281,7 +3280,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			fullBackupName = fmt.Sprintf("%s-%v", "full-backup", time.Now().Unix())
 			backupNames = append(backupNames, fullBackupName)
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, fullBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, fullBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", fullBackupName))
 
 			//Incremental backup
@@ -3289,7 +3288,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 			incrementalBackupName = fmt.Sprintf("%s-%v", "incremental-backup", time.Now().Unix())
 			backupNames = append(backupNames, incrementalBackupName)
 
-			err = CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, incrementalBackupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", incrementalBackupName))
 
 			log.Infof("List of backups - %v", backupNames)
@@ -3511,7 +3510,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", f
 			log.InfoD("Taking  backup of application for different combination of restores")
 			backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, bkpNamespaces[0], time.Now().Unix())
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+			err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
@@ -3832,7 +3831,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces[0:1])
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 		backupMap := make(map[string]string, 0)
@@ -4066,7 +4065,7 @@ var _ = Describe("{SwapShareBackup}", func() {
 				log.FailOnError(err, "Fetching non admin ctx")
 
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{bkpNamespaces[0]})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, userBackupLocationMapping[user], backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, userBackupLocationMapping[user], backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 
 				backupDriver := Inst().Backup

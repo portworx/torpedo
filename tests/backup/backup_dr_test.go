@@ -204,7 +204,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 				backupNamespaceMap[backupName] = namespace
@@ -219,7 +219,7 @@ var _ = Describe("{BackupAndRestoreSyncDR}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, DestinationClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, destClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid)
+				err = CreateBackupWithValidation(ctx, backupName, DestinationClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, destClusterUid, preRuleName, preRuleUid, postRuleName, postRuleUid, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 				drBackupNames = append(drBackupNames, backupName)

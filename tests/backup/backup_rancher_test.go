@@ -128,7 +128,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 			for _, namespace := range appNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, RandomString(10))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
@@ -386,7 +386,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 			log.InfoD("Taking Backup of applications %s", appNamespaces)
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
@@ -641,7 +641,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			for _, val := range namespaceList {
 				backupName = fmt.Sprintf("%s-%v-ns", BackupNamePrefix, RandomString(10))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, val)
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and validation of backup [%s] with the namespaces %s", backupName, val))
 				backupList = append(backupList, backupName)
 			}
@@ -794,7 +794,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 			log.InfoD("Taking backup of namespaces %s after moving them to no project", appNamespaces)
 			noProjectBackup = fmt.Sprintf("%s-%v-no-project", BackupNamePrefix, RandomString(10))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, appNamespaces)
-			err = CreateBackupWithValidation(ctx, noProjectBackup, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, noProjectBackup, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and validation of backup [%s] with the namespaces %s after removing the namespaces from project", noProjectBackup, appNamespaces))
 		})
 
@@ -1015,7 +1015,7 @@ var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", fu
 			for _, namespace := range appNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, customBackupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, sourceClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})

@@ -109,7 +109,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, RandomString(10))
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 		})
 
@@ -235,7 +235,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 			for _, namespace := range bkpNamespaces {
 				backupName = fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
@@ -428,7 +428,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {
 				backupName := fmt.Sprintf("%s-%s-%v", BackupNamePrefix, namespace, time.Now().Unix())
 				backupNamespaceMap[namespace] = backupName
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, BackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid)
+				err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, BackupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, clusterUid, preRuleNameList[0], preRuleUid, postRuleNameList[0], postRuleUid, nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			}
 		})
@@ -587,11 +587,11 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			appContextsToBackup = FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationNames[0], BackupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			encryptionBackupName := fmt.Sprintf("%s-%s-%s", "encryption", BackupNamePrefix, RandomString(10))
 			backupNames = append(backupNames, encryptionBackupName)
-			err = CreateBackupWithValidation(ctx, encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, encryptionBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", encryptionBackupName))
 
 		})
@@ -618,7 +618,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			encryptedBackupName = fmt.Sprintf("new-%s-%s-%s", "encrypted", BackupNamePrefix, RandomString(10))
 			backupNames = append(backupNames, encryptedBackupName)
-			err = CreateBackupWithValidation(ctx, encryptedBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, encryptedBackupName, SourceClusterName, backupLocationNames[1], BackupLocation1UID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of new encrypted backup [%s]", encryptedBackupName))
 		})
 

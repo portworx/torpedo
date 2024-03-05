@@ -484,7 +484,7 @@ var _ = Describe("{RestartBackupPodDuringBackupSharing}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			backupName = fmt.Sprintf("%s-%v", BackupNamePrefix, time.Now().Unix())
 			appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, bkpNamespaces)
-			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "")
+			err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocation, backupLocationUID, appContextsToBackup, nil, BackupOrgID, clusterUid, "", "", "", "", nil)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 			backupNames = append(backupNames, backupName)
 		})
@@ -718,8 +718,7 @@ var _ = Describe("{CancelAllRunningBackupJobs}", func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 						defer func() { <-sem }()
-						_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID,
-							[]string{namespace}, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", ctx)
+						_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, bkpLocationName, backupLocationUID, []string{namespace}, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", ctx, nil)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Taking backup %s of application- %s", backupName, namespace))
 					}(backupName, namespace)
 				}
@@ -1705,7 +1704,7 @@ var _ = Describe("{CancelAllRunningRestoreJobs}", func() {
 						defer GinkgoRecover()
 						defer wg.Done()
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-						err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+						err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 					}(backupName, namespace)
 				}
@@ -1902,7 +1901,7 @@ var _ = Describe("{BackupNetworkErrorTest}", func() {
 			for _, namespace := range appNamespaces {
 				backupName := fmt.Sprintf("%s-%s-%s", BackupNamePrefix, namespace, RandomString(10))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] of namespace (scheduled Context) [%s]", backupName, namespace))
 			}
 		})
@@ -1936,7 +1935,7 @@ var _ = Describe("{BackupNetworkErrorTest}", func() {
 
 						backupName := fmt.Sprintf("%s-%s-delay-%dms-%s", BackupNamePrefix, namespace, i, RandomString(5))
 						appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+						err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 
 						if err != nil {
 							log.Infof(fmt.Sprintf("The backup creation failed with error [%v]", err))
@@ -1960,7 +1959,7 @@ var _ = Describe("{BackupNetworkErrorTest}", func() {
 				log.Infof("Create the backup when delay is removed and verify backup is succeeded")
 				finalBackupName := fmt.Sprintf("%s-%s-nodelay-%s", BackupNamePrefix, namespace, RandomString(5))
 				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, finalBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+				err = CreateBackupWithValidation(ctx, finalBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "", nil)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] after removing the network delay", finalBackupName))
 				backupNamespaceMap[namespace] = finalBackupName
 			}
