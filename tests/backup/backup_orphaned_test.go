@@ -1175,8 +1175,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 				defer GinkgoRecover()
 				defer wg.Done()
 				for backupLocationUID, backupLocationName := range userBackupLocationMap {
-					_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, backupLocationName, backupLocationUID,
-						[]string{namespace}, map[string]string{}, BackupOrgID, userSourceClusterUID, "", "", "", "", nonAdminCtx)
+					_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{namespace}, map[string]string{}, BackupOrgID, userSourceClusterUID, "", "", "", "", nonAdminCtx, nil)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup %s of namespace %s", backupName, namespace))
 					break
 				}
@@ -1284,8 +1283,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func
 				defer GinkgoRecover()
 				defer wg.Done()
 				for backupLocationUID, backupLocationName := range userBackupLocationMap {
-					_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, backupLocationName, backupLocationUID,
-						[]string{invalidNamespace}, map[string]string{}, BackupOrgID, userSourceClusterUID, "", "", "", "", nonAdminCtx)
+					_, err = CreateBackupByNamespacesWithoutCheck(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{invalidNamespace}, map[string]string{}, BackupOrgID, userSourceClusterUID, "", "", "", "", nonAdminCtx, nil)
 					if err != nil {
 						backupUID, UIDError := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, BackupOrgID)
 						log.FailOnError(UIDError, "failed to get backup %s uid", backupName)
