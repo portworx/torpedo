@@ -1,0 +1,794 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/pds/backupconfig/apiv1/backupconfig.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "BackupConfigService"
+        }
+    ],
+    "paths": {
+        "/pds/v1/backupConfigs": {
+            "get": {
+                "summary": "ListBackupConfigs API lists all the backup configuration for a deployment.",
+                "operationId": "BackupConfigService_ListBackupConfigs",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListBackupConfigsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "description": "Account ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tenantId",
+                        "description": "Tenant ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "Project ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "targetClusterId",
+                        "description": "Cluster ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "namespaceId",
+                        "description": "Namespace ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "deploymentId",
+                        "description": "Deployment ID for which the backup configurations will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    }
+                ],
+                "tags": [
+                    "BackupConfigService"
+                ]
+            }
+        },
+        "/pds/v1/backupConfigs/{backupConfig.meta.uid}": {
+            "put": {
+                "summary": "UpdateBackupConfig API updates the backup configuration of the backup.",
+                "operationId": "BackupConfigService_UpdateBackupConfig",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1BackupConfig"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "backupConfig.meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "name": {
+                                                "type": "string",
+                                                "description": "Name of the resource."
+                                            },
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Description of the resource."
+                                            },
+                                            "resourceVersion": {
+                                                "type": "string",
+                                                "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                                            },
+                                            "createTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Creation time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "updateTime": {
+                                                "type": "string",
+                                                "format": "date-time",
+                                                "description": "Update time of the object.",
+                                                "readOnly": true
+                                            },
+                                            "labels": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Labels to apply to the object."
+                                            },
+                                            "annotations": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Annotations for the object."
+                                            },
+                                            "parentReference": {
+                                                "$ref": "#/components/schemas/v1Reference"
+                                            },
+                                            "resourceNames": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                                "readOnly": true
+                                            }
+                                        },
+                                        "description": "Metadata of the backup configuration.",
+                                        "title": "Metadata of the backup configuration."
+                                    },
+                                    "config": {
+                                        "$ref": "#/components/schemas/v1Config"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/backupconfigv1Status"
+                                    }
+                                },
+                                "title": "Desired backup configuration."
+                            }
+                        }
+                    },
+                    "description": "Desired backup configuration.",
+                    "required": true
+                },
+                "tags": [
+                    "BackupConfigService"
+                ]
+            }
+        },
+        "/pds/v1/backupConfigs/{id}": {
+            "get": {
+                "summary": "GetBackupConfig API returns the the backup configuration resource.",
+                "operationId": "BackupConfigService_GetBackupConfig",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1BackupConfig"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "ID of the backup configuration.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "BackupConfigService"
+                ]
+            },
+            "delete": {
+                "summary": "DeleteBackupConfig API deletes the backup configuration.",
+                "operationId": "BackupConfigService_DeleteBackupConfig",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "ID of the backup configuration.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "BackupConfigService"
+                ]
+            }
+        },
+        "/pds/v1/projects/{projectId}/backupConfigs": {
+            "post": {
+                "summary": "CreateBackupConfig API creates the backup configuration of the backup.",
+                "operationId": "BackupConfigService_CreateBackupConfig",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1BackupConfig"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "description": "(-- api-linter: core::0133::request-required-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required to support creation of\n    the resource in the project context. --)\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required to support creation of\n    the resource in the project context. --)\nThe parent project id under which backup configuration will be created.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "deploymentId",
+                        "description": "(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required\n    to support creation of the resource in the deployment context.. --)\n(-- api-linter: core::0133::request-required-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required\n    to support creation of the resource in the deployment context.. --)\nDeployment id associated with the backup configuration.",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1BackupConfig"
+                            }
+                        }
+                    },
+                    "description": "Backup configuration for the backup.",
+                    "required": true
+                },
+                "tags": [
+                    "BackupConfigService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ConfigBackupLevel": {
+                "type": "string",
+                "enum": [
+                    "BACKUP_LEVEL_UNSPECIFIED",
+                    "SNAPSHOT",
+                    "INCREMENTAL"
+                ],
+                "default": "BACKUP_LEVEL_UNSPECIFIED",
+                "description": "Enum for Backup Level of the backup configuration.\n\n - BACKUP_LEVEL_UNSPECIFIED: Unspecified level.\n - SNAPSHOT: Snapshot.\n - INCREMENTAL: Incremental."
+            },
+            "ConfigBackupType": {
+                "type": "string",
+                "enum": [
+                    "BACKUP_TYPE_UNSPECIFIED",
+                    "ADHOC",
+                    "SCHEDULED"
+                ],
+                "default": "BACKUP_TYPE_UNSPECIFIED",
+                "description": "Enum for Backup Type of the backup configuration.\n\n - BACKUP_TYPE_UNSPECIFIED: Unspecified type.\n - ADHOC: Adhoc Backup.\n - SCHEDULED: Scheduled Backup."
+            },
+            "ConfigReclaimPolicyType": {
+                "type": "string",
+                "enum": [
+                    "RECLAIM_POLICY_TYPE_UNSPECIFIED",
+                    "DELETE",
+                    "RETAIN"
+                ],
+                "default": "RECLAIM_POLICY_TYPE_UNSPECIFIED",
+                "description": "Enum for Reclaim Policy for the backup configuration.\n\n - RECLAIM_POLICY_TYPE_UNSPECIFIED: Unspecified.\n - DELETE: Delete snapshot.\n - RETAIN: Retain snapshot."
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "StatusPhase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "PENDING",
+                    "FAILED",
+                    "CREATED",
+                    "SUSPENDED"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "Enum for Phases of the backup configuration.\n\n - PHASE_UNSPECIFIED: Unspecified state.\n - PENDING: Pending state.\n - FAILED: Failed state.\n - CREATED: Created state.\n - SUSPENDED: Suspended state."
+            },
+            "backupconfigv1Status": {
+                "type": "object",
+                "properties": {
+                    "phase": {
+                        "$ref": "#/components/schemas/StatusPhase"
+                    },
+                    "customResourceName": {
+                        "type": "string",
+                        "description": "Custom Resource Name is the kubernetes resource name for the backup that is built from ID."
+                    },
+                    "isScheduleSynchronized": {
+                        "type": "boolean",
+                        "description": "Flag to check if the schedule is synchronized or not."
+                    },
+                    "deploymentMetaData": {
+                        "$ref": "#/components/schemas/v1DeploymentMetaData"
+                    }
+                },
+                "description": "Status for backup configuration."
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "v1BackupConfig": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/backupconfigv1Status"
+                    }
+                },
+                "description": "Resource representing the backup configuration for a backup."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "references": {
+                        "$ref": "#/components/schemas/v1References"
+                    },
+                    "jobHistoryLimit": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1."
+                    },
+                    "schedule": {
+                        "$ref": "#/components/schemas/v1Schedule"
+                    },
+                    "suspend": {
+                        "type": "boolean",
+                        "description": "Suspend flag is used to suspend a scheduled backup from creating new backup jobs."
+                    },
+                    "backupType": {
+                        "$ref": "#/components/schemas/ConfigBackupType"
+                    },
+                    "backupLevel": {
+                        "$ref": "#/components/schemas/ConfigBackupLevel"
+                    },
+                    "reclaimPolicy": {
+                        "$ref": "#/components/schemas/ConfigReclaimPolicyType"
+                    }
+                },
+                "description": "Desired config of the backup configuration."
+            },
+            "v1DeploymentMetaData": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the deployment."
+                    },
+                    "customResourceName": {
+                        "type": "string",
+                        "description": "Custom Resource Name is the kubernetes resource name for the deployment meta data.",
+                        "readOnly": true
+                    },
+                    "deploymentTargetName": {
+                        "type": "string",
+                        "description": "Deployment Target Name associated with the backup configuration."
+                    },
+                    "namespaceName": {
+                        "type": "string",
+                        "description": "Namespace name to which the backup configuration is associated."
+                    },
+                    "tlsEnabled": {
+                        "type": "boolean",
+                        "description": "Flag to check whether Transport Layer Security support is enabled or not."
+                    }
+                },
+                "description": "Deployment Meta Data contains the details of the deployment associated with the backup configuration."
+            },
+            "v1ListBackupConfigsResponse": {
+                "type": "object",
+                "properties": {
+                    "backupConfigs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1BackupConfig"
+                        },
+                        "description": "The list of backup configurations."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "Response of list of backup configurations."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by\nclients to determine when objects have changed. This value must be passed\nunmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page number is the page number to return based on the size"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size is the maximum number of records to include per page"
+                    }
+                },
+                "title": "Request parameters for page-based pagination"
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total records without pagination available in the dataset"
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Current page number for this paginated response"
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Page size used for pagination"
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Total pages based on the page_size provided in the request"
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Next page if available in the dataset, -1 if unavailable"
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Previous page if available in the dataset, -1 if unavailable"
+                    }
+                },
+                "title": "Metadata related to page based pagination for paginated API responses"
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and\nthe resource."
+            },
+            "v1References": {
+                "type": "object",
+                "properties": {
+                    "deploymentId": {
+                        "type": "string",
+                        "description": "UID of the deployment to which the backup configuration belong.",
+                        "readOnly": true
+                    },
+                    "backupLocationId": {
+                        "type": "string",
+                        "description": "UID of the backup target to which the backup configuration belong."
+                    },
+                    "dataServiceId": {
+                        "type": "string",
+                        "description": "UID of the data service to which the backup configuration belong.",
+                        "readOnly": true
+                    }
+                },
+                "description": "References to the associated resources for backup configuration."
+            },
+            "v1Schedule": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "description": "UID of the schedule associated with the backup configuration."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "Resource version of the schedule."
+                    }
+                },
+                "description": "Schedule associated with the backup config."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            }
+        }
+    }
+}

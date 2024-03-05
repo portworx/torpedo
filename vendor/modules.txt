@@ -1260,6 +1260,7 @@ github.com/prometheus/statsd_exporter/pkg/mapper/fsm
 # github.com/pure-px/apis v0.0.0-20240219053634-348bdc2a3d67
 ## explicit; go 1.20
 github.com/pure-px/apis/public/portworx/common/apiv1
+github.com/pure-px/apis/public/portworx/pds/backupconfig/apiv1
 github.com/pure-px/apis/public/portworx/pds/deployment/apiv1
 github.com/pure-px/apis/public/portworx/pds/deploymentconfigupdate/apiv1
 github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1

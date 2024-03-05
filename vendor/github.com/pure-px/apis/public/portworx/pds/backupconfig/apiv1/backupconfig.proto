@@ -1,0 +1,302 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.pds.backupconfig.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/sort.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/apiv1/backupconfig;backupconfig";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.backupconfig.v1";
+option java_outer_classname = "BackupConfigProto";
+
+// BackupConfigService serves backup config resource APIs.
+service BackupConfigService {
+  // GetBackupConfig API returns the the backup configuration resource.
+  rpc GetBackupConfig(GetBackupConfigRequest)
+    returns (BackupConfig) {
+    option(google.api.http) = {
+      get: "/pds/v1/backupConfigs/{id}"
+    };
+  }
+
+  // ListBackupConfigs API lists all the backup configuration for a deployment.
+  rpc ListBackupConfigs(ListBackupConfigsRequest)
+    returns (ListBackupConfigsResponse) {
+    option(google.api.http) = {
+      get: "/pds/v1/backupConfigs"
+    };
+  }
+
+  // CreateBackupConfig API creates the backup configuration of the backup.
+  rpc CreateBackupConfig(CreateBackupConfigRequest)
+    returns(BackupConfig) {
+    option(google.api.http) = {
+      post: "/pds/v1/projects/{project_id}/backupConfigs"
+      body: "backup_config"
+    };
+  }
+
+  // UpdateBackupConfig API updates the backup configuration of the backup.
+  rpc UpdateBackupConfig(UpdateBackupConfigRequest)
+    returns(BackupConfig) {
+    option(google.api.http) = {
+      put: "/pds/v1/backupConfigs/{backup_config.meta.uid}"
+      body: "backup_config"
+    };
+  }
+
+  // DeleteBackupConfig API deletes the backup configuration.
+  rpc DeleteBackupConfig(DeleteBackupConfigRequest)
+    returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/pds/v1/backupConfigs/{id}"
+    };
+  }
+}
+
+// Request to get the backup configuration of the specified backup.
+message GetBackupConfigRequest {
+  // ID of the backup configuration.
+  string id = 1;
+}
+
+// Request to list all the backup configurations.
+message ListBackupConfigsRequest {
+  // Specifies a filter to list the backup configurations.
+  oneof list_by {
+    // Account ID for which the backup configurations will be listed.
+    string account_id = 1;
+
+    // Tenant ID for which the backup configurations will be listed.
+    string tenant_id = 2;
+
+    // Project ID for which the backup configurations will be listed.
+    string project_id = 3;
+
+    // Cluster ID for which the backup configurations will be listed.
+    string target_cluster_id = 4;
+
+    // Namespace ID for which the backup configurations will be listed.
+    string namespace_id = 5;
+
+    // Deployment ID for which the backup configurations will be listed.
+    string deployment_id = 6;
+  }
+
+  // Pagination metadata for listing backup configuration.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7;
+
+  // Sorting details using which requested list of backup configurations to be sorted.
+  public.portworx.common.v1.Sort sort = 8;
+}
+
+// Response of list of backup configurations.
+message ListBackupConfigsResponse {
+  // The list of backup configurations.
+  repeated BackupConfig backup_configs = 1;
+
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to create a backup configuration.
+message CreateBackupConfigRequest {
+  // (-- api-linter: core::0133::request-required-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required to support creation of
+  //     the resource in the project context. --)
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required to support creation of
+  //     the resource in the project context. --)
+  // The parent project id under which backup configuration will be created.
+  string project_id = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required
+  //     to support creation of the resource in the deployment context.. --)
+  // (-- api-linter: core::0133::request-required-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required
+  //     to support creation of the resource in the deployment context.. --)
+  // Deployment id associated with the backup configuration.
+  string deployment_id = 2 [(google.api.field_behavior) = REQUIRED];
+
+  // Backup configuration for the backup.
+  BackupConfig backup_config = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request to update a backup configuration.
+message UpdateBackupConfigRequest {
+  // Desired backup configuration.
+  BackupConfig backup_config = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Request to delete a backup configuration.
+message DeleteBackupConfigRequest {
+  // ID of the backup configuration.
+  string id = 1;
+}
+
+// Resource representing the backup configuration for a backup.
+message BackupConfig {
+  // Metadata of the backup configuration.
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Desired config of the backup configuration.
+  Config config = 2;
+
+  // Current Status of the backup configuration.
+  Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Desired config of the backup configuration.
+message Config {
+  // References to the associated objects for backup configuration.
+  References references = 1;
+
+  // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
+  int32 job_history_limit = 2;
+
+  // Schedule associated with the backup config.
+  Schedule schedule = 3 [(google.api.field_behavior) = OPTIONAL];
+
+  // Suspend flag is used to suspend a scheduled backup from creating new backup jobs.
+  bool suspend = 4;
+
+  // Enum for Backup Type of the backup configuration.
+  enum BackupType {
+    // Unspecified type.
+    BACKUP_TYPE_UNSPECIFIED = 0;
+
+    // Adhoc Backup.
+    ADHOC = 1;
+
+    // Scheduled Backup.
+    SCHEDULED = 2;
+  }
+
+  // Backup Type for the backup configuration.
+  BackupType backup_type = 5;
+
+  // Enum for Backup Level of the backup configuration.
+  enum BackupLevel {
+    // Unspecified level.
+    BACKUP_LEVEL_UNSPECIFIED = 0;
+
+    // Snapshot.
+    SNAPSHOT = 1;
+
+    // Incremental.
+    INCREMENTAL = 2;
+  }
+
+  // Backup Level for the backup configuration.
+  BackupLevel backup_level = 6;
+
+  // Enum for Reclaim Policy for the backup configuration.
+  enum ReclaimPolicyType {
+    // Unspecified.
+    RECLAIM_POLICY_TYPE_UNSPECIFIED = 0;
+
+    // Delete snapshot.
+    DELETE = 1;
+
+    // Retain snapshot.
+    RETAIN = 2;
+  }
+
+  // Reclaim Policy decides if the volume snapshots should get deleted when a Backup CR gets deleted.
+  ReclaimPolicyType reclaim_policy = 7;
+}
+
+// References to the associated resources for backup configuration.
+message References {
+  // UID of the deployment to which the backup configuration belong.
+  string deployment_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // UID of the backup target to which the backup configuration belong.
+  string backup_location_id = 2;
+
+  // UID of the data service to which the backup configuration belong.
+  string data_service_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Schedule associated with the backup config.
+message Schedule {
+  // UID of the schedule associated with the backup configuration.
+  string id = 1;
+
+  // Resource version of the schedule.
+  string resource_version = 2;
+}
+
+// Status for backup configuration.
+message Status {
+  // Enum for Phases of the backup configuration.
+  enum Phase {
+    // Unspecified state.
+    PHASE_UNSPECIFIED = 0;
+
+    // Pending state.
+    PENDING = 1;
+
+    // Failed state.
+    FAILED = 2;
+
+    // Created state.
+    CREATED = 3;
+
+    // Suspended state.
+    SUSPENDED = 4;
+  }
+
+  // Phase specifies the phase of backup CR in target cluster.
+  Phase phase = 1;
+
+  // Custom Resource Name is the kubernetes resource name for the backup that is built from ID.
+  string custom_resource_name = 2;
+
+  // Flag to check if the schedule is synchronized or not.
+  bool is_schedule_synchronized = 3;
+
+  // Deployment Meta Data.
+  DeploymentMetaData deployment_meta_data = 4;
+}
+
+// Deployment Meta Data contains the details of the deployment associated with the backup configuration.
+message DeploymentMetaData {
+  // Name of the deployment.
+  string name = 1;
+
+  // Custom Resource Name is the kubernetes resource name for the deployment meta data.
+  string custom_resource_name = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Deployment Target Name associated with the backup configuration.
+  string deployment_target_name = 3;
+
+  // Namespace name to which the backup configuration is associated.
+  string namespace_name = 4;
+
+  // Flag to check whether Transport Layer Security support is enabled or not.
+  bool tls_enabled = 5;
+}
