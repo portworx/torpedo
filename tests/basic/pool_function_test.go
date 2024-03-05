@@ -264,7 +264,7 @@ var _ = Describe("{PoolExpandRejectConcurrent}", func() {
 		// wait for expansion to start
 		// TODO: this is a hack to wait for expansion to start. The existing WaitForExpansionToStart() risks returning
 		// when the expansion has already completed.
-		time.Sleep(5)
+		time.Sleep(15 * time.Second)
 		// verify pool expansion is in progress
 		isExpandInProgress, expandErr := poolResizeIsInProgress(poolToResize)
 		if expandErr != nil {
@@ -442,6 +442,19 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 		StartTorpedoTest("PoolExpandResizeDiskAndPXRestart",
 			"Initiate pool expansion using add-drive and restart PX", nil, testrailID)
 
+		stepLog = "Move pool to maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expectedStatus := "In Maintenance"
+			log.InfoD(fmt.Sprintf("Entering pool maintenance mode on node %s", storageNode.Name))
+			err = Inst().V.EnterPoolMaintenance(*storageNode)
+			log.FailOnError(err, fmt.Sprintf("failed to enter node %s in maintenance mode", storageNode.Name))
+			status, _ := Inst().V.GetNodeStatus(*storageNode)
+			log.InfoD(fmt.Sprintf("Node %s status %s", storageNode.Name, status.String()))
+			err := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
+			dash.VerifyFatal(err, nil, "Pool now in maintenance mode")
+		})
+
 		Step("Select a pool that has I/O and expand it by 100 GiB with add-disk type. ", func() {
 			originalSizeInBytes = poolToResize.TotalSize
 			targetSizeInBytes = originalSizeInBytes + 100*units.GiB
@@ -464,6 +477,27 @@ var _ = Describe("{PoolExpandWithPXRestart}", func() {
 			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
 			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+		})
+
+		stepLog = "Exit pool out of maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			expectedStatus := "Online"
+			statusMap, err := Inst().V.GetNodePoolsStatus(*storageNode)
+			log.FailOnError(err, "Failed to get map of pool UUID and status")
+			log.InfoD(fmt.Sprintf("pool %s has status %s", storageNode.Name, statusMap[poolToResize.Uuid]))
+			if statusMap[poolToResize.Uuid] == "In Maintenance" {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", storageNode.Name))
+				err := Inst().V.ExitPoolMaintenance(*storageNode)
+				log.FailOnError(err, "failed to exit pool maintenance mode")
+			} else {
+				dash.VerifyFatal(statusMap[poolToResize.Uuid], "In Maintenance", "Pool is not in Maintenance mode")
+			}
+			status, err := Inst().V.GetNodeStatus(*storageNode)
+			log.FailOnError(err, "err getting node [%s] status", storageNode.Name)
+			log.Infof(fmt.Sprintf("Node %s status %s after exit", storageNode.Name, status.String()))
+			exitErr := WaitForPoolStatusToUpdate(*storageNode, expectedStatus)
+			dash.VerifyFatal(exitErr, nil, "Pool is now online")
 		})
 	})
 })
