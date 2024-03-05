@@ -1,7 +1,7 @@
 package apiStructs
 
 type TargetClusterManifest struct {
-	ClusterName string
-	TenantId    string
-	Config      Config
+	ClusterName string `copier:"must,nopanic"`
+	TenantId    string `copier:"must,nopanic"`
+	Config      Config `copier:"must,nopanic"`
 }

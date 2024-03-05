@@ -87,28 +87,28 @@ type MetadataOfTheBackupConfiguration struct {
 }
 
 type DesiredBackupConfiguration struct {
-	Meta   *MetadataOfTheBackupConfiguration `json:"meta,omitempty"`
-	Config *BackupV1Config                   `json:"config,omitempty"`
-	Status *Backupconfigv1Status             `json:"status,omitempty"`
+	Meta   *MetadataOfTheBackupConfiguration `copier:"must,nopanic"`
+	Config *BackupV1Config                   `copier:"must,nopanic"`
+	Status *Backupconfigv1Status             `copier:"must,nopanic"`
 }
 
 type BackupV1Config struct {
-	References      *BackupV1References1     `json:"references,omitempty"`
-	JobHistoryLimit *int32                   `json:"jobHistoryLimit,omitempty"`
-	Schedule        *BackupV1Schedule        `json:"schedule,omitempty"`
-	Suspend         *bool                    `json:"suspend,omitempty"`
-	BackupType      *ConfigBackupType        `json:"backupType,omitempty"`
-	BackupLevel     *ConfigBackupLevel       `json:"backupLevel,omitempty"`
-	ReclaimPolicy   *ConfigReclaimPolicyType `json:"reclaimPolicy,omitempty"`
+	References      *BackupV1References1     `copier:"must,nopanic"`
+	JobHistoryLimit *int32                   `copier:"must,nopanic"`
+	Schedule        *BackupV1Schedule        `copier:"must,nopanic"`
+	Suspend         *bool                    `copier:"must,nopanic"`
+	BackupType      *ConfigBackupType        `copier:"must,nopanic"`
+	BackupLevel     *ConfigBackupLevel       `copier:"must,nopanic"`
+	ReclaimPolicy   *ConfigReclaimPolicyType `copier:"must,nopanic"`
 }
 
 type BackupV1References1 struct {
-	DeploymentId     *string `json:"deploymentId,omitempty"`
-	BackupLocationId *string `json:"backupLocationId,omitempty"`
-	DataServiceId    *string `json:"dataServiceId,omitempty"`
+	DeploymentId     *string `copier:"must,nopanic"`
+	BackupLocationId *string `copier:"must,nopanic"`
+	DataServiceId    *string `copier:"must,nopanic"`
 }
 
 type BackupV1Schedule struct {
-	Id              *string `json:"id,omitempty"`
-	ResourceVersion *string `json:"resourceVersion,omitempty"`
+	Id              *string `copier:"must,nopanic"`
+	ResourceVersion *string `copier:"must,nopanic"`
 }

@@ -49,7 +49,7 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStru
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
-
+	log.Infof("Backup Request - [%+v]", backupRequest)
 	apiResponse, err := client.CreateBackupConfig(ctx, backupRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
