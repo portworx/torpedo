@@ -164,7 +164,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			}
 		}
 
-		cephfsProvisioner := "openshift-storage.cephfs.csi.ceph.com"
+		cephfsProvisioner = "openshift-storage.cephfs.csi.ceph.com"
 		taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
 		appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
 			AppKeys:            []string{"postgres-cephfs-csi"},
