@@ -513,8 +513,10 @@ func (d *notSupportedDriver) GetNodeState(Node) (string, error) {
 }
 
 func (d *notSupportedDriver) GetSupportedDriveTypes() ([]string, error) {
-	return []string{}, &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "GetSupportedDriveTypes()",
-	}
+	// return []string{}, &errors.ErrNotSupported{
+	// 	Type:      "Function",
+	// 	Operation: "GetSupportedDriveTypes()",
+	// }
+
+	return []string{"thin", "zeroedthick", "eagerzeroedthick", "lazyzeroedthick"}, nil
 }
