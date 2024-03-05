@@ -252,7 +252,8 @@ var _ = Describe("{DuplicateSharedBackup}", func() {
 
 			//to duplicate shared backup internally it calls create backup api
 			log.Infof("Duplicate shared backup")
-			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]}, nil, BackupOrgID, clusterUid, "", "", "", "", ctxNonAdmin)
+			err = CreateBackup(backupName, SourceClusterName, backupLocationName, backupLocationUID, []string{bkpNamespaces[0]},
+				nil, BackupOrgID, clusterUid, "", "", "", "", ctxNonAdmin)
 			log.Infof("user not able to duplicate shared backup without adding cluster with err - %v", err)
 			errMessage := fmt.Sprintf("NotFound desc = failed to retrieve cluster [%s]: object not found", SourceClusterName)
 			dash.VerifyFatal(strings.Contains(err.Error(), errMessage), true, "Verifying that shared backup can't be duplicated without adding cluster")
