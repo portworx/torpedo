@@ -19,9 +19,15 @@ func CreateBackupConfig(backupConfig BackupConfig) (*apiStructs.WorkFlowResponse
 	createBackupRequest := apiStructs.WorkFlowRequest{}
 
 	createBackupRequest.BackupConfig.GRPC.Create.V1BackupConfig = &apiStructs.V1BackupConfig{
-		Meta:   &apiStructs.Meta{},
-		Config: &apiStructs.Config{},
-		Status: &apiStructs.Backupconfigv1Status{},
+		Meta: &apiStructs.Meta{
+			Uid: intToPointerString(10),
+		},
+		Config: &apiStructs.Config{
+			UserEmail: intToPointerString(15),
+		},
+		Status: &apiStructs.Backupconfigv1Status{
+			CustomResourceName: intToPointerString(70),
+		},
 	}
 	createBackupRequest.BackupConfig.GRPC.Create.DeploymentId = backupConfig.DeploymentID
 	createBackupRequest.BackupConfig.GRPC.Create.ProjectId = backupConfig.ProjectId

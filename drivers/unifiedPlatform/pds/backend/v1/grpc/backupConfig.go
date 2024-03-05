@@ -33,10 +33,12 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStru
 	response := &apiStructs.WorkFlowResponse{}
 
 	backupConfig := &publicBackupConfigapis.BackupConfig{}
+	log.Infof("Backup Config - [%v]", backupConfig)
 	err := utilities.CopyStruct(createBackupConfigRequest.BackupConfig.GRPC.Create.V1BackupConfig, backupConfig)
 	if err != nil {
 		return response, err
 	}
+	log.Infof("Backup Config - [%v]", backupConfig)
 	backupRequest := &publicBackupConfigapis.CreateBackupConfigRequest{
 		DeploymentId: createBackupConfigRequest.BackupConfig.V1.Create.DeploymentId,
 		ProjectId:    createBackupConfigRequest.BackupConfig.V1.Create.ProjectId,
@@ -49,7 +51,7 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStru
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
-	log.Infof("Backup Request - [%+v]", backupRequest)
+
 	apiResponse, err := client.CreateBackupConfig(ctx, backupRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
