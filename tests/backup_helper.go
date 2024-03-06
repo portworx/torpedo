@@ -340,6 +340,7 @@ func getPXNamespace() string {
 	return defaultStorkDeploymentNamespace
 }
 
+// CreateBackup creates backup and checks for success
 func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
