@@ -89,9 +89,9 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	})
 })
 
-var _ = Describe("{CreateBackupConfig}", func() {
+var _ = Describe("{BackupConfigCRUD}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("CreateBackupConfig", "Creates a backup config", nil, 0)
+		StartTorpedoTest("BackupConfigCRUD", "Runs CRUD on backup config", nil, 0)
 	})
 
 	It("Create Backup Config", func() {
@@ -124,6 +124,34 @@ var _ = Describe("{CreateBackupConfig}", func() {
 		Step("List Backup Config", func() {
 			_, err := dslibs.ListBackupConfig(dslibs.WorkflowBackupInput{})
 			log.Infof("Error while listing backup config - %s", err.Error())
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{BackupRD}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("BackupRD", "Runs RD operations on backup", nil, 0)
+	})
+
+	It("Create Backup Config", func() {
+
+		Step("Get Backup Config", func() {
+			_, err := dslibs.GetBackup(dslibs.WorkflowBackup{})
+			log.Infof("Error while fetching backup - %s", err.Error())
+		})
+
+		Step("Delete Backup Config", func() {
+			_, err := dslibs.DeleteBackup(dslibs.WorkflowBackup{})
+			log.Infof("Error while deleting backup - %s", err.Error())
+		})
+
+		Step("List Backup Config", func() {
+			_, err := dslibs.ListBackup(dslibs.WorkflowBackup{})
+			log.Infof("Error while listing backup - %s", err.Error())
 		})
 	})
 
