@@ -263,7 +263,11 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
 				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
 			}
-			firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, firstBkpLocationName, firstBackupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
+			firstBkpLocationName = fmt.Sprintf("%s-%s-bl", "bl-sch", time.Now().Unix())
+			firstBackupLocationUID = uuid.New()
+			for i, _ := range scheduledAppContexts {
+				firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, firstBkpLocationName, firstBackupLocationUID, scheduledAppContexts[i:i+1], make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
+			}
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
 			err = IsFullBackup(firstSchBackupName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", firstSchBackupName, firstBkpLocationName))
