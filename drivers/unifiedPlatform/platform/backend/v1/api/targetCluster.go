@@ -99,7 +99,7 @@ func (tc *PLATFORM_API_V1) DeleteTarget(tcRequest *WorkFlowRequest) error {
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	_, res, _ := dtClient.TargetClusterServiceDeleteTargetCluster(ctx, tcRequest.Id).Execute()
+	_, res, _ := dtClient.TargetClusterServiceDeleteTargetCluster(ctx, tcRequest.ClusterId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `TargetClusterServiceDeleteTargetCluster`: %v\n.Full HTTP response: %v", err, res)
 	}

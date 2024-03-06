@@ -10,6 +10,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"strings"
@@ -26,6 +27,7 @@ const (
 	targetClusterHealthOK      = "CONNECTED"
 	targetClusterHealthTimeOut = 5 * time.Minute
 	pxTargetSecret             = "px-target-cluster-secret"
+	platformLabel              = "platform.portworx.io/pds"
 )
 
 var (
@@ -41,10 +43,9 @@ type TargetCluster struct {
 // type customRegistryConfig utils.CustomRegistryConfig
 
 // RegisterToControlPlane register the target cluster to control plane.
-func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion string, tenantId string) (string, error) {
+func (targetCluster *TargetCluster) RegisterToControlPlane(tenantId string) (string, error) {
 	var cmd string
 	// Get Manifest from API
-
 	clusterName := fmt.Sprintf("Cluster_%v", time.Now().Unix())
 	manifest, err := GetManifest(tenantId, clusterName)
 	if err != nil {
@@ -70,7 +71,7 @@ func (targetCluster *TargetCluster) RegisterToControlPlane(platformVersion strin
 	}
 
 	if !isRegistered {
-		log.InfoD("Installing Manifests %v", platformVersion)
+		log.InfoD("Installing Manifests...")
 		cmd = fmt.Sprintf("echo '%v' > /tmp/manifest.yaml && kubectl apply -f /tmp/manifest.yaml && rm -f /tmp/manifest.yaml", manifest)
 		log.Infof("Manifest:\n%v\n", cmd)
 		output, _, err := osutils.ExecShell(cmd)
@@ -122,20 +123,82 @@ func (targetCluster *TargetCluster) ValidatePlatformComponents() error {
 	return nil
 }
 
-// DeregisterFromControlPlane de-register the target cluster from control plane.
-func (targetCluster *TargetCluster) DeregisterFromControlPlane(platformVersion string, tenantId string) error {
-	var cmd string
+// CreatePlatformNamespace checks if the namespace is available in the cluster and services are enabled on it
+func (targetCluster *TargetCluster) CreatePlatformNamespace(namespace string) (*corev1.Namespace, bool, error) {
+	ns, err := k8sCore.GetNamespace(namespace)
+	isAvailable := false
+	if err != nil {
+		log.Warnf("Namespace not found %v", err)
+		if strings.Contains(err.Error(), "not found") {
+			nsName := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   namespace,
+					Labels: map[string]string{platformLabel: "true"},
+				},
+			}
+			log.InfoD("Creating namespace %v", namespace)
+			ns, err = k8sCore.CreateNamespace(nsName)
+			if err != nil {
+				log.Errorf("Error while creating namespace %v", err)
+				return nil, false, err
+			}
+			isAvailable = true
+		}
+		if !isAvailable {
+			return nil, false, err
+		}
+	}
+	isAvailable = false
+	for key, value := range ns.Labels {
+		log.Infof("key: %v values: %v", key, value)
+		if key == platformLabel && value == "true" {
+			log.InfoD("key: %v values: %v", key, value)
+			isAvailable = true
+			break
+		}
+	}
+	if !isAvailable {
+		return nil, false, nil
+	}
+	return ns, true, nil
+}
 
-	// TODO: Currently we are checking for pods in platformNameSpace. Probably  we need to check for deployments
+func (targetCluster *TargetCluster) GetNamespaceId(namespace, clusterId string) (string, error) {
+	wfResponse, err := v2Components.Platform.ListNamespaces(&apiStructs.WorkFlowRequest{
+		ClusterId: clusterId,
+	})
+	if err != nil {
+		return "", fmt.Errorf("Failed while listing namespaces: %v\n", err)
+	}
+
+	for index := 0; index < len(wfResponse); index++ {
+		if wfResponse[index].Meta.Name == &namespace {
+			return *wfResponse[index].Meta.Uid, nil
+		}
+	}
+	return "", fmt.Errorf("Unable to find namespace %s in cluster %s\n", namespace, clusterId)
+}
+
+// DeregisterFromControlPlane de-register the target cluster from control plane.
+func (targetCluster *TargetCluster) DeregisterFromControlPlane(clusterId string, tenantId string) error {
+	var cmd string
+	// Getting clusterName from the pxTargetSecret in platformNamespace
+	secretData, err := core.Instance().GetSecret(pxTargetSecret, platformNamespace)
+	if err != nil {
+		return fmt.Errorf("Failed while getting px-target-cluster-secret: %v\n", err)
+	}
+	clusterName := string(secretData.Data["target_cluster_name"])
+	log.Infof("ClusterName is [%s]", clusterName)
+
 	pods, err := k8sCore.GetPods(platformNamespace, nil)
 	if err != nil {
 		return fmt.Errorf("Failed while getting the pods on %v Namespace: %v\n", platformNamespace, err)
 	}
 
 	if len(pods.Items) > 0 {
-		log.InfoD("Uninstalling Manifests %v", platformVersion)
+		log.InfoD("Uninstalling Manifests")
 		// Get Manifest from API
-		manifest, err := GetManifest(tenantId, "")
+		manifest, err := GetManifest(tenantId, clusterName)
 		if err != nil {
 			return fmt.Errorf("Failed while getting platform manifests: %v\n", err)
 		}
@@ -146,8 +209,25 @@ func (targetCluster *TargetCluster) DeregisterFromControlPlane(platformVersion s
 		}
 		log.Infof("Terminal output: %v", output)
 	}
-	return nil
 
+	log.InfoD("Wait till cluster state becomes Disconnected")
+	err = wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
+		clusterState := getTargetClusterHealth(clusterName, tenantId)
+		// getTargetClusterHealth returns nil if state is CONNECTED, hence wait till err is not nil
+		if clusterState == nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	// Delete the target-cluster from control plane
+	wfRequest := apiStructs.WorkFlowRequest{
+		ClusterId: clusterId,
+	}
+	err = v2Components.Platform.DeleteTarget(&wfRequest)
+	if err != nil {
+		return fmt.Errorf("Failed to delete targetcluster from control plane: %v\n", err)
+	}
+	return nil
 }
 
 func (targetCluster *TargetCluster) InstallPDSAppOnTC(clusterId string, tenantId string) error {
@@ -202,7 +282,6 @@ func GetManifest(tenantId string, clusterName string) (string, error) {
 	if clusterName == "" {
 		clusterName = fmt.Sprintf("Cluster_%v", time.Now().Unix())
 	}
-
 	manifestInputs.TargetClusterManifest.ClusterName = clusterName
 	manifestInputs.TargetClusterManifest.TenantId = tenantId
 	log.Infof("cluster name [%s]", manifestInputs.TargetClusterManifest.ClusterName)

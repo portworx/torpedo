@@ -30,7 +30,12 @@ func (ns *PLATFORM_API_V1) ListNamespaces(targetID *WorkFlowRequest) ([]WorkFlow
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	nsModels, res, err := nsClient.NamespaceServiceListNamespaces(ctx, targetID.Id).Execute()
+	nsRequest := platformv1.ApiNamespaceServiceListNamespacesRequest{}
+	nsRequest = nsRequest.TenantId(targetID.TenantId)
+	nsRequest = nsRequest.ApiService.NamespaceServiceListNamespaces(ctx, targetID.ClusterId)
+
+	nsModels, res, err := nsClient.NamespaceServiceListNamespacesExecute(nsRequest)
+	// nsModels, res, err := nsClient.NamespaceServiceListNamespaces(ctx, targetID.ClusterId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `NamespaceServiceListNamespaces`: %v\n.Full HTTP response: %v", err, res)
 	}

@@ -11,17 +11,18 @@ import (
 
 var tc platformLibs.TargetCluster
 
-var _ = Describe("{TenantsCRUD}", func() {
+var _ = Describe("{RegisterTargetCluster}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("TenantsCRUD", "Create and Get the Tenant", pdsLabels, 0)
 	})
 
 	It("Tenants", func() {
-		steplog := "Tenants CRUD"
+		var clusterId string
+		var tenantId string
+		steplog := "Register TC and get ClusterID"
 		Step(steplog, func() {
 			log.InfoD(steplog)
 			var tc platformLibs.TargetCluster
-			var tenantId string
 			tenantList, err := platformLibs.GetTenantListV1(accID)
 			log.FailOnError(err, "error while getting tenant list")
 			for _, tenant := range tenantList {
@@ -30,11 +31,34 @@ var _ = Describe("{TenantsCRUD}", func() {
 				break
 			}
 			log.Infof("TenantID [%s]", tenantId)
-			clusterId, err := tc.RegisterToControlPlane("1.0.0", tenantId)
+			clusterId, err := tc.RegisterToControlPlane(tenantId)
 			if err != nil {
 				log.FailOnError(err, "Failed to register Target Cluster to Control plane")
 			}
 			log.Infof("Registered Cluster ID is: %v\n", clusterId)
+
+		})
+
+		steplog = "Create and label namespace"
+		Step(steplog, func() {
+			ns := "test-ns"
+			_, _, err := tc.CreatePlatformNamespace(ns)
+			if err != nil {
+				log.FailOnError(err, "Failed to Create namespace on target cluster")
+			}
+			// ns_id, err := tc.GetNamespaceId(ns, clusterId)
+			// if err != nil {
+			//	log.FailOnError(err, "Failed while getting NameSpace ID")
+			// }
+			// log.Infof("NameSpaceId is %s\n", ns_id)
+		})
+
+		steplog = "de-register Target cluster from Control plane"
+		Step(steplog, func() {
+			err := tc.DeregisterFromControlPlane(clusterId, tenantId)
+			if err != nil {
+				log.FailOnError(err, "Failed to Create namespace on target cluster")
+			}
 		})
 	})
 
