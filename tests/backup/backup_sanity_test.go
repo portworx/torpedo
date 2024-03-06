@@ -263,7 +263,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
 				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
 			}
-			firstBkpLocationName = fmt.Sprintf("%s-%s-bl", "bl-sch", time.Now().Unix())
+			firstBkpLocationName = fmt.Sprintf("%s-%s-%v", "cred", "provider", time.Now().Unix())
 			firstBackupLocationUID = uuid.New()
 			for i, _ := range scheduledAppContexts {
 				firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, firstBkpLocationName, firstBackupLocationUID, scheduledAppContexts[i:i+1], make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
