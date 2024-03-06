@@ -35,7 +35,6 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 			nsName                 = params.InfraToTest.Namespace
 		)
 		stepLog := "Deploy data service and take adhoc backup."
-		//Step(stepLog, func() {
 		log.InfoD(stepLog)
 		backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 		log.FailOnError(err, "Error while fetching the backup supported ds.")
@@ -131,7 +130,6 @@ var _ = Describe("{PerformRestoreValidatingHA}", func() {
 				CleanupDeployments(deploymentsToBeCleaned)
 			})
 		}
-		//})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -155,7 +153,6 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 			nsName                 = params.InfraToTest.Namespace
 		)
 		stepLog := "Deploy data service and take adhoc backup."
-		//Step(stepLog, func() {
 		log.InfoD(stepLog)
 		backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
 		log.FailOnError(err, "Error while fetching the backup supported ds.")
@@ -235,7 +232,6 @@ var _ = Describe("{PerformRestorePDSPodsDown}", func() {
 				CleanupDeployments(deploymentsToBeCleaned)
 			})
 		}
-		//})
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
@@ -533,81 +529,79 @@ var _ = Describe("{DeleteBackupJobTriggerRestore}", func() {
 			nsName                 = params.InfraToTest.Namespace
 		)
 		stepLog := "Deploy data service and take adhoc backup."
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
-			log.FailOnError(err, "Error while fetching the backup supported ds.")
-			for _, ds := range params.DataServiceToTest {
-				deploymentsToBeCleaned = []*pds.ModelsDeployment{}
-				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
-				if !supported {
-					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
-					continue
-				}
-				stepLog = "Deploy and validate data service"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
-					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-					log.FailOnError(err, "Error while deploying data services")
-					// TODO: Add workload generation
-				})
-				stepLog = "Perform adhoc backup and validate."
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					dsEntity = restoreBkp.DSEntity{
-						Deployment: deployment,
-					}
-					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
-					log.FailOnError(err, "Failed while performing adhoc backup")
-				})
-
-				log.Info("Simultaneous backup delete and restores working as expected.")
-				var wg sync.WaitGroup
-				wg.Add(2)
-				go func() {
-					defer wg.Done()
-					defer GinkgoRecover()
-					// TODO: Add backup job deletion for in parallel backup delete and restore operation.
-				}()
-
-				go func() {
-					defer wg.Done()
-					defer GinkgoRecover()
-					log.InfoD("Perform restore for the backup jobs.")
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTargetCluster,
-					}
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, false, true)
-						if err != nil {
-							log.InfoD("Failed during the restore as the backup data might have been lost as part of simultaneous delete. ")
-						} else {
-							restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-							log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-							deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-							log.InfoD("Restored successfully. Deployment- %v", restoredModel.GetClusterResourceName())
-						}
-					}
-				}()
-
-				wg.Wait()
-
-				// TODO trigger workload for restored deployment
-
-				Step("Delete Deployments", func() {
-					CleanupDeployments(deploymentsToBeCleaned)
-				})
+		log.InfoD(stepLog)
+		backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+		log.FailOnError(err, "Error while fetching the backup supported ds.")
+		for _, ds := range params.DataServiceToTest {
+			deploymentsToBeCleaned = []*pds.ModelsDeployment{}
+			_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+			if !supported {
+				log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+				continue
 			}
-		})
+			stepLog = "Deploy and validate data service"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				deployment, _, _, err = DeployandValidateDataServices(ds, nsName, tenantID, projectID)
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				log.FailOnError(err, "Error while deploying data services")
+				// TODO: Add workload generation
+			})
+			stepLog = "Perform adhoc backup and validate."
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				dsEntity = restoreBkp.DSEntity{
+					Deployment: deployment,
+				}
+				log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+				err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+				log.FailOnError(err, "Failed while performing adhoc backup")
+			})
+
+			log.Info("Simultaneous backup delete and restores working as expected.")
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				// TODO: Add backup job deletion for in parallel backup delete and restore operation.
+			}()
+
+			go func() {
+				defer wg.Done()
+				defer GinkgoRecover()
+				log.InfoD("Perform restore for the backup jobs.")
+				restoreClient := restoreBkp.RestoreClient{
+					TenantId:             tenantID,
+					ProjectId:            projectID,
+					Components:           components,
+					Deployment:           deployment,
+					RestoreTargetCluster: restoreTargetCluster,
+				}
+				backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+				log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+				for _, backupJob := range backupJobs {
+					log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+					restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, false, true)
+					if err != nil {
+						log.InfoD("Failed during the restore as the backup data might have been lost as part of simultaneous delete. ")
+					} else {
+						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+						log.InfoD("Restored successfully. Deployment- %v", restoredModel.GetClusterResourceName())
+					}
+				}
+			}()
+
+			wg.Wait()
+
+			// TODO trigger workload for restored deployment
+
+			Step("Delete Deployments", func() {
+				CleanupDeployments(deploymentsToBeCleaned)
+			})
+		}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()

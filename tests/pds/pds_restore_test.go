@@ -55,107 +55,105 @@ var _ = Describe("{PerformRestoreToSameCluster}", func() {
 		pdsdeploymentsmd5Hash := make(map[string]string)
 		restoredDeploymentsmd5Hash := make(map[string]string)
 		stepLog := "Deploy data service and take adhoc backup."
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
-			log.FailOnError(err, "Error while fetching the backup supported ds.")
-			for _, ds := range params.DataServiceToTest {
-				deploymentsToBeCleaned := []*pds.ModelsDeployment{}
-				restoredDeployments := []*pds.ModelsDeployment{}
-				wlDeploymentsToBeCleaned := []*v1.Deployment{}
+		log.InfoD(stepLog)
+		backupSupportedDataServiceNameIDMap, err = bkpClient.GetAllBackupSupportedDataServices()
+		log.FailOnError(err, "Error while fetching the backup supported ds.")
+		for _, ds := range params.DataServiceToTest {
+			deploymentsToBeCleaned := []*pds.ModelsDeployment{}
+			restoredDeployments := []*pds.ModelsDeployment{}
+			wlDeploymentsToBeCleaned := []*v1.Deployment{}
 
-				//clearing up the previous entries
-				CleanMapEntries(pdsdeploymentsmd5Hash)
-				CleanMapEntries(restoredDeploymentsmd5Hash)
+			//clearing up the previous entries
+			CleanMapEntries(pdsdeploymentsmd5Hash)
+			CleanMapEntries(restoredDeploymentsmd5Hash)
 
-				_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
-				if !supported {
-					log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
-					continue
+			_, supported := backupSupportedDataServiceNameIDMap[ds.Name]
+			if !supported {
+				log.InfoD("Data service: %v doesn't support backup, skipping...", ds.Name)
+				continue
+			}
+			stepLog = "Deploy and validate data service"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
+				deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
+				deps = append(deps, deployment)
+				log.FailOnError(err, "Error while deploying data services")
+
+				dsEntity = restoreBkp.DSEntity{
+					Deployment: deployment,
 				}
-				stepLog = "Deploy and validate data service"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					deployment, _, _, err = DeployandValidateDataServices(ds, params.InfraToTest.Namespace, tenantID, projectID)
-					deploymentsToBeCleaned = append(deploymentsToBeCleaned, deployment)
-					deps = append(deps, deployment)
-					log.FailOnError(err, "Error while deploying data services")
+			})
+			stepLog = "Running Workloads before taking backups"
+			Step(stepLog, func() {
+				ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+				wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
+				log.FailOnError(err, "Error while Running workloads")
+				log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
+				pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
 
-					dsEntity = restoreBkp.DSEntity{
-						Deployment: deployment,
-					}
-				})
-				stepLog = "Running Workloads before taking backups"
-				Step(stepLog, func() {
-					ckSum, wlDep, err := dsTest.InsertDataAndReturnChecksum(deployment, wkloadParams)
+			})
+			stepLog = "Perform adhoc backup and validate them"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
+				err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
+				log.FailOnError(err, "Failed while performing adhoc backup")
+			})
+			stepLog = "Perform restore for the backup jobs."
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				ctx, err := GetSourceClusterConfigPath()
+				log.FailOnError(err, "failed while getting src cluster path")
+				restoreTarget := tc.NewTargetCluster(ctx)
+				restoreClient := restoreBkp.RestoreClient{
+					TenantId:             tenantID,
+					ProjectId:            projectID,
+					Components:           components,
+					Deployment:           deployment,
+					RestoreTargetCluster: restoreTarget,
+				}
+				backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
+				log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
+				for _, backupJob := range backupJobs {
+					log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
+					restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
+					log.FailOnError(err, "Failed during restore.")
+					restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
+					log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
+					deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
+					restoredDeployments = append(restoredDeployments, restoredDeployment)
+					log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
+				}
+			})
+			stepLog = "Validate md5hash for the restored deployments"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				for _, pdsDeployment := range restoredDeployments {
+					err := dsTest.ValidateDataServiceDeployment(pdsDeployment, params.InfraToTest.Namespace)
+					log.FailOnError(err, "Error while validating deployment before validating checksum")
+					ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
 					wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
 					log.FailOnError(err, "Error while Running workloads")
-					log.Debugf("Checksum for the deployment %s is %s", *deployment.ClusterResourceName, ckSum)
-					pdsdeploymentsmd5Hash[*deployment.ClusterResourceName] = ckSum
+					log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
+					restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
+				}
 
-				})
-				stepLog = "Perform adhoc backup and validate them"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					log.Infof("Deployment ID: %v, backup target ID: %v", deployment.GetId(), bkpTarget.GetId())
-					err = bkpClient.TriggerAndValidateAdhocBackup(deployment.GetId(), bkpTarget.GetId(), "s3")
-					log.FailOnError(err, "Failed while performing adhoc backup")
-				})
-				stepLog = "Perform restore for the backup jobs."
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					ctx, err := GetSourceClusterConfigPath()
-					log.FailOnError(err, "failed while getting src cluster path")
-					restoreTarget := tc.NewTargetCluster(ctx)
-					restoreClient := restoreBkp.RestoreClient{
-						TenantId:             tenantID,
-						ProjectId:            projectID,
-						Components:           components,
-						Deployment:           deployment,
-						RestoreTargetCluster: restoreTarget,
-					}
-					backupJobs, err := restoreClient.Components.BackupJob.ListBackupJobsBelongToDeployment(projectID, deployment.GetId())
-					log.FailOnError(err, "Error while fetching the backup jobs for the deployment: %v", deployment.GetClusterResourceName())
-					for _, backupJob := range backupJobs {
-						log.Infof("[Restoring] Details Backup job name- %v, Id- %v", backupJob.GetName(), backupJob.GetId())
-						restoredModel, err := restoreClient.TriggerAndValidateRestore(backupJob.GetId(), params.InfraToTest.Namespace, dsEntity, true, true)
-						log.FailOnError(err, "Failed during restore.")
-						restoredDeployment, err = restoreClient.Components.DataServiceDeployment.GetDeployment(restoredModel.GetDeploymentId())
-						log.FailOnError(err, fmt.Sprintf("Failed while fetching the restore data service instance: %v", restoredModel.GetClusterResourceName()))
-						deploymentsToBeCleaned = append(deploymentsToBeCleaned, restoredDeployment)
-						restoredDeployments = append(restoredDeployments, restoredDeployment)
-						log.InfoD("Restored successfully. Details: Deployment- %v, Status - %v", restoredModel.GetClusterResourceName(), restoredModel.GetStatus())
-					}
-				})
-				stepLog = "Validate md5hash for the restored deployments"
-				Step(stepLog, func() {
-					log.InfoD(stepLog)
-					for _, pdsDeployment := range restoredDeployments {
-						err := dsTest.ValidateDataServiceDeployment(pdsDeployment, params.InfraToTest.Namespace)
-						log.FailOnError(err, "Error while validating deployment before validating checksum")
-						ckSum, wlDep, err := dsTest.ReadDataAndReturnChecksum(pdsDeployment, wkloadParams)
-						wlDeploymentsToBeCleaned = append(wlDeploymentsToBeCleaned, wlDep)
-						log.FailOnError(err, "Error while Running workloads")
-						log.Debugf("Checksum for the deployment %s is %s", *pdsDeployment.ClusterResourceName, ckSum)
-						restoredDeploymentsmd5Hash[*pdsDeployment.ClusterResourceName] = ckSum
-					}
+				dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
+					true, "Validate md5 hash after restore")
+			})
 
-					dash.VerifyFatal(dsTest.ValidateDataMd5Hash(pdsdeploymentsmd5Hash, restoredDeploymentsmd5Hash),
-						true, "Validate md5 hash after restore")
-				})
+			Step("Clean up workload deployments", func() {
+				for _, wlDep := range wlDeploymentsToBeCleaned {
+					err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
+					log.FailOnError(err, "Failed while deleting the workload deployment")
+				}
+			})
 
-				Step("Clean up workload deployments", func() {
-					for _, wlDep := range wlDeploymentsToBeCleaned {
-						err := k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
-						log.FailOnError(err, "Failed while deleting the workload deployment")
-					}
-				})
-
-				Step("Delete Deployments, backUp targets and creds", func() {
-					CleanupDeployments(deploymentsToBeCleaned)
-				})
-			}
-		})
+			Step("Delete Deployments, backUp targets and creds", func() {
+				CleanupDeployments(deploymentsToBeCleaned)
+			})
+		}
 	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
