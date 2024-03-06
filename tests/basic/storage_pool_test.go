@@ -11069,3 +11069,178 @@ func isCloudDriveTypePureBlock(nodeUUID, poolUUID string) bool {
 	driveType := strings.TrimSpace(strings.Split(out, ":")[1])
 	return driveType == "pure-block"
 }
+
+var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", func() {
+
+	/*
+		https://portworx.atlassian.net/browse/PTX-15169
+		1. Add 2 disk of same size/type to create a new Pool
+		2. While disks are getting attached and after check status of metadata disk (metadata disk shouldn't be in rebalance)
+		3. After adding the disk, check the status of metadata disk (metadata disk shouldn't be in rebalance)
+		4. Add a disk of same size/type
+		5. While disk is getting attached and after check status of metadata disk (metadata disk shouldn't be in rebalance)
+
+	*/
+
+	itLog := "DriveAddMetaDataDiskStatusCheck"
+	JustBeforeEach(func() {
+		StartTorpedoTest(itLog, "Drive add and check metadata disk status", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	var selectedNode node.Node
+
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Schedule apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("drive-add-metadata-disk-%d", i))...)
+			}
+		})
+		defer DestroyApps(contexts, nil)
+		ValidateApplications(contexts)
+
+		stepLog = "Check which node has a metadata disk if not add one"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes, err := GetStorageNodes()
+			log.FailOnError(err, "Failed to get storage nodes")
+
+			isDedicatedMetadataDiskExist := false
+			selectedNode = storageNodes[0]
+
+			//Check which node has metadata disk if not add one
+			for _, storageNode := range storageNodes {
+				path, err := getMetaDataDiskPath(storageNode)
+				log.FailOnError(err, "Failed to get metadata disk")
+				if path != "" {
+					log.InfoD("Metadata disk path: %v", path)
+					isDedicatedMetadataDiskExist = true
+					selectedNode = storageNode
+					break
+				}
+			}
+			if !isDedicatedMetadataDiskExist {
+				for _, storageNode := range storageNodes {
+					deviceSpec := fmt.Sprintf("size=100 --metadata")
+					log.InfoD("Initiate add cloud drive and validate")
+					// enter pool maintenance mode
+					err = Inst().V.EnterPoolMaintenance(storageNode)
+					log.FailOnError(err, "node: %v failed to transition to pool maintenance mode", storageNode.Name)
+
+					err = Inst().V.AddCloudDrive(&storageNode, deviceSpec, -1)
+					// exit pool maintenance
+					err = Inst().V.ExitPoolMaintenance(storageNode)
+					log.FailOnError(err, "Node: %v Failed to exit out of maintenance mode", storageNode.Name)
+					if err != nil {
+						if strings.Contains(err.Error(), "Cannot add metadata device when internal kvdb is running on this node") {
+							log.Infof("Cannot add metadata device when internal kvdb is running on this node")
+							continue
+						}
+					}
+					log.FailOnError(err, "Failed to add metadata device on node : %s", selectedNode.Name)
+					selectedNode = storageNode
+					break
+				}
+			}
+		})
+		var wg sync.WaitGroup
+
+		stepLog = "Add 2 disk of same size/type to create a new Pool"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			done := make(chan struct{})
+			wg.Add(1)
+			go func(done chan<- struct{}) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				drivePath := "size=57"
+				for i := 0; i < 2; i++ {
+					err := Inst().V.AddCloudDrive(&selectedNode, drivePath, -1)
+					log.FailOnError(err, "Failed to add a drive to the pool")
+					time.Sleep(60 * time.Second)
+				}
+				close(done)
+			}(done)
+		})
+		stepLog = "Keep checking if metadata disk goes into rebalance"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			done := make(chan struct{})
+			devicePath, err := getMetaDataDiskPath(selectedNode)
+			log.FailOnError(err, "Failed to get metadata device path")
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				waitForMetadataRebalance(done, wg, devicePath, selectedNode)
+			}()
+		})
+		wg.Wait()
+		stepLog = "Again add a drive to an existing pool and check the metadatadevice"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			done := make(chan struct{})
+			wg.Add(1)
+			go func(done chan<- struct{}) {
+				defer GinkgoRecover()
+				defer wg.Done()
+				err := AddCloudDrive(selectedNode, 0)
+				log.FailOnError(err, "Failed to add a drive to the pool")
+				close(done)
+			}(done)
+			devicePath, err := getMetaDataDiskPath(selectedNode)
+			log.FailOnError(err, "Failed to get metadata device path")
+			go waitForMetadataRebalance(done, wg, devicePath, selectedNode)
+		})
+		wg.Wait()
+	})
+})
+
+// This function checks for metadata disk to be in rebalance state
+func waitForMetadataRebalance(done <-chan struct{}, wg sync.WaitGroup, devicePath string, selectedNode node.Node) {
+	defer wg.Done()
+
+	for {
+		select {
+		case <-done:
+			// Received signal from the first goroutine
+			fmt.Println("Metadata rebalance status checker is exiting")
+			return
+		default:
+			t := func() (interface{}, bool, error) {
+				cmd := fmt.Sprintf("-j service drive add -d %s -o status", devicePath)
+				// Simulated runPxctlCommand, replace with actual implementation
+				output, err := runPxctlCommand(cmd, selectedNode, nil)
+				log.InfoD("metadata status: %v", output)
+
+				if strings.Contains(err.Error(), "rebalance") {
+
+					return fmt.Sprintf("Metadata disk is in rebalance"), false, nil
+				}
+				return nil, true, nil
+			}
+			_, err := task.DoRetryWithTimeout(t, time.Minute*30, 5*time.Second)
+			fmt.Println("Failed to wait for metadata disk to be in rebalance:", err)
+			return // timeout
+		}
+	}
+}
+
+func getMetaDataDiskPath(n node.Node) (string, error) {
+	output, err := runPxctlCommand("status | grep -A 1 'Metadata Device:' | tail -n 1", n, nil)
+	if err != nil {
+		return "", err
+	}
+	log.Infof("Output of pxctl status: %v", output)
+	path := ""
+	if output != "" {
+		components := strings.Fields(output)
+		// Extract path and size
+		path = components[1]
+		path = strings.TrimSuffix(path, "-part1")
+
+		log.InfoD("Metadata device path: %v", path)
+	}
+	return path, nil
+}
