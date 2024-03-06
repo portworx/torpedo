@@ -15,6 +15,12 @@ func (restore WorkflowRestore) CreateRestore() (*apiStructs.WorkFlowResponse, er
 
 	createRestoreRequest := apiStructs.WorkFlowRequest{}
 
+	createRestoreRequest.Restore.Create.SourceReferences = &apiStructs.SourceReferences{
+		BackupId: "BackupID",
+	}
+	createRestoreRequest.Restore.Create.DestinationReferences = &apiStructs.DestinationReferences{
+		TargetClusterId: "TargetClusterID",
+	}
 	createRestoreRequest.Restore.Create.SourceReferences.BackupId = "SomeBackupID"
 	createRestoreRequest.Restore.Create.DestinationReferences.TargetClusterId = "SomeClusterID"
 

@@ -33,12 +33,12 @@ func (restore *PdsGrpc) CreateRestore(createRestoreRequest *apiStructs.WorkFlowR
 	response := &apiStructs.WorkFlowResponse{}
 
 	createRequest := &publicRestoreapis.CreateRestoreRequest{}
-	log.Infof("Restore Create Request - [%v], Restore Config - [%v]", createRequest, createRequest.Restore)
+	// log.Infof("Restore Create Request - [%v], Restore Config - [%v]", createRequest, createRequest.Restore)
 	err := utilities.CopyStruct(createRestoreRequest.Restore.Create, createRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Restore Create Request - [%v], Restore Config - [%v]", createRequest, createRequest.Restore)
+	// log.Infof("Restore Create Request - [%v], Restore Config - [%v]", createRequest, createRequest.Restore)
 
 	ctx, client, _, err := restore.getRestoreClient()
 	if err != nil {
@@ -69,12 +69,12 @@ func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *apiStructs.WorkF
 	response := &apiStructs.WorkFlowResponse{}
 
 	recreateRequest := &publicRestoreapis.RecreateRestoreRequest{}
-	log.Infof("Restore Recretae - [%v]", recreateRequest)
+	// log.Infof("Restore Recretae - [%v]", recreateRequest)
 	err := utilities.CopyStruct(recretaeRestoreRequest.Restore.ReCreate, recreateRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Restore Recretae - [%v]", recreateRequest)
+	// log.Infof("Restore Recretae - [%v]", recreateRequest)
 
 	ctx, client, _, err := restore.getRestoreClient()
 	if err != nil {
@@ -105,12 +105,12 @@ func (restore *PdsGrpc) GetRestore(getRestoreRequest *apiStructs.WorkFlowRequest
 	response := &apiStructs.WorkFlowResponse{}
 
 	getRequest := &publicRestoreapis.GetRestoreRequest{}
-	log.Infof("Restore Get - [%v]", getRequest)
+	// log.Infof("Restore Get - [%v]", getRequest)
 	err := utilities.CopyStruct(getRestoreRequest.Restore.Get, getRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Restore Get - [%v]", getRequest)
+	// log.Infof("Restore Get - [%v]", getRequest)
 
 	ctx, client, _, err := restore.getRestoreClient()
 	if err != nil {
@@ -141,12 +141,12 @@ func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *apiStructs.WorkFlowR
 	response := &apiStructs.WorkFlowResponse{}
 
 	deleteRequest := &publicRestoreapis.DeleteRestoreRequest{}
-	log.Infof("Restore Delete - [%v]", deleteRequest)
+	// log.Infof("Restore Delete - [%v]", deleteRequest)
 	err := utilities.CopyStruct(deleteRestoreRequest.Restore.Delete, deleteRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Restore Delete - [%v]", deleteRequest)
+	// log.Infof("Restore Delete - [%v]", deleteRequest)
 
 	ctx, client, _, err := restore.getRestoreClient()
 	if err != nil {
@@ -176,12 +176,12 @@ func (restore *PdsGrpc) ListRestore(listRestoresRequest *apiStructs.WorkFlowRequ
 	response := []apiStructs.WorkFlowResponse{}
 
 	listRequest := &publicRestoreapis.ListRestoresRequest{}
-	log.Infof("Restore List - [%v]", listRequest)
+	// log.Infof("Restore List - [%v]", listRequest)
 	err := utilities.CopyStruct(listRestoresRequest.Restore.List, listRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Restore List - [%v]", listRequest)
+	// log.Infof("Restore List - [%v]", listRequest)
 
 	ctx, client, _, err := restore.getRestoreClient()
 	if err != nil {

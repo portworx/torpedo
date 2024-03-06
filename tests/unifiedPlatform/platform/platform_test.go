@@ -132,6 +132,52 @@ var _ = Describe("{BackupConfigCRUD}", func() {
 	})
 })
 
+var _ = Describe("{RestoreCRUD}", func() {
+	var (
+		workflowRestore dslibs.WorkflowRestore
+	)
+	JustBeforeEach(func() {
+
+		workflowRestore = dslibs.WorkflowRestore{
+			DeploymentID: "SomeID",
+			NamepsaceID:  "SomeNamespace",
+			ProjectId:    "SomeID",
+		}
+		StartTorpedoTest("RestoreCRUD", "Runs CRUD on restores", nil, 0)
+	})
+
+	It("Create Restore", func() {
+		Step("Create Backup Config", func() {
+			_, err := workflowRestore.CreateRestore()
+			log.Infof("Error while creating restores - %s", err.Error())
+		})
+
+		Step("Recreate Restore", func() {
+			_, err := workflowRestore.ReCreateRestore()
+			log.Infof("Error while updating restores - %s", err.Error())
+		})
+
+		Step("Get Restore", func() {
+			_, err := workflowRestore.GetRestore()
+			log.Infof("Error while fetching restores - %s", err.Error())
+		})
+
+		Step("Delete Restore", func() {
+			_, err := workflowRestore.DeleteRestore()
+			log.Infof("Error while deleting restores - %s", err.Error())
+		})
+
+		Step("List Restore", func() {
+			_, err := workflowRestore.ListRestore()
+			log.Infof("Error while listing restores - %s", err.Error())
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{BackupRD}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("BackupRD", "Runs RD operations on backup", nil, 0)
