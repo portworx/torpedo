@@ -110,7 +110,6 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		monthlyName                       string
 		provisionerVolumeSnapshotClassMap map[string]string
 		firstBkpLocationName              string
-		firstBackupLocationUID            string
 		schedulePolicyName                string
 		schedulePolicyUID                 string
 		firstScheduleName                 string
