@@ -318,26 +318,6 @@ func (k *K8s) Init(schedOpts scheduler.InitOptions) error {
 		}
 	}
 
-	// Update node PxPodRestartCount during init
-	namespace, err := k.GetAutopilotNamespace()
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("%v", err))
-	}
-	pxLabel := make(map[string]string)
-	pxLabel[PxLabelNameKey] = PxLabelValue
-	pxPodRestartCountMap, err := k.GetPodsRestartCount(namespace, pxLabel)
-	if err != nil {
-		log.Fatalf(fmt.Sprintf("%v", err))
-	}
-
-	for pod, value := range pxPodRestartCountMap {
-		n, err := node.GetNodeByIP(pod.Status.HostIP)
-		if err != nil {
-			log.Fatalf(fmt.Sprintf("%v", err))
-		}
-		n.PxPodRestartCount = value
-	}
-
 	k.SpecFactory, err = spec.NewFactory(schedOpts.SpecDir, schedOpts.VolDriverName, k)
 	if err != nil {
 		return err
@@ -1468,6 +1448,12 @@ SPECS:
 				}
 			} else if specObj, ok := spec.(*appsapi.StatefulSet); ok {
 				if removeObj, ok := removeSpec.(*appsapi.StatefulSet); ok {
+					if specObj.Name == removeObj.Name {
+						continue SPECS
+					}
+				}
+			} else if specObj, ok := spec.(*storkapi.ClusterPair); ok {
+				if removeObj, ok := removeSpec.(*storkapi.ClusterPair); ok {
 					if specObj.Name == removeObj.Name {
 						continue SPECS
 					}
@@ -6260,7 +6246,7 @@ func (k *K8s) createPodDisruptionBudgetObjects(
 	ns *corev1.Namespace,
 	app *spec.AppSpec,
 ) (interface{}, error) {
-	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+	if obj, ok := spec.(*policyv1.PodDisruptionBudget); ok {
 		if obj.Namespace == "" {
 			obj.Namespace = ns.Name
 		}
