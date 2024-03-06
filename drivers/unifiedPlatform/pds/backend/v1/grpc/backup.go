@@ -33,12 +33,12 @@ func (backup *PdsGrpc) DeleteBackup(deleteBackupRequest *apiStructs.WorkFlowRequ
 	response := &apiStructs.WorkFlowResponse{}
 
 	deleteRequest := &publicBackupapis.DeleteBackupRequest{}
-	log.Infof("Backup Delete - [%v]", deleteRequest)
+	// log.Infof("Backup Delete - [%v]", deleteRequest)
 	err := utilities.CopyStruct(deleteBackupRequest.Backup.Delete, deleteRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Backup Delete - [%v]", deleteRequest)
+	// log.Infof("Backup Delete - [%v]", deleteRequest)
 
 	ctx, client, _, err := backup.getBackupClient()
 	if err != nil {
@@ -68,12 +68,12 @@ func (backup *PdsGrpc) ListBackup(listBackupConfigRequest *apiStructs.WorkFlowRe
 	response := []apiStructs.WorkFlowResponse{}
 
 	listRequest := &publicBackupapis.ListBackupsRequest{}
-	log.Infof("Backup List - [%v]", listRequest)
+	// log.Infof("Backup List - [%v]", listRequest)
 	err := utilities.CopyStruct(listBackupConfigRequest.Backup.List, listRequest)
 	if err != nil {
 		return response, err
 	}
-	log.Infof("Backup List - [%v]", listRequest)
+	// log.Infof("Backup List - [%v]", listRequest)
 
 	ctx, client, _, err := backup.getBackupClient()
 	if err != nil {
