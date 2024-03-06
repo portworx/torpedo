@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/eks/types"
+	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
@@ -40,27 +42,104 @@ func (e *EKS) String() string {
 }
 
 func (e *EKS) Init(schedOpts scheduler.InitOptions) (err error) {
-	e.clusterName = os.Getenv("EKS_CLUSTER_NAME")
-	if e.clusterName == "" {
-		return fmt.Errorf("env EKS_CLUSTER_NAME not found")
-	}
-	e.region = os.Getenv("EKS_CLUSTER_REGION")
-	if e.region == "" {
-		return fmt.Errorf("env EKS_CLUSTER_REGION not found")
-	}
-	e.pxNodeGroupName = os.Getenv("EKS_PX_NODEGROUP_NAME")
-	if e.pxNodeGroupName == "" {
-		return fmt.Errorf("env EKS_PX_NODEGROUP_NAME not found")
-	}
-	e.config, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(e.region))
-	if err != nil {
-		return fmt.Errorf("unable to load default SDK config. Err: [%v]", err)
-	}
-	e.eksClient = eks.NewFromConfig(e.config)
+	// This implementation assumes the EKS cluster has two node groups: one group for
+	// Torpedo and another group for Portworx.
 	err = e.K8s.Init(schedOpts)
 	if err != nil {
 		return err
 	}
+	torpedoNodeName := ""
+	pods, err := core.Instance().GetPods("default", nil)
+	if err != nil {
+		log.Errorf("failed to get pods from default namespace. Err: [%v]", err)
+	}
+	if pods != nil {
+		for _, pod := range pods.Items {
+			if pod.Name == "torpedo" {
+				torpedoNodeName = pod.Spec.NodeName
+			}
+		}
+	}
+	nodes, err := core.Instance().GetNodes()
+	if err != nil {
+		log.Errorf("failed to get nodes. Err: [%v]", err)
+	}
+	e.region = os.Getenv("EKS_CLUSTER_REGION")
+	if e.region == "" {
+		nodeRegionLabel := "topology.kubernetes.io/region"
+		log.Warnf("env EKS_CLUSTER_REGION not found. Using node label [%s] to determine region", nodeRegionLabel)
+		if torpedoNodeName != "" && nodes != nil  {
+			for _, node := range nodes.Items {
+				if node.Name != torpedoNodeName {
+					e.region = node.Labels[nodeRegionLabel]
+					log.Infof("Using node label [%s] to determine region [%s]", nodeRegionLabel, e.region)
+					break
+				}
+			}
+		}
+		if e.region == "" {
+			return fmt.Errorf("env EKS_CLUSTER_REGION or node label [%s] not found", nodeRegionLabel)
+		}
+	}
+	e.pxNodeGroupName = os.Getenv("EKS_PX_NODEGROUP_NAME")
+	if e.pxNodeGroupName == "" {
+		nodeGroupLabel := "eks.amazonaws.com/nodegroup"
+		log.Warnf("env EKS_PX_NODEGROUP_NAME not found. Using node label [%s] to determine Portworx node group", nodeGroupLabel)
+		if torpedoNodeName != "" && nodes != nil  {
+			for _, node := range nodes.Items {
+				if node.Name != torpedoNodeName {
+					e.pxNodeGroupName = node.Labels[nodeGroupLabel]
+					log.Infof("Using node label [%s] to determine Portworx node group [%s]", nodeGroupLabel, e.pxNodeGroupName)
+					break
+				}
+			}
+		}
+		if e.pxNodeGroupName == "" {
+			return fmt.Errorf("env EKS_PX_NODEGROUP_NAME or node label [%s] not found", nodeGroupLabel)
+		}
+	}
+	e.clusterName = os.Getenv("EKS_CLUSTER_NAME")
+	if e.clusterName == "" {
+		ec2InstanceLabel := "kubernetes.io/cluster/"
+		for _, node := range nodes.Items {
+			providerID := node.Spec.ProviderID
+			// In EKS, nodes have a ProviderID formatted as aws:///<region>/<instance-id>
+			splitID := strings.Split(providerID, "/")
+			if len(splitID) < 5 {
+				return fmt.Errorf("unexpected format of providerID: %s", providerID)
+			}
+			instanceID := splitID[4]
+			e.config, err = config.LoadDefaultConfig(context.TODO(), config.WithRegion(e.region))
+			if err != nil {
+				return fmt.Errorf("unable to load config for region %s, %v", e.region, err)
+			}
+			ec2Client := ec2.NewFromConfig(e.config)
+			result, err := ec2Client.DescribeInstances(
+				context.TODO(),
+				&ec2.DescribeInstancesInput{
+					InstanceIds: []string{instanceID},
+				},
+			)
+			if err != nil {
+				return fmt.Errorf("failed to describe instance %s, %v", instanceID, err)
+			}
+			for _, reservation := range result.Reservations {
+				for _, instance := range reservation.Instances {
+					for _, tag := range instance.Tags {
+						if strings.HasPrefix(*tag.Key, ec2InstanceLabel) {
+							e.clusterName = strings.TrimPrefix(*tag.Key, ec2InstanceLabel)
+							log.Infof("Instance [%s] is part of EKS cluster [%s] in region [%s]", instanceID, e.clusterName, e.region)
+							break
+						}
+					}
+				}
+			}
+		}
+		if e.clusterName == "" {
+			return fmt.Errorf("env EKS_CLUSTER_NAME or EC2 instance label [%s] not found", ec2InstanceLabel)
+		}
+	}
+	e.eksClient = eks.NewFromConfig(e.config)
 	return nil
 }
 
