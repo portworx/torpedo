@@ -251,6 +251,16 @@ done
 
 echo "checking if we need to override test suite: ${TEST_SUITE}"
 
+# TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
+case $FOCUS_TESTS in
+  Longevity|UpgradeLongevity|BackupLongevity)
+    TEST_SUITE="bin/longevity.test"
+    echo "Warning: Based on the FOCUS_TESTS ('$FOCUS_TESTS'), the TEST_SUITE ('$TEST_SUITE') is set to 'bin/longevity.test'"
+    ;;
+  *)
+    ;;
+esac
+
 if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
@@ -544,6 +554,7 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
+            "--px-cluster-opts=$PX_CLUSTER_OPTS",
             "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
             "--anthos-inst-path=$ANTHOS_INST_PATH",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
@@ -770,6 +781,8 @@ spec:
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
     - name: ENABLE_GRAFANA
       value: "${ENABLE_GRAFANA}"
+    - name: USE_GLOBAL_RULES
+      value: "${USE_GLOBAL_RULES}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
