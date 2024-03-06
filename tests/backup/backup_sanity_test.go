@@ -109,6 +109,14 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		weeklyName                        string
 		monthlyName                       string
 		provisionerVolumeSnapshotClassMap map[string]string
+		firstBkpLocationName              string
+		firstBackupLocationUID            string
+		schedulePolicyName                string
+		schedulePolicyUID                 string
+		firstScheduleName                 string
+		firstSchBackupName                string
+		scheduleUid                       string
+		srcClusterUid                     string
 	)
 
 	JustBeforeEach(func() {
@@ -137,14 +145,14 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
 		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 
-		taskName = fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
-		appCtx, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys:            []string{"postgres-rbd-csi"},
-			StorageProvisioner: "openshift-storage.rbd.csi.ceph.com",
-		})
-		appCtx[0].ReadinessTimeout = AppReadinessTimeout
-		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
-		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+		/*		taskName = fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+				appCtx, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            []string{"postgres-rbd-csi"},
+					StorageProvisioner: "openshift-storage.rbd.csi.ceph.com",
+				})
+				appCtx[0].ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx...)
+				log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)*/
 	})
 
 	It("Basic Backup Creation", func() {
@@ -254,6 +262,26 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
+		})
+
+		Step(fmt.Sprintf("Creating schedule backup for %s backup location and deleting it", firstBkpLocationName), func() {
+			log.InfoD("Creating schedule backup for %s backup location and deleting it", firstBkpLocationName)
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(5))
+			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
+				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
+			}
+			firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, firstBkpLocationName, firstBackupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
+			err = IsFullBackup(firstSchBackupName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", firstSchBackupName, firstBkpLocationName))
+			_, err = GetNextPeriodicScheduleBackupName(firstScheduleName, 15, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
+			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, firstScheduleName, BackupOrgID)
+			log.FailOnError(err, "failed to fetch backup schedule: %s uid", firstScheduleName)
+			err = DeleteScheduleWithUIDAndWait(firstScheduleName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule %s for backup location %s", firstScheduleName, firstBkpLocationName))
 		})
 
 		Step("Restoring the backed up namespaces", func() {
