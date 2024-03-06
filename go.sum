@@ -3072,6 +3072,8 @@ github.com/pseudomuto/protoc-gen-doc v1.3.2/go.mod h1:y5+P6n3iGrbKG+9O04V5ld71in
 github.com/pseudomuto/protokit v0.2.0/go.mod h1:2PdH30hxVHsup8KpBTOXTBeMVhJZVio3Q8ViKSAXT0Q=
 github.com/pure-px/apis v0.0.0-20240305100112-ad7910c0cf7c h1:n/elFp2Xa9Qqxxyao3GLXXwXJHkrVw0U6bs4qE6Ou+M=
 github.com/pure-px/apis v0.0.0-20240305100112-ad7910c0cf7c/go.mod h1:N6aOGZ7UR6ILSgtKC+jrYdpnAE7mGtBLa8tzHRqQkd8=
+github.com/pure-px/apis v0.0.0-20240306064831-6f5b789bef11 h1:KEXwWU6QwgAZUVJvSMEZRUZlyAkFsSNwa6Gh8R5NWwY=
+github.com/pure-px/apis v0.0.0-20240306064831-6f5b789bef11/go.mod h1:N6aOGZ7UR6ILSgtKC+jrYdpnAE7mGtBLa8tzHRqQkd8=
 github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1 h1:d/MG7RNwx0gpfbSQrMtat355R/8jRG4JuUYY+OMBIGI=
 github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1/go.mod h1:1JYlDoZQvC6Q2T9LdXVWHCzBGgR9frA9JKTEz3aSQcQ=
 github.com/quasilyte/go-ruleguard v0.3.1-0.20210203134552-1b5a410e1cc8/go.mod h1:KsAh3x0e7Fkpgs+Q9pNLS5XpFSvYCEVl5gP9Pp1xp30=
