@@ -1,0 +1,115 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/whoami/apiv1/whoami.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "WhoAmIService"
+        }
+    ],
+    "paths": {
+        "/v1/whoami": {
+            "get": {
+                "summary": "WhoAmI API returns the current actor accounts.",
+                "operationId": "WhoAmIService_WhoAmI",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1WhoAmIResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "WhoAmIService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1Account": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "Id of an account"
+                    },
+                    "dnsName": {
+                        "type": "string",
+                        "title": "Account DNS name"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name of Account"
+                    }
+                },
+                "title": "Account details in WhoAmI Respose"
+            },
+            "v1WhoAmIResponse": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "title": "id of current actor"
+                    },
+                    "email": {
+                        "type": "string",
+                        "title": "email of current actor"
+                    },
+                    "accounts": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Account"
+                        },
+                        "title": "accounts of current actor"
+                    }
+                },
+                "title": "WhoAmI response return accounts for current actor"
+            }
+        }
+    }
+}

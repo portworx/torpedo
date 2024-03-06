@@ -12,6 +12,9 @@ type Pds interface {
 
 type Deployment interface {
 	CreateDeployment(depRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+	ListDeployment() (*WorkFlowResponse, error)
+	GetDeployment(string) (*WorkFlowResponse, error)
+	DeleteDeployment(string) (*WorkFlowResponse, error)
 }
 
 type DeploymentConfig interface {

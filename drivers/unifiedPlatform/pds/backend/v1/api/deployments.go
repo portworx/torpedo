@@ -33,6 +33,18 @@ func (ds *PDSV2_API) GetDeploymentClient() (context.Context, *pdsv2.DeploymentSe
 	return ctx, client, nil
 }
 
+func (ds *PDSV2_API) GetDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
+	dsResponse := apiStructs.WorkFlowResponse{}
+
+	return &dsResponse, nil
+}
+
+func (ds *PDSV2_API) DeleteDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
+	dsResponse := apiStructs.WorkFlowResponse{}
+
+	return &dsResponse, nil
+}
+
 func (ds *PDSV2_API) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 

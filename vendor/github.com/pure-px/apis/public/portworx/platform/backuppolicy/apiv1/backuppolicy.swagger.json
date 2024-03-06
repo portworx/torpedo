@@ -1,0 +1,758 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/backuppolicy/apiv1/backuppolicy.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "BackupPolicyService"
+        }
+    ],
+    "paths": {
+        "/v1/backupPolicies": {
+            "get": {
+                "summary": "List API lists all the backup policies for a tenant.",
+                "operationId": "BackupPolicyService_ListBackupPolicies",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListBackupPoliciesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "Tenant ID for which the backup policies will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    }
+                ],
+                "tags": [
+                    "BackupPolicyService"
+                ]
+            }
+        },
+        "/v1/backupPolicies/{id}": {
+            "get": {
+                "summary": "Get API returns the backup policy for the given ID.",
+                "operationId": "BackupPolicyService_GetBackupPolicy",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1BackupPolicy"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "ID of the schedule.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "BackupPolicyService"
+                ]
+            },
+            "delete": {
+                "summary": "Delete API deletes a backup policy.",
+                "operationId": "BackupPolicyService_DeleteBackupPolicy",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "ID of the backup policy.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "BackupPolicyService"
+                ]
+            }
+        },
+        "/v1/backupPolicies/{meta.uid}:metaUpdate": {
+            "put": {
+                "summary": "Update API updates a the meta data of a backup policy.\n(-- api-linter: core::0134::response-message-name=disabled\n    aip.dev/not-precedent: We need to do this because we need to return the whole Schedule after the update. --)\n(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because we are updating only the meta data of the schedule and not config. --)",
+                "operationId": "BackupPolicyService_UpdateBackupPolicyMeta",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1BackupPolicy"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "description": "Name of the resource."
+                                    },
+                                    "description": {
+                                        "type": "string",
+                                        "description": "Description of the resource."
+                                    },
+                                    "resourceVersion": {
+                                        "type": "string",
+                                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                                    },
+                                    "createTime": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "description": "Creation time of the object.",
+                                        "readOnly": true
+                                    },
+                                    "updateTime": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "description": "Update time of the object.",
+                                        "readOnly": true
+                                    },
+                                    "labels": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "description": "Labels to apply to the object."
+                                    },
+                                    "annotations": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "description": "Annotations for the object."
+                                    },
+                                    "parentReference": {
+                                        "$ref": "#/components/schemas/v1Reference"
+                                    },
+                                    "resourceNames": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                            "type": "string"
+                                        },
+                                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                        "readOnly": true
+                                    }
+                                },
+                                "title": "Metadata of the backup policy to be updated.\n(-- api-linter: core::0134::request-required-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required because\nmeta data which needs to be updated has to be passed in the request. --)"
+                            }
+                        }
+                    },
+                    "description": "Metadata of the backup policy to be updated.\n(-- api-linter: core::0134::request-required-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required because\nmeta data which needs to be updated has to be passed in the request. --)",
+                    "required": true
+                },
+                "tags": [
+                    "BackupPolicyService"
+                ]
+            }
+        },
+        "/v1/tenants/{tenantId}/backupPolicies": {
+            "post": {
+                "summary": "Create API creates a backup policy for a tenant.",
+                "operationId": "BackupPolicyService_CreateBackupPolicy",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1BackupPolicy"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "The parent tenant id under which schedule will be created.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the tenant context. --)",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1BackupPolicy"
+                            }
+                        }
+                    },
+                    "description": "Backup Policy configuration.",
+                    "required": true
+                },
+                "tags": [
+                    "BackupPolicyService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ResourceSelectorResourceFilter": {
+                "type": "object",
+                "properties": {
+                    "resourceType": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs."
+                    }
+                },
+                "description": "ResourceFilter is filter for a given resource type."
+            },
+            "SelectorFilter": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Key of key,value pair against which filtering needs to be performs."
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array."
+                    }
+                },
+                "description": "Filter for a given key."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "rpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "v1BackupPolicy": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    }
+                },
+                "description": "Resource representing a backup policy."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "schedule": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Schedule"
+                        },
+                        "description": "Schedules defined for a policy."
+                    }
+                },
+                "description": "Desired configuration of the backup policy."
+            },
+            "v1DailyPolicy": {
+                "type": "object",
+                "properties": {
+                    "time": {
+                        "type": "string",
+                        "title": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                    }
+                },
+                "description": "Daily Policy."
+            },
+            "v1InfraResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACCOUNT",
+                    "TENANT",
+                    "PROJECT",
+                    "TARGET_CLUSTER",
+                    "NAMESPACE",
+                    "CREDENTIAL",
+                    "BACKUP_LOCATION",
+                    "BACKUP_POLICY",
+                    "TEMPLATE"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
+            },
+            "v1IntervalPolicy": {
+                "type": "object",
+                "properties": {
+                    "minutes": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Interval in minutes at which an action should be triggered."
+                    }
+                },
+                "description": "Interval Policy."
+            },
+            "v1ListBackupPoliciesResponse": {
+                "type": "object",
+                "properties": {
+                    "backupPolicies": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1BackupPolicy"
+                        },
+                        "description": "The list of backup policies scoped to a tenant."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "Response of list backup policies."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1MonthlyPolicy": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "int64",
+                        "title": "Date of the month when the policy should be triggered. If a given date doesn't exist in a month it'll rollover to the next date of the month.\nFor example if 31 is specified, it'll trigger on either 1st or 2nd March depending on if it is a leap year.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                    },
+                    "time": {
+                        "type": "string",
+                        "title": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                    }
+                },
+                "description": "Monthly Policy."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1ResourceSelector": {
+                "type": "object",
+                "properties": {
+                    "infraResourceFilters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
+                        },
+                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
+                    }
+                },
+                "description": "ResourceSelector is used to query resources using the associated infra resources."
+            },
+            "v1Schedule": {
+                "type": "object",
+                "properties": {
+                    "intervalPolicy": {
+                        "$ref": "#/components/schemas/v1IntervalPolicy"
+                    },
+                    "dailyPolicy": {
+                        "$ref": "#/components/schemas/v1DailyPolicy"
+                    },
+                    "weeklyPolicy": {
+                        "$ref": "#/components/schemas/v1WeeklyPolicy"
+                    },
+                    "monthlyPolicy": {
+                        "$ref": "#/components/schemas/v1MonthlyPolicy"
+                    },
+                    "cronExpression": {
+                        "type": "string",
+                        "description": "A cron expression is a string consisting of six or seven subexpressions (fields) that describe individual details of the schedule."
+                    },
+                    "incrementalCount": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Number of incremental snapshots to take before taking a full snapshot."
+                    },
+                    "retain": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Number of objects to retain for the schedule type, default value is 10."
+                    }
+                },
+                "description": "A schedule for a backup policy."
+            },
+            "v1Selector": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SelectorFilter"
+                        },
+                        "description": "FilterList is the list of all filters that should be applied."
+                    }
+                },
+                "description": "Selector is used to query resources using the associated labels or field names."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1WeeklyPolicy": {
+                "type": "object",
+                "properties": {
+                    "day": {
+                        "type": "string",
+                        "description": "Day of the week when the policy should be triggered.\nFor example, sunday or sun."
+                    },
+                    "time": {
+                        "type": "string",
+                        "title": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                    }
+                },
+                "description": "Weekly Policy."
+            }
+        }
+    }
+}

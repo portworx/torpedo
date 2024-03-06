@@ -1,0 +1,259 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.project.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/sort.proto";
+import "public/portworx/common/apiv1/platformresource.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/project/apiv1;project";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.project.v1";
+option java_outer_classname = "ProjectProto";
+
+
+// Project service provides APIs to interact with the Project entity.
+service ProjectService {
+  // Create project api creates a project.
+  rpc CreateProject(CreateProjectRequest)
+    returns (Project) {
+      option(google.api.http) = {
+        post: "/v1/tenants/{tenant_id}/projects"
+        body: "*"
+     };
+  }
+
+  // Update project api updates a project meta
+  rpc UpdateProject(UpdateProjectRequest)
+    returns (Project) {
+      option(google.api.http) = {
+        put: "/v1/projects/{meta.uid}"
+        body: "*"
+     };
+  }
+
+  // Get project apis returns a requested project.
+  rpc GetProject(GetProjectRequest)
+    returns (Project) {
+      option(google.api.http) = {
+        get: "/v1/projects/{project_id}"
+      };
+  }
+
+  // ListProjects API lists the projects visible to the caller for the provided tenant.
+  rpc ListProjects(ListProjectsRequest)
+    returns (ListProjectsResponse) {
+    option(google.api.http) = {
+      get: "/v1/projects"
+    };
+  }
+
+  // Deletes a project and its associated resources.
+  rpc DeleteProject(DeleteProjectRequest)
+    returns (google.protobuf.Empty) {
+      option (google.api.http) = {
+        delete: "/v1/projects/{project_id}"
+      };
+  }
+
+  // AssociateResources will append the supplied resources to existing infra resources of a given project config.
+  // (-- api-linter: core::0136::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because renaming creating issues with other apis)
+  rpc AssociateResources(AssociateResourcesRequest)
+    returns (Project) {
+      option(google.api.http) = {
+        put: "/v1/projects/{project_id}:associate"
+        body: "*"
+      };
+  }
+
+  // DisassociateResource will remove the infra resources supplied in the request from the project config.
+  // (-- api-linter: core::0136::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because renaming creating issues with other apis)
+  rpc DisassociateResources(DisassociateResourcesRequest)
+    returns (Project) {
+      option(google.api.http) = {
+        put: "/v1/projects/{project_id}:disassociate"
+        body: "*"
+      };
+  }
+}
+
+// Project is a logical collection of objects and/or services that users can access.
+message Project {
+  // Metadata of the project.
+  public.portworx.common.v1.Meta meta = 1;
+  // Configuration represents details of associated resources to the project.
+  Config config = 2;
+  // Status information of the project.
+  Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Status represents the current state of the project.
+message Status {
+  // Textual information for the current state of the project.
+  string reason = 1;
+  // Current phase of the project.
+  Phase.Type phase = 2;
+}
+
+// Phase represents the current status of the project.
+message Phase {
+  // Type of phase the project is in currently should be one of the below.
+  enum Type {
+    // Unspecified, do not use.
+    TYPE_UNSPECIFIED = 0;
+    // The project is in use and active.
+    ACTIVE = 1;
+    // Deletion of project has not started.
+    DELETE_PENDING = 2;
+    // Deletion of the project is scheduled and in progress.
+    DELETE_IN_PROGRESS = 3;
+  }
+}
+
+
+// Configuration represents the associated resource details for project.
+message Config {
+  // Infra resources access ownership to the project.
+  Resources infra_resources = 1;
+  // Application resources access ownership to the project
+  ApplicationResources applications_resources = 2;
+}
+
+// Infra resource are platform managed resources, used by associated applications.
+message Resources {
+  // Clusters represents the target k8s clusters.
+  repeated string clusters = 1;
+  // Namespaces created in k8s cluster to provide the logical isolation.
+  repeated string namespaces = 2;
+  // Credentials required to connect to a backup target.
+  repeated string credentials = 3;
+  // Backup locations where backups can be placed.
+  repeated string backup_locations = 4;
+  // Templates can be used by applications to manage its resources.
+  repeated string templates = 5;
+  // Backup Policies where the schedules are defined.
+  repeated string backup_policies = 6;
+}
+
+// ApplicationsResources clubs applications and their generated resources.
+message ApplicationResources {
+  // PDS application and its generated resources supported by the platform.
+    PDSResources pds_resources = 1;
+}
+
+// PDSResource clubs resources generated by pds application.
+message PDSResources {
+  // Resource ids of deployments.
+  repeated string deployments = 1;
+  // Resource ids of backup configs.
+  repeated string backup_configs = 2;
+  // Resource ids of restores.
+  repeated string restores = 3;
+}
+
+// Request to create a project.
+message CreateProjectRequest {
+  // The parent tenant under which project will be created
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to support creation of
+  //     the resource in the tenant context. --)
+  string tenant_id = 1;
+  // Details of the project supplied by the user.
+  Project project = 2;
+}
+
+// Request to update a project meta.
+// (-- api-linter: core::0134::request-resource-required=disabled
+//     aip.dev/not-precedent: We need to do this because reasons.
+// we are onlu updating project meta--)
+message UpdateProjectRequest {
+  // Metadata of the project.
+  public.portworx.common.v1.Meta meta = 2;
+}
+
+// Request to fetch a project.
+message GetProjectRequest {
+  // Project id.
+  string project_id = 1;
+}
+
+// ListProjectsRequest  is the request message to the ListProjects API
+// and it takes the resource details for which the projects visible to the caller
+// will be returned.
+message ListProjectsRequest {
+  // Filtering list of projects based on the provided resource details.
+  Filter query = 1;
+  // Sorting details using which requested list of projects to be sorted.
+  public.portworx.common.v1.Sort sort = 2;
+  // Pagination parameters for listing projects.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListProjectsResponse is the response message to the ListProjects API and contains
+// the list of projects visible to the caller.
+message ListProjectsResponse {
+  // Requested projects.
+  repeated Project projects = 1;
+
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request for deleting a project.
+message DeleteProjectRequest {
+  // ID of the project which needs to be deleted.
+  string project_id = 1;
+}
+
+// Request for updating a project with infra resource.
+message AssociateResourcesRequest {
+  // ID of the project.
+  string project_id = 1;
+  // Infra resource configuration to be associated to the project.
+  // The resources in the request will be appended to existing resource config of the project.
+  Resources infra_resource = 2;
+}
+
+// Request to disassociate infra resource from the project configuration.
+message DisassociateResourcesRequest {
+  // ID of the project from which infra resources to be disassociated.
+  string project_id = 1;
+  // Infra resource configuration to be disassociated from the project.
+  // The resources in the request will be disassociated from the existing resource config of the project.
+  Resources infra_resource = 2;
+}
+
+// Filter clubs the infra and application resource details, to filter the requested list of projects.
+message Filter {
+  oneof resource_type {
+    // Type of the application managed resource for which projects to be listed.
+    public.portworx.common.v1.ApplicationResource.Type app_resource = 1;
+    // Type of the infra resource for which projects to be listed.
+    public.portworx.common.v1.InfraResource.Type infra_resource = 2;
+  }
+  // ID of the resource for which projects to be listed.
+  string resource_id = 3;
+}

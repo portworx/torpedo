@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// GetClient updates the header with bearer token and returns the new client
+// getDeploymentClient updates the header with bearer token and returns the new client
 func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploymentapis.DeploymentServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
 	var depClient publicdeploymentapis.DeploymentServiceClient
@@ -29,6 +29,53 @@ func (deployment *PdsGrpc) getDeploymentClient() (context.Context, publicdeploym
 	depClient = publicdeploymentapis.NewDeploymentServiceClient(deployment.ApiClientV2)
 
 	return ctx, depClient, token, nil
+}
+
+func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*WorkFlowResponse, error) {
+	depResponse := WorkFlowResponse{}
+	ctx, client, _, err := deployment.getDeploymentClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	getRequest := &publicdeploymentapis.GetDeploymentRequest{
+		Id: deploymentId,
+	}
+	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
+	apiResponse, err := client.GetDeployment(ctx, getRequest)
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting the deployment: %v\n", err)
+	}
+	err = copier.Copy(&depResponse, apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying the response:%v\n", err)
+	}
+	return &depResponse, nil
+}
+
+func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) (*WorkFlowResponse, error) {
+	depResponse := WorkFlowResponse{}
+	ctx, client, _, err := deployment.getDeploymentClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+	}
+
+	deleteRequest := &publicdeploymentapis.DeleteDeploymentRequest{
+		Id: deploymentId,
+	}
+
+	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
+	apiResponse, err := client.DeleteDeployment(ctx, deleteRequest)
+	log.Infof("api response [+%v]", apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while deleting the deployment: %v\n", err)
+	}
+	err = copier.Copy(&depResponse, apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying the response:%v\n", err)
+	}
+	return &depResponse, nil
 }
 
 func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {

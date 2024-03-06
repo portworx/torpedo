@@ -1,0 +1,917 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/platform/project/apiv1/project.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "ProjectService"
+        }
+    ],
+    "paths": {
+        "/v1/projects": {
+            "get": {
+                "summary": "ListProjects API lists the projects visible to the caller for the provided tenant.",
+                "operationId": "ProjectService_ListProjects",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListProjectsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "query.appResource",
+                        "description": "Type of the application managed resource for which projects to be listed.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - PDS_DEPLOYMENT: List of supported PDS application resources.\nPDS application resource of type deployment.\n - PDS_BACKUPCONFIG: PDS application resource of type backup.\n - PDS_RESTORE: PDS application resource of type restore.\n - BAAS_BACKUP: List of supported BAAS application resources.\nBAAS application resource of type backup.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "TYPE_UNSPECIFIED",
+                                "PDS_DEPLOYMENT",
+                                "PDS_BACKUPCONFIG",
+                                "PDS_RESTORE",
+                                "BAAS_BACKUP"
+                            ],
+                            "default": "TYPE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "query.infraResource",
+                        "description": "Type of the infra resource for which projects to be listed.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "TYPE_UNSPECIFIED",
+                                "ACCOUNT",
+                                "TENANT",
+                                "PROJECT",
+                                "TARGET_CLUSTER",
+                                "NAMESPACE",
+                                "CREDENTIAL",
+                                "BACKUP_LOCATION",
+                                "BACKUP_POLICY",
+                                "TEMPLATE"
+                            ],
+                            "default": "TYPE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "query.resourceId",
+                        "description": "ID of the resource for which projects to be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        },
+        "/v1/projects/{meta.uid}": {
+            "put": {
+                "summary": "Update project api updates a project meta",
+                "operationId": "ProjectService_UpdateProject",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Project"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "meta.uid",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectServiceUpdateProjectBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        },
+        "/v1/projects/{projectId}": {
+            "get": {
+                "summary": "Get project apis returns a requested project.",
+                "operationId": "ProjectService_GetProject",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Project"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "description": "Project id.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "ProjectService"
+                ]
+            },
+            "delete": {
+                "summary": "Deletes a project and its associated resources.",
+                "operationId": "ProjectService_DeleteProject",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "description": "ID of the project which needs to be deleted.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        },
+        "/v1/projects/{projectId}:associate": {
+            "put": {
+                "summary": "AssociateResources will append the supplied resources to existing infra resources of a given project config.\n(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because renaming creating issues with other apis)",
+                "operationId": "ProjectService_AssociateResources",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Project"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "description": "ID of the project.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectServiceAssociateResourcesBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        },
+        "/v1/projects/{projectId}:disassociate": {
+            "put": {
+                "summary": "DisassociateResource will remove the infra resources supplied in the request from the project config.\n(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because renaming creating issues with other apis)",
+                "operationId": "ProjectService_DisassociateResources",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Project"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "projectId",
+                        "description": "ID of the project from which infra resources to be disassociated.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectServiceDisassociateResourcesBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        },
+        "/v1/tenants/{tenantId}/projects": {
+            "post": {
+                "summary": "Create project api creates a project.",
+                "operationId": "ProjectService_CreateProject",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Project"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "tenantId",
+                        "description": "The parent tenant under which project will be created\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the tenant context. --)",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectServiceCreateProjectBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ProjectServiceAssociateResourcesBody": {
+                "type": "object",
+                "properties": {
+                    "infraResource": {
+                        "$ref": "#/components/schemas/v1Resources"
+                    }
+                },
+                "description": "Request for updating a project with infra resource."
+            },
+            "ProjectServiceCreateProjectBody": {
+                "type": "object",
+                "properties": {
+                    "project": {
+                        "$ref": "#/components/schemas/v1Project"
+                    }
+                },
+                "description": "Request to create a project."
+            },
+            "ProjectServiceDisassociateResourcesBody": {
+                "type": "object",
+                "properties": {
+                    "infraResource": {
+                        "$ref": "#/components/schemas/v1Resources"
+                    }
+                },
+                "description": "Request to disassociate infra resource from the project configuration."
+            },
+            "ProjectServiceUpdateProjectBody": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Name of the resource."
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Description of the resource."
+                            },
+                            "resourceVersion": {
+                                "type": "string",
+                                "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                            },
+                            "createTime": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "Creation time of the object.",
+                                "readOnly": true
+                            },
+                            "updateTime": {
+                                "type": "string",
+                                "format": "date-time",
+                                "description": "Update time of the object.",
+                                "readOnly": true
+                            },
+                            "labels": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                },
+                                "description": "Labels to apply to the object."
+                            },
+                            "annotations": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                },
+                                "description": "Annotations for the object."
+                            },
+                            "parentReference": {
+                                "$ref": "#/components/schemas/v1Reference"
+                            },
+                            "resourceNames": {
+                                "type": "object",
+                                "additionalProperties": {
+                                    "type": "string"
+                                },
+                                "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                                "readOnly": true
+                            }
+                        },
+                        "description": "Metadata of the project.",
+                        "title": "Metadata of the project."
+                    }
+                },
+                "title": "Request to update a project meta.\n(-- api-linter: core::0134::request-resource-required=disabled\n    aip.dev/not-precedent: We need to do this because reasons.\nwe are onlu updating project meta--)"
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "projectv1Status": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Textual information for the current state of the project."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/v1PhaseType"
+                    }
+                },
+                "description": "Status represents the current state of the project."
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "v1ApplicationResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "PDS_DEPLOYMENT",
+                    "PDS_BACKUPCONFIG",
+                    "PDS_RESTORE",
+                    "BAAS_BACKUP"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource can be associated to the project.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - PDS_DEPLOYMENT: List of supported PDS application resources.\nPDS application resource of type deployment.\n - PDS_BACKUPCONFIG: PDS application resource of type backup.\n - PDS_RESTORE: PDS application resource of type restore.\n - BAAS_BACKUP: List of supported BAAS application resources.\nBAAS application resource of type backup."
+            },
+            "v1ApplicationResources": {
+                "type": "object",
+                "properties": {
+                    "pdsResources": {
+                        "$ref": "#/components/schemas/v1PDSResources"
+                    }
+                },
+                "description": "ApplicationsResources clubs applications and their generated resources."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "infraResources": {
+                        "$ref": "#/components/schemas/v1Resources"
+                    },
+                    "applicationsResources": {
+                        "$ref": "#/components/schemas/v1ApplicationResources"
+                    }
+                },
+                "description": "Configuration represents the associated resource details for project."
+            },
+            "v1Filter": {
+                "type": "object",
+                "properties": {
+                    "appResource": {
+                        "$ref": "#/components/schemas/v1ApplicationResourceType"
+                    },
+                    "infraResource": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "resourceId": {
+                        "type": "string",
+                        "description": "ID of the resource for which projects to be listed."
+                    }
+                },
+                "description": "Filter clubs the infra and application resource details, to filter the requested list of projects."
+            },
+            "v1InfraResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACCOUNT",
+                    "TENANT",
+                    "PROJECT",
+                    "TARGET_CLUSTER",
+                    "NAMESPACE",
+                    "CREDENTIAL",
+                    "BACKUP_LOCATION",
+                    "BACKUP_POLICY",
+                    "TEMPLATE"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
+            },
+            "v1ListProjectsResponse": {
+                "type": "object",
+                "properties": {
+                    "projects": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Project"
+                        },
+                        "description": "Requested projects."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListProjectsResponse is the response message to the ListProjects API and contains\nthe list of projects visible to the caller."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PDSResources": {
+                "type": "object",
+                "properties": {
+                    "deployments": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Resource ids of deployments."
+                    },
+                    "backupConfigs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Resource ids of backup configs."
+                    },
+                    "restores": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Resource ids of restores."
+                    }
+                },
+                "description": "PDSResource clubs resources generated by pds application."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1PhaseType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACTIVE",
+                    "DELETE_PENDING",
+                    "DELETE_IN_PROGRESS"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of phase the project is in currently should be one of the below.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACTIVE: The project is in use and active.\n - DELETE_PENDING: Deletion of project has not started.\n - DELETE_IN_PROGRESS: Deletion of the project is scheduled and in progress."
+            },
+            "v1Project": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/projectv1Status"
+                    }
+                },
+                "description": "Project is a logical collection of objects and/or services that users can access."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1Resources": {
+                "type": "object",
+                "properties": {
+                    "clusters": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Clusters represents the target k8s clusters."
+                    },
+                    "namespaces": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Namespaces created in k8s cluster to provide the logical isolation."
+                    },
+                    "credentials": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Credentials required to connect to a backup target."
+                    },
+                    "backupLocations": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Backup locations where backups can be placed."
+                    },
+                    "templates": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Templates can be used by applications to manage its resources."
+                    },
+                    "backupPolicies": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Backup Policies where the schedules are defined."
+                    }
+                },
+                "description": "Infra resource are platform managed resources, used by associated applications."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            }
+        }
+    }
+}

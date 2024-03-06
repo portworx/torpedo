@@ -1,0 +1,58 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.whoami.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/whoami/apiv1;whoami";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.whoami.v1";
+option java_outer_classname = "WhoAmIProto";
+
+// WhoAmIService service provides API to get the current actor accounts.
+service WhoAmIService {
+  // WhoAmI API returns the current actor accounts.
+  rpc WhoAmI(google.protobuf.Empty)
+    returns (WhoAmIResponse) {
+    option(google.api.http) = {
+      get: "/v1/whoami"
+    };
+  }
+}
+
+// WhoAmI response return accounts for current actor
+message WhoAmIResponse {
+  // id of current actor
+  string id  = 1;
+  // email of current actor
+  string email =2;
+  // accounts of current actor
+  repeated Account accounts = 3;
+}
+
+// Account details in WhoAmI Respose
+message Account {
+  // Id of an account
+  string id =1;
+  // Account DNS name
+  string dns_name = 2;
+  // Name of Account
+  string name = 3;
+}
