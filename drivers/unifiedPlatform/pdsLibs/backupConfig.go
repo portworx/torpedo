@@ -16,9 +16,9 @@ type WorkflowBackupInput struct {
 // CreateBackupConfig created backup config for the deployment
 func CreateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
 
-	createBackupRequest := apiStructs.WorkFlowRequest{}
+	createBackupConfigRequest := apiStructs.WorkFlowRequest{}
 
-	createBackupRequest.BackupConfig.Create.BackupConfig = &apiStructs.V1BackupConfig{
+	createBackupConfigRequest.BackupConfig.Create.BackupConfig = &apiStructs.V1BackupConfig{
 		Meta: &apiStructs.Meta{
 			Uid: intToPointerString(10),
 		},
@@ -29,10 +29,10 @@ func CreateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 			CustomResourceName: intToPointerString(70),
 		},
 	}
-	createBackupRequest.BackupConfig.Create.DeploymentId = backupConfig.DeploymentID
-	createBackupRequest.BackupConfig.Create.ProjectId = backupConfig.ProjectId
+	createBackupConfigRequest.BackupConfig.Create.DeploymentId = backupConfig.DeploymentID
+	createBackupConfigRequest.BackupConfig.Create.ProjectId = backupConfig.ProjectId
 
-	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupRequest)
+	backupResponse, err := v2Components.PDS.CreateBackupConfig(&createBackupConfigRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -42,9 +42,9 @@ func CreateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 // UpdateBackupConfig updates backup config of the deployment
 func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
 
-	updateBackupRequest := apiStructs.WorkFlowRequest{}
+	updateBackupConfigRequest := apiStructs.WorkFlowRequest{}
 
-	updateBackupRequest.BackupConfig.Update.BackupConfig = &apiStructs.V1BackupConfig{
+	updateBackupConfigRequest.BackupConfig.Update.BackupConfig = &apiStructs.V1BackupConfig{
 		Meta: &apiStructs.Meta{
 			Uid: intToPointerString(10),
 		},
@@ -56,7 +56,7 @@ func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 		},
 	}
 
-	backupResponse, err := v2Components.PDS.UpdateBackupConfig(&updateBackupRequest)
+	backupResponse, err := v2Components.PDS.UpdateBackupConfig(&updateBackupConfigRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -66,11 +66,11 @@ func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 // DeleteBackupConfig deletes backup config of the deployment
 func DeleteBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
 
-	deleteBackupRequest := apiStructs.WorkFlowRequest{}
+	deleteBackupConfigRequest := apiStructs.WorkFlowRequest{}
 
-	deleteBackupRequest.BackupConfig.Delete.Id = "SomeID"
+	deleteBackupConfigRequest.BackupConfig.Delete.Id = "SomeID"
 
-	backupResponse, err := v2Components.PDS.DeleteBackupConfig(&deleteBackupRequest)
+	backupResponse, err := v2Components.PDS.DeleteBackupConfig(&deleteBackupConfigRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -80,11 +80,11 @@ func DeleteBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 // GetBackupConfig fetches backup config for the deployment
 func GetBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
 
-	getBackupRequest := apiStructs.WorkFlowRequest{}
+	getBackupConfigRequest := apiStructs.WorkFlowRequest{}
 
-	getBackupRequest.BackupConfig.Get.Id = "SomeID"
+	getBackupConfigRequest.BackupConfig.Get.Id = "SomeID"
 
-	backupResponse, err := v2Components.PDS.GetBackupConfig(&getBackupRequest)
+	backupResponse, err := v2Components.PDS.GetBackupConfig(&getBackupConfigRequest)
 	if err != nil {
 		return nil, err
 	}
