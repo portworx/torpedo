@@ -1257,7 +1257,7 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.13
 github.com/prometheus/statsd_exporter/pkg/mapper
 github.com/prometheus/statsd_exporter/pkg/mapper/fsm
-# github.com/pure-px/apis v0.0.0-20240305100112-ad7910c0cf7c
+# github.com/pure-px/apis v0.0.0-20240306064831-6f5b789bef11
 ## explicit; go 1.20
 github.com/pure-px/apis/public/portworx/common/apiv1
 github.com/pure-px/apis/public/portworx/pds/backup/apiv1
@@ -1265,6 +1265,7 @@ github.com/pure-px/apis/public/portworx/pds/backupconfig/apiv1
 github.com/pure-px/apis/public/portworx/pds/deployment/apiv1
 github.com/pure-px/apis/public/portworx/pds/deploymentconfigupdate/apiv1
 github.com/pure-px/apis/public/portworx/pds/deploymenttopology/apiv1
+github.com/pure-px/apis/public/portworx/pds/restore/apiv1
 github.com/pure-px/apis/public/portworx/platform/account/apiv1
 github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1
 github.com/pure-px/apis/public/portworx/platform/backuppolicy/apiv1

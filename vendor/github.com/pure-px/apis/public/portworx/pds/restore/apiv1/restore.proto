@@ -1,0 +1,289 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.pds.restore.v1;
+
+import "google/protobuf/empty.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "google/api/annotations.proto";
+import "public/portworx/common/apiv1/sort.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/restore/apiv1;restore";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.restore.v1";
+option java_outer_classname = "RestoreProto";
+
+// Restore service provides APIs to interact with the Restore entity.
+service RestoreService {
+  // CreateRestore API creates the Restore resource.
+  rpc CreateRestore(CreateRestoreRequest)
+    returns (Restore) {
+    option(google.api.http) = {
+      post: "/pds/v1/namespaces/{namespace_id}/restores"
+      body: "restore"
+    };
+  }
+
+  // GetRestore API returns the Restore resource.
+  rpc GetRestore(GetRestoreRequest)
+    returns (Restore) {
+    option(google.api.http) = {
+      get: "/pds/v1/restores/{id}"
+    };
+  }
+
+  // ListRestore API lists the Restore resources.
+  rpc ListRestores(ListRestoresRequest)
+    returns (ListRestoresResponse) {
+    option(google.api.http) = {
+      get: "/pds/v1/restores"
+    };
+  }
+
+  // DeleteRestore API deletes the restore.
+  rpc DeleteRestore(DeleteRestoreRequest)
+    returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/pds/v1/restores/{id}"
+    };
+  }
+
+  // RecreateRestore API recreates a already failed restore.
+  rpc RecreateRestore(RecreateRestoreRequest)
+    returns(Restore) {
+    option(google.api.http) = {
+      post: "/pds/v1/restores/{id}:recreate"
+      body: "*"
+    };
+  }
+
+  // GetRestorabilityMatrix API returns the compatibility matrix for restore.
+  // (-- api-linter: core::0131::request-message-name=disabled
+  //     aip.dev/not-precedent: We need to do this because we don't need any parameter in request --)
+  rpc GetRestorabilityMatrix(google.protobuf.Empty)
+    returns (RestorabilityMatrix) {
+    option(google.api.http) = {
+      get: "/pds/v1/restores:restorabilityMatrix"
+    };
+  }
+}
+
+// Request to create a restore.
+message CreateRestoreRequest {
+  // UID of the namespace where restore will be created.
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We really need this field because namespace is the parent of the restore. --)
+  string namespace_id = 1;
+
+  // UID of the project associated with the restore.
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to know the project with which the restore is associated with. --)
+  string project_id = 2;
+
+  // Restore resource.
+  Restore restore = 3;
+}
+
+// Request to get a restore.
+message GetRestoreRequest {  
+  // UID of the restore.
+  string id = 1;
+}
+
+// Request to list the restores.
+message ListRestoresRequest {
+  // Specifies a filter to list restores.
+  oneof list_by {
+    // Account ID for which the restore will be listed.
+    string account_id = 1;
+    // Tenant ID for which the restore will be listed.
+    string tenant_id = 2;
+    // Project ID for which the restore will be listed.
+    string project_id = 3;
+    // Deployment ID for which the restore will be listed.
+    string deployment_id = 4;
+    // Backup ID for which the restore will be listed.
+    string backup_id = 5;
+  }
+  // Sorting details using which requested list to be sorted.
+  public.portworx.common.v1.Sort sort = 6;
+  // Pagination metadata for this response.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7;
+}
+
+// ListRestoresResponse represents list restores response.
+message ListRestoresResponse {
+  // List of restores.
+  repeated Restore restores = 1;
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to delete a restore.
+message DeleteRestoreRequest {
+  // UID of the Restore.
+  string id = 2;
+}
+
+// Request to recreate a restore.
+message RecreateRestoreRequest {
+  // UID of the existing restore.
+  string id = 1;
+  // UID of the target cluster where restore will be created.
+  string target_cluster_id = 2;
+  // Name of the restore.
+  string name = 3;
+  // UID of namespace where restore will be created.
+  string namespace_id = 4;
+}
+
+// Restore represents a data service restore.
+message Restore {
+  // Metadata of the resource.
+  public.portworx.common.v1.Meta meta = 1;
+  // Desired configuration of the Restore.
+  Config config = 2;
+  // Current status of the Restore.
+  Status status = 3;
+}
+
+// Desired configuration of the restore.
+message Config {
+  // SourceReferences for the restore.
+  SourceReferences source_references = 1;
+  // Destination references for the restore.
+  DestinationReferences destination_references = 2;
+  // K8s resource name for restore, built from ["restore-" + name + short-id].
+  string custom_resource_name = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// SourceReferences for the restore.
+message SourceReferences {
+  // UID of the deployment which was backed up.
+  string deployment_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // UID of the backup.
+  string backup_id = 2;
+  // UID of the backup location.
+  string backup_location_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // UID of the cloud snapshot of the backup volume used for restore.
+  string cloudsnap_id = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Destination references for the restore.
+message DestinationReferences {
+  // UID of the target cluster where restore will be created.
+  string target_cluster_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // UID of the deployment created by the restore.
+  string deployment_id = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // UID of the project.
+  string project_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Status of the restore.
+message Status {
+  // (-- api-linter: core::0142::time-field-names=disabled
+  //     aip.dev/not-precedent: We need to do this because we need different name for the field. --)
+  // Time when restore was started.
+  google.protobuf.Timestamp started_at = 1;
+  // (-- api-linter: core::0142::time-field-names=disabled
+  //     aip.dev/not-precedent: We need to do this because we need different name for the field. --)
+  // Time when restore was completed.
+  google.protobuf.Timestamp completed_at = 2;
+  // Error code of the restore from Target Cluster.
+  ErrorCode error_code = 3;
+  // Error message is description of the error in restore.
+  string error_message = 4;
+  // Phase of the restore.
+  Phase phase = 5;
+}
+
+// RestorabilityMatrix represents the compatibility matrix for restore.
+message RestorabilityMatrix {
+  // Restore compatibility conditions for each dataservice.
+  map<string, RestoreCompatibilityConditionList> conditions = 1;
+}
+
+// List of restore compatibility conditions.
+message RestoreCompatibilityConditionList {
+  // List of restore compatibility conditions.
+  repeated RestoreCompatibilityCondition conditions = 1;
+}
+
+// Restore compatibility condition.
+message RestoreCompatibilityCondition {
+  // Restore compatibility condition for backup.
+  // key represents backup capability and value represents the version of the capability.
+  // e.g. {"backup": "v2"}
+  map<string, string> backup = 1;
+  // Restore compatibility condition for image.
+  // key represents image capability and value represents the version of the capability.
+  // e.g. {"pds_restore": "v1"}
+  map<string, string> image = 2;
+}
+
+// Enum for phase of the restore.
+enum Phase {
+  // Phase is unspecified.
+  PHASE_UNSPECIFIED = 0;
+  // Restore is initializing.
+  INITIALIZING = 1;
+  // Restore has not yet started.
+  PENDING = 2;
+  // Waiting for the cloud snap restore to complete.
+  RESTORING_CLOUDSNAP = 3;
+  // PV and PVC resources are ready and we're waiting to get the data service manifest from the backup.
+  RESTORING_DATA_SERVICE_CR = 4;
+  // New data service has been created and we're waiting for the restore process to complete.
+  RESTORING_DEPLOYMENT = 5;
+  // Restore process in data service has succeeded and we're waiting until it becomes healthy in normal mode.
+  DEPLOYMENT_ENTERING_NORMAL_MODE = 6;
+  // Restore successful.
+  SUCCESSFUL = 7;
+  // Restore failed. 
+  FAILED = 8;
+}
+
+// Enums for error codes for restore on the target cluster.
+enum ErrorCode {
+  // Error code not specified.
+  ERROR_CODE_UNSPECIFIED = 0;
+  // Cloud credentials specified in Restore spec were not found by Portworx.
+  PX_CLOUD_CREDENTIALS_NOT_FOUND = 1;
+  // Problem triggering the cloudsnap restore in PX.
+  PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED = 2;
+  // Problem with finishing the cloudsnap restore in PX.
+  PX_CLOUD_SNAP_RESTORE_FAILED = 3;
+  // Problem with getting the cloudsnap restore status from PX.
+  PX_GET_CLOUD_SNAP_STATUS_FAILED = 4;
+  // Problem with getting the volume from PX.
+  PX_GET_VOLUME_FAILED = 5;
+  // Problem with reading the data service manifest from the busybox pod.
+  READ_DATA_SERVICE_MANIFEST_FAILED = 6;
+  // Problem with unmarshalling the JSON with data service manifest.
+  UNMARSHAL_DATA_SERVICE_JSON = 7;
+  // Deployment name already used in the namespace.
+  DEPLOYMENT_NAME_ALREADY_EXIST = 8;
+  // Timeout while waiting for the BusyBox pod to enter the running state.
+  TIMEOUT_BUSYBOX_POD_RUNNING = 9;
+  // Busybox pod has failed.
+  BUSYBOX_POD_FAILED = 10;
+}
+

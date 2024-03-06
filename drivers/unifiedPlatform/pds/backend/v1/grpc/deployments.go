@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -115,7 +116,6 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 			Meta: nil,
 			Config: &publicdeploymentapis.Config{
 				References: nil,
-				TlsEnabled: false,
 				DeploymentTopologies: []*deploymenttopology.DeploymentTopology{
 					{
 						Name:        *dep.Meta.Name,

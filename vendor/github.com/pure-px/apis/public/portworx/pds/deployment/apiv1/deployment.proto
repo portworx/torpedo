@@ -108,11 +108,19 @@ message Config {
   // References to other objects.
   References references = 1;
 
-  // Flag to enable TLS for the Data Service.
-  bool tls_enabled = 2;
+  // TLS configuration for the Data Service.
+  TLSConfig tls_config = 2 [(google.api.field_behavior) = OPTIONAL];
 
   // A deployment topology contains a number of nodes that have various attributes as a collective group.
   repeated public.portworx.pds.deploymenttopology.v1.DeploymentTopology  deployment_topologies = 3;
+}
+
+// TLS configuration for the Data Service.
+message TLSConfig {
+  // Flag to enable TLS for the Data Service.
+  bool enabled = 1;
+  // Issuer (Certificate Authority) name for the TLS certificates.
+  string issuer_name = 2;
 }
 
 // References to other resources.

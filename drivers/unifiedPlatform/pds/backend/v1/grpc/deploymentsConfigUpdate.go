@@ -64,7 +64,7 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *apiStructs.
 				},
 				DeploymentConfig: &publicdeploymentapis.Config{
 					References: nil,
-					TlsEnabled: false,
+					//TlsEnabled: false,
 					DeploymentTopologies: []*deploymenttopology.DeploymentTopology{
 						{
 							Name:        "",
