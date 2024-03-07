@@ -21,9 +21,6 @@ type WorkFlowRequest struct {
 	ServiceAccountRequest      ServiceAccountRequest
 	ServiceAccountTokenRequest ServiceAccountTokenRequest `copier:"must,nopanic"`
 	CreateIAM                  CreateIAM                  `copier:"must,nopanic"`
-	V1RoleBinding              V1RoleBinding              `copier:"must,nopanic"`
-	V1AccessPolicy             V1AccessPolicy             `copier:"must,nopanic"`
-	V1IAM                      V1IAM                      `copier:"must,nopanic"`
 	ListNamespacesRequest      ListNamespacesRequest      `copier:"must,nopanic"`
 	Pagination                 PaginationRequest          `copier:"must,nopanic"`
 	TargetClusterManifest      TargetClusterManifest      `copier:"must,nopanic"`
