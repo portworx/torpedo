@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	defaultTestAccount = "demo-milestone-one"
-	// DefaultTimeout default timeout
 	timeOut      = 30 * time.Minute
 	timeInterval = 10 * time.Second
 )

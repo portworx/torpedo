@@ -17,7 +17,7 @@ var (
 	SaRequestBody platformv1.V1ServiceAccount
 )
 
-// GetSAClient updates the header with bearer token and returns the new client
+// GetSAClient updates the header with bearer token and returns the  client
 func (sa *PLATFORM_API_V1) GetSAClient() (context.Context, *platformv1.ServiceAccountServiceAPIService, error) {
 	ctx, token, err := GetBearerToken()
 	if err != nil {

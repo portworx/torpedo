@@ -70,6 +70,6 @@ func SetRbacWithSAToken(value bool, token string) (bool, error) {
 		ServiceIdFlag = false
 	}
 	log.InfoD("Successfully updated Infra params for ServiceIdentity and RBAC test")
-	log.InfoD("ServiceIdentity flag is set to- %v", ServiceIdFlag)
+	log.InfoD("RBAC flag is set to- %v", ServiceIdFlag)
 	return true, nil
 }

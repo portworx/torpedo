@@ -2,6 +2,7 @@ package platformLibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/pkg/log"
 )
 
 var (
@@ -17,5 +18,6 @@ func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBinding
 	if err != nil {
 		return nil, err
 	}
+	log.InfoD("IAM Roles created - %v", iamModel)
 	return iamModel, nil
 }

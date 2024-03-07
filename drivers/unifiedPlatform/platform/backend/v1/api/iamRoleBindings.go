@@ -13,7 +13,7 @@ import (
 
 var IAMRequestBody platformv1.ApiIAMServiceCreateIAMRequest
 
-// GetIamClient updates the header with bearer token and returns the new client
+// GetIamClient updates the header with bearer token and returns the  client
 func (iam *PLATFORM_API_V1) GetIamClient() (context.Context, *platformv1.IAMServiceAPIService, error) {
 	ctx, token, err := GetBearerToken()
 	if err != nil {
