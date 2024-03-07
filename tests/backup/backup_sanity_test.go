@@ -258,7 +258,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			log.InfoD("Creating schedule backup for %s backup location and deleting it", firstBkpLocationName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(5))
+			firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(15))
 			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
 				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
 			}
