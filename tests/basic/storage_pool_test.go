@@ -11257,5 +11257,4 @@ func getJournalDevicePath(n node.Node) string {
 
 	log.InfoD("Metadata device path: %v", path)
 	return path
-
 }
