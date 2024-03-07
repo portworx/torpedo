@@ -258,11 +258,13 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			log.InfoD("Creating schedule backup for %s backup location and deleting it", firstBkpLocationName)
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
-			firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(15))
-			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
-				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
-			}
+
+			/*			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
+						"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
+					}*/
+			provisionerVolumeSnapshotCephfsClassMap := make(map[string]string)
 			for i, _ := range scheduledAppContexts {
+				firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(15))
 				firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
 			}
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
