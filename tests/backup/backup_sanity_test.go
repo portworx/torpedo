@@ -131,10 +131,10 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
-		/*		provisionerVolumeSnapshotClassMap = map[string]string{
-				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
-				"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-rbdsplugin-snapclass",
-			}*/
+		/*			provisionerVolumeSnapshotClassMap = map[string]string{
+					"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
+					"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-rbdsplugin-snapclass",
+				}*/
 
 		taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
 		appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
@@ -259,10 +259,9 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-			/*			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
-						"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
-					}*/
-			provisionerVolumeSnapshotCephfsClassMap := make(map[string]string)
+			provisionerVolumeSnapshotCephfsClassMap := map[string]string{
+				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
+			}
 			scheduleList := []string{}
 			for i, _ := range scheduledAppContexts {
 				firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(15))
