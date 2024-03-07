@@ -13,6 +13,6 @@ func WorkflowListTenants(accountID string) (map[string][]apiStructs.WorkFlowResp
 	if err != nil {
 		return resultMap, err
 	}
-	addResultToResponse(tenantsList, GetTenantListV1, resultMap)
+	addResultToResponse(tenantsList, apiStructs.GetTenantListV1, resultMap)
 	return resultMap, nil
 }

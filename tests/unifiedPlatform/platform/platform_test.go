@@ -2,6 +2,7 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
@@ -210,19 +211,26 @@ var _ = Describe("{BackupRD}", func() {
 	})
 })
 
-var _ = Describe("{ListTenants}", func() {
+var _ = Describe("{BackupRD}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("ListTenants", "List Tenants", nil, 0)
+		StartTorpedoTest("BackupRD", "Runs RD operations on backup", nil, 0)
 	})
 
-	It("Tenants", func() {
-		Step("Create and List Accounts", func() {
-			workflowResponse, err := stworkflows.WorkflowListTenants(accID)
-			log.FailOnError(err, "Some error occurred while running WorkflowCreateAndListAccounts")
-			tenantList := workflowResponse[stworkflows.GetTenantListV1]
-			for _, tenant := range tenantList {
-				log.Infof("Available Tenant [%s] under account [%s]", *tenant.Meta.Name, accID)
-			}
+	It("Create Backup Config", func() {
+
+		Step("Get Backup Config", func() {
+			_, err := dslibs.GetBackup(dslibs.WorkflowBackup{})
+			log.Infof("Error while fetching backup - %s", err.Error())
+		})
+
+		Step("Delete Backup Config", func() {
+			_, err := dslibs.DeleteBackup(dslibs.WorkflowBackup{})
+			log.Infof("Error while deleting backup - %s", err.Error())
+		})
+
+		Step("List Backup Config", func() {
+			_, err := dslibs.ListBackup(dslibs.WorkflowBackup{})
+			log.Infof("Error while listing backup - %s", err.Error())
 		})
 	})
 
@@ -231,19 +239,37 @@ var _ = Describe("{ListTenants}", func() {
 	})
 })
 
-var _ = Describe("{CreateAccount}", func() {
+var _ = Describe("{TestingWorkflowToCreateAccounts}", func() {
+	var (
+		workflowPlatform stworkflows.WorkflowPlatform
+	)
 	JustBeforeEach(func() {
-		StartTorpedoTest("ListAccounts", "Create and List Accounts", nil, 0)
+		StartTorpedoTest("TestingWorkflowToCreateAccounts", "Create Accounts", nil, 0)
+		workflowPlatform.Accounts = map[string]map[string]string{
+			"testAccount1": map[string]string{
+				apiStructs.UserName:        "testAccount1",
+				apiStructs.UserDisplayName: "testAccountDisplay",
+				apiStructs.UserEmail:       "testAccount1@xyz.com",
+			},
+			"testAccount2": map[string]string{
+				apiStructs.UserName:        "testAccount2",
+				apiStructs.UserDisplayName: "testAccount2Display",
+				apiStructs.UserEmail:       "testAccount2@xyz.com",
+			},
+			"testAccount3": map[string]string{
+				apiStructs.UserName:        "testAccount3",
+				apiStructs.UserDisplayName: "testAccount3Display",
+				apiStructs.UserEmail:       "testAccount3@xyz.com",
+			},
+		}
+
 	})
 
-	It("Accounts", func() {
+	It("Creating accounts", func() {
 		Step("Create and List Accounts", func() {
-			workflowResponse, err := stworkflows.WorkflowCreateAndListAccounts()
-			log.FailOnError(err, "Some error occurred while running WorkflowCreateAndListAccounts")
-			accountList := workflowResponse[stworkflows.GetAccountListv1]
-			for _, account := range accountList {
-				log.Infof("Found %s as part of result", account.Meta.Name)
-			}
+			workflowResponse, err := workflowPlatform.CreateAccounts()
+			log.FailOnError(err, "Unable to create accounts")
+			log.Infof("All Account Created Successfully, Response - [%+v]", workflowResponse)
 		})
 	})
 
