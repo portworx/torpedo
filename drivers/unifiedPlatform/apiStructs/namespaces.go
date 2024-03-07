@@ -1,5 +1,6 @@
 package apiStructs
 
+// ListNamespacesRequest struct
 type ListNamespacesRequest struct {
 	ClusterId     string `copier:"must,nopanic"`
 	TenantId      string `copier:"must,nopanic"`

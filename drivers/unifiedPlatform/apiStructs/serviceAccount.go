@@ -1,5 +1,6 @@
 package apiStructs
 
+// ServiceAccountRequest struct
 type ServiceAccountRequest struct {
 	V1ServiceAccount V1ServiceAccount
 	TenantId         string
