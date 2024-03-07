@@ -4814,7 +4814,8 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 			return err
 		}
 		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		//if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
@@ -4827,7 +4828,8 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		//if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
