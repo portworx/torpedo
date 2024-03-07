@@ -11,6 +11,7 @@ type WorkFlowRequest struct {
 	Deployment            PDSDeployment         `copier:"must,nopanic"`
 	BackupConfig          PDSBackupConfig       `copier:"must,nopanic"`
 	Backup                PDSBackupConfig       `copier:"must,nopanic"`
+	Restore               PDSRestore            `copier:"must,nopanic"`
 	Meta                  Meta                  `copier:"must,nopanic"`
 	Config                Config                `copier:"must,nopanic"`
 	Id                    string                `copier:"must,nopanic"`

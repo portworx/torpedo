@@ -24,6 +24,7 @@
     - [References](#references)
     - [Status](#status)
     - [Status.ConnectionInfoEntry](#statusconnectioninfoentry)
+    - [TLSConfig](#tlsconfig)
     - [UpdateDeploymentRequest](#updatedeploymentrequest)
   
 
@@ -86,7 +87,7 @@ Desired configuration of the Deployment.
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | references | [ References](#references) | References to other objects. |
-| tls_enabled | [ bool](#bool) | Flag to enable TLS for the Data Service. |
+| tls_config | [ TLSConfig](#tlsconfig) | TLS configuration for the Data Service. |
 | deployment_topologies | [repeated public.portworx.pds.deploymenttopology.v1.DeploymentTopology](#publicportworxpdsdeploymenttopologyv1deploymenttopology) | A deployment topology contains a number of nodes that have various attributes as a collective group. |
  <!-- end Fields -->
  <!-- end HasFields -->
@@ -228,6 +229,18 @@ Status of the Deployment.
 | ----- | ---- | ----------- |
 | key | [ string](#string) | none |
 | value | [ google.protobuf.Any](#googleprotobufany) | none |
+ <!-- end Fields -->
+ <!-- end HasFields -->
+
+
+### TLSConfig {#tlsconfig}
+TLS configuration for the Data Service.
+
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| enabled | [ bool](#bool) | Flag to enable TLS for the Data Service. |
+| issuer_name | [ string](#string) | Issuer (Certificate Authority) name for the TLS certificates. |
  <!-- end Fields -->
  <!-- end HasFields -->
 

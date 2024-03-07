@@ -1,0 +1,784 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "public/portworx/pds/restore/apiv1/restore.proto",
+        "version": "version not set"
+    },
+    "tags": [
+        {
+            "name": "RestoreService"
+        }
+    ],
+    "paths": {
+        "/pds/v1/namespaces/{namespaceId}/restores": {
+            "post": {
+                "summary": "CreateRestore API creates the Restore resource.",
+                "operationId": "RestoreService_CreateRestore",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Restore"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "namespaceId",
+                        "description": "UID of the namespace where restore will be created.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field because namespace is the parent of the restore. --)",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "UID of the project associated with the restore.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to know the project with which the restore is associated with. --)",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1Restore"
+                            }
+                        }
+                    },
+                    "description": "Restore resource.",
+                    "required": true
+                },
+                "tags": [
+                    "RestoreService"
+                ]
+            }
+        },
+        "/pds/v1/restores": {
+            "get": {
+                "summary": "ListRestore API lists the Restore resources.",
+                "operationId": "RestoreService_ListRestores",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListRestoresResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "accountId",
+                        "description": "Account ID for which the restore will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "tenantId",
+                        "description": "Tenant ID for which the restore will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "projectId",
+                        "description": "Project ID for which the restore will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "deploymentId",
+                        "description": "Deployment ID for which the restore will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "backupId",
+                        "description": "Backup ID for which the restore will be listed.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "NAME",
+                                "CREATED_AT",
+                                "UPDATED_AT",
+                                "PHASE"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    }
+                ],
+                "tags": [
+                    "RestoreService"
+                ]
+            }
+        },
+        "/pds/v1/restores/{id}": {
+            "get": {
+                "summary": "GetRestore API returns the Restore resource.",
+                "operationId": "RestoreService_GetRestore",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Restore"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the restore.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "RestoreService"
+                ]
+            },
+            "delete": {
+                "summary": "DeleteRestore API deletes the restore.",
+                "operationId": "RestoreService_DeleteRestore",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the Restore.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "RestoreService"
+                ]
+            }
+        },
+        "/pds/v1/restores/{id}:recreate": {
+            "post": {
+                "summary": "RecreateRestore API recreates a already failed restore.",
+                "operationId": "RestoreService_RecreateRestore",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1Restore"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "UID of the existing restore.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RestoreServiceRecreateRestoreBody"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "tags": [
+                    "RestoreService"
+                ]
+            }
+        },
+        "/pds/v1/restores:restorabilityMatrix": {
+            "get": {
+                "summary": "GetRestorabilityMatrix API returns the compatibility matrix for restore.\n(-- api-linter: core::0131::request-message-name=disabled\n    aip.dev/not-precedent: We need to do this because we don't need any parameter in request --)",
+                "operationId": "RestoreService_GetRestorabilityMatrix",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1RestorabilityMatrix"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "tags": [
+                    "RestoreService"
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "RestoreServiceRecreateRestoreBody": {
+                "type": "object",
+                "properties": {
+                    "targetClusterId": {
+                        "type": "string",
+                        "description": "UID of the target cluster where restore will be created."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the restore."
+                    },
+                    "namespaceId": {
+                        "type": "string",
+                        "description": "UID of namespace where restore will be created."
+                    }
+                },
+                "description": "Request to recreate a restore."
+            },
+            "SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "NAME",
+                    "CREATED_AT",
+                    "UPDATED_AT",
+                    "PHASE"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "googlerpcStatus": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/protobufAny"
+                        }
+                    }
+                }
+            },
+            "protobufAny": {
+                "type": "object",
+                "properties": {
+                    "@type": {
+                        "type": "string"
+                    }
+                },
+                "additionalProperties": {}
+            },
+            "restorev1Status": {
+                "type": "object",
+                "properties": {
+                    "startedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "(-- api-linter: core::0142::time-field-names=disabled\n    aip.dev/not-precedent: We need to do this because we need different name for the field. --)\nTime when restore was started."
+                    },
+                    "completedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "(-- api-linter: core::0142::time-field-names=disabled\n    aip.dev/not-precedent: We need to do this because we need different name for the field. --)\nTime when restore was completed."
+                    },
+                    "errorCode": {
+                        "$ref": "#/components/schemas/v1ErrorCode"
+                    },
+                    "errorMessage": {
+                        "type": "string",
+                        "description": "Error message is description of the error in restore."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/v1Phase"
+                    }
+                },
+                "description": "Status of the restore."
+            },
+            "v1Config": {
+                "type": "object",
+                "properties": {
+                    "sourceReferences": {
+                        "$ref": "#/components/schemas/v1SourceReferences"
+                    },
+                    "destinationReferences": {
+                        "$ref": "#/components/schemas/v1DestinationReferences"
+                    },
+                    "customResourceName": {
+                        "type": "string",
+                        "description": "K8s resource name for restore, built from [\"restore-\" + name + short-id].",
+                        "readOnly": true
+                    }
+                },
+                "description": "Desired configuration of the restore."
+            },
+            "v1DestinationReferences": {
+                "type": "object",
+                "properties": {
+                    "targetClusterId": {
+                        "type": "string",
+                        "description": "UID of the target cluster where restore will be created.",
+                        "readOnly": true
+                    },
+                    "deploymentId": {
+                        "type": "string",
+                        "description": "UID of the deployment created by the restore.",
+                        "readOnly": true
+                    },
+                    "projectId": {
+                        "type": "string",
+                        "description": "UID of the project.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Destination references for the restore."
+            },
+            "v1ErrorCode": {
+                "type": "string",
+                "enum": [
+                    "ERROR_CODE_UNSPECIFIED",
+                    "PX_CLOUD_CREDENTIALS_NOT_FOUND",
+                    "PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED",
+                    "PX_CLOUD_SNAP_RESTORE_FAILED",
+                    "PX_GET_CLOUD_SNAP_STATUS_FAILED",
+                    "PX_GET_VOLUME_FAILED",
+                    "READ_DATA_SERVICE_MANIFEST_FAILED",
+                    "UNMARSHAL_DATA_SERVICE_JSON",
+                    "DEPLOYMENT_NAME_ALREADY_EXIST",
+                    "TIMEOUT_BUSYBOX_POD_RUNNING",
+                    "BUSYBOX_POD_FAILED"
+                ],
+                "default": "ERROR_CODE_UNSPECIFIED",
+                "description": "Enums for error codes for restore on the target cluster.\n\n - ERROR_CODE_UNSPECIFIED: Error code not specified.\n - PX_CLOUD_CREDENTIALS_NOT_FOUND: Cloud credentials specified in Restore spec were not found by Portworx.\n - PX_CLOUD_SNAP_RESTORE_TRIGGER_FAILED: Problem triggering the cloudsnap restore in PX.\n - PX_CLOUD_SNAP_RESTORE_FAILED: Problem with finishing the cloudsnap restore in PX.\n - PX_GET_CLOUD_SNAP_STATUS_FAILED: Problem with getting the cloudsnap restore status from PX.\n - PX_GET_VOLUME_FAILED: Problem with getting the volume from PX.\n - READ_DATA_SERVICE_MANIFEST_FAILED: Problem with reading the data service manifest from the busybox pod.\n - UNMARSHAL_DATA_SERVICE_JSON: Problem with unmarshalling the JSON with data service manifest.\n - DEPLOYMENT_NAME_ALREADY_EXIST: Deployment name already used in the namespace.\n - TIMEOUT_BUSYBOX_POD_RUNNING: Timeout while waiting for the BusyBox pod to enter the running state.\n - BUSYBOX_POD_FAILED: Busybox pod has failed."
+            },
+            "v1ListRestoresResponse": {
+                "type": "object",
+                "properties": {
+                    "restores": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1Restore"
+                        },
+                        "description": "List of restores."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
+                    }
+                },
+                "description": "ListRestoresResponse represents list restores response."
+            },
+            "v1Meta": {
+                "type": "object",
+                "properties": {
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource of the format <resource prefix>-<uuid>."
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the resource."
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Description of the resource."
+                    },
+                    "resourceVersion": {
+                        "type": "string",
+                        "description": "A string that identifies the version of this object that can be used by clients to determine when objects have changed.\nThis value must be passed unmodified back to the server by the client."
+                    },
+                    "createTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Creation time of the object.",
+                        "readOnly": true
+                    },
+                    "updateTime": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Update time of the object.",
+                        "readOnly": true
+                    },
+                    "labels": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Labels to apply to the object."
+                    },
+                    "annotations": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Annotations for the object."
+                    },
+                    "parentReference": {
+                        "$ref": "#/components/schemas/v1Reference"
+                    },
+                    "resourceNames": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "description": "Resource names holds the mapping between the resource IDs and its display name which will be consumed by the frontend.",
+                        "readOnly": true
+                    }
+                },
+                "description": "Meta holds general resource metadata."
+            },
+            "v1PageBasedPaginationRequest": {
+                "type": "object",
+                "properties": {
+                    "pageNumber": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page number is the page number to return based on the size."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size is the maximum number of records to include per page."
+                    }
+                },
+                "description": "Request parameters for page-based pagination."
+            },
+            "v1PageBasedPaginationResponse": {
+                "type": "object",
+                "properties": {
+                    "totalRecords": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total records without pagination available in the dataset."
+                    },
+                    "currentPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Current page number for this paginated response."
+                    },
+                    "pageSize": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Page size used for pagination."
+                    },
+                    "totalPages": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Total pages based on the page_size provided in the request."
+                    },
+                    "nextPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Next page if available in the dataset, -1 if unavailable."
+                    },
+                    "prevPage": {
+                        "type": "string",
+                        "format": "int64",
+                        "description": "Previous page if available in the dataset, -1 if unavailable."
+                    }
+                },
+                "description": "Metadata related to page based pagination for paginated API responses."
+            },
+            "v1Phase": {
+                "type": "string",
+                "enum": [
+                    "PHASE_UNSPECIFIED",
+                    "INITIALIZING",
+                    "PENDING",
+                    "RESTORING_CLOUDSNAP",
+                    "RESTORING_DATA_SERVICE_CR",
+                    "RESTORING_DEPLOYMENT",
+                    "DEPLOYMENT_ENTERING_NORMAL_MODE",
+                    "SUCCESSFUL",
+                    "FAILED"
+                ],
+                "default": "PHASE_UNSPECIFIED",
+                "description": "Enum for phase of the restore.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - INITIALIZING: Restore is initializing.\n - PENDING: Restore has not yet started.\n - RESTORING_CLOUDSNAP: Waiting for the cloud snap restore to complete.\n - RESTORING_DATA_SERVICE_CR: PV and PVC resources are ready and we're waiting to get the data service manifest from the backup.\n - RESTORING_DEPLOYMENT: New data service has been created and we're waiting for the restore process to complete.\n - DEPLOYMENT_ENTERING_NORMAL_MODE: Restore process in data service has succeeded and we're waiting until it becomes healthy in normal mode.\n - SUCCESSFUL: Restore successful.\n - FAILED: Restore failed."
+            },
+            "v1Reference": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "API group of the resource."
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "Version of the API."
+                    },
+                    "uid": {
+                        "type": "string",
+                        "description": "UID of the resource."
+                    }
+                },
+                "description": "Reference identifies the resource type, version of the uid and the resource."
+            },
+            "v1RestorabilityMatrix": {
+                "type": "object",
+                "properties": {
+                    "conditions": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/v1RestoreCompatibilityConditionList"
+                        },
+                        "description": "Restore compatibility conditions for each dataservice."
+                    }
+                },
+                "description": "RestorabilityMatrix represents the compatibility matrix for restore."
+            },
+            "v1Restore": {
+                "type": "object",
+                "properties": {
+                    "meta": {
+                        "$ref": "#/components/schemas/v1Meta"
+                    },
+                    "config": {
+                        "$ref": "#/components/schemas/v1Config"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/restorev1Status"
+                    }
+                },
+                "description": "Restore represents a data service restore."
+            },
+            "v1RestoreCompatibilityCondition": {
+                "type": "object",
+                "properties": {
+                    "backup": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "title": "Restore compatibility condition for backup.\nkey represents backup capability and value represents the version of the capability.\ne.g. {\"backup\": \"v2\"}"
+                    },
+                    "image": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "title": "Restore compatibility condition for image.\nkey represents image capability and value represents the version of the capability.\ne.g. {\"pds_restore\": \"v1\"}"
+                    }
+                },
+                "description": "Restore compatibility condition."
+            },
+            "v1RestoreCompatibilityConditionList": {
+                "type": "object",
+                "properties": {
+                    "conditions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1RestoreCompatibilityCondition"
+                        },
+                        "description": "List of restore compatibility conditions."
+                    }
+                },
+                "description": "List of restore compatibility conditions."
+            },
+            "v1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SourceReferences": {
+                "type": "object",
+                "properties": {
+                    "deploymentId": {
+                        "type": "string",
+                        "description": "UID of the deployment which was backed up.",
+                        "readOnly": true
+                    },
+                    "backupId": {
+                        "type": "string",
+                        "description": "UID of the backup."
+                    },
+                    "backupLocationId": {
+                        "type": "string",
+                        "description": "UID of the backup location.",
+                        "readOnly": true
+                    },
+                    "cloudsnapId": {
+                        "type": "string",
+                        "description": "UID of the cloud snapshot of the backup volume used for restore.",
+                        "readOnly": true
+                    }
+                },
+                "description": "SourceReferences for the restore."
+            }
+        }
+    }
+}

@@ -535,9 +535,8 @@
                     "references": {
                         "$ref": "#/components/schemas/v1References"
                     },
-                    "tlsEnabled": {
-                        "type": "boolean",
-                        "description": "Flag to enable TLS for the Data Service."
+                    "tlsConfig": {
+                        "$ref": "#/components/schemas/v1TLSConfig"
                     },
                     "deploymentTopologies": {
                         "type": "array",
@@ -940,6 +939,20 @@
                 ],
                 "default": "PHASE_UNSPECIFIED",
                 "description": "Enum for Status of the Deployment.\n\n - PHASE_UNSPECIFIED: Phase is unspecified.\n - RESTORING: Restore of Deployment is in progress.\n - FAILED: Deployment is Failed.\n - DELETING: Deployment is being deleted.\n - PREPARING: Deployment is Preparing.\n - DEPLOYING: Deployment is Deploying.\n - DEPLOYED: Deployment is Deployed.\n - UPDATING: Deployment is Updating.\n - TIMED_OUT: Deployment is Timeout."
+            },
+            "v1TLSConfig": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Flag to enable TLS for the Data Service."
+                    },
+                    "issuerName": {
+                        "type": "string",
+                        "description": "Issuer (Certificate Authority) name for the TLS certificates."
+                    }
+                },
+                "description": "TLS configuration for the Data Service."
             },
             "v1Template": {
                 "type": "object",

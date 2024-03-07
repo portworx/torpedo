@@ -426,9 +426,8 @@
                     "references": {
                         "$ref": "#/components/schemas/v1References"
                     },
-                    "tlsEnabled": {
-                        "type": "boolean",
-                        "description": "Flag to enable TLS for the Data Service."
+                    "tlsConfig": {
+                        "$ref": "#/components/schemas/v1TLSConfig"
                     },
                     "deploymentTopologies": {
                         "type": "array",
@@ -690,6 +689,20 @@
                     }
                 },
                 "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1TLSConfig": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Flag to enable TLS for the Data Service."
+                    },
+                    "issuerName": {
+                        "type": "string",
+                        "description": "Issuer (Certificate Authority) name for the TLS certificates."
+                    }
+                },
+                "description": "TLS configuration for the Data Service."
             },
             "v1Template": {
                 "type": "object",

@@ -9,6 +9,7 @@ type Pds interface {
 	DeploymentConfig
 	BackupConfig
 	Backup
+	RestoreInterface
 }
 
 type Deployment interface {
@@ -34,4 +35,12 @@ type Backup interface {
 	DeleteBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GetBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
 	ListBackup(*WorkFlowRequest) ([]WorkFlowResponse, error)
+}
+
+type RestoreInterface interface {
+	CreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
+	ReCreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GetRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
+	ListRestore(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
