@@ -1,6 +1,8 @@
 package platformLibs
 
-import "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+import (
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+)
 
 // GetTenantListV1
 func GetTenantListV1(accountID string) ([]apiStructs.WorkFlowResponse, error) {

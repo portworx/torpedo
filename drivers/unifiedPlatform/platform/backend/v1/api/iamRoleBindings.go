@@ -11,7 +11,9 @@ import (
 	status "net/http"
 )
 
-// GetIamClient updates the header with bearer token and returns the new client
+var IAMRequestBody platformv1.ApiIAMServiceCreateIAMRequest
+
+// GetIamClient updates the header with bearer token and returns the  client
 func (iam *PLATFORM_API_V1) GetIamClient() (context.Context, *platformv1.IAMServiceAPIService, error) {
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -50,29 +52,25 @@ func (iam *PLATFORM_API_V1) ListIamRoleBindings(listReq *WorkFlowRequest) ([]Wor
 }
 
 // CreateIamRoleBinding returns newly create IAM RoleBinding object
-func (iam *PLATFORM_API_V1) CreateIamRoleBinding(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (iam *PLATFORM_API_V1) CreateIamRoleBinding(createIamReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 	_, iamClient, err := iam.GetIamClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
 	iamResponse := WorkFlowResponse{}
-	var iamCreateReq platformv1.ApiIAMServiceCreateIAMRequest
-	err = copier.Copy(&iamCreateReq, createReq)
+	iamCreateRequest := platformv1.ApiIAMServiceCreateIAMRequest{}
+	iamCreateRequest = iamCreateRequest.ApiService.IAMServiceCreateIAM(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	iamModel, res, err := iamClient.IAMServiceCreateIAMExecute(iamCreateReq)
-	if err != nil && res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `IAMServiceCreateIAM`: %v\n.Full HTTP response: %v", err, res)
-	}
-	log.InfoD("Successfully created the IAM Roles")
-	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel)
+	err = copier.Copy(&IAMRequestBody, createIamReq.CreateIAM)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error while copying the deployment request\n")
 	}
-	log.Infof("Value of iam after copy - [%v]", iamResponse)
-	return &iamResponse, nil
+	dsModel, res, err := iamClient.IAMServiceCreateIAMExecute(iamCreateRequest)
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	copier.Copy(&iamResponse, dsModel)
+	return &iamResponse, err
 }
 
 func (iam *PLATFORM_API_V1) UpdateIamRoleBindings(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {

@@ -13,10 +13,12 @@ type Platform interface {
 	BackupLocationInterface
 	CloudCredentialsInterface
 	NamespaceInterface
+	IamRoleBindingsInterface
+	ServiceAccountsInterface
 }
 
 type AccountInterface interface {
-	//GetAccountList() ([]WorkFlowResponse, error)
+	//GetAccountList() ([]WorkFlowResponse, error) // not used as of now
 	GetAccount(string) (*WorkFlowResponse, error)
 	CreateAccount(string, string, string) (WorkFlowResponse, error)
 	DeleteAccount(string) error
@@ -66,7 +68,7 @@ type NamespaceInterface interface {
 	ListNamespaces(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
 
-type IamRoleBindings interface {
+type IamRoleBindingsInterface interface {
 	ListIamRoleBindings(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	CreateIamRoleBinding(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateIamRoleBindings(*WorkFlowRequest) (*WorkFlowResponse, error)
@@ -76,7 +78,7 @@ type IamRoleBindings interface {
 	DeleteIamRoleBinding(*WorkFlowRequest) error
 }
 
-type ServiceAccounts interface {
+type ServiceAccountsInterface interface {
 	ListAllServiceAccounts(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
 	CreateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
