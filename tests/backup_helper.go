@@ -4765,7 +4765,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
@@ -4778,7 +4778,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
