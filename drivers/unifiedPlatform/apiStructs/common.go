@@ -41,6 +41,12 @@ type V1Config1 struct {
 	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
 
+type V1Config3 struct {
+	ActorId      *string `json:"actorId,omitempty"`
+	ActorType    *string `json:"actorType,omitempty"`
+	AccessPolicy *V1AccessPolicy
+}
+
 type V1Deployment struct {
 	Meta   Meta      `copier:"must,nopanic"`
 	Config V1Config1 `copier:"must,nopanic"`
