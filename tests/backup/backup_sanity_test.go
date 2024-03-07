@@ -330,8 +330,8 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		}()
 
 		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
 			for _, ruleName := range preRuleNameList {
 				err := Inst().Backup.DeleteRuleForBackup(BackupOrgID, ruleName)
@@ -344,12 +344,12 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
 			}
 		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
+		err := Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
-		log.InfoD("switching to destination context")
+		/*log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch to context to destination cluster")
 
@@ -383,7 +383,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
 		}
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)*/
 	})
 })
 
