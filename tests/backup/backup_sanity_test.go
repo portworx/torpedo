@@ -263,19 +263,23 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 						"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
 					}*/
 			provisionerVolumeSnapshotCephfsClassMap := make(map[string]string)
+			scheduleList := []string{}
 			for i, _ := range scheduledAppContexts {
 				firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(15))
 				firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
+				scheduleList = append(scheduleList, firstScheduleName)
 			}
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
 			err = IsFullBackup(firstSchBackupName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", firstSchBackupName, firstBkpLocationName))
 			_, err = GetNextPeriodicScheduleBackupName(firstScheduleName, 15, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
-			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, firstScheduleName, BackupOrgID)
-			log.FailOnError(err, "failed to fetch backup schedule: %s uid", firstScheduleName)
-			err = DeleteScheduleWithUIDAndWait(firstScheduleName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule %s for backup location %s", firstScheduleName, firstBkpLocationName))
+			for _, schName := range scheduleList {
+				log.FailOnError(err, "failed to fetch backup schedule: %s uid", firstScheduleName)
+				scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, schName, BackupOrgID)
+				err = DeleteScheduleWithUIDAndWait(schName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule %s for backup location %s", firstScheduleName, firstBkpLocationName))
+			}
 		})
 
 		Step("Taking backup of application from source cluster", func() {
