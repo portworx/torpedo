@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/Masterminds/semver/v3"
 	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"net/url"
 	"strings"
@@ -88,7 +87,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(30 * time.Minute)
 				}
-				printK8sCluterInfo()
+				PrintK8sCluterInfo()
 			})
 
 			Step("validate storage components", func() {
