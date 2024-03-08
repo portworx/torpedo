@@ -1277,6 +1277,7 @@ github.com/pure-px/apis/public/portworx/platform/serviceaccount/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetcluster/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetclusterregistrationmanifest/apiv1
+github.com/pure-px/apis/public/portworx/platform/template/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/whoami/apiv1
