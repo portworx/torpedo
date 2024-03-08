@@ -21,4 +21,8 @@ type WorkFlowRequest struct {
 	PdsAppId              string                `copier:"must,nopanic"`
 	Pagination            PaginationRequest     `copier:"must,nopanic"`
 	TargetClusterManifest TargetClusterManifest `copier:"must,nopanic"`
+	ServiceAccountRequest      ServiceAccountRequest`copier:"must,nopanic"`
+	ServiceAccountTokenRequest ServiceAccountTokenRequest `copier:"must,nopanic"`
+	CreateIAM                  CreateIAM                  `copier:"must,nopanic"`
+	ListNamespacesRequest      ListNamespacesRequest      `copier:"must,nopanic"`
 }

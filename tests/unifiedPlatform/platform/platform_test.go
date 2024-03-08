@@ -48,15 +48,13 @@ var _ = Describe("{CreateCloudCredentials}", func() {
 		StartTorpedoTest("WhoAmI", "get actor id", nil, 0)
 	})
 
-	Step("CreateCloudCredentials", func() {
-		It("CreateCloudCredentials", func() {
-			Step("create cloud credentials", func() {
-				tenantId, err := platformLibs.GetDefaultTenantId(accID)
-				log.FailOnError(err, "error occured while fetching tenantID")
-				credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
-				log.FailOnError(err, "error while creating account")
-				log.Infof("creds response [+%v]", credResp)
-			})
+	It("CreateCloudCredentials", func() {
+		Step("create cloud credentials", func() {
+			tenantId, err := platformLibs.GetDefaultTenantId(accID)
+			log.FailOnError(err, "error occured while fetching tenantID")
+			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error while creating account")
+			log.Infof("creds response [+%v]", credResp)
 		})
 	})
 

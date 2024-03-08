@@ -43,12 +43,12 @@ func CreateCloudCredentials(tenantId, backupType string) (*apiStructs.WorkFlowRe
 		createReq.CloudCredentials.Config.Credentials.GcpCredentials.Key = os.Getenv("GCP_JSON_PATH")
 	case "s3-comp":
 		createReq.CloudCredentials.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.CloudCredentials.Config.Credentials.S3Credentials.AccessKey = os.Getenv("AWS_ACCESS_KEY_ID")
-		createReq.CloudCredentials.Config.Credentials.S3Credentials.SecretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+		createReq.CloudCredentials.Config.Credentials.S3Credentials.AccessKey = os.Getenv("AWS_MINIO_ACCESS_KEY_ID")
+		createReq.CloudCredentials.Config.Credentials.S3Credentials.SecretKey = os.Getenv("AWS_MINIO_ACCESS_KEY_ID")
 	default:
 		createReq.CloudCredentials.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.CloudCredentials.Config.Credentials.S3Credentials.AccessKey = os.Getenv("AWS_ACCESS_KEY_ID")
-		createReq.CloudCredentials.Config.Credentials.S3Credentials.SecretKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+		createReq.CloudCredentials.Config.Credentials.S3Credentials.AccessKey = os.Getenv("AWS_MINIO_ACCESS_KEY_ID")
+		createReq.CloudCredentials.Config.Credentials.S3Credentials.SecretKey = os.Getenv("AWS_MINIO_ACCESS_KEY_ID")
 	}
 
 	wfResponse, err := v2Components.Platform.CreateCloudCredentials(&createReq)
