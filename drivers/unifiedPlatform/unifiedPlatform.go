@@ -109,6 +109,7 @@ func NewUnifiedPlatformComponents(controlPlaneURL string, AccountId string) (*Un
 		}, nil
 	default:
 		//generate platform api_v1 client
+		log.Infof("Generating api_v1 client by default")
 		platformApiConf := platformv1.NewConfiguration()
 		endpointURL, err := url.Parse(controlPlaneURL)
 		if err != nil {

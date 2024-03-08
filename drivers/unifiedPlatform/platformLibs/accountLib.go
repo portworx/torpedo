@@ -1,24 +1,9 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
 )
-
-var (
-	v2Components *unifiedPlatform.UnifiedPlatformComponents
-	err          error
-)
-
-// InitUnifiedApiComponents
-func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
-	v2Components, err = unifiedPlatform.NewUnifiedPlatformComponents(controlPlaneURL, accountID)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 // GetAccountListv1
 //func GetAccountListv1() ([]apiStructs.WorkFlowResponse, error) {

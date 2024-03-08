@@ -34,6 +34,8 @@ func (cloudCredGrpcV1 *PlatformGrpc) getCloudCredClient() (context.Context, publ
 		Token: token,
 	}
 
+	ctx = WithAccountIDMetaCtx(ctx, cloudCredGrpcV1.AccountId)
+
 	backupLocClient = publiccloudcredapi.NewCloudCredentialServiceClient(cloudCredGrpcV1.ApiClientV1)
 
 	return ctx, backupLocClient, token, nil
@@ -162,7 +164,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 				Uid:             "",
 				Name:            *createRequest.CloudCredentials.Meta.Name,
 				Description:     "",
-				ResourceVersion: "",
+				ResourceVersion: "3",
 				CreateTime:      nil,
 				UpdateTime:      nil,
 				Labels:          nil,
@@ -173,6 +175,8 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 			Config: cloudConfig(createRequest),
 		},
 	}
+
+	ctx = WithAccountIDMetaCtx(ctx, cloudCredGrpcV1.AccountId)
 
 	cloudCredModel, err := cloudCredsClient.CreateCloudCredential(ctx, createCloudCredRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
