@@ -301,6 +301,7 @@ func GetEnv(key, fallback string) string {
 		log.Infof("Unable to find [%v] in the env variables, falling back to [%s]", fallback)
 		return fallback
 	}
+	log.Infof("ENV values %s", value)
 	return value
 }
 

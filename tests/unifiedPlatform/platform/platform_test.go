@@ -45,7 +45,7 @@ var _ = Describe("{TenantsCRUD}", func() {
 
 var _ = Describe("{CreateCloudCredentials}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("WhoAmI", "get actor id", nil, 0)
+		StartTorpedoTest("CreateCloudCredentials", "create cloud credentials", nil, 0)
 	})
 
 	It("CreateCloudCredentials", func() {
@@ -53,7 +53,7 @@ var _ = Describe("{CreateCloudCredentials}", func() {
 			tenantId, err := platformLibs.GetDefaultTenantId(accID)
 			log.FailOnError(err, "error occured while fetching tenantID")
 			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
-			log.FailOnError(err, "error while creating account")
+			log.FailOnError(err, "error while creating cloud creds")
 			log.Infof("creds response [+%v]", credResp)
 		})
 	})

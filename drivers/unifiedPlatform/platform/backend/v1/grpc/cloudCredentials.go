@@ -174,6 +174,11 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 		},
 	}
 
+	//Test Print
+	log.Debugf("name [%s]", createCloudCredRequest.CloudCredential.Meta.Name)
+	log.Debugf("access key [%s]", createCloudCredRequest.CloudCredential.Config.GetS3Credentials().AccessKey)
+	log.Debugf("secret key [%s]", createCloudCredRequest.CloudCredential.Config.GetS3Credentials().SecretKey)
+
 	cloudCredModel, err := cloudCredsClient.CreateCloudCredential(ctx, createCloudCredRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
