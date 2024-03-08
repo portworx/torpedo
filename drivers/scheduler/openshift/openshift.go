@@ -85,6 +85,16 @@ type openshift struct {
 	openshiftVersion string
 }
 
+// String returns the string name of this driver.
+func (k *openshift) String() string {
+	return SchedName
+}
+
+func init() {
+	k := &openshift{}
+	scheduler.Register(SchedName, k)
+}
+
 func (k *openshift) StopSchedOnNode(n node.Node) error {
 	driver, _ := node.Get(k.K8s.NodeDriverName)
 	systemOpts := node.SystemctlOpts{
@@ -94,8 +104,7 @@ func (k *openshift) StopSchedOnNode(n node.Node) error {
 		},
 		Action: "stop",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
-	if err != nil {
+	if err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts); err != nil {
 		return &scheduler.ErrFailedToStopSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
@@ -130,8 +139,7 @@ func (k *openshift) StartSchedOnNode(n node.Node) error {
 		},
 		Action: "start",
 	}
-	err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts)
-	if err != nil {
+	if err := driver.Systemctl(n, SystemdSchedServiceName, systemOpts); err != nil {
 		return &scheduler.ErrFailedToStartSchedOnNode{
 			Node:          n,
 			SystemService: SystemdSchedServiceName,
@@ -203,6 +211,7 @@ func (k *openshift) Schedule(instanceID string, options scheduler.ScheduleOption
 func (k *openshift) ScheduleWithCustomAppSpecs(apps []*spec.AppSpec, instanceID string, options scheduler.ScheduleOptions) ([]*scheduler.Context, error) {
 	var contexts []*scheduler.Context
 	oldOptionsNamespace := options.Namespace
+
 	for _, app := range apps {
 
 		appNamespace := app.GetID(instanceID)
@@ -249,19 +258,21 @@ func (k *openshift) SaveSchedulerLogsToFile(n node.Node, location string) error 
 	driver, _ := node.Get(k.K8s.NodeDriverName)
 
 	usableServiceName := SystemdSchedServiceName
-	if serviceName, err := k.getServiceName(driver, n); err == nil {
-		usableServiceName = serviceName
-	} else {
+	serviceName, err := k.getServiceName(driver, n)
+	if err != nil {
 		return err
 	}
+	usableServiceName = serviceName
 
 	cmd := fmt.Sprintf("journalctl -lu %s* > %s/kubelet.log", usableServiceName, location)
-	_, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
+	if _, err := driver.RunCommand(n, cmd, node.ConnectionOpts{
 		Timeout:         kube.DefaultTimeout,
 		TimeBeforeRetry: kube.DefaultRetryInterval,
 		Sudo:            true,
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // updateSecurityContextConstraints updates Torpedo SecurityContextConstrains users to allow app provisioning in the given namespace
@@ -287,11 +298,9 @@ func (k *openshift) updateSecurityContextConstraints(namespace string) error {
 	torpedoScc.Users = append(torpedoScc.Users, "system:serviceaccount:"+namespace+":default")
 
 	// Update SecurityContextConstrains
-	_, err = k8sOpenshift.UpdateSecurityContextConstraints(torpedoScc)
-	if err != nil {
+	if _, err := k8sOpenshift.UpdateSecurityContextConstraints(torpedoScc); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -323,15 +332,15 @@ func (k *openshift) UpgradeScheduler(version string) error {
 		return err
 	}
 
-	// Get Openshift versiob
+	// Get Openshift version
 	ocpVersion, err := optest.GetOpenshiftVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get Openshift version, Err: %v", err)
 	}
 	k.openshiftVersion = ocpVersion
 
-	clientVersion := ""
-	if clientVersion, err = getClientVersion(); err != nil {
+	clientVersion, err := getClientVersion()
+	if err != nil {
 		return err
 	}
 
@@ -369,13 +378,11 @@ func (k *openshift) UpgradeScheduler(version string) error {
 }
 
 func getClientVersion() (string, error) {
-	var err error
-	var output interface{}
-
 	t := func() (interface{}, bool, error) {
 		var output []byte
 		cmd := "oc version --client -o json|jq -r .releaseClientVersion"
-		if output, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
+		output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+		if err != nil {
 			return "", true, fmt.Errorf("failed to get client version, Err: %v", err)
 		}
 		clientVersion := strings.TrimSpace(string(output))
@@ -383,20 +390,20 @@ func getClientVersion() (string, error) {
 		clientVersion = strings.Trim(clientVersion, "'")
 		return clientVersion, false, nil
 	}
-	if output, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+	output, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
+	if err != nil {
 		return "", err
 	}
 	return output.(string), nil
 }
 
 func getGenerationNumber() (int, error) {
-	var genNumInt int
 	clusterVersionArgs := []string{"get", "clusterversion", " -o jsonpath='{.items[*].status.observedGeneration}'"}
 	beforeGenNum, stdErr, err := osutils.ExecTorpedoShell("oc", clusterVersionArgs...)
 	if err != nil {
 		return 0, fmt.Errorf("Failed to get generation number %s. cause: %v", stdErr, err)
 	}
-	genNumInt, err = strconv.Atoi(beforeGenNum)
+	genNumInt, err := strconv.Atoi(beforeGenNum)
 	if err != nil {
 		return 0, fmt.Errorf("Failed to convert generator number from string to int, Err: %v", err)
 	}
@@ -404,8 +411,7 @@ func getGenerationNumber() (int, error) {
 }
 
 func waitForNewGenertionNumber(currentGenNumber int) error {
-	//Wait upto 10 minutes to update generation number
-	var err error
+	// Wait upto 10 minutes to update generation number
 	t := func() (interface{}, bool, error) {
 		newGenNumInt, err := getGenerationNumber()
 		if err != nil {
@@ -417,8 +423,10 @@ func waitForNewGenertionNumber(currentGenNumber int) error {
 		log.Debugf("Set channel spec has been updated: Generation number [%d]", newGenNumInt)
 		return nil, true, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, generationNumberWaitTime, 5*time.Second)
-	return err
+	if _, err := task.DoRetryWithTimeout(t, generationNumberWaitTime, 5*time.Second); err != nil {
+		return err
+	}
+	return nil
 }
 
 func selectChannel(ocpVer string) error {
@@ -430,7 +438,7 @@ func selectChannel(ocpVer string) error {
 	}
 	beforeGenNumInt, err := getGenerationNumber()
 	if err != nil {
-		return fmt.Errorf("Failed to convert generator number from string to int, Err: %v", err)
+		return fmt.Errorf("failed to convert generator number from string to int, Err: %v", err)
 	}
 	log.Infof("Generation number before selecting channel [%d]", beforeGenNumInt)
 	log.Infof("Selecting channel [%s]..", channel)
@@ -466,11 +474,13 @@ func getImageSha(ocpVersion string) (string, error) {
 		Body:     nil,
 		Insecure: true,
 	}
+
 	log.Debugf("Getting image sha for OCP [%s] from URL [%s]", ocpVersion, downloadURL)
 	content, err := netutil.DoRequest(request)
 	if err != nil {
 		return "", fmt.Errorf("Failed to get Get content from [%s], Err: %v", downloadURL, err)
 	}
+
 	// Convert the body to type string
 	contentInString := string(content)
 	parts := strings.Split(contentInString, "\n")
@@ -479,14 +489,14 @@ func getImageSha(ocpVersion string) (string, error) {
 			return strings.TrimSpace(strings.Split(a, ": ")[1]), nil
 		}
 	}
-	return "", fmt.Errorf("Failed to find image sha from [%s]", downloadURL)
+	return "", fmt.Errorf("failed to find image sha from [%s]", downloadURL)
 }
 
 func startUpgrade(upgradeVersion string) error {
 	var output []byte
-	var err error
 	var shaName string
 	args := []string{"adm", "upgrade", fmt.Sprintf("--to=%s", upgradeVersion)}
+
 	t := func() (interface{}, bool, error) {
 		output, stdErr, err := osutils.ExecTorpedoShell("oc", args...)
 		if err != nil {
@@ -497,7 +507,7 @@ func startUpgrade(upgradeVersion string) error {
 				log.Infof("Retrying upgrade with --allow-not-recommended option")
 				output, stdErr, err = osutils.ExecTorpedoShell("oc", args...)
 				if err != nil {
-					return output, true, fmt.Errorf("failed to start upgrade due to %s, cause: %v ", stdErr, err)
+					return output, true, fmt.Errorf("failed to start upgrade, Err: %s %v", stdErr, err)
 				}
 				log.Infof(output)
 				log.Debugf(stdErr)
@@ -511,20 +521,21 @@ func startUpgrade(upgradeVersion string) error {
 				args = []string{"adm", "upgrade", imagePath, "--force", "--allow-explicit-upgrade", "--allow-upgrade-with-warnings"}
 				output, stdErr, err = osutils.ExecTorpedoShell("oc", args...)
 				if err != nil {
-					return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
+					return output, true, fmt.Errorf("failed to start upgrade, Err: %s %v", stdErr, err)
 				}
 				log.Infof(output)
 				log.Warnf(stdErr)
 			} else {
-				return output, true, fmt.Errorf("failed to start upgrade due to %s. cause: %v", stdErr, err)
+				return output, true, fmt.Errorf("failed to start upgrade, Err: %v %v", stdErr, err)
 			}
 		}
-		log.Debugf("Upgrade command output %s", output)
+		log.Debugf("Upgrade command output: %s", output)
 		return output, false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, defaultCmdRetry, defaultCmdRetry); err != nil {
 		return err
 	}
+
 	t = func() (interface{}, bool, error) {
 		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
@@ -536,16 +547,15 @@ func startUpgrade(upgradeVersion string) error {
 			return nil, true, fmt.Errorf("version mismatch. expected: %s but got %s", upgradeVersion, desiredVersion)
 		}
 		log.Infof("Upgrade started: %s", output)
-
 		return nil, false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry)
-	return err
+	if _, err := task.DoRetryWithTimeout(t, defaultCmdTimeout, defaultCmdRetry); err != nil {
+		return err
+	}
+	return nil
 }
 
 func waitUpgradeCompletion(upgradeVersion string) error {
-	var err error
-
 	t := func() (interface{}, bool, error) {
 		clusterVersion, err := k8sOpenshift.GetClusterVersion("version")
 		if err != nil {
@@ -570,14 +580,14 @@ func waitUpgradeCompletion(upgradeVersion string) error {
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, defaultUpgradeTimeout, defaultUpgradeRetryInterval)
-	return err
+	if _, err := task.DoRetryWithTimeout(t, defaultUpgradeTimeout, defaultUpgradeRetryInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 // waitNodesToBeReady waits for all nodes to become Ready and using the same k8s version
 func waitNodesToBeReady() error {
-	var err error
-
 	t := func() (interface{}, bool, error) {
 		var count int
 		var k8sVersions = make(map[string]string)
@@ -585,7 +595,7 @@ func waitNodesToBeReady() error {
 
 		nodeList, err := k8sCore.GetNodes()
 		if err != nil {
-			return nil, true, fmt.Errorf("failed to get nodes. cause: %v", err)
+			return nil, true, fmt.Errorf("failed to get nodes, Err:%v", err)
 		}
 
 		for _, k8sNode := range nodeList.Items {
@@ -602,17 +612,19 @@ func waitNodesToBeReady() error {
 
 		totalNodes := len(nodeList.Items)
 		if count < totalNodes {
-			return nil, true, fmt.Errorf("nodes not ready. expected %d but got %d", totalNodes, count)
+			return nil, true, fmt.Errorf("nodes not ready, expected [%d] actual [%d]", totalNodes, count)
 		}
 
 		if len(versionSet) > 1 {
-			return nil, true, fmt.Errorf("nodes are not in the same version.\n%v", k8sVersions)
+			return nil, true, fmt.Errorf("nodes are not the same version:\n%v", k8sVersions)
 		}
 		return nil, false, nil
 	}
 
-	_, err = task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Second)
-	return err
+	if _, err := task.DoRetryWithTimeout(t, 30*time.Minute, 15*time.Second); err != nil {
+		return err
+	}
+	return nil
 }
 
 func getChannel(ocpVer string) (string, error) {
@@ -664,28 +676,28 @@ func downloadOCP4Client(ocpVersion string) error {
 		return fmt.Errorf("failed to construct URL [%s] and/or client package name [%s] for OCP [%s]", downloadURL, clientName, ocpVersion)
 	}
 
-	log.Infof("Downloading OCP [%s] client from URL [%s] to [%s]", ocpVersion, downloadURL, clientName)
+	log.Infof("Downloading OCP [%s] client from URL [%s] to [%s]...", ocpVersion, downloadURL, clientName)
 	stdout, err := exec.Command("curl", "-o", clientName, downloadURL).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to download OpenShift [%s] client from [%s], Err %v %v", clientName, downloadURL, stdout, err)
 	}
-	log.Infof("Openshift [%s] client downloaded successfully downloaded from [%s] and saved as [%s]", ocpVersion, downloadURL, clientName)
+	log.Infof("Openshift [%s] client successfully downloaded from [%s] and saved as [%s]", ocpVersion, downloadURL, clientName)
 
-	log.Debugf("Executing [tar -xvf %s]", clientName)
+	log.Infof("Executing command [tar -xvf %s]...", clientName)
 	stdout, err = exec.Command("tar", "-xvf", clientName).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to extract [%s], Err: %v %v", clientName, err, string(stdout))
 	}
 	log.Infof("Successfully extracted [%s]", clientName)
 
-	log.Debugf("Executing [cp ./oc %s]", ocBinaryDir)
+	log.Infof("Executing command [cp ./oc %s]...", ocBinaryDir)
 	stdout, err = exec.Command("cp", "./oc", ocBinaryDir).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to copy oc binary to [%s], Err %v %v", ocBinaryDir, err, string(stdout))
 	}
-	log.Infof("Successfully move oc binary to [%s]", ocBinaryDir)
+	log.Infof("Successfully copied oc binary to [%s]", ocBinaryDir)
 
-	log.Debug("Executing [oc version]")
+	log.Info("Executing command [oc version]...")
 	stdout, err = exec.Command("oc", "version").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to get oc version, Err: %v %v", err, string(stdout))
@@ -696,6 +708,7 @@ func downloadOCP4Client(ocpVersion string) error {
 
 // ackAPIRemoval provides an acknowledgment before the cluster can be upgraded to specific versions
 func ackAPIRemoval(ocpVer string) error {
+	log.Info("Checking if we need to provide acknowledgment of API removal before proceeding with OCP cluster upgrade...")
 	openshiftVersion, err := getParsedVersion(ocpVer)
 	if err != nil {
 		return err
@@ -712,6 +725,7 @@ func ackAPIRemoval(ocpVer string) error {
 	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_14) {
 		patchData = "{\"data\":{\"ack-4.13-kube-1.27-api-removals-in-4.14\":\"true\"}}"
 	} else {
+		log.Infof("Providing acknowledgment of API removal is not needed when upgrading to OCP version [%s]", openshiftVersion.String())
 		return nil
 	}
 
@@ -719,9 +733,11 @@ func ackAPIRemoval(ocpVer string) error {
 		var output []byte
 		args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-			return nil, true, fmt.Errorf("failed to ack API removal, Err: %v %v", string(output), err)
+			return nil, true, fmt.Errorf("failed to provide acknowledgment of API removal, Err: %v %v", string(output), err)
 		}
 		log.Info(string(output))
+
+		log.Infof("Successfully provided acknowledgment of API removal before proceeding to upgrade to OCP version [%s]", openshiftVersion.String())
 		return nil, false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
@@ -732,11 +748,10 @@ func ackAPIRemoval(ocpVer string) error {
 
 // Check for newly create OCP node and retun OCP node
 func (k *openshift) checkAndGetNewNode() (string, error) {
-	var err error
 	var newNodeName string
 
 	// Waiting for new node to be ready
-	newNodeName, err = k.getAndWaitMachineToBeReady()
+	newNodeName, err := k.getAndWaitMachineToBeReady()
 	if err != nil {
 		// This is to handle error case when newly provisioned node not ready in 10 minutes
 		// Deleting the newly provisioned node and waiting for one more time before returning error
@@ -751,8 +766,7 @@ func (k *openshift) checkAndGetNewNode() (string, error) {
 	}
 
 	// VM is up and ready. Waiting for other services to be up and joining it to cluster.
-	err = k.waitForJoinK8sNode(newNodeName)
-	if err != nil {
+	if err := k.waitForJoinK8sNode(newNodeName); err != nil {
 		return newNodeName, err
 	}
 
@@ -825,23 +839,20 @@ func (k *openshift) waitForJoinK8sNode(node string) error {
 	return nil
 }
 
-// Delete the OCP node using kubectl command
+// deleteAMachine deletes the OCP node using kubectl command
 func (k *openshift) deleteAMachine(nodeName string) error {
-	var err error
-
 	// Delete the node from machineset using kubectl command
 	t := func() (interface{}, bool, error) {
 		log.Infof("Deleting machine [%s]", nodeName)
 		cmd := "kubectl delete machines -n openshift-machine-api " + nodeName
-		if _, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
+		if _, err := exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
 			return "", true, fmt.Errorf("failed to delete machine, Err: %v", err)
 		}
 		return "", false, nil
 	}
-	if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 60*time.Second); err != nil {
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 60*time.Second); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -1033,11 +1044,6 @@ func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNo
 	return nil
 }
 
-// String returns the string name of this driver.
-func (k *openshift) String() string {
-	return SchedName
-}
-
 func getParsedVersion(ocpVer string) (*version.Version, error) {
 	if versionReg.MatchString(ocpVer) {
 		cli := &http.Client{}
@@ -1080,31 +1086,27 @@ func getMachineSetName() (string, error) {
 
 // ScaleCluster scale the cluster to the given replicas
 func (k *openshift) ScaleCluster(replicas int) error {
-
 	machineSetName, err := getMachineSetName()
 	if err != nil {
 		return err
 	}
 	// kubectl scale machineset leela-ocp-vx6zf-worker-0 --replicas 6 -n openshift-machine-api
 	cmd := fmt.Sprintf("kubectl -n %s scale %s --replicas %d", OpenshiftMachineNamespace, machineSetName, replicas)
-	log.Infof("Running cmnd : %s", cmd)
+	log.Infof("Executing command [%s]", cmd)
 	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
 		return err
 	}
-
-	log.Infof("output : %s", string(output))
+	log.Infof("output: %s", string(output))
 
 	if !strings.Contains(string(output), fmt.Sprintf("%s scaled", machineSetName)) {
-		return fmt.Errorf("failed to scale %s, output %s", machineSetName, string(output))
+		return fmt.Errorf("failed to scale [%s], output: %s", machineSetName, string(output))
 	}
 
-	_, err = k.checkAndGetNewNode()
-	if err != nil {
+	if _, err := k.checkAndGetNewNode(); err != nil {
 		return err
 	}
-	err = k.RefreshNodeRegistry()
-	if err != nil {
+	if err := k.RefreshNodeRegistry(); err != nil {
 		return err
 	}
 
@@ -1113,7 +1115,7 @@ func (k *openshift) ScaleCluster(replicas int) error {
 
 // needOcpPrereq checks if we need to do OCP Prometheus prereq and returns true or false
 func (k *openshift) needOcpPrereq(ocpVer string) (bool, error) {
-	log.Infof("Checking if OCP version  [%s] requires Prometheus configuration changes", ocpVer)
+	log.Infof("Checking if OCP version  [%s] requires Prometheus configuration changes...", ocpVer)
 
 	openshiftVersion, err := getParsedVersion(ocpVer)
 	if err != nil {
@@ -1173,11 +1175,11 @@ func configureClusterMonitoringConfig() error {
 		},
 	}
 
-	// Try to get cofngimap and based on results either create it or modify it
+	// Try to get Openshift Cluster Monitoring ConfigMap and based on the results either create or modify it
 	existingConfigMap, err := k8sCore.GetConfigMap(ocpConfigmap.Name, ocpConfigmap.Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
-			log.Infof("Creating ConfigMap [%s] in namespace [%s]", ocpConfigmap.Name, ocpConfigmap.Namespace)
+			log.Infof("Creating ConfigMap [%s] in namespace [%s]...", ocpConfigmap.Name, ocpConfigmap.Namespace)
 			if _, err := k8sCore.CreateConfigMap(ocpConfigmap); err != nil {
 				return fmt.Errorf("failed to create ConfigMap [%s] in namesapce [%s], Err: %v", ocpConfigmap.Name, ocpConfigmap.Namespace, err)
 			}
@@ -1186,12 +1188,12 @@ func configureClusterMonitoringConfig() error {
 			return fmt.Errorf("failed to get ConfigMap [%s] in namespace [%s], Err: %v", ocpConfigmap.Name, ocpConfigmap.Namespace, err)
 		}
 	} else {
-		log.Infof("ConfigMap [%s] already exists in [%s] namespace, will check if enableUserWorkload is true", ocpConfigmap.Name, ocpConfigmap.Namespace)
+		log.Infof("ConfigMap [%s] already exists in [%s] namespace, will check if enableUserWorkload is true...", ocpConfigmap.Name, ocpConfigmap.Namespace)
 		existingData := existingConfigMap.Data["config.yaml"]
 		if strings.Contains(existingData, "enableUserWorkload: true") {
 			log.Infof("ConfigMap [%s] already contains enableUserWorkload: true in [%s] namespace, skipping update", ocpConfigmap.Name, ocpConfigmap.Namespace)
 		} else {
-			log.Infof("Adding enableUserWorkload: true to ConfigMap [%s] in [%s] namespace", ocpConfigmap.Name, ocpConfigmap.Namespace)
+			log.Infof("Adding enableUserWorkload: true to ConfigMap [%s] in [%s] namespace...", ocpConfigmap.Name, ocpConfigmap.Namespace)
 			newData := existingData + "enableUserWorkload: true\n"
 			ocpConfigmap.Data["config.yaml"] = newData
 			if _, err = k8sCore.UpdateConfigMap(ocpConfigmap); err != nil {
@@ -1267,9 +1269,4 @@ func updatePrometheusAndAutopilot() error {
 	}
 	log.Infof("Successfully updated PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...", stc.Name, stc.Namespace)
 	return nil
-}
-
-func init() {
-	k := &openshift{}
-	scheduler.Register(SchedName, k)
 }
