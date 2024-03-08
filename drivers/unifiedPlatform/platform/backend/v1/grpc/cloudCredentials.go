@@ -149,13 +149,36 @@ func cloudConfig(createRequest *WorkFlowRequest) *publiccloudcredapi.Config {
 	}
 }
 
+func copyCloudCredResponse(providerType int32, cloudCredModel publiccloudcredapi.CloudCredential) (*WorkFlowResponse, error) {
+	cloudCredResponse := WorkFlowResponse{}
+
+	//Test Print
+	log.Infof("access key [%s]", cloudCredModel.Config.GetS3Credentials().AccessKey)
+	log.Infof("secret key [%s]", cloudCredModel.Config.GetS3Credentials().SecretKey)
+
+	switch providerType {
+	case PROVIDER_S3:
+		log.Debugf("copying s3 credentials")
+		cloudCredResponse.CloudConfig.Credentials.S3Credentials.AccessKey = cloudCredModel.Config.GetS3Credentials().AccessKey
+		cloudCredResponse.CloudConfig.Credentials.S3Credentials.SecretKey = cloudCredModel.Config.GetS3Credentials().SecretKey
+	case PROVIDER_AZURE:
+		log.Debugf("copying azure credentials")
+		cloudCredResponse.CloudConfig.Credentials.AzureCredentials.AccountKey = cloudCredModel.Config.GetAzureCredentials().StorageAccountKey
+		cloudCredResponse.CloudConfig.Credentials.AzureCredentials.AccountName = cloudCredModel.Config.GetAzureCredentials().StorageAccountName
+	case PROVIDER_GOOGLE:
+		log.Debugf("copying gcp credentials")
+		cloudCredResponse.CloudConfig.Credentials.GcpCredentials.ProjectId = cloudCredModel.Config.GetGoogleCredentials().ProjectId
+		cloudCredResponse.CloudConfig.Credentials.GcpCredentials.Key = cloudCredModel.Config.GetGoogleCredentials().JsonKey
+	}
+	return &cloudCredResponse, nil
+}
+
 // CreateCloudCredentials return newly created cloud credentials
 func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredResponse := WorkFlowResponse{}
 
 	createCloudCredRequest := &publiccloudcredapi.CreateCloudCredentialRequest{
 		TenantId: createRequest.TenantId,
@@ -184,13 +207,10 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 	}
 
 	log.Infof("cloud cred response [%+v]", cloudCredModel)
+	cloudCredResponse, err := copyCloudCredResponse(createRequest.CloudCredentials.Config.Provider.CloudProvider, *cloudCredModel)
 
-	err = copier.Copy(&cloudCredResponse, cloudCredModel)
-	if err != nil {
-		return nil, err
-	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredResponse)
-	return &cloudCredResponse, nil
+	return cloudCredResponse, nil
 }
 
 // UpdateCloudCredentials return newly created cloud credentials
