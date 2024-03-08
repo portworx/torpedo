@@ -1,6 +1,16 @@
 package apiStructs
 
 type CloudCredentials struct {
+	Create CreateCloudCredentials
+	Get    GetCloudCredentials
+}
+
+type GetCloudCredentials struct {
+	CloudCredentialsId string
+	IsConfigRequired   bool
+}
+
+type CreateCloudCredentials struct {
 	TenantID string
 	Meta     Meta
 	Config   CloudConfig

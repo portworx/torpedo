@@ -25,7 +25,7 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentialClient() (context.Context, *
 }
 
 // ListCloudCredentials return list of cloud credentials
-func (cloudCred *PLATFORM_API_V1) ListCloudCredentials() ([]WorkFlowResponse, error) {
+func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
 	cloudCredsResponse := []WorkFlowResponse{}
 	if err != nil {

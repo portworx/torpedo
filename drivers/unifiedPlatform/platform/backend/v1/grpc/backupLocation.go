@@ -7,6 +7,7 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
+	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publicbackuplocapi "github.com/pure-px/apis/public/portworx/platform/backuplocation/apiv1"
 	"google.golang.org/grpc"
 )
@@ -82,11 +83,33 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *WorkFlo
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var createAppRequest *publicbackuplocapi.CreateBackupLocationRequest
-	err = copier.Copy(&createAppRequest, createRequest)
-	if err != nil {
-		return nil, err
+	createAppRequest := &publicbackuplocapi.CreateBackupLocationRequest{
+		TenantId: "",
+		BackupLocation: &publicbackuplocapi.BackupLocation{
+			Meta: &commonapiv1.Meta{
+				Uid:             "",
+				Name:            "",
+				Description:     "",
+				ResourceVersion: "",
+				CreateTime:      nil,
+				UpdateTime:      nil,
+				Labels:          nil,
+				Annotations:     nil,
+				ParentReference: nil,
+				ResourceNames:   nil,
+			},
+			Config: &publicbackuplocapi.Config{ //write a seperate method to populate the config as per the provider type
+				Provider:          nil,
+				CloudCredentialId: "",
+				Location:          nil,
+			},
+			Status: nil,
+		},
 	}
+	//err = copier.Copy(&createAppRequest, createRequest)
+	//if err != nil {
+	//	return nil, err
+	//}
 	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `BackupLocationServiceCreateBackupLocation` to create backup target - %v", err)
