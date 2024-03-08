@@ -1,0 +1,191 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.platform.template.v1;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/common/apiv1/sort.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/template/apiv1;template";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.template.v1";
+option java_outer_classname = "TemplateProto";
+
+// TemplateService serves and manages templates
+service TemplateService {
+  // Get API returns the template details sans the actual credentials
+  rpc GetTemplate(GetTemplateRequest)
+    returns(Template) {
+    option(google.api.http) = {
+      get: "/v1/templates/{id}"
+    };
+  }
+
+  // Create API creates a set of templates for a tenant
+  rpc CreateTemplate(CreateTemplateRequest)
+    returns(Template) {
+    option(google.api.http) = {
+      post: "/v1/tenants/{tenant_id}/templates"
+      body: "template"
+    };
+  }
+
+  // Update API updates a template
+  rpc UpdateTemplate(UpdateTemplateRequest)
+    returns(Template) {
+    option(google.api.http) = {
+      put: "/v1/templates/{id}"
+      body: "template"
+    };
+  }
+
+  // (-- api-linter: core::0132::http-body=disabled
+  //     api-linter: core::0132::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because 
+  // we can't have advance filters as query params. 
+  // --)
+  // List API lists all the templates for a tenant
+  rpc ListTemplates(ListTemplatesRequest)
+    returns(ListTemplatesResponse) {
+    option(google.api.http) = {
+      get: "/v1/templates"
+      additional_bindings: {
+        post: "/v1/templates:search"
+        body: "*"
+      }
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List API lists all the templates for a tenant"
+    };
+  }
+
+  // Delete API deletes the templates
+  rpc DeleteTemplate(DeleteTemplateRequest)
+    returns(google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/v1/templates/{id}"
+    };
+  }
+}
+
+// Resource representing a template
+message Template{
+  // Metadata of the resource
+  portworx.common.v1.Meta meta = 1;
+
+  // Desired configuration of the tempalate.
+  Config config = 2;
+  // Status of the template instance
+  Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// Config provides configurational data of the template instance
+message Config{
+  // Kind to the template instance used to identify the template schema
+  string kind = 1;
+  // Semantic version of the template used to identify template schema 
+  // and latest revison for the given template instance kind 
+  string semantic_version = 2;
+  // Uid of the schema used to create the template instance
+  string revision_uid = 3;
+  // Key, value pairs of the template instance
+  google.protobuf.Struct template_values = 4;
+}
+
+// Status provides the current status of template
+message Status{
+  // Different phases of template instance
+  enum Phase {
+    // Phase unspecified
+    PHASE_UNSPECIFIED = 0;
+    // Template instance is active
+    ACITVE = 1;
+    // Template instance is deprecated
+    DEPRECATED = 2;
+  }
+  // current state of the template instance
+  Phase phase = 1;
+}
+
+// Request to create template instance
+message CreateTemplateRequest {
+  // The parent tenant id under which template will be created
+  // (-- api-linter: core::0133::request-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for to support creation of
+  //     the resource in the tenant context. --)
+  string tenant_id = 1 ;
+  // Information about the template instance that needs to be created
+  Template template = 2;  
+}
+
+// Request to get a template instance
+message GetTemplateRequest {
+  // ID of the template instance
+  string id = 1;
+}
+
+// Request to list the templates for a tenant
+message ListTemplatesRequest {
+  // Tenant ID for which the credentials will be listed
+  string tenant_id = 1;
+  // Pagination metadata for this response.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 2;
+  // Provides the key in labels and associated values for which 
+  // templates need to be listed
+  public.portworx.common.v1.Selector label_selector = 3;
+  // Field selector is used to filter templates based on 
+  // the fields in the template's proto message 
+  public.portworx.common.v1.Selector field_selector = 4;
+  // Infra_resource_selector is used to filter templates based on 
+  // the infra resources associated with the templates
+  // Supported infra resource filters: PROJECT
+  public.portworx.common.v1.ResourceSelector infra_resource_selector = 5;
+  // Response data flags for listing templates
+  public.portworx.common.v1.RespData resp_data= 6;
+  // Sorting details using which requested list of templates to be sorted.
+  public.portworx.common.v1.Sort sort = 7;
+}
+
+// Request to update a template instance
+message UpdateTemplateRequest {
+  // ID of the template to be updated
+  string id = 1;
+  // Desired template configuration
+  Template template = 2;
+}
+
+// Request to delete a template instance
+message DeleteTemplateRequest {
+  // ID of the template instance
+  string id = 1;
+}
+
+// Response of list templates
+message ListTemplatesResponse {
+  // The list of templates scoped to a tenant
+  repeated Template templates = 1;  
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
