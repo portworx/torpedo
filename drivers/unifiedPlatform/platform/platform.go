@@ -15,6 +15,7 @@ type Platform interface {
 	NamespaceInterface
 	IamRoleBindingsInterface
 	ServiceAccountsInterface
+	TemplatesInterface
 }
 
 type AccountInterface interface {
@@ -86,4 +87,11 @@ type ServiceAccountsInterface interface {
 	UpdateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GenerateServiceAccountAccessToken(*WorkFlowRequest) (*WorkFlowResponse, error)
 	DeleteServiceAccount(*WorkFlowRequest) error
+}
+
+type TemplatesInterface interface {
+	ListTemplates(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	CreateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteTemplate(*WorkFlowRequest) error
 }
