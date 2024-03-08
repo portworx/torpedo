@@ -59,7 +59,7 @@ type BackupLocationInterface interface {
 }
 
 type CloudCredentialsInterface interface {
-	ListCloudCredentials() ([]WorkFlowResponse, error)
+	ListCloudCredentials(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
 	CreateCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)

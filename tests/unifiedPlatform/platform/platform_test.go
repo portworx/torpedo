@@ -43,18 +43,24 @@ var _ = Describe("{TenantsCRUD}", func() {
 	})
 })
 
-var _ = Describe("{CreateCloudCredentials}", func() {
+var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateCloudCredentials", "create cloud credentials", nil, 0)
 	})
 
 	It("CreateCloudCredentials", func() {
-		Step("create cloud credentials", func() {
+		Step("create and cloud credentials", func() {
 			tenantId, err := platformLibs.GetDefaultTenantId(accID)
 			log.FailOnError(err, "error occured while fetching tenantID")
 			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating cloud creds")
-			log.Infof("creds secretkey [+%v]", credResp.CloudConfig.Credentials.S3Credentials.SecretKey)
+			log.Infof("creds resp [%+v]", credResp.CloudCredentials.Config.Credentials.S3Credentials.AccessKey)
+			log.Infof("creds id [%+v]", *credResp.CloudCredentials.Meta.Uid)
+
+			isconfigRequiredTrue, err := platformLibs.GetCloudCredentials(*credResp.CloudCredentials.Meta.Uid, NewPdsParams.BackUpAndRestore.TargetLocation, true)
+			log.FailOnError(err, "error occured while gettig cloud required with false flag")
+			log.Debugf("Cred Name [%+v]", *isconfigRequiredTrue.CloudCredentials.Meta.Name)
+			log.Debugf("Cred Id [%+v]", *isconfigRequiredTrue.CloudCredentials.Meta.Uid)
 		})
 	})
 
