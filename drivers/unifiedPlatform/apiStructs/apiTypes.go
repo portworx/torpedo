@@ -12,6 +12,7 @@ type WorkFlowRequest struct {
 	BackupConfig          PDSBackupConfig       `copier:"must,nopanic"`
 	Backup                PDSBackupConfig       `copier:"must,nopanic"`
 	Restore               PDSRestore            `copier:"must,nopanic"`
+	CloudCredentials      CloudCredentials      `copier:"must,nopanic"`
 	Meta                  Meta                  `copier:"must,nopanic"`
 	Config                Config                `copier:"must,nopanic"`
 	Id                    string                `copier:"must,nopanic"`

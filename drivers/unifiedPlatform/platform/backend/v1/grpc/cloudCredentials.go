@@ -7,8 +7,17 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
+	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publiccloudcredapi "github.com/pure-px/apis/public/portworx/platform/cloudcredential/apiv1"
 	"google.golang.org/grpc"
+)
+
+const (
+	PROVIDER_UNSPECIFIED  int32 = 0
+	PROVIDER_AZURE        int32 = 1
+	PROVIDER_GOOGLE       int32 = 2
+	PROVIDER_S3           int32 = 3
+	PROVIDER_UNSTRUCTURED int32 = 4
 )
 
 // getCloudCredClient updates the header with bearer token and returns the new client
@@ -78,28 +87,106 @@ func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(cloudCredId *WorkFlowRe
 	return &cloudCredsResponse, nil
 }
 
+func cloudConfig(createRequest *WorkFlowRequest) *publiccloudcredapi.Config {
+	PROVIDER_TYPE := createRequest.CloudCredentials.Config.Provider.CloudProvider
+	secret := createRequest.CloudCredentials.Config.Credentials
+	switch PROVIDER_TYPE {
+	case PROVIDER_S3:
+		log.Debugf("creating s3 credentials")
+		return &publiccloudcredapi.Config{
+			Provider: &publiccloudcredapi.Provider{
+				CloudProvider: publiccloudcredapi.Provider_Type(PROVIDER_S3),
+			},
+			Credentials: &publiccloudcredapi.Config_S3Credentials{
+				S3Credentials: &publiccloudcredapi.S3Credentials{
+					AccessKey: secret.S3Credentials.AccessKey,
+					SecretKey: secret.S3Credentials.SecretKey,
+				},
+			},
+		}
+	case PROVIDER_AZURE:
+		log.Debugf("creating azure credentials")
+		return &publiccloudcredapi.Config{
+			Provider: &publiccloudcredapi.Provider{
+				CloudProvider: publiccloudcredapi.Provider_Type(PROVIDER_AZURE),
+			},
+			Credentials: &publiccloudcredapi.Config_AzureCredentials{
+				AzureCredentials: &publiccloudcredapi.AzureCredentials{
+					StorageAccountName: secret.AzureCredentials.AccountName,
+					StorageAccountKey:  secret.AzureCredentials.AccountKey,
+				},
+			},
+		}
+	case PROVIDER_GOOGLE:
+		log.Debugf("creating gcp credentials")
+		return &publiccloudcredapi.Config{
+			Provider: &publiccloudcredapi.Provider{
+				CloudProvider: publiccloudcredapi.Provider_Type(PROVIDER_GOOGLE),
+			},
+			Credentials: &publiccloudcredapi.Config_GoogleCredentials{
+				GoogleCredentials: &publiccloudcredapi.GoogleCredentials{
+					ProjectId: secret.GcpCredentials.ProjectId,
+					JsonKey:   secret.GcpCredentials.Key,
+				},
+			},
+		}
+
+	default:
+		log.Debugf("creating s3 credentials by default")
+		return &publiccloudcredapi.Config{
+			Provider: &publiccloudcredapi.Provider{
+				CloudProvider: publiccloudcredapi.Provider_Type(PROVIDER_S3),
+			},
+			Credentials: &publiccloudcredapi.Config_S3Credentials{
+				S3Credentials: &publiccloudcredapi.S3Credentials{
+					AccessKey: secret.S3Credentials.AccessKey,
+					SecretKey: secret.S3Credentials.SecretKey,
+				},
+			},
+		}
+	}
+}
+
 // CreateCloudCredentials return newly created cloud credentials
 func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := WorkFlowResponse{}
-	var createCloudCredRequest *publiccloudcredapi.CreateCloudCredentialRequest
-	err = copier.Copy(&createCloudCredRequest, createRequest)
-	if err != nil {
-		return nil, err
+	cloudCredResponse := WorkFlowResponse{}
+
+	createCloudCredRequest := &publiccloudcredapi.CreateCloudCredentialRequest{
+		TenantId: createRequest.TenantId,
+		CloudCredential: &publiccloudcredapi.CloudCredential{
+			Meta: &commonapiv1.Meta{
+				Uid:             "",
+				Name:            *createRequest.CloudCredentials.Meta.Name,
+				Description:     "",
+				ResourceVersion: "",
+				CreateTime:      nil,
+				UpdateTime:      nil,
+				Labels:          nil,
+				Annotations:     nil,
+				ParentReference: nil,
+				ResourceNames:   nil,
+			},
+			Config: cloudConfig(createRequest),
+		},
 	}
+
 	cloudCredModel, err := cloudCredsClient.CreateCloudCredential(ctx, createCloudCredRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `CloudCredentialServiceCreateCloudCredential` to create cloud credential - %v", err)
 	}
-	err = copier.Copy(&cloudCredsResponse, cloudCredModel)
+
+	log.Infof("cloud cred response [%+v]", cloudCredModel)
+
+	err = copier.Copy(&cloudCredResponse, cloudCredModel)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
-	return &cloudCredsResponse, nil
+	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredResponse)
+	return &cloudCredResponse, nil
 }
 
 // UpdateCloudCredentials return newly created cloud credentials

@@ -43,27 +43,27 @@ var _ = Describe("{TenantsCRUD}", func() {
 	})
 })
 
-//var _ = Describe("{WhoamI}", func() {
-//	steplog := "WhoamI"
-//	JustBeforeEach(func() {
-//		StartTorpedoTest("WhoAmI", "get actor id", nil, 0)
-//	})
-//
-//	Step(steplog, func() {
-//		log.InfoD(steplog)
-//		It("WhoAmI", func() {
-//			Step("create accounts", func() {
-//				whoAmIResp, err := platformLibs.WhoAmIV1()
-//				log.FailOnError(err, "error while creating account")
-//				log.Infof("Actor ID %s", whoAmIResp.GetId())
-//			})
-//		})
-//	})
-//
-//	JustAfterEach(func() {
-//		defer EndTorpedoTest()
-//	})
-//})
+var _ = Describe("{CreateCloudCredentials}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("WhoAmI", "get actor id", nil, 0)
+	})
+
+	Step("CreateCloudCredentials", func() {
+		It("CreateCloudCredentials", func() {
+			Step("create cloud credentials", func() {
+				tenantId, err := platformLibs.GetDefaultTenantId(accID)
+				log.FailOnError(err, "error occured while fetching tenantID")
+				credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
+				log.FailOnError(err, "error while creating account")
+				log.Infof("creds response [+%v]", credResp)
+			})
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
 
 var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	JustBeforeEach(func() {

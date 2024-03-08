@@ -1,6 +1,9 @@
 package platformLibs
 
-import "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+import (
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/pkg/log"
+)
 
 // GetTenantListV1
 func GetTenantListV1(accountID string) ([]apiStructs.WorkFlowResponse, error) {
@@ -9,4 +12,16 @@ func GetTenantListV1(accountID string) ([]apiStructs.WorkFlowResponse, error) {
 		return nil, err
 	}
 	return tenList, nil
+}
+
+func GetDefaultTenantId(accountID string) (string, error) {
+	var tenantId string
+	tenantList, err := GetTenantListV1(accountID)
+	log.FailOnError(err, "error while getting tenant list")
+	for _, tenant := range tenantList {
+		log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accountID)
+		tenantId = *tenant.Meta.Uid
+		break
+	}
+	return tenantId, nil
 }

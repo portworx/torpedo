@@ -312,6 +312,17 @@ func CopyStruct(fromValue interface{}, toValue interface{}) error {
 	return err
 }
 
+// RandString generates random string
+func RandString(length int) string {
+	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+	}
+	return string(b)
+}
+
 // syncData will execute 'sync' command on pod post start
 func syncData(namespace string) {
 	var k8sCore = core.Instance()
