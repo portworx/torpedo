@@ -11,13 +11,17 @@ import (
 	"time"
 
 	"github.com/blang/semver"
+	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/openstorage/api"
+	opv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
+	optest "github.com/libopenstorage/operator/pkg/util/test"
 	openshiftv1 "github.com/openshift/api/config/v1"
 	ocpsecurityv1api "github.com/openshift/api/security/v1"
 	"github.com/portworx/sched-ops/k8s/apiextensions"
 	k8s "github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/externalsnapshotter"
 	opnshift "github.com/portworx/sched-ops/k8s/openshift"
+	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/node/vsphere"
@@ -31,6 +35,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -56,6 +61,7 @@ const (
 
 var (
 	k8sOpenshift       = opnshift.Instance()
+	pxOperator         = operator.Instance()
 	k8sCore            = k8s.Instance()
 	crdOps             = apiextensions.Instance()
 	snapshoterOps      = externalsnapshotter.Instance()
@@ -65,10 +71,19 @@ var (
 		"volumesnapshotcontents.snapshot.storage.k8s.io",
 		"volumesnapshots.snapshot.storage.k8s.io",
 	}
+
+	minPxOperatorVersionOcp_4_14, _ = version.NewVersion("23.10.3-") // PX Operator version that only supports OCP 4.14+
+	minPxOperatorVersionOcpAll, _   = version.NewVersion("23.10.4-") // PX Operator version that supports all OCP versions
+
+	openshiftVersion_4_9, _  = version.NewVersion("4.9.0")
+	openshiftVersion_4_12, _ = version.NewVersion("4.12.0")
+	openshiftVersion_4_13, _ = version.NewVersion("4.13.0")
+	openshiftVersion_4_14, _ = version.NewVersion("4.14.0")
 )
 
 type openshift struct {
 	kube.K8s
+	openshiftVersion string
 }
 
 func (k *openshift) StopSchedOnNode(n node.Node) error {
@@ -305,11 +320,16 @@ func (k *openshift) createTorpedoSecurityContextConstraints() (*ocpsecurityv1api
 }
 
 func (k *openshift) UpgradeScheduler(version string) error {
-	var err error
-
-	if err = downloadOCP4Client(version); err != nil {
+	if err := downloadOCP4Client(version); err != nil {
 		return err
 	}
+
+	// Get Openshift versiob
+	ocpVersion, err := optest.GetOpenshiftVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get Openshift version, Err: %v", err)
+	}
+	k.openshiftVersion = ocpVersion
 
 	clientVersion := ""
 	if clientVersion, err = getClientVersion(); err != nil {
@@ -321,11 +341,11 @@ func (k *openshift) UpgradeScheduler(version string) error {
 		upgradeVersion = clientVersion
 	}
 
-	if err := selectChannel(version); err != nil {
+	if err := k.setOcpPrometheusPrereq(upgradeVersion); err != nil {
 		return err
 	}
 
-	if err := fixOCPClusterStorageOperator(upgradeVersion); err != nil {
+	if err := selectChannel(version); err != nil {
 		return err
 	}
 
@@ -402,11 +422,11 @@ func waitForNewGenertionNumber(currentGenNumber int) error {
 	return err
 }
 
-func selectChannel(version string) error {
+func selectChannel(ocpVer string) error {
 	var output []byte
 	var err error
 	channel := ""
-	if channel, err = getChannel(version); err != nil {
+	if channel, err = getChannel(ocpVer); err != nil {
 		return err
 	}
 	beforeGenNumInt, err := getGenerationNumber()
@@ -430,8 +450,10 @@ spec:
 		}
 		return nil, false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second)
-	return err
+	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 5*time.Second); err != nil {
+		return err
+	}
+	return nil
 }
 
 // getImageSha gets image sha which will be used to install/upgrade OCP
@@ -594,21 +616,22 @@ func waitNodesToBeReady() error {
 	return err
 }
 
-func getChannel(version string) (string, error) {
-	if versionReg.MatchString(version) {
-		return version, nil
+func getChannel(ocpVer string) (string, error) {
+	if versionReg.MatchString(ocpVer) {
+		return ocpVer, nil
 	}
 
-	versionSplit := strings.Split(version, "-")
+	versionSplit := strings.Split(ocpVer, "-")
 	channel := "stable"
+	var ocpVersion string
 	if len(versionSplit) > 1 {
 		channel = versionSplit[0]
-		version = versionSplit[1]
+		ocpVersion = versionSplit[1]
 	}
 
-	ver, err := semver.Make(version)
+	ver, err := semver.Make(ocpVersion)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse version: %s. cause: %v", version, err)
+		return "", fmt.Errorf("failed to parse version [%s], Err: %v", ocpVersion, err)
 	}
 
 	channels := map[string]string{
@@ -639,115 +662,55 @@ func downloadOCP4Client(ocpVersion string) error {
 		clientName = fmt.Sprintf("openshift-client-linux-%s.tar.gz", ocpVersion)
 	}
 	if clientName == "" && downloadURL == "" {
-		return fmt.Errorf("Failed to construct URL [%s] and/or client package name [%s] for OCP [%s]", downloadURL, clientName, ocpVersion)
+		return fmt.Errorf("failed to construct URL [%s] and/or client package name [%s] for OCP [%s]", downloadURL, clientName, ocpVersion)
 	}
 
 	log.Infof("Downloading OCP [%s] client from URL [%s] to [%s]", ocpVersion, downloadURL, clientName)
 	stdout, err := exec.Command("curl", "-o", clientName, downloadURL).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Error while downloading OpenShift [%s] client from [%s], Err %v %v", clientName, downloadURL, stdout, err)
+		return fmt.Errorf("failed to download OpenShift [%s] client from [%s], Err %v %v", clientName, downloadURL, stdout, err)
 	}
 	log.Infof("Openshift [%s] client downloaded successfully downloaded from [%s] and saved as [%s]", ocpVersion, downloadURL, clientName)
 
 	log.Debugf("Executing [tar -xvf %s]", clientName)
 	stdout, err = exec.Command("tar", "-xvf", clientName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed extracting [%s], Err: %v %v", clientName, err, string(stdout))
+		return fmt.Errorf("failed to extract [%s], Err: %v %v", clientName, err, string(stdout))
 	}
 	log.Infof("Successfully extracted [%s]", clientName)
 
 	log.Debugf("Executing [cp ./oc %s]", ocBinaryDir)
 	stdout, err = exec.Command("cp", "./oc", ocBinaryDir).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to copy oc binary to [%s], Err %v %v", ocBinaryDir, err, string(stdout))
+		return fmt.Errorf("failed to copy oc binary to [%s], Err %v %v", ocBinaryDir, err, string(stdout))
 	}
 	log.Infof("Successfully move oc binary to [%s]", ocBinaryDir)
 
 	log.Debug("Executing [oc version]")
 	stdout, err = exec.Command("oc", "version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to get oc version, Err: %v %v", err, string(stdout))
+		return fmt.Errorf("failed to get oc version, Err: %v %v", err, string(stdout))
 	}
 	log.Infof("Successfully got OCP version:\n%v\n", string(stdout))
 	return nil
 }
 
-// workaround for https://portworx.atlassian.net/browse/PWX-20465
-func fixOCPClusterStorageOperator(version string) error {
-	parsedVersion, err := getParsedVersion(version)
+// ackAPIRemoval provides an acknowledgment before the cluster can be upgraded to specific versions
+func ackAPIRemoval(ocpVer string) error {
+	openshiftVersion, err := getParsedVersion(ocpVer)
 	if err != nil {
 		return err
 	}
 
-	// this issue happens on OCP 4.3.X, 4.4.15< and 4.5.3<
-	parsedVersion43, _ := semver.Parse("4.3.0")
-	parsedVersion4415, _ := semver.Parse("4.4.15")
-	parsedVersion45, _ := semver.Parse("4.5.0")
-	parsedVersion453, _ := semver.Parse("4.5.3")
-
-	if (parsedVersion.GTE(parsedVersion43) && parsedVersion.LT(parsedVersion4415)) ||
-		(parsedVersion.GTE(parsedVersion45) && parsedVersion.LT(parsedVersion453)) {
-
-		log.Infof("Found version %s which uses alphav1 version of snapshot", version)
-		log.Warn("This upgrade requires all snapshots to be deleted.")
-
-		namespaces, err := k8sCore.ListNamespaces(nil)
-		if err != nil {
-			return err
-		}
-
-		log.Info("Deleting volume snapshots")
-		for _, ns := range namespaces.Items {
-			snaps, err := snapshoterOps.ListSnapshots(ns.Name)
-			if k8serrors.IsNotFound(err) {
-				log.Infof("No snapshots found for namespace %s", ns.Name)
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			for _, snap := range snaps.Items {
-				if err = snapshoterOps.DeleteSnapshot(snap.Name, snap.Namespace); err != nil {
-					return err
-				}
-				log.Infof("Deleted snapshot [%s]%s", snap.Namespace, snap.Name)
-			}
-		}
-
-		log.Info("Removing CRDs")
-		for _, crd := range volumeSnapshotCRDs {
-			err = crdOps.DeleteCRD(crd)
-			if k8serrors.IsNotFound(err) {
-				log.Infof("CRD %s not found", crd)
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			log.Infof("Removed CRD %s", crd)
-		}
-	}
-	return nil
-}
-
-func ackAPIRemoval(version string) error {
-	parsedVersion, err := getParsedVersion(version)
-	if err != nil {
-		return err
-	}
-	// this issue happens on OCP 4.9, 4.12, 4.13 and 4.14
-	parsedVersion49, _ := semver.Parse("4.9.0")
-	parsedVersion412, _ := semver.Parse("4.12.0")
-	parsedVersion413, _ := semver.Parse("4.13.0")
-	parsedVersion414, _ := semver.Parse("4.14.0")
+	// This is required for OCP version 4.9, 4.12, 4.13 and 4.14 upgrade hops
 	var patchData string
-	if parsedVersion.GTE(parsedVersion49) && parsedVersion.LT(parsedVersion412) {
+	if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_9) && openshiftVersion.LessThan(openshiftVersion_4_12) {
 		patchData = "{\"data\":{\"ack-4.8-kube-1.22-api-removals-in-4.9\":\"true\"}}"
-	} else if parsedVersion.GTE(parsedVersion412) && parsedVersion.LT(parsedVersion413) {
+	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_12) && openshiftVersion.LessThan(openshiftVersion_4_13) {
 		patchData = "{\"data\":{\"ack-4.11-kube-1.25-api-removals-in-4.12\":\"true\"}}"
-	} else if parsedVersion.GTE(parsedVersion413) && parsedVersion.LT(parsedVersion414) {
+	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_13) && openshiftVersion.LessThan(openshiftVersion_4_14) {
 		patchData = "{\"data\":{\"ack-4.12-kube-1.26-api-removals-in-4.13\":\"true\"}}"
-	} else if parsedVersion.GTE(parsedVersion414) {
+	} else if openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_14) {
 		patchData = "{\"data\":{\"ack-4.13-kube-1.27-api-removals-in-4.14\":\"true\"}}"
 	} else {
 		return nil
@@ -757,13 +720,15 @@ func ackAPIRemoval(version string) error {
 		var output []byte
 		args := []string{"-n", "openshift-config", "patch", "cm", "admin-acks", "--type=merge", "--patch", patchData}
 		if output, err = exec.Command("oc", args...).CombinedOutput(); err != nil {
-			return nil, true, fmt.Errorf("failed to ack API removal due to %s. cause: %v", string(output), err)
+			return nil, true, fmt.Errorf("failed to ack API removal, Err: %v %v", string(output), err)
 		}
 		log.Info(string(output))
 		return nil, false, nil
 	}
-	_, err = task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second)
-	return err
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Check for newly create OCP node and retun OCP node
@@ -811,11 +776,8 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 
 		output, err = exec.Command("sh", "-c", cmd).CombinedOutput()
 		result := strings.Fields(string(output))
-
 		if err != nil {
-			return "", true, fmt.Errorf(
-				"FAILED: Unable to get new OCP VM:[%s] status. cause: %v", result[0], err,
-			)
+			return "", true, fmt.Errorf("failed to get new OCP VM [%s] status, Err: %v", result[0], err)
 		} else if strings.ToLower(result[1]) != "running" {
 			// Observed that OCP unable to power-on VM sometimes for vSphere driver
 			// Trying to power on the new VM once
@@ -831,7 +793,7 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 			}
 			return result[0], true, &scheduler.ErrFailedToBringUpNode{
 				Node:  result[0],
-				Cause: fmt.Errorf("FAILED: OCP Unable to bring up the new node"),
+				Cause: fmt.Errorf("OCP was Unable to bring up the new node"),
 			}
 		}
 		return result[0], false, nil
@@ -845,7 +807,7 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 		return "", err
 	}
 	nodeName := output.(string)
-	log.Infof("New OCP VM: [%s] is up now", nodeName)
+	log.Infof("New OCP VM [%s] is up now", nodeName)
 	return nodeName, nil
 }
 
@@ -853,16 +815,14 @@ func (k *openshift) getAndWaitMachineToBeReady() (string, error) {
 func (k *openshift) waitForJoinK8sNode(node string) error {
 	t := func() (interface{}, bool, error) {
 		if err := k8sCore.IsNodeReady(node); err != nil {
-			return "", true, fmt.Errorf(
-				"FAILED: Waiting for new node:[%s] to join k8s cluster. cause: %v", node, err,
-			)
+			return "", true, fmt.Errorf("Waiting for new node [%s] to join k8s cluster, Err: %v", node, err)
 		}
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second); err != nil {
 		return err
 	}
-	log.Infof("New OCP VM: [%s] came up successfully and joined k8s cluster", node)
+	log.Infof("New OCP VM [%s] came up successfully and joined k8s cluster", node)
 	return nil
 }
 
@@ -872,10 +832,10 @@ func (k *openshift) deleteAMachine(nodeName string) error {
 
 	// Delete the node from machineset using kubectl command
 	t := func() (interface{}, bool, error) {
-		log.Infof("Deleting machine %s", nodeName)
+		log.Infof("Deleting machine [%s]", nodeName)
 		cmd := "kubectl delete machines -n openshift-machine-api " + nodeName
 		if _, err = exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
-			return "", true, fmt.Errorf("failed to delete machine. cause: %v", err)
+			return "", true, fmt.Errorf("failed to delete machine, Err: %v", err)
 		}
 		return "", false, nil
 	}
@@ -903,7 +863,8 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			return err
 		}
 
-		if delNode, err = volDriver.GetDriverNode(&n); err != nil {
+		delNode, err = volDriver.GetDriverNode(&n)
+		if err != nil {
 			return err
 		}
 
@@ -915,22 +876,17 @@ func (k *openshift) RecycleNode(n node.Node) error {
 
 		// Checking if given node is storageless node
 		if volDriver.Contains(storagelessNodes, delNode) {
-			log.Infof(
-				"PX node [%s] is storageless node and pool validation is not needed",
-				delNode.Hostname,
-			)
+			log.Infof("PX node [%s] is storageless node and pool validation is not needed", delNode.Hostname)
 			isStoragelessNode = true
 		}
 
 		// Printing the drives and pools info only for a storage node
 		if !isStoragelessNode {
-			log.Infof("Before recyling a node, Node [%s] is having following pools:",
-				delNode.Hostname)
+			log.Infof("Before recyling a node, Node [%s] is having following pools:", delNode.Hostname)
 			for _, pool := range delNode.Pools {
 				log.Infof("Node [%s] is having pool ID: [%s]", delNode.Hostname, pool.Uuid)
 			}
-			log.Infof("Before recyling a node, Node [%s] is having disks: [%v]",
-				delNode.Hostname, delNode.Disks)
+			log.Infof("Before recyling a node, Node [%s] is having disks: [%v]", delNode.Hostname, delNode.Disks)
 
 			if isKVDBNode {
 				log.Infof("Node [%s] is one of the KVDB node", delNode.Hostname)
@@ -944,8 +900,7 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		var driverName = k.K8s.NodeDriverName
 		if driverName == vsphere.DriverName {
 			driver, _ := node.Get(driverName)
-			err = driver.PowerOffVM(n)
-			if err != nil {
+			if err := driver.PowerOffVM(n); err != nil {
 				return err
 			}
 			//wait for power off complete before deleting machine
@@ -955,46 +910,45 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		eg := errgroup.Group{}
 
 		eg.Go(func() error {
-			delErr := k.deleteAMachine(n.Name)
-			if delErr != nil {
-				log.Errorf("Failed to delete OCP node: [%s] due to err: [%v]", n.Name, delErr)
+			if err := k.deleteAMachine(n.Name); err != nil {
+				return fmt.Errorf("Failed to delete OCP node [%s], Err: %v", n.Name, err)
 			}
-			return delErr
+			return nil
 		})
 
 		eg.Go(func() error {
-			var destroyErr error
 			if !isStoragelessNode && driverName == vsphere.DriverName {
-				driver, _ := node.Get(driverName)
-				destroyErr = driver.DestroyVM(n)
-				return destroyErr
+				driver, err := node.Get(driverName)
+				if err != nil {
+					return err
+				}
+				if err := driver.DestroyVM(n); err != nil {
+					return err
+				}
 			}
-			return destroyErr
+			return nil
 		})
 
-		if err = eg.Wait(); err != nil {
+		if err := eg.Wait(); err != nil {
 			return err
 		}
 
 		// Removing the node from the nodeRegistry
-		log.Infof("Deleting node %s from node registry", n.Name)
-		err = node.DeleteNode(n)
-		if err != nil {
+		log.Infof("Deleting node [%s] from node registry..", n.Name)
+		if err := node.DeleteNode(n); err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
-				Node: n.Name,
-				Cause: fmt.Sprintf(
-					"Failed to remove OCP node [%s] from node list. Error: [%v]", n.Name, err),
+				Node:  n.Name,
+				Cause: fmt.Sprintf("Failed to remove OCP node [%s] from node list, Err: %v", n.Name, err),
 			}
-
 		}
-		log.Infof("Successfully deleted the OCP node: [%s] ", n.Name)
+		log.Infof("Successfully deleted the OCP node [%s]", n.Name)
 
 		// OCP creates a new node once the desired number of worker node count goes down
 		// Wait for OCP to provision new node and update new node to the k8s node list
 		newOCPNode, err := k.checkAndGetNewNode()
 		if err != nil {
 			return &scheduler.ErrFailedToGetNode{
-				Cause: fmt.Sprintf("Failed to get newly created OCP node name. Error: [%v]", err),
+				Cause: fmt.Sprintf("failed to get newly created OCP node name. Err: %v", err),
 			}
 		}
 
@@ -1005,35 +959,31 @@ func (k *openshift) RecycleNode(n node.Node) error {
 		}
 
 		//Adding a new node to a nodeRegistry
-		if err = k.AddNewNode(*newNode); err != nil {
+		if err := k.AddNewNode(*newNode); err != nil {
 			return &scheduler.ErrFailedToUpdateNodeList{
-				Node: newOCPNode,
-				Cause: fmt.Sprintf(
-					"Failed to update new OCP node [%s] in node list. Error: [%v]", newOCPNode, err),
+				Node:  newOCPNode,
+				Cause: fmt.Sprintf("failed to update new OCP node [%s] in node list, Err: %v", newOCPNode, err),
 			}
 		}
 
 		// Getting the node object for a new node
 		newlyProvNode, err := node.GetNodeByName(newOCPNode)
-
 		if err != nil {
 			return err
 		}
 
 		// Waits for px pod to be up in new node
-		if err = volDriver.WaitForPxPodsToBeUp(newlyProvNode); err != nil {
+		if err := volDriver.WaitForPxPodsToBeUp(newlyProvNode); err != nil {
 			return err
 		}
 
 		// Validation is needed only when deleted node was StorageNode
-		if err = k.validateDrivesAfterNewNodePickUptheID(delNode, volDriver,
-			storagelessNodes, isStoragelessNode,
-		); err != nil {
+		if err := k.validateDrivesAfterNewNodePickUptheID(delNode, volDriver, storagelessNodes, isStoragelessNode); err != nil {
 			return err
 		}
 
 		// Update the new node object with storage information
-		if err = volDriver.UpdateNodeWithStorageInfo(newlyProvNode, n.Name); err != nil {
+		if err := volDriver.UpdateNodeWithStorageInfo(newlyProvNode, n.Name); err != nil {
 			return err
 		}
 		log.Infof("Successfully updated the storage info for new node: [%s] ", newlyProvNode.Name)
@@ -1044,17 +994,16 @@ func (k *openshift) RecycleNode(n node.Node) error {
 			return err
 		}
 
-		log.Infof("Waiting for driver to be come up on node: [%s] ", newlyProvNode.Name)
 		// Waiting and make sure driver to come up successfuly on newly provisoned node
-		if err = volDriver.WaitDriverUpOnNode(newlyProvNode, driverUpTimeout); err != nil {
+		log.Infof("Waiting for driver to be come up on node [%s]", newlyProvNode.Name)
+		if err := volDriver.WaitDriverUpOnNode(newlyProvNode, driverUpTimeout); err != nil {
 			return err
 		}
-		log.Infof("Driver came up successfully on node: [%s] ", newlyProvNode.Name)
-
+		log.Infof("Driver came up successfully on node [%s]", newlyProvNode.Name)
 		return nil
 
 	}
-	return fmt.Errorf("FAILED: Node is not a worker node")
+	return fmt.Errorf("Node is not a worker node")
 }
 
 func (k *openshift) validateDrivesAfterNewNodePickUptheID(delNode *api.StorageNode,
@@ -1090,29 +1039,31 @@ func (k *openshift) String() string {
 	return SchedName
 }
 
-func getParsedVersion(version string) (semver.Version, error) {
-	if versionReg.MatchString(version) {
+func getParsedVersion(ocpVer string) (*version.Version, error) {
+	var fullVersion string
+
+	if versionReg.MatchString(ocpVer) {
 		cli := &http.Client{}
-		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", version)
+		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", ocpVer)
 		resp, err := cli.Get(url)
 		if err != nil {
-			return semver.Version{}, err
+			return nil, err
 		}
 		defer resp.Body.Close()
 		output, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return semver.Version{}, err
+			return nil, err
 		}
 		var re = regexp.MustCompile(`(?m)Name:\s+([\d.]+)`)
 		match := re.FindStringSubmatch(string(output))
 		if len(match) > 1 {
-			version = match[1]
+			fullVersion = match[1]
 		}
 	}
 
-	parsedVersion, err := semver.Parse(version)
+	parsedVersion, err := version.NewVersion(fullVersion)
 	if err != nil {
-		return semver.Version{}, err
+		return nil, err
 	}
 	return parsedVersion, nil
 }
@@ -1159,6 +1110,164 @@ func (k *openshift) ScaleCluster(replicas int) error {
 		return err
 	}
 
+	return nil
+}
+
+// needOcpPrereq checks if we need to do OCP Prometheus prereq and returns true or false
+func (k *openshift) needOcpPrereq(ocpVer string) (bool, error) {
+	log.Infof("Checking if OCP version  [%s] requires Prometheus configuration changes", ocpVer)
+
+	openshiftVersion, err := getParsedVersion(ocpVer)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse OCP version [%s], Err: %v", ocpVer, err)
+	}
+	log.Infof("This Openshift cluster version is [%s]", openshiftVersion.String())
+
+	// Get PX Operator version
+	opVersion, err := optest.GetPxOperatorVersion()
+	if err != nil {
+		return false, fmt.Errorf("failed to get PX Operator version, Err: %v", err)
+	}
+	log.Infof("PX Operator version is [%s]", opVersion.String())
+
+	// Check PX Operator version compatibility
+	minPxOperatorVersionOcp_4_14, _ := version.NewVersion("23.10.3-") // PX Operator version that only supports OCP 4.14+
+	minPxOperatorVersionOcpAll, _ := version.NewVersion("23.10.4-")   // PX Operator version that supports all OCP versions
+
+	if !opVersion.GreaterThanOrEqual(minPxOperatorVersionOcpAll) {
+		if !openshiftVersion.GreaterThanOrEqual(openshiftVersion_4_14) && !opVersion.GreaterThanOrEqual(minPxOperatorVersionOcp_4_14) {
+			log.Warnf("Openshift version [%s] and PX Operator version [%s] are not compatible for integrating with Openshift Prometheus..", openshiftVersion.String(), opVersion.String())
+			return false, nil
+		}
+	}
+	log.Info("Openshift cluster version [%s] and PX Operator version [%s] are compatible, will prepare cluster to integrate with Openshift Prometheus..", openshiftVersion.String(), opVersion.String())
+
+	return true, nil
+}
+
+// setOcpPrometheusPrereq perform required steps for PX to work with OCP Prometheus
+func (k *openshift) setOcpPrometheusPrereq(version string) error {
+	// Check if we need to perform this Prometheus prereq
+	doPrereq, err := k.needOcpPrereq(version)
+	if err != nil {
+		return fmt.Errorf("failed to determine if we need to do OCP prereq or not, Err: %v", err)
+	}
+
+	if doPrereq {
+		// Perform Prometheus prereq
+		if err := updatePrometheusAndAutopilot(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func configureClusterMonitoringConfig() error {
+	log.Info("Configure Cluster Monitoring for OCP Prometheus...")
+	// Openshift Cluster Moniting ConfigMap
+	ocpConfigmap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-monitoring-config",
+			Namespace: "openshift-monitoring",
+		},
+		Data: map[string]string{
+			"config.yaml": "enableUserWorkload: true",
+		},
+	}
+
+	// Try to get cofngimap and based on results either create it or modify it
+	existingConfigMap, err := k8sCore.GetConfigMap(ocpConfigmap.Name, ocpConfigmap.Namespace)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			log.Infof("Creating ConfigMap [%s] in namespace [%s]", ocpConfigmap.Name, ocpConfigmap.Namespace)
+			if _, err := k8sCore.CreateConfigMap(ocpConfigmap); err != nil {
+				return fmt.Errorf("failed to create ConfigMap [%s] in namesapce [%s], Err: %v", ocpConfigmap.Name, ocpConfigmap.Namespace, err)
+			}
+			log.Infof("Successfully created ConfigMap [%s] in namespace [%s]", ocpConfigmap.Name, ocpConfigmap.Namespace)
+		} else {
+			return fmt.Errorf("failed to get ConfigMap [%s] in namespace [%s], Err: %v", ocpConfigmap.Name, ocpConfigmap.Namespace, err)
+		}
+	} else {
+		log.Infof("ConfigMap [%s] already exists in [%s] namespace, will check if enableUserWorkload is true", ocpConfigmap.Name, ocpConfigmap.Namespace)
+		existingData := existingConfigMap.Data["config.yaml"]
+		if strings.Contains(existingData, "enableUserWorkload: true") {
+			log.Infof("ConfigMap [%s] already contains enableUserWorkload: true in [%s] namespace, skipping update", ocpConfigmap.Name, ocpConfigmap.Namespace)
+		} else {
+			log.Infof("Adding enableUserWorkload: true to ConfigMap [%s] in [%s] namespace", ocpConfigmap.Name, ocpConfigmap.Namespace)
+			newData := existingData + "enableUserWorkload: true\n"
+			ocpConfigmap.Data["config.yaml"] = newData
+			if _, err = k8sCore.UpdateConfigMap(ocpConfigmap); err != nil {
+				return fmt.Errorf("failed to update ConfigMap [%s] in namespace [%s], Err: %v", ocpConfigmap.Name, ocpConfigmap.Namespace, err)
+			}
+			log.Infof("Successfully updated ConfigMap [%s] in namespace [%s]", ocpConfigmap.Name, ocpConfigmap.Namespace)
+		}
+	}
+	log.Info("Successfully configured Cluster Monitoring for OCP Prometheus")
+	return nil
+}
+
+func updatePrometheusAndAutopilot() error {
+	// Get StorageCluster object
+	log.Info("Looking for PX StorageCluster...")
+	stcList, err := pxOperator.ListStorageClusters("")
+	if err != nil {
+		return fmt.Errorf("failed to get list of StorageCluster objects, Err: %v", err)
+	}
+	if len(stcList.Items) != 1 {
+		return fmt.Errorf("invalid number of StorageCluster objects found, expected [1] got [%d]", len(stcList.Items))
+	}
+	stc := &stcList.Items[0]
+	log.Infof("Successfully found PX StorageCluster [%s] in [%s] namespace", stc.Name, stc.Namespace)
+
+	// Create or modify cluster monitoring ConfigMap
+	if err = configureClusterMonitoringConfig(); err != nil {
+		return err
+	}
+
+	log.Info("Looking for Thanos Querier Host...")
+	thanosQuerierHostCmd := `kubectl get route thanos-querier -n openshift-monitoring -o json | jq -r '.spec.host'`
+	var output []byte
+
+	output, err = exec.Command("sh", "-c", thanosQuerierHostCmd).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to get thanos querier host , Err: %v", err)
+	}
+	thanosQuerierHost := strings.TrimSpace(string(output))
+	log.Infof("Thanos Querier Host is [%s]", thanosQuerierHost)
+	thanosQuerierHostUrl := fmt.Sprintf("https://%s", thanosQuerierHost)
+
+	if stc.Spec.Monitoring.Prometheus.Enabled {
+		log.Debug("PX Prometheus is enabled, will disable it in the StorageCluster spec...")
+		stc.Spec.Monitoring.Prometheus.Enabled = false
+	}
+
+	// Add Thanos Querir to Autopilot spec
+	log.Info("Adding Thanos Querier Host to the Autopilot spec...")
+	var dataProviders []opv1.DataProviderSpec
+	if stc.Spec.Autopilot.Enabled {
+		dataProviders = stc.Spec.Autopilot.Providers
+		for _, dataProvider := range dataProviders {
+			if dataProvider.Type == "prometheus" {
+				isUrlUpdated := false
+				if val, ok := dataProvider.Params["url"]; ok {
+					if val == thanosQuerierHostUrl {
+						isUrlUpdated = true
+					}
+				}
+				if !isUrlUpdated {
+					dataProvider.Params["url"] = thanosQuerierHostUrl
+				}
+			}
+		}
+	}
+	log.Info("Successfully added Thanos Host to the Autopilot spec")
+
+	// Update PX StorageCluster with the changes
+	log.Infof("Updating PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...")
+	if _, err := pxOperator.UpdateStorageCluster(stc); err != nil {
+		return fmt.Errorf("failed to update StorageCluster [%s] in [%s] namespace, Err: %v", stc.Name, stc.Namespace, err)
+	}
+	log.Infof("Successfully pdated PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...")
 	return nil
 }
 
