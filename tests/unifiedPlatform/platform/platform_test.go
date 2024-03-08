@@ -239,37 +239,27 @@ var _ = Describe("{BackupRD}", func() {
 	})
 })
 
-var _ = Describe("{TestingWorkflowToCreateAccounts}", func() {
+var _ = Describe("{TestingWorkflowToOnboardAccounts}", func() {
 	var (
 		workflowPlatform stworkflows.WorkflowPlatform
 	)
 	JustBeforeEach(func() {
-		StartTorpedoTest("TestingWorkflowToCreateAccounts", "Create Accounts", nil, 0)
+		StartTorpedoTest("TestingWorkflowToOnboardAccounts", "Onboard Accounts", nil, 0)
 		workflowPlatform.Accounts = map[string]map[string]string{
 			"testAccount1": map[string]string{
 				apiStructs.UserName:        "testAccount1",
-				apiStructs.UserDisplayName: "testAccountDisplay",
-				apiStructs.UserEmail:       "testAccount1@xyz.com",
-			},
-			"testAccount2": map[string]string{
-				apiStructs.UserName:        "testAccount2",
-				apiStructs.UserDisplayName: "testAccount2Display",
-				apiStructs.UserEmail:       "testAccount2@xyz.com",
-			},
-			"testAccount3": map[string]string{
-				apiStructs.UserName:        "testAccount3",
-				apiStructs.UserDisplayName: "testAccount3Display",
-				apiStructs.UserEmail:       "testAccount3@xyz.com",
+				apiStructs.UserDisplayName: "testAccount1",
+				apiStructs.UserEmail:       "atrivedi+1@purestorage.com",
 			},
 		}
 
 	})
 
-	It("Creating accounts", func() {
-		Step("Create and List Accounts", func() {
-			workflowResponse, err := workflowPlatform.CreateAccounts()
+	It("Onboard accounts", func() {
+		Step("Onboarding Accounts", func() {
+			workflowResponse, err := workflowPlatform.OnboardAccounts()
 			log.FailOnError(err, "Unable to create accounts")
-			log.Infof("All Account Created Successfully, Response - [%+v]", workflowResponse)
+			log.Infof("All Account onboarded Successfully, Response - [%+v]", workflowResponse)
 		})
 	})
 

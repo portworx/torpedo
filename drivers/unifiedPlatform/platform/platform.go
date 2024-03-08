@@ -16,6 +16,7 @@ type Platform interface {
 	IamRoleBindingsInterface
 	ServiceAccountsInterface
 	TemplatesInterface
+	Onboard
 }
 
 type AccountInterface interface {
@@ -94,4 +95,8 @@ type TemplatesInterface interface {
 	CreateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
 	DeleteTemplate(*WorkFlowRequest) error
+}
+
+type Onboard interface {
+	OnboardNewAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
 }

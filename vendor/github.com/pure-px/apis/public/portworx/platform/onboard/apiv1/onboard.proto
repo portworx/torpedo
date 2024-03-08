@@ -1,0 +1,100 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+
+syntax = "proto3";
+
+package public.portworx.platform.onboard.v1;
+
+import "google/api/annotations.proto";
+
+import "public/portworx/common/apiv1/meta.proto";
+import "public/portworx/platform/account/apiv1/account.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/platform/onboard/apiv1;onboard";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.platform.onboard.v1";
+option java_outer_classname = "OnboardProto";
+
+
+// Onbaording service provides APIs to add/update subscription info for Portworx services
+service OnboardService {
+  // creates a new account registration request
+  rpc CreateAccountRegistration(CreateAccountRegistrationRequest)
+      returns (AccountRegistration) {
+    option(google.api.http) = {
+      post: "/v1/registration"
+      body: "account_registration"
+    };
+  }
+
+  // For updating account subscription info
+  rpc UpdateAccountRegistration(UpdateAccountRegistrationRequest)
+      returns(AccountRegistration) {
+    option(google.api.http) = {
+      put: "/v1/registration/{account_registration.meta.uid}"
+      body: "account_registration"
+    };
+  }
+}
+
+// CreateRegistrationRequest to create account.
+message CreateAccountRegistrationRequest {
+  // account to be created and onboarded
+  AccountRegistration account_registration = 1;
+}
+
+// UpdateRegistrationRequest currently supports only name update.
+message UpdateAccountRegistrationRequest {
+  // account for which subscription info needs to be updated
+  AccountRegistration account_registration = 1;
+}
+
+// AccountRegistration has all details about the acccount and its subscriptions
+message AccountRegistration {
+  // Metadata of the account.
+  public.portworx.common.v1.Meta meta = 1;
+
+  //Configuration info used for registering the account
+  AccountConfig config = 2;
+}
+
+// Account Configuration Info used for Registration
+message AccountConfig {
+  // Desired configuration of the Account
+  public.portworx.platform.account.v1.Config account_config = 1;
+
+  //Product subscription info
+  oneof pds_subscription_info{
+    //AWS registration token
+    string pds_aws_registration_token = 100;
+
+    //Zuora subscription info
+    public.portworx.platform.account.v1.ZuoraSubscriptionInfo pds_zuora_subscription = 101;
+  }
+
+  oneof pxe_subscription_info{
+    //AWS registration token
+    string pxe_aws_registration_token = 200;
+    //Zuora subscription info
+    public.portworx.platform.account.v1.ZuoraSubscriptionInfo pxe_zuora_subscription = 201;
+  }
+
+  oneof baas_subscription_info{
+    //AWS registration token
+    string baas_aws_registration_token = 300;
+    //Zuora subscription info
+    public.portworx.platform.account.v1.ZuoraSubscriptionInfo baas_zuora_subscription = 301;
+  }
+}
