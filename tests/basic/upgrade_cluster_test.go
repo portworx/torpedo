@@ -8,6 +8,8 @@ import (
 
 	"go.uber.org/multierr"
 
+	"github.com/hashicorp/go-version"
+	oputil "github.com/libopenstorage/operator/pkg/util/test"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
@@ -22,6 +24,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
+var (
+	OpVer24_1_0, _ = version.NewVersion("24.1.0-")
+)
 var _ = Describe("{UpgradeCluster}", func() {
 	var contexts []*scheduler.Context
 
@@ -62,12 +67,16 @@ var _ = Describe("{UpgradeCluster}", func() {
 				stopSignal := make(chan struct{})
 
 				var mError error
-				go doPDBValidation(stopSignal, &mError)
-				defer func() {
-					close(stopSignal)
-				}()
+				// pxOperator := operator.Instance()
+				opver, err := oputil.GetPxOperatorVersion()
+				if err == nil && opver.GreaterThanOrEqual(OpVer24_1_0) {
+					go doPDBValidation(stopSignal, &mError)
+					defer func() {
+						close(stopSignal)
+					}()
+				}
 
-				err := Inst().S.UpgradeScheduler(version)
+				err = Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(mError, nil, "validate PDB during PX upgrade")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
@@ -267,7 +276,7 @@ func doPDBValidation(stopSignal <-chan struct{}, mError *error) {
 		default:
 			errorChan := make(chan error, 50)
 			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
-			if !isClusterParallelyUpgraded {
+			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
 				err := fmt.Errorf("Cluster is not parallely upgraded")
 				*mError = multierr.Append(*mError, err)
 			}

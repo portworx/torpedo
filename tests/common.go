@@ -793,8 +793,9 @@ func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isCl
 			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
 			processError(err, errChan...)
 		}
-		if allowedDisruptions == initialNumNodes-currentNumNodes {
+		if initialNumNodes-currentNumNodes > 1 {
 			*isClusterParallelyUpgraded = true
+			
 		}
 	})
 
