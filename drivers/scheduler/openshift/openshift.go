@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blang/semver"
 	"github.com/hashicorp/go-version"
 	"github.com/libopenstorage/openstorage/api"
 	opv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
@@ -65,7 +64,7 @@ var (
 	k8sCore            = k8s.Instance()
 	crdOps             = apiextensions.Instance()
 	snapshoterOps      = externalsnapshotter.Instance()
-	versionReg         = regexp.MustCompile(`^(stable|candidate|fast)(-\d\.\d+)?$`)
+	versionReg         = regexp.MustCompile(`^(stable|candidate|fast)-(\d\.\d+)?$`)
 	volumeSnapshotCRDs = []string{
 		"volumesnapshotclasses.snapshot.storage.k8s.io",
 		"volumesnapshotcontents.snapshot.storage.k8s.io",
@@ -629,15 +628,15 @@ func getChannel(ocpVer string) (string, error) {
 		ocpVersion = versionSplit[1]
 	}
 
-	ver, err := semver.Make(ocpVersion)
+	ver, err := version.NewVersion(ocpVersion)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse version [%s], Err: %v", ocpVersion, err)
 	}
 
 	channels := map[string]string{
-		"stable":    fmt.Sprintf("stable-%d.%d", ver.Major, ver.Minor),
-		"candidate": fmt.Sprintf("candidate-%d.%d", ver.Major, ver.Minor),
-		"fast":      fmt.Sprintf("fast-%d.%d", ver.Major, ver.Minor),
+		"stable":    fmt.Sprintf("stable-%d.%d", ver.Segments()[0], ver.Segments()[1]),
+		"candidate": fmt.Sprintf("candidate-%d.%d", ver.Segments()[0], ver.Segments()[1]),
+		"fast":      fmt.Sprintf("fast-%d.%d", ver.Segments()[0], ver.Segments()[1]),
 	}
 
 	return channels[channel], err
@@ -1040,8 +1039,6 @@ func (k *openshift) String() string {
 }
 
 func getParsedVersion(ocpVer string) (*version.Version, error) {
-	var fullVersion string
-
 	if versionReg.MatchString(ocpVer) {
 		cli := &http.Client{}
 		url := fmt.Sprintf("https://mirror.openshift.com/pub/openshift-v4/clients/ocp/%s/release.txt", ocpVer)
@@ -1054,14 +1051,15 @@ func getParsedVersion(ocpVer string) (*version.Version, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		var re = regexp.MustCompile(`(?m)Name:\s+([\d.]+)`)
 		match := re.FindStringSubmatch(string(output))
 		if len(match) > 1 {
-			fullVersion = match[1]
+			ocpVer = match[1]
 		}
 	}
 
-	parsedVersion, err := version.NewVersion(fullVersion)
+	parsedVersion, err := version.NewVersion(ocpVer)
 	if err != nil {
 		return nil, err
 	}
@@ -1267,7 +1265,7 @@ func updatePrometheusAndAutopilot() error {
 	if _, err := pxOperator.UpdateStorageCluster(stc); err != nil {
 		return fmt.Errorf("failed to update StorageCluster [%s] in [%s] namespace, Err: %v", stc.Name, stc.Namespace, err)
 	}
-	log.Infof("Successfully pdated PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...")
+	log.Infof("Successfully updated PX StorageCluster [%s] in [%s] namespace with required changes to work with OCP Prometheus...", stc.Name, stc.Namespace)
 	return nil
 }
 
