@@ -170,13 +170,11 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 		log.Errorf("unable to get grpc connection: %v", err)
 		return err
 	}
-	if os.Getenv(backup_api_endpoint) == "" {
-		p.healthManager = api.NewHealthClient(conn)
-		_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
-		if err != nil {
-			log.Errorf("HealthManager API error: %v", err)
-			return err
-		}
+	p.healthManager = api.NewHealthClient(conn)
+	_, err = p.healthManager.Status(context.Background(), &api.HealthStatusRequest{})
+	if err != nil {
+		log.Errorf("HealthManager API error: %v", err)
+		return err
 	}
 
 	p.clusterManager = api.NewClusterClient(conn)
