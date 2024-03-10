@@ -323,6 +323,119 @@ var (
 	dataAfterBackupSuffix = "-after-backup"
 )
 
+// ProvisionerMap maps cloud provider names to their corresponding sub-maps containing provisioner-snapshot class mappings
+var ProvisionerMap = map[string]map[string]struct {
+	snapshotClasses []string // List of snapshot classes for the provisioner
+	defaultSnapshot string   // Default snapshot class for the provisioner
+	appList         []string
+}{
+	"gke": {
+		"pd.csi.storage.gke.io": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "gke-snapshot-class-1",
+			appList:         []string{"postgres-gke-csi"},
+		},
+		"pd.csi.storage.gke.io_1": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "",
+			appList:         []string{},
+		},
+		"pd.csi.storage.gke.io_2": {
+			snapshotClasses: []string{"gke-snapshot-class", "gke-snapshot-class-2"},
+			defaultSnapshot: "gke-snapshot-class-2",
+			appList:         []string{},
+		},
+		"pxd": {
+			snapshotClasses: []string{"gke-snapshot-class", "gke-snapshot-class-2"},
+			defaultSnapshot: "gke-snapshot-class",
+			appList:         []string{},
+		},
+		// Add entries for other provisioners within GKE as needed
+	},
+	"aws": {
+		"aws-provisioner": {
+			snapshotClasses: []string{"aws-snapshot-class", "aws-snapshot-class-2"},
+			defaultSnapshot: "aws-snapshot-class",
+		},
+		// Add entries for other provisioners within AWS as needed
+	},
+	"aks": {
+		"aks-provisioner": {
+			snapshotClasses: []string{"aks-snapshot-class", "aks-snapshot-class-2"},
+			defaultSnapshot: "aks-snapshot-class",
+		},
+		// Add entries for other provisioners within AKS as needed
+	},
+	"ocp": {
+		"ocp-provisioner": {
+			snapshotClasses: []string{"ocp-snapshot-class", "ocp-snapshot-class-2"},
+			defaultSnapshot: "ocp-snapshot-class",
+		},
+		// Add entries for other provisioners within ocp as needed
+	},
+}
+
+// GetProvisionerDefaultSnapshotMap returns a map with provisioner to volume snapshot class mappings for the specified cloud provider
+func GetProvisionerDefaultSnapshotMap(cloudProvider string) (map[string]string, error) {
+	provisionerSnapshotMap := make(map[string]string)
+
+	provisionerMap, ok := ProvisionerMap[cloudProvider]
+	if !ok {
+		return provisionerSnapshotMap, nil
+	}
+
+	for provisioner, info := range provisionerMap {
+		if info.defaultSnapshot != "" {
+			provisionerSnapshotMap[provisioner] = info.defaultSnapshot
+		}
+	}
+
+	return provisionerSnapshotMap, nil
+}
+
+// GetProvisionerSnapshotClassesMap returns a map of provisioners with their corresponding list of SnapshotClasses for the specified provider
+func GetProvisionerSnapshotClassesMap(cloudProvider string) (map[string]string, error) {
+	provisionerSnapshotClasses := make(map[string][]string)
+
+	// Check if the provider exists in the provisioner map
+	providerProvisioners, ok := ProvisionerMap[cloudProvider]
+	if !ok {
+		return nil, fmt.Errorf("provider '%s' not found", cloudProvider)
+	}
+
+	// Iterate over the provisioners for the specified provider
+	for provisioner, info := range providerProvisioners {
+		if len(info.snapshotClasses) > 0 {
+			provisionerSnapshotClasses[provisioner] = info.snapshotClasses
+		}
+	}
+
+	return provisionerSnapshotClasses, nil
+}
+
+// GetApplicationSpecForProvisioner returns a map for
+func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string, applicationName string) string {
+	var speclist []string
+
+	provisionerInfo, ok := ProvisionerMap[cloudProvider]
+	if !ok {
+		fmt.Printf("Cloud provider '%s' not found\n", cloudProvider)
+	}
+
+	info, ok := provisionerInfo[provisionerName]
+	if !ok {
+		fmt.Printf("Provisioner '%s' not found for cloud provider '%s'\n", provisionerName, cloudProvider)
+	}
+
+	for _, appName := range info.appList {
+		if strings.Contains(appName, applicationName) {
+			speclist = append(speclist, appName)
+		}
+	}
+
+	return speclist[0]
+}
+
 // Set default provider as aws
 func GetBackupProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")

@@ -3254,7 +3254,7 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	provider := getClusterProvider()
+	provider := GetClusterProvider()
 	if clusterConfigPath != "" {
 		switch provider {
 		case drivers.ProviderGke:
@@ -10127,7 +10127,7 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 }
 
 // Set default provider as aws
-func getClusterProvider() string {
+func GetClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
 	return clusterProvider
 }
