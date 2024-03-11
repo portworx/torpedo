@@ -22,6 +22,8 @@ func (restore *Restore) GetRestore(restoreID string) (*pds.ModelsRestore, error)
 	restoreModel, res, err := restoreClient.ApiRestoresIdGet(ctx, restoreID).Execute()
 	fmt.Println("GetRestore response: ", res)
 	if err != nil || res.StatusCode != status.StatusOK {
+		fmt.Println("RestoreModel fetched is-: ", restoreModel)
+		fmt.Println("GetRestore failed due to-: ", err)
 		return nil, fmt.Errorf("Error when calling `ApiRestoresIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return restoreModel, err
