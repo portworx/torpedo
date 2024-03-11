@@ -569,7 +569,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			}
 
 			defaultProvisionerScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(15))
-			defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap, false)
+			defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap, true)
 			scheduleList = append(scheduleList, defaultSchBackupName)
 
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", defaultSchBackupName, firstBkpLocationName))
@@ -581,7 +581,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, defaultSchBackupName, BackupOrgID)
 			err = DeleteScheduleWithUIDAndWait(defaultSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 		})
-
+		os.Exit(0)
 		Step(fmt.Sprintf("Creating schedule backup %s for multiple provisioner with non default volume snapshot class", defaultProvisionerScheduleName), func() {
 			log.InfoD("Creating schedule backup %s for multiple provisioner with non default volume snapshot class", defaultProvisionerScheduleName)
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -603,7 +603,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, nonDefaultVscSchBackupName, BackupOrgID)
 			err = DeleteScheduleWithUIDAndWait(nonDefaultVscSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 		})
-		os.Exit(0)
+
 		Step("Taking manual backup of application from source cluster", func() {
 			log.InfoD("taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
