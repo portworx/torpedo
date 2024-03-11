@@ -38,7 +38,7 @@ type TargetClusterInterface interface {
 }
 
 type TargetClusterManifestInterface interface {
-	GetTargetClusterRegistrationManifest(getRequest *WorkFlowRequest) (string, error)
+	GetTargetClusterRegistrationManifest(*WorkFlowRequest) (*WorkFlowResponse, error)
 }
 
 type ApplicationInterface interface {

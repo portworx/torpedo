@@ -29,25 +29,34 @@ func (tcGrpc *PlatformGrpc) getTargetClusterManifestClient() (context.Context, p
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *WorkFlowRequest) (string, error) {
+func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+
+	response := &WorkFlowResponse{
+		TargetCluster: PlatformTargetClusterOutput{
+			Manifest: PlatformManifestOutput{},
+		},
+	}
 
 	ctx, client, _, err := tcGrpc.getTargetClusterManifestClient()
 	if err != nil {
-		return "", fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return response, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
 	getTcManifestRequest := &publictcapis.GenerateTargetClusterRegistrationManifestRequest{
-		ClusterName: getManifestRequest.TargetClusterManifest.ClusterName,
-		TenantId:    getManifestRequest.TargetClusterManifest.TenantId,
+		ClusterName: getManifestRequest.TargetCluster.GetManifest.ClusterName,
+		TenantId:    getManifestRequest.TargetCluster.GetManifest.TenantId,
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, tcGrpc.AccountId)
 
 	apiResponse, err := client.GenerateTargetClusterRegistrationManifest(ctx, getTcManifestRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return "", fmt.Errorf("Error when calling `GenerateTargetClusterRegistrationManifest`: %v\n.", err)
+		return response, fmt.Errorf("Error when calling `GenerateTargetClusterRegistrationManifest`: %v\n.", err)
 	}
 
-	return apiResponse.GetManifest(), nil
+	response.TargetCluster.Manifest.Manifest = apiResponse.GetManifest()
+	log.Infof("Manifest - [%s]", response.TargetCluster.Manifest.Manifest)
+
+	return response, nil
 
 }

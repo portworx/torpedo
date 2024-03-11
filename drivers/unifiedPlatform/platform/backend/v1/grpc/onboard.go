@@ -54,9 +54,6 @@ func (onboard *PlatformGrpc) OnboardNewAccount(onboardAccountRequest *apiStructs
 		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
-	log.Infof("Onboard - [%+v]", onboardRequest)
-	log.Infof("Onboard Request from lib - [%+v]", onboardRequest.AccountRegistration)
-
 	// TODO: Add support for opts if required
 	apiResponse, err := client.CreateAccountRegistration(ctx, &onboardRequest, nil)
 	if err != nil {

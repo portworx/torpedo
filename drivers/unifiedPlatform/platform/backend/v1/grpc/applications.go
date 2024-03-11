@@ -62,7 +62,7 @@ func (ApplicationGrpcV1 *PlatformGrpc) ListAvailableApplicationsForTenant(listRe
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var firstPageRequest *publicAppsApitenant.ListAvailableApplicationsRequest
-	err = copier.Copy(&firstPageRequest, listReq)
+	firstPageRequest.TenantId = listReq.PDSApplication.ListAvailableAppsForTenant.TenantId
 	if err != nil {
 		return nil, err
 	}

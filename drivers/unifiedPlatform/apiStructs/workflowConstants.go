@@ -12,3 +12,10 @@ const (
 	GetTenantListV1            = "GetTenantListV1"
 	DeployeDataserviceOnDemand = "DeployeDataserviceOnDemand"
 )
+
+// Constant for Roles
+const (
+	User         = "user"
+	ProjectAdmin = "projectadmin"
+	TenantAdmin  = "tenantadmin"
+)

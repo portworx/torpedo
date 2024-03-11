@@ -8,7 +8,10 @@ import (
 )
 
 type WorkflowPlatform struct {
-	Accounts map[string]map[string]string
+	Accounts        map[string]map[string]string
+	AdminAccountId  string
+	PlatformVersion string
+	TenantId        string
 }
 
 func (platform *WorkflowPlatform) OnboardAccounts() (map[string][]apiStructs.WorkFlowResponse, error) {
@@ -31,4 +34,22 @@ func (platform *WorkflowPlatform) OnboardAccounts() (map[string][]apiStructs.Wor
 	}
 
 	return resultMap, nil
+}
+
+func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
+
+	wfTenant := WorkflowTenant{
+		AccountID: platform.AdminAccountId,
+	}
+	tenantList, err := wfTenant.ListTenants()
+	if err != nil {
+		return platform, err
+	}
+	for _, tenant := range tenantList[apiStructs.GetTenantListV1] {
+		log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, wfTenant.AccountID)
+		platform.TenantId = *tenant.Meta.Uid
+		break
+	}
+
+	return platform, nil
 }

@@ -29,7 +29,7 @@ func (tc *PLATFORM_API_V1) getTargetClusterClient() (context.Context, *platformv
 // ListTargetClusters return deployment targets models.
 func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
 	tcResponse := []WorkFlowResponse{}
-	tenantId := tcRequest.TenantId
+	tenantId := tcRequest.TargetCluster.ListTargetClusters.TenantId
 	_, dtClient, err := tc.getTargetClusterClient()
 
 	var req platformv1.ApiTargetClusterServiceListTargetClustersRequest
