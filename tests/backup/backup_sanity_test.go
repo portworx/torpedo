@@ -404,6 +404,24 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		provisionerSnapshotClassMap, err := GetProvisionerDefaultSnapshotMap("openshift")
 		log.FailOnError(err, "Failed to get default provisioner for cloud %v", err)
 
+		// Deploy multiple application in a single namespace for custom backup
+		taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+		for provisioner, _ := range provisionerSnapshotClassMap {
+			println("inside provisionerSnapshotClassMap")
+			println(provisioner)
+			println(provisionerSnapshotClassMap[provisioner])
+			appSpec := GetApplicationSpecForProvisioner(GetClusterProvider(), provisioner, "postgres")
+			//taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+			appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+				AppKeys:            []string{appSpec},
+				StorageProvisioner: provisioner,
+			})
+			appCtx[0].ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContextsForDefaultBackup = append(scheduledAppContexts, appCtx...)
+			allAppContext = append(allAppContext, appCtx...)
+			log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+		}
+
 		for provisioner, _ := range provisionerSnapshotClassMap {
 			println("inside provisionerSnapshotClassMap")
 			println(provisioner)
@@ -550,7 +568,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", defaultSchBackupName, firstBkpLocationName))
 			err = IsFullBackup(defaultSchBackupName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", defaultSchBackupName, firstBkpLocationName))
-			/*			_, err = GetNextPeriodicScheduleBackupName(defaultSchBackupName, 15, ctx)
+			/*			_, err = GetNextPeriodicScheduleBackupName(defaultProvisionerScheduleName, 15, ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", defaultSchBackupName, firstBkpLocationName))*/
 
 			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, defaultSchBackupName, BackupOrgID)
@@ -563,16 +581,16 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			provisionerNonDefaultSnapshotClassMap := map[string]string{}
-			provisionerNonDefaultSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("ocp")
+			provisionerNonDefaultSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("opeshift")
 
-			defaultProvisionerScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(15))
-			nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForCustomBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap)
+			nonDefaultProvisionerScheduleName := fmt.Sprintf("default-provisioner-schedule-%v", RandomString(15))
+			nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, nonDefaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForCustomBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap)
 			scheduleList = append(scheduleList, nonDefaultVscSchBackupName)
 
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", nonDefaultVscSchBackupName, firstBkpLocationName))
 			err = IsFullBackup(nonDefaultVscSchBackupName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", nonDefaultVscSchBackupName, firstBkpLocationName))
-			/*			_, err = GetNextPeriodicScheduleBackupName(nonDefaultVscSchBackupName, 15, ctx)
+			/*			_, err = GetNextPeriodicScheduleBackupName(nonDefaultProvisionerScheduleName, 15, ctx)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", nonDefaultVscSchBackupName, firstBkpLocationName))*/
 
 			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, nonDefaultVscSchBackupName, BackupOrgID)
