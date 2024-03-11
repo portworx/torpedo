@@ -237,7 +237,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			scheduleList := []string{}
 			for i, _ := range scheduledAppContexts {
 				firstScheduleName = fmt.Sprintf("first-schedule-%v", RandomString(15))
-				firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap)
+				firstSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, firstScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerVolumeSnapshotCephfsClassMap, false)
 				scheduleList = append(scheduleList, firstScheduleName)
 			}
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", firstScheduleName, firstBkpLocationName))
@@ -267,7 +267,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 								provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
 							}*/
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
-				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap)
+				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
@@ -427,7 +427,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		}
 
 		// Exit the program with exit code 0 (indicating success)
-		os.Exit(0)
+
 		for provisioner, _ := range provisionerSnapshotClassMap {
 			println("inside provisionerSnapshotClassMap")
 			println(provisioner)
@@ -443,6 +443,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			allAppContext = append(allAppContext, appCtx...)
 			log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 		}
+		os.Exit(0)
 
 		// Deploy application for custom backup
 		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
@@ -485,7 +486,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
-		os.Exit(0)
+
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
 			log.InfoD("Creating pre rule for deployed apps")
@@ -568,7 +569,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			}
 
 			defaultProvisionerScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(15))
-			defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap)
+			defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap, false)
 			scheduleList = append(scheduleList, defaultSchBackupName)
 
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", defaultSchBackupName, firstBkpLocationName))
@@ -590,7 +591,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			provisionerNonDefaultSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("opeshift")
 
 			nonDefaultProvisionerScheduleName := fmt.Sprintf("default-provisioner-schedule-%v", RandomString(15))
-			nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, nonDefaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForCustomBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap)
+			nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, nonDefaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForCustomBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, true)
 			scheduleList = append(scheduleList, nonDefaultVscSchBackupName)
 
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", nonDefaultVscSchBackupName, firstBkpLocationName))
@@ -602,7 +603,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, nonDefaultVscSchBackupName, BackupOrgID)
 			err = DeleteScheduleWithUIDAndWait(nonDefaultVscSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 		})
-
+		os.Exit(0)
 		Step("Taking manual backup of application from source cluster", func() {
 			log.InfoD("taking backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -618,7 +619,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 					provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
 				}
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
-				err = CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap)
+				err = CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap, true)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
