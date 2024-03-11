@@ -405,7 +405,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		log.FailOnError(err, "Failed to get default provisioner for cloud %v", err)
 
 		// Deploy multiple application in a single namespace for custom backup
-		taskName := fmt.Sprintf("%s-%v", "TaskNamePrefix", Inst().InstanceID)
+		taskName := fmt.Sprintf("%s-%v", "taskprefix", Inst().InstanceID)
 		println("multiple application")
 		println(taskName)
 		for provisioner, _ := range provisionerSnapshotClassMap {
