@@ -271,15 +271,16 @@ func doPDBValidation(stopSignal <-chan struct{}, mError *error) {
 		log.Infof("PDB validation iteration: #%d", itr)
 		select {
 		case <-stopSignal:
+			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
+				err := fmt.Errorf("Cluster is not parallely upgraded")
+				*mError = multierr.Append(*mError, err)
+				log.Warnf("Cluster not parallely upgraded as expected")
+			}
 			log.Infof("Exiting PDB validation routine")
 			return
 		default:
 			errorChan := make(chan error, 50)
 			ValidatePDB(pdbValue, allowedDisruptions, totalNodes, &isClusterParallelyUpgraded, &errorChan)
-			if allowedDisruptions > 1 && !isClusterParallelyUpgraded {
-				err := fmt.Errorf("Cluster is not parallely upgraded")
-				*mError = multierr.Append(*mError, err)
-			}
 			for err := range errorChan {
 				*mError = multierr.Append(*mError, err)
 			}
@@ -287,7 +288,7 @@ func doPDBValidation(stopSignal <-chan struct{}, mError *error) {
 				return
 			}
 			itr++
-			time.Sleep(7 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}
 
