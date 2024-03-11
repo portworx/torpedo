@@ -401,7 +401,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		providers = GetBackupProviders()
 
 		// Deploy application for Default backup
-		provisionerSnapshotClassMap, err := GetProvisionerDefaultSnapshotMap("ocp")
+		provisionerSnapshotClassMap, err := GetProvisionerDefaultSnapshotMap("openshift")
 		log.FailOnError(err, "Failed to get provisioner mao %v", err)
 
 		for provisioner, _ := range provisionerSnapshotClassMap {
