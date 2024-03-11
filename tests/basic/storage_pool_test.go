@@ -9973,6 +9973,12 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 })
 
 func isMaintenanceModeRequiredForAddDisk() bool {
+	isDmthin, err := IsDMthin()
+	log.FailOnError(err, "error validating for dmthin check")
+	if isDmthin {
+		return true
+	}
+
 	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
 		cmd := "uname -r"
 
@@ -10001,6 +10007,7 @@ func isMaintenanceModeRequiredForAddDisk() bool {
 		}
 
 	}
+
 	return false
 }
 

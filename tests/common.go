@@ -2110,7 +2110,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
