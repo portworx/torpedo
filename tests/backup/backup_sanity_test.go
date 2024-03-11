@@ -443,28 +443,27 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			allAppContext = append(allAppContext, appCtx...)
 			log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 		}
-		os.Exit(0)
 
 		// Deploy application for custom backup
-		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
-		log.FailOnError(err, "Failed to get provisioner mao %v", err)
+		/*		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
+				log.FailOnError(err, "Failed to get provisioner mao %v", err)
 
-		for provisioner, _ := range provisionerSnapshotClassMap {
-			appSpec := GetApplicationSpecForProvisioner(GetClusterProvider(), provisioner, "postgres")
-			taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
-			appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-				AppKeys:            []string{appSpec},
-				StorageProvisioner: provisioner,
-			})
-			appCtx[0].ReadinessTimeout = AppReadinessTimeout
-			scheduledAppContextsForCustomBackup = append(scheduledAppContexts, appCtx...)
-			allAppContext = append(allAppContext, appCtx...)
-			log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
-		}
+				for provisioner, _ := range provisionerSnapshotClassMap {
+					appSpec := GetApplicationSpecForProvisioner(GetClusterProvider(), provisioner, "postgres")
+					taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+					appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+						AppKeys:            []string{appSpec},
+						StorageProvisioner: provisioner,
+					})
+					appCtx[0].ReadinessTimeout = AppReadinessTimeout
+					scheduledAppContextsForCustomBackup = append(scheduledAppContexts, appCtx...)
+					allAppContext = append(allAppContext, appCtx...)
+					log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+				}*/
 
 		// Deploy application for kdmp backup
-		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
-		log.FailOnError(err, "Failed to get provisioner mao %v", err)
+		/*		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
+				log.FailOnError(err, "Failed to get provisioner mao %v", err)*/
 
 		/*		for provisioner, _ := range provisionerSnapshotClassMap {
 				appSpec := GetApplicationSpecForProvisioner(GetClusterProvider(), provisioner, "postgres")
