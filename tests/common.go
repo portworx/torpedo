@@ -10929,6 +10929,10 @@ func ExportSourceKubeConfig() error {
 	if err != nil {
 		return err
 	}
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
 	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
 }
 
@@ -10937,5 +10941,11 @@ func ExportDestinationKubeConfig() error {
 	if err != nil {
 		return err
 	}
+
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	
 	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
 }

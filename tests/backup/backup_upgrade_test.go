@@ -1026,13 +1026,45 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		if len(Inst().SchedUpgradeHops) > 0 {
 			versions = strings.Split(Inst().SchedUpgradeHops, ",")
 		}
-		dash.VerifyFatal(len(versions) > 0, true, "No upgrade versions provided")
+		dash.VerifyFatal(len(versions) > 0, true, "Check if upgrade versions provided is provided")
 
+		PrereqNotExecuted := true
 		for _, version := range versions {
 			Step("Upgrading OCP cluster", func() {
 
 				err := ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
+
+				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) && PrereqNotExecuted {
+					err := OcpPrometheusPrereq()
+					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
+				}
+
+				err = Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+				PrintK8sCluterInfo()
+
+				err = ExportDestinationKubeConfig()
+				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig")
+
+				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) && PrereqNotExecuted {
+					err := OcpPrometheusPrereq()
+					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
+					PrereqNotExecuted = false
+				}
+
+				err = Inst().S.UpgradeScheduler(version)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
+				PrintK8sCluterInfo()
+
+				err = ExportSourceKubeConfig()
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig ")
+
+			})
+			Step("validate storage components", func() {
+
+				err := ExportSourceKubeConfig()
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
 				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
 					err := OcpPrometheusPrereq()
@@ -1044,7 +1076,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				PrintK8sCluterInfo()
 
 				err = ExportDestinationKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig")
 
 				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
 					err := OcpPrometheusPrereq()
@@ -1056,43 +1088,13 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				PrintK8sCluterInfo()
 
 				err = ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
 			})
 			Step("validate storage components", func() {
 
 				err := ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
-
-				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
-					err := OcpPrometheusPrereq()
-					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-				}
-
-				err = Inst().S.UpgradeScheduler(version)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				PrintK8sCluterInfo()
-
-				err = ExportDestinationKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig failed")
-
-				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
-					err := OcpPrometheusPrereq()
-					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-				}
-
-				err = Inst().S.UpgradeScheduler(version)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				PrintK8sCluterInfo()
-
-				err = ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
-
-			})
-			Step("validate storage components", func() {
-
-				err := ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
 				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 				u, err := url.Parse(urlToParse)
@@ -1104,7 +1106,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				PrintK8sCluterInfo()
 
 				err = ExportDestinationKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig")
 
 				urlToParse = fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 				u, err = url.Parse(urlToParse)
@@ -1116,13 +1118,13 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				PrintK8sCluterInfo()
 
 				err = ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
 			})
 
 			Step("update node drive endpoints", func() {
 				err := ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
 				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
 				err = Inst().S.RefreshNodeRegistry()
@@ -1133,7 +1135,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				log.FailOnError(err, "Refresh Driver Endpoints failed")
 
 				err = ExportDestinationKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig")
 
 				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
 				err = Inst().S.RefreshNodeRegistry()
@@ -1144,7 +1146,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				log.FailOnError(err, "Refresh Driver Endpoints failed")
 
 				err = ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig failed")
+				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 			})
 
 			Step("Create backups after OCP upgrade with and without pre and post exec rules", func() {
