@@ -6,6 +6,7 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"os"
@@ -19,15 +20,20 @@ var _ = BeforeSuite(func() {
 
 		// Read pds params from the configmap
 		var err error
+		log.InfoD("Get Account ID")
+		accID := "acc:2199f82a-9c39-4070-a431-4a8c8b1c2ca7"
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
-		NewPdsParams, err = ReadNewParams(pdsparams)
-		log.FailOnError(err, "Failed to read params from json file")
+		NewPdsParams, err := ReadNewParams(pdsparams)
 		infraParams := NewPdsParams.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
-
-		log.InfoD("Get Account ID")
-		accID = "acc:a7e9dff1-a2f4-40ce-b8cf-09d27deff80e"
-
+		rbacParams := NewPdsParams.RbacParams
+		log.FailOnError(err, "Failed to read params from json file")
+		if rbacParams.RunWithRbac == true {
+			err := stworkflows.RunTestWithRbac(accID, rbacParams.RoleName, rbacParams.ResourceId)
+			if err != nil {
+				return
+			}
+		}
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 

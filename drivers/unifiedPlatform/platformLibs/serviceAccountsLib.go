@@ -52,8 +52,10 @@ func CreateServiceAccountForRBAC(saName, tenantId string) (*apiStructs.WorkFlowR
 }
 
 // GenerateServiceAccountAccessToken used to generate ServiceAccount JWT token
-func GenerateServiceAccountAccessToken(tenantId string) (*apiStructs.WorkFlowResponse, error) {
+func GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret string) (*apiStructs.WorkFlowResponse, error) {
 	saInputs.ServiceAccountTokenRequest.TenantId = tenantId
+	saInputs.ServiceAccountTokenRequest.ServiceAccountServiceGetAccessTokenBody.ClientId = &clientID
+	saInputs.ServiceAccountTokenRequest.ServiceAccountServiceGetAccessTokenBody.ClientSecret = &clientSecret
 	tokenModel, err := v2Components.Platform.GenerateServiceAccountAccessToken(saInputs)
 	if err != nil {
 		return nil, err

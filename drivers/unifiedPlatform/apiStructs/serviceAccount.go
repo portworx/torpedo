@@ -24,3 +24,8 @@ type ServiceAccountServiceGetAccessTokenBody struct {
 type V1AccessToken struct {
 	Token string
 }
+
+type V1ServiceAccountResponse struct {
+	Meta   Meta
+	Config V1Config2
+}

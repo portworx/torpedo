@@ -48,6 +48,12 @@ type V1Config3 struct {
 	AccessPolicy *V1AccessPolicy
 }
 
+type V1Config2 struct {
+	ClientId     *string `json:"clientId,omitempty"`
+	ClientSecret *string `json:"clientSecret,omitempty"`
+	Disabled     *bool   `json:"disabled,omitempty"`
+}
+
 type V1Deployment struct {
 	Meta   Meta      `copier:"must,nopanic"`
 	Config V1Config1 `copier:"must,nopanic"`

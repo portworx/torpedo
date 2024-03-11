@@ -1,11 +1,12 @@
 package apiStructs
 
 type WorkFlowResponse struct {
-	Meta             Meta   `copier:"must,nopanic"`
-	Config           Config `copier:"must,nopanic"`
-	Id               string `copier:"must,nopanic"`
-	Status           Status
-	CloudCredentials CreateCloudCredentials
+	Meta                     Meta   `copier:"must,nopanic"`
+	Config                   Config `copier:"must,nopanic"`
+	Id                       string `copier:"must,nopanic"`
+	Status                   Status
+	CloudCredentials         CreateCloudCredentials
+	V1ServiceAccountResponse V1ServiceAccountResponse
 }
 
 type WorkFlowRequest struct {
