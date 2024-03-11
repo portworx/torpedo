@@ -537,7 +537,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			provisionerSnapshotClassMap := map[string]string{}
-			provisionerSnapshotClassMap, err = GetProvisionerDefaultSnapshotMap("ocp")
+			provisionerSnapshotClassMap, err = GetProvisionerDefaultSnapshotMap("openshift")
 			// Modify all values to select default volume snapshot class
 			for key := range provisionerSnapshotClassMap {
 				provisionerSnapshotClassMap[key] = "default"
