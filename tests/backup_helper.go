@@ -363,7 +363,7 @@ var ProvisionerMap = map[string]map[string]struct {
 			defaultSnapshot: "aks-snapshot-class",
 		},
 	},
-	"ocp": {
+	"openshift": {
 		"cephfs-csi": {
 			snapshotClasses: []string{},
 			defaultSnapshot: "ocs-storagecluster-cephfsplugin-snapclass",
@@ -380,12 +380,16 @@ var ProvisionerMap = map[string]map[string]struct {
 func GetProvisionerDefaultSnapshotMap(cloudProvider string) (map[string]string, error) {
 	provisionerSnapshotMap := make(map[string]string)
 
+	println("GetProvisionerDefaultSnapshotMap")
+	println(cloudProvider)
 	provisionerMap, ok := ProvisionerMap[cloudProvider]
 	if !ok {
 		return provisionerSnapshotMap, nil
 	}
 
 	for provisioner, info := range provisionerMap {
+		println(info.defaultSnapshot)
+		println(provisioner)
 		if info.defaultSnapshot != "" {
 			provisionerSnapshotMap[provisioner] = info.defaultSnapshot
 		}
