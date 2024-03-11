@@ -421,7 +421,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		}
 
 		// Deploy application for custom backup
-		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("ocp")
+		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
 		log.FailOnError(err, "Failed to get provisioner mao %v", err)
 
 		for provisioner, _ := range provisionerSnapshotClassMap {
@@ -438,7 +438,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		}
 
 		// Deploy application for kdmp backup
-		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("ocp")
+		provisionerSnapshotClassMap, err = GetProvisionerSnapshotClassesMap("openshift")
 		log.FailOnError(err, "Failed to get provisioner mao %v", err)
 
 		/*		for provisioner, _ := range provisionerSnapshotClassMap {
