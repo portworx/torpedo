@@ -405,6 +405,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		log.FailOnError(err, "Failed to get provisioner mao %v", err)
 
 		for provisioner, _ := range provisionerSnapshotClassMap {
+			println("inside provisionerSnapshotClassMap")
 			println(provisioner)
 			println(provisionerSnapshotClassMap[provisioner])
 			appSpec := GetApplicationSpecForProvisioner(GetClusterProvider(), provisioner, "postgres")
