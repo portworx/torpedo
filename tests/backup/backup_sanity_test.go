@@ -402,7 +402,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 
 		// Deploy application for Default backup
 		provisionerSnapshotClassMap, err := GetProvisionerDefaultSnapshotMap("openshift")
-		log.FailOnError(err, "Failed to get provisioner mao %v", err)
+		log.FailOnError(err, "Failed to get default provisioner for cloud %v", err)
 
 		for provisioner, _ := range provisionerSnapshotClassMap {
 			println("inside provisionerSnapshotClassMap")
