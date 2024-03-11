@@ -32,10 +32,6 @@ func (svcUser *UserWithRbac) SwitchPdsUser(saName string) {
 		utils.RunWithRBAC = utils.RunWithRbac{
 			RbacFlag: false,
 		}
-		_, _, err := utils.GetBearerToken()
-		if err != nil {
-
-		}
 	}()
 	if user, ok := svcUser.UserRoles[saName]; ok {
 		fmt.Println("User is found", user)

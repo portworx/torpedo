@@ -67,7 +67,6 @@ func GetBearerToken() (context.Context, string, error) {
 	password := os.Getenv(envPXCentralPassword)
 	issuerURL := os.Getenv(envPxCentralAPI)
 	if RunWithRBAC.RbacFlag == true {
-		//Test if token is not expired.
 		return context.Background(), RunWithRBAC.RbacToken, nil
 	}
 	log.Infof("user name %s", username)

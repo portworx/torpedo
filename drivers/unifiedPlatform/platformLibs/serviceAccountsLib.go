@@ -2,25 +2,21 @@ package platformLibs
 
 import (
 	"context"
-	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/utilities"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 )
 
 var (
 	saInputs      *apiStructs.WorkFlowRequest
 	saListRequest platformv1.ApiServiceAccountServiceListServiceAccountRequest
-	namespaceId   string
-	ServiceIdFlag bool
-	SiToken       string
-	SiTokenSet    string
 )
 
 // ListServiceAccountsForTenant lists all serviceAccounts for a given tenant
 func ListServiceAccountsForTenant(tenantID string) ([]apiStructs.WorkFlowResponse, error) {
 	saListRequest = saListRequest.TenantId(tenantID)
 	saListRequest = saListRequest.ApiService.ServiceAccountServiceListServiceAccount(context.Background())
-	copier.Copy(&saInputs, saListRequest)
+	err = utilities.CopyStruct(&saInputs, saListRequest)
 	saList, err := v2Components.Platform.ListAllServiceAccounts(saInputs)
 	if err != nil {
 		return nil, err
