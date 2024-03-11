@@ -1214,6 +1214,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				ctx.SkipVolumeValidation = true
 				log.InfoD("Context Validation after increasing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
+				ctx.SkipVolumeValidation = false
 				log.InfoD("Context Validation after increasing HA is completed for  %s", ctx.App.Key)
 				for err := range errorChan {
 					if err != nil {
@@ -1531,6 +1532,7 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 				log.InfoD("Context Validation after reducing HA started for  %s", ctx.App.Key)
 				ValidateContext(ctx, &errorChan)
 				log.InfoD("Context Validation after reducing HA is completed for  %s", ctx.App.Key)
+				ctx.SkipVolumeValidation = false
 				for err := range errorChan {
 					UpdateOutcome(event, err)
 					log.Infof("Context outcome after reducing HA is updated for  %s", ctx.App.Key)
@@ -1585,6 +1587,7 @@ func TriggerAppTaskDown(contexts *[]*scheduler.Context, recordChan *chan *EventR
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
+			ctx.SkipVolumeValidation = false
 			for err := range errorChan {
 				UpdateOutcome(event, err)
 			}
@@ -5403,7 +5406,13 @@ func initiatePoolExpansion(event *EventRecord, wg *sync.WaitGroup, pool *opsapi.
 					dashStats["node"] = storageNode.Name
 
 					updateLongevityStats(event.Event.Type, stats.NodeRebootEventName, dashStats)
-					err = RebootNodeAndWait(*storageNode)
+					if isDmthin && resizeOperationType == opsapi.SdkStoragePool_RESIZE_TYPE_ADD_DISK {
+						//this is required as for Dmthin add-disk . pool will be in maintenance mode after node reboot
+						err = RebootNodeAndWaitForPxDown(*storageNode)
+					} else {
+						err = RebootNodeAndWaitForPxUp(*storageNode)
+					}
+					err = RebootNodeAndWaitForPxUp(*storageNode)
 					if err != nil {
 						log.Error(err.Error())
 						UpdateOutcome(event, err)
@@ -6533,6 +6542,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
+			ctx.SkipVolumeValidation = false
 			for err := range errorChan {
 				UpdateOutcome(event, err)
 				if strings.Contains(ctx.App.Key, fastpathAppName) {
@@ -6660,6 +6670,7 @@ func TriggerNodeRejoin(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 			errorChan := make(chan error, errorChannelSize)
 			ctx.SkipVolumeValidation = true
 			ValidateContext(ctx, &errorChan)
+			ctx.SkipVolumeValidation = false
 			for err := range errorChan {
 				UpdateOutcome(event, err)
 			}
@@ -7158,6 +7169,7 @@ func TriggerAppTasksDown(contexts *[]*scheduler.Context, recordChan *chan *Event
 					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx, &errorChan)
+					ctx.SkipClusterScopedObject = false
 				})
 			}
 		}
@@ -7290,6 +7302,7 @@ func TriggerAddDrive(contexts *[]*scheduler.Context, recordChan *chan *EventReco
 					errorChan := make(chan error, errorChannelSize)
 					ctx.SkipVolumeValidation = true
 					ValidateContext(ctx, &errorChan)
+					ctx.SkipVolumeValidation = false
 					for err := range errorChan {
 						UpdateOutcome(event, err)
 					}

@@ -4260,6 +4260,7 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 	var vols []*volume.Volume
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*corev1.PersistentVolumeClaim); ok {
+			log.Debugf("Getting PVC [%s], namespace: [%s] for depolyment [%s]", obj.Name, obj.Namespace, ctx.App.Key)
 			pvcObj, err := k8sCore.GetPersistentVolumeClaim(obj.Name, obj.Namespace)
 			if err != nil {
 				return nil, fmt.Errorf("error getting pvc: %s, namespace: %s. Err: %v", obj.Name, obj.Namespace, err)
@@ -4298,6 +4299,8 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					Cause: fmt.Sprintf("Failed to get StatefulSet: %v , Namespace: %v. Err: %v", obj.Name, obj.Namespace, err),
 				}
 			}
+
+			log.Debugf("Getting PVCs from namespace: [%s] for statefulset [%s]", obj.Namespace, obj.Name)
 
 			pvcList, err := k8sOps.GetPVCsForStatefulSet(ss)
 			if err != nil || pvcList == nil {

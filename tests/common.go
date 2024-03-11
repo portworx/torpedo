@@ -7121,8 +7121,21 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-// RebootNodeAndWait reboots node and waits for to be up
-func RebootNodeAndWait(n node.Node) error {
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 	if &n == nil {
 		return fmt.Errorf("no Node is provided to reboot")
@@ -7151,10 +7164,6 @@ func RebootNodeAndWait(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
-	if err != nil {
-		return err
-	}
-	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}
