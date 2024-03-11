@@ -2289,10 +2289,15 @@ func faLUNExists(faVolList []string, pvc string) bool {
 
 var _ = Describe("{ReDistributeFADAVol}", func() {
 	/*
-		PTX:
-			https://portworx.atlassian.net/browse/PTX-20638
-		TestRail:
-			https://portworx.testrail.net/index.php?/cases/view/87945
+			PTX:
+				https://portworx.atlassian.net/browse/PTX-20638
+			TestRail:
+				https://portworx.testrail.net/index.php?/cases/view/87945
+			1. create apps with FADA vol
+		    2. Pick a node with highest number of pods being scheduled
+		    3. Cordon the node and delete the pods.
+		    4. Delete the pods
+		    5. check if they are distributed to other nodes
 	*/
 	var contexts []*scheduler.Context
 	var nodeToCordon string
@@ -2300,8 +2305,8 @@ var _ = Describe("{ReDistributeFADAVol}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("ReDistributeFADAVol", "Create apps with FADA vol and check if they are distributed to other nodes", nil, 87495)
 	})
-	stepLog = "create apps with FADA vol and check if they are distributed to other nodes when the initial node is cordoned and pods are deleted from that node"
-	It(stepLog, func() {
+	itLog := "ReDistributeFADAVol"
+	It(itLog, func() {
 		//Number of apps to be deployed
 		NumberOfDeployments := 10
 		//Map of "pod" -> {"node":nodename,"namespace":ns}
