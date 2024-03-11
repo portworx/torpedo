@@ -350,28 +350,29 @@ var ProvisionerMap = map[string]map[string]struct {
 			defaultSnapshot: "gke-snapshot-class",
 			appList:         []string{},
 		},
-		// Add entries for other provisioners within GKE as needed
 	},
 	"aws": {
 		"aws-provisioner": {
 			snapshotClasses: []string{"aws-snapshot-class", "aws-snapshot-class-2"},
 			defaultSnapshot: "aws-snapshot-class",
 		},
-		// Add entries for other provisioners within AWS as needed
 	},
 	"aks": {
 		"aks-provisioner": {
 			snapshotClasses: []string{"aks-snapshot-class", "aks-snapshot-class-2"},
 			defaultSnapshot: "aks-snapshot-class",
 		},
-		// Add entries for other provisioners within AKS as needed
 	},
 	"ocp": {
-		"ocp-provisioner": {
-			snapshotClasses: []string{"ocp-snapshot-class", "ocp-snapshot-class-2"},
-			defaultSnapshot: "ocp-snapshot-class",
+		"cephfs-csi": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "ocs-storagecluster-cephfsplugin-snapclass",
+			appList:         []string{"postgres-cephfs-csi"},
+		}, "rbd-csi": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "ocs-storagecluster-rbdplugin-snapclass",
+			appList:         []string{"postgres-rbd-csi"},
 		},
-		// Add entries for other provisioners within ocp as needed
 	},
 }
 
@@ -395,7 +396,7 @@ func GetProvisionerDefaultSnapshotMap(cloudProvider string) (map[string]string, 
 
 // GetProvisionerSnapshotClassesMap returns a map of provisioners with their corresponding list of SnapshotClasses for the specified provider
 func GetProvisionerSnapshotClassesMap(cloudProvider string) (map[string]string, error) {
-	provisionerSnapshotClasses := make(map[string][]string)
+	provisionerSnapshotClasses := make(map[string]string)
 
 	// Check if the provider exists in the provisioner map
 	providerProvisioners, ok := ProvisionerMap[cloudProvider]
@@ -406,7 +407,9 @@ func GetProvisionerSnapshotClassesMap(cloudProvider string) (map[string]string, 
 	// Iterate over the provisioners for the specified provider
 	for provisioner, info := range providerProvisioners {
 		if len(info.snapshotClasses) > 0 {
-			provisionerSnapshotClasses[provisioner] = info.snapshotClasses
+			// Get a random index
+			randomIndex := rand.Intn(len(info.snapshotClasses))
+			provisionerSnapshotClasses[provisioner] = info.snapshotClasses[randomIndex]
 		}
 	}
 
