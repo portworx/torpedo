@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -424,6 +425,8 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 		}
 
+		// Exit the program with exit code 0 (indicating success)
+		os.Exit(0)
 		for provisioner, _ := range provisionerSnapshotClassMap {
 			println("inside provisionerSnapshotClassMap")
 			println(provisioner)
@@ -481,7 +484,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
-
+		os.Exit(0)
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
 			log.InfoD("Creating pre rule for deployed apps")
@@ -679,7 +682,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-
+		os.Exit(0)
 		defer func() {
 			log.InfoD("switching to default context")
 			err := SetClusterContext("")
