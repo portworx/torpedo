@@ -405,6 +405,8 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 		log.FailOnError(err, "Failed to get provisioner mao %v", err)
 
 		for provisioner, _ := range provisionerSnapshotClassMap {
+			println(provisioner)
+			println(provisionerSnapshotClassMap[provisioner])
 			appSpec := GetApplicationSpecForProvisioner(GetClusterProvider(), provisioner, "postgres")
 			taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
 			appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
