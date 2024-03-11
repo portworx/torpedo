@@ -1,7 +1,7 @@
 package apiStructs
 
-// ServiceAccountRequest struct
-type ServiceAccountRequest struct {
+// PDSServiceAccountRequest struct
+type PDSServiceAccount struct {
 	V1ServiceAccount V1ServiceAccount
 	TenantId         string
 }
@@ -11,7 +11,7 @@ type V1ServiceAccount struct {
 	Config Config
 }
 
-type ServiceAccountTokenRequest struct {
+type PDSServiceAccountToken struct {
 	TenantId                                string
 	ServiceAccountServiceGetAccessTokenBody ServiceAccountServiceGetAccessTokenBody
 }
@@ -21,11 +21,11 @@ type ServiceAccountServiceGetAccessTokenBody struct {
 	ClientSecret *string
 }
 
-type V1AccessToken struct {
+type PdsRbacAccessToken struct {
 	Token string
 }
 
-type V1ServiceAccountResponse struct {
+type PdsServiceAccount struct {
 	Meta   Meta
 	Config V1Config2
 }

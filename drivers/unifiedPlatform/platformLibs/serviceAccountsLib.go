@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	"github.com/portworx/torpedo/pkg/log"
 	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 )
 
@@ -63,15 +62,16 @@ func GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret string) 
 	return tokenModel, nil
 }
 
-// SetRbacWithSAToken used by testcases to toggle between access token
-func SetRbacWithSAToken(value bool, token string) (bool, error) {
-	if value == true {
-		ServiceIdFlag = true
-		SiTokenSet = token
-	} else {
-		ServiceIdFlag = false
+func GetServiceAccFromSaName(tenantId, saName string) (*apiStructs.WorkFlowResponse, error) {
+	var saModel *apiStructs.WorkFlowResponse
+	saList, err := ListServiceAccountsForTenant(tenantId)
+	if err != nil {
+		return nil, err
 	}
-	log.InfoD("Successfully updated Infra params for ServiceIdentity and RBAC test")
-	log.InfoD("RBAC flag is set to- %v", ServiceIdFlag)
-	return true, nil
+	for _, sa := range saList {
+		if *sa.Meta.Name == saName {
+			saModel = &sa
+		}
+	}
+	return saModel, nil
 }

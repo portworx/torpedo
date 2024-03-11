@@ -6,7 +6,6 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"os"
@@ -26,14 +25,7 @@ var _ = BeforeSuite(func() {
 		NewPdsParams, err := ReadNewParams(pdsparams)
 		infraParams := NewPdsParams.InfraToTest
 		pdsLabels["clusterType"] = infraParams.ClusterType
-		rbacParams := NewPdsParams.RbacParams
 		log.FailOnError(err, "Failed to read params from json file")
-		if rbacParams.RunWithRbac == true {
-			err := stworkflows.RunTestWithRbac(accID, rbacParams.RoleName, rbacParams.ResourceId)
-			if err != nil {
-				return
-			}
-		}
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 

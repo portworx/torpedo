@@ -2,11 +2,14 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
+	"strconv"
 )
 
 var tc platformLibs.TargetCluster
@@ -233,6 +236,42 @@ var _ = Describe("{ListTenants}", func() {
 
 var _ = Describe("{CreateAccount}", func() {
 	JustBeforeEach(func() {
+		StartTorpedoTest("ListAccounts", "Create and List Accounts", nil, 0)
+	})
+
+	It("Accounts", func() {
+		Step("Create and List Accounts", func() {
+			workflowResponse, err := stworkflows.WorkflowCreateAndListAccounts()
+			log.FailOnError(err, "Some error occurred while running WorkflowCreateAndListAccounts")
+			accountList := workflowResponse[stworkflows.GetAccountListv1]
+			for _, account := range accountList {
+				log.Infof("Found %s as part of result", account.Meta.Name)
+			}
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{TestRbacForPds}", func() {
+	JustBeforeEach(func() {
+		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
+		NewPdsParams, err := ReadNewParams(pdsparams)
+		infraParams := NewPdsParams.InfraToTest
+		pdsLabels["clusterType"] = infraParams.ClusterType
+		rbacParams := NewPdsParams.RbacParams
+		log.FailOnError(err, "Failed to read params from json file")
+		if rbacParams.RunWithRbac == true {
+			var pdsRbac *stworkflows.UserWithRbac
+			userName := "pdsUser-" + strconv.Itoa(rand.Int())
+			err, _ := pdsRbac.CreateNewPdsUser(accID, userName, rbacParams.RoleName, rbacParams.ResourceId)
+			if err != nil {
+				return
+			}
+			pdsRbac.SwitchPdsUser(userName)
+		}
 		StartTorpedoTest("ListAccounts", "Create and List Accounts", nil, 0)
 	})
 

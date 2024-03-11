@@ -1,7 +1,7 @@
 package apiStructs
 
-// ListNamespacesRequest struct
-type ListNamespacesRequest struct {
+// PDSListNamespaces struct
+type PDSListNamespaces struct {
 	ClusterId     string `copier:"must,nopanic"`
 	TenantId      string `copier:"must,nopanic"`
 	ProjectId     string `copier:"must,nopanic"`
