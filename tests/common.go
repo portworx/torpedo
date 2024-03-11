@@ -1877,6 +1877,35 @@ func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan 
 	return contexts
 }
 
+// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationswithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		AppKeys:            []string{appSpec},
+		StorageProvisioner: provisioner,
+		Namespace:          taskName,
+	}
+	//taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
 // ScheduleAppsInTopologyEnabledCluster schedules but does not wait for applications
 func ScheduleAppsInTopologyEnabledCluster(
 	testname string, labels []map[string]string, errChan ...*chan error) []*scheduler.Context {
