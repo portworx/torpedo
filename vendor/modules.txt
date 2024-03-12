@@ -286,11 +286,6 @@ github.com/aws/aws-sdk-go-v2/internal/endpoints/v2
 # github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0
 ## explicit; go 1.20
 github.com/aws/aws-sdk-go-v2/internal/ini
-# github.com/aws/aws-sdk-go-v2/service/autoscaling v1.39.2
-## explicit; go 1.20
-github.com/aws/aws-sdk-go-v2/service/autoscaling
-github.com/aws/aws-sdk-go-v2/service/autoscaling/internal/endpoints
-github.com/aws/aws-sdk-go-v2/service/autoscaling/types
 # github.com/aws/aws-sdk-go-v2/service/ec2 v1.148.2
 ## explicit; go 1.20
 github.com/aws/aws-sdk-go-v2/service/ec2
@@ -307,11 +302,6 @@ github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding
 # github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.1
 ## explicit; go 1.20
 github.com/aws/aws-sdk-go-v2/service/internal/presigned-url
-# github.com/aws/aws-sdk-go-v2/service/ssm v1.48.0
-## explicit; go 1.20
-github.com/aws/aws-sdk-go-v2/service/ssm
-github.com/aws/aws-sdk-go-v2/service/ssm/internal/endpoints
-github.com/aws/aws-sdk-go-v2/service/ssm/types
 # github.com/aws/aws-sdk-go-v2/service/sso v1.19.2
 ## explicit; go 1.20
 github.com/aws/aws-sdk-go-v2/service/sso
@@ -1302,7 +1292,7 @@ github.com/portworx/kvdb/mem
 # github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 ## explicit; go 1.17
 github.com/portworx/pds-api-go-client/pds/v1alpha1
-# github.com/portworx/px-backup-api v1.2.2-0.20240223100835-84b57faae78f
+# github.com/portworx/px-backup-api v1.2.2-0.20240229114136-e58baeb9fbe1
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth

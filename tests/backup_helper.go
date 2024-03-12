@@ -323,6 +323,124 @@ var (
 	dataAfterBackupSuffix = "-after-backup"
 )
 
+// CloudProviderProvisionerSnapshotMap maps cloud provider names to their corresponding sub-maps containing provisioner-snapshot class mappings
+var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
+	snapshotClasses []string // List of snapshot classes for the provisioner
+	defaultSnapshot string   // Default snapshot class for the provisioner
+	appList         []string
+}{
+	"gke": {
+		"pd.csi.storage.gke.io": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "gke-snapshot-class-1",
+			appList:         []string{"postgres-gke-csi"},
+		},
+		"pd.csi.storage.gke.io_1": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "",
+			appList:         []string{},
+		},
+		"pd.csi.storage.gke.io_2": {
+			snapshotClasses: []string{"gke-snapshot-class", "gke-snapshot-class-2"},
+			defaultSnapshot: "gke-snapshot-class-2",
+			appList:         []string{},
+		},
+		"pxd": {
+			snapshotClasses: []string{"gke-snapshot-class", "gke-snapshot-class-2"},
+			defaultSnapshot: "gke-snapshot-class",
+			appList:         []string{},
+		},
+	},
+	"aws": {
+		"aws-provisioner": {
+			snapshotClasses: []string{"aws-snapshot-class", "aws-snapshot-class-2"},
+			defaultSnapshot: "aws-snapshot-class",
+		},
+	},
+	"aks": {
+		"aks-provisioner": {
+			snapshotClasses: []string{"aks-snapshot-class", "aks-snapshot-class-2"},
+			defaultSnapshot: "aks-snapshot-class",
+		},
+	},
+	"openshift": {
+		"cephfs-csi": {
+			snapshotClasses: []string{"ocs-storagecluster-cephfsplugin-snapclass"},
+			defaultSnapshot: "ocs-storagecluster-cephfsplugin-snapclass",
+			appList:         []string{"postgres-cephfs-csi"},
+		}, "rbd-csi": {
+			snapshotClasses: []string{"ocs-storagecluster-rbdplugin-snapclass"},
+			defaultSnapshot: "ocs-storagecluster-rbdplugin-snapclass",
+			appList:         []string{"postgres-rbd-csi"},
+		},
+	},
+}
+
+// GetProvisionerDefaultSnapshotMap returns a map with provisioner to default volumeSnapshotClass mappings for the specified cloud provider
+func GetProvisionerDefaultSnapshotMap(cloudProvider string) map[string]string {
+	provisionerSnapshotMap := make(map[string]string)
+	provisionerMap, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
+	if !ok {
+		//return provisionerSnapshotMap, nil
+		return provisionerSnapshotMap
+	}
+
+	for provisioner, info := range provisionerMap {
+		println(info.defaultSnapshot)
+		println(provisioner)
+		if info.defaultSnapshot != "" {
+			provisionerSnapshotMap[provisioner] = info.defaultSnapshot
+		}
+	}
+
+	return provisionerSnapshotMap
+}
+
+// GetProvisionerSnapshotClassesMap returns a map of provisioners with their corresponding list of SnapshotClasses for the specified provider
+func GetProvisionerSnapshotClassesMap(cloudProvider string) map[string]string {
+	provisionerSnapshotClasses := make(map[string]string)
+
+	// Check if the provider exists in the provisioner map
+	providerProvisioners, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
+	if !ok {
+		return provisionerSnapshotClasses
+	}
+
+	// Iterate over the provisioners for the specified provider
+	for provisioner, info := range providerProvisioners {
+		if len(info.snapshotClasses) > 0 {
+			// Get a random index
+			randomIndex := rand.Intn(len(info.snapshotClasses))
+			provisionerSnapshotClasses[provisioner] = info.snapshotClasses[randomIndex]
+		}
+	}
+
+	return provisionerSnapshotClasses
+}
+
+// GetApplicationSpecForProvisioner returns a map for
+func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string, applicationName string) (string, error) {
+	var speclist []string
+
+	provisionerInfo, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
+	if !ok {
+		return "", fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
+	}
+
+	info, ok := provisionerInfo[provisionerName]
+	if !ok {
+		return "", fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
+	}
+
+	for _, appName := range info.appList {
+		if strings.Contains(appName, applicationName) {
+			speclist = append(speclist, appName)
+		}
+	}
+
+	return speclist[0], nil
+}
+
 // Set default provider as aws
 func GetBackupProviders() []string {
 	providersStr := os.Getenv("PROVIDERS")
@@ -342,9 +460,7 @@ func getPXNamespace() string {
 }
 
 // CreateBackup creates backup and checks for success
-func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string,
-	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
+func CreateBackup(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
 	if err != nil {
 		return err
@@ -359,8 +475,8 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 }
 
 // CreateBackupWithVscMapping creates backup and checks for success
-func CreateBackupWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string) error {
-	_, err := CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap)
+func CreateBackupWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) error {
+	_, err := CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
 	if err != nil {
 		return err
 	}
@@ -524,7 +640,6 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 		}
 	}
 
-	log.Infof("Backup [%s] started at [%s]", backupName, time.Now().Format("2006-01-02 15:04:05"))
 	// Insert data before backup which is expected to be present after restore
 	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
 	if err != nil {
@@ -546,7 +661,7 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 }
 
 // CreateBackupWithValidationWithVscMapping creates backup, checks for success, and validates the backup
-func CreateBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string) error {
+func CreateBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) error {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -561,7 +676,7 @@ func CreateBackupWithValidationWithVscMapping(ctx context1.Context, backupName s
 		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
 	}
 
-	err = CreateBackupWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap)
+	err = CreateBackupWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
 	if err != nil {
 		return err
 	}
@@ -731,8 +846,8 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	return nil
 }
 
-// CreateScheduleBackupWithValidationWithVscMapping creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
-func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string) (string, error) {
+// CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (string, error) {
 	namespaces := make([]string, 0)
 	for _, scheduledAppContext := range scheduledAppContextsToBackup {
 		namespace := scheduledAppContext.ScheduleOptions.Namespace
@@ -740,7 +855,7 @@ func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, sche
 			namespaces = append(namespaces, namespace)
 		}
 	}
-	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap)
+	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
 	if err != nil {
 		return "", err
 	}
@@ -824,9 +939,7 @@ func ValidateScheduleBackupCR(backupName string, backupScheduleInspectReponse *a
 }
 
 // CreateBackupByNamespacesWithoutCheck creates backup of provided namespaces without waiting for success.
-func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string,
-	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) (*api.BackupInspectResponse, error) {
+func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) (*api.BackupInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -893,7 +1006,7 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 }
 
 // CreateBackupByNamespacesWithoutCheckWithVscMapping creates backup of provided namespaces without waiting for success.
-func CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string) (*api.BackupInspectResponse, error) {
+func CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (*api.BackupInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -932,6 +1045,7 @@ func CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName string, clust
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+		DirectKdmp: forceKdmp,
 	}
 
 	err := AdditionalBackupRequestParams(bkpCreateRequest, provisionerVolumeSnapshotClassMap)
@@ -1075,9 +1189,7 @@ func CreateBackupWithoutCheck(ctx context1.Context, backupName string, clusterNa
 }
 
 // CreateScheduleBackupWithoutCheck creates a schedule backup without waiting for success
-func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, bLocation string, bLocationUID string,
-	namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string,
-	preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
+func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context) (*api.BackupScheduleInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -1140,7 +1252,7 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 }
 
 // CreateScheduleBackupWithoutCheckWithVscMapping creates a schedule backup without waiting for success
-func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string) (*api.BackupScheduleInspectResponse, error) {
+func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (*api.BackupScheduleInspectResponse, error) {
 
 	if GlobalRuleFlag {
 		preRuleName = GlobalPreRuleName
@@ -1180,6 +1292,7 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+		DirectKdmp: forceKdmp,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest, provisionerVolumeSnapshotClassMap)
@@ -2985,9 +3098,7 @@ func ValidateRestore(ctx context1.Context, restoreName string, orgID string, exp
 		log.Infof("getting the volumes bounded to the PVCs in the namespace (restoredAppContext) [%s] in restore [%s]", expectedRestoredAppContextNamespace, restoreName)
 		actualVolumeMap := make(map[string]*volume.Volume)
 		for _, appContext := range expectedRestoredAppContexts {
-			// Using appContext.ScheduleOptions to get the namespace of the appContext
-			// Do not use appContext.App.Namespace as it is not set
-			if appContext.ScheduleOptions.Namespace == expectedRestoredAppContextNamespace {
+			if appContext.App.NameSpace == expectedRestoredAppContextNamespace {
 				actualRestoredVolumes, err := Inst().S.GetVolumes(appContext)
 				if err != nil {
 					err := fmt.Errorf("error getting volumes for namespace (expectedRestoredAppContext) [%s], hence skipping volume validation. Error in Inst().S.GetVolumes: [%v]", expectedRestoredAppContextNamespace, err)
@@ -3105,9 +3216,6 @@ func CloneAppContextAndTransformWithMappings(appContext *scheduler.Context, name
 	log.Infof("TransformAppContextWithMappings of appContext [%s] with namespace mapping [%v] and storage Class Mapping [%v]", appContextNamespace, namespaceMapping, storageClassMapping)
 
 	restoreAppContext := *appContext
-	if namespace, ok := namespaceMapping[appContextNamespace]; ok {
-		restoreAppContext.App.NameSpace = namespaceMapping[namespace]
-	}
 	var errors []error
 
 	// TODO: remove workaround in future.
@@ -4777,7 +4885,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
@@ -4790,7 +4898,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
@@ -4826,7 +4934,8 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 			return err
 		}
 		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		//if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
@@ -4839,7 +4948,8 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		//if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+		if provisionerVolumeSnapshotClassMap != nil {
 			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
 		} else {
 			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
@@ -6550,24 +6660,6 @@ func GetAllVMsInNamespace(namespace string) ([]kubevirtv1.VirtualMachine, error)
 		return nil, err
 	}
 	return vms.Items, nil
-
-}
-
-// GetAllVMsInNamespacesWithLabel returns all the Kubevirt VMs in the namespaces filtered by the namespace label provided
-func GetAllVMsInNamespacesWithLabel(namespaceLabel map[string]string) ([]kubevirtv1.VirtualMachine, error) {
-	var vms []kubevirtv1.VirtualMachine
-	nsList, err := k8sCore.ListNamespaces(namespaceLabel)
-	if err != nil {
-		return nil, err
-	}
-	for _, ns := range nsList.Items {
-		vmList, err := GetAllVMsInNamespace(ns.Name)
-		if err != nil {
-			return nil, err
-		}
-		vms = append(vms, vmList...)
-	}
-	return vms, nil
 
 }
 
