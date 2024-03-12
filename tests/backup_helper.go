@@ -323,8 +323,8 @@ var (
 	dataAfterBackupSuffix = "-after-backup"
 )
 
-// ProvisionerMap maps cloud provider names to their corresponding sub-maps containing provisioner-snapshot class mappings
-var ProvisionerMap = map[string]map[string]struct {
+// CloudProviderProvisionerSnapshotMap maps cloud provider names to their corresponding sub-maps containing provisioner-snapshot class mappings
+var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 	snapshotClasses []string // List of snapshot classes for the provisioner
 	defaultSnapshot string   // Default snapshot class for the provisioner
 	appList         []string
@@ -376,15 +376,13 @@ var ProvisionerMap = map[string]map[string]struct {
 	},
 }
 
-// GetProvisionerDefaultSnapshotMap returns a map with provisioner to volume snapshot class mappings for the specified cloud provider
-func GetProvisionerDefaultSnapshotMap(cloudProvider string) (map[string]string, error) {
+// GetProvisionerDefaultSnapshotMap returns a map with provisioner to default volumeSnapshotClass mappings for the specified cloud provider
+func GetProvisionerDefaultSnapshotMap(cloudProvider string) map[string]string {
 	provisionerSnapshotMap := make(map[string]string)
-
-	println("GetProvisionerDefaultSnapshotMap")
-	println(cloudProvider)
-	provisionerMap, ok := ProvisionerMap[cloudProvider]
+	provisionerMap, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
 	if !ok {
-		return provisionerSnapshotMap, nil
+		//return provisionerSnapshotMap, nil
+		return provisionerSnapshotMap
 	}
 
 	for provisioner, info := range provisionerMap {
@@ -395,17 +393,17 @@ func GetProvisionerDefaultSnapshotMap(cloudProvider string) (map[string]string, 
 		}
 	}
 
-	return provisionerSnapshotMap, nil
+	return provisionerSnapshotMap
 }
 
 // GetProvisionerSnapshotClassesMap returns a map of provisioners with their corresponding list of SnapshotClasses for the specified provider
-func GetProvisionerSnapshotClassesMap(cloudProvider string) (map[string]string, error) {
+func GetProvisionerSnapshotClassesMap(cloudProvider string) map[string]string {
 	provisionerSnapshotClasses := make(map[string]string)
 
 	// Check if the provider exists in the provisioner map
-	providerProvisioners, ok := ProvisionerMap[cloudProvider]
+	providerProvisioners, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
 	if !ok {
-		return nil, fmt.Errorf("provider '%s' not found", cloudProvider)
+		return provisionerSnapshotClasses
 	}
 
 	// Iterate over the provisioners for the specified provider
@@ -417,21 +415,21 @@ func GetProvisionerSnapshotClassesMap(cloudProvider string) (map[string]string, 
 		}
 	}
 
-	return provisionerSnapshotClasses, nil
+	return provisionerSnapshotClasses
 }
 
 // GetApplicationSpecForProvisioner returns a map for
-func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string, applicationName string) string {
+func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string, applicationName string) (string, error) {
 	var speclist []string
 
-	provisionerInfo, ok := ProvisionerMap[cloudProvider]
+	provisionerInfo, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
 	if !ok {
-		fmt.Printf("Cloud provider '%s' not found\n", cloudProvider)
+		return "", fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
 	}
 
 	info, ok := provisionerInfo[provisionerName]
 	if !ok {
-		fmt.Printf("Provisioner '%s' not found for cloud provider '%s'\n", provisionerName, cloudProvider)
+		return "", fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
 	}
 
 	for _, appName := range info.appList {
@@ -440,7 +438,7 @@ func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName stri
 		}
 	}
 
-	return speclist[0]
+	return speclist[0], nil
 }
 
 // Set default provider as aws

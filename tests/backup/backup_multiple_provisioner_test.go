@@ -12,98 +12,99 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
 )
 
-// This Dummy testcase to test the provisioner support will be removed at the time of merge
-var _ = Describe("{RestoreCsiBackupAfterSnapshotDelete}", func() {
+// This MultipleProvisionerBackupAndRestore testcase to test the provisioner support will be removed at the time of merge
+var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
 
 	var (
-		backupNames                       []string
-		restoreNames                      []string
-		scheduledAppContexts              []*scheduler.Context
-		preRuleNameList                   []string
-		postRuleNameList                  []string
-		sourceClusterUid                  string
-		cloudCredName                     string
-		cloudCredUID                      string
-		backupLocationUID                 string
-		backupLocationName                string
-		appList                           []string
-		backupLocationMap                 map[string]string
-		labelSelectors                    map[string]string
-		providers                         []string
-		intervalName                      string
-		dailyName                         string
-		weeklyName                        string
-		monthlyName                       string
-		provisionerVolumeSnapshotClassMap map[string]string
+		backupNames                               []string
+		restoreNames                              []string
+		scheduledAppContexts                      []*scheduler.Context
+		sourceClusterUid                          string
+		cloudCredName                             string
+		cloudCredUID                              string
+		backupLocationUID                         string
+		backupLocationName                        string
+		backupLocationMap                         map[string]string
+		labelSelectors                            map[string]string
+		providers                                 []string
+		firstBkpLocationName                      string
+		schedulePolicyName                        string
+		schedulePolicyUID                         string
+		scheduleUid                               string
+		srcClusterUid                             string
+		schedulePolicyInterval                    = int64(15)
+		scheduledAppContextsForDefaultVscBackup   []*scheduler.Context
+		scheduledAppContextsForCustomVscBackup    []*scheduler.Context
+		allAppContext                             []*scheduler.Context
+		defaultSchBackupName                      string
+		scheduleList                              []string
+		defaultProvisionerScheduleName            string
+		nonDefaultVscSchBackupName                string
+		randomStringLength                        = 10
+		forceKdmpSchBackupName                    string
+		appSpecList                               []string
+		kdmpScheduleName                          string
+		scheduledAppContextsForMultipleAppSinleNs []*scheduler.Context
+		multipleProvisionerSameNsScheduleName     string
+		multipleNsSchBackupName                   string
+		clusterProviderName                       = GetClusterProvider()
+		provisionerDefaultSnapshotClassMap        = GetProvisionerDefaultSnapshotMap(clusterProviderName)
+		provisionerSnapshotClassMap               = GetProvisionerSnapshotClassesMap(clusterProviderName)
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("BasicBackupCreationDummyTest", "Deploying backup", nil, 84755, Sagrawal, Q4FY23)
+		StartPxBackupTorpedoTest("MultipleProvisionerCsiKdmpBackupAndRestore", "Backup and restore of namespaces with multiple provisioners using csi and kdmp", nil, 296724, Sn, Q4FY24)
 
-		appList = Inst().AppList
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		providers = GetBackupProviders()
-		intervalName = fmt.Sprintf("%s-%v", "interval", time.Now().Unix())
-		dailyName = fmt.Sprintf("%s-%v", "daily", time.Now().Unix())
-		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
-		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
-		provisionerVolumeSnapshotClassMap = map[string]string{
-			"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
-			"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-rbdsplugin-snapclass",
+		// Deploy application for Default backup
+		appSpecList = []string{"postgres"}
+		applicationSpecIndex := rand.Intn(len(appSpecList))
+		applicationSpec := appSpecList[applicationSpecIndex]
+
+		// Deploy multiple application in a single namespace using different provisioner
+		taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
+		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
+			appSpec, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner, applicationSpec)
+			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
+			appContexts := ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)
+			appContexts[0].ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContextsForMultipleAppSinleNs = append(scheduledAppContextsForMultipleAppSinleNs, appContexts...)
+			allAppContext = append(allAppContext, appContexts...)
 		}
 
-		taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
-		appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys:            []string{"postgres-cephfs-csi"},
-			StorageProvisioner: "openshift-storage.cephfs.csi.ceph.com",
-		})
-		appCtx[0].ReadinessTimeout = AppReadinessTimeout
-		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
-		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+		// Deploy multiple application in multiple namespace for default backup
+		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
+			appSpec, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner, applicationSpec)
+			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
+			taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+			appCtx := ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)
+			appCtx[0].ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContextsForDefaultVscBackup = append(scheduledAppContextsForDefaultVscBackup, appCtx...)
+			allAppContext = append(allAppContext, appCtx...)
+		}
 
-		taskName = fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
-		appCtx, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys:            []string{"postgres-rbd-csi"},
-			StorageProvisioner: "openshift-storage.rbd.csi.ceph.com",
-		})
-		appCtx[0].ReadinessTimeout = AppReadinessTimeout
-		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
-		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+		// Deploy multiple application in multiple namespace for custom backup
+		for provisioner, _ := range provisionerSnapshotClassMap {
+			appSpec, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner, applicationSpec)
+			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
+			taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+			appCtx := ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)
+			appCtx[0].ReadinessTimeout = AppReadinessTimeout
+			scheduledAppContextsForCustomVscBackup = append(scheduledAppContextsForCustomVscBackup, appCtx...)
+			allAppContext = append(allAppContext, appCtx...)
+		}
 	})
 
-	It("Basic Backup Creation", func() {
-		defer func() {
-			log.InfoD("switching to default context")
-			err := SetClusterContext("")
-			log.FailOnError(err, "failed to SetClusterContext to default cluster")
-		}()
-
-		Step("Creating rules for backup", func() {
-			log.InfoD("Creating rules for backup")
-			log.InfoD("Creating pre rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				preRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "pre")
-				log.FailOnError(err, "Creating pre rule for deployed app [%s] failed", appList[i])
-				dash.VerifyFatal(preRuleStatus, true, "Verifying pre rule for backup")
-				if ruleName != "" {
-					preRuleNameList = append(preRuleNameList, ruleName)
-				}
-			}
-			log.InfoD("Creating post rule for deployed apps")
-			for i := 0; i < len(appList); i++ {
-				postRuleStatus, ruleName, err := Inst().Backup.CreateRuleForBackup(appList[i], BackupOrgID, "post")
-				log.FailOnError(err, "Creating post rule for deployed app [%s] failed", appList[i])
-				dash.VerifyFatal(postRuleStatus, true, "Verifying Post rule for backup")
-				if ruleName != "" {
-					postRuleNameList = append(postRuleNameList, ruleName)
-				}
-			}
+	It("Backup and restore of namespaces with multiple provisioners using csi and kdmp", func() {
+		Step("Validate deployed applications", func() {
+			ValidateApplications(allAppContext)
 		})
-
 		Step("Creating backup location and cloud setting", func() {
 			log.InfoD("Creating backup location and cloud setting")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -120,30 +121,6 @@ var _ = Describe("{RestoreCsiBackupAfterSnapshotDelete}", func() {
 				dash.VerifyFatal(err, nil, "Creating backup location")
 			}
 		})
-
-		Step("Creating backup schedule policies", func() {
-			log.InfoD("Creating backup schedule policies")
-			log.InfoD("Creating backup interval schedule policy")
-			intervalSchedulePolicyInfo := Inst().Backup.CreateIntervalSchedulePolicy(5, 15, 2)
-			intervalPolicyStatus := Inst().Backup.BackupSchedulePolicy(intervalName, uuid.New(), BackupOrgID, intervalSchedulePolicyInfo)
-			dash.VerifyFatal(intervalPolicyStatus, nil, "Creating interval schedule policy")
-
-			log.InfoD("Creating backup daily schedule policy")
-			dailySchedulePolicyInfo := Inst().Backup.CreateDailySchedulePolicy(1, "9:00AM", 2)
-			dailyPolicyStatus := Inst().Backup.BackupSchedulePolicy(dailyName, uuid.New(), BackupOrgID, dailySchedulePolicyInfo)
-			dash.VerifyFatal(dailyPolicyStatus, nil, "Creating daily schedule policy")
-
-			log.InfoD("Creating backup weekly schedule policy")
-			weeklySchedulePolicyInfo := Inst().Backup.CreateWeeklySchedulePolicy(1, backup.Friday, "9:10AM", 2)
-			weeklyPolicyStatus := Inst().Backup.BackupSchedulePolicy(weeklyName, uuid.New(), BackupOrgID, weeklySchedulePolicyInfo)
-			dash.VerifyFatal(weeklyPolicyStatus, nil, "Creating weekly schedule policy")
-
-			log.InfoD("Creating backup monthly schedule policy")
-			monthlySchedulePolicyInfo := Inst().Backup.CreateMonthlySchedulePolicy(1, 29, "9:20AM", 2)
-			monthlyPolicyStatus := Inst().Backup.BackupSchedulePolicy(monthlyName, uuid.New(), BackupOrgID, monthlySchedulePolicyInfo)
-			dash.VerifyFatal(monthlyPolicyStatus, nil, "Creating monthly schedule policy")
-		})
-
 		Step("Registering cluster for backup", func() {
 			log.InfoD("Registering cluster for backup")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -163,107 +140,209 @@ var _ = Describe("{RestoreCsiBackupAfterSnapshotDelete}", func() {
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
 		})
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating schedule policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			schedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(randomStringLength))
+			schedulePolicyUID = uuid.New()
+			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, BackupOrgID, ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
+		})
+		Step(fmt.Sprintf("Creating schedule backup for application deployed using multiple provisioner with default volume snapshot class"), func() {
+			log.InfoD("Creating schedule backup for multiple provisioner with default volume snapshot class")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
 
-		Step("Taking backup of application from source cluster", func() {
-			log.InfoD("taking backup of applications")
+			if len(provisionerDefaultSnapshotClassMap) > 0 {
+				// Modify all provisioner to select default volume snapshot class
+				provisionerSelectDefaultVolumeSnapshotClass := make(map[string]string)
+				for key := range provisionerDefaultSnapshotClassMap {
+					provisionerSelectDefaultVolumeSnapshotClass[key] = "default"
+				}
+				multipleProvisionerSameNsScheduleName = fmt.Sprintf("multiple-provisioner-same-namespace-schedule-%v", RandomString(randomStringLength))
+				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
+				scheduleList = append(scheduleList, multipleNsSchBackupName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", multipleNsSchBackupName, backupLocationName))
+				err = IsFullBackup(multipleNsSchBackupName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", multipleNsSchBackupName, backupLocationName))
+				scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, multipleNsSchBackupName, BackupOrgID)
+				err = DeleteScheduleWithUIDAndWait(multipleNsSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+			} else {
+				log.InfoD("Skipping this step as provisioner with default volume snapshot class is not found")
+			}
+		})
+		Step(fmt.Sprintf("Creating schedule backup for each namespace having application deployed with different provisioner which has default volume snapshot class"), func() {
+			log.InfoD("Creating schedule backup for multiple provisioner which has default volume snapshot class")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			if len(provisionerDefaultSnapshotClassMap) > 0 {
+				// Modify all provisioner to select default volume snapshot class
+				provisionerSelectDefaultVolumeSnapshotClass := make(map[string]string)
+				for key := range provisionerDefaultSnapshotClassMap {
+					provisionerSelectDefaultVolumeSnapshotClass[key] = "default"
+				}
+				defaultProvisionerScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(randomStringLength))
+				defaultSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, defaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
+				scheduleList = append(scheduleList, defaultSchBackupName)
+
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", defaultSchBackupName, backupLocationName))
+				err = IsFullBackup(defaultSchBackupName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", defaultSchBackupName, backupLocationName))
+				scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, defaultSchBackupName, BackupOrgID)
+				err = DeleteScheduleWithUIDAndWait(defaultSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+			} else {
+				log.InfoD("Skipping this step as provisioner with default volume snapshot class is not found")
+			}
+		})
+		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner with non default volume snapshot class"), func() {
+			log.InfoD("Creating schedule backup for multiple provisioner with non default volume snapshot class")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+
+			if len(provisionerSnapshotClassMap) > 0 {
+				nonDefaultProvisionerScheduleName := fmt.Sprintf("default-provisioner-schedule-%v", RandomString(randomStringLength))
+				nonDefaultVscSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, nonDefaultProvisionerScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSnapshotClassMap, false)
+				scheduleList = append(scheduleList, nonDefaultProvisionerScheduleName)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", nonDefaultVscSchBackupName, backupLocationName))
+				err = IsFullBackup(nonDefaultVscSchBackupName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", nonDefaultVscSchBackupName, backupLocationName))
+				scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, nonDefaultVscSchBackupName, BackupOrgID)
+				err = DeleteScheduleWithUIDAndWait(nonDefaultVscSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+			} else {
+				log.InfoD("Skipping this step as provisioner with non-default volumeSnapshotClass is not found")
+			}
+		})
+		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner with forced kdmp option"), func() {
+			log.InfoD("Creating schedule backup for multiple provisioner with forced kdmp option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			provisionerNonDefaultSnapshotClassMap := map[string]string{}
+			kdmpScheduleName = fmt.Sprintf("default-provisioner-schedule-%v", RandomString(randomStringLength))
+			forceKdmpSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, kdmpScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, true)
+			scheduleList = append(scheduleList, kdmpScheduleName)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", nonDefaultVscSchBackupName, firstBkpLocationName))
+			err = IsFullBackup(forceKdmpSchBackupName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", nonDefaultVscSchBackupName, firstBkpLocationName))
+		})
+		Step("Taking manual backup of application from source cluster", func() {
+			log.InfoD("taking manual backup of applications")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
 			backupNames = make([]string, 0)
-			for i, appCtx := range scheduledAppContexts {
-				scheduledNamespace := appCtx.ScheduleOptions.Namespace
-				backupName := fmt.Sprintf("%s-%s-%v", "autogenerated-backup", scheduledNamespace, time.Now().Unix())
-				provisionerVolumeSnapshotClassSubMap := make(map[string]string)
-				if value, ok := provisionerVolumeSnapshotClassMap[appCtx.ScheduleOptions.StorageProvisioner]; ok {
-					provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
+			if len(provisionerDefaultSnapshotClassMap) > 0 {
+				for i, appCtx := range scheduledAppContextsForDefaultVscBackup {
+					scheduledNamespace := appCtx.ScheduleOptions.Namespace
+					backupName := fmt.Sprintf("%s-%s-%v", "autogenerated-backup", scheduledNamespace, time.Now().Unix())
+					provisionerVolumeSnapshotClassSubMap := make(map[string]string)
+					if value, ok := provisionerDefaultSnapshotClassMap[appCtx.ScheduleOptions.StorageProvisioner]; ok {
+						provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
+					}
+					log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
+					err = CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForDefaultVscBackup[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap, false)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
+					backupNames = append(backupNames, backupName)
 				}
-				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
-				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap, false)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-				backupNames = append(backupNames, backupName)
+			} else {
+				log.InfoD("Skipping this step as provisioner with default volumeSnapshotClass is not found")
 			}
 		})
-
-		Step("Restoring the backed up namespaces", func() {
-			log.InfoD("Restoring the backed up namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for i, appCtx := range scheduledAppContexts {
-				scheduledNamespace := appCtx.ScheduleOptions.Namespace
-				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
-				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
-					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
-				}
-				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts[i:i+1])
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+		Step("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner", func() {
+			if multipleNsSchBackupName != "" {
+				log.InfoD("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "multi-app-single-ns", RandomString(randomStringLength))
+				log.InfoD("Restoring namespaces from the [%s] backup", multipleNsSchBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, multipleNsSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForMultipleAppSinleNs)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
+		Step("Restoring the backup taken on multiple namespace with different provisioner", func() {
+			if defaultSchBackupName != "" {
+				log.InfoD("Restoring the backup taken on multiple namespace with different provisioner")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "multi-ns-different-provisioner", RandomString(randomStringLength))
+				log.InfoD("Restoring namespaces from the [%s] backup", defaultSchBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, defaultSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForDefaultVscBackup)
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+		Step("Restoring the backup taken on multiple provisioner with non default volumeSnapshotClass", func() {
+			if nonDefaultVscSchBackupName != "" {
+				log.InfoD("Restoring the multiple provisioner with default volume snapshot class")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "non-default-provisioner", RandomString(randomStringLength))
+				log.InfoD("Restoring namespaces from the [%s] backup", nonDefaultVscSchBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, nonDefaultVscSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForCustomVscBackup)
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+		Step("Restoring the backup taken on multiple provisioner with kdmp", func() {
+			if forceKdmpSchBackupName != "" {
+				log.InfoD("Restoring the multiple provisioner with default volumeSnapshotClass")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "kdmp", RandomString(randomStringLength))
+				log.InfoD("Restoring namespaces from the [%s] backup", forceKdmpSchBackupName)
+				err = CreateRestoreWithValidation(ctx, restoreName, forceKdmpSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForCustomVscBackup)
+				restoreNames = append(restoreNames, restoreName)
+			}
+		})
+		Step("Restoring from the manual back backup", func() {
+			if len(backupNames) > 0 {
+				log.InfoD("Restoring from the manual back backup")
+				ctx, err := backup.GetAdminCtxFromSecret()
+				log.FailOnError(err, "Fetching px-central-admin ctx")
+				for i, appCtx := range scheduledAppContextsForCustomVscBackup {
+					scheduledNamespace := appCtx.ScheduleOptions.Namespace
+					restoreName := fmt.Sprintf("%s-%s-%s", "test-restore-manual-backup", scheduledNamespace, RandomString(randomStringLength))
+					for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
+						restoreName = fmt.Sprintf("%s-%s-%s", "test-restore-manual-backup", scheduledNamespace, RandomString(randomStringLength))
+					}
+					log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
+					err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts[i:i+1])
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+					restoreNames = append(restoreNames, restoreName)
+				}
+			}
+		})
 	})
-
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-
 		defer func() {
 			log.InfoD("switching to default context")
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
-		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
-		if len(preRuleNameList) > 0 {
-			for _, ruleName := range preRuleNameList {
-				err := Inst().Backup.DeleteRuleForBackup(BackupOrgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup pre rules [%s]", ruleName))
-			}
-		}
-		if len(postRuleNameList) > 0 {
-			for _, ruleName := range postRuleNameList {
-				err := Inst().Backup.DeleteRuleForBackup(BackupOrgID, ruleName)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
-			}
-		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
-		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
-		log.InfoD("switching to destination context")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "failed to switch to context to destination cluster")
-
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
-			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		for _, schName := range scheduleList {
+			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, schName, BackupOrgID)
+			err = DeleteScheduleWithUIDAndWait(schName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting schedule %s for backup location %s", defaultSchBackupName, firstBkpLocationName))
 		}
-		DestroyApps(restoredAppContexts, opts)
+
+		log.InfoD("Deleting the deployed apps after the testcase")
+		DestroyApps(allAppContext, opts)
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
 
-		backupDriver := Inst().Backup
-		log.Info("Deleting backed up namespaces")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
-			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
-		}
-		log.Info("Deleting restored namespaces")
+		// Delete restores
+		log.Info("Delete restores")
 		for _, restoreName := range restoreNames {
 			err = DeleteRestore(restoreName, BackupOrgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		}
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
