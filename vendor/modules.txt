@@ -1272,6 +1272,7 @@ github.com/pure-px/apis/public/portworx/platform/backuppolicy/apiv1
 github.com/pure-px/apis/public/portworx/platform/cloudcredential/apiv1
 github.com/pure-px/apis/public/portworx/platform/iam/apiv1
 github.com/pure-px/apis/public/portworx/platform/namespace/apiv1
+github.com/pure-px/apis/public/portworx/platform/onboard/apiv1
 github.com/pure-px/apis/public/portworx/platform/project/apiv1
 github.com/pure-px/apis/public/portworx/platform/serviceaccount/apiv1
 github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1

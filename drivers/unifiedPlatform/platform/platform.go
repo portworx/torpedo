@@ -16,6 +16,7 @@ type Platform interface {
 	IamRoleBindingsInterface
 	ServiceAccountsInterface
 	TemplatesInterface
+	Onboard
 }
 
 type AccountInterface interface {
@@ -33,11 +34,11 @@ type TargetClusterInterface interface {
 	ListTargetClusters(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetTarget(*WorkFlowRequest) (*WorkFlowResponse, error)
 	PatchTargetCluster(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteTarget(request *WorkFlowRequest) error
+	DeleteTargetCluster(request *WorkFlowRequest) error
 }
 
 type TargetClusterManifestInterface interface {
-	GetTargetClusterRegistrationManifest(getRequest *WorkFlowRequest) (string, error)
+	GetTargetClusterRegistrationManifest(*WorkFlowRequest) (*WorkFlowResponse, error)
 }
 
 type ApplicationInterface interface {
@@ -94,4 +95,8 @@ type TemplatesInterface interface {
 	CreateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
 	DeleteTemplate(*WorkFlowRequest) error
+}
+
+type Onboard interface {
+	OnboardNewAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
 }
