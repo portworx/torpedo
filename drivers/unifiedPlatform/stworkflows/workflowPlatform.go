@@ -8,10 +8,9 @@ import (
 )
 
 type WorkflowPlatform struct {
-	Accounts        map[string]map[string]string
-	AdminAccountId  string
-	PlatformVersion string
-	TenantId        string
+	Accounts       map[string]map[string]string
+	AdminAccountId string
+	TenantId       string
 }
 
 func (platform *WorkflowPlatform) OnboardAccounts() (map[string][]apiStructs.WorkFlowResponse, error) {

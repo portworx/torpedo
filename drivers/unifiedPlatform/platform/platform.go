@@ -34,7 +34,7 @@ type TargetClusterInterface interface {
 	ListTargetClusters(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetTarget(*WorkFlowRequest) (*WorkFlowResponse, error)
 	PatchTargetCluster(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteTarget(request *WorkFlowRequest) error
+	DeleteTargetCluster(request *WorkFlowRequest) error
 }
 
 type TargetClusterManifestInterface interface {

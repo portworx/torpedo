@@ -5,8 +5,9 @@ type PlatformTargetClusterOutput struct {
 }
 
 type PlatformTargetCluster struct {
-	GetManifest        PlatformGetTargetClusterManifest `copier:"must,nopanic"`
-	ListTargetClusters PlatformListTargetCluster        `copier:"must,nopanic"`
+	GetManifest         PlatformGetTargetClusterManifest `copier:"must,nopanic"`
+	ListTargetClusters  PlatformListTargetCluster        `copier:"must,nopanic"`
+	DeleteTargetCluster PlatformDeleteTargetCluster      `copier:"must,nopanic"`
 }
 
 type PlatformManifestOutput struct {
@@ -21,4 +22,8 @@ type PlatformGetTargetClusterManifest struct {
 
 type PlatformListTargetCluster struct {
 	TenantId string `copier:"must,nopanic"`
+}
+
+type PlatformDeleteTargetCluster struct {
+	Id string `copier:"must,nopanic"`
 }

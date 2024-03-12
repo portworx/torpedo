@@ -22,7 +22,6 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 				apiStructs.UserEmail:       "atrivedi+1@purestorage.com",
 			},
 		}
-		workflowPlatform.PlatformVersion = "v1.0.0"
 	})
 
 	It("Onboard accounts", func() {
@@ -39,7 +38,6 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 
 			workflowTargetCluster.Platform = workflowPlatform
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Platform.TenantId)
-			log.Infof("Tenant Version [%s]", workflowTargetCluster.Platform.PlatformVersion)
 			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
 			log.FailOnError(err, "Unable to register target cluster")
 			log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)

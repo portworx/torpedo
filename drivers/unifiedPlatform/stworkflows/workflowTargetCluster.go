@@ -67,7 +67,7 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 	}
 
 	if !isRegistered {
-		log.InfoD("Installing Manifests %v", targetCluster.Platform.PlatformVersion)
+		log.InfoD("Installing Manifests..")
 		cmd = fmt.Sprintf("echo '%v' > %s && kubectl apply -f %s && rm -f %s", manifest.TargetCluster.Manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		log.Infof("Manifest:\n%v\n", cmd)
 		output, _, err := osutils.ExecShell(cmd)
@@ -116,7 +116,7 @@ func (targetCluster *WorkflowTargetCluster) DeregisterFromControlPlane() error {
 	}
 
 	if len(pods.Items) > 0 {
-		log.InfoD("Uninstalling Manifests %v", targetCluster.Platform.PlatformVersion)
+		log.InfoD("Uninstalling Manifests ...")
 		// Get Manifest from API
 		manifest, err := platformLibs.GetManifest(targetCluster.Platform.TenantId, "")
 		if err != nil {
