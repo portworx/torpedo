@@ -1877,7 +1877,7 @@ func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan 
 	return contexts
 }
 
-// ScheduleApplications schedules *the* applications and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+// ScheduleApplicationsWithScheduleOptions schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
 func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
 	defer func() {
 		if len(errChan) > 0 {
