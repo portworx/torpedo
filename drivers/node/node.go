@@ -221,9 +221,6 @@ type Driver interface {
 	// delayInMilliseconds => 1 to 1000
 	InjectNetworkError(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
 
-	// InjectNetworkErrorWithRebootFallback by dropping packets or introdiucing delay in packet tramission and reboot nodes during fallback
-	InjectNetworkErrorWithRebootFallback(nodes []Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error
-
 	// GetDeviceMapperCount return devicemapper count
 	GetDeviceMapperCount(Node, time.Duration) (int, error)
 
@@ -487,14 +484,6 @@ func (d *notSupportedDriver) InjectNetworkError(nodes []Node, errorInjectionType
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "InjectNetworkError()",
-	}
-}
-
-func (d *notSupportedDriver) InjectNetworkErrorWithRebootFallback(nodes []Node, errorInjectionType string, operationType string,
-	dropPercentage int, delayInMilliseconds int) error {
-	return &errors.ErrNotSupported{
-		Type:      "Function",
-		Operation: "InjectNetworkErrorWithRebootFallback()",
 	}
 }
 

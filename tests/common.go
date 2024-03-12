@@ -10731,3 +10731,36 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	_, err := k8sStorage.CreateStorageClass(&scObj)
 	return err
 }
+
+// InjectNetworkErrorWithRebootFallback by dropping packets or introdiucing delay in packet tramission and reboot nodes during fallback
+// nodes=> list of nodes where network injection should be done.
+// errorInjectionType => pass "delay" or "drop"
+// operationType => add/change/delete
+// dropPercentage => intger value from 1 to 100
+// delayInMilliseconds => 1 to 1000
+
+// sample usage:
+// Inst().N.InjectNetworkErrorWithRebootFallback(nodes, "delay", "del", 0, i)
+func InjectNetworkErrorWithRebootFallback(nodes []node.Node, errorInjectionType string, operationType string, dropPercentage int, delayInMilliseconds int) error {
+	for _, n := range nodes {
+		err := Inst().N.InjectNetworkError([]node.Node{n}, errorInjectionType, operationType, dropPercentage, delayInMilliseconds)
+		if err != nil {
+			if strings.Contains(err.Error(), "no usable address found") {
+				log.Infof("Node %s [is] unreachable. Rebooting the node to recover", n.Name)
+				// recover the VM if it went unreachable by rebooting
+				rebootErr := RebootNodeAndWait(n)
+				if rebootErr != nil {
+					return fmt.Errorf("failed to reboot node %s: %v", n.Name, rebootErr)
+				}
+				log.Infof("Retrying network error injection on node [%s] after reboot", n.Name)
+				err = Inst().N.InjectNetworkError([]node.Node{n}, errorInjectionType, operationType, dropPercentage, delayInMilliseconds)
+				if err != nil {
+					return fmt.Errorf("failed to inject network error on node [%s] after reboot. Err: [%v]", n.Name, err)
+				}
+			} else {
+				return err
+			}
+		}
+	}
+	return nil
+}

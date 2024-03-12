@@ -1938,12 +1938,12 @@ var _ = Describe("{BackupNetworkErrorTest}", func() {
 					func() {
 						defer func() {
 							log.Infof(fmt.Sprintf("Deleting the delay of %dms to the applications nodes", lastErrorDelay))
-							err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "del", 0, lastErrorDelay)
+							err := InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "del", 0, lastErrorDelay)
 							dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", lastErrorDelay))
 						}()
 
 						log.Infof(fmt.Sprintf("Adding a delay of %dms to the applications nodes", i))
-						err := Inst().N.InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "add", 0, i)
+						err := InjectNetworkErrorWithRebootFallback(appNodesMap[currentNamespace], "delay", "add", 0, i)
 						dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", i))
 
 						backupName := fmt.Sprintf("%s-%s-delay-%dms-%s", BackupNamePrefix, namespace, i, RandomString(5))
@@ -1962,19 +1962,21 @@ var _ = Describe("{BackupNetworkErrorTest}", func() {
 							} else {
 								dash.VerifyFatal(err, nil, fmt.Sprintf("The backup creation failed with error [%v]", err))
 								lastErrorDelay = i
+								return
 							}
 						} else {
 							log.Infof(fmt.Sprintf("Backup [%s] succeeded with a network delay of [%d]", backupName, i))
 						}
 					}()
 				}
-
-				log.Infof("Create the backup when delay is removed and verify backup is succeeded")
-				finalBackupName := fmt.Sprintf("%s-%s-nodelay-%s", BackupNamePrefix, namespace, RandomString(5))
-				appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
-				err = CreateBackupWithValidation(ctx, finalBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] after removing the network delay", finalBackupName))
-				backupNamespaceMap[namespace] = finalBackupName
+				if failedBackupTaken {
+					log.Infof("Create the backup when delay is removed and verify backup is succeeded")
+					finalBackupName := fmt.Sprintf("%s-%s-nodelay-%s", BackupNamePrefix, namespace, RandomString(5))
+					appContextsToBackup := FilterAppContextsByNamespace(scheduledAppContexts, []string{namespace})
+					err = CreateBackupWithValidation(ctx, finalBackupName, SourceClusterName, bkpLocationName, backupLocationUID, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
+					dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s] after removing the network delay", finalBackupName))
+					backupNamespaceMap[namespace] = finalBackupName
+				}
 			}
 		})
 
