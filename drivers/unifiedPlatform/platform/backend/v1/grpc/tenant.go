@@ -30,7 +30,7 @@ func (Tenantgrpc *PlatformGrpc) getTenantClient() (context.Context, publictenant
 	return ctx, tenantClient, token, nil
 }
 
-func (Tenantgrpc *PlatformGrpc) ListTenants(accountID string) ([]WorkFlowResponse, error) {
+func (Tenantgrpc *PlatformGrpc) ListTenants() ([]WorkFlowResponse, error) {
 	tenantsResponse := []WorkFlowResponse{}
 	ctx, client, _, err := Tenantgrpc.getTenantClient()
 	if err != nil {

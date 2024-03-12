@@ -1282,9 +1282,20 @@ github.com/pure-px/apis/public/portworx/platform/template/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/apiv1
 github.com/pure-px/apis/public/portworx/platform/tenant/application/apiv1
 github.com/pure-px/apis/public/portworx/platform/whoami/apiv1
-# github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
+# github.com/pure-px/platform-api-go-client v0.0.0-20240312035631-72cc1e92f225
 ## explicit; go 1.21.4
-github.com/pure-px/platform-api-go-client/v1alpha1
+github.com/pure-px/platform-api-go-client/v1/account
+github.com/pure-px/platform-api-go-client/v1/backuplocation
+github.com/pure-px/platform-api-go-client/v1/cloudcredential
+github.com/pure-px/platform-api-go-client/v1/iam
+github.com/pure-px/platform-api-go-client/v1/namespace
+github.com/pure-px/platform-api-go-client/v1/onboard
+github.com/pure-px/platform-api-go-client/v1/project
+github.com/pure-px/platform-api-go-client/v1/serviceaccount
+github.com/pure-px/platform-api-go-client/v1/targetcluster
+github.com/pure-px/platform-api-go-client/v1/targetclusterregistrationmanifest
+github.com/pure-px/platform-api-go-client/v1/tenant
+github.com/pure-px/platform-api-go-client/v1/whoami
 # github.com/rancher/norman v0.0.0-20230222213531-275a3e921940
 ## explicit; go 1.19
 github.com/rancher/norman/clientbase

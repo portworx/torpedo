@@ -1,32 +1,17 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	cloudCredentialv1 "github.com/pure-px/platform-api-go-client/v1/cloudcredential"
 	status "net/http"
 )
 
-// GetCloudCredentialClient updates the header with bearer token and return cloudCreds the new client
-func (cloudCred *PLATFORM_API_V1) GetCloudCredentialClient() (context.Context, *platformv1.CloudCredentialServiceAPIService, error) {
-	ctx, token, err := GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-	cloudCred.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	cloudCred.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = cloudCred.AccountID
-	client := cloudCred.ApiClientV1.CloudCredentialServiceAPI
-
-	return ctx, client, nil
-}
-
 // ListCloudCredentials return list of cloud credentials
 func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
-	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	cloudCredsResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -46,12 +31,12 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *WorkFlowRequest)
 
 // GetCloudCredentials gets cloud credentials by ts id
 func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	cloudCredsResponse := WorkFlowResponse{}
-	var getCloudCredReq platformv1.ApiCloudCredentialServiceGetCloudCredentialRequest
+	var getCloudCredReq cloudCredentialv1.ApiCloudCredentialServiceGetCloudCredentialRequest
 	err = copier.Copy(&getCloudCredReq, getReq)
 	if err != nil {
 		return nil, err
@@ -71,12 +56,12 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *WorkFlowRequest) (
 
 // CreateCloudCredentials return newly created cloud credentials
 func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	cloudCredsResponse := WorkFlowResponse{}
-	var createCloudCredRequest platformv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
+	var createCloudCredRequest cloudCredentialv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
 	err = copier.Copy(&createCloudCredRequest, createRequest)
 	if err != nil {
 		return nil, err
@@ -95,12 +80,12 @@ func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *WorkFlow
 
 // UpdateCloudCredentials return updated created cloud credentials
 func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	cloudCredsResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var updateAppReq platformv1.ApiCloudCredentialServiceUpdateCloudCredentialRequest
+	var updateAppReq cloudCredentialv1.ApiCloudCredentialServiceUpdateCloudCredentialRequest
 	err = copier.Copy(&updateAppReq, updateReq)
 	if err != nil {
 		return nil, err
@@ -119,7 +104,7 @@ func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequ
 
 // DeleteCloudCredential delete cloud cred model.
 func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCredId *WorkFlowRequest) error {
-	ctx, cloudCredsClient, err := cloudCred.GetCloudCredentialClient()
+	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
