@@ -15,7 +15,7 @@ import (
 	"math/rand"
 )
 
-// This MultipleProvisionerBackupAndRestore testcase to test the provisioner support will be removed at the time of merge
+// This MultipleProvisionerBackupAndRestore testcase to test Backup and restore of namespaces with multiple provisioners using csi and kdmp
 var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
 
 	var (
