@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
@@ -418,5 +419,39 @@ func GetVMsWithNamespaceLabels(c *gin.Context) {
 
 	// Return the list of VMs
 	c.JSON(http.StatusOK, vmResponse)
+
+}
+
+// AddNSLabel ads the label to the namespaces with the given label
+func AddNSLabel(c *gin.Context) {
+	log.Infof("Adding label to NS ")
+	var NamespaceLabelRequest struct {
+		Namespace string            `json:"namespace" binding:"required"`
+		Label     map[string]string `json:"ns_label" binding:"required"`
+	}
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+	if err := c.BindJSON(&NamespaceLabelRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(NamespaceLabelRequest.Label) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace labels cannot be empty"})
+		return
+	}
+	log.Infof("NamespaceLabelRequest", NamespaceLabelRequest)
+	_, err := pdslib.UpdatePDSNamespce(NamespaceLabelRequest.Namespace, NamespaceLabelRequest.Label)
+	if err != nil {
+		log.Error(err, "Error while adding label to namespace")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Label updated successfully",
+	})
 
 }
