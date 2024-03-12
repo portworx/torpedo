@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/portworx/torpedo/drivers/node"
-	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests"
@@ -422,13 +421,20 @@ func GetVMsWithNamespaceLabels(c *gin.Context) {
 
 }
 
-// AddNSLabel ads the label to the namespaces with the given label
+// AddNSLabel adds the label to the namespaces with the given label
 func AddNSLabel(c *gin.Context) {
 	log.Infof("Adding label to NS ")
-	var NamespaceLabelRequest struct {
-		Namespace string            `json:"namespace" binding:"required"`
-		Label     map[string]string `json:"ns_label" binding:"required"`
+	type LabelUpdateResponse struct {
+		Success map[string]string `json:"success"`
+		Failed  map[string]string `json:"failed"`
 	}
+
+	var NamespaceLabelRequest struct {
+		Namespaces []string          `json:"namespaces" binding:"required"`
+		Label      map[string]string `json:"ns_label" binding:"required"`
+	}
+	success := make(map[string]string)
+	failed := make(map[string]string)
 	if !checkTorpedoInit(c) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Errorf("error in InitInstance()"),
@@ -444,14 +450,21 @@ func AddNSLabel(c *gin.Context) {
 		return
 	}
 	log.Infof("NamespaceLabelRequest", NamespaceLabelRequest)
-	_, err := pdslib.UpdatePDSNamespce(NamespaceLabelRequest.Namespace, NamespaceLabelRequest.Label)
-	if err != nil {
-		log.Error(err, "Error while adding label to namespace")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	for _, namespace := range NamespaceLabelRequest.Namespaces {
+		err := tests.Inst().S.AddNamespaceLabel(namespace, NamespaceLabelRequest.Label)
+		if err != nil {
+			failed[namespace] = err.Error()
+		} else {
+			success[namespace] = "Label added successfully"
+		}
+	}
+
+	response := LabelUpdateResponse{
+		Success: success,
+		Failed:  failed,
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Label updated successfully",
+		"message": response,
 	})
 
 }
