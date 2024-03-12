@@ -558,7 +558,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			err = DeleteScheduleWithUIDAndWait(defaultSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 		})
 		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner with non default volume snapshot class"), func() {
-			log.InfoD("Creating schedule backup %s for multiple provisioner with non default volume snapshot class")
+			log.InfoD("Creating schedule backup for multiple provisioner with non default volume snapshot class")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 
