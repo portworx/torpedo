@@ -365,11 +365,11 @@ var ProvisionerMap = map[string]map[string]struct {
 	},
 	"openshift": {
 		"cephfs-csi": {
-			snapshotClasses: []string{},
+			snapshotClasses: []string{"ocs-storagecluster-cephfsplugin-snapclass"},
 			defaultSnapshot: "ocs-storagecluster-cephfsplugin-snapclass",
 			appList:         []string{"postgres-cephfs-csi"},
 		}, "rbd-csi": {
-			snapshotClasses: []string{},
+			snapshotClasses: []string{"ocs-storagecluster-rbdplugin-snapclass"},
 			defaultSnapshot: "ocs-storagecluster-rbdplugin-snapclass",
 			appList:         []string{"postgres-rbd-csi"},
 		},
