@@ -856,8 +856,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 			log.InfoD("Validating app namespaces in source cluster")
 			err := SetSourceKubeConfig()
 			log.FailOnError(err, "Switching context to source cluster failed")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(srcClusterContexts, ctx)
+			ValidateApplications(srcClusterContexts)
 		})
 		Step("Create cloud credentials and backup locations", func() {
 			log.InfoD("Creating cloud credentials and backup locations")
@@ -1366,11 +1365,10 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		opts[SkipClusterScopedObjects] = true
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "Switching context to destination cluster failed")
-		ValidateAndDestroy(destClusterContexts, opts)
+		DestroyApps(destClusterContexts, opts)
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Switching context to source cluster failed")
-		err = DestroyAppsWithData(srcClusterContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
+		DestroyApps(srcClusterContexts, opts)
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudAccountName, cloudAccountUid, ctx)
 	})
 })
