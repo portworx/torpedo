@@ -26,12 +26,17 @@ func (tcManifest *PLATFORM_API_V1) getTargetClusterManifestClient() (context.Con
 	return ctx, client, nil
 }
 
-func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *apiStructs.WorkFlowRequest) (string, error) {
+func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 
+	response := &apiStructs.WorkFlowResponse{
+		TargetCluster: apiStructs.PlatformTargetClusterOutput{
+			Manifest: apiStructs.PlatformManifestOutput{},
+		},
+	}
 	var tcManifestRequest platformv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
-	clusterName := getManifestRequest.TargetClusterManifest.ClusterName
-	tenantId := getManifestRequest.TargetClusterManifest.TenantId
+	clusterName := getManifestRequest.TargetCluster.GetManifest.ClusterName
+	tenantId := getManifestRequest.TargetCluster.GetManifest.TenantId
 
 	tcManifestRequest = tcManifestRequest.ApiService.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest(context.Background(), tenantId)
 
@@ -48,8 +53,13 @@ func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManif
 	dtModels, res, err := dtClient.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestExecute(tcManifestRequest)
 
 	if err != nil || res.StatusCode != status.StatusOK {
-		return "", fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
+		return response, fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
 	}
-	return *dtModels.Manifest, nil
+
+	response.TargetCluster.Manifest.Manifest = dtModels.GetManifest()
+
+	log.Infof("Manifest - [%s]", response.TargetCluster.Manifest.Manifest)
+
+	return response, nil
 
 }

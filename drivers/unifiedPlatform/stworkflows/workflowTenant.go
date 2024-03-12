@@ -6,13 +6,17 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 )
 
-func WorkflowListTenants(accountID string) (map[string][]apiStructs.WorkFlowResponse, error) {
+type WorkflowTenant struct {
+	AccountID string
+}
+
+func (tenant *WorkflowTenant) ListTenants() (map[string][]apiStructs.WorkFlowResponse, error) {
 	resultMap := utils.GetWorkflowResponseMap()
 
-	tenantsList, err := platformLibs.GetTenantListV1(accountID)
+	tenantsList, err := platformLibs.GetTenantListV1(tenant.AccountID)
 	if err != nil {
 		return resultMap, err
 	}
-	addResultToResponse(tenantsList, GetTenantListV1, resultMap)
+	addResultToResponse(tenantsList, apiStructs.GetTenantListV1, resultMap)
 	return resultMap, nil
 }
