@@ -78,7 +78,7 @@ func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *WorkFlowRequest) (*
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	err = utilities.CopyStruct(&SaRequestBody, createSaReq.ServiceAccountRequest.V1ServiceAccount)
+	err = utilities.CopyStruct(&SaRequestBody, createSaReq.ServiceAccountRequest.Create)
 	saCreateRequest = saClient.ServiceAccountServiceCreateServiceAccount(context.Background(), createSaReq.TenantId).V1ServiceAccount(SaRequestBody)
 	saModel, res, err := saClient.ServiceAccountServiceCreateServiceAccountExecute(saCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {

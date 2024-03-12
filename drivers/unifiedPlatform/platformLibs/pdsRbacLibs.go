@@ -21,15 +21,15 @@ func CreateUser(saName, accId string) (*apiStructs.WorkFlowResponse, error) {
 
 func AssignRoleBindingsToUser(saName, roleName, resourceId, accId string) (*apiStructs.WorkFlowResponse, error) {
 	var (
-		userModel apiStructs.PdsServiceAccount
+		userModel apiStructs.PDSServiceAccount
 		binding   apiStructs.V1RoleBinding
 		roles     []apiStructs.V1RoleBinding
 	)
 	tenantId, err := GetDefaultTenantId(accId)
 	user, err := GetServiceAccFromSaName(tenantId, saName)
 	err = utilities.CopyStruct(user, userModel)
-	actorID := *userModel.Config.ClientId
-	clientSecret := *userModel.Config.ClientSecret
+	actorID := *userModel.Get.Config.ClientId
+	clientSecret := *userModel.Get.Config.ClientSecret
 	binding.RoleName = &roleName
 	binding.ResourceIds = append(binding.ResourceIds, resourceId)
 	iamName := "iam-" + strconv.Itoa(rand.Int())

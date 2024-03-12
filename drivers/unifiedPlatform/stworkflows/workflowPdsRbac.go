@@ -21,7 +21,7 @@ func (svcUser *UserWithRbac) CreateNewPdsUser(accId, saName, roleName, resourceI
 	log.InfoD("moving on to assign roleBindings to this user")
 	newToken, err := platformLibs.AssignRoleBindingsToUser(saName, roleName, resourceId, accId)
 
-	rbacToken := newToken.PdsRbacAccessToken.Token
+	rbacToken := newToken.PdsServiceAccount.GetToken.Token
 	svcUser.UserRoles[saName] = rbacToken
 	return saModel, nil
 }

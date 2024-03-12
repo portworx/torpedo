@@ -37,8 +37,8 @@ func GetServiceAccountForTenant(saId, tenantId string) (*apiStructs.WorkFlowResp
 
 // CreateServiceAccountForRBAC creates a new service account for a given tenant
 func CreateServiceAccountForRBAC(saName, tenantId string) (*apiStructs.WorkFlowResponse, error) {
-	saInputs.ServiceAccountRequest.V1ServiceAccount.Meta.Name = &saName
-	saInputs.ServiceAccountRequest.TenantId = tenantId
+	saInputs.ServiceAccountRequest.Create.V1ServiceAccount.Meta.Name = &saName
+	saInputs.ServiceAccountRequest.Create.TenantId = tenantId
 	saModel, err := v2Components.Platform.CreateServiceAccount(saInputs)
 	if err != nil {
 		return nil, err
@@ -48,9 +48,9 @@ func CreateServiceAccountForRBAC(saName, tenantId string) (*apiStructs.WorkFlowR
 
 // GenerateServiceAccountAccessToken used to generate ServiceAccount JWT token
 func GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret string) (*apiStructs.WorkFlowResponse, error) {
-	saInputs.ServiceAccountTokenRequest.TenantId = tenantId
-	saInputs.ServiceAccountTokenRequest.ServiceAccountServiceGetAccessTokenBody.ClientId = &clientID
-	saInputs.ServiceAccountTokenRequest.ServiceAccountServiceGetAccessTokenBody.ClientSecret = &clientSecret
+	saInputs.ServiceAccountRequest.CreateToken.TenantId = tenantId
+	saInputs.ServiceAccountRequest.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientId = &clientID
+	saInputs.ServiceAccountRequest.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientSecret = &clientSecret
 	tokenModel, err := v2Components.Platform.GenerateServiceAccountAccessToken(saInputs)
 	if err != nil {
 		return nil, err

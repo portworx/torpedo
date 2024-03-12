@@ -54,7 +54,7 @@ func (iam *PLATFORM_API_V1) CreateIamRoleBinding(createIamReq *WorkFlowRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	err = utilities.CopyStruct(&IAMRequestBody, createIamReq.CreateIAM)
+	err = utilities.CopyStruct(&IAMRequestBody, createIamReq.Iam)
 	iamModel, res, err := iamClient.IAMServiceCreateIAMExecute(iamCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
