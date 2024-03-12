@@ -179,9 +179,8 @@ type NewPDSParams struct {
 	} `json:"StorageConfigurations"`
 	RbacParams struct {
 		RunWithRbac bool   //true
-		GlobalScope string //
 		RoleName    string //Project-admin or project-user
-		ResourceId  string // projectId
+		ResourceId  string // projectId 
 	} `json:"RbacParams"`
 }
 
