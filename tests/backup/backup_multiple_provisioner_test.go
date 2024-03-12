@@ -254,9 +254,13 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
 				log.InfoD("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
+				namespaceMappingMultiApp := make(map[string]string)
+				for _, appCtx := range scheduledAppContextsForMultipleAppSinleNs {
+					namespaceMappingMultiApp[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mul-app-snigle-ns"
+				}
 				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "multi-app-single-ns", RandomString(randomStringLength))
 				log.InfoD("Restoring namespaces from the [%s] backup", multipleNsSchBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, multipleNsSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForMultipleAppSinleNs)
+				err = CreateRestoreWithValidation(ctx, restoreName, multipleNsSchBackupName, namespaceMappingMultiApp, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForMultipleAppSinleNs)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
@@ -265,9 +269,13 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
 				log.InfoD("Restoring the backup taken on multiple namespace with different provisioner")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
+				namespaceMappingMultiNs := make(map[string]string)
+				for _, appCtx := range scheduledAppContextsForDefaultVscBackup {
+					namespaceMappingMultiNs[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mul-provisioner-multiple-ns"
+				}
 				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "multi-ns-different-provisioner", RandomString(randomStringLength))
 				log.InfoD("Restoring namespaces from the [%s] backup", defaultSchBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, defaultSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForDefaultVscBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, defaultSchBackupName, namespaceMappingMultiNs, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForDefaultVscBackup)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
@@ -276,9 +284,13 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
 				log.InfoD("Restoring the multiple provisioner with default volume snapshot class")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
+				namespaceMappingMultiNsNonDefaultVsc := make(map[string]string)
+				for _, appCtx := range scheduledAppContextsForDefaultVscBackup {
+					namespaceMappingMultiNsNonDefaultVsc[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mul-app-non-default-vsc"
+				}
 				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "non-default-provisioner", RandomString(randomStringLength))
 				log.InfoD("Restoring namespaces from the [%s] backup", nonDefaultVscSchBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, nonDefaultVscSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForCustomVscBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, nonDefaultVscSchBackupName, namespaceMappingMultiNsNonDefaultVsc, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForCustomVscBackup)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
@@ -287,9 +299,13 @@ var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
 				log.InfoD("Restoring the multiple provisioner with default volumeSnapshotClass")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
+				namespaceMappingkdmp := make(map[string]string)
+				for _, appCtx := range scheduledAppContextsForDefaultVscBackup {
+					namespaceMappingkdmp[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mul-app-kdmp"
+				}
 				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "kdmp", RandomString(randomStringLength))
 				log.InfoD("Restoring namespaces from the [%s] backup", forceKdmpSchBackupName)
-				err = CreateRestoreWithValidation(ctx, restoreName, forceKdmpSchBackupName, make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForCustomVscBackup)
+				err = CreateRestoreWithValidation(ctx, restoreName, forceKdmpSchBackupName, namespaceMappingkdmp, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContextsForDefaultVscBackup)
 				restoreNames = append(restoreNames, restoreName)
 			}
 		})
