@@ -400,7 +400,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("MultipleProvisionerBackupAndRestore", "Backup and restore of namespaces with multiple provisioners using volume snapshot class", nil, 84755, Sn, Q4FY24)
-		
+
 		backupLocationMap = make(map[string]string)
 		labelSelectors = make(map[string]string)
 		providers = GetBackupProviders()
@@ -557,7 +557,7 @@ var _ = Describe("{MultipleProvisionerBackupAndRestore}", func() {
 			scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, defaultSchBackupName, BackupOrgID)
 			err = DeleteScheduleWithUIDAndWait(defaultSchBackupName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 		})
-		Step(fmt.Sprintf("Creating schedule backup %s for multiple provisioner with non default volume snapshot class"), func() {
+		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner with non default volume snapshot class"), func() {
 			log.InfoD("Creating schedule backup %s for multiple provisioner with non default volume snapshot class")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
