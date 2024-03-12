@@ -10924,6 +10924,7 @@ func updatePrometheusAndAutopilot(stc *opsv1.StorageCluster) error {
 	return err
 }
 
+//ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
 func ExportSourceKubeConfig() error {
 	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
 	if err != nil {
@@ -10936,6 +10937,7 @@ func ExportSourceKubeConfig() error {
 	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
 }
 
+//ExportDestinationKubeConfig changes the KUBECONFIG environment variable to the destination cluster config path
 func ExportDestinationKubeConfig() error {
 	DestinationClusterConfigPath, err := GetDestinationClusterConfigPath()
 	if err != nil {
@@ -10946,6 +10948,29 @@ func ExportDestinationKubeConfig() error {
 	if err != nil {
 		return err
 	}
-	
 	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
+}
+
+//SwitchBothKubeConfigANDContext switches both KUBECONFIG and context to the given cluster
+func SwitchBothKubeConfigANDContext(cluster string) error {
+	if cluster == "source" {
+		err := ExportSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+	} else if cluster == "destination" {
+		err := ExportDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

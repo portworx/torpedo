@@ -1032,7 +1032,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		for _, version := range versions {
 			Step("Upgrading OCP cluster", func() {
 
-				err := ExportSourceKubeConfig()
+				err := SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
 				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) && PrereqNotExecuted {
