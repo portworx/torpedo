@@ -1066,36 +1066,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				err := ExportSourceKubeConfig()
 				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
 
-				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
-					err := OcpPrometheusPrereq()
-					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-				}
-
-				err = Inst().S.UpgradeScheduler(version)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				PrintK8sCluterInfo()
-
-				err = ExportDestinationKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting Destination cluster kubeconfig")
-
-				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
-					err := OcpPrometheusPrereq()
-					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-				}
-
-				err = Inst().S.UpgradeScheduler(version)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
-				PrintK8sCluterInfo()
-
-				err = ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
-
-			})
-			Step("validate storage components", func() {
-
-				err := ExportSourceKubeConfig()
-				dash.VerifyFatal(err, nil, "Exporting source cluster kubeconfig")
-
 				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 				u, err := url.Parse(urlToParse)
 				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
