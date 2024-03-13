@@ -100,7 +100,7 @@ func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *WorkFlowRequest) (*Wor
 	return &tcResponse, nil
 }
 
-func (tcGrpc *PlatformGrpc) DeleteTarget(tcRequest *WorkFlowRequest) error {
+func (tcGrpc *PlatformGrpc) DeleteTargetCluster(tcRequest *WorkFlowRequest) error {
 	var deleteRequest *publictcapis.DeleteTargetClusterRequest
 	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {

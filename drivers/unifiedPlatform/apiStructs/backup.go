@@ -3,6 +3,7 @@ package apiStructs
 type PDSBackup struct {
 	Delete PDSDeleteBackup `copier:"must,nopanic"`
 	List   PDSListBackup   `copier:"must,nopanic"`
+	Get    PDSGetRestore   `copier:"must,nopanic"`
 }
 
 type PDSDeleteBackup struct {
@@ -14,6 +15,6 @@ type PDSListBackup struct {
 	Sort       *Sort                       `copier:"must,nopanic"`
 }
 
-type GetBackupRequest struct {
+type PDSGetBackupRequest struct {
 	Id string `copier:"must,nopanic"`
 }

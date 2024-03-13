@@ -51,7 +51,7 @@ func (applications *PLATFORM_API_V1) ListAvailableApplicationsForTenant(appReque
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	appModels, res, err := appClient.ApplicationServiceListAvailableApplications(ctx, appRequest.TenantId).Execute()
+	appModels, res, err := appClient.ApplicationServiceListAvailableApplications(ctx, appRequest.PDSApplication.ListAvailableAppsForTenant.TenantId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `ApplicationServiceListAvailableApplications`: %v\n.Full HTTP response: %v", err, res)
 	}
