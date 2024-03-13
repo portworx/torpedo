@@ -5,39 +5,25 @@ import (
 	"fmt"
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	serviceaccountv1 "github.com/pure-px/platform-api-go-client/v1/serviceaccount"
 	status "net/http"
 )
 
 var (
 	SiToken       string
 	SiFlag        bool
-	SaRequestBody platformv1.V1ServiceAccount
+	SaRequestBody serviceaccountv1.V1ServiceAccount
 )
-
-// GetSAClient updates the header with bearer token and returns the  client
-func (sa *PLATFORM_API_V1) GetSAClient() (context.Context, *platformv1.ServiceAccountServiceAPIService, error) {
-	ctx, token, err := GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-	sa.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	sa.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = sa.AccountID
-	client := sa.ApiClientV1.ServiceAccountServiceAPI
-
-	return ctx, client, nil
-}
 
 // ListAllServiceAccounts List all Service Accounts
 func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
-	_, client, err := sa.GetSAClient()
+	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := []WorkFlowResponse{}
-	var firstPageRequest platformv1.ApiServiceAccountServiceListServiceAccountRequest
+	var firstPageRequest serviceaccountv1.ApiServiceAccountServiceListServiceAccountRequest
 	err = copier.Copy(&firstPageRequest, listReq)
 	if err != nil {
 		return nil, err
@@ -57,12 +43,12 @@ func (sa *PLATFORM_API_V1) ListAllServiceAccounts(listReq *WorkFlowRequest) ([]W
 
 // GetServiceAccount return service account model.
 func (sa *PLATFORM_API_V1) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, client, err := sa.GetSAClient()
+	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := WorkFlowResponse{}
-	var getRequest platformv1.ApiServiceAccountServiceGetServiceAccountRequest
+	var getRequest serviceaccountv1.ApiServiceAccountServiceGetServiceAccountRequest
 	err = copier.Copy(&getRequest, saID)
 	if err != nil {
 		return nil, err
@@ -84,9 +70,9 @@ func (sa *PLATFORM_API_V1) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowRe
 func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *WorkFlowRequest) (*WorkFlowResponse, error) {
 
 	saResponse := WorkFlowResponse{}
-	saCreateRequest := platformv1.ApiServiceAccountServiceCreateServiceAccountRequest{}
+	saCreateRequest := serviceaccountv1.ApiServiceAccountServiceCreateServiceAccountRequest{}
 
-	_, saClient, err := sa.GetSAClient()
+	_, saClient, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
@@ -109,12 +95,12 @@ func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *WorkFlowRequest) (*
 
 // DeleteServiceAccount delete service account and return status.
 func (sa *PLATFORM_API_V1) DeleteServiceAccount(saId *WorkFlowRequest) error {
-	_, client, err := sa.GetSAClient()
+	_, client, err := sa.getSAClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := WorkFlowResponse{}
-	var delIamRequest platformv1.ApiServiceAccountServiceDeleteServiceAccountRequest
+	var delIamRequest serviceaccountv1.ApiServiceAccountServiceDeleteServiceAccountRequest
 	err = copier.Copy(&delIamRequest, saId)
 	if err != nil {
 		return err
@@ -134,12 +120,12 @@ func (sa *PLATFORM_API_V1) DeleteServiceAccount(saId *WorkFlowRequest) error {
 
 // RegenerateServiceAccountSecret serviceAccountSecret
 func (sa *PLATFORM_API_V1) RegenerateServiceAccountSecret(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, client, err := sa.GetSAClient()
+	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := WorkFlowResponse{}
-	var regenIamRequest platformv1.ApiServiceAccountServiceRegenerateServiceAccountSecretRequest
+	var regenIamRequest serviceaccountv1.ApiServiceAccountServiceRegenerateServiceAccountSecretRequest
 	err = copier.Copy(&regenIamRequest, saId)
 	if err != nil {
 		return nil, err
@@ -159,12 +145,12 @@ func (sa *PLATFORM_API_V1) RegenerateServiceAccountSecret(saId *WorkFlowRequest)
 
 // UpdateServiceAccount update existing serviceAccount
 func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, client, err := sa.GetSAClient()
+	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := WorkFlowResponse{}
-	var updateIamRequest platformv1.ApiServiceAccountServiceUpdateServiceAccountRequest
+	var updateIamRequest serviceaccountv1.ApiServiceAccountServiceUpdateServiceAccountRequest
 	err = copier.Copy(&updateIamRequest, saId)
 	if err != nil {
 		return nil, err
@@ -183,12 +169,12 @@ func (sa *PLATFORM_API_V1) UpdateServiceAccount(saId *WorkFlowRequest) (*WorkFlo
 }
 
 func (sa *PLATFORM_API_V1) GenerateServiceAccountAccessToken(tokenReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, client, err := sa.GetSAClient()
+	_, client, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	saResponse := WorkFlowResponse{}
-	var tokenIamRequest platformv1.ApiServiceAccountServiceGetAccessTokenRequest
+	var tokenIamRequest serviceaccountv1.ApiServiceAccountServiceGetAccessTokenRequest
 	tokenIamRequest = tokenIamRequest.ApiService.ServiceAccountServiceGetAccessToken(context.Background(), tokenReq.TenantId)
 	err = copier.Copy(&tokenIamRequest, tokenReq)
 	if err != nil {

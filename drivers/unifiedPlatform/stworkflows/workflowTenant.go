@@ -13,7 +13,7 @@ type WorkflowTenant struct {
 func (tenant *WorkflowTenant) ListTenants() (map[string][]apiStructs.WorkFlowResponse, error) {
 	resultMap := utils.GetWorkflowResponseMap()
 
-	tenantsList, err := platformLibs.GetTenantListV1(tenant.AccountID)
+	tenantsList, err := platformLibs.GetTenantListV1()
 	if err != nil {
 		return resultMap, err
 	}

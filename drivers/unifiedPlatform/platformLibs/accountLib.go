@@ -35,12 +35,3 @@ func GetPlatformAccountID(accList []apiStructs.WorkFlowResponse, accountName str
 	}
 	return accID
 }
-
-// CreatePlatformAccountV1
-func CreatePlatformAccountV1(name, displayName, userMail string) (apiStructs.WorkFlowResponse, error) {
-	acc, err := v2Components.Platform.CreateAccount(name, displayName, userMail)
-	if err != nil {
-		return acc, err
-	}
-	return acc, nil
-}

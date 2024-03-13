@@ -6,8 +6,8 @@ import (
 )
 
 // GetTenantListV1
-func GetTenantListV1(accountID string) ([]apiStructs.WorkFlowResponse, error) {
-	tenList, err := v2Components.Platform.ListTenants(accountID)
+func GetTenantListV1() ([]apiStructs.WorkFlowResponse, error) {
+	tenList, err := v2Components.Platform.ListTenants()
 	if err != nil {
 		return nil, err
 	}
@@ -16,7 +16,7 @@ func GetTenantListV1(accountID string) ([]apiStructs.WorkFlowResponse, error) {
 
 func GetDefaultTenantId(accountID string) (string, error) {
 	var tenantId string
-	tenantList, err := GetTenantListV1(accountID)
+	tenantList, err := GetTenantListV1()
 	log.FailOnError(err, "error while getting tenant list")
 	for _, tenant := range tenantList {
 		log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accountID)

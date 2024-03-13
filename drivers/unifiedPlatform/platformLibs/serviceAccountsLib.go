@@ -5,12 +5,12 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	serviceaccountv1 "github.com/pure-px/platform-api-go-client/v1/serviceaccount"
 )
 
 var (
 	saInputs      *apiStructs.WorkFlowRequest
-	saListRequest platformv1.ApiServiceAccountServiceListServiceAccountRequest
+	saListRequest serviceaccountv1.ApiServiceAccountServiceListServiceAccountRequest
 	namespaceId   string
 	ServiceIdFlag bool
 	SiToken       string

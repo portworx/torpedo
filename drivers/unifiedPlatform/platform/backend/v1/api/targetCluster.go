@@ -1,30 +1,13 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	targetClusterv1 "github.com/pure-px/platform-api-go-client/v1/targetcluster"
 	status "net/http"
 )
-
-// GetClient updates the header with bearer token and returns the new client
-func (tc *PLATFORM_API_V1) getTargetClusterClient() (context.Context, *platformv1.TargetClusterServiceAPIService, error) {
-	log.Infof("Creating client from PLATFORM_API_V1 package")
-	ctx, token, err := GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-
-	tc.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tc.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = tc.AccountID
-
-	client := tc.ApiClientV1.TargetClusterServiceAPI
-	return ctx, client, nil
-}
 
 // ListTargetClusters return deployment targets models.
 func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
@@ -32,7 +15,7 @@ func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *WorkFlowRequest) ([]Wor
 	tenantId := tcRequest.TargetCluster.ListTargetClusters.TenantId
 	_, dtClient, err := tc.getTargetClusterClient()
 
-	var req platformv1.ApiTargetClusterServiceListTargetClustersRequest
+	var req targetClusterv1.ApiTargetClusterServiceListTargetClustersRequest
 	req = req.TenantId(tenantId)
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -69,7 +52,7 @@ func (tc *PLATFORM_API_V1) GetTarget(tcRequest *WorkFlowRequest) (*WorkFlowRespo
 
 // PatchTargetCluster returns the updated the deployment target model
 func (tc *PLATFORM_API_V1) PatchTargetCluster(tcRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
-	var patchRequest platformv1.ApiTargetClusterServiceUpdateTargetClusterRequest
+	var patchRequest targetClusterv1.ApiTargetClusterServiceUpdateTargetClusterRequest
 	tcResponse := WorkFlowResponse{}
 	_, dtClient, err := tc.getTargetClusterClient()
 	if err != nil {
@@ -106,7 +89,7 @@ func (tc *PLATFORM_API_V1) DeleteTargetCluster(tcRequest *WorkFlowRequest) error
 	return nil
 }
 
-func (tc *PLATFORM_API_V1) GetClusterHealth(targetClusterId string) (*platformv1.PlatformTargetClusterv1Status, error) {
+func (tc *PLATFORM_API_V1) GetClusterHealth(targetClusterId string) (*targetClusterv1.PlatformTargetClusterv1Status, error) {
 	ctx, dtClient, err := tc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
