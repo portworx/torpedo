@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 // CreateIAM Struct for IAM roleBindings
 type CreateIAM struct {

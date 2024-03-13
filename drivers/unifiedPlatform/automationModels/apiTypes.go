@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type WorkFlowResponse struct {
 	Meta             Meta                        `copier:"must,nopanic"`
@@ -21,7 +21,6 @@ type WorkFlowRequest struct {
 	ServiceAccountRequest      ServiceAccountRequest      `copier:"must,nopanic"`
 	ServiceAccountTokenRequest ServiceAccountTokenRequest `copier:"must,nopanic"`
 	CreateIAM                  CreateIAM                  `copier:"must,nopanic"`
-	ListNamespacesRequest      ListNamespacesRequest      `copier:"must,nopanic"`
 	CloudCredentials           CloudCredentials           `copier:"must,nopanic"`
 	Meta                       Meta                       `copier:"must,nopanic"`
 	Config                     Config                     `copier:"must,nopanic"`

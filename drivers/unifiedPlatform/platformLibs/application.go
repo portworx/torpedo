@@ -2,14 +2,14 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
-func ListAvailableApplicationsForTenant(clusterId string, tenantId string) ([]apiStructs.WorkFlowResponse, error) {
+func ListAvailableApplicationsForTenant(clusterId string, tenantId string) ([]automationModels.WorkFlowResponse, error) {
 
-	pdsAppRequest := apiStructs.WorkFlowRequest{
-		PDSApplication: apiStructs.PDSApplicaition{
-			ListAvailableAppsForTenant: apiStructs.PlatformListAvailableAppsForTenant{},
+	pdsAppRequest := automationModels.WorkFlowRequest{
+		PDSApplication: automationModels.PDSApplicaition{
+			ListAvailableAppsForTenant: automationModels.PlatformListAvailableAppsForTenant{},
 		},
 	}
 	pdsAppRequest.PDSApplication.ListAvailableAppsForTenant.ClusterId = clusterId
@@ -26,19 +26,19 @@ func ListAvailableApplicationsForTenant(clusterId string, tenantId string) ([]ap
 	return availableApps, nil
 }
 
-func InstallApplication(applicationName string, applicationVersion string, clusterId string) (*apiStructs.WorkFlowResponse, error) {
-	pdsAppRequest := apiStructs.WorkFlowRequest{
-		PDSApplication: apiStructs.PDSApplicaition{
-			Install: apiStructs.PDSApplicationInstall{},
+func InstallApplication(applicationName string, applicationVersion string, clusterId string) (*automationModels.WorkFlowResponse, error) {
+	pdsAppRequest := automationModels.WorkFlowRequest{
+		PDSApplication: automationModels.PDSApplicaition{
+			Install: automationModels.PDSApplicationInstall{},
 		},
 	}
 
 	pdsAppRequest.PDSApplication.Install.ClusterId = clusterId
-	pdsAppRequest.PDSApplication.Install.V1Application1 = &apiStructs.V1Application1{
-		Meta: &apiStructs.V1Meta{
+	pdsAppRequest.PDSApplication.Install.V1Application1 = &automationModels.V1Application1{
+		Meta: &automationModels.V1Meta{
 			Name: &applicationName,
 		},
-		Config: &apiStructs.AppConfig{
+		Config: &automationModels.AppConfig{
 			Version: applicationVersion,
 		},
 	}

@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type PDSApplicaition struct {
 	Install                    PDSApplicationInstall              `copier:"must,nopanic"`

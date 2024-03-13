@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	publicnamespaceapis "github.com/pure-px/apis/public/portworx/platform/namespace/apiv1"
@@ -30,9 +30,14 @@ func (NamespaceGrpcV1 *PlatformGrpc) getNamespaceClient() (context.Context, publ
 	return ctx, accountClient, token, nil
 }
 
-func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *PlatformNamespace) (*PlatformNamespaceResponse, error) {
 	ctx, nsClient, _, err := NamespaceGrpcV1.getNamespaceClient()
-	namespaceResponse := []WorkFlowResponse{}
+
+	namespaceResponse := PlatformNamespaceResponse{
+		List: V1ListNamespacesResponse{
+			Namespaces: []V1Namespace{},
+		},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -50,15 +55,15 @@ func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *WorkFlowRequest) ([
 		log.Infof("namespace -  [%v]", ns.Meta.Name)
 	}
 
-	err = copier.Copy(&namespaceResponse, nsResponse.Namespaces)
+	err = copier.Copy(&namespaceResponse.List, nsResponse)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Infof("Value of namespace after copy - [%v]", nsResponse)
-	for _, ten := range namespaceResponse {
+	for _, ten := range namespaceResponse.List.Namespaces {
 		log.Infof("namespace -  [%v]", ten.Meta.Name)
 	}
 
-	return namespaceResponse, nil
+	return &namespaceResponse, nil
 }

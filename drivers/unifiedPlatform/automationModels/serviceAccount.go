@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 // ServiceAccountRequest struct
 type ServiceAccountRequest struct {

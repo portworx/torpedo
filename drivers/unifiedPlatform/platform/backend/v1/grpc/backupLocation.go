@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"

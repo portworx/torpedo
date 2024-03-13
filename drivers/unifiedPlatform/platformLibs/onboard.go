@@ -1,20 +1,20 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
-func OnboardAccount(name string, displayName string, userEmail string) (*apiStructs.WorkFlowResponse, error) {
+func OnboardAccount(name string, displayName string, userEmail string) (*automationModels.WorkFlowResponse, error) {
 
-	onboardAccountRequest := apiStructs.WorkFlowRequest{}
-	onboardAccountRequest.OnboardAccount = apiStructs.PlatformOnboardAccount{
-		Register: &apiStructs.PlatformRegisterAccount{
-			AccountRegistration: &apiStructs.AccountRegistration{
-				Meta: &apiStructs.Meta{
+	onboardAccountRequest := automationModels.WorkFlowRequest{}
+	onboardAccountRequest.OnboardAccount = automationModels.PlatformOnboardAccount{
+		Register: &automationModels.PlatformRegisterAccount{
+			AccountRegistration: &automationModels.AccountRegistration{
+				Meta: &automationModels.Meta{
 					Name: &name,
 				},
-				Config: &apiStructs.AccountConfig{AccountConfig: &apiStructs.PlatformAccountConfig{
+				Config: &automationModels.AccountConfig{AccountConfig: &automationModels.PlatformAccountConfig{
 					DisplayName: displayName,
 					UserEmail:   userEmail,
 				}},

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/jinzhu/copier"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	status "net/http"
 )
@@ -23,9 +23,9 @@ func (ds *PDSV2_API) GetDeploymentConfigClient() (context.Context, *pdsv2.Deploy
 	return ctx, client, nil
 }
 
-func (ds *PDSV2_API) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDSV2_API) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	var updateRequest pdsv2.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
-	dsResponse := apiStructs.WorkFlowResponse{}
+	dsResponse := automationModels.WorkFlowResponse{}
 
 	_, dsClient, err := ds.GetDeploymentConfigClient()
 	if err != nil {

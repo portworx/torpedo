@@ -339,3 +339,23 @@ func syncData(namespace string) {
 	}
 
 }
+
+// DeleteElementFromSlice deletes an element from a slice
+func DeleteElementFromSlice(slice []string, element string) ([]string, error) {
+	// Find the index of the element to delete
+	index := -1
+	for i, v := range slice {
+		if v == element {
+			index = i
+			break
+		}
+	}
+
+	// If element not found, return the original slice
+	if index == -1 {
+		return slice, fmt.Errorf("[%s] not found in [%s]", element, slice)
+	}
+
+	// Delete the element by slicing the original slice
+	return append(slice[:index], slice[index+1:]...), nil
+}

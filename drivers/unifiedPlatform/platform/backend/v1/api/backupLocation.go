@@ -6,7 +6,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/pure-px/platform-api-go-client/v1/backuplocation"
 
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	status "net/http"
 )
 

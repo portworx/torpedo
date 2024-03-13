@@ -6,14 +6,14 @@ import (
 
 	"github.com/jinzhu/copier"
 
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	accountv1 "github.com/pure-px/platform-api-go-client/v1/account"
 )
 
 // GetAccount return pds account model.
-func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*WorkFlowResponse, error) {
-	log.Infof("Get the account detail having UUID: %v", accountID)
+func (AccountV1 *PLATFORM_API_V1) GetAccount(accountRequest *PlatformAccount) (*WorkFlowResponse, error) {
+	log.Infof("Get the account detail having UUID: %v", accountRequest.Get.AccountId)
 	accountResponse := WorkFlowResponse{}
 	ctx, client, err := AccountV1.getAccountClient()
 	if err != nil {
@@ -21,7 +21,7 @@ func (AccountV1 *PLATFORM_API_V1) GetAccount(accountID string) (*WorkFlowRespons
 	}
 
 	var getRequest accountv1.ApiAccountServiceGetAccountRequest
-	getRequest = getRequest.ApiService.AccountServiceGetAccount(ctx, accountID)
+	getRequest = getRequest.ApiService.AccountServiceGetAccount(ctx, accountRequest.Get.AccountId)
 	accountModel, res, err := client.AccountServiceGetAccountExecute(getRequest)
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `AccountServiceGetAccount`: %v\n.Full HTTP response: %v", err, res)

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	accountv1 "github.com/pure-px/platform-api-go-client/v1/account"
 	"io/ioutil"

@@ -1,7 +1,7 @@
 package pds
 
 import (
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type Pds interface {

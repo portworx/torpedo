@@ -3,24 +3,24 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/v1/targetclusterregistrationmanifest"
 	status "net/http"
 	"time"
 )
 
-func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *automationModels.PlatformTargetCluster) (*automationModels.WorkFlowResponse, error) {
 
-	response := &apiStructs.WorkFlowResponse{
-		TargetCluster: apiStructs.PlatformTargetClusterOutput{
-			Manifest: apiStructs.PlatformManifestOutput{},
+	response := &automationModels.WorkFlowResponse{
+		TargetCluster: automationModels.PlatformTargetClusterOutput{
+			Manifest: automationModels.PlatformManifestOutput{},
 		},
 	}
 	var tcManifestRequest targetClusterManifestv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
-	clusterName := getManifestRequest.TargetCluster.GetManifest.ClusterName
-	tenantId := getManifestRequest.TargetCluster.GetManifest.TenantId
+	clusterName := getManifestRequest.GetManifest.ClusterName
+	tenantId := getManifestRequest.GetManifest.TenantId
 
 	tcManifestRequest = tcManifestRequest.ApiService.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest(context.Background(), tenantId)
 

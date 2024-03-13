@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 import (
 	"time"
@@ -122,3 +122,5 @@ type DestinationReferences struct {
 	// UID of the project.
 	ProjectId string `copier:"must,nopanic"`
 }
+
+type V1PhaseType string

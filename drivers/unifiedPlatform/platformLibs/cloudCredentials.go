@@ -2,7 +2,7 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	utilities "github.com/portworx/torpedo/drivers/utilities"
 	"os"
 	"strings"
@@ -22,8 +22,8 @@ var (
 	provider int32
 )
 
-func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*apiStructs.WorkFlowResponse, error) {
-	getReq := apiStructs.WorkFlowRequest{}
+func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*automationModels.WorkFlowResponse, error) {
+	getReq := automationModels.WorkFlowRequest{}
 	getReq.CloudCredentials.Get.CloudCredentialsId = credId
 	getReq.CloudCredentials.Get.IsConfigRequired = isConfigRequired
 
@@ -48,8 +48,8 @@ func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*api
 	return wfResponse, nil
 }
 
-func CreateCloudCredentials(tenantId, backupType string) (*apiStructs.WorkFlowResponse, error) {
-	createReq := apiStructs.WorkFlowRequest{}
+func CreateCloudCredentials(tenantId, backupType string) (*automationModels.WorkFlowResponse, error) {
+	createReq := automationModels.WorkFlowRequest{}
 	credsName := strings.ToLower("pds-automation-" + utilities.RandString(5))
 	createReq.TenantId = tenantId
 	createReq.CloudCredentials.Create.Meta.Name = &credsName

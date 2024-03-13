@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 import (
 	"time"
