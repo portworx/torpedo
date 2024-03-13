@@ -238,6 +238,7 @@ func GetPureFAVolumeSize(volName, mgmtEndpoint, apiToken string) (uint64, error)
 	for _, item := range items {
 		if itemMap, ok := item.(map[string]interface{}); ok {
 			if name, ok := itemMap["name"].(string); ok {
+				log.Infof("name: [%v]", name)
 				if strings.Contains(name, volName) {
 					log.Infof("itemMap: [%v]", itemMap)
 					if space, ok := itemMap["space"].(map[string]interface{}); ok {

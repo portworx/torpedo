@@ -1066,6 +1066,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 
 							gotVol := false
 							for _, fa := range flashArrays {
+								log.InfoD("getting vol [%s] size from fa [%s]", v.Name, fa.MgmtEndPoint)
 								faVol, err := pureutils.GetPureFAVolumeSize(v.Name, fa.MgmtEndPoint, fa.APIToken)
 								log.FailOnError(err, "error getting vol [%s] size", v.Name)
 								if faVol != 0 {
@@ -2169,13 +2170,13 @@ func faLUNExists(faVolList []string, pvc string) bool {
 
 var _ = Describe("{FADAVolMigrateValidation}", func() {
 
-	/* 
-          1. Attach FADA PVC on Node 1, confirm proper attachment. 
-	  2. Stop PX on Node 1, ensure volume persistence in multipath -ll. 
-          3. Move deployment to Node 2, validate successful pod startup. 
-	  4. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.
+	/*
+		          1. Attach FADA PVC on Node 1, confirm proper attachment.
+			  2. Stop PX on Node 1, ensure volume persistence in multipath -ll.
+		          3. Move deployment to Node 2, validate successful pod startup.
+			  4. Paths on original node indicate failure. Restart PX on Node 1, confirm old multipath device absence.
 
-        */
+	*/
 	var contexts []*scheduler.Context
 	JustBeforeEach(func() {
 		StartTorpedoTest("FADAVolMigrateValidation", "Migrate pods from node 1 to node and check multipath consistency", nil, 0)
@@ -2332,7 +2333,7 @@ var _ = Describe("{FADAVolMigrateValidation}", func() {
 			Step(stepLog, func() {
 				//sleep for some time for the entries to update
 				time.Sleep(30 * time.Second)
-				
+
 				//run the multipath -ll command on the node where the volume is attached
 				cmd := fmt.Sprintf("multipath -ll")
 				output, err := runCmd(cmd, selectedNode)
