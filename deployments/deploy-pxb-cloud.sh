@@ -356,9 +356,6 @@ if [ -z "${NODE_DRIVER}" ]; then
 fi
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
         aks)
             NODE_DRIVER="aks"
             ;;
@@ -694,6 +691,8 @@ spec:
       value: "${S3_POLICY_SID}"
     - name: S3_ENCRYPTION_POLICY
       value: "${S3_ENCRYPTION_POLICY}"
+    - name: USE_GLOBAL_RULES
+      value: "${USE_GLOBAL_RULES}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

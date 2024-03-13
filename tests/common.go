@@ -24,8 +24,9 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	context1 "context"
+
+	"cloud.google.com/go/storage"
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -49,6 +50,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
+	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers"
@@ -132,6 +134,9 @@ import (
 
 	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
+
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
 
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
@@ -382,6 +387,7 @@ const (
 )
 
 var pxRuntimeOpts string
+var pxClusterOpts string
 var PxBackupVersion string
 
 var (
@@ -576,6 +582,8 @@ func InitInstance() {
 	ns, err := Inst().V.GetVolumeDriverNamespace()
 	log.FailOnError(err, "Error occured while getting volume driver namespace")
 	installGrafana(ns)
+	err = updatePxClusterOpts()
+	log.Errorf("%v", err)
 }
 
 func PrintPxctlStatus() {
@@ -746,9 +754,12 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 
-		Step("Validate Px pod restart count", func() {
-			ValidatePxPodRestartCount(ctx, errChan...)
-		})
+		// Validating px pod restart count only for portworx volume driver
+		if Inst().V.String() == "pxd" {
+			Step("Validate Px pod restart count", func() {
+				ValidatePxPodRestartCount(ctx, errChan...)
+			})
+		}
 	})
 }
 
@@ -1697,7 +1708,8 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		})
 
 		if !ctx.SkipVolumeValidation {
-			ValidateVolumesDeleted(ctx.App.Key, vols)
+			err = ValidateVolumesDeleted(ctx.App.Key, vols)
+			log.FailOnError(err, "Failed to delete volumes for app %s", ctx.App.Key)
 		}
 
 		// Delete Cluster Scope objects
@@ -1735,23 +1747,32 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 }
 
 // ValidateVolumesDeleted checks it given volumes got deleted
-func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
+func ValidateVolumesDeleted(appName string, vols []*volume.Volume) error {
 	for _, vol := range vols {
+		var err error
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			log.InfoD("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
-			err := Inst().V.ValidateDeleteVolume(vol)
-			log.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("%s's volume %s deleted successfully?", appName, vol.Name))
+			err = Inst().V.ValidateDeleteVolume(vol)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
+				return
+			}
+
 		})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) error {
 	vols := DeleteVolumes(ctx, options)
-	ValidateVolumesDeleted(ctx.App.Key, vols)
+	err := ValidateVolumesDeleted(ctx.App.Key, vols)
+	return err
 }
 
 // GetAppNamespace returns namespace in which context is created
@@ -1951,10 +1972,15 @@ func ValidateApplications(contexts []*scheduler.Context) {
 }
 
 // ValidateApplicationsStartData validates applications and start continous data injection to the same
+
 func ValidateApplicationsStartData(contexts []*scheduler.Context, context context1.Context) (chan string, *errgroup.Group) {
 
-	// Resetting the global map before starting the new App Validations
-	NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+	log.Infof("Is backup longevity run [%v]", IsBackupLongevityRun)
+	// Skipping map reset in case of longevity run
+	if !IsBackupLongevityRun {
+		// Resetting the global map before starting the new App Validations
+		NamespaceAppWithDataMap = make(map[string][]appDriver.ApplicationDriver)
+	}
 
 	log.InfoD("Validate applications")
 	for _, ctx := range contexts {
@@ -6419,6 +6445,7 @@ func ParseFlags() {
 	flag.StringVar(&testBranch, testBranchFlag, "master", "branch of the product")
 	flag.StringVar(&testProduct, testProductFlag, "PxEnp", "Portworx product under test")
 	flag.StringVar(&pxRuntimeOpts, "px-runtime-opts", "", "comma separated list of run time options for cluster update")
+	flag.StringVar(&pxClusterOpts, "px-cluster-opts", "", "comma separated list of cluster options for cluster update")
 	flag.BoolVar(&pxPodRestartCheck, failOnPxPodRestartCount, false, "Set it true for px pods restart check during test")
 	flag.BoolVar(&deployPDSApps, deployPDSAppsFlag, false, "To deploy pds apps and return scheduler context for pds apps")
 	flag.StringVar(&pdsDriverName, pdsDriveCliFlag, defaultPdsDriver, "Name of the pdsdriver to use")
@@ -7395,6 +7422,30 @@ func updatePxRuntimeOpts() error {
 		return Inst().V.SetClusterRunTimeOpts(currNode, optionsMap)
 	} else {
 		log.Info("No run time options provided to update")
+	}
+	return nil
+
+}
+
+func updatePxClusterOpts() error {
+	if pxClusterOpts != "" {
+		log.InfoD("Setting cluster options: %s", pxClusterOpts)
+		optionsMap := make(map[string]string)
+		runtimeOpts, err := splitCsv(pxClusterOpts)
+		log.FailOnError(err, "Error parsing run time options")
+
+		for _, opt := range runtimeOpts {
+			if !strings.Contains(opt, "=") {
+				log.Fatalf("Given cluster option is not in expected format key=val, Actual : %v", opt)
+			}
+			optArr := strings.Split(opt, "=")
+			ketString := "--" + optArr[0]
+			optionsMap[ketString] = optArr[1]
+		}
+		currNode := node.GetWorkerNodes()[0]
+		return Inst().V.SetClusterOptsWithConfirmation(currNode, optionsMap)
+	} else {
+		log.Info("No cluster options provided to update")
 	}
 	return nil
 
@@ -10594,4 +10645,89 @@ func installGrafana(namespace string) {
 		log.Infof(output)
 	}
 
+}
+
+func SetupProxyServer(n node.Node) error {
+
+	createDirCommand := "mkdir -p /exports/testnfsexportdir"
+	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
+	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
+	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+	exportCmd := "exportfs -a"
+	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	enableNfsServerCmd := "systemctl enable nfs-server"
+	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	startNfsServerCmd := "systemctl restart nfs-server"
+	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
+		Sudo: true,
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof(output)
+
+	return nil
+}
+
+func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
+	params := make(map[string]string)
+	params["repl"] = "1"
+	params["io_profile"] = "none"
+	params["proxy_endpoint"] = fmt.Sprintf("nfs://%s", nfsServer)
+	params["proxy_nfs_exportpath"] = fmt.Sprintf("%s", mountPath)
+	params["mount_options"] = "vers=4.0"
+	v1obj := metav1.ObjectMeta{
+		Name: scName,
+	}
+	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	bindMode := storageapi.VolumeBindingImmediate
+	allowWxpansion := true
+	scObj := storageapi.StorageClass{
+		ObjectMeta:           v1obj,
+		Provisioner:          "kubernetes.io/portworx-volume",
+		Parameters:           params,
+		ReclaimPolicy:        &reclaimPolicyDelete,
+		VolumeBindingMode:    &bindMode,
+		AllowVolumeExpansion: &allowWxpansion,
+	}
+
+	k8sStorage := k8sStorage.Instance()
+	_, err := k8sStorage.CreateStorageClass(&scObj)
+	return err
 }

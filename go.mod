@@ -38,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
 	github.com/portworx/px-backup-api v1.2.2-0.20240223100835-84b57faae78f
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240214035641-f67239479cd9
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240227055433-19ad4caac7e9
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.15.1
@@ -72,7 +72,19 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.17.2 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.15.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.1 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.19.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.22.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.27.2 // indirect
+	github.com/aws/smithy-go v1.20.1 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/coreos/prometheus-operator v0.38.0 // indirect
@@ -120,6 +132,12 @@ require (
 )
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.25.1
+	github.com/aws/aws-sdk-go-v2/config v1.27.2
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.39.2
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.148.2
+	github.com/aws/aws-sdk-go-v2/service/eks v1.39.2
+	github.com/aws/aws-sdk-go-v2/service/ssm v1.48.0
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
 	github.com/hashicorp/nomad/api v0.0.0-20240209231933-e2bfdf0c1034
 	github.com/jackc/pgx/v4 v4.15.0
@@ -162,7 +180,6 @@ require (
 	github.com/Microsoft/hcsshim v0.11.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
-	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chai2010/gettext-go v1.0.2 // indirect

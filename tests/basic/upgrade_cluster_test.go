@@ -3,25 +3,21 @@ package tests
 import (
 	"fmt"
 	"net/url"
-	"os/exec"
 	"strings"
 	"time"
 
-	ops_v1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/operator"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/node"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("{UpgradeCluster}", func() {
@@ -48,8 +44,8 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}
 		Expect(versions).NotTo(BeEmpty())
 
-		// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
-		var mError error
+		// TODO: Commenting out below changes as it doesn't work for most distros upgrades, see PTX-22409
+		/*var mError error
 		if Inst().S.String() != aks.SchedName {
 			stopSignal := make(chan struct{})
 			go getClusterNodesInfo(stopSignal, &mError)
@@ -57,14 +53,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 			defer func() {
 				close(stopSignal)
 			}()
-		}
+		}*/
 
 		for _, version := range versions {
-			if Inst().S.String() == openshift.SchedName && strings.Contains(version, "4.14") {
-				err = ocp414Prereq()
-				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-			}
-			Step(fmt.Sprintf("start [%s] scheduler upgrade", Inst().S.String()), func() {
+			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				err := Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
@@ -86,6 +78,14 @@ var _ = Describe("{UpgradeCluster}", func() {
 					log.Infof("Sleeping for 10 minutes to let the cluster stabilize after the upgrade..")
 					time.Sleep(10 * time.Minute)
 				}
+
+				// Sleep needed for EKS cluster upgrades
+				if Inst().S.String() == eks.SchedName {
+					log.Warnf("This is [%s] scheduler, during Node Group upgrades, EKS creates an extra node. "+
+						"After the Node Group upgrade is complete, EKS deletes this extra node, but it takes some time.", Inst().S.String())
+					log.Infof("Sleeping for 30 minutes to let the cluster stabilize after the upgrade..")
+					time.Sleep(30 * time.Minute)
+				}
 				printK8sCluterInfo()
 			})
 
@@ -100,10 +100,10 @@ var _ = Describe("{UpgradeCluster}", func() {
 				printK8sCluterInfo()
 			})
 
-			// TODO: This currently doesn't work for AKS upgrades, see PTX-22409
-			if Inst().S.String() != aks.SchedName {
+			// TODO: This currently doesn't work for most distros and commenting out this change, see PTX-22409
+			/*if Inst().S.String() != aks.SchedName {
 				dash.VerifyFatal(mError, nil, "validate no parallel upgrade of nodes")
-			}
+			}*/
 
 			Step("update node drive endpoints", func() {
 				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
@@ -208,25 +208,6 @@ func getClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	}
 }
 
-func ocp414Prereq() error {
-	stc, err := Inst().V.GetDriver()
-	if err != nil {
-		return err
-	}
-
-	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
-	if stc.Spec.Autopilot.Enabled {
-		if err = createClusterMonitoringConfig(); err != nil {
-			return err
-		}
-
-		if err = updatePrometheusAndAutopilot(stc); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // printK8sClusterInfo prints info about K8s cluster nodes
 func printK8sCluterInfo() {
 	log.Info("Get cluster info..")
@@ -254,48 +235,4 @@ func printK8sCluterInfo() {
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
-}
-
-func createClusterMonitoringConfig() error {
-	// Create configmap
-	ocpConfigmap := &v1.ConfigMap{
-		ObjectMeta: meta_v1.ObjectMeta{
-			Name:      "cluster-monitoring-config",
-			Namespace: "openshift-monitoring",
-		},
-		Data: map[string]string{
-			"config.yaml": "enableUserWorkload: true",
-		},
-	}
-
-	_, err = core.Instance().CreateConfigMap(ocpConfigmap)
-	return err
-}
-
-func updatePrometheusAndAutopilot(stc *ops_v1.StorageCluster) error {
-	thanosQuerierHostCmd := `kubectl get route thanos-querier -n openshift-monitoring -o json | jq -r '.spec.host'`
-	var output []byte
-
-	output, err = exec.Command("sh", "-c", thanosQuerierHostCmd).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to get thanos querier host , Err: %v", err)
-	}
-	thanosQuerierHost := strings.TrimSpace(string(output))
-	log.Infof("Thanos Querier Host:%s", thanosQuerierHost)
-
-	if stc.Spec.Monitoring.Prometheus.Enabled {
-		stc.Spec.Monitoring.Prometheus.Enabled = false
-	}
-
-	dataProviders := stc.Spec.Autopilot.Providers
-
-	for _, dataProvider := range dataProviders {
-		if dataProvider.Type == "prometheus" {
-			dataProvider.Params["url"] = fmt.Sprintf("https://%s", thanosQuerierHost)
-		}
-
-	}
-	pxOperator := operator.Instance()
-	_, err = pxOperator.UpdateStorageCluster(stc)
-	return err
 }

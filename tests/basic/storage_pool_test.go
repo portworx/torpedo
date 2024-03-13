@@ -10946,3 +10946,315 @@ var _ = Describe("{PoolResizeInTrashCanNode}", func() {
 		AfterEachTest(contexts)
 	})
 })
+
+// PX pool went offline even when 30% of storage still available [PWX-26872]
+
+var _ = Describe("{CheckPoolOffline}", func() {
+	/*
+		    1. Deploy fio apps
+		    2. when capacity 70 percent is reached, check if pool is offline (Pool shouldn't be offline)
+			3. when capacity 80 percent is reached, check if pool is offline (Pool should be offline)
+
+			https://portworx.atlassian.net/browse/PTX-15695
+	*/
+	itLog := "CheckPoolOffline"
+	JustBeforeEach(func() {
+		StartTorpedoTest(itLog, "Check if pool is offline when capacity is reached", nil, 0)
+	})
+	var contexts []*scheduler.Context
+	var selectedNode *node.Node
+
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "Label nodes and Deploy fio apps"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			selectedNode = GetNodeWithLeastSize()
+
+			AppList := Inst().AppList
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+
+			var err error
+			defer func() {
+				Inst().AppList = AppList
+				err = Inst().S.RemoveLabelOnNode(*selectedNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			}()
+			err = Inst().S.AddLabelOnNode(*selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("storagefull-check-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		// Pool should go offline after using 80% of the storage capacity
+		stepLog = "Keep checking when the pool goes offline"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			t := func() (interface{}, bool, error) {
+				poolsStatus, err := Inst().V.GetNodePoolsStatus(*selectedNode)
+				if err != nil {
+					return nil, true, err
+				}
+
+				for poolUUID, v := range poolsStatus {
+					if v == "Offline" {
+						offlinePool, err := GetStoragePoolByUUID(poolUUID)
+						log.FailOnError(err, "Failed to get uuid of offline pool")
+						log.Infof("Pool %s is offline", offlinePool.Uuid)
+						// Used storage should be greater than 80 percentage
+						if (offlinePool.Used) >= (offlinePool.TotalSize*80)/100 {
+							log.Infof("Pool %s is offline and used storage is greater than 80 percentage", offlinePool.Uuid)
+							return nil, false, nil
+						}
+						return nil, true, fmt.Errorf("Pool %s is offline but used storage is less than 80 percentage", offlinePool.Uuid)
+					}
+				}
+				return nil, true, fmt.Errorf("no pool is offline is node %s", selectedNode.Name)
+			}
+			_, err := task.DoRetryWithTimeout(t, time.Minute*360, time.Minute*2)
+			log.FailOnError(err, "Failed to wait for pool offline")
+
+		})
+
+	})
+
+})
+
+var _ = Describe("{FACDPoolIOPriorityCheck}", func() {
+
+	/* This test is created to provide functional testing coverage for ticket PWX-35590
+	1. Create a cluster with FACD backend
+	2. Check if the IO Priority for the storagepools is HIGH
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("FACDPoolIOPriorityCheck", "Verify the Priority of the pools with FACD is High", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+
+	itLog := "FACDPoolIOPriorityCheck"
+	It(itLog, func() {
+		provisions, err := GetClusterProvisionStatus()
+		log.FailOnError(err, "failed to get cluster provision status")
+		for _, provision := range provisions {
+			if isCloudDriveTypePureBlock(provision.NodeUUID, provision.PoolUUID) {
+				log.Infof("the iopriority is %v\n", provision.IoPriority)
+				dash.VerifyFatal(provision.IoPriority == "HIGH", true, fmt.Sprintf("Expected the IOPriority to be HIGH for pool with ID: %s on the node: %s but found to be %s", provision.PoolUUID, provision.NodeUUID, provision.IoPriority))
+			} else {
+				dash.VerifyFatal(false, true, fmt.Sprintf("Expected the CloudDrive type to be pure-block, found something else."))
+			}
+		}
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+func isCloudDriveTypePureBlock(nodeUUID, poolUUID string) bool {
+	n, err := GetNodeFromPoolUUID(poolUUID)
+	log.FailOnError(err, "Failed to get node with given pool ID")
+	cmd := fmt.Sprintf("pxctl clouddrive inspect --node %v | grep Type | uniq", nodeUUID)
+	out, err := Inst().N.RunCommandWithNoRetry(*n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	log.FailOnError(err, "Unable to execute the clouddrive inspect command")
+	driveType := strings.TrimSpace(strings.Split(out, ":")[1])
+	return driveType == "pure-block"
+}
+
+var _ = Describe("{OnlineJournalAddCheck}", func() {
+	/*
+			https://portworx.atlassian.net/browse/PTX-15712
+			1. Deploy apps
+			2. Check lsblk state before addition of drive add of journal device
+		    3. Add a cloud drive as a journal device without pool in maintenance mode
+		    4. The request must be rejected and the journal device should not be added in lsblk
+		    5. Now put pool in maintenance mode and add a cloud drive as a journal device this should go through successfully
+	*/
+
+	JustBeforeEach(func() {
+		StartTorpedoTest("OnlineJournalAddCheck", "Online journal add check", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var selectedNode = node.Node{}
+	diskMapBeforeDriveAdd := make(map[string]string)
+
+	itLog := "OnlineJournalAddCheck"
+	It(itLog, func() {
+		stepLog := "Check if file system is dm-thin if so then skip the test"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			if isDMthin, _ := IsDMthin(); isDMthin {
+				log.FailOnError(fmt.Errorf("File system is dm-thin"), "dm-thin doesn't support journal device")
+			}
+		})
+
+		log.InfoD(itLog)
+		stepLog = "Schedule application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("online-journal-add-check-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		stepLog = "select a node where there is no journal device"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			storageNodes := node.GetStorageDriverNodes()
+			for _, node := range storageNodes {
+				output, err := runCmd("pxctl status", node)
+				log.FailOnError(err, "Failed to run pxctl status on node: %v", node.Name)
+				log.Infof("pxctl status output: %v", output)
+
+				if !strings.Contains(output, "Journal Device") {
+					selectedNode = node
+					break
+				}
+			}
+			if selectedNode.Name == "" {
+				log.FailOnError(fmt.Errorf("No node found without journal device"), "No node found without journal device")
+			}
+			log.Infof("Selected Node for add journal device: %v", selectedNode.Name)
+		})
+		stepLog = "Check lsblk state before addition of drive add of journal device"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			drivesMap, err := Inst().N.GetBlockDrives(selectedNode, node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+				Action: "start",
+			})
+			log.FailOnError(err, "Failed to get block drives on node %s", selectedNode.Name)
+			// store map of drives
+			for _, v := range drivesMap {
+				log.InfoD("Drive path: %v , Drive size: %v", v.Path, v.Size)
+				diskMapBeforeDriveAdd[v.Path] = v.Size
+			}
+		})
+
+		stepLog = "Add a cloud drive as a journal device without pool in maintenance mode"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Add a cloud drive as a journal device without pool in maintenance mode
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			devicespecjournal := deviceSpec + " --journal"
+
+			err = Inst().V.AddCloudDrive(&selectedNode, devicespecjournal, -1)
+			if err == nil {
+				log.FailOnError(fmt.Errorf("adding cloud drive with journal expected ? Error: [%v]", err),
+					"adding cloud drive with journal failed ?")
+			}
+			log.InfoD("adding journal failed as expected. verifying the error: %v", err.Error())
+
+			re := regexp.MustCompile(".*Requires pool maintenance mode*")
+			if !re.MatchString(err.Error()) {
+				log.FailOnError(err, "Requires pool maintenance mode alert is not received")
+			}
+
+			// Wait for lsblk to catch up [BUG PWX-36300] and verify if the journal device is not added on lsblk
+			time.Sleep(30 * time.Second)
+
+			// verify if the journal device is not added on lsblk
+			drivesMap, err := Inst().N.GetBlockDrives(selectedNode, node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+			})
+			log.FailOnError(err, "Failed to get block drives on node %s", selectedNode.Name)
+			// store map of drives
+			for _, v := range drivesMap {
+				log.InfoD("Drive path: %v , Drive size: %v", v.Path, v.Size)
+				if _, ok := diskMapBeforeDriveAdd[v.Path]; !ok {
+					log.FailOnError(fmt.Errorf("Journal device added at path: %v", v.Path), "Journal device added at path this should have been blocked")
+				}
+			}
+		})
+
+		stepLog = "Put pool in maintenance mode and add a cloud drive as a journal device"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//Put pool in maintenance mode
+			defer func() {
+				err := ExitPoolMaintenance(selectedNode)
+				log.FailOnError(err, "Failed to exit pool maintenance mode")
+			}()
+			err := EnterPoolMaintenance(selectedNode)
+			log.FailOnError(err, "Failed to enter pool maintenance mode")
+
+			//Add a cloud drive as a journal device
+			driveSpecs, err := GetCloudDriveDeviceSpecs()
+			log.FailOnError(err, "Error getting cloud drive specs")
+
+			deviceSpec := driveSpecs[0]
+			devicespecjournal := deviceSpec + " --journal"
+
+			err = Inst().V.AddCloudDrive(&selectedNode, devicespecjournal, -1)
+			log.FailOnError(err, "Failed to add cloud drive as a journal device")
+		})
+		stepLog = "validate on pxctl and lsblk if metadata device has been added successfully"
+		Step(stepLog, func() {
+			//get metadata device path from pxctl status
+			journalDevicePath := getJournalDevicePath(selectedNode)
+			log.InfoD("Metadata device path from pxctl : %v", journalDevicePath)
+
+			//After drive add run the command to check if metadata drive has been added or not.
+			drivesMap, err := Inst().N.GetBlockDrives(selectedNode, node.SystemctlOpts{
+				ConnectionOpts: node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: defaultRetryInterval,
+				},
+				Action: "start",
+			})
+			log.FailOnError(err, "Failed to get block drives on node %s", selectedNode.Name)
+
+			for _, v := range drivesMap {
+				log.InfoD("Drive path: %v , Drive size: %v", v.Path, v.Size)
+				if _, ok := diskMapBeforeDriveAdd[v.Path]; !ok {
+					log.Infof("New drive added at path: %v", v.Path)
+					if strings.Contains(journalDevicePath, v.Path) {
+						log.InfoD("Metadata device added at path: %v", v.Path)
+					} else {
+						log.FailOnError(fmt.Errorf("Journal device not added at path: %v", v.Path), "Journal device not added at path")
+					}
+				}
+			}
+		})
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
+
+// Returns path and size of metadata device of node n
+func getJournalDevicePath(n node.Node) string {
+	output, err := runPxctlCommand("status | grep -A 1 'Journal Device:' | tail -n 1", n, nil)
+	log.FailOnError(err, "Failed to run pxctl command on node: %v", n.Name)
+	log.Infof("Output of pxctl status: %v", output)
+	components := strings.Fields(output)
+
+	// Extract path and size
+	path := components[1]
+	path = strings.TrimSuffix(path, "-part1")
+
+	log.InfoD("Metadata device path: %v", path)
+	return path
+}
