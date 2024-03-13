@@ -2,8 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/eks"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"net/url"
 	"strings"
 	"time"
@@ -12,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/drivers/scheduler/aks"
+	"github.com/portworx/torpedo/drivers/scheduler/eks"
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
@@ -45,7 +44,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 		/*var mError error
 		if Inst().S.String() != aks.SchedName {
 			stopSignal := make(chan struct{})
-			go GetClusterNodesInfo(stopSignal, &mError)
+			go getClusterNodesInfo(stopSignal, &mError)
 
 			defer func() {
 				close(stopSignal)
@@ -53,10 +52,6 @@ var _ = Describe("{UpgradeCluster}", func() {
 		}*/
 
 		for _, version := range versions {
-			if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) {
-				err = OcpPrometheusPrereq()
-				log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-			}
 			Step(fmt.Sprintf("start [%s] scheduler upgrade to version [%s]", Inst().S.String(), version), func() {
 				err := Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))

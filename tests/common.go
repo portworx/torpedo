@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Masterminds/semver/v3"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -40,7 +39,6 @@ import (
 	"github.com/libopenstorage/openstorage/pkg/sched"
 	"github.com/libopenstorage/operator/drivers/storage/portworx/util"
 	oputil "github.com/libopenstorage/operator/drivers/storage/portworx/util"
-	opsv1 "github.com/libopenstorage/operator/pkg/apis/core/v1"
 	optest "github.com/libopenstorage/operator/pkg/util/test"
 	storkapi "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/libopenstorage/stork/pkg/storkctl"
@@ -10734,21 +10732,6 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	return err
 }
 
-
-func HasOCPPrereq(ocpVer string) bool {
-
-	if strings.Contains(ocpVer, "stable-") {
-		ocpVer = strings.Split(ocpVer, "-")[1]
-	}
-	parsedVersion, err := semver.NewVersion(ocpVer)
-	log.FailOnError(err, fmt.Sprintf("error parsion ocp version [%s]", ocpVer))
-	compareVersion, _ := semver.NewVersion("4.12") //giving compare version as 4.11 will make below condition true for 4.11.X
-	if parsedVersion.Equal(compareVersion) || parsedVersion.GreaterThan(compareVersion) {
-		return true
-	}
-	return false
-}
-
 func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	stNodes := node.GetStorageNodes()
 
@@ -10823,25 +10806,6 @@ func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	}
 }
 
-func OcpPrometheusPrereq() error {
-	stc, err := Inst().V.GetDriver()
-	if err != nil {
-		return err
-	}
-
-	log.Infof("is autopilot enabled?: %t", stc.Spec.Autopilot.Enabled)
-	if stc.Spec.Autopilot.Enabled {
-		if err = createClusterMonitoringConfig(); err != nil {
-			return err
-		}
-
-		if err = updatePrometheusAndAutopilot(stc); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // printK8sClusterInfo prints info about K8s cluster nodes
 func PrintK8sCluterInfo() {
 	log.Info("Get cluster info..")
@@ -10869,59 +10833,6 @@ func PrintK8sCluterInfo() {
 	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
 		log.Warnf("failed to get k8s cluster info, Err: %v", err)
 	}
-}
-
-func createClusterMonitoringConfig() error {
-	// Create configmap
-	ocpConfigmap := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "cluster-monitoring-config",
-			Namespace: "openshift-monitoring",
-		},
-		Data: map[string]string{
-			"config.yaml": "enableUserWorkload: true",
-		},
-	}
-
-	_, err := core.Instance().CreateConfigMap(ocpConfigmap)
-	return err
-}
-
-func updatePrometheusAndAutopilot(stc *opsv1.StorageCluster) error {
-	thanosQuerierHostCmd := `kubectl get route thanos-querier -n openshift-monitoring -o json | jq -r '.spec.host'`
-	var output []byte
-
-	output, err := exec.Command("sh", "-c", thanosQuerierHostCmd).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to get thanos querier host , Err: %v", err)
-	}
-	thanosQuerierHost := strings.TrimSpace(string(output))
-	log.Infof("Thanos Querier Host:%s", thanosQuerierHost)
-	thanosQuerierHostUrl := fmt.Sprintf("https://%s", thanosQuerierHost)
-
-	if stc.Spec.Monitoring.Prometheus.Enabled {
-		stc.Spec.Monitoring.Prometheus.Enabled = false
-	}
-
-	dataProviders := stc.Spec.Autopilot.Providers
-
-	for _, dataProvider := range dataProviders {
-		if dataProvider.Type == "prometheus" {
-			isUrlUpdated := false
-			if val, ok := dataProvider.Params["url"]; ok {
-				if val == thanosQuerierHostUrl {
-					isUrlUpdated = true
-				}
-			}
-			if !isUrlUpdated {
-				dataProvider.Params["url"] = thanosQuerierHostUrl
-			}
-		}
-
-	}
-	pxOperator := operator.Instance()
-	_, err = pxOperator.UpdateStorageCluster(stc)
-	return err
 }
 
 //ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path

@@ -1025,17 +1025,11 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		}
 		dash.VerifyFatal(len(versions) > 0, true, "Check if upgrade versions provided is provided")
 
-		PrereqNotExecuted := true
-		for _, version := range versions {
+``			for _, version := range versions {
 			Step("Upgrading OCP cluster", func() {
 
 				err := SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
-
-				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) && PrereqNotExecuted {
-					err := OcpPrometheusPrereq()
-					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-				}
 
 				err = Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
@@ -1043,12 +1037,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 
 				err = SwitchBothKubeConfigANDContext("destination")
 				dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to destination cluster")
-
-				if Inst().S.String() == openshift.SchedName && HasOCPPrereq(version) && PrereqNotExecuted {
-					err := OcpPrometheusPrereq()
-					log.FailOnError(err, fmt.Sprintf("error running OCP pre-requisites for version [%s]", version))
-					PrereqNotExecuted = false
-				}
 
 				err = Inst().S.UpgradeScheduler(version)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
