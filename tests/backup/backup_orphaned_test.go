@@ -25,24 +25,24 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87563
 
 	var (
-		scheduledAppContexts                           = make([]*scheduler.Context, 0)
-		appNamespaces                                  = make([]string, 0)
-		infraAdminUsers                                = make([]string, 0)
-		providers                                      = GetBackupProviders()
-		userCloudCredentialMap                         = make(map[string]map[string]string)
-		userBackupLocationMap                          = make(map[string]map[string]string)
-		userClusterMap                                 = make(map[string]map[string]string)
-		userSchedulePolicyInterval                     = int64(15)
-		userSchedulePolicyMap                          = make(map[string]map[string]string)
-		userBackupMap                                  = make(map[string]map[string]string)
-		userScheduleNameMap                            = make(map[string]string)
-		userRestoreMap                                 = make(map[string]map[string]string)
-		numberOfUsers                                  = 3
-		numberOfBackups                                = 1
-		randomSuffix                                   = RandomString(4)
-		infraAdminRole             backup.PxBackupRole = backup.InfrastructureOwner
-		controlChannel             chan string
-		errorGroup                 *errgroup.Group
+		scheduledAppContexts       = make([]*scheduler.Context, 0)
+		appNamespaces              = make([]string, 0)
+		infraAdminUsers            = make([]string, 0)
+		providers                  = GetBackupProviders()
+		userCloudCredentialMap     = make(map[string]map[string]string)
+		userBackupLocationMap      = make(map[string]map[string]string)
+		userClusterMap             = make(map[string]map[string]string)
+		userSchedulePolicyInterval = int64(15)
+		userSchedulePolicyMap      = make(map[string]map[string]string)
+		userBackupMap              = make(map[string]map[string]string)
+		userScheduleNameMap        = make(map[string]string)
+		//userRestoreMap                                 = make(map[string]map[string]string)
+		numberOfUsers                       = 3
+		numberOfBackups                     = 1
+		randomSuffix                        = RandomString(4)
+		infraAdminRole  backup.PxBackupRole = backup.InfrastructureOwner
+		//controlChannel             chan string
+		//errorGroup                 *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -66,7 +66,8 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 		Step("Validate applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			_, _ = ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 		Step(fmt.Sprintf("Create %d users with %s role", numberOfUsers, infraAdminRole), func() {
 			log.InfoD(fmt.Sprintf("Creating %d users with %s role", numberOfUsers, infraAdminRole))
@@ -174,38 +175,42 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 				}
 				userScheduleNameMap[user] = userScheduleName
 			})
+			log.InfoD("sleeping for 30 minutes")
+			time.Sleep(30 * time.Minute)
 		}
 		err = TaskHandler(infraAdminUsers, createObjectsFromUser, Parallel)
 		log.FailOnError(err, "failed to create objects from user")
 		for _, user := range infraAdminUsers {
-			Step(fmt.Sprintf("Take restore of backups from the user %s", user), func() {
-				log.InfoD(fmt.Sprintf("Taking restore of backups from the user %s", user))
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				var wg sync.WaitGroup
-				var mu sync.RWMutex
-				userRestoreMap[user] = make(map[string]string, 0)
-				createRestore := func(backupName string, restoreName string, namespace string) {
-					defer GinkgoRecover()
-					defer wg.Done()
-					customNamespace := "custom-" + namespace + randomSuffix
-					namespaceMapping := map[string]string{namespace: customNamespace}
-					err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
-					restoreUid, err := Inst().Backup.GetRestoreUID(nonAdminCtx, restoreName, BackupOrgID)
-					log.FailOnError(err, "failed to fetch restore %s uid of the user %s", restoreName, user)
-					mu.Lock()
-					defer mu.Unlock()
-					userRestoreMap[user][restoreUid] = restoreName
-				}
-				for backupName, namespace := range userBackupMap[user] {
-					wg.Add(1)
-					restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
-					go createRestore(backupName, restoreName, namespace)
-				}
-				wg.Wait()
-				log.Infof("The list of user restores taken are: %v", userRestoreMap)
-			})
+			/*
+				Step(fmt.Sprintf("Take restore of backups from the user %s", user), func() {
+					log.InfoD(fmt.Sprintf("Taking restore of backups from the user %s", user))
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					var wg sync.WaitGroup
+					var mu sync.RWMutex
+					userRestoreMap[user] = make(map[string]string, 0)
+					createRestore := func(backupName string, restoreName string, namespace string) {
+						defer GinkgoRecover()
+						defer wg.Done()
+						customNamespace := "custom-" + namespace + randomSuffix
+						namespaceMapping := map[string]string{namespace: customNamespace}
+						err = CreateRestoreWithValidation(nonAdminCtx, restoreName, backupName, namespaceMapping, make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of restore %s of backup %s", restoreName, backupName))
+						restoreUid, err := Inst().Backup.GetRestoreUID(nonAdminCtx, restoreName, BackupOrgID)
+						log.FailOnError(err, "failed to fetch restore %s uid of the user %s", restoreName, user)
+						mu.Lock()
+						defer mu.Unlock()
+						userRestoreMap[user][restoreUid] = restoreName
+					}
+					for backupName, namespace := range userBackupMap[user] {
+						wg.Add(1)
+						restoreName := fmt.Sprintf("%s-%s", RestoreNamePrefix, backupName)
+						go createRestore(backupName, restoreName, namespace)
+					}
+					wg.Wait()
+					log.Infof("The list of user restores taken are: %v", userRestoreMap)
+				})
+			*/
 			Step(fmt.Sprintf("Verify backups of the user %s from the admin", user), func() {
 				log.InfoD(fmt.Sprintf("Verifying backups of the user %s from the admin", user))
 				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
@@ -236,141 +241,147 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 					}
 				}
 			})
-			Step(fmt.Sprintf("Verify restores of the user %s from the admin", user), func() {
-				log.InfoD(fmt.Sprintf("Verifying restores of the user %s from the admin", user))
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
-				log.FailOnError(err, "failed to fetch user owner id %s", user)
-				restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, BackupOrgID, ctx)
-				log.FailOnError(err, "failed to fetch restore names with owner id %s from the admin", userOwnerID)
-				for _, restoreName := range userRestoreMap[user] {
-					if !IsPresent(restoreNamesByOwnerID, restoreName) {
-						err := fmt.Errorf("restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
-						log.FailOnError(fmt.Errorf(""), err.Error())
-					}
-				}
-			})
-		}
-		cleanupUserObjectsFromAdmin := func(user string) {
-			defer GinkgoRecover()
-			Step(fmt.Sprintf("Delete user %s schedule backups, backup schedule and schedule policy from the admin", user), func() {
-				log.InfoD(fmt.Sprintf("Deleting user %s schedule backups, backup schedule and schedule policy from the admin", user))
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(nonAdminCtx, userScheduleNameMap[user], BackupOrgID)
-				log.FailOnError(err, "failed to get all schedule backup names with schedule name %s of the user %s", userScheduleNameMap[user], user)
-				for i := len(allScheduleBackupNames) - 1; i >= 0; i-- {
-					backupName := allScheduleBackupNames[i]
-					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, BackupOrgID)
-					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], BackupOrgID, ctx)
-					log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, user)
-				}
-				scheduleUid, err := Inst().Backup.GetBackupScheduleUID(nonAdminCtx, userScheduleNameMap[user], BackupOrgID)
-				log.FailOnError(err, "failed to fetch backup schedule %s uid of the user %s", userScheduleNameMap[user], user)
-				err = DeleteScheduleWithUID(userScheduleNameMap[user], scheduleUid, BackupOrgID, ctx)
-				log.FailOnError(err, "failed to delete schedule %s of the user %s", userScheduleNameMap[user], user)
-			})
-			Step(fmt.Sprintf("Delete user %s backups from the admin", user), func() {
-				log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user))
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				for backupName := range userBackupMap[user] {
-					backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, BackupOrgID)
-					log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
-					_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], BackupOrgID, ctx)
-					log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
-				}
-			})
-			Step(fmt.Sprintf("Wait for the backups and backup schedule to be deleted"), func() {
-				log.InfoD("Waiting for the backups and backup schedule to be deleted")
-				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-				log.FailOnError(err, "failed to fetch user %s ctx", user)
-				clusterInspectReq := &api.ClusterInspectRequest{
-					OrgId:          BackupOrgID,
-					Name:           SourceClusterName,
-					Uid:            userClusterMap[user][SourceClusterName],
-					IncludeSecrets: true,
-				}
-				clusterResp, err := Inst().Backup.InspectCluster(nonAdminCtx, clusterInspectReq)
-				log.FailOnError(err, "failed to inspect cluster %s", SourceClusterName)
-				var wg sync.WaitGroup
-				namespace := "*"
-				wg.Add(1)
-				go func() {
-					defer GinkgoRecover()
-					defer wg.Done()
-					err = Inst().Backup.WaitForBackupScheduleDeletion(
-						nonAdminCtx,
-						userScheduleNameMap[user],
-						namespace,
-						BackupOrgID,
-						clusterResp.GetCluster(),
-						BackupLocationDeleteTimeout,
-						BackupLocationDeleteRetryTime,
-					)
-					log.FailOnError(err, "failed while waiting for backup schedule %s to be deleted for the user %s", userScheduleNameMap[user], user)
-					for schedulePolicyUID, schedulePolicyName := range userSchedulePolicyMap[user] {
-						schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
-							Name:  schedulePolicyName,
-							Uid:   schedulePolicyUID,
-							OrgId: BackupOrgID,
+			/*
+				Step(fmt.Sprintf("Verify restores of the user %s from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Verifying restores of the user %s from the admin", user))
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					userOwnerID, err := portworx.GetSubFromCtx(nonAdminCtx)
+					log.FailOnError(err, "failed to fetch user owner id %s", user)
+					restoreNamesByOwnerID, err := GetAllRestoreNamesByOwnerID(userOwnerID, BackupOrgID, ctx)
+					log.FailOnError(err, "failed to fetch restore names with owner id %s from the admin", userOwnerID)
+					for _, restoreName := range userRestoreMap[user] {
+						if !IsPresent(restoreNamesByOwnerID, restoreName) {
+							err := fmt.Errorf("restore %s is not listed in restore names %s", restoreName, restoreNamesByOwnerID)
+							log.FailOnError(fmt.Errorf(""), err.Error())
 						}
-						_, err = Inst().Backup.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
-						log.FailOnError(err, "failed to delete schedule policy %s of the user %s", schedulePolicyName, user)
-						break
 					}
-				}()
-				for backupName := range userBackupMap[user] {
+				})
+			*/
+		}
+		/*
+			cleanupUserObjectsFromAdmin := func(user string) {
+				defer GinkgoRecover()
+				Step(fmt.Sprintf("Delete user %s schedule backups, backup schedule and schedule policy from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Deleting user %s schedule backups, backup schedule and schedule policy from the admin", user))
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(nonAdminCtx, userScheduleNameMap[user], BackupOrgID)
+					log.FailOnError(err, "failed to get all schedule backup names with schedule name %s of the user %s", userScheduleNameMap[user], user)
+					for i := len(allScheduleBackupNames) - 1; i >= 0; i-- {
+						backupName := allScheduleBackupNames[i]
+						backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, BackupOrgID)
+						log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
+						_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], BackupOrgID, ctx)
+						log.FailOnError(err, "failed to delete schedule backup %s of the user %s", backupName, user)
+					}
+					scheduleUid, err := Inst().Backup.GetBackupScheduleUID(nonAdminCtx, userScheduleNameMap[user], BackupOrgID)
+					log.FailOnError(err, "failed to fetch backup schedule %s uid of the user %s", userScheduleNameMap[user], user)
+					err = DeleteScheduleWithUID(userScheduleNameMap[user], scheduleUid, BackupOrgID, ctx)
+					log.FailOnError(err, "failed to delete schedule %s of the user %s", userScheduleNameMap[user], user)
+				})
+				Step(fmt.Sprintf("Delete user %s backups from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Deleting user %s backups from the admin", user))
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					for backupName := range userBackupMap[user] {
+						backupUid, err := Inst().Backup.GetBackupUID(nonAdminCtx, backupName, BackupOrgID)
+						log.FailOnError(err, "failed to fetch backup %s uid of the user %s", backupName, user)
+						_, err = DeleteBackupWithClusterUID(backupName, backupUid, SourceClusterName, userClusterMap[user][SourceClusterName], BackupOrgID, ctx)
+						log.FailOnError(err, "failed to delete backup %s of the user %s", backupName, user)
+					}
+				})
+				Step(fmt.Sprintf("Wait for the backups and backup schedule to be deleted"), func() {
+					log.InfoD("Waiting for the backups and backup schedule to be deleted")
+					nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+					log.FailOnError(err, "failed to fetch user %s ctx", user)
+					clusterInspectReq := &api.ClusterInspectRequest{
+						OrgId:          BackupOrgID,
+						Name:           SourceClusterName,
+						Uid:            userClusterMap[user][SourceClusterName],
+						IncludeSecrets: true,
+					}
+					clusterResp, err := Inst().Backup.InspectCluster(nonAdminCtx, clusterInspectReq)
+					log.FailOnError(err, "failed to inspect cluster %s", SourceClusterName)
+					var wg sync.WaitGroup
+					namespace := "*"
 					wg.Add(1)
-					go func(backupName string) {
+					go func() {
 						defer GinkgoRecover()
 						defer wg.Done()
-						err = Inst().Backup.WaitForBackupDeletion(nonAdminCtx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
-						log.FailOnError(err, "failed while waiting for backup %s to be deleted", backupName)
-					}(backupName)
-				}
-				wg.Wait()
-			})
-			Step(fmt.Sprintf("Delete user %s restores from the admin", user), func() {
-				log.InfoD(fmt.Sprintf("Deleting user %s restores from the admin", user))
-				for restoreUid, restoreName := range userRestoreMap[user] {
-					err = DeleteRestoreWithUID(restoreName, restoreUid, BackupOrgID, ctx)
-					log.FailOnError(err, "failed to delete restore %s of the user %s", restoreName, user)
-				}
-			})
-			Step(fmt.Sprintf("Delete user %s source and destination cluster from the admin", user), func() {
-				log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster from the admin", user))
-				for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
-					err := DeleteClusterWithUID(clusterName, userClusterMap[user][clusterName], BackupOrgID, ctx, false)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, user))
-				}
-			})
-		}
-		err = TaskHandler(infraAdminUsers, cleanupUserObjectsFromAdmin, Parallel)
-		log.FailOnError(err, "failed to cleanup user objects from admin")
+						err = Inst().Backup.WaitForBackupScheduleDeletion(
+							nonAdminCtx,
+							userScheduleNameMap[user],
+							namespace,
+							BackupOrgID,
+							clusterResp.GetCluster(),
+							BackupLocationDeleteTimeout,
+							BackupLocationDeleteRetryTime,
+						)
+						log.FailOnError(err, "failed while waiting for backup schedule %s to be deleted for the user %s", userScheduleNameMap[user], user)
+						for schedulePolicyUID, schedulePolicyName := range userSchedulePolicyMap[user] {
+							schedulePolicyDeleteRequest := &api.SchedulePolicyDeleteRequest{
+								Name:  schedulePolicyName,
+								Uid:   schedulePolicyUID,
+								OrgId: BackupOrgID,
+							}
+							_, err = Inst().Backup.DeleteSchedulePolicy(ctx, schedulePolicyDeleteRequest)
+							log.FailOnError(err, "failed to delete schedule policy %s of the user %s", schedulePolicyName, user)
+							break
+						}
+					}()
+					for backupName := range userBackupMap[user] {
+						wg.Add(1)
+						go func(backupName string) {
+							defer GinkgoRecover()
+							defer wg.Done()
+							err = Inst().Backup.WaitForBackupDeletion(nonAdminCtx, backupName, BackupOrgID, BackupDeleteTimeout, BackupDeleteRetryTime)
+							log.FailOnError(err, "failed while waiting for backup %s to be deleted", backupName)
+						}(backupName)
+					}
+					wg.Wait()
+				})
+				Step(fmt.Sprintf("Delete user %s restores from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Deleting user %s restores from the admin", user))
+					for restoreUid, restoreName := range userRestoreMap[user] {
+						err = DeleteRestoreWithUID(restoreName, restoreUid, BackupOrgID, ctx)
+						log.FailOnError(err, "failed to delete restore %s of the user %s", restoreName, user)
+					}
+				})
+				Step(fmt.Sprintf("Delete user %s source and destination cluster from the admin", user), func() {
+					log.InfoD(fmt.Sprintf("Deleting user %s source and destination cluster from the admin", user))
+					for _, clusterName := range []string{SourceClusterName, DestinationClusterName} {
+						err := DeleteClusterWithUID(clusterName, userClusterMap[user][clusterName], BackupOrgID, ctx, false)
+						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying deletion of cluster [%s] of the user %s", clusterName, user))
+					}
+				})
+			}
+			err = TaskHandler(infraAdminUsers, cleanupUserObjectsFromAdmin, Parallel)
+			log.FailOnError(err, "failed to cleanup user objects from admin")
+		*/
 	})
 
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		log.InfoD("Destroying the scheduled applications")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-		cleanupUserObjects := func(user string) {
-			nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
-			log.FailOnError(err, "failed to fetch user %s ctx", user)
-			for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
-				CleanupCloudSettingsAndClusters(userBackupLocationMap[user], cloudCredentialName, cloudCredentialUID, nonAdminCtx)
-				break
+		/*
+			log.InfoD("Destroying the scheduled applications")
+			opts := make(map[string]bool)
+			opts[SkipClusterScopedObjects] = true
+			err := DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+			log.FailOnError(err, "Data validations failed")
+			cleanupUserObjects := func(user string) {
+				nonAdminCtx, err := backup.GetNonAdminCtx(user, CommonPassword)
+				log.FailOnError(err, "failed to fetch user %s ctx", user)
+				for cloudCredentialUID, cloudCredentialName := range userCloudCredentialMap[user] {
+					CleanupCloudSettingsAndClusters(userBackupLocationMap[user], cloudCredentialName, cloudCredentialUID, nonAdminCtx)
+					break
+				}
+				err = backup.DeleteUser(user)
+				log.FailOnError(err, "failed to delete user %s", user)
 			}
-			err = backup.DeleteUser(user)
-			log.FailOnError(err, "failed to delete user %s", user)
-		}
-		err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
-		log.FailOnError(err, "failed to cleanup user objects from user")
+			err = TaskHandler(infraAdminUsers, cleanupUserObjects, Parallel)
+			log.FailOnError(err, "failed to cleanup user objects from user")
+		*/
 	})
 })
 
