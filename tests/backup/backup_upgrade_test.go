@@ -1058,61 +1058,64 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
 			})
-			Step("validate storage components", func() {
+			if Inst().Provisioner == "portworx" {
+				Step("validate storage components", func() {
 
-				err := SwitchBothKubeConfigANDContext("source")
-				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
+					err := SwitchBothKubeConfigANDContext("source")
+					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
-				urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-				u, err := url.Parse(urlToParse)
-				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-				err = Inst().V.ValidateDriver(u.String(), true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+					urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+					u, err := url.Parse(urlToParse)
+					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
+					err = Inst().V.ValidateDriver(u.String(), true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
-				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+					// Printing cluster node info after the upgrade
+					PrintK8sCluterInfo()
 
-				err = SwitchBothKubeConfigANDContext("destination")
-				dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to destination cluster")
+					err = SwitchBothKubeConfigANDContext("destination")
+					dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to destination cluster")
 
-				urlToParse = fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
-				u, err = url.Parse(urlToParse)
-				log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
-				err = Inst().V.ValidateDriver(u.String(), true)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
+					urlToParse = fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
+					u, err = url.Parse(urlToParse)
+					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
+					err = Inst().V.ValidateDriver(u.String(), true)
+					dash.VerifyFatal(err, nil, fmt.Sprintf("verify volume driver after upgrade to %s", version))
 
-				// Printing cluster node info after the upgrade
-				PrintK8sCluterInfo()
+					// Printing cluster node info after the upgrade
+					PrintK8sCluterInfo()
 
-				err = SwitchBothKubeConfigANDContext("source")
-				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
-			})
+					err = SwitchBothKubeConfigANDContext("source")
+					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
+				})
 
-			Step("update node drive endpoints", func() {
-				err := SwitchBothKubeConfigANDContext("source")
-				dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to source cluster")
+				Step("update node drive endpoints", func() {
+					err := SwitchBothKubeConfigANDContext("source")
+					dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to source cluster")
 
-				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
-				err = Inst().S.RefreshNodeRegistry()
-				log.FailOnError(err, "Refresh Node Registry failed")
+					// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Refresh Node Registry failed")
 
-				// Refresh Driver Endpoints
-				err = Inst().V.RefreshDriverEndpoints()
-				log.FailOnError(err, "Refresh Driver Endpoints failed")
+					// Refresh Driver Endpoints
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver Endpoints failed")
 
-				err = SwitchBothKubeConfigANDContext("destination")
-				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to destination cluster")
-				// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
-				err = Inst().S.RefreshNodeRegistry()
-				log.FailOnError(err, "Refresh Node Registry failed")
+					err = SwitchBothKubeConfigANDContext("destination")
+					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to destination cluster")
 
-				// Refresh Driver Endpoints
-				err = Inst().V.RefreshDriverEndpoints()
-				log.FailOnError(err, "Refresh Driver Endpoints failed")
+					// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Refresh Node Registry failed")
 
-				err = SwitchBothKubeConfigANDContext("source")
-				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
-			})
+					// Refresh Driver Endpoints
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver Endpoints failed")
+
+					err = SwitchBothKubeConfigANDContext("source")
+					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
+				})
+			}
 
 			Step("Create backups after OCP upgrade with and without pre and post exec rules", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
