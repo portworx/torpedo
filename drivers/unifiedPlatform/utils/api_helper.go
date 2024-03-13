@@ -20,8 +20,15 @@ const (
 	envPxCentralAPI      = "PX_CENTRAL_API"
 )
 
+var RunWithRBAC RunWithRbac
+
 type Credentials struct {
 	Token string
+}
+
+type RunWithRbac struct {
+	RbacFlag  bool
+	RbacToken string
 }
 
 // BearerToken struct
@@ -59,7 +66,9 @@ func GetBearerToken() (context.Context, string, error) {
 	username := os.Getenv(envPXCentralUsername)
 	password := os.Getenv(envPXCentralPassword)
 	issuerURL := os.Getenv(envPxCentralAPI)
-
+	if RunWithRBAC.RbacFlag == true {
+		return context.Background(), RunWithRBAC.RbacToken, nil
+	}
 	log.Infof("user name %s", username)
 	log.Infof("password %s", password)
 

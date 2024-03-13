@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	iamv1 "github.com/pure-px/platform-api-go-client/v1/iam"
 	status "net/http"
@@ -29,10 +30,7 @@ func (iam *PLATFORM_API_V1) ListIamRoleBindings(listReq *WorkFlowRequest) ([]Wor
 		return nil, fmt.Errorf("Error when calling `cloudCredationServiceListcloudCredations`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel.Iam)
-	if err != nil {
-		return nil, err
-	}
+	err = utilities.CopyStruct(&iamResponse, iamModel.Iam)
 	log.Infof("Value of iam after copy - [%v]", iamResponse)
 	return iamResponse, nil
 }
@@ -46,16 +44,12 @@ func (iam *PLATFORM_API_V1) CreateIamRoleBinding(createIamReq *WorkFlowRequest) 
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	err = copier.Copy(&IAMRequestBody, createIamReq.CreateIAM)
-	if err != nil {
-		return nil, fmt.Errorf("Error while copying the deployment request\n")
-	}
-	dsModel, res, err := iamClient.IAMServiceCreateIAMExecute(iamCreateRequest)
+	err = utilities.CopyStruct(&IAMRequestBody, createIamReq.Iam)
+	iamModel, res, err := iamClient.IAMServiceCreateIAMExecute(iamCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
-
-	copier.Copy(&iamResponse, dsModel)
+	err = utilities.CopyStruct(&iamResponse, iamModel)
 	return &iamResponse, err
 }
 
@@ -76,10 +70,7 @@ func (iam *PLATFORM_API_V1) UpdateIamRoleBindings(updateReq *WorkFlowRequest) (*
 	}
 	log.InfoD("Successfully updated the IAM Roles")
 	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel)
-	if err != nil {
-		return nil, err
-	}
+	err = utilities.CopyStruct(&iamResponse, iamModel)
 	log.Infof("Value of iam after copy - [%v]", iamResponse)
 	return &iamResponse, nil
 }
@@ -102,10 +93,7 @@ func (iam *PLATFORM_API_V1) GetIamRoleBindingByID(actorId *WorkFlowRequest) (*Wo
 	}
 	log.InfoD("Successfully fetched the IAM Roles")
 	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel)
-	if err != nil {
-		return nil, err
-	}
+	err = utilities.CopyStruct(&iamResponse, iamModel)
 	log.Infof("Value of iam after copy - [%v]", iamResponse)
 	return &iamResponse, nil
 }
@@ -128,10 +116,7 @@ func (iam *PLATFORM_API_V1) DeleteIamRoleBinding(actorId *WorkFlowRequest) error
 	}
 	log.InfoD("Successfully DELETED the IAM Roles")
 	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel)
-	if err != nil {
-		return err
-	}
+	err = utilities.CopyStruct(&iamResponse, iamModel)
 	log.Infof("Value of iam after copy - [%v]", iamResponse)
 	return nil
 }
@@ -153,10 +138,7 @@ func (iam *PLATFORM_API_V1) GrantIAMRoles(grantIamReq *WorkFlowRequest) (*WorkFl
 	}
 	log.InfoD("Successfully granted the IAM roles")
 	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel)
-	if err != nil {
-		return nil, err
-	}
+	err = utilities.CopyStruct(&iamResponse, iamModel)
 	log.Infof("Value of iam after copy - [%v]", iamResponse)
 	return &iamResponse, nil
 }
@@ -178,10 +160,7 @@ func (iam *PLATFORM_API_V1) RevokeAccessForIAM(revokeReq *WorkFlowRequest) (*Wor
 	}
 	log.InfoD("Successfully revoked access to the IAM roles")
 	log.Infof("Value of iam - [%v]", iamModel)
-	err = copier.Copy(&iamResponse, iamModel)
-	if err != nil {
-		return nil, err
-	}
+	err = utilities.CopyStruct(&iamResponse, iamModel)
 	log.Infof("Value of iam after copy - [%v]", iamResponse)
 	return &iamResponse, nil
 }

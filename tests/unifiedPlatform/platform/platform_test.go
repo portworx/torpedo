@@ -2,10 +2,13 @@ package tests
 
 import (
 	. "github.com/onsi/ginkgo/v2"
+	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	"math/rand"
+	"strconv"
 )
 
 var _ = Describe("{PlatformOnboardingTest}", func() {
@@ -49,6 +52,40 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 			log.Infof("PDS Apps deployed successfully on the targte cluster")
 		})
 
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{TestRbacForPds}", func() {
+	var (
+		pdsRbac  *stworkflows.UserWithRbac
+		userName string
+	)
+	JustBeforeEach(func() {
+		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
+		NewPdsParams, err := ReadNewParams(pdsparams)
+		infraParams := NewPdsParams.InfraToTest
+		pdsLabels["clusterType"] = infraParams.ClusterType
+		rbacParams := NewPdsParams.RbacParams
+		log.FailOnError(err, "Failed to read params from json file")
+		if rbacParams.RunWithRbac == true {
+			userName = "pdsUser-" + strconv.Itoa(rand.Int())
+			err, _ := pdsRbac.CreateNewPdsUser(accID, userName, rbacParams.RoleName, rbacParams.ResourceId)
+			if err != nil {
+				return
+			}
+		}
+		StartTorpedoTest("ListAccounts", "Create and List Accounts", nil, 0)
+	})
+
+	It("Accounts", func() {
+		Step("Create and List Accounts", func() {
+			pdsRbac.SwitchPdsUser(userName)
+			//Perform any PDS workflow with Rbac enabled.
+		})
 	})
 
 	JustAfterEach(func() {
