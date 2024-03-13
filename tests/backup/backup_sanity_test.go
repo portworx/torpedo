@@ -109,6 +109,9 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		weeklyName                        string
 		monthlyName                       string
 		provisionerVolumeSnapshotClassMap map[string]string
+		schedulePolicyName                string
+		schedulePolicyUID                 string
+		schedulePolicyInterval            = int64(15)
 	)
 
 	JustBeforeEach(func() {
@@ -235,6 +238,27 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
 			dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
 		})
+		Step("Create schedule policy", func() {
+			log.InfoD("Creating schedule policy")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			schedulePolicyName = fmt.Sprintf("%s-%v", "periodic-schedule-policy", RandomString(10))
+			schedulePolicyUID = uuid.New()
+			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, BackupOrgID, ctx, false, false)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
+		})
+
+		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner with forced kdmp option"), func() {
+			log.InfoD("Creating schedule backup for multiple provisioner with forced kdmp option")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			provisionerNonDefaultSnapshotClassMap := map[string]string{}
+			kdmpScheduleName := fmt.Sprintf("default-provisioner-schedule-%v", RandomString(10))
+			forceKdmpSchBackupName, err := CreateScheduleBackupWithValidationWithVscMapping(ctx, kdmpScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, true)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
+			err = IsFullBackup(forceKdmpSchBackupName, BackupOrgID, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
+		})
 
 		Step("Taking backup of application from source cluster", func() {
 			log.InfoD("taking backup of applications")
@@ -250,7 +274,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 					provisionerVolumeSnapshotClassSubMap[appCtx.ScheduleOptions.StorageProvisioner] = value
 				}
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
-				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap)
+				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
 			}
