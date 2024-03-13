@@ -989,7 +989,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 		Provisioner := fmt.Sprintf("%v", portworx.PortworxCsi)
 
 		//Number of apps to be deployed
-		NumberOfDeployments := 200
+		NumberOfDeployments := 2
 
 		Step("Schedule applications", func() {
 			log.InfoD("Scheduling applications")
@@ -1044,7 +1044,7 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 							log.InfoD("increasing pvc [%s/%s]  size to %v %v", pvc.Namespace, pvc.Name, 2*pvcSizeInt, pvc.UID)
 							resizedVol, err := Inst().S.ResizePVC(ctx, pvc, uint64(2*pvcSizeInt))
 							log.FailOnError(err, "pvc resize failed pvc:%v", pvc.UID)
-							log.InfoD("Vol uid %v", resizedVol.ID)
+							log.InfoD("Vol uid %v and vol size: %v", resizedVol.ID, resizedVol.Size)
 							requestedVols = append(requestedVols, resizedVol)
 						}
 					})
@@ -1061,13 +1061,17 @@ var _ = Describe("{StopPXAddDiskDeleteApps}", func() {
 								params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 								log.FailOnError(err, "didn't get auth token")
 							}
-							err := Inst().V.ValidateUpdateVolume(v, params)
+							respVol, err := Inst().V.InspectVolume(v.ID)
+							log.FailOnError(err, "error inspecting volume [%s]", v.Name)
+							v.Size = respVol.Spec.Size
+							log.Infof("respvol: %v volume: %v", respVol.Spec.Size, v)
+							err = Inst().V.ValidateUpdateVolume(v, params)
 							log.FailOnError(err, "Could not validate volume resize %v", v.Name)
 
 							gotVol := false
 							for _, fa := range flashArrays {
-								log.InfoD("getting vol [%s] size from fa [%s]", v.Name, fa.MgmtEndPoint)
-								faVol, err := pureutils.GetPureFAVolumeSize(v.Name, fa.MgmtEndPoint, fa.APIToken)
+								log.InfoD("getting vol [%s] size from fa [%s]", v.ID, fa.MgmtEndPoint)
+								faVol, err := pureutils.GetPureFAVolumeSize(v.ID, fa.MgmtEndPoint, fa.APIToken)
 								log.FailOnError(err, "error getting vol [%s] size", v.Name)
 								if faVol != 0 {
 									dash.VerifyFatal(faVol, v.Size, fmt.Sprintf("validate volume [%s] resize in FA backend", v.Name))

@@ -2244,7 +2244,7 @@ func (d *portworx) ValidateUpdateVolume(vol *torpedovolume.Volume, params map[st
 		}
 
 		respVol := volumeInspectResponse.Volume
-
+		log.Infof("Validating volume size [%v] after update", respVol.Spec.Size)
 		// Size Update
 		if respVol.Spec.Size != vol.RequestedSize {
 			return nil, true, &ErrFailedToInspectVolume{
