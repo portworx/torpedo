@@ -2,7 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/scheduler/openshift"
 	"net/url"
 	"os"
 	"strconv"
@@ -176,7 +175,6 @@ var _ = Describe("{StorkUpgradeWithBackup}", func() {
 				allScheduleBackupNames, err := Inst().Backup.GetAllScheduleBackupNames(ctx, scheduleName, BackupOrgID)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of all schedule backups with schedule name - %s", scheduleName))
 				dash.VerifyFatal(len(allScheduleBackupNames) > 1, true, fmt.Sprintf("Verfiying the backup count is increased for backups with schedule name - %s", scheduleName))
-				//Get the status of latest backup
 				schBackupName, err = GetLatestScheduleBackupName(ctx, scheduleName, BackupOrgID)
 				log.FailOnError(err, fmt.Sprintf("Failed to get latest schedule backup with schedule name - %s", scheduleName))
 				err = BackupSuccessCheckWithValidation(ctx, schBackupName, appContextsToBackupMap[scheduleName], BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
@@ -1025,7 +1023,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		}
 		dash.VerifyFatal(len(versions) > 0, true, "Check if upgrade versions provided is provided")
 
-``			for _, version := range versions {
+		for _, version := range versions {
 			Step("Upgrading OCP cluster", func() {
 
 				err := SwitchBothKubeConfigANDContext("source")
