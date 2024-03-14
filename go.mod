@@ -143,7 +143,7 @@ require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/pure-px/apis v0.0.0-20240306064831-6f5b789bef11
-	github.com/pure-px/platform-api-go-client v0.0.0-20240312035631-72cc1e92f225
+	github.com/pure-px/platform-api-go-client v0.0.0-20240314114103-9e6ae8844392
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.10.0

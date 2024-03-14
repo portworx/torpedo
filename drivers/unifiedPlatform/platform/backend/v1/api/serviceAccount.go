@@ -7,7 +7,7 @@ import (
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
-	serviceaccountv1 "github.com/pure-px/platform-api-go-client/v1/serviceaccount"
+	serviceaccountv1 "github.com/pure-px/platform-api-go-client/platform/v1/serviceaccount"
 	status "net/http"
 )
 
