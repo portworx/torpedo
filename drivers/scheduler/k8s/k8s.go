@@ -143,7 +143,10 @@ const (
 	// PxLabelNameKey is key for map
 	PxLabelNameKey = "name"
 	// PxLabelValue portworx pod label
-	PxLabelValue = "portworx"
+	PxLabelValue          = "portworx"
+	AutopilotLabelNameKey = "name"
+	AutopilotLabelValue   = "autopilot"
+	PortworxNotDeployed   = "portworx not deployed"
 )
 
 const (
@@ -3850,7 +3853,13 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			autopilotLabels := make(map[string]string)
 			autopilotLabels["name"] = "autopilot"
-			autopilotPods, err := k8sCore.GetPods(autopilotDefaultNamespace, autopilotLabels)
+
+			namespace, err := k.GetAutopilotNamespace()
+			if err != nil {
+				return fmt.Errorf("failed to get Autopilot namespace, Err: %v", err)
+			}
+			log.Debugf("Autopilot namespace %s ", namespace)
+			autopilotPods, err := k8sCore.GetPods(namespace, autopilotLabels)
 			if err != nil {
 				return fmt.Errorf("failed to get [autopilot] pods, Err: %v", err)
 			}
@@ -6661,16 +6670,71 @@ func (k *K8s) addAnnotationsToPVC(pvc *corev1.PersistentVolumeClaim, annotations
 
 // GetAutopilotNamespace returns the autopilot namespace
 func (k *K8s) GetAutopilotNamespace() (string, error) {
+	var pods *corev1.PodList
+	var err error
+	var ns string
+	ns, err = k.GetPortworxNamespace()
+	if err != nil {
+		if strings.Contains(err.Error(), PortworxNotDeployed) {
+			//Return default AutopilotNamespace
+			return autopilotDefaultNamespace, nil
+		}
+		return "", fmt.Errorf("Failed to find portworx namespace %v", err)
+	}
+	log.Infof("Portworx installed on namespace %s", ns)
+	//Find out autopilot pod deployed namespace by label
+	pods, err = k8sCore.ListPods(map[string]string{
+		AutopilotLabelNameKey: AutopilotLabelValue,
+	})
+	if err != nil {
+		return ns, err
+	}
+	ns = ""
+	if len(pods.Items) > 0 {
+		ns = pods.Items[0].Namespace
+	}
+	if len(ns) == 0 {
+		return ns, fmt.Errorf("error: can't find autopilot namespace using pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
+	}
+	return ns, nil
+}
+
+// GetPortworxNamespace returns namespace where Portworx is deployed based on the portworx-service location
+func (k *K8s) GetPortworxNamespace() (string, error) {
 	allServices, err := k8sCore.ListServices("", metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
+
+	var namespaces []string
 	for _, svc := range allServices.Items {
 		if svc.Name == portworxServiceName {
-			return svc.Namespace, nil
+			namespaces = append(namespaces, svc.Namespace)
 		}
 	}
-	return autopilotDefaultNamespace, nil
+	if len(namespaces) > 0 {
+		// If portworx-service is deployed in 2 namespaces, return the none kube-system namespace
+		if len(namespaces) == 2 {
+			log.Debugf("Found [%s] service in 2 different namespaces %s", portworxServiceName, namespaces)
+			for _, namespace := range namespaces {
+				if namespace != "kube-system" {
+					log.Debugf("When Portworx deployed outside of [kube-system] namespace, it also creates [%s] service in the [kube-system ] namespace as well as in the namespace it is deployed in", portworxServiceName)
+					log.Debugf("Will assume Portworx is deployed in [%s] namespace", namespace)
+					return namespace, nil
+				}
+			}
+		}
+
+		// If portworx-service is deployed in more than 2 namespaces, something is wrong here
+		if len(namespaces) > 2 {
+			return "", fmt.Errorf("Portworx service [%s] is deployed in too many namespaces %s, something is wrong here", portworxServiceName, namespaces)
+		}
+
+		// portworx-service is deployed in kube-system if only 1 namesapce is found
+		return namespaces[0], nil
+	}
+
+	return "", fmt.Errorf("%s on this K8S cluster", PortworxNotDeployed)
 }
 
 // CreateAutopilotRule creates the AutopilotRule object
