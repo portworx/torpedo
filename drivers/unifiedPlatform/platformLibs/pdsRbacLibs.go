@@ -28,7 +28,8 @@ func AssignRoleBindingsToUser(saName, roleName, resourceId, accId string) (*apiS
 	tenantId, err := GetDefaultTenantId(accId)
 	user, err := GetServiceAccFromSaName(tenantId, saName)
 	err = utilities.CopyStruct(user, userModel)
-	actorID := *userModel.Get.Config.ClientId
+	actorID := *userModel.Get.Meta.Uid
+	clientID := *userModel.Get.Config.ClientId
 	clientSecret := *userModel.Get.Config.ClientSecret
 	binding.RoleName = &roleName
 	binding.ResourceIds = append(binding.ResourceIds, resourceId)
@@ -37,6 +38,6 @@ func AssignRoleBindingsToUser(saName, roleName, resourceId, accId string) (*apiS
 	iamRoles, err := CreatePlatformServiceAccountIamRoles(iamName, actorID, roles)
 	log.FailOnError(err, "error while creating iam roles")
 	log.Infof("created iam role with name %s", *iamRoles.Meta.Name)
-	tokenRes, err := GenerateServiceAccountAccessToken(tenantId, actorID, clientSecret)
+	tokenRes, err := GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret)
 	return tokenRes, nil
 }
