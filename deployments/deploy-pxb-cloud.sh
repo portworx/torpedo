@@ -436,24 +436,6 @@ spec:
     operator: Equal
     value: "false"
     effect: "NoSchedule"
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: node-role.kubernetes.io/master
-            operator: "Exists"
-        - matchExpressions:
-          - key: node-role.kubernetes.io/control-plane
-            operator: "Exists"
-        - matchExpressions:
-          - key: node-role.kubernetes.io/controlplane
-            operator: "In"
-            values: ["true"]
-        - matchExpressions:
-          - key: px/enabled
-            operator: "In"
-            values: ["false"]
   initContainers:
   - name: init-sysctl
     image: ${BUSYBOX_IMG}
