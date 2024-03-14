@@ -44,3 +44,9 @@ type RestoreInterface interface {
 	DeleteRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
 	ListRestore(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
+
+type TemplateDefinitionInterface interface {
+	ListTemplateKinds(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListTemplateRevisions(WorkFlowRequest) ([]WorkFlowResponse, error)
+	GetTemplateRevisions(*WorkFlowRequest) (*WorkFlowResponse, error)
+}
