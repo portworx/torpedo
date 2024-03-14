@@ -48,6 +48,6 @@ type RestoreInterface interface {
 
 type TemplateDefinitionsInterface interface {
 	ListTemplateKinds(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	ListTemplateRevisions(WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListTemplateRevisions(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetTemplateRevisions(*WorkFlowRequest) (*WorkFlowResponse, error)
 }
