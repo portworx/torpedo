@@ -1,0 +1,83 @@
+// Please use the following editor setup for this file:
+// Tab size=2; Tabs as spaces; Clean up trailing whitepsace
+//
+// In vim add: au FileType proto setl sw=2 ts=2 expandtab list
+//
+// In vscode install vscode-proto3 extension and add this to your settings.json:
+//    "[proto3]": {
+//        "editor.tabSize": 2,
+//        "editor.insertSpaces": true,
+//        "editor.rulers": [80],
+//        "editor.detectIndentation": true,
+//        "files.trimTrailingWhitespace": true
+//    }
+//
+syntax = "proto3";
+
+package public.portworx.pds.catalog.templatedefinition.v1;
+
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
+
+import "public/portworx/common/apiv1/revision.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "public/portworx/common/apiv1/pagination.proto";
+import "public/portworx/common/apiv1/sort.proto";
+
+option go_package = "github.com/pure-px/apis/public/portworx/pds/catalog/templatedefinition/apiv1;templatedefinition";
+option java_multiple_files = true;
+option java_package = "com.public.portworx.pds.catalog.templatedefinition.v1";
+option java_outer_classname = "TemplateDefinitionProto";
+
+// TemplateDefinitionService which caters to getting template definitions.
+service TemplateDefinitionService{
+  // GetRevision gets the revision details, containing the actual schema.
+  rpc GetRevision (public.portworx.common.v1.GetRevisionRequest)
+      returns (public.portworx.common.v1.Revision){
+      option(google.api.http) = {
+        get: "/pds/v1/catalog/templatedefinition/revision"
+      };
+    }
+
+  // ListRevisions list the revisions.
+  rpc ListRevisions (public.portworx.common.v1.ListRevisionsRequest)
+      returns (public.portworx.common.v1.ListRevisionsResponse){
+      option(google.api.http) = {
+        get: "/pds/v1/catalog/templatedefinition/revisions"
+      };
+    }
+
+  // ListTemplateKindRequest: Used to list unique template kind(names).
+  rpc ListTemplateKinds (ListTemplateKindsRequest)
+    returns (ListTemplateKindsResponse){
+      option(google.api.http) = {
+        get: "/pds/v1/catalog/templatedefinition/kinds"
+      };
+    }
+   // TODO (PDS): Add RPCs to display UI friendly options to pick a schema template.
+}
+
+// ListTemplateKindResponse listing request.
+message ListTemplateKindsRequest{
+  // Version of the revision, this accepts wild card, eg: 1.*, 1.2.
+  string semantic_version = 1 [(google.api.field_behavior) = OPTIONAL];
+  // Prefix of the kind, eg: pds, pds:application, pds:application:postg.
+  string prefix = 2 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting details using which requested list of revisions to be sorted.
+  public.portworx.common.v1.Sort sort = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Pagination parameters for listing revisions.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListTemplateKindsResponse listing response.
+message ListTemplateKindsResponse{
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this to list all kinds. --)
+  // List of kinds.
+  repeated string kinds = 1;
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  // Pagination metadata for this response.
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}

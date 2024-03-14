@@ -10,6 +10,7 @@ type Pds interface {
 	BackupConfig
 	Backup
 	RestoreInterface
+	TemplateDefinitionInterface
 }
 
 type Deployment interface {
