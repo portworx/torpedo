@@ -123,6 +123,9 @@ var _ = Describe("{UpgradeCluster}", func() {
 				// Refresh Driver Endpoints
 				err = Inst().V.RefreshDriverEndpoints()
 				log.FailOnError(err, "Refresh Driver Endpoints failed")
+
+				// Printing pxctl status after the upgrade
+				PrintPxctlStatus()
 			})
 
 			Step("validate all apps after upgrade", func() {
