@@ -10,7 +10,7 @@ type Pds interface {
 	BackupConfig
 	Backup
 	RestoreInterface
-	TemplateDefinitionInterface
+	TemplateDefinitionsInterface
 }
 
 type Deployment interface {
@@ -46,7 +46,7 @@ type RestoreInterface interface {
 	ListRestore(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
 
-type TemplateDefinitionInterface interface {
+type TemplateDefinitionsInterface interface {
 	ListTemplateKinds(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	ListTemplateRevisions(WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetTemplateRevisions(*WorkFlowRequest) (*WorkFlowResponse, error)
