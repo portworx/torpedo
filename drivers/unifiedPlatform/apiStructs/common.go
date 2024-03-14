@@ -41,6 +41,12 @@ type V1Config1 struct {
 	DeploymentTopologies []DeploymentTopology `copier:"must,nopanic"`
 }
 
+type V1Config2 struct {
+	ClientId     *string `json:"clientId,omitempty"`
+	ClientSecret *string `json:"clientSecret,omitempty"`
+	Disabled     *bool   `json:"disabled,omitempty"`
+}
+
 // V1Config3 USED from creating IAM Roles
 type V1Config3 struct {
 	ActorId      *string `json:"actorId,omitempty"`
