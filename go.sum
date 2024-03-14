@@ -565,7 +565,6 @@ github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f1181
 github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f11817397a1b/go.mod h1:FNj4KYEAAHfYu68kRYolGoxkaJn+6mdEsaM12VTwuI0=
 github.com/GoogleCloudPlatform/testgrid v0.0.1-alpha.3/go.mod h1:f96W2HYy3tiBNV5zbbRc+NczwYHgG1PHXMQfoEWv680=
 github.com/IBM-Cloud/bluemix-go v0.0.0-20220329045155-d2a8118ac5c7/go.mod h1:UOhxo7T8CdX6sdTY9Dn7rJSgyoTlz1KM9641XcPraH0=
-github.com/IBM-Cloud/bluemix-go v0.0.0-20230120122421-afb48116b8f1 h1:5cVMU5MglJjwzoBsDOk3yuH6T/1EeDZyYbQDowL4nW8=
 github.com/IBM-Cloud/bluemix-go v0.0.0-20230120122421-afb48116b8f1/go.mod h1:cO5KCpiop9eP/pM/5W07TprYUkv/kHtajW1FiZgE59k=
 github.com/IBM-Cloud/bluemix-go v0.0.0-20240226130409-ce92adb39a22 h1:bmLx8w2wQB97Dm5pNeQKIjOGjASvRa+cPP8QZCrL+Xo=
 github.com/IBM-Cloud/bluemix-go v0.0.0-20240226130409-ce92adb39a22/go.mod h1:/7hMjdZA6fEpd/dQAOEABxKEwN0t72P3PlpEDu0Y7bE=
@@ -2843,8 +2842,8 @@ github.com/onsi/gomega v1.27.6/go.mod h1:PIQNjfQwkP3aQAH7lf7j87O/5FiNr+ZR8+ipb+q
 github.com/onsi/gomega v1.27.7/go.mod h1:1p8OOlwo2iUUDsHnOrjE5UKYJ+e3W8eQ3qSlRahPmr4=
 github.com/onsi/gomega v1.27.8/go.mod h1:2J8vzI/s+2shY9XHRApDkdgPo1TKT7P2u6fXeJKFnNQ=
 github.com/onsi/gomega v1.27.10/go.mod h1:RsS8tutOdbdgzbPtzzATp12yT7kM5I5aElG3evPbQ0M=
-github.com/onsi/gomega v1.30.0 h1:hvMK7xYz4D3HapigLTeGdId/NcfQx1VHMJc60ew99+8=
 github.com/onsi/gomega v1.30.0/go.mod h1:9sxs+SwGrKI0+PWe4Fxa9tFQQBG5xSsSbMXOI8PPpoQ=
+github.com/onsi/gomega v1.31.1 h1:KYppCUK+bUgAZwHOu7EXVBKyQA6ILvOESHkn/tgoqvo=
 github.com/onsi/gomega v1.31.1/go.mod h1:y40C95dwAD1Nz36SsEnxvfFe8FFfNxzI5eJ0EYGyAy0=
 github.com/op/go-logging v0.0.0-20160315200505-970db520ece7/go.mod h1:HzydrMdWErDVzsI23lYNej1Htcns9BCg93Dk0bBINWk=
 github.com/opencontainers/go-digest v0.0.0-20170106003457-a6d0ee40d420/go.mod h1:cMLVZDEM3+U2I4VmLI6N8jQYUd2OVphdqWwCJHrFt2s=
