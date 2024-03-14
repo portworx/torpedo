@@ -31,7 +31,7 @@ require (
 	github.com/libopenstorage/openstorage v9.4.47+incompatible
 	github.com/libopenstorage/operator v0.0.0-20240206041752-d8569d10595c
 	github.com/libopenstorage/stork v1.4.1-0.20230610103146-72cf75320066
-	github.com/onsi/gomega v1.30.0
+	github.com/onsi/gomega v1.31.1
 	github.com/openshift/api v0.0.0-20230503133300-8bbcb7ca7183
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
@@ -173,7 +173,7 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f11817397a1b // indirect
-	github.com/IBM-Cloud/bluemix-go v0.0.0-20230120122421-afb48116b8f1
+	github.com/IBM-Cloud/bluemix-go v0.0.0-20240226130409-ce92adb39a22
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.1.1
