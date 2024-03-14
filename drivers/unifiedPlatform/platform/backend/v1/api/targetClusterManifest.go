@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
-	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/v1/targetclusterregistrationmanifest"
+	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetclusterregistrationmanifest"
 	status "net/http"
 	"time"
 )

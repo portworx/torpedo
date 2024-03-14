@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	projectv1 "github.com/pure-px/platform-api-go-client/v1/project"
+	projectv1 "github.com/pure-px/platform-api-go-client/platform/v1/project"
 	status "net/http"
 )
 

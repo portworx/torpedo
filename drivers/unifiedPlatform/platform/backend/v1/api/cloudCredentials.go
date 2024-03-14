@@ -5,7 +5,7 @@ import (
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
-	cloudCredentialv1 "github.com/pure-px/platform-api-go-client/v1/cloudcredential"
+	cloudCredentialv1 "github.com/pure-px/platform-api-go-client/platform/v1/cloudcredential"
 	status "net/http"
 )
 
