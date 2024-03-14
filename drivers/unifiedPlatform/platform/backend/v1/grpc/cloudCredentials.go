@@ -83,10 +83,8 @@ func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *Wor
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
 
-	cloudCredResponse, err := copyCloudCredResponse(getWorkflowRequest.CloudCredentials.Create.Config.Provider.CloudProvider, *cloudCredModel)
-	if err != nil {
-		return nil, fmt.Errorf("Error while copying cloud cred response: %v\n", err)
-	}
+	cloudCredResponse := copyCloudCredResponse(getWorkflowRequest.CloudCredentials.Create.Config.Provider.CloudProvider, *cloudCredModel)
+
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredResponse)
 	return cloudCredResponse, nil
 }
@@ -151,7 +149,7 @@ func cloudConfig(createRequest *WorkFlowRequest) *publiccloudcredapi.Config {
 	}
 }
 
-func copyCloudCredResponse(providerType int32, cloudCredModel publiccloudcredapi.CloudCredential) (*WorkFlowResponse, error) {
+func copyCloudCredResponse(providerType int32, cloudCredModel publiccloudcredapi.CloudCredential) *WorkFlowResponse {
 	cloudCredResponse := WorkFlowResponse{}
 	//var (
 	//	config = cloudCredResponse.CloudCredentials.Config.Credentials
@@ -189,7 +187,7 @@ func copyCloudCredResponse(providerType int32, cloudCredModel publiccloudcredapi
 	log.Infof("access key after copy [%s]", cloudCredResponse.CloudCredentials.Config.Credentials.S3Credentials.AccessKey)
 	log.Infof("secret key after copy [%s]", cloudCredResponse.CloudCredentials.Config.Credentials.S3Credentials.SecretKey)
 
-	return &cloudCredResponse, nil
+	return &cloudCredResponse
 }
 
 // CreateCloudCredentials return newly created cloud credentials
@@ -226,7 +224,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 	}
 
 	log.Infof("cloud cred response [%+v]", cloudCredModel)
-	cloudCredResponse, err := copyCloudCredResponse(createRequest.CloudCredentials.Create.Config.Provider.CloudProvider, *cloudCredModel)
+	cloudCredResponse := copyCloudCredResponse(createRequest.CloudCredentials.Create.Config.Provider.CloudProvider, *cloudCredModel)
 
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredResponse)
 	return cloudCredResponse, nil

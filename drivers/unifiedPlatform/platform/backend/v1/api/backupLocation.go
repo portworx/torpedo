@@ -26,9 +26,9 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocClient() (context.Context, *platfo
 }
 
 // ListBackupLocations return lis of backup locatiobackuploc
-func (backuploc *PLATFORM_API_V1) ListBackupLocations() ([]WorkFlowResponse, error) {
+func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) ([]BackupLocation, error) {
 	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
-	backupLocResp := []WorkFlowResponse{}
+	backupLocResp := []BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -71,9 +71,9 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*W
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocation) (*BackupLocation, error) {
 	_, backupLocationClient, err := backuploc.GetBackupLocClient()
-	bckpLocResp := WorkFlowResponse{}
+	bckpLocResp := BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
