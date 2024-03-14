@@ -133,6 +133,31 @@ var _ = Describe("{BackupConfigCRUD}", func() {
 	})
 })
 
+var _ = Describe("{CreateAndGeBackupLocation}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("CreateAndGeBackupLocation", "create backup locations", nil, 0)
+	})
+
+	It("CreateAndGeBackupLocation", func() {
+		Step("create credentials and backup location", func() {
+			tenantId, err := platformLibs.GetDefaultTenantId(accID)
+			log.FailOnError(err, "error occured while fetching tenantID")
+			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error while creating cloud creds")
+			log.Infof("creds resp [%+v]", credResp.CloudCredentials.Config.Credentials.S3Credentials.AccessKey)
+			log.Infof("creds id [%+v]", *credResp.CloudCredentials.Meta.Uid)
+
+			resp, err := platformLibs.CreateBackupLocation(tenantId, *credResp.CloudCredentials.Meta.Uid, "test-bucket", NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error while creating backup location")
+			log.Infof("backup location id: [%s]", *resp.Meta.Uid)
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
 var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateCloudCredentials", "create cloud credentials", nil, 0)
