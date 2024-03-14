@@ -7,7 +7,7 @@ import (
 	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	accountv1 "github.com/pure-px/platform-api-go-client/v1/account"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -20,8 +20,15 @@ const (
 	envPxCentralAPI      = "PX_CENTRAL_API"
 )
 
+var RunWithRBAC RunWithRbac
+
 type Credentials struct {
 	Token string
+}
+
+type RunWithRbac struct {
+	RbacFlag  bool
+	RbacToken string
 }
 
 // BearerToken struct
@@ -59,7 +66,9 @@ func GetBearerToken() (context.Context, string, error) {
 	username := os.Getenv(envPXCentralUsername)
 	password := os.Getenv(envPXCentralPassword)
 	issuerURL := os.Getenv(envPxCentralAPI)
-
+	if RunWithRBAC.RbacFlag == true {
+		return context.Background(), RunWithRBAC.RbacToken, nil
+	}
 	log.Infof("user name %s", username)
 	log.Infof("password %s", password)
 
@@ -156,7 +165,7 @@ func GetContext() (context.Context, error) {
 	}
 
 	log.Infof("Bearer Token %s", bearerToken.DATA.Token)
-	ctx := context.WithValue(context.Background(), "auth apiKey", map[string]platformv1.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token, Prefix: "Bearer"}})
+	ctx := context.WithValue(context.Background(), "auth apiKey", map[string]accountv1.APIKey{"ApiKeyAuth": {Key: bearerToken.DATA.Token, Prefix: "Bearer"}})
 	log.Infof("ctx value [%s]", ctx.Value("auth apiKey"))
 
 	return ctx, nil

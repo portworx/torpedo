@@ -4,27 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
+	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/v1/targetclusterregistrationmanifest"
 	status "net/http"
 	"time"
 )
-
-// GetClient updates the header with bearer token and returns the new client
-func (tcManifest *PLATFORM_API_V1) getTargetClusterManifestClient() (context.Context, *platformv1.TargetClusterRegistrationManifestServiceAPIService, error) {
-	log.Infof("Creating client from PLATFORM_API_V1 package")
-	ctx, token, err := GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-
-	tcManifest.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tcManifest.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = tcManifest.AccountID
-
-	client := tcManifest.ApiClientV1.TargetClusterRegistrationManifestServiceAPI
-	return ctx, client, nil
-}
 
 func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 
@@ -33,7 +17,7 @@ func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManif
 			Manifest: apiStructs.PlatformManifestOutput{},
 		},
 	}
-	var tcManifestRequest platformv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
+	var tcManifestRequest targetClusterManifestv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
 	clusterName := getManifestRequest.TargetCluster.GetManifest.ClusterName
 	tenantId := getManifestRequest.TargetCluster.GetManifest.TenantId
@@ -45,7 +29,7 @@ func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManif
 	}
 
 	tcManifestRequest = tcManifestRequest.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody(
-		platformv1.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody{
+		targetClusterManifestv1.TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestBody{
 			ClusterName: &clusterName,
 		})
 

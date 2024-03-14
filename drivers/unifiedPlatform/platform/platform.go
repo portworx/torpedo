@@ -22,12 +22,10 @@ type Platform interface {
 type AccountInterface interface {
 	//GetAccountList() ([]WorkFlowResponse, error) // not used as of now
 	GetAccount(string) (*WorkFlowResponse, error)
-	CreateAccount(string, string, string) (WorkFlowResponse, error)
-	DeleteAccount(string) error
 }
 
 type TenantInterface interface {
-	ListTenants(string) ([]WorkFlowResponse, error)
+	ListTenants() ([]WorkFlowResponse, error)
 }
 
 type TargetClusterInterface interface {

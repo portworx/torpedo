@@ -1,33 +1,19 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/pkg/log"
+	"github.com/pure-px/platform-api-go-client/v1/backuplocation"
 
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	status "net/http"
 )
 
-// GetBackupLocClient updates the header with bearer token and returbackuploc the new client
-func (backuploc *PLATFORM_API_V1) GetBackupLocClient() (context.Context, *platformv1.BackupLocationServiceAPIService, error) {
-	ctx, token, err := GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-	backuploc.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	backuploc.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = backuploc.AccountID
-	client := backuploc.ApiClientV1.BackupLocationServiceAPI
-
-	return ctx, client, nil
-}
 
 // ListBackupLocations return lis of backup locatiobackuploc
 func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) ([]BackupLocation, error) {
-	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
+	ctx, backupLocationClient, err := backuploc.getBackupLocClient()
 	backupLocResp := []BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -47,12 +33,12 @@ func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) (
 
 // GetBackupLocation get backup location model by its ID.
 func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, backupLocationClient, err := backuploc.GetBackupLocClient()
+	_, backupLocationClient, err := backuploc.getBackupLocClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	bckpLocResp := WorkFlowResponse{}
-	var getRequest platformv1.ApiBackupLocationServiceGetBackupLocationRequest
+	var getRequest backuplocation.ApiBackupLocationServiceGetBackupLocationRequest
 	err = copier.Copy(&getRequest, getReq)
 	if err != nil {
 		return nil, err
@@ -72,12 +58,12 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*W
 
 // CreateBackupLocation return newly created backup location model.
 func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocation) (*BackupLocation, error) {
-	_, backupLocationClient, err := backuploc.GetBackupLocClient()
+	_, backupLocationClient, err := backuploc.getBackupLocClient()
 	bckpLocResp := BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var createBackupLoc platformv1.ApiBackupLocationServiceCreateBackupLocationRequest
+	var createBackupLoc backuplocation.ApiBackupLocationServiceCreateBackupLocationRequest
 	err = copier.Copy(&createBackupLoc, createReq)
 	if err != nil {
 		return nil, err
@@ -96,12 +82,12 @@ func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocation
 
 // UpdateBackupLocation return updated backup location model.
 func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-	_, backupLocationClient, err := backuploc.GetBackupLocClient()
+	_, backupLocationClient, err := backuploc.getBackupLocClient()
 	bckpLocResp := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var updateBackupLoc platformv1.ApiBackupLocationServiceUpdateBackupLocationRequest
+	var updateBackupLoc backuplocation.ApiBackupLocationServiceUpdateBackupLocationRequest
 	err = copier.Copy(&updateBackupLoc, updateReq)
 	if err != nil {
 		return nil, err
@@ -123,7 +109,7 @@ func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq *WorkFlowReques
 
 // DeleteBackupLocation delete backup location and return status.
 func (backuploc *PLATFORM_API_V1) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
-	ctx, backupLocationClient, err := backuploc.GetBackupLocClient()
+	ctx, backupLocationClient, err := backuploc.getBackupLocClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

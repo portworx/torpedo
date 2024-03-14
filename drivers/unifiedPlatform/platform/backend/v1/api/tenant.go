@@ -1,38 +1,20 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
-	platformv1 "github.com/pure-px/platform-api-go-client/v1alpha1"
 	status "net/http"
 )
 
-// GetClient updates the header with bearer token and returns the new client
-func (tenant *PLATFORM_API_V1) getTenantClient() (context.Context, *platformv1.TenantServiceAPIService, error) {
-	ctx, token, err := GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-	tenant.ApiClientV1.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	tenant.ApiClientV1.GetConfig().DefaultHeader["px-account-id"] = tenant.AccountID
-	client := tenant.ApiClientV1.TenantServiceAPI
-
-	return ctx, client, nil
-}
-
 // ListTenants return pds tenants models.
-func (tenant *PLATFORM_API_V1) ListTenants(accountID string) ([]WorkFlowResponse, error) {
+func (tenant *PLATFORM_API_V1) ListTenants() ([]WorkFlowResponse, error) {
 	tenantsResponse := []WorkFlowResponse{}
 	ctx, tenantClient, err := tenant.getTenantClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	var req platformv1.ApiTenantServiceListTenantsRequest
-	req = req.AccountId(accountID)
 
 	//tenantsModel, res, err := tenantClient.TenantServiceListTenantsExecute(req)
 	tenantsModel, res, err := tenantClient.TenantServiceListTenants(ctx).Execute()

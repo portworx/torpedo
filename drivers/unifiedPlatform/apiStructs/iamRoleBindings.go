@@ -1,6 +1,10 @@
 package apiStructs
 
-// CreateIAM Struct for IAM roleBindings
+// PDSCreateIAM Struct for IAM roleBindings
+type PDSIam struct {
+	Create CreateIAM
+}
+
 type CreateIAM struct {
 	V1IAM V1IAM
 }

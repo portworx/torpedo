@@ -134,10 +134,8 @@ require (
 require (
 	github.com/aws/aws-sdk-go-v2 v1.25.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.2
-	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.39.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.148.2
 	github.com/aws/aws-sdk-go-v2/service/eks v1.39.2
-	github.com/aws/aws-sdk-go-v2/service/ssm v1.48.0
 	github.com/devans10/pugo/flasharray v0.0.0-20230602184138-1a5d930c950e
 	github.com/hashicorp/nomad/api v0.0.0-20240209231933-e2bfdf0c1034
 	github.com/jackc/pgx/v4 v4.15.0
@@ -145,7 +143,7 @@ require (
 	github.com/jinzhu/copier v0.4.0
 	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/pure-px/apis v0.0.0-20240306064831-6f5b789bef11
-	github.com/pure-px/platform-api-go-client v0.0.0-20240208103239-7034d94803b1
+	github.com/pure-px/platform-api-go-client v0.0.0-20240312035631-72cc1e92f225
 	github.com/tektoncd/pipeline v0.56.0
 	go.mongodb.org/mongo-driver v1.13.0
 	go.uber.org/multierr v1.10.0
@@ -221,7 +219,7 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.14.0 // indirect
-	github.com/gobwas/glob v0.2.3 // indirect
+	github.com/gobwas/glob v0.2.3
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
