@@ -127,28 +127,28 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		weeklyName = fmt.Sprintf("%s-%v", "weekly", time.Now().Unix())
 		monthlyName = fmt.Sprintf("%s-%v", "monthly", time.Now().Unix())
 
-		provisionerVolumeSnapshotClassMap = map[string]string{
-			"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
-			"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-rbdsplugin-snapclass",
-		}
+		/*		provisionerVolumeSnapshotClassMap = map[string]string{
+				"openshift-storage.cephfs.csi.ceph.com": "ocs-storagecluster-cephfsplugin-snapclass",
+				"openshift-storage.rbd.csi.ceph.com":    "ocs-storagecluster-rbdsplugin-snapclass",
+			}*/
 
 		taskName := fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
 		appCtx, err := Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys:            []string{"postgres-cephfs-csi"},
-			StorageProvisioner: "openshift-storage.cephfs.csi.ceph.com",
+			AppKeys:            []string{"postgres-csi"},
+			StorageProvisioner: "vpc.block.csi.ibm.io",
 		})
 		appCtx[0].ReadinessTimeout = AppReadinessTimeout
 		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
 		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
 
-		taskName = fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
-		appCtx, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
-			AppKeys:            []string{"postgres-rbd-csi"},
-			StorageProvisioner: "openshift-storage.rbd.csi.ceph.com",
-		})
-		appCtx[0].ReadinessTimeout = AppReadinessTimeout
-		scheduledAppContexts = append(scheduledAppContexts, appCtx...)
-		log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)
+		/*		taskName = fmt.Sprintf("%s-%v", TaskNamePrefix, Inst().InstanceID)
+				appCtx, err = Inst().S.Schedule(taskName, scheduler.ScheduleOptions{
+					AppKeys:            []string{"postgres-rbd-csi"},
+					StorageProvisioner: "openshift-storage.rbd.csi.ceph.com",
+				})
+				appCtx[0].ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContexts = append(scheduledAppContexts, appCtx...)
+				log.FailOnError(err, "Failed to schedule %v", appCtx[0].App.Key)*/
 	})
 
 	It("Basic Backup Creation", func() {
@@ -249,13 +249,14 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
 		})
 
-		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner with forced kdmp option"), func() {
-			log.InfoD("Creating schedule backup for multiple provisioner with forced kdmp option")
+		Step(fmt.Sprintf("Creating schedule backup for multiple provisioner"), func() {
+			log.InfoD("Creating schedule backup for multiple provisioner")
 			ctx, err := backup.GetAdminCtxFromSecret()
 			log.FailOnError(err, "Fetching px-central-admin ctx")
 			provisionerNonDefaultSnapshotClassMap := map[string]string{}
+			provisionerNonDefaultSnapshotClassMap["vpc.block.csi.ibm.io"] = "ibmc-vpcblock-snapshot"
 			kdmpScheduleName := fmt.Sprintf("default-provisioner-schedule-%v", RandomString(10))
-			forceKdmpSchBackupName, err := CreateScheduleBackupWithValidationWithVscMapping(ctx, kdmpScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, true)
+			forceKdmpSchBackupName, err := CreateScheduleBackupWithValidationWithVscMapping(ctx, kdmpScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerNonDefaultSnapshotClassMap, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
 			err = IsFullBackup(forceKdmpSchBackupName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
