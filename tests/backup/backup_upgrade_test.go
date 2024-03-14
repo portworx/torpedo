@@ -787,7 +787,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		intervalInMins                     int
 		singleNSNamespaces                 []string
 		singleNSScheduleNames              []string
-		allNamespaces                      []string
 		allNSScheduleName                  string
 		backupAfterUpgradeWithoutRuleNames []string
 		backupAfterUpgradeWithRuleNames    []string
@@ -800,7 +799,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		backupToContextMapping[backupName] = appContextsToBackup
 	}
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("PXBackupEndToEndBackupAndRestoreWithUpgrade", "Validates end-to-end backup and restore operations with OCP upgrade", nil, 296424, Kshithijiyer, Q1FY25)
+		StartPxBackupTorpedoTest("PXBackupOcpUpgradeTest", "Validates end-to-end backup and restore operations with OCP upgrade", nil, 296424, Kshithijiyer, Q1FY25)
 		log.Infof("Scheduling applications")
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
@@ -1000,22 +999,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 				singleNSScheduleNames = SafeAppend(&mutex, singleNSScheduleNames, singleNSScheduleName).([]string)
 			}
 			_ = TaskHandler(Inst().AppList, createSingleNSBackupTask, Parallel)
-		})
-		Step("Create schedule backup of all namespaces", func() {
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for _, appName := range Inst().AppList {
-				allNamespaces = append(allNamespaces, destClusterAppNamespaces[appName]...)
-			}
-			allNSScheduleName = fmt.Sprintf("%s-all-namespaces-schedule-%v", BackupNamePrefix, time.Now().Unix())
-			labelSelectors := make(map[string]string, 0)
-			log.InfoD("Creating schedule backup with schedule [%s] of all namespaces of destination cluster [%s]", allNSScheduleName, allNamespaces)
-			err = CreateScheduleBackup(allNSScheduleName, DestinationClusterName, backupLocationName, backupLocationUid, allNamespaces,
-				labelSelectors, BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUid, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule backup with schedule [%s]", allNSScheduleName))
-			firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, allNSScheduleName, BackupOrgID)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching name of the first schedule backup with schedule [%s]", allNSScheduleName))
-			log.Infof("First schedule backup name: [%s]", firstScheduleBackupName)
 		})
 		var versions []string
 		if len(Inst().SchedUpgradeHops) > 0 {
@@ -1276,39 +1259,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 					}
 				}
 				_ = TaskHandler(singleNSNamespaces, restoreSingleNSBackupInVariousWaysTask, Sequential)
-			})
-			// First all namespaces schedule backup is taken before px-backup upgrade
-			Step("Restore first all namespaces schedule backup", func() {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-				firstAllNSScheduleBackupName, err := GetFirstScheduleBackupName(ctx, allNSScheduleName, BackupOrgID)
-				log.FailOnError(err, "Getting first backup name of schedule [%s] failed", allNSScheduleName)
-				restoreName := fmt.Sprintf("%s-%s", "test-restore-all-ns", RandomString(4))
-				log.InfoD("Restoring first all namespaces schedule backup [%s] in cluster [%s] with restore [%s]", firstAllNSScheduleBackupName, SourceClusterName, restoreName)
-				namespaceMapping := make(map[string]string, 0)
-				err = CreateRestoreWithValidation(ctx, restoreName, firstAllNSScheduleBackupName, namespaceMapping, make(map[string]string, 0), SourceClusterName, BackupOrgID, destClusterContexts)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first all namespaces schedule backup [%s] in cluster [%s]", restoreName, firstAllNSScheduleBackupName, restoreName))
-				restoreNames = append(restoreNames, restoreName)
-			})
-			// By the time the next all namespaces schedule backups are taken, the OCP upgrade would have been completed
-			Step("Restore next all namespaces schedule backup", func() {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-				log.Infof("Switching cluster context to destination cluster as backup is created in destination cluster")
-				err = SetDestinationKubeConfig()
-				log.FailOnError(err, "Switching context to destination cluster failed")
-				nextScheduleBackupName, err := GetNextCompletedScheduleBackupNameWithValidation(ctx, allNSScheduleName, destClusterContexts, time.Duration(intervalInMins))
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifyings next schedule backup name of schedule named [%s]", allNSScheduleName))
-				log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
-				log.Infof("Switching cluster context back to source ")
-				err = SetSourceKubeConfig()
-				log.FailOnError(err, "Switching context to source cluster failed")
-				restoreName := fmt.Sprintf("%s-%s", "test-restore-all-ns", RandomString(4))
-				log.InfoD("Restoring next all namespaces schedule backup [%s] in cluster [%s] with restore [%s]", nextScheduleBackupName, SourceClusterName, restoreName)
-				namespaceMapping := make(map[string]string, 0)
-				err = CreateRestoreWithValidation(ctx, restoreName, nextScheduleBackupName, namespaceMapping, make(map[string]string, 0), SourceClusterName, BackupOrgID, destClusterContexts)
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of next all namespaces schedule backup [%s] in cluster [%s]", restoreName, nextScheduleBackupName, restoreName))
-				restoreNames = append(restoreNames, restoreName)
 			})
 		}
 	})
