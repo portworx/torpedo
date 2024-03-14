@@ -112,6 +112,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		schedulePolicyName                string
 		schedulePolicyUID                 string
 		schedulePolicyInterval            = int64(15)
+		volumeNames                       []string
 	)
 
 	JustBeforeEach(func() {
@@ -258,6 +259,39 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
 			err = IsFullBackup(forceKdmpSchBackupName, BackupOrgID, ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
+			backupUID, err := Inst().Backup.GetBackupUID(ctx, forceKdmpSchBackupName, BackupOrgID)
+			log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", forceKdmpSchBackupName))
+			backupInspectRequest := &api.BackupInspectRequest{
+				Name:  forceKdmpSchBackupName,
+				Uid:   backupUID,
+				OrgId: BackupOrgID,
+			}
+			resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+			volumeObjlist := resp.Backup.Volumes
+			for _, obj := range volumeObjlist {
+				volumeNames = append(volumeNames, obj.Name)
+			}
+			for _, provider := range providers {
+				DeleteSnapshotsForVolumes(provider, volumeNames)
+			}
+
+		})
+
+		Step("Restoring the backed up namespaces", func() {
+			log.InfoD("Restoring the backed up namespaces")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-central-admin ctx")
+			for i, appCtx := range scheduledAppContexts {
+				scheduledNamespace := appCtx.ScheduleOptions.Namespace
+				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
+				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
+					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
+				}
+				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
+				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts[i:i+1])
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
+				restoreNames = append(restoreNames, restoreName)
+			}
 		})
 
 		Step("Taking backup of application from source cluster", func() {
@@ -277,23 +311,6 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 				err := CreateBackupWithValidationWithVscMapping(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "", provisionerVolumeSnapshotClassSubMap, false)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
-			}
-		})
-
-		Step("Restoring the backed up namespaces", func() {
-			log.InfoD("Restoring the backed up namespaces")
-			ctx, err := backup.GetAdminCtxFromSecret()
-			log.FailOnError(err, "Fetching px-central-admin ctx")
-			for i, appCtx := range scheduledAppContexts {
-				scheduledNamespace := appCtx.ScheduleOptions.Namespace
-				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
-				for strings.Contains(strings.Join(restoreNames, ","), restoreName) {
-					restoreName = fmt.Sprintf("%s-%s-%s", "test-restore", scheduledNamespace, RandomString(4))
-				}
-				log.InfoD("Restoring [%s] namespace from the [%s] backup", scheduledNamespace, backupNames[i])
-				err = CreateRestoreWithValidation(ctx, restoreName, backupNames[i], make(map[string]string), make(map[string]string), DestinationClusterName, BackupOrgID, scheduledAppContexts[i:i+1])
-				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of restore [%s]", restoreName))
-				restoreNames = append(restoreNames, restoreName)
 			}
 		})
 	})
