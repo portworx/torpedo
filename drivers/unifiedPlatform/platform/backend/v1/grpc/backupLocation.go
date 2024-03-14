@@ -95,9 +95,9 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 			CloudCredentialId: createRequest.Config.CloudCredentialsId,
 			Location: &publicbackuplocapi.Config_S3Storage{
 				S3Storage: &publicbackuplocapi.S3ObjectStorage{
-					BucketName: "",
-					Region:     "",
-					Endpoint:   "",
+					BucketName: createRequest.Config.BkpLocation.S3Storage.BucketName,
+					Region:     createRequest.Config.BkpLocation.S3Storage.Region,
+					Endpoint:   createRequest.Config.BkpLocation.S3Storage.Endpoint,
 				},
 			},
 		}
@@ -111,7 +111,7 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 			CloudCredentialId: createRequest.Config.CloudCredentialsId,
 			Location: &publicbackuplocapi.Config_AzureStorage{
 				AzureStorage: &publicbackuplocapi.AzureBlobStorage{
-					ContainerName: "",
+					ContainerName: createRequest.Config.BkpLocation.AzureStorage.ContainerName,
 				},
 			},
 		}
@@ -124,7 +124,9 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 			},
 			CloudCredentialId: createRequest.Config.CloudCredentialsId,
 			Location: &publicbackuplocapi.Config_GoogleStorage{
-				GoogleStorage: &publicbackuplocapi.GoogleCloudStorage{BucketName: ""},
+				GoogleStorage: &publicbackuplocapi.GoogleCloudStorage{
+					BucketName: createRequest.Config.BkpLocation.GoogleStorage.BucketName,
+				},
 			},
 		}
 
@@ -137,16 +139,13 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 			CloudCredentialId: createRequest.Config.CloudCredentialsId,
 			Location: &publicbackuplocapi.Config_S3Storage{
 				S3Storage: &publicbackuplocapi.S3ObjectStorage{
-					BucketName: "",
-					Region:     "",
-					Endpoint:   "",
+					BucketName: createRequest.Config.BkpLocation.S3Storage.BucketName,
+					Region:     createRequest.Config.BkpLocation.S3Storage.Region,
+					Endpoint:   createRequest.Config.BkpLocation.S3Storage.Endpoint,
 				},
 			},
 		}
-
 	}
-
-	return nil
 }
 
 func copyCloudLocationResponse(providerType int32, bkpLocation publicbackuplocapi.BackupLocation) *BackupLocation {
@@ -183,7 +182,6 @@ func copyCloudLocationResponse(providerType int32, bkpLocation publicbackuplocap
 // CreateBackupLocation return newly created backup location model.
 func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupLocation) (*BackupLocation, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	bckpLocResp := BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -191,8 +189,7 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupL
 		TenantId: createRequest.TenantID,
 		BackupLocation: &publicbackuplocapi.BackupLocation{
 			Meta: &commonapiv1.Meta{
-				Name:        *createRequest.Meta.Name,
-				Description: *createRequest.Meta.Description,
+				Name: *createRequest.Meta.Name,
 			},
 			Config: backupLocationConfig(createRequest),
 		},
@@ -207,7 +204,7 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupL
 
 	bkpLocationResponse := copyCloudLocationResponse(createRequest.Config.Provider.CloudProvider, *backupLocationModel)
 
-	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
+	log.Infof("Value of backupLocation after copy - [%v]", bkpLocationResponse)
 	return bkpLocationResponse, nil
 }
 

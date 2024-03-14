@@ -198,7 +198,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 	}
 
 	createCloudCredRequest := &publiccloudcredapi.CreateCloudCredentialRequest{
-		TenantId: createRequest.TenantId,
+		TenantId: createRequest.CloudCredentials.Create.TenantID,
 		CloudCredential: &publiccloudcredapi.CloudCredential{
 			Meta: &commonapiv1.Meta{
 				Uid:             "",
