@@ -128,7 +128,7 @@ github.com/BurntSushi/toml/internal
 # github.com/GoogleCloudPlatform/k8s-cloud-provider v1.18.1-0.20220218231025-f11817397a1b
 ## explicit; go 1.13
 github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/meta
-# github.com/IBM-Cloud/bluemix-go v0.0.0-20230120122421-afb48116b8f1
+# github.com/IBM-Cloud/bluemix-go v0.0.0-20240226130409-ce92adb39a22
 ## explicit; go 1.13
 github.com/IBM-Cloud/bluemix-go
 github.com/IBM-Cloud/bluemix-go/api/container/containerv1
@@ -1230,8 +1230,8 @@ github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/internal/testingtproxy
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
-# github.com/onsi/gomega v1.30.0
-## explicit; go 1.18
+# github.com/onsi/gomega v1.31.1
+## explicit; go 1.20
 github.com/onsi/gomega
 github.com/onsi/gomega/format
 github.com/onsi/gomega/internal
