@@ -6,19 +6,19 @@ import (
 )
 
 // DeleteBackup will delete backup for a given deployment
-func (backup *PDSV2_API) DeleteBackup(deleteBackupRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backup *PDS_API_V1) DeleteBackup(deleteBackupRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	log.Warnf("DeleteBackup is not implemented for API")
 	return &apiStructs.WorkFlowResponse{}, nil
 }
 
 // ListBackup will list backup for a given deployment
-func (backup *PDSV2_API) ListBackup(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
 	log.Warnf("ListBackup is not implemented for API")
 	return []apiStructs.WorkFlowResponse{}, nil
 }
 
 // GetBackup will fetch backup for a given deployment
-func (backup *PDSV2_API) GetBackup(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backup *PDS_API_V1) GetBackup(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	log.Warnf("GetBackup is not implemented for API")
 	return &apiStructs.WorkFlowResponse{}, nil
 }
