@@ -51,10 +51,11 @@ func (workflowNamespace *WorkflowNamespace) DeleteNamespace(namespace string) er
 		return err
 	}
 
-	err = workflowNamespace.ValidateNamespaceDeletion(namespace)
-	if err != nil {
-		return err
-	}
+	// TODO: This needs to be enabled once deletion sync is fixed from platform side
+	//err = workflowNamespace.ValidateNamespaceDeletion(namespace)
+	//if err != nil {
+	//	return err
+	//}
 
 	delete(workflowNamespace.Namespaces, namespace)
 

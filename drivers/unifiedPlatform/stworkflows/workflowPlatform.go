@@ -40,15 +40,12 @@ func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
 	wfTenant := WorkflowTenant{
 		AccountID: platform.AdminAccountId,
 	}
-	tenantList, err := wfTenant.ListTenants()
+	tenantId, err := wfTenant.GetDefaultTenantId()
 	if err != nil {
 		return platform, err
 	}
-	for _, tenant := range tenantList[automationModels.GetTenantListV1] {
-		log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, wfTenant.AccountID)
-		platform.TenantId = *tenant.Meta.Uid
-		break
-	}
+	
+	platform.TenantId = tenantId
 
 	return platform, nil
 }
