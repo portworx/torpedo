@@ -3,10 +3,20 @@ package unifiedPlatform
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/pds"
 	pdsapi "github.com/portworx/torpedo/drivers/unifiedPlatform/pds/backend/v1/api"
 	pdsGrpc "github.com/portworx/torpedo/drivers/unifiedPlatform/pds/backend/v1/grpc"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform"
 	platformapi "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/backend/v1/api"
+	platformGrpc "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/backend/v1/grpc"
+	. "github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
+	backupV1 "github.com/pure-px/platform-api-go-client/pds/v1/backup"
+	backupConfigV1 "github.com/pure-px/platform-api-go-client/pds/v1/backupconfig"
+	catalogV1 "github.com/pure-px/platform-api-go-client/pds/v1/catalog"
+	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/deployment"
+	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
+	restoreV1 "github.com/pure-px/platform-api-go-client/pds/v1/restore"
 	accountv1 "github.com/pure-px/platform-api-go-client/platform/v1/account"
 	backuplocationv1 "github.com/pure-px/platform-api-go-client/platform/v1/backuplocation"
 	cloudCredentialv1 "github.com/pure-px/platform-api-go-client/platform/v1/cloudcredential"
@@ -19,18 +29,12 @@ import (
 	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetclusterregistrationmanifest"
 	tenantv1 "github.com/pure-px/platform-api-go-client/platform/v1/tenant"
 	whoamiv1 "github.com/pure-px/platform-api-go-client/platform/v1/whoami"
-	"os"
-	"strconv"
-	"strings"
-
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/pds"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/platform"
-	platformGrpc "github.com/portworx/torpedo/drivers/unifiedPlatform/platform/backend/v1/grpc"
-	. "github.com/portworx/torpedo/drivers/utilities"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"os"
+	"strconv"
+	"strings"
 
 	"net/url"
 )
@@ -223,22 +227,57 @@ func GetPlatformRESTClientForAutomation(controlPlaneURL string, AccountId string
 }
 
 // GetPlatformRESTClientForAutomation returns the platform client for automation
-func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pdsapi.PDSV2_API, error) {
+func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pdsapi.PDS_API_V2, error) {
 
 	endpointURL, err := url.Parse(controlPlaneURL)
 	if err != nil {
-		return pdsapi.PDSV2_API{}, err
+		return pdsapi.PDS_API_V2{}, err
 	}
 	log.Infof("Generating REST(V1) client for PDS [%s]", endpointURL)
 
-	// Creating PDS REST api client
-	pdsApiConf := pdsv2.NewConfiguration()
-	pdsApiConf.Host = endpointURL.Host
-	pdsApiConf.Scheme = endpointURL.Scheme
-	pdsV2apiClient := pdsv2.NewAPIClient(pdsApiConf)
+	// Creating PDS Backup REST api client
+	backupV1Conf := backupV1.NewConfiguration()
+	backupV1Conf.Host = endpointURL.Host
+	backupV1Conf.Scheme = endpointURL.Scheme
+	backupV1APIClient := backupV1.NewAPIClient(backupV1Conf)
 
-	return pdsapi.PDSV2_API{
-		ApiClientV2: pdsV2apiClient,
-		AccountID:   AccountId,
+	// Creating PDS BackupConfig REST Client
+	backupConfigV1Conf := backupConfigV1.NewConfiguration()
+	backupConfigV1Conf.Host = endpointURL.Host
+	backupConfigV1Conf.Scheme = endpointURL.Scheme
+	backupConfigV1APIClient := backupConfigV1.NewAPIClient(backupConfigV1Conf)
+
+	// Creating PDS Deployment REST Client
+	deploymentV1Conf := deploymentV1.NewConfiguration()
+	deploymentV1Conf.Host = endpointURL.Host
+	deploymentV1Conf.Scheme = endpointURL.Scheme
+	deploymentV1APIClient := deploymentV1.NewAPIClient(deploymentV1Conf)
+
+	// Creating PDS DeploymentsConfigUpdate REST Client
+	deploymentsConfigUpdateV1Conf := deploymentsConfigUpdateV1.NewConfiguration()
+	deploymentsConfigUpdateV1Conf.Host = endpointURL.Host
+	deploymentsConfigUpdateV1Conf.Scheme = endpointURL.Scheme
+	deploymentsConfigUpdateV1APIClient := deploymentsConfigUpdateV1.NewAPIClient(deploymentsConfigUpdateV1Conf)
+
+	// Creating PDS Restore REST Client
+	restoreV1Conf := restoreV1.NewConfiguration()
+	restoreV1Conf.Host = endpointURL.Host
+	restoreV1Conf.Scheme = endpointURL.Scheme
+	restoreV1APIClient := restoreV1.NewAPIClient(restoreV1Conf)
+
+	// Creating PDS Catalog REST Client
+	catalogV1Conf := catalogV1.NewConfiguration()
+	catalogV1Conf.Host = endpointURL.Host
+	restoreV1Conf.Scheme = endpointURL.Scheme
+	catalogV1APIClient := catalogV1.NewAPIClient(catalogV1Conf)
+
+	return pdsapi.PDS_API_V2{
+		BackupV1APIClient:                  backupV1APIClient,
+		BackupConfigV1APIClient:            backupConfigV1APIClient,
+		DeploymentV1APIClient:              deploymentV1APIClient,
+		DeploymentsConfigUpdateV1APIClient: deploymentsConfigUpdateV1APIClient,
+		RestoreV1APIClient:                 restoreV1APIClient,
+		CatalogV1APIClient:                 catalogV1APIClient,
+		AccountID:                          AccountId,
 	}, nil
 }
