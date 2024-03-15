@@ -4821,7 +4821,13 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 	case string(NativeCSIWithOffloadToS3):
 		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
-		backupScheduleRequest.CsiSnapshotClassName = "ibmc-vpcblock-snapshot"
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		println("vsc :", csiSnapshotClassName)
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 		/*				var csiSnapshotClassName string
 						var err error
 						if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
