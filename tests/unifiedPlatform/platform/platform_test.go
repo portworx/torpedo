@@ -23,10 +23,15 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 		StartTorpedoTest("TestingWorkflowToOnboardAccounts", "Onboard Accounts", nil, 0)
 		namespace = fmt.Sprintf("pds-namespace-%s", utilities.RandomString(5))
 		workflowPlatform.Accounts = map[string]map[string]string{
-			"testAccount1": map[string]string{
-				automationModels.UserName:        "testAccount1",
-				automationModels.UserDisplayName: "testAccount1",
-				automationModels.UserEmail:       "atrivedi+1@purestorage.com",
+			NewPdsParams.Users.AdminUsername: map[string]string{
+				automationModels.UserName:        NewPdsParams.Users.AdminUsername,
+				automationModels.UserDisplayName: NewPdsParams.Users.AdminUsername,
+				automationModels.UserEmail:       NewPdsParams.Users.AdminEmailAddress,
+			},
+			NewPdsParams.Users.NonAdminUsername: map[string]string{
+				automationModels.UserName:        NewPdsParams.Users.NonAdminUsername,
+				automationModels.UserDisplayName: NewPdsParams.Users.NonAdminUsername,
+				automationModels.UserEmail:       NewPdsParams.Users.NonAdminEmailAddress,
 			},
 		}
 	})
