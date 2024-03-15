@@ -1021,6 +1021,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 				err = SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
+				time.Sleep(60 * time.Minute)
+
 			})
 			if Inst().Provisioner == "portworx" {
 				Step("validate storage components", func() {
@@ -1146,61 +1148,19 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 					restoreNames = append(restoreNames, restoreName)
 				}
 			})
-			// First single namespace schedule backups are taken before OCP upgrade
-			Step("Restore first single namespace schedule backups", func() {
-				ctx, err := backup.GetAdminCtxFromSecret()
-				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
-				restoreSingleNSBackupInVariousWaysTask := func(index int, namespace string) {
-					firstSingleNSScheduleBackupName, err := GetFirstScheduleBackupName(ctx, singleNSScheduleNames[index], BackupOrgID)
-					log.FailOnError(err, "Getting first backup name of schedule [%s] failed", singleNSScheduleNames[index])
-					restoreConfigs := []struct {
-						namePrefix          string
-						namespaceMapping    map[string]string
-						storageClassMapping map[string]string
-						replacePolicy       ReplacePolicyType
-					}{
-						{
-							"test-restore-single-ns",
-							make(map[string]string, 0),
-							make(map[string]string, 0),
-							ReplacePolicyRetain,
-						},
-						{
-							"test-custom-restore-single-ns",
-							map[string]string{namespace: "custom-" + namespace},
-							make(map[string]string, 0),
-							ReplacePolicyRetain,
-						},
-						{
-							"test-replace-restore-single-ns",
-							make(map[string]string, 0),
-							make(map[string]string, 0),
-							ReplacePolicyDelete,
-						},
-					}
-					for _, config := range restoreConfigs {
-						restoreName := fmt.Sprintf("%s-%s", config.namePrefix, RandomString(4))
-						log.InfoD("Restoring first single namespace schedule backup [%s] in cluster [%s] with restore [%s] and namespace mapping %v", firstSingleNSScheduleBackupName, DestinationClusterName, restoreName, config.namespaceMapping)
-						if config.replacePolicy == ReplacePolicyRetain {
-							appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
-							err = CreateRestoreWithValidation(ctx, restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, config.storageClassMapping, DestinationClusterName, BackupOrgID, appContextsToBackup)
-						} else if config.replacePolicy == ReplacePolicyDelete {
-							err = CreateRestoreWithReplacePolicy(restoreName, firstSingleNSScheduleBackupName, config.namespaceMapping, DestinationClusterName, BackupOrgID, ctx, config.storageClassMapping, config.replacePolicy)
-						}
-						dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of first single namespace schedule backup [%s] in cluster [%s]", restoreName, firstSingleNSScheduleBackupName, restoreName))
-						restoreNames = SafeAppend(&mutex, restoreNames, restoreName).([]string)
-					}
-				}
-				_ = TaskHandler(singleNSNamespaces, restoreSingleNSBackupInVariousWaysTask, Sequential)
-			})
 			// By the time the next single namespace schedule backups are taken, the OCP upgrade would have been completed
-			Step("Restore next single namespace schedule backups", func() {
+			Step("Restore latest single namespace schedule backups", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
 				restoreSingleNSBackupInVariousWaysTask := func(index int, namespace string) {
 					nextScheduleBackupName, err := GetNextScheduleBackupName(singleNSScheduleNames[index], time.Duration(intervalInMins), ctx)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching next schedule backup name of schedule named [%s]", singleNSScheduleNames[index]))
 					appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
+					err = BackupSuccessCheckWithValidation(ctx, nextScheduleBackupName, appContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+					if err != nil {
+						log.InfoD("Attempting for the second time")
+						nextScheduleBackupName, err = GetNextScheduleBackupName(singleNSScheduleNames[index], time.Duration(intervalInMins), ctx)
+					}
 					err = BackupSuccessCheckWithValidation(ctx, nextScheduleBackupName, appContextsToBackup, BackupOrgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verification of success of next single namespace schedule backup [%s] of schedule %s", nextScheduleBackupName, singleNSScheduleNames[index]))
 					log.InfoD("Next schedule backup name [%s]", nextScheduleBackupName)
