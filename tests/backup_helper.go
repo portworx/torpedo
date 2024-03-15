@@ -4771,17 +4771,18 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 	case string(NativeCSIWithOffloadToS3):
 		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
-		backupRequest.BackupType = api.BackupCreateRequest_Generic
-		var csiSnapshotClassName string
-		var err error
-		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-			return err
-		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-		} else {
-			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupRequest.CsiSnapshotClassName = "ibmc-vpcblock-snapshot"
+		/*		backupRequest.BackupType = api.BackupCreateRequest_Generic
+				var csiSnapshotClassName string
+				var err error
+				if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+					return err
+				}
+				if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+					backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
+				} else {
+					backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+				}*/
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
