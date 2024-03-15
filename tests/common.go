@@ -1723,17 +1723,25 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 }
 
 // ValidateVolumesDeleted checks it given volumes got deleted
-func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
+func ValidateVolumesDeleted(appName string, vols []*volume.Volume) error {
 	for _, vol := range vols {
+		var err error
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			log.InfoD("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
-			err := Inst().V.ValidateDeleteVolume(vol)
-			log.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("%s's volume %s deleted successfully?", appName, vol.Name))
+			err = Inst().V.ValidateDeleteVolume(vol)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
+				return
+			}
+
 		})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
@@ -7149,6 +7157,57 @@ func WaitForExpansionToStart(poolID string) error {
 
 	_, err := task.DoRetryWithTimeout(f, 2*time.Minute, 5*time.Second)
 	return err
+}
+
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
+
+	if &n == nil {
+		return fmt.Errorf("no Node is provided to reboot")
+	}
+
+	err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 5 * time.Second,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	err = Inst().N.TestConnection(n, node.ConnectionOpts{
+		Timeout:         15 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	err = Inst().V.WaitDriverDownOnNode(n)
+	if err != nil {
+		return err
+	}
+	err = Inst().S.IsNodeReady(n)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 // RebootNodeAndWait reboots node and waits for to be up
