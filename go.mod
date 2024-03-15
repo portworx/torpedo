@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-storage-blob-go v0.14.0
 	github.com/LINBIT/golinstor v0.27.0
 	github.com/andygrunwald/go-jira v1.15.0
-	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
+	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/aws/aws-sdk-go v1.44.164
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/docker/docker v24.0.0+incompatible
@@ -71,6 +71,7 @@ require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
+	github.com/IBM/go-sdk-core/v5 v5.15.0 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.2 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.15.1 // indirect
@@ -88,12 +89,15 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/coreos/prometheus-operator v0.38.0 // indirect
+	github.com/dgrijalva/jwt-go v3.2.1-0.20180719211823-0b96aaa70776+incompatible // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.1 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.5.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-openapi/errors v0.20.3 // indirect
+	github.com/go-openapi/strfmt v0.21.5 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/google/cel-go v0.18.1 // indirect
 	github.com/google/go-containerregistry v0.17.0 // indirect
@@ -109,6 +113,7 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v0.0.0-20191119172530-79f836b90111 // indirect
 	github.com/moby/sys/mountinfo v0.6.2 // indirect
 	github.com/montanaflynn/stats v0.0.0-20180911141734-db72e6cae808 // indirect
+	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/openshift/custom-resource-status v1.1.2 // indirect
 	github.com/prometheus/statsd_exporter v0.21.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
@@ -125,6 +130,7 @@ require (
 	golang.org/x/exp v0.0.0-20230728194245-b0cb94b80691 // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/tools v0.16.1 // indirect
+	gopkg.in/go-playground/validator.v9 v9.31.0 // indirect
 	knative.dev/pkg v0.0.0-20231023150739-56bfe0dd9626 // indirect
 	kubevirt.io/client-go v0.59.2 // indirect
 	kubevirt.io/containerized-data-importer-api v1.57.0-alpha1 // indirect
@@ -132,6 +138,8 @@ require (
 )
 
 require (
+	github.com/IBM/go-sdk-core/v4 v4.10.0
+	github.com/IBM/vpc-go-sdk v0.48.0
 	github.com/aws/aws-sdk-go-v2 v1.25.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.2
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.148.2
