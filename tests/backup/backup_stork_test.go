@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// This testcase verifies backup and restore with non existing and deleted custom stork admin namespaces
+// This testcase verifies backup and restore with non-existing and deleted custom stork admin namespaces
 var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResumeSuspendBackupPolicies}", func() {
 
 	var (
