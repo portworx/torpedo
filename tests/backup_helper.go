@@ -1156,6 +1156,8 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 		DirectKdmp: forceKdmp,
 	}
 
+	fmt.Println("kdmp flag:", forceKdmp)
+	fmt.Println("provisioner map :", provisionerVolumeSnapshotClassMap)
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest, provisionerVolumeSnapshotClassMap)
 	if err != nil {
 		return nil, err
