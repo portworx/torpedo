@@ -32,7 +32,6 @@ func (ns *PLATFORM_API_V1) ListNamespaces(request *PlatformNamespace) (*Platform
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `NamespaceServiceListNamespaces`: %v\n.Full HTTP response: %v", err, res)
 	}
-	log.Infof("Ns Models - [%+v]", nsModels)
 	err = utilities.CopyStruct(nsModels.Namespaces, &namespaceResponse.List.Namespaces)
 	if err != nil {
 		return nil, err
