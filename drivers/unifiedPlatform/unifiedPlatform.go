@@ -227,11 +227,11 @@ func GetPlatformRESTClientForAutomation(controlPlaneURL string, AccountId string
 }
 
 // GetPlatformRESTClientForAutomation returns the platform client for automation
-func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pdsapi.PDS_API_V2, error) {
+func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pdsapi.PDS_API_V1, error) {
 
 	endpointURL, err := url.Parse(controlPlaneURL)
 	if err != nil {
-		return pdsapi.PDS_API_V2{}, err
+		return pdsapi.PDS_API_V1{}, err
 	}
 	log.Infof("Generating REST(V1) client for PDS [%s]", endpointURL)
 
@@ -271,7 +271,7 @@ func GetPDSRESTClientForAutomation(controlPlaneURL string, AccountId string) (pd
 	restoreV1Conf.Scheme = endpointURL.Scheme
 	catalogV1APIClient := catalogV1.NewAPIClient(catalogV1Conf)
 
-	return pdsapi.PDS_API_V2{
+	return pdsapi.PDS_API_V1{
 		BackupV1APIClient:                  backupV1APIClient,
 		BackupConfigV1APIClient:            backupConfigV1APIClient,
 		DeploymentV1APIClient:              deploymentV1APIClient,

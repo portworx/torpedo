@@ -13,26 +13,26 @@ var (
 	DeploymentRequestBody deploymentV1.V1Deployment
 )
 
-func (ds *PDS_API_V2) GetDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
-func (ds *PDS_API_V2) DeleteDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
-func (ds *PDS_API_V2) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
 // CreateDeployment return newly created deployment model.
-func (ds *PDS_API_V2) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 	depCreateRequest := deploymentV1.ApiDeploymentServiceCreateDeploymentRequest{}
 

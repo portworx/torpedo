@@ -12,7 +12,7 @@ import (
 	restoreV1 "github.com/pure-px/platform-api-go-client/pds/v1/restore"
 )
 
-type PDS_API_V2 struct {
+type PDS_API_V1 struct {
 	BackupV1APIClient                  *backupV1.APIClient
 	BackupConfigV1APIClient            *backupConfigV1.APIClient
 	DeploymentV1APIClient              *deploymentV1.APIClient
@@ -23,7 +23,7 @@ type PDS_API_V2 struct {
 }
 
 // getBackupConfigClient updates the header with bearer token and returns the new client
-func (backupConf *PDS_API_V2) getBackupConfigClient() (context.Context, *backupConfigV1.BackupConfigServiceAPIService, error) {
+func (backupConf *PDS_API_V1) getBackupConfigClient() (context.Context, *backupConfigV1.BackupConfigServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 
 	if err != nil {
@@ -37,7 +37,7 @@ func (backupConf *PDS_API_V2) getBackupConfigClient() (context.Context, *backupC
 }
 
 // GetClient updates the header with bearer token and returns the new client
-func (ds *PDS_API_V2) getDeploymentClient() (context.Context, *deploymentV1.DeploymentServiceAPIService, error) {
+func (ds *PDS_API_V1) getDeploymentClient() (context.Context, *deploymentV1.DeploymentServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
@@ -50,7 +50,7 @@ func (ds *PDS_API_V2) getDeploymentClient() (context.Context, *deploymentV1.Depl
 }
 
 // GetDeploymentConfigClient updates the header with bearer token and returns the new client
-func (ds *PDS_API_V2) getDeploymentConfigClient() (context.Context, *deploymentsConfigUpdateV1.DeploymentConfigUpdateServiceAPIService, error) {
+func (ds *PDS_API_V1) getDeploymentConfigClient() (context.Context, *deploymentsConfigUpdateV1.DeploymentConfigUpdateServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)

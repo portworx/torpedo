@@ -8,7 +8,7 @@ import (
 	status "net/http"
 )
 
-func (ds *PDS_API_V2) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	var updateRequest deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
 	dsResponse := apiStructs.WorkFlowResponse{}
 
