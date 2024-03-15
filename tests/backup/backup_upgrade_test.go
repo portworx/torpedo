@@ -761,7 +761,7 @@ var _ = Describe("{PXBackupEndToEndBackupAndRestoreWithUpgrade}", func() {
 	})
 })
 
-var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
+var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 	var (
 		numDeployments                     int
 		srcClusterContexts                 []*scheduler.Context
@@ -774,7 +774,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		backupLocationUid                  string
 		backupLocationMap                  map[string]string
 		srcClusterUid                      string
-		destClusterUid                     string
 		preRuleNames                       map[string]string
 		preRuleUids                        map[string]string
 		postRuleNames                      map[string]string
@@ -787,7 +786,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		intervalInMins                     int
 		singleNSNamespaces                 []string
 		singleNSScheduleNames              []string
-		allNSScheduleName                  string
 		backupAfterUpgradeWithoutRuleNames []string
 		backupAfterUpgradeWithRuleNames    []string
 		restoreNames                       []string
@@ -799,7 +797,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 		backupToContextMapping[backupName] = appContextsToBackup
 	}
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("PXBackupOcpUpgradeTest", "Validates end-to-end backup and restore operations with OCP upgrade", nil, 296424, Kshithijiyer, Q1FY25)
+		StartPxBackupTorpedoTest("PXBackupClusterUpgradeTest", "Validates end-to-end backup and restore operations with cluster upgrade", nil, 296424, Kshithijiyer, Q1FY25)
 		log.Infof("Scheduling applications")
 		numDeployments = Inst().GlobalScaleFactor
 		if len(Inst().AppList) == 1 && numDeployments < 2 {
@@ -840,7 +838,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 			}
 		}
 	})
-	It("PX-Backup End-to-End Backup and Restore with OCP Upgrade", func() {
+	It("PX-Backup End-to-End Backup and Restore with cluster Upgrade", func() {
 		Step("Validate app namespaces in destination cluster", func() {
 			log.InfoD("Validating app namespaces in destination cluster")
 			err := SetDestinationKubeConfig()
@@ -881,18 +879,16 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 			log.Infof("Creating source [%s] and destination [%s] clusters", SourceClusterName, DestinationClusterName)
 			err = CreateApplicationClusters(BackupOrgID, "", "", ctx)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of source [%s] and destination [%s] clusters with px-central-admin ctx", SourceClusterName, DestinationClusterName))
-			srcClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, SourceClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", SourceClusterName))
-			dash.VerifyFatal(srcClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", SourceClusterName))
+
+			clusters := []string{SourceClusterName, DestinationClusterName}
+			for _, c := range clusters {
+				clusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, c, ctx)
+				log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", c))
+				dash.VerifyFatal(clusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", c))
+			}
 			srcClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, SourceClusterName)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching [%s] cluster uid", SourceClusterName))
 			log.Infof("Cluster [%s] uid: [%s]", SourceClusterName, srcClusterUid)
-			dstClusterStatus, err := Inst().Backup.GetClusterStatus(BackupOrgID, DestinationClusterName, ctx)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster status", DestinationClusterName))
-			dash.VerifyFatal(dstClusterStatus, api.ClusterInfo_StatusInfo_Online, fmt.Sprintf("Verifying if [%s] cluster is online", DestinationClusterName))
-			destClusterUid, err = Inst().Backup.GetClusterUID(ctx, BackupOrgID, DestinationClusterName)
-			log.FailOnError(err, fmt.Sprintf("Fetching [%s] cluster uid", DestinationClusterName))
-			log.Infof("Cluster [%s] uid: [%s]", DestinationClusterName, destClusterUid)
 		})
 		Step("Create pre and post exec rules for applications", func() {
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -910,10 +906,8 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 					log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleName)
 					log.Infof("Pre backup rule [%s] uid: [%s]", preRuleName, preRuleUid)
 				}
-				for i := 0; i < len(srcClusterAppNamespaces[appName]); i++ {
-					preRuleNames[appName] = preRuleName
-					preRuleUids[appName] = preRuleUid
-				}
+				preRuleNames[appName] = preRuleName
+				preRuleUids[appName] = preRuleUid
 			}
 			postRuleNames = make(map[string]string, 0)
 			postRuleUids = make(map[string]string, 0)
@@ -932,6 +926,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 					postRuleNames[appName] = postRuleName
 					postRuleUids[appName] = postRuleUid
 				}
+
 			}
 		})
 		Step("Create backups with and without pre and post exec rules", func() {
@@ -940,7 +935,7 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 			backupToContextMapping = make(map[string][]*scheduler.Context, 0)
 			createBackupWithRulesTask := func(appName string) {
 				namespace := srcClusterAppNamespaces[appName][0]
-				backupName := fmt.Sprintf("%s-%s-%v-with-rules", BackupNamePrefix, namespace, time.Now().Unix())
+				backupName := fmt.Sprintf("%s-%s-%v-%s-with-rules", BackupNamePrefix, namespace, time.Now().Unix(), RandomString(4))
 				labelSelectors := make(map[string]string, 0)
 				log.InfoD("Creating a backup of namespace [%s] with pre and post exec rules", namespace)
 				appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
@@ -1033,6 +1028,14 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 					err := SwitchBothKubeConfigANDContext("source")
 					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
+					// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Refresh Node Registry failed")
+
+					// Refresh Driver Endpoints
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver Endpoints failed")
+
 					urlToParse := fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 					u, err := url.Parse(urlToParse)
 					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
@@ -1045,6 +1048,14 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 					err = SwitchBothKubeConfigANDContext("destination")
 					dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to destination cluster")
 
+					// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
+					err = Inst().S.RefreshNodeRegistry()
+					log.FailOnError(err, "Refresh Node Registry failed")
+
+					// Refresh Driver Endpoints
+					err = Inst().V.RefreshDriverEndpoints()
+					log.FailOnError(err, "Refresh Driver Endpoints failed")
+
 					urlToParse = fmt.Sprintf("%s/%s", Inst().StorageDriverUpgradeEndpointURL, Inst().StorageDriverUpgradeEndpointVersion)
 					u, err = url.Parse(urlToParse)
 					log.FailOnError(err, fmt.Sprintf("error parsing PX version the url [%s]", urlToParse))
@@ -1053,33 +1064,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 
 					// Printing cluster node info after the upgrade
 					PrintK8sCluterInfo()
-
-					err = SwitchBothKubeConfigANDContext("source")
-					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
-				})
-
-				Step("update node drive endpoints", func() {
-					err := SwitchBothKubeConfigANDContext("source")
-					dash.VerifyFatal(err, nil, "Switching context and Kubeconfig to source cluster")
-
-					// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
-					err = Inst().S.RefreshNodeRegistry()
-					log.FailOnError(err, "Refresh Node Registry failed")
-
-					// Refresh Driver Endpoints
-					err = Inst().V.RefreshDriverEndpoints()
-					log.FailOnError(err, "Refresh Driver Endpoints failed")
-
-					err = SwitchBothKubeConfigANDContext("destination")
-					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to destination cluster")
-
-					// Update NodeRegistry, this is needed as node names and IDs might change after upgrade
-					err = Inst().S.RefreshNodeRegistry()
-					log.FailOnError(err, "Refresh Node Registry failed")
-
-					// Refresh Driver Endpoints
-					err = Inst().V.RefreshDriverEndpoints()
-					log.FailOnError(err, "Refresh Driver Endpoints failed")
 
 					err = SwitchBothKubeConfigANDContext("source")
 					dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
@@ -1273,16 +1257,6 @@ var _ = Describe("{PXBackupOcpUpgradeTest}", func() {
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", scheduleName))
 		}
 		_ = TaskHandler(singleNSScheduleNames, deleteSingleNSScheduleTask, Parallel)
-		log.InfoD("Deleting all namespaces backup schedule [%s]", allNSScheduleName)
-		err = DeleteSchedule(allNSScheduleName, SourceClusterName, BackupOrgID, ctx)
-		dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of backup schedule [%s]", allNSScheduleName))
-		log.InfoD("Deleting pre exec rules %s", preRuleNames)
-		for _, preRuleName := range preRuleNames {
-			if preRuleName != "" {
-				err := DeleteRule(preRuleName, BackupOrgID, ctx)
-				dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of pre backup rule [%s]", preRuleName))
-			}
-		}
 		log.InfoD("Deleting post exec rules %s", postRuleNames)
 		for _, postRuleName := range postRuleNames {
 			if postRuleName != "" {

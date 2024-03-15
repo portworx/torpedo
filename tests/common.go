@@ -10815,7 +10815,7 @@ func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
 	}
 }
 
-// printK8sClusterInfo prints info about K8s cluster nodes
+// PrintK8sClusterInfo prints info about K8s cluster nodes
 func PrintK8sCluterInfo() {
 	log.Info("Get cluster info..")
 	t := func() (interface{}, bool, error) {
