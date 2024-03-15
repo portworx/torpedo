@@ -38,8 +38,9 @@ var (
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 
-	triggerFunctions     map[string]func(*[]*scheduler.Context, *chan *EventRecord)
-	emailTriggerFunction map[string]func()
+	triggerFunctions       map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	triggerBackupFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	emailTriggerFunction   map[string]func()
 
 	// Pure Topology is disabled by default
 	pureTopologyEnabled = false
@@ -1588,7 +1589,7 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 	if baseInterval, ok := ChaosMap[BaseInterval]; ok {
 		return GetWaitTime(chaosLevel, time.Duration(baseInterval)*time.Minute), true
 	} else {
-		return GetWaitTime(chaosLevel, defaultBaseInterval), true
+		return GetWaitTime(chaosLevel, triggerInterval[triggerType][maximumChaosLevel]), true
 	}
 }
 

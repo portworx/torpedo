@@ -29,5 +29,7 @@ func main() {
 	router.GET("taas/getpxctloutput", utils.GetPxctlStatusOutput)
 	router.GET("taas/getkubevirtvmsbyns", utils.GetVMsInNamespaces)
 	router.GET("taas/getkubevirtvmsbynslabels", utils.GetVMsWithNamespaceLabels)
+	router.POST("taas/namespaces/addLabel", utils.AddNSLabel)
+	router.POST("taas/stork/upgrade", utils.UpgradeStork)
 	log.Fatal(router.Run(":8080"))
 }
