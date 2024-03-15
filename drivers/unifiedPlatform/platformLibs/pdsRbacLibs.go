@@ -1,14 +1,14 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	"math/rand"
 	"strconv"
 )
 
-func CreateUser(saName, accId string) (*apiStructs.WorkFlowResponse, error) {
+func CreateUser(saName, accId string) (*automationModels.WorkFlowResponse, error) {
 	log.InfoD("Creating Service Account...")
 	tenantId, err := GetDefaultTenantId(accId)
 	if err != nil {
@@ -19,11 +19,11 @@ func CreateUser(saName, accId string) (*apiStructs.WorkFlowResponse, error) {
 	return saAcc, nil
 }
 
-func AssignRoleBindingsToUser(saName, roleName, resourceId, accId string) (*apiStructs.WorkFlowResponse, error) {
+func AssignRoleBindingsToUser(saName, roleName, resourceId, accId string) (*automationModels.WorkFlowResponse, error) {
 	var (
-		userModel apiStructs.PDSServiceAccount
-		binding   apiStructs.V1RoleBinding
-		roles     []apiStructs.V1RoleBinding
+		userModel automationModels.PDSServiceAccount
+		binding   automationModels.V1RoleBinding
+		roles     []automationModels.V1RoleBinding
 	)
 	tenantId, err := GetDefaultTenantId(accId)
 	user, err := GetServiceAccFromSaName(tenantId, saName)

@@ -1,12 +1,12 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 // GetTenantListV1
-func GetTenantListV1() ([]apiStructs.WorkFlowResponse, error) {
+func GetTenantListV1() ([]automationModels.WorkFlowResponse, error) {
 	tenList, err := v2Components.Platform.ListTenants()
 	if err != nil {
 		return nil, err

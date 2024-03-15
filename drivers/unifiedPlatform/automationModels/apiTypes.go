@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type WorkFlowResponse struct {
 	Meta              Meta                        `copier:"must,nopanic"`
@@ -29,5 +29,4 @@ type WorkFlowRequest struct {
 	Pagination            PaginationRequest      `copier:"must,nopanic"`
 	ServiceAccountRequest PDSServiceAccount      `copier:"must,nopanic"`
 	Iam                   PDSIam                 `copier:"must,nopanic"`
-	Namespace             PDNamespace            `copier:"must,nopanic"`
 }

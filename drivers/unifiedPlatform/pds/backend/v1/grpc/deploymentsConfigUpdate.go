@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
@@ -33,8 +33,8 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 	return ctx, depClient, token, nil
 }
 
-func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
-	depResponse := apiStructs.WorkFlowResponse{}
+func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+	depResponse := automationModels.WorkFlowResponse{}
 	updateRequest := &publicdeploymentConfigUpdate.CreateDeploymentConfigUpdateRequest{
 		DeploymentConfigUpdate: &publicdeploymentConfigUpdate.DeploymentConfigUpdate{
 			Meta: &commonapiv1.Meta{

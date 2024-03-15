@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type PDSBackup struct {
 	Delete PDSDeleteBackup `copier:"must,nopanic"`

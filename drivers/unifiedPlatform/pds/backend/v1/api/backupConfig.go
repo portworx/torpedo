@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 )
@@ -28,32 +28,32 @@ func (backupConf *PDSV2_API) getBackupConfigClient() (context.Context, *pdsv2.Ba
 }
 
 // CreateBackupConfig will create backup config for a given deployment
-func (backupConf *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) CreateBackupConfig(createBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	log.Warnf("CreateBackupConfig is not implemented for API")
-	return &apiStructs.WorkFlowResponse{}, nil
+	return &automationModels.WorkFlowResponse{}, nil
 }
 
 // UpdateBackupConfig will update backup config for a given deployment
-func (backupConf *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) UpdateBackupConfig(updateBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	log.Warnf("UpdateBackupConfig is not implemented for API")
-	return &apiStructs.WorkFlowResponse{}, nil
+	return &automationModels.WorkFlowResponse{}, nil
 }
 
 // GetBackupConfig will fetch backup config for a given deployment
-func (backupConf *PDSV2_API) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) GetBackupConfig(getBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	log.Warnf("GetBackupConfig is not implemented for API")
-	return &apiStructs.WorkFlowResponse{}, nil
+	return &automationModels.WorkFlowResponse{}, nil
 }
 
 // DeleteBackupConfig will delete backup config for a given deployment
-func (backupConf *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) DeleteBackupConfig(deleteBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	log.Warnf("DeleteBackupConfig is not implemented for API")
-	return &apiStructs.WorkFlowResponse{}, nil
+	return &automationModels.WorkFlowResponse{}, nil
 }
 
 // ListBackupConfig will list backup config for a given deployment
-func (backupConf *PDSV2_API) ListBackupConfig(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (backupConf *PDSV2_API) ListBackupConfig(listBackupConfigRequest *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	log.Warnf("ListBackupConfig is not implemented for API")
-	return []apiStructs.WorkFlowResponse{}, nil
+	return []automationModels.WorkFlowResponse{}, nil
 
 }

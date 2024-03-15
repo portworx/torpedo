@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 // PDSCreateIAM Struct for IAM roleBindings
 type PDSIam struct {

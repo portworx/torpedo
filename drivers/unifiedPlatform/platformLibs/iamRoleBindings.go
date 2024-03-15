@@ -1,16 +1,16 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 var (
-	iamInputs *apiStructs.WorkFlowRequest
+	iamInputs *automationModels.WorkFlowRequest
 )
 
 // CreatePlatformServiceAccountIamRoles creates IAM roles for given Namespace role binding and ActorId
-func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBindings []apiStructs.V1RoleBinding) (*apiStructs.WorkFlowResponse, error) {
+func CreatePlatformServiceAccountIamRoles(iamName, actorId string, nsRoleBindings []automationModels.V1RoleBinding) (*automationModels.WorkFlowResponse, error) {
 	iamInputs.Iam.Create.V1IAM.Meta.Name = &iamName
 	iamInputs.Iam.Create.V1IAM.Config.ActorId = &actorId
 	iamInputs.Iam.Create.V1IAM.Config.AccessPolicy.Namespace = nsRoleBindings

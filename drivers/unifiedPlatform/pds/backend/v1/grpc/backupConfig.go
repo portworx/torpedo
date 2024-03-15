@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -27,10 +27,10 @@ func (backupConf *PdsGrpc) getBackupConfigClient() (context.Context, publicBacku
 }
 
 // CreateBackupConfig will create backup config for a given deployment
-func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup Create - [%+v]", createBackupConfigRequest.BackupConfig.Create)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	createRequest := &publicBackupConfigapis.CreateBackupConfigRequest{}
 	// log.Infof("Backup Create Request - [%v], Backup Config - [%v]", createRequest, createRequest.BackupConfig)
@@ -62,11 +62,11 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *apiStru
 }
 
 // UpdateBackupConfig will update backup config for a given deployment
-func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 
 	// log.Infof("Backup Update - [%+v]", updateBackupConfigRequest.BackupConfig.Update)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	updateRequest := &publicBackupConfigapis.UpdateBackupConfigRequest{}
 	// log.Infof("Backup Update - [%v], Backup Config - [%v]", updateRequest, updateRequest.BackupConfig)
@@ -99,10 +99,10 @@ func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *apiStru
 }
 
 // GetBackupConfig will fetch backup config for a given deployment
-func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	getRequest := &publicBackupConfigapis.GetBackupConfigRequest{}
 	// log.Infof("Backup Get - [%v]", getRequest)
@@ -135,10 +135,10 @@ func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *apiStructs.Wo
 }
 
 // DeleteBackupConfig will delete backup config for a given deployment
-func (backupConf *PdsGrpc) DeleteBackupConfig(deleteBackupConfigRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) DeleteBackupConfig(deleteBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup Delete - [%+v]", deleteBackupConfigRequest.BackupConfig.Delete)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	deleteRequest := &publicBackupConfigapis.DeleteBackupConfigRequest{}
 	// log.Infof("Backup Delete - [%v]", deleteRequest)
@@ -170,10 +170,10 @@ func (backupConf *PdsGrpc) DeleteBackupConfig(deleteBackupConfigRequest *apiStru
 }
 
 // ListBackupConfig will list backup config for a given deployment
-func (backupConf *PdsGrpc) ListBackupConfig(listBackupConfigRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) ListBackupConfig(listBackupConfigRequest *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup List - [%+v]", listBackupConfigRequest.BackupConfig.List)
 
-	response := []apiStructs.WorkFlowResponse{}
+	response := []automationModels.WorkFlowResponse{}
 
 	listRequest := &publicBackupConfigapis.ListBackupConfigsRequest{}
 	// log.Infof("Backup List - [%v]", listRequest)

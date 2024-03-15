@@ -3,16 +3,16 @@ package api
 import (
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	targetClusterv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetcluster"
 	status "net/http"
 )
 
 // ListTargetClusters return deployment targets models.
-func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *PlatformTargetCluster) ([]WorkFlowResponse, error) {
 	tcResponse := []WorkFlowResponse{}
-	tenantId := tcRequest.TargetCluster.ListTargetClusters.TenantId
+	tenantId := tcRequest.ListTargetClusters.TenantId
 	_, dtClient, err := tc.getTargetClusterClient()
 
 	var req targetClusterv1.ApiTargetClusterServiceListTargetClustersRequest
@@ -33,13 +33,13 @@ func (tc *PLATFORM_API_V1) ListTargetClusters(tcRequest *WorkFlowRequest) ([]Wor
 }
 
 // GetTarget return deployment target model.
-func (tc *PLATFORM_API_V1) GetTarget(tcRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (tc *PLATFORM_API_V1) GetTargetCluster(tcRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
 	tcResponse := WorkFlowResponse{}
 	ctx, dtClient, err := tc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	dtModel, res, err := dtClient.TargetClusterServiceGetTargetCluster(ctx, tcRequest.Id).Execute()
+	dtModel, res, err := dtClient.TargetClusterServiceGetTargetCluster(ctx, tcRequest.GetTargetCluster.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TargetClusterServiceGetTargetCluster`: %v\n.Full HTTP response: %v", err, res)
 	}
@@ -51,7 +51,7 @@ func (tc *PLATFORM_API_V1) GetTarget(tcRequest *WorkFlowRequest) (*WorkFlowRespo
 }
 
 // PatchTargetCluster returns the updated the deployment target model
-func (tc *PLATFORM_API_V1) PatchTargetCluster(tcRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (tc *PLATFORM_API_V1) PatchTargetCluster(tcRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
 	var patchRequest targetClusterv1.ApiTargetClusterServiceUpdateTargetClusterRequest
 	tcResponse := WorkFlowResponse{}
 	_, dtClient, err := tc.getTargetClusterClient()
@@ -77,24 +77,24 @@ func (tc *PLATFORM_API_V1) PatchTargetCluster(tcRequest *WorkFlowRequest) (*Work
 }
 
 // DeleteTargetCluster delete the deployment target and return status.
-func (tc *PLATFORM_API_V1) DeleteTargetCluster(tcRequest *WorkFlowRequest) error {
+func (tc *PLATFORM_API_V1) DeleteTargetCluster(tcRequest *PlatformTargetCluster) error {
 	ctx, dtClient, err := tc.getTargetClusterClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	_, res, _ := dtClient.TargetClusterServiceDeleteTargetCluster(ctx, tcRequest.TargetCluster.DeleteTargetCluster.Id).Execute()
+	_, res, _ := dtClient.TargetClusterServiceDeleteTargetCluster(ctx, tcRequest.DeleteTargetCluster.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `TargetClusterServiceDeleteTargetCluster`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return nil
 }
 
-func (tc *PLATFORM_API_V1) GetClusterHealth(targetClusterId string) (*targetClusterv1.PlatformTargetClusterv1Status, error) {
+func (tc *PLATFORM_API_V1) GetClusterHealth(tcRequest *PlatformTargetCluster) (*targetClusterv1.PlatformTargetClusterv1Status, error) {
 	ctx, dtClient, err := tc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	targetCluster, _, err := dtClient.TargetClusterServiceGetTargetCluster(ctx, targetClusterId).Execute()
+	targetCluster, _, err := dtClient.TargetClusterServiceGetTargetCluster(ctx, tcRequest.GetTargetClusterHealth.Id).Execute()
 	log.Info("Get list of Accounts.")
 	return targetCluster.Status, nil
 }
