@@ -8,7 +8,7 @@ import (
 
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
 	"github.com/portworx/torpedo/pkg/log"
-	accountv1 "github.com/pure-px/platform-api-go-client/v1/account"
+	accountv1 "github.com/pure-px/platform-api-go-client/platform/v1/account"
 )
 
 // GetAccount return pds account model.
