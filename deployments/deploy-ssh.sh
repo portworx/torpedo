@@ -699,6 +699,8 @@ spec:
       value: "${DEPLOY_ALL_DATASERVICE}"
     - name: GCP_PROJECT_ID
       value: "${GCP_PROJECT_ID}"
+    - name: INSECURE_FLAG
+      value: "${INSECURE_FLAG}"
     - name: PDS_USERNAME
       value: "${PDS_USERNAME}"
     - name: PDS_PASSWORD

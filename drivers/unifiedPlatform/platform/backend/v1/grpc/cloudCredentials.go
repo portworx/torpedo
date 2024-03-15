@@ -83,7 +83,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *Wor
 	}
 	log.Infof("Value of cloudCredentials - [%v]", cloudCredModel)
 
-	cloudCredResponse := copyCloudCredResponse(getWorkflowRequest.CloudCredentials.Create.Config.Provider.CloudProvider, *cloudCredModel)
+	cloudCredResponse := copyCloudCredResponse(getWorkflowRequest.CloudCredentials.Create.Config.Provider.CloudProvider, cloudCredModel)
 
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredResponse)
 	return cloudCredResponse, nil
@@ -149,12 +149,8 @@ func cloudConfig(createRequest *WorkFlowRequest) *publiccloudcredapi.Config {
 	}
 }
 
-func copyCloudCredResponse(providerType int32, cloudCredModel publiccloudcredapi.CloudCredential) *WorkFlowResponse {
+func copyCloudCredResponse(providerType int32, cloudCredModel *publiccloudcredapi.CloudCredential) *WorkFlowResponse {
 	cloudCredResponse := WorkFlowResponse{}
-	//var (
-	//	config = cloudCredResponse.CloudCredentials.Config.Credentials
-	//	meta   = cloudCredResponse.CloudCredentials.Meta
-	//)
 
 	//Test Print
 	log.Infof("access key before copy [%s]", cloudCredModel.Config.GetS3Credentials().AccessKey)
@@ -224,7 +220,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *WorkF
 	}
 
 	log.Infof("cloud cred response [%+v]", cloudCredModel)
-	cloudCredResponse := copyCloudCredResponse(createRequest.CloudCredentials.Create.Config.Provider.CloudProvider, *cloudCredModel)
+	cloudCredResponse := copyCloudCredResponse(createRequest.CloudCredentials.Create.Config.Provider.CloudProvider, cloudCredModel)
 
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredResponse)
 	return cloudCredResponse, nil
