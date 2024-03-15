@@ -140,14 +140,31 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 
 	It("CreateAndGeBackupLocation", func() {
 		Step("create credentials and backup location", func() {
+			var (
+				workflowCc  stworkflows.WorkflowCloudCredentials
+				cloudCredId string
+			)
+
 			tenantId, err := platformLibs.GetDefaultTenantId(accID)
 			log.FailOnError(err, "error occured while fetching tenantID")
-			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
-			log.FailOnError(err, "error while creating cloud creds")
-			log.Infof("creds resp [%+v]", credResp.CloudCredentials.Config.Credentials.S3Credentials.AccessKey)
-			log.Infof("creds id [%+v]", *credResp.CloudCredentials.Meta.Uid)
 
-			resp, err := platformLibs.CreateBackupLocation(tenantId, *credResp.CloudCredentials.Meta.Uid, "test-bucket", NewPdsParams.BackUpAndRestore.TargetLocation)
+			workflowCc.Platform.TenantId = tenantId
+			cc, err := workflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+			log.FailOnError(err, "error occured while creating cloud credentials")
+
+			for key, value := range cc.CloudCredentials {
+				log.Infof("cloud credentials name: [%s]", key)
+				log.Infof("cloud credentials id: [%s]", value.ID)
+				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+				cloudCredId = value.ID
+			}
+
+			//credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
+			//log.FailOnError(err, "error while creating cloud creds")
+			//log.Infof("creds resp [%+v]", credResp.Create.Config.Credentials.S3Credentials.AccessKey)
+			//log.Infof("creds id [%+v]", *credResp.Create.Meta.Uid)
+
+			resp, err := platformLibs.CreateBackupLocation(tenantId, cloudCredId, "test-bucket", NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating backup location")
 			log.Infof("backup location id: [%s]", *resp.Meta.Uid)
 		})
@@ -169,13 +186,13 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 			log.FailOnError(err, "error occured while fetching tenantID")
 			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating cloud creds")
-			log.Infof("creds resp [%+v]", credResp.CloudCredentials.Config.Credentials.S3Credentials.AccessKey)
-			log.Infof("creds id [%+v]", *credResp.CloudCredentials.Meta.Uid)
+			log.Infof("creds resp [%+v]", credResp.Create.Config.Credentials.S3Credentials.AccessKey)
+			log.Infof("creds id [%+v]", *credResp.Create.Meta.Uid)
 
-			isconfigRequiredTrue, err := platformLibs.GetCloudCredentials(*credResp.CloudCredentials.Meta.Uid, NewPdsParams.BackUpAndRestore.TargetLocation, true)
-			log.FailOnError(err, "error occured while gettig cloud required with false flag")
-			log.Debugf("Cred Name [%+v]", *isconfigRequiredTrue.CloudCredentials.Meta.Name)
-			log.Debugf("Cred Id [%+v]", *isconfigRequiredTrue.CloudCredentials.Meta.Uid)
+			isconfigRequiredTrue, err := platformLibs.GetCloudCredentials(*credResp.Create.Meta.Uid, NewPdsParams.BackUpAndRestore.TargetLocation, true)
+			log.FailOnError(err, "error occured while getting cloud required with false flag")
+			log.Debugf("Cred Name [%+v]", *isconfigRequiredTrue.Create.Meta.Name)
+			log.Debugf("Cred Id [%+v]", *isconfigRequiredTrue.Create.Meta.Uid)
 		})
 	})
 

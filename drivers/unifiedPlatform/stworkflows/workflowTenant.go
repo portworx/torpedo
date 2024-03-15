@@ -20,3 +20,11 @@ func (tenant *WorkflowTenant) ListTenants() (map[string][]apiStructs.WorkFlowRes
 	addResultToResponse(tenantsList, apiStructs.GetTenantListV1, resultMap)
 	return resultMap, nil
 }
+
+func (tenant *WorkflowTenant) GetDefaultTenantId() (string, error) {
+	tenantID, err := platformLibs.GetDefaultTenantId(tenant.AccountID)
+	if err != nil {
+		return "", err
+	}
+	return tenantID, nil
+}

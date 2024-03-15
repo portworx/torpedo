@@ -10,9 +10,9 @@ import (
 )
 
 // ListCloudCredentials return list of cloud credentials
-func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentials) ([]CloudCredentials, error) {
 	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
-	cloudCredsResponse := []WorkFlowResponse{}
+	cloudCredsResponse := []CloudCredentials{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -30,12 +30,12 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *WorkFlowRequest)
 }
 
 // GetCloudCredentials gets cloud credentials by ts id
-func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentials) (*CloudCredentials, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := WorkFlowResponse{}
+	cloudCredsResponse := CloudCredentials{}
 	var getCloudCredReq cloudCredentialv1.ApiCloudCredentialServiceGetCloudCredentialRequest
 	err = copier.Copy(&getCloudCredReq, getReq)
 	if err != nil {
@@ -55,12 +55,12 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *WorkFlowRequest) (
 }
 
 // CreateCloudCredentials return newly created cloud credentials
-func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentials, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := WorkFlowResponse{}
+	cloudCredsResponse := CloudCredentials{}
 	var createCloudCredRequest cloudCredentialv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
 	err = copier.Copy(&createCloudCredRequest, createRequest)
 	if err != nil {

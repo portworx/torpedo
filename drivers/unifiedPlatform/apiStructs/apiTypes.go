@@ -6,7 +6,6 @@ type WorkFlowResponse struct {
 	Id                string                      `copier:"must,nopanic"`
 	OnboardAccount    AccountRegistration         `copier:"must,nopanic"`
 	Status            Status                      `copier:"must,nopanic"`
-	CloudCredentials  CreateCloudCredentials      `copier:"must,nopanic"`
 	TargetCluster     PlatformTargetClusterOutput `copier:"must,nopanic"`
 	PdsServiceAccount PDSServiceAccount
 }
@@ -19,7 +18,6 @@ type WorkFlowRequest struct {
 	OnboardAccount        PlatformOnboardAccount `copier:"must,nopanic"`
 	PDSApplication        PDSApplicaition        `copier:"must,nopanic"`
 	TargetCluster         PlatformTargetCluster  `copier:"must,nopanic"`
-	CloudCredentials      CloudCredentials       `copier:"must,nopanic"`
 	Meta                  Meta                   `copier:"must,nopanic"`
 	Config                Config                 `copier:"must,nopanic"`
 	Id                    string                 `copier:"must,nopanic"`
