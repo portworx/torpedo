@@ -4,59 +4,39 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/deployment"
 	status "net/http"
 )
 
-// DeploymentV2 struct
-type PDSV2_API struct {
-	ApiClientV2 *pdsv2.APIClient
-	AccountID   string
-}
-
 var (
-	DeploymentRequestBody pdsv2.V1Deployment
+	DeploymentRequestBody deploymentV1.V1Deployment
 )
 
-// GetClient updates the header with bearer token and returns the new client
-func (ds *PDSV2_API) GetDeploymentClient() (context.Context, *pdsv2.DeploymentServiceAPIService, error) {
-	ctx, token, err := utils.GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-	ds.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	ds.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
-	client := ds.ApiClientV2.DeploymentServiceAPI
-
-	return ctx, client, nil
-}
-
-func (ds *PDSV2_API) GetDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V2) GetDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
-func (ds *PDSV2_API) DeleteDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V2) DeleteDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
-func (ds *PDSV2_API) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V2) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
 // CreateDeployment return newly created deployment model.
-func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V2) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
 	dsResponse := apiStructs.WorkFlowResponse{}
-	depCreateRequest := pdsv2.ApiDeploymentServiceCreateDeploymentRequest{}
+	depCreateRequest := deploymentV1.ApiDeploymentServiceCreateDeploymentRequest{}
 
-	_, dsClient, err := ds.GetDeploymentClient()
+	_, dsClient, err := ds.getDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
@@ -68,12 +48,11 @@ func (ds *PDSV2_API) CreateDeployment(createDeploymentRequest *apiStructs.WorkFl
 
 	//Debug Print
 	fmt.Println("DeploymentRequestBody Name ", *DeploymentRequestBody.Meta.Name)
-	fmt.Println("Storage Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].StorageTemplate.Id)
-	fmt.Println("App Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
-	fmt.Println("Resource Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	fmt.Println("Storage Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].StorageOptions.Id)
+	fmt.Println("App Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
+	fmt.Println("Resource Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ResourceSettings.Id)
 
-	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(context.Background(), createDeploymentRequest.Deployment.NamespaceID).V1Deployment(DeploymentRequestBody)
-
+	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(context.Background(), createDeploymentRequest.Deployment.NamespaceID)
 	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(depCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
