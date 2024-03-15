@@ -4772,17 +4772,17 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 	case string(NativeCSIWithOffloadToS3):
 		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
 		backupRequest.CsiSnapshotClassName = "ibmc-vpcblock-snapshot"
-		/*		backupRequest.BackupType = api.BackupCreateRequest_Generic
-				var csiSnapshotClassName string
-				var err error
-				if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-					return err
-				}
-				if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-					backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-				} else {
-					backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-				}*/
+		backupRequest.BackupType = api.BackupCreateRequest_Generic
+		/*				var csiSnapshotClassName string
+						var err error
+						if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+							return err
+						}
+						if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+							backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
+						} else {
+							backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+						}*/
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
@@ -4820,18 +4820,18 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 	case string(NativeCSIWithOffloadToS3):
 		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
+		backupScheduleRequest.CsiSnapshotClassName = "ibmc-vpcblock-snapshot"
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Generic
-		var csiSnapshotClassName string
-		var err error
-		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-			return err
-		}
-		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-		} else {
-			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		/*				var csiSnapshotClassName string
+						var err error
+						if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+							return err
+						}
+						if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
+							backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
+						} else {
+							backupRequest.CsiSnapshotClassName = csiSnapshotClassName
+						}*/
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
