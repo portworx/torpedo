@@ -243,7 +243,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				log.InfoD("creating backup [%s] in source cluster [%s] (%s), organization [%s], of namespace [%s], in backup location [%s]", backupName, SourceClusterName, sourceClusterUid, BackupOrgID, scheduledNamespace, backupLocationName)
 				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
-				log.Infof("sleep for 60s")
+				log.Infof("sleep for 120s")
 				time.Sleep(60 * time.Second)
 				backupNames = append(backupNames, backupName)
 				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
