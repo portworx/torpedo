@@ -5551,7 +5551,7 @@ func DeleteBucket(provider string, bucketName string) {
 }
 
 // DeleteSnapshotsForVolumes for all the volumes from the
-func DeleteSnapshotsForVolumes(provider string, volumes []string) {
+func DeleteSnapshotsForVolumes(volumes []string) {
 	Step(fmt.Sprintf("Delete snapshots of volumes %v", volumes), func() {
 
 		if getClusterProvider() == "ibm" {
