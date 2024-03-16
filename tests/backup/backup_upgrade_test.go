@@ -1021,7 +1021,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 				err = SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
-				time.Sleep(60 * time.Minute)
+				time.Sleep(120 * time.Minute)
 
 			})
 			if Inst().Provisioner == "portworx" {
