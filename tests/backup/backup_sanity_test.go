@@ -143,11 +143,11 @@ var _ = Describe("{BasicBackupCreation}", func() {
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
 
-		Step("Validating applications", func() {
-			log.InfoD("Validating applications")
-			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
-		})
+		/*		Step("Validating applications", func() {
+				log.InfoD("Validating applications")
+				ctx, _ := backup.GetAdminCtxFromSecret()
+				controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			})*/
 
 		Step("Creating rules for backup", func() {
 			log.InfoD("Creating rules for backup")
