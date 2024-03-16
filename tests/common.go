@@ -135,9 +135,6 @@ import (
 	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
 
-	// import scheduler drivers to invoke it's init
-	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
-
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
@@ -174,6 +171,9 @@ import (
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
+
+	ibmcore "github.com/IBM/go-sdk-core/v5/core"
+	"github.com/IBM/vpc-go-sdk/vpcv1"
 )
 
 const (
@@ -356,6 +356,7 @@ const (
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
+	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 const (
@@ -676,91 +677,71 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
-	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
-		var timeout time.Duration
-		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
-		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-		if Inst().ScaleAppTimeout != time.Duration(0) {
-			timeout = Inst().ScaleAppTimeout
-		} else if ctx.ReadinessTimeout == time.Duration(0) {
-			timeout = appScaleFactor * defaultTimeout
-		} else {
-			timeout = appScaleFactor * ctx.ReadinessTimeout
+
+	var timeout time.Duration
+	log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
+	appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+	if Inst().ScaleAppTimeout != time.Duration(0) {
+		timeout = Inst().ScaleAppTimeout
+	} else if ctx.ReadinessTimeout == time.Duration(0) {
+		timeout = appScaleFactor * defaultTimeout
+	} else {
+		timeout = appScaleFactor * ctx.ReadinessTimeout
+	}
+
+	if !ctx.SkipVolumeValidation {
+		log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
+		ValidateVolumes(ctx, errChan...)
+	}
+
+	err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+	if err != nil {
+		PrintDescribeContext(ctx)
+		processError(err, errChan...)
+		return
+	}
+
+	// Validating Topology Labels for apps if Topology is enabled
+	if len(Inst().TopologyLabels) > 0 {
+		err := Inst().S.ValidateTopologyLabel(ctx)
+		if err != nil {
+			processError(err, errChan...)
+			return
 		}
 
-		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
-			if !ctx.SkipVolumeValidation {
-				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
-				ValidateVolumes(ctx, errChan...)
-			}
-		})
+	}
 
-		stepLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
+	if ctx.SkipVolumeValidation {
+		return
+	}
+	log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
 
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
-			if err != nil {
-				PrintDescribeContext(ctx)
-				processError(err, errChan...)
-				return
-			}
-		})
-
-		// Validating Topology Labels for apps if Topology is enabled
-		if len(Inst().TopologyLabels) > 0 {
-			stepLog = fmt.Sprintf("validate topology labels for %s app", ctx.App.Key)
-			Step(stepLog, func() {
-				log.InfoD(stepLog)
-				err := Inst().S.ValidateTopologyLabel(ctx)
-				if err != nil {
-					processError(err, errChan...)
-					return
-				}
-			})
+	var vols []*volume.Volume
+	t := func() (interface{}, bool, error) {
+		vols, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", true, err
 		}
-		stepLog = fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key)
+		return "", false, nil
+	}
 
-		Step(stepLog, func() {
-			if ctx.SkipVolumeValidation {
-				return
-			}
-			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
+	if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+		log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+		processError(err, errChan...)
+	}
 
-			var vols []*volume.Volume
-			var err error
-			t := func() (interface{}, bool, error) {
-				vols, err = Inst().S.GetVolumes(ctx)
-				if err != nil {
-					return "", true, err
-				}
-				return "", false, nil
-			}
-
-			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
-				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-				processError(err, errChan...)
-			}
-
-			for _, vol := range vols {
-				stepLog = fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol)
-				Step(stepLog, func() {
-					log.Infof(stepLog)
-					err := Inst().V.ValidateVolumeSetup(vol)
-					if err != nil {
-						processError(err, errChan...)
-					}
-				})
-			}
-		})
-
-		// Validating px pod restart count only for portworx volume driver
-		if Inst().V.String() == "pxd" {
-			Step("Validate Px pod restart count", func() {
-				ValidatePxPodRestartCount(ctx, errChan...)
-			})
+	for _, vol := range vols {
+		err := Inst().V.ValidateVolumeSetup(vol)
+		if err != nil {
+			processError(err, errChan...)
 		}
-	})
+
+	}
+
+	// Validating px pod restart count only for portworx volume driver
+	if Inst().V.String() == "pxd" {
+		ValidatePxPodRestartCount(ctx, errChan...)
+	}
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -1050,71 +1031,67 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	Step("For validation of an app's volumes", func() {
-		var err error
-		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
-			var vols []*volume.Volume
-			t := func() (interface{}, bool, error) {
-				vols, err = Inst().S.GetVolumes(ctx)
-				if err != nil {
-					return "", true, err
-				}
-				return "", false, nil
-			}
-
-			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
-				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-				processError(err, errChan...)
-			}
-			volScaleFactor := 1
-			if len(vols) > 10 {
-				// Take into account the number of volumes in the app. More volumes will
-				// take longer to format if the backend storage has limited bandwidth. Even if the
-				// GlobalScaleFactor is 1, high number of volumes in a single app instance
-				// may slow things down.
-				volScaleFactor = len(vols) / 10
-				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
-			}
-			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-			// If provisioner is IBM increase the timeout to 8 min
-			if Inst().Provisioner == "ibm" {
-				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
-			} else {
-				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
-			}
-			if err != nil {
-				PrintDescribeContext(ctx)
-				processError(err, errChan...)
-			}
-		})
-
-		var vols map[string]map[string]string
-		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
-			vols, err = Inst().S.GetVolumeParameters(ctx)
-			if err != nil {
-				processError(err, errChan...)
-			}
-		})
-
-		for vol, params := range vols {
-			if Inst().ConfigMap != "" {
-				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
-				if err != nil {
-					processError(err, errChan...)
-				}
-			}
-			if ctx.RefreshStorageEndpoint {
-				params["refresh-endpoint"] = "true"
-			}
-			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
-				err = Inst().V.ValidateCreateVolume(vol, params)
-				if err != nil {
-					PrintDescribeContext(ctx)
-					processError(err, errChan...)
-				}
-			})
+	var err error
+	var vols []*volume.Volume
+	t := func() (interface{}, bool, error) {
+		vols, err = Inst().S.GetVolumes(ctx)
+		if err != nil {
+			return "", true, err
 		}
-	})
+		return "", false, nil
+	}
+
+	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+		log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+		processError(err, errChan...)
+	}
+	volScaleFactor := 1
+	if len(vols) > 10 {
+		// Take into account the number of volumes in the app. More volumes will
+		// take longer to format if the backend storage has limited bandwidth. Even if the
+		// GlobalScaleFactor is 1, high number of volumes in a single app instance
+		// may slow things down.
+		volScaleFactor = len(vols) / 10
+		log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+	}
+	scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
+	// If provisioner is IBM increase the timeout to 8 min
+	if Inst().Provisioner == "ibm" {
+		err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+	} else {
+		err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+	}
+	if err != nil {
+		PrintDescribeContext(ctx)
+		processError(err, errChan...)
+	}
+
+	var volsMap map[string]map[string]string
+
+	volsMap, err = Inst().S.GetVolumeParameters(ctx)
+	if err != nil {
+		processError(err, errChan...)
+	}
+
+	for vol, params := range volsMap {
+		if Inst().ConfigMap != "" {
+			params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+			if err != nil {
+				processError(err, errChan...)
+			}
+		}
+		if ctx.RefreshStorageEndpoint {
+			params["refresh-endpoint"] = "true"
+		}
+
+		err = Inst().V.ValidateCreateVolume(vol, params)
+		if err != nil {
+			PrintDescribeContext(ctx)
+			processError(err, errChan...)
+		}
+
+	}
+
 }
 
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
@@ -1708,8 +1685,7 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		})
 
 		if !ctx.SkipVolumeValidation {
-			err = ValidateVolumesDeleted(ctx.App.Key, vols)
-			log.FailOnError(err, "Failed to delete volumes for app %s", ctx.App.Key)
+			ValidateVolumesDeleted(ctx.App.Key, vols)
 		}
 
 		// Delete Cluster Scope objects
@@ -1769,10 +1745,9 @@ func ValidateVolumesDeleted(appName string, vols []*volume.Volume) error {
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) error {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
 	vols := DeleteVolumes(ctx, options)
-	err := ValidateVolumesDeleted(ctx.App.Key, vols)
-	return err
+	ValidateVolumesDeleted(ctx.App.Key, vols)
 }
 
 // GetAppNamespace returns namespace in which context is created
@@ -1813,7 +1788,6 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 	//if not hyper converged set up deploy apps only on storageless nodes
 	if !Inst().IsHyperConverged {
 		var err error
-
 		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
 		storagelessNodes := node.GetStorageLessNodes()
 		if len(storagelessNodes) == 0 {
@@ -1862,30 +1836,29 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var contexts []*scheduler.Context
 	var taskName string
 	var err error
-	Step("schedule applications", func() {
-		if Inst().IsPDSApps {
-			log.InfoD("Scheduling PDS Apps...")
-			pdsapps, err := Inst().Pds.DeployPDSDataservices()
-			if err != nil {
-				processError(err, errChan...)
-			}
-			contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
-			if err != nil {
-				processError(err, errChan...)
-			}
-		} else {
-			options := CreateScheduleOptions("", errChan...)
-			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-			contexts, err = Inst().S.Schedule(taskName, options)
-			// Need to check err != nil before calling processError
-			if err != nil {
-				processError(err, errChan...)
-			}
+	if Inst().IsPDSApps {
+		log.InfoD("Scheduling PDS Apps...")
+		pdsapps, err := Inst().Pds.DeployPDSDataservices()
+		if err != nil {
+			processError(err, errChan...)
 		}
-		if len(contexts) == 0 {
-			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+		contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+		if err != nil {
+			processError(err, errChan...)
 		}
-	})
+	} else {
+		options := CreateScheduleOptions("", errChan...)
+		//taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+		taskName = fmt.Sprintf("%s", testname)
+		contexts, err = Inst().S.Schedule(taskName, options)
+		// Need to check err != nil before calling processError
+		if err != nil {
+			processError(err, errChan...)
+		}
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
 
 	return contexts
 }
@@ -2110,7 +2083,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.InfoD(stepLog)
+			log.Info(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -2436,45 +2409,42 @@ func TogglePrometheusInStc() error {
 
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
-	Step("Validating portworx pods restart count ...", func() {
-		Step("Getting current restart counts for portworx pods and matching", func() {
-			pxLabel := make(map[string]string)
-			pxLabel[labelNameKey] = defaultStorageProvisioner
-			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
-			if err != nil {
-				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
-			}
+	pxLabel := make(map[string]string)
+	pxLabel[labelNameKey] = defaultStorageProvisioner
+	pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+	//Using fatal verification will abort longevity runs
+	if err != nil {
+		log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+	}
 
-			// Validate portworx pod restart count after test
-			for pod, value := range pxPodRestartCountMap {
-				n, err := node.GetNodeByIP(pod.Status.HostIP)
-				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
-				if n.PxPodRestartCount != value {
-					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
-					if Inst().PortworxPodRestartCheck {
-						log.Fatalf("portworx pods restart [%d] times", value)
-					}
-				}
+	// Validate portworx pod restart count after test
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
+		if n.PxPodRestartCount != value {
+			log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
+			if Inst().PortworxPodRestartCheck {
+				log.Fatalf("portworx pods restart [%d] times", value)
 			}
+		}
+	}
 
-			// Validate portworx operator pod check
-			pxLabel[labelNameKey] = portworxOperatorName
-			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-			//Using fatal verification will abort longevity runs
-			if err != nil {
-				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+	// Validate portworx operator pod check
+	pxLabel[labelNameKey] = portworxOperatorName
+	pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+	//Using fatal verification will abort longevity runs
+	if err != nil {
+		log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+	}
+	for _, v := range pxPodRestartCountMap {
+		if v > 0 {
+			log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
+			if Inst().PortworxPodRestartCheck {
+				log.Fatalf("portworx operator pods restart [%d] times", v)
 			}
-			for _, v := range pxPodRestartCountMap {
-				if v > 0 {
-					log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
-					if Inst().PortworxPodRestartCheck {
-						log.Fatalf("portworx operator pods restart [%d] times", v)
-					}
-				}
-			}
-		})
-	})
+		}
+	}
+
 }
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
@@ -5580,6 +5550,74 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
+// DeleteSnapshotsForVolumes for all the volumes from the
+func DeleteSnapshotsForVolumes(provider string, volumes []string) {
+	Step(fmt.Sprintf("Delete snapshots of volumes [%s]", volumes), func() {
+		switch provider {
+		case drivers.ProviderIbm:
+			DeleteIbmSnapshotsForVolumes(volumes)
+		}
+	})
+}
+
+func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
+	apiKey, err := GetIBMApiKey("default")
+	if err != nil {
+		return err
+	}
+	// Initialize the IBM Cloud VPC service client
+	authenticator := &ibmcore.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+	options := &vpcv1.VpcV1Options{
+		URL:           serviceURL,
+		Authenticator: authenticator,
+	}
+	vpcService, err := vpcv1.NewVpcV1(options)
+	if err != nil {
+		return fmt.Errorf("error creating VPC service client: %s", err)
+	}
+
+	// Iterate over each volume name
+	for _, volumeName := range volumeNames {
+		// Find the volume by name
+		findVolumeOptions := vpcService.NewListVolumesOptions()
+		findVolumeOptions.SetName(volumeName)
+		volumes, _, err := vpcService.ListVolumes(findVolumeOptions)
+		if err != nil {
+			return fmt.Errorf("error finding volume '%s': %s", volumeName, err)
+		}
+		if len(volumes.Volumes) == 0 {
+			fmt.Printf("Volume '%s' not found.\n", volumeName)
+			continue
+		}
+		volumeID := *volumes.Volumes[0].ID
+
+		// List all snapshots
+		snapshots, _, err := vpcService.ListSnapshots(vpcService.NewListSnapshotsOptions())
+		if err != nil {
+			return fmt.Errorf("error listing snapshots: %s", err)
+		}
+
+		// Delete snapshots associated with the volume
+		for _, snapshot := range snapshots.Snapshots {
+			if *snapshot.SourceVolume.ID == volumeID {
+				// Snapshot belongs to the specified volume, delete it
+				snapshotID := *snapshot.ID
+				snapshotName := *snapshot.Name
+				fmt.Printf("Deleting snapshot '%s' associated with volume '%s'\n", snapshotName, volumeName)
+
+				_, err = vpcService.DeleteSnapshot(vpcService.NewDeleteSnapshotOptions(snapshotID))
+				if err != nil {
+					return fmt.Errorf("error deleting snapshot '%s': %s", snapshotName, err)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // HaIncreaseRebootTargetNode repl increase and reboot target node
 func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {
 
@@ -7164,6 +7202,48 @@ func RebootNodeAndWaitForPxDown(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWait reboots node and waits for to be up
+func RebootNodeAndWait(n node.Node) error {
+
+	if &n == nil {
+		return fmt.Errorf("no Node is provided to reboot")
+	}
+
+	err := Inst().N.RebootNode(n, node.RebootNodeOpts{
+		Force: true,
+		ConnectionOpts: node.ConnectionOpts{
+			Timeout:         1 * time.Minute,
+			TimeBeforeRetry: 5 * time.Second,
+		},
+	})
+
+	if err != nil {
+		return err
+	}
+	err = Inst().N.TestConnection(n, node.ConnectionOpts{
+		Timeout:         15 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return err
+	}
+	err = Inst().V.WaitDriverDownOnNode(n)
+	if err != nil {
+		return err
+	}
+	err = Inst().S.IsNodeReady(n)
+	if err != nil {
+		return err
+	}
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}
@@ -10374,7 +10454,7 @@ func GenerateS3BucketPolicy(sid string, encryptionPolicy string, bucketName stri
 					"%s":"%s"
 				}
 			}
-		  }	
+		  }
 	   ]
 	}`
 

@@ -244,6 +244,22 @@ var _ = Describe("{BasicBackupCreation}", func() {
 				err := CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContexts[i:i+1], labelSelectors, BackupOrgID, sourceClusterUid, "", "", "", "")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Creation and Validation of backup [%s]", backupName))
 				backupNames = append(backupNames, backupName)
+				backupUID, err := Inst().Backup.GetBackupUID(ctx, backupName, BackupOrgID)
+				log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", backupName))
+				backupInspectRequest := &api.BackupInspectRequest{
+					Name:  backupName,
+					Uid:   backupUID,
+					OrgId: BackupOrgID,
+				}
+				resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+				volumeObjlist := resp.Backup.Volumes
+				var volumeNames []string
+				for _, obj := range volumeObjlist {
+					volumeNames = append(volumeNames, obj.Name)
+				}
+				for _, provider := range providers {
+					DeleteSnapshotsForVolumes(provider, volumeNames)
+				}
 			}
 		})
 
