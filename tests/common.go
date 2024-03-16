@@ -5592,15 +5592,19 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 			continue
 		}
 		volumeID := *volumes.Volumes[0].ID
+		log.Infof("volume id %s", volumeID)
 
 		// List all snapshots
 		snapshots, _, err := vpcService.ListSnapshots(vpcService.NewListSnapshotsOptions())
+		log.Infof("snaps %s", snapshots)
 		if err != nil {
 			return fmt.Errorf("error listing snapshots: %s", err)
 		}
 
 		// Delete snapshots associated with the volume
 		for _, snapshot := range snapshots.Snapshots {
+			log.Infof("snapid %s", *snapshot.SourceVolume.ID)
+			log.Infof("snapid %s", snapshot.SourceVolume.ID)
 			if *snapshot.SourceVolume.ID == volumeID {
 				// Snapshot belongs to the specified volume, delete it
 				snapshotID := *snapshot.ID
