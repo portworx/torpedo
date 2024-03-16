@@ -5552,16 +5552,30 @@ func DeleteBucket(provider string, bucketName string) {
 
 // DeleteSnapshotsForVolumes for all the volumes from the
 func DeleteSnapshotsForVolumes(provider string, volumes []string) {
-	Step(fmt.Sprintf("Delete snapshots of volumes [%s]", volumes), func() {
+	Step(fmt.Sprintf("Delete snapshots of volumes %v", volumes), func() {
 		switch provider {
 		case drivers.ProviderIbm:
-			DeleteIbmSnapshotsForVolumes(volumes)
+			log.Infof("inside ibm provider")
+			err := DeleteIbmSnapshotsForVolumes(volumes)
+			if err != nil {
+				log.Errorf("Error deleting IBM snapshots for volumes: %v", err)
+			}
+		default:
+			log.Errorf("Provider '%s' not supported", provider)
 		}
 	})
 }
 
 func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 	apiKey, err := GetIBMApiKey("default")
+	if err != nil {
+		log.Errorf("Error getting IBM API key: %v", err)
+		log.Infof("error %v", err)
+		log.Infof("error not nil")
+	}
+	if apiKey != "" {
+		log.Infof("key not empty")
+	}
 	if err != nil {
 		return err
 	}
