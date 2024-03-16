@@ -2234,7 +2234,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 					log.InfoD("Backup to contexts : %v", backupToContexts)
 					log.InfoD("Backup name to appcontext map : %v", backupNameToAppContextMap[backupToContexts])
 					for _, ctx := range backupNameToAppContextMap[restoreNameBackupNameMap[restoreName]] {
-						expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(ctx, make(map[string]string), make(map[string]string), true)
+						expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(ctx, namespaceMapping, make(map[string]string), true)
 						if err != nil {
 							mutex.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", restoreName, err.Error()))
