@@ -1776,31 +1776,32 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 		singleScheduledAppContexts []*scheduler.Context
 		multiScheduledAppContexts  []*scheduler.Context
 		//restoreNameToAppContextMap map[string]*scheduler.Context
-		sourceClusterUID          string
-		cloudCredName             string
-		cloudCredUID              string
-		backupLocationUID         string
-		backupLocationName        string
-		backupLocationMap         map[string]string
-		labelSelectors            map[string]string
-		namespaceMapping          map[string]string
-		providers                 []string
-		numOfDeployments          int
-		appNamespaces             []string
-		schPolicyUid              string
-		periodicPolicyName        string
-		preRuleName               string
-		postRuleName              string
-		preRuleUid                string
-		postRuleUid               string
-		preRuleNames              []string
-		postRuleNames             []string
-		allVMs                    []kubevirtv1.VirtualMachine
-		allVMNames                []string
-		preRuleList               []*api.RulesInfo_RuleItem
-		postRuleList              []*api.RulesInfo_RuleItem
-		backupNameToAppContextMap map[string][]*scheduler.Context
-		restoreNameBackupNameMap  map[string]string
+		sourceClusterUID              string
+		cloudCredName                 string
+		cloudCredUID                  string
+		backupLocationUID             string
+		backupLocationName            string
+		backupLocationMap             map[string]string
+		labelSelectors                map[string]string
+		namespaceMapping              map[string]string
+		providers                     []string
+		numOfDeployments              int
+		appNamespaces                 []string
+		schPolicyUid                  string
+		periodicPolicyName            string
+		preRuleName                   string
+		postRuleName                  string
+		preRuleUid                    string
+		postRuleUid                   string
+		preRuleNames                  []string
+		postRuleNames                 []string
+		allVMs                        []kubevirtv1.VirtualMachine
+		allVMNames                    []string
+		preRuleList                   []*api.RulesInfo_RuleItem
+		postRuleList                  []*api.RulesInfo_RuleItem
+		backupNameToAppContextMap     map[string][]*scheduler.Context
+		restoreNameBackupNameMap      map[string]string
+		backupNameNamespaceMappingMap map[string]map[string]string
 	)
 
 	backupLocationMap = make(map[string]string)
@@ -1812,6 +1813,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 	//backupNamespaceMap := make(map[string]string)
 	restoreNameBackupNameMap = make(map[string]string)
 	backupNameToAppContextMap = make(map[string][]*scheduler.Context)
+	backupNameNamespaceMappingMap = make(map[string]map[string]string)
 	//restoreNameToAppContextMap = make(map[string]*scheduler.Context)
 	timeStamp := strconv.Itoa(int(time.Now().Unix()))
 	periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", timeStamp)
@@ -2200,6 +2202,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 					namespaceMapping[namespace] = namespace + "-new"
 				}
 				log.InfoD("Backup namespace mapping : %v", namespaceMapping)
+				backupNameNamespaceMappingMap[bkpName] = namespaceMapping
 				err = CreateRestoreWithReplacePolicy(restoreName, bkpName, namespaceMapping, DestinationClusterName, BackupOrgID, ctx, make(map[string]string), 2)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Default restore of backups by replacing to a new namespace [%s]", restoreName))
 				replaceRestoreNames = append(replaceRestoreNames, restoreName)
@@ -2233,8 +2236,9 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 					backupToContexts := restoreNameBackupNameMap[restoreName]
 					log.InfoD("Backup to contexts : %v", backupToContexts)
 					log.InfoD("Backup name to appcontext map : %v", backupNameToAppContextMap[backupToContexts])
-					for _, ctx := range backupNameToAppContextMap[restoreNameBackupNameMap[restoreName]] {
-						expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(ctx, namespaceMapping, make(map[string]string), true)
+					backupName := restoreNameBackupNameMap[restoreName]
+					for _, ctx := range backupNameToAppContextMap[backupName] {
+						expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(ctx, backupNameNamespaceMappingMap[backupName], make(map[string]string), true)
 						if err != nil {
 							mutex.Lock()
 							errors = append(errors, fmt.Sprintf("Failed while context tranforming of restore [%s]. Error - [%s]", restoreName, err.Error()))
@@ -2286,23 +2290,23 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 			err := DeleteRule(ruleName, BackupOrgID, ctx)
 			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
 		}
-		log.Info("Destroying scheduled apps on source cluster")
-		DestroyApps(scheduledAppContexts, opts)
-		log.InfoD("Switching to Destination context")
-		err = SetDestinationKubeConfig()
-		log.FailOnError(err, "Failed to switch context to destination cluster")
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
-			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-		}
-		log.InfoD("Destroying restored apps on destination clusters : %+v", restoredAppContexts)
-		DestroyApps(restoredAppContexts, opts)
+		//log.Info("Destroying scheduled apps on source cluster")
+		//DestroyApps(scheduledAppContexts, opts)
+		//log.InfoD("Switching to Destination context")
+		//err = SetDestinationKubeConfig()
+		//log.FailOnError(err, "Failed to switch context to destination cluster")
+		//log.InfoD("Destroying restored apps on destination clusters")
+		//restoredAppContexts := make([]*scheduler.Context, 0)
+		//for _, scheduledAppContext := range scheduledAppContexts {
+		//	restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+		//	if err != nil {
+		//		log.Errorf("TransformAppContextWithMappings: %v", err)
+		//		continue
+		//	}
+		//	restoredAppContexts = append(restoredAppContexts, restoredAppContext)
+		//}
+		//log.InfoD("Destroying restored apps on destination clusters : %+v", restoredAppContexts)
+		//DestroyApps(restoredAppContexts, opts)
 		log.InfoD("switching backup to source context")
 		err = SetSourceKubeConfig()
 		log.FailOnError(err, "Failed to set cluster context to source cluster")
