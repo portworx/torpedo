@@ -10,11 +10,10 @@ import (
 	status "net/http"
 )
 
-
 // ListBackupLocations return lis of backup locatiobackuploc
-func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) ([]BackupLocation, error) {
+func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) ([]*BackupLocation, error) {
 	ctx, backupLocationClient, err := backuploc.getBackupLocClient()
-	backupLocResp := []BackupLocation{}
+	backupLocResp := []*BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

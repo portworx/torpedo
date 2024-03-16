@@ -8,6 +8,16 @@ import (
 	"strings"
 )
 
+func ListBackupLocation(tenantId string) ([]*apiStructs.BackupLocation, error) {
+	listReq := apiStructs.BackupLocation{}
+	listReq.TenantID = tenantId
+	bkpLocations, err := v2Components.Platform.ListBackupLocations(&listReq)
+	if err != nil {
+		return nil, fmt.Errorf("Error while listing backup locations %v\n", err)
+	}
+	return bkpLocations, nil
+}
+
 func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string) (*apiStructs.BackupLocation, error) {
 	createReq := apiStructs.BackupLocation{}
 	bkpLocName := strings.ToLower("pds-bkp-loc-" + utilities.RandString(5))
