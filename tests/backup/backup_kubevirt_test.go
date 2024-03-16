@@ -1817,7 +1817,7 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 	//restoreNameToAppContextMap = make(map[string]*scheduler.Context)
 	timeStamp := strconv.Itoa(int(time.Now().Unix()))
 	periodicPolicyName = fmt.Sprintf("%s-%s", "periodic", timeStamp)
-	backupDriver := Inst().Backup
+	//backupDriver := Inst().Backup
 
 	JustBeforeEach(func() {
 		StartPxBackupTorpedoTest("DefaultBackupRestoreWithKubevirtAndNonKubevirtNS", "Verify default backup & restore with both Kubevirt and Non-Kubevirt namespaces", nil, 93006, Vpinisetti, Q1FY25)
@@ -1836,6 +1836,11 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 				singleScheduledAppContexts = append(singleScheduledAppContexts, appCtx)
 				log.InfoD("Single Scheduled App Contexts %v : %v", i, singleScheduledAppContexts)
 				scheduledAppContexts = append(scheduledAppContexts, appCtx)
+
+				log.Infof("Scheduled applications [%s] in source cluster in single namespace [%s]", appName, namespace)
+				vols, err := Inst().S.GetVolumes(appCtx)
+				log.Warnf("Volumes [%s/%s]: [%d --- %v]", appCtx.ScheduleOptions.Namespace, appCtx.App.Key, len(vols), vols)
+				log.Errorf("Error while getting volumes: %v", err)
 			}
 		}
 		log.InfoD("Deploying all provided applications in separate namespaces")
@@ -2235,7 +2240,8 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 					expectedRestoredAppContexts := make([]*scheduler.Context, 0)
 					backupToContexts := restoreNameBackupNameMap[restoreName]
 					log.InfoD("Backup to contexts : %v", backupToContexts)
-					log.InfoD("Backup name to appcontext map : %v", backupNameToAppContextMap[backupToContexts])
+					log.InfoD("Backup name to appcontext map : %#v", backupNameToAppContextMap[backupToContexts])
+					log.Infof("backupName and Namespace mapping : [%s ::: %v]", backupName, backupNameNamespaceMappingMap[backupName])
 					backupName := restoreNameBackupNameMap[restoreName]
 					for _, ctx := range backupNameToAppContextMap[backupName] {
 						expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(ctx, backupNameNamespaceMappingMap[backupName], make(map[string]string), true)
@@ -2246,6 +2252,11 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 							return
 						}
 						expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+
+						log.Infof("[Validating restore] getting volumes for app [%s] in namespace [%s]", ctx.App.Key, ctx.ScheduleOptions.Namespace)
+						vols, err := Inst().S.GetVolumes(expectedRestoredAppContext)
+						log.Warnf("Volumes [%s/%s]: [%d --- %v]", ctx.ScheduleOptions.Namespace, ctx.App.Key, len(vols), vols)
+						log.Errorf("Error while getting volumes: %v", err)
 					}
 					err = ValidateRestore(ctx, restoreName, BackupOrgID, expectedRestoredAppContexts, make([]string, 0))
 					if err != nil {
@@ -2263,33 +2274,33 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 	})
 
 	JustAfterEach(func() {
-		defer EndPxBackupTorpedoTest(scheduledAppContexts)
-		defer func() {
-			log.InfoD("switching to default context")
-			err := SetClusterContext("")
-			log.FailOnError(err, "Failed to SetClusterContext to default cluster")
-		}()
-		ctx, err := backup.GetAdminCtxFromSecret()
-		log.FailOnError(err, "Fetching px-central-admin ctx")
-		opts := make(map[string]bool)
-		opts[SkipClusterScopedObjects] = true
-		log.Info("Deleting backup schedules")
-		for _, scheduleName := range scheduleNames {
-			err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
-		}
-		log.Infof("Deleting backup schedule policy")
-		schedulePolicyNames, err := backupDriver.GetAllSchedulePolicies(ctx, BackupOrgID)
-		for _, schedulePolicyName := range schedulePolicyNames {
-			err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
-			dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
-		}
-		log.Infof("Deleting pre & post exec rules")
-		allRules, _ := Inst().Backup.GetAllRules(ctx, BackupOrgID)
-		for _, ruleName := range allRules {
-			err := DeleteRule(ruleName, BackupOrgID, ctx)
-			dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
-		}
+		//defer EndPxBackupTorpedoTest(scheduledAppContexts)
+		//defer func() {
+		//	log.InfoD("switching to default context")
+		//	err := SetClusterContext("")
+		//	log.FailOnError(err, "Failed to SetClusterContext to default cluster")
+		//}()
+		//ctx, err := backup.GetAdminCtxFromSecret()
+		//log.FailOnError(err, "Fetching px-central-admin ctx")
+		//opts := make(map[string]bool)
+		//opts[SkipClusterScopedObjects] = true
+		//log.Info("Deleting backup schedules")
+		//for _, scheduleName := range scheduleNames {
+		//	err = DeleteSchedule(scheduleName, SourceClusterName, BackupOrgID, ctx)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", scheduleName))
+		//}
+		//log.Infof("Deleting backup schedule policy")
+		//schedulePolicyNames, err := backupDriver.GetAllSchedulePolicies(ctx, BackupOrgID)
+		//for _, schedulePolicyName := range schedulePolicyNames {
+		//	err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, []string{schedulePolicyName})
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup schedule policy %s ", []string{schedulePolicyName}))
+		//}
+		//log.Infof("Deleting pre & post exec rules")
+		//allRules, _ := Inst().Backup.GetAllRules(ctx, BackupOrgID)
+		//for _, ruleName := range allRules {
+		//	err := DeleteRule(ruleName, BackupOrgID, ctx)
+		//	dash.VerifySafely(err, nil, fmt.Sprintf("Verifying deletion of rule [%s]", ruleName))
+		//}
 		//log.Info("Destroying scheduled apps on source cluster")
 		//DestroyApps(scheduledAppContexts, opts)
 		//log.InfoD("Switching to Destination context")
@@ -2307,9 +2318,9 @@ var _ = Describe("{DefaultBackupRestoreWithKubevirtAndNonKubevirtNS}", func() {
 		//}
 		//log.InfoD("Destroying restored apps on destination clusters : %+v", restoredAppContexts)
 		//DestroyApps(restoredAppContexts, opts)
-		log.InfoD("switching backup to source context")
-		err = SetSourceKubeConfig()
-		log.FailOnError(err, "Failed to set cluster context to source cluster")
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//log.InfoD("switching backup to source context")
+		//err = SetSourceKubeConfig()
+		//log.FailOnError(err, "Failed to set cluster context to source cluster")
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
