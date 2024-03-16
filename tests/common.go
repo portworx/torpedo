@@ -5607,6 +5607,7 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 				snapshotName := *snapshot.Name
 				fmt.Printf("Deleting snapshot '%s' associated with volume '%s'\n", snapshotName, volumeName)
 				fmt.Println("Deleting snapshot '%s' associated with volume '%s'\n", snapshotName, volumeName)
+				log.Infof("Deleting snapshot %s associated with volume %s", snapshotName, volumeName)
 
 				_, err = vpcService.DeleteSnapshot(vpcService.NewDeleteSnapshotOptions(snapshotID))
 				if err != nil {
