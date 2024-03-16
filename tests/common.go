@@ -5578,12 +5578,16 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 		return fmt.Errorf("error creating VPC service client: %s", err)
 	}
 
+	log.Infof("vpc client serive created successfully")
+
 	// Iterate over each volume name
 	for _, volumeName := range volumeNames {
+		log.Infof("volume name %s", volumeName)
 		// Find the volume by name
 		findVolumeOptions := vpcService.NewListVolumesOptions()
 		findVolumeOptions.SetName(volumeName)
 		volumes, _, err := vpcService.ListVolumes(findVolumeOptions)
+		log.Infof("volumes from the vpc service %s", volumes)
 		if err != nil {
 			return fmt.Errorf("error finding volume '%s': %s", volumeName, err)
 		}
