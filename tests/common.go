@@ -172,7 +172,7 @@ import (
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 
-	ibmcore "github.com/IBM/go-sdk-core/v5/core"
+	ibmcore "github.com/IBM/go-sdk-core/v4/core"
 	"github.com/IBM/vpc-go-sdk/vpcv1"
 )
 
