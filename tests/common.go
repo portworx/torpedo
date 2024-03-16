@@ -5575,6 +5575,8 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 	}
 	vpcService, err := vpcv1.NewVpcV1(options)
 	if err != nil {
+		log.Infof("vpc service not created")
+		log.Infof("vpc service not created %s", err)
 		return fmt.Errorf("error creating VPC service client: %s", err)
 	}
 
