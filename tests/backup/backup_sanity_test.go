@@ -258,9 +258,7 @@ var _ = Describe("{BasicBackupCreation}", func() {
 					log.Infof("sleep for 60s %v", obj.Name)
 					volumeNames = append(volumeNames, obj.Name)
 				}
-				for _, provider := range providers {
-					DeleteSnapshotsForVolumes(provider, volumeNames)
-				}
+				DeleteSnapshotsForVolumes(volumeNames)
 			}
 		})
 

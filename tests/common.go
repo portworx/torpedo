@@ -5553,15 +5553,13 @@ func DeleteBucket(provider string, bucketName string) {
 // DeleteSnapshotsForVolumes for all the volumes from the
 func DeleteSnapshotsForVolumes(provider string, volumes []string) {
 	Step(fmt.Sprintf("Delete snapshots of volumes %v", volumes), func() {
-		switch provider {
-		case drivers.ProviderIbm:
+
+		if getClusterProvider() == "ibm" {
 			log.Infof("inside ibm provider")
 			err := DeleteIbmSnapshotsForVolumes(volumes)
 			if err != nil {
 				log.Errorf("Error deleting IBM snapshots for volumes: %v", err)
 			}
-		default:
-			log.Errorf("Provider '%s' not supported", provider)
 		}
 	})
 }
