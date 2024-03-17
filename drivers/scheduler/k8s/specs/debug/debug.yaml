@@ -42,6 +42,8 @@ spec:
           mountPath: /hostproc
         - name: varcore
           mountPath: /var/cores/
+        - name: testresults
+          mountPath: /testresults
       restartPolicy: Always
       volumes:
       - name: etcpwx
@@ -59,3 +61,6 @@ spec:
       - name: varcore
         hostPath:
           path: /var/cores/
+      - name: testresults
+        hostPath:
+          path: /mnt/testresults

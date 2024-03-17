@@ -30,10 +30,6 @@ if [[ ! -z "${TORPEDO_SKIP_SYSTEM_CHECKS}" ]]; then
     TORPEDO_SKIP_SYSTEM_CHECKS=true
 fi
 
-if [ "${IS_OCP}" == true ]; then
-    SECURITY_CONTEXT=true
-fi
-
 if [ -z "${SCALE_FACTOR}" ]; then
     SCALE_FACTOR="10"
 fi
@@ -54,6 +50,14 @@ if [ -z "${SCHEDULER}" ]; then
     SCHEDULER="k8s"
 fi
 
+if [ "${SCHEDULER}" == "openshift" ]; then
+    IS_OCP="true"
+fi
+
+if [ "${IS_OCP}" == true ]; then
+    SECURITY_CONTEXT=true
+fi
+
 if [ -z "${LOGLEVEL}" ]; then
     LOGLEVEL="debug"
 fi
@@ -71,6 +75,14 @@ if [[ -z "$FAIL_FAST" || "$FAIL_FAST" = true ]]; then
 else
     FAIL_FAST="-keep-going"
 fi
+
+if [ "$DRY_RUN" = "true" ]; then
+    DRY_RUN="--dry-run"
+else
+    DRY_RUN=""
+fi
+
+CONTAINER_TARGET="${CONTAINER_TARGET:-build}"
 
 SKIP_ARG=""
 if [ -n "$SKIP_TESTS" ]; then
@@ -246,7 +258,7 @@ if [ -n "$ANTHOS_HOST_PATH" ]; then
     ANTHOS_HOST_PATH="${ANTHOS_HOST_PATH}"
 fi
 
-for i in $@
+for i in "$@"
 do
 case $i in
 	--backup-driver)
@@ -295,6 +307,25 @@ if [ $timeout -gt 600 ]; then
   describe_pod_then_exit
 fi
 
+PRE_TORPEDO_SCRIPT_VOLUME=""
+PRE_TORPEDO_SCRIPT_VOLUME_MOUNT=""
+if [ -f "${PRE_TORPEDO_SCRIPT_PATH}" ]; then
+    PRE_TORPEDO_SCRIPT_CM_NAME="pre-torpedo-script"
+    kubectl create configmap ${PRE_TORPEDO_SCRIPT_CM_NAME} --from-file="script=${PRE_TORPEDO_SCRIPT_PATH}" -o yaml --dry-run=client | kubectl apply -f -
+    PRE_TORPEDO_SCRIPT_VOLUME="{\"name\":\"${PRE_TORPEDO_SCRIPT_CM_NAME}\",\"configMap\":{\"name\":\"${PRE_TORPEDO_SCRIPT_CM_NAME}\",\"items\":[{\"key\":\"script\",\"path\":\"script\"}]}}"
+    PRE_TORPEDO_SCRIPT_VOLUME_MOUNT="{\"name\":\"${PRE_TORPEDO_SCRIPT_CM_NAME}\",\"mountPath\":\"/tmp/${PRE_TORPEDO_SCRIPT_CM_NAME}\"}"
+fi
+
+POST_TORPEDO_SCRIPT_VOLUME=""
+POST_TORPEDO_SCRIPT_VOLUME_MOUNT=""
+
+if [ -f "${POST_TORPEDO_SCRIPT_PATH}" ]; then
+    POST_TORPEDO_SCRIPT_CM_NAME="post-torpedo-script"
+    kubectl create configmap ${POST_TORPEDO_SCRIPT_CM_NAME} --from-file="script=${POST_TORPEDO_SCRIPT_PATH}" -o yaml --dry-run=client | kubectl apply -f -
+    POST_TORPEDO_SCRIPT_VOLUME="{\"name\":\"${POST_TORPEDO_SCRIPT_CM_NAME}\",\"configMap\":{\"name\":\"${POST_TORPEDO_SCRIPT_CM_NAME}\",\"items\":[{\"key\":\"script\",\"path\":\"script\"}]}}"
+    POST_TORPEDO_SCRIPT_VOLUME_MOUNT="{\"name\":\"${POST_TORPEDO_SCRIPT_CM_NAME}\",\"mountPath\":\"/tmp/${POST_TORPEDO_SCRIPT_CM_NAME}\"}"
+fi
+
 TORPEDO_CUSTOM_PARAM_VOLUME=""
 TORPEDO_CUSTOM_PARAM_MOUNT=""
 CUSTOM_APP_CONFIG_PATH=""
@@ -335,11 +366,6 @@ if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
 fi
 
-JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
-if [ "${SCHEDULER}" == "openshift" ]; then
-    SECURITY_CONTEXT=true
-fi
-
 if [ -n "${PROVIDERS}" ]; then
   echo "Create configs for providers",${PROVIDERS}
   for i in ${PROVIDERS//,/ };do
@@ -355,6 +381,38 @@ if [ -n "${TORPEDO_SSH_KEY_VOLUME}" ]; then
 fi
 
 VOLUME_MOUNTS="${TESTRESULTS_MOUNT}"
+
+if [ -n "${PRE_TORPEDO_SCRIPT_VOLUME}" ]; then
+    if [ -n "${VOLUMES}" ]; then
+        VOLUMES="${VOLUMES},${PRE_TORPEDO_SCRIPT_VOLUME}"
+    else
+        VOLUMES="${PRE_TORPEDO_SCRIPT_VOLUME}"
+    fi
+fi
+
+if [ -n "${PRE_TORPEDO_SCRIPT_VOLUME_MOUNT}" ]; then
+    if [ -n "${VOLUME_MOUNTS}" ]; then
+        VOLUME_MOUNTS="${VOLUME_MOUNTS},${PRE_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    else
+        VOLUME_MOUNTS="${PRE_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    fi
+fi
+
+if [ -n "${POST_TORPEDO_SCRIPT_VOLUME}" ]; then
+    if [ -n "${VOLUMES}" ]; then
+        VOLUMES="${VOLUMES},${POST_TORPEDO_SCRIPT_VOLUME}"
+    else
+        VOLUMES="${POST_TORPEDO_SCRIPT_VOLUME}"
+    fi
+fi
+
+if [ -n "${POST_TORPEDO_SCRIPT_VOLUME_MOUNT}" ]; then
+    if [ -n "${VOLUME_MOUNTS}" ]; then
+        VOLUME_MOUNTS="${VOLUME_MOUNTS},${POST_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    else
+        VOLUME_MOUNTS="${POST_TORPEDO_SCRIPT_VOLUME_MOUNT}"
+    fi
+fi
 
 if [ -n "${TORPEDO_SSH_KEY_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_SSH_KEY_MOUNT}"
@@ -374,6 +432,10 @@ fi
 
 if [ -n "${TORPEDO_CUSTOM_PARAM_MOUNT}" ]; then
     VOLUME_MOUNTS="${VOLUME_MOUNTS},${TORPEDO_CUSTOM_PARAM_MOUNT}"
+fi
+
+if [ -z "${FA_SECRET}" ]; then
+    FA_SECRET=""
 fi
 
 if [ -n "${ANTHOS_HOST_PATH}" ]; then
@@ -509,86 +571,109 @@ spec:
     imagePullPolicy: Always
     securityContext:
       privileged: ${SECURITY_CONTEXT}
-    command: [ "ginkgo" ]
-    args: [ "--trace",
-            "--timeout", "${TIMEOUT}",
-            "$FAIL_FAST",
-            "--poll-progress-after", "20m",
-            --junit-report=$JUNIT_REPORT_PATH,
-            "$FOCUS_ARG",
-            "$SKIP_ARG",
-            $TEST_SUITE,
-            "--",
-            "--spec-dir", $SPEC_DIR,
-            "--app-list", "$APP_LIST",
-            "--deploy-pds-apps=$DEPLOY_PDS_APPS",
-            "--pds-driver", "$PDS_DRIVER",
-            "--secure-apps", "$SECURE_APP_LIST",
-            "--repl1-apps", "$REPL1_APP_LIST",
-            "--csi-app-list", "$CSI_APP_LIST",
-            "--scheduler", "$SCHEDULER",
-            "--max-storage-nodes-per-az", "$MAX_STORAGE_NODES_PER_AZ",
-            "--backup-driver", "$BACKUP_DRIVER",
-            "--log-level", "$LOGLEVEL",
-            "--node-driver", "$NODE_DRIVER",
-            "--scale-factor", "$SCALE_FACTOR",
-            "--hyper-converged=$IS_HYPER_CONVERGED",
-            "--fail-on-px-pod-restartcount=$PX_POD_RESTART_CHECK",
-            "--minimun-runtime-mins", "$MIN_RUN_TIME",
-            "--driver-start-timeout", "$DRIVER_START_TIMEOUT",
-            "--chaos-level", "$CHAOS_LEVEL",
-            "--storagenode-recovery-timeout", "$STORAGENODE_RECOVERY_TIMEOUT",
-            "--provisioner", "$PROVISIONER",
-            "--storage-driver", "$STORAGE_DRIVER",
-            "--config-map", "$CONFIGMAP",
-            "--custom-config", "$CUSTOM_APP_CONFIG_PATH",
-            "--storage-upgrade-endpoint-url=$UPGRADE_ENDPOINT_URL",
-            "--storage-upgrade-endpoint-version=$UPGRADE_ENDPOINT_VERSION",
-            "--upgrade-storage-driver-endpoint-list=$UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST",
-            "--enable-stork-upgrade=$ENABLE_STORK_UPGRADE",
-            "--secret-type=$SECRET_TYPE",
-            "--pure-volumes=$IS_PURE_VOLUMES",
-            "--pure-fa-snapshot-restore-to-many-test=$PURE_FA_CLONE_MANY_TEST",
-            "--pure-san-type=$PURE_SAN_TYPE",
-            "--pure-fada-pod=$PURE_FADA_POD",
-            "--vault-addr=$VAULT_ADDR",
-            "--vault-token=$VAULT_TOKEN",
-            "--px-runtime-opts=$PX_RUNTIME_OPTS",
-            "--px-cluster-opts=$PX_CLUSTER_OPTS",
-            "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
-            "--anthos-inst-path=$ANTHOS_INST_PATH",
-            "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
-            "--csi-generic-driver-config-map=$CSI_GENERIC_CONFIGMAP",
-            "--sched-upgrade-hops=$SCHEDULER_UPGRADE_HOPS",
-            "--migration-hops=$MIGRATION_HOPS",
-            "--license_expiry_timeout_hours=$LICENSE_EXPIRY_TIMEOUT_HOURS",
-            "--metering_interval_mins=$METERING_INTERVAL_MINS",
-            "--testrail-milestone=$TESTRAIL_MILESTONE",
-            "--testrail-run-name=$TESTRAIL_RUN_NAME",
-            "--testrail-run-id=$TESTRAIL_RUN_ID",
-            "--testrail-jeknins-build-url=$TESTRAIL_JENKINS_BUILD_URL",
-            "--testrail-host=$TESTRAIL_HOST",
-            "--testrail-username=$TESTRAIL_USERNAME",
-            "--testrail-password=$TESTRAIL_PASSWORD",
-            "--jira-username=$JIRA_USERNAME",
-            "--jira-token=$JIRA_TOKEN",
-            "--jira-account-id=$JIRA_ACCOUNT_ID",
-            "--user=$USER",
-            "--enable-dash=$ENABLE_DASH",
-            "--data-integrity-validation-tests=$DATA_INTEGRITY_VALIDATION_TESTS",
-            "--test-desc=$TEST_DESCRIPTION",
-            "--test-type=$TEST_TYPE",
-            "--test-tags=$TEST_TAGS",
-            "--testset-id=$DASH_UID",
-            "--branch=$BRANCH",
-            "--product=$PRODUCT",
-            "--torpedo-job-name=$TORPEDO_JOB_NAME",
-            "--torpedo-job-type=$TORPEDO_JOB_TYPE",
-            "--torpedo-skip-system-checks=$TORPEDO_SKIP_SYSTEM_CHECKS",
-            "--fa-secret=${FA_SECRET}",
-            "$APP_DESTROY_TIMEOUT_ARG",
-            "$SCALE_APP_TIMEOUT_ARG",
-    ]
+    command: ["/bin/bash", "-c"]
+    args: ['
+      cd ./torpedo && \
+      ls && \
+      git status && \
+      git stash push -u && \
+      git fetch origin ${BRANCH} --quiet && \
+      git checkout ${BRANCH} && \
+      git reset --hard origin/${BRANCH} && \
+      if [ "${K8S_TORPEDO_CLEANUP_ALL}" = "true" ]; then
+          scripts/k8s/k8s-torpedo-cleanup-all.sh;
+      else
+          true;
+      fi && \
+      if [ -n "${PRE_TORPEDO_SCRIPT_CM_NAME}" ]; then
+          bash /tmp/${PRE_TORPEDO_SCRIPT_CM_NAME}/script
+      else
+          true;
+      fi && \
+      make ${CONTAINER_TARGET} && \
+      ginkgo \
+        --trace \
+        --timeout "${TIMEOUT}" \
+        ${FAIL_FAST} \
+        --junit-report=/testresults/junit_basic.xml \
+        ${DRY_RUN} \
+        --poll-progress-after "10m" \
+        "${FOCUS_ARG}" \
+        ${SKIP_ARG} \
+        ${TEST_SUITE} \
+        -- \
+        --spec-dir "${SPEC_DIR}" \
+        --app-list "${APP_LIST}" \
+        --deploy-pds-apps="${DEPLOY_PDS_APPS}" \
+        --pds-driver "${PDS_DRIVER}" \
+        --secure-apps "${SECURE_APP_LIST}" \
+        --repl1-apps "${REPL1_APP_LIST}" \
+        --csi-app-list "${CSI_APP_LIST}" \
+        --scheduler "${SCHEDULER}" \
+        --max-storage-nodes-per-az "${MAX_STORAGE_NODES_PER_AZ}" \
+        --backup-driver "${BACKUP_DRIVER}" \
+        --log-level "${LOGLEVEL}" \
+        --node-driver "${NODE_DRIVER}" \
+        --scale-factor "${SCALE_FACTOR}" \
+        --hyper-converged="${IS_HYPER_CONVERGED}" \
+        --fail-on-px-pod-restartcount="${PX_POD_RESTART_CHECK}" \
+        --minimun-runtime-mins "${MIN_RUN_TIME}" \
+        --driver-start-timeout "${DRIVER_START_TIMEOUT}" \
+        --chaos-level "${CHAOS_LEVEL}" \
+        --storagenode-recovery-timeout "${STORAGENODE_RECOVERY_TIMEOUT}" \
+        --provisioner "${PROVISIONER}" \
+        --storage-driver "${STORAGE_DRIVER}" \
+        --config-map "${CONFIGMAP}" \
+        --custom-config "${CUSTOM_APP_CONFIG_PATH}" \
+        --storage-upgrade-endpoint-url="${UPGRADE_ENDPOINT_URL}" \
+        --storage-upgrade-endpoint-version="${UPGRADE_ENDPOINT_VERSION}" \
+        --upgrade-storage-driver-endpoint-list="${UPGRADE_STORAGE_DRIVER_ENDPOINT_LIST}" \
+        --enable-stork-upgrade="${ENABLE_STORK_UPGRADE}" \
+        --secret-type="${SECRET_TYPE}" \
+        --pure-volumes="${IS_PURE_VOLUMES}" \
+        --pure-fa-snapshot-restore-to-many-test="${PURE_FA_CLONE_MANY_TEST}" \
+        --pure-san-type="${PURE_SAN_TYPE}" \
+        --vault-addr="${VAULT_ADDR}" \
+        --vault-token="${VAULT_TOKEN}" \
+        --px-runtime-opts="${PX_RUNTIME_OPTS}" \
+        --anthos-ws-node-ip="${ANTHOS_ADMIN_WS_NODE}" \
+        --anthos-inst-path="${ANTHOS_INST_PATH}" \
+        --autopilot-upgrade-version="${AUTOPILOT_UPGRADE_VERSION}" \
+        --csi-generic-driver-config-map="${CSI_GENERIC_CONFIGMAP}" \
+        --sched-upgrade-hops="${SCHEDULER_UPGRADE_HOPS}" \
+        --migration-hops="${MIGRATION_HOPS}" \
+        --license_expiry_timeout_hours="${LICENSE_EXPIRY_TIMEOUT_HOURS}" \
+        --metering_interval_mins="${METERING_INTERVAL_MINS}" \
+        --testrail-milestone="${TESTRAIL_MILESTONE}" \
+        --testrail-run-name="${TESTRAIL_RUN_NAME}" \
+        --testrail-run-id="${TESTRAIL_RUN_ID}" \
+        --testrail-jeknins-build-url="${TESTRAIL_JENKINS_BUILD_URL}" \
+        --testrail-host="${TESTRAIL_HOST}" \
+        --testrail-username="${TESTRAIL_USERNAME}" \
+        --testrail-password="${TESTRAIL_PASSWORD}" \
+        --jira-username="${JIRA_USERNAME}" \
+        --jira-token="${JIRA_TOKEN}" \
+        --jira-account-id="${JIRA_ACCOUNT_ID}" \
+        --user="${USER}" \
+        --enable-dash="${ENABLE_DASH}" \
+        --data-integrity-validation-tests="${DATA_INTEGRITY_VALIDATION_TESTS}" \
+        --test-desc="${TEST_DESCRIPTION}" \
+        --test-type="${TEST_TYPE}" \
+        --test-tags="${TEST_TAGS}" \
+        --testset-id="${DASH_UID}" \
+        --branch="${BRANCH}" \
+        --product="${PRODUCT}" \
+        --torpedo-job-name="${TORPEDO_JOB_NAME}" \
+        --torpedo-job-type="${TORPEDO_JOB_TYPE}" \
+        --torpedo-skip-system-checks="${TORPEDO_SKIP_SYSTEM_CHECKS}" \
+        --fa-secret="${FA_SECRET}" \
+        "${APP_DESTROY_TIMEOUT_ARG}" && \
+        if [ -n "${POST_TORPEDO_SCRIPT_CM_NAME}" ]; then
+            bash /tmp/${POST_TORPEDO_SCRIPT_CM_NAME}/script
+        else
+            true;
+        fi
+    ']
     tty: true
     volumeMounts: [${VOLUME_MOUNTS}]
     env:
@@ -804,6 +889,10 @@ spec:
       value: "${GKE_UPGRADE_STRATEGY}"
     - name: GKE_SURGE_VALUE
       value: "${GKE_SURGE_VALUE}"
+    - name: TOGGLE_PURE_MGMT_IP
+      value: "${TOGGLE_PURE_MGMT_IP}"
+    - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
+      value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
     - name: GOOGLE_APPLICATION_CREDENTIALS
       value: "${GOOGLE_APPLICATION_CREDENTIALS}"
   volumes: [${VOLUMES}]
@@ -812,63 +901,6 @@ spec:
 
 
 EOF
-
-if [ "${RUN_GINKGO_COMMAND}" = "true" ]; then
-    torpedo_pod_command="ginkgo"
-    torpedo_pod_args=$(yq e '.spec.containers[] | select(.name == "torpedo") | .args[]' torpedo.yaml | sed 's/,$//')
-
-	# This code removes the comma if the line ends with it.
-	# If the line is an empty string, it is quoted.
-	# Otherwise, the line is printed normally.
-    formatted_torpedo_pod_args=$(echo "$torpedo_pod_args" | awk '{
-        if ($0 ~ /,$/) {
-            gsub(/,$/, "", $0);
-            printf "%s ", $0;
-        } else {
-            if ($0 == "") {
-                printf "\"\" ";
-            } else {
-                printf "%s ", $0;
-            }
-        }
-    }')
-
-    torpedo_pod_ginkgo_command="$torpedo_pod_command $formatted_torpedo_pod_args"
-    echo "Formatted Ginkgo Command: $torpedo_pod_ginkgo_command"
-
-    # This code skips a flag followed by an empty string ("") if the next token is another flag or if it is the end of the command.
-    # This is necessary because Torpedo does not handle empty strings as expected.
-    # Example: In the input ginkgo --trace --timeout "" --fail-fast ... --fa-secret ""
-    # --timeout "" is skipped because it is immediately followed by another flag --fail-fast
-    # --fa-secret "" is also skipped because it is the last token and followed by no other arguments.
-    cleaned_torpedo_pod_ginkgo_command=$(echo "$torpedo_pod_ginkgo_command" | awk '
-	{
-	   output = "";
-	   i = 1;
-	   while (i <= NF) {
-		   if ($(i) ~ /^--/ && $(i+1) == "\"\"") {
-			   if (i+2 <= NF && $(i+2) ~ /^--/) {
-				   i += 2;
-				   continue;
-			   } else if (i+2 > NF) {
-				   i += 2;
-				   continue;
-			   }
-		   }
-		   output = output (output ? " " : "") $(i);
-		   i++;
-	   }
-	   print output;
-	}')
-    echo "Cleaned Ginkgo Command: $cleaned_torpedo_pod_ginkgo_command"
-
-    $cleaned_torpedo_pod_ginkgo_command
-    exit $?
-fi
-
-if [ -z "${ANTHOS_HOST_PATH}" ]; then
-  sed -i  '/GOOGLE_APPLICATION_CREDENTIALS/, +1d' torpedo.yaml
-fi 
 
 # If these are passed, we will create a docker config secret to use to pull images
 if [ ! -z $IMAGE_PULL_SERVER ] && [ ! -z $IMAGE_PULL_USERNAME ] && [ ! -z $IMAGE_PULL_PASSWORD ]; then
@@ -907,6 +939,11 @@ function terminate_pod_then_exit {
     # Fetch the PID of the Ginkgo test process
     local test_pid
     test_pid=$(kubectl -n default exec torpedo -- pgrep -f 'torpedo/bin')
+    echo "The PID of the process is: $test_pid"
+
+    echo "Listing all running processes in the torpedo pod:"
+    kubectl exec torpedo -- ps aux
+
     if [ "$test_pid" ]; then
         # Using SIGKILL instead of SIGTERM to immediately stop the process.
         # SIGTERM would allow Ginkgo to run AfterSuite and generate reports,
