@@ -93,7 +93,7 @@ $(GOPATH)/bin/ginkgo:
 build: GINKGO_BUILD_DIR=./tests/basic
 build: $(GOPATH)/bin/ginkgo
 	mkdir -p $(BIN)
-	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
+#	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)
 
 	ginkgo build -r $(GINKGO_BUILD_DIR)
 	find $(GINKGO_BUILD_DIR) -name '*.test' | awk '{cmd="cp  "$$1"  $(BIN)"; system(cmd)}'
