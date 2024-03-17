@@ -333,16 +333,19 @@ var _ = Describe("{BackupAndRestoreWithNonExistingAdminNamespaceAndUpdatedResume
 	JustAfterEach(func() {
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
 		log.InfoD("Creating new admin namespace again for other tests - %v", newAdminNamespace)
 		nsSpec := &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: newAdminNamespace,
 			},
 		}
-		ns, err := core.Instance().CreateNamespace(nsSpec)
-		log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
-		log.InfoD("Created Namespace - %v", ns.Name)
-		log.FailOnError(err, "Fetching px-central-admin ctx")
+		_, err = core.Instance().GetNamespace(newAdminNamespace)
+		if err != nil {
+			ns, err := core.Instance().CreateNamespace(nsSpec)
+			log.FailOnError(err, fmt.Sprintf("Unable to create namespace [%s]", newAdminNamespace))
+			log.InfoD("Created Namespace - %v", ns.Name)
+		}
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 		log.Infof("Deleting backup schedule policy")

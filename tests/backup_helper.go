@@ -7516,9 +7516,6 @@ func validateCRCleanup(resourceInterface interface{},
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
-	allCRsCurrently := GetAllBackupCRObjects(clusterObj)
-	log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
-
 	validateCRCleanupInNamespace := func() (interface{}, bool, error) {
 		allCRs, err = getCRMethod(currentAdminNamespace, clusterObj)
 		if err != nil {
