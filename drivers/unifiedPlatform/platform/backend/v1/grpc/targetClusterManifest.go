@@ -29,12 +29,10 @@ func (tcGrpc *PlatformGrpc) getTargetClusterManifestClient() (context.Context, p
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error) {
 
-	response := &WorkFlowResponse{
-		TargetCluster: PlatformTargetClusterOutput{
-			Manifest: PlatformManifestOutput{},
-		},
+	response := &PlatformTargetClusterResponse{
+		GetManifest: V1TargetClusterRegistrationManifest{},
 	}
 
 	ctx, client, _, err := tcGrpc.getTargetClusterManifestClient()
@@ -54,8 +52,9 @@ func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequ
 		return response, fmt.Errorf("Error when calling `GenerateTargetClusterRegistrationManifest`: %v\n.", err)
 	}
 
-	response.TargetCluster.Manifest.Manifest = apiResponse.GetManifest()
-	log.Infof("Manifest - [%s]", response.TargetCluster.Manifest.Manifest)
+	*response.GetManifest.Manifest = apiResponse.GetManifest()
+
+	log.Infof("Manifest - [%s]", *response.GetManifest.Manifest)
 
 	return response, nil
 

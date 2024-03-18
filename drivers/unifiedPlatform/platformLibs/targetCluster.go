@@ -12,13 +12,8 @@ const (
 )
 
 // GetManifest Get the manifest for the account and tenant-id that can be used to install the platform agent
-func GetManifest(tenantId string, clusterName string) (*automationModels.WorkFlowResponse, error) {
-
-	response := &automationModels.WorkFlowResponse{
-		TargetCluster: automationModels.PlatformTargetClusterOutput{
-			Manifest: automationModels.PlatformManifestOutput{}}}
-
-	manifestInputs := automationModels.PlatformTargetCluster{
+func GetManifest(tenantId string, clusterName string) (*automationModels.V1TargetClusterRegistrationManifest, error) {
+	manifestInputs := automationModels.PlatformTargetClusterRequest{
 		GetManifest: automationModels.PlatformGetTargetClusterManifest{
 			ClusterName: clusterName,
 			TenantId:    tenantId,
@@ -36,16 +31,14 @@ func GetManifest(tenantId string, clusterName string) (*automationModels.WorkFlo
 	// Get Manifest from API
 	manifest, err := v2Components.Platform.GetTargetClusterRegistrationManifest(&manifestInputs)
 	if err != nil {
-		return response, err
+		return nil, err
 	}
 
-	response.TargetCluster.Manifest.Manifest = manifest.TargetCluster.Manifest.Manifest
-
-	return response, nil
+	return &manifest.GetManifest, nil
 }
 
-func ListTargetClusters(tenantId string) ([]automationModels.WorkFlowResponse, error) {
-	wfRequest := automationModels.PlatformTargetCluster{
+func ListTargetClusters(tenantId string) (*automationModels.V1ListTargetClustersResponse, error) {
+	wfRequest := automationModels.PlatformTargetClusterRequest{
 		ListTargetClusters: automationModels.PlatformListTargetCluster{
 			TenantId: tenantId,
 		},
@@ -53,7 +46,7 @@ func ListTargetClusters(tenantId string) ([]automationModels.WorkFlowResponse, e
 
 	tcList, err := v2Components.Platform.ListTargetClusters(&wfRequest)
 	if err != nil {
-		return tcList, err
+		return &tcList.ListTargetClusters, err
 	}
-	return tcList, nil
+	return &tcList.ListTargetClusters, nil
 }

@@ -57,7 +57,7 @@ func (ProjectV1 *PlatformGrpc) GetProjectList(pageNumber int, pageSize int) (*Pl
 }
 
 // GetProject returns the project details of the project id
-func (ProjectV1 *PlatformGrpc) GetProject(projectReq *PlaformProject) (
+func (ProjectV1 *PlatformGrpc) GetProject(projectReq *PlaformProjectRequest) (
 	*PlaformProjectResponse, error) {
 
 	projectResponse := PlaformProjectResponse{
@@ -86,7 +86,7 @@ func (ProjectV1 *PlatformGrpc) GetProject(projectReq *PlaformProject) (
 }
 
 // CreateProject creates a new project under the given tenant
-func (ProjectV1 *PlatformGrpc) CreateProject(projectReq *PlaformProject, tenantId string) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PlatformGrpc) CreateProject(projectReq *PlaformProjectRequest, tenantId string) (*PlaformProjectResponse, error) {
 	projectResponse := PlaformProjectResponse{
 		Create: V1Project{},
 	}
@@ -118,7 +118,7 @@ func (ProjectV1 *PlatformGrpc) CreateProject(projectReq *PlaformProject, tenantI
 }
 
 // DeleteProject deletes the project
-func (ProjectV1 *PlatformGrpc) DeleteProject(projectReq *PlaformProject) error {
+func (ProjectV1 *PlatformGrpc) DeleteProject(projectReq *PlaformProjectRequest) error {
 
 	ctx, client, _, err := ProjectV1.getProjectClient()
 	if err != nil {
@@ -137,13 +137,13 @@ func (ProjectV1 *PlatformGrpc) DeleteProject(projectReq *PlaformProject) error {
 }
 
 // AssociateToProject associates the given resurces to the project
-func (ProjectV1 *PlatformGrpc) AssociateToProject(associateProject *PlaformProject) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PlatformGrpc) AssociateToProject(associateProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	log.Warnf("AssociateToProject is not implemented for GRPC")
 	return &PlaformProjectResponse{}, nil
 }
 
 // DissociateFromProject dissociates the given resurces from the project
-func (ProjectV1 *PlatformGrpc) DissociateFromProject(dissociateProject *PlaformProject) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PlatformGrpc) DissociateFromProject(dissociateProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	log.Warnf("DissociateFromProject is not implemented for GRPC")
 	return &PlaformProjectResponse{}, nil
 

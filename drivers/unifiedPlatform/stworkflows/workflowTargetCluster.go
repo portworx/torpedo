@@ -69,7 +69,7 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 
 	if !isRegistered {
 		log.InfoD("Installing Manifests..")
-		cmd = fmt.Sprintf("echo '%v' > %s && kubectl apply -f %s && rm -f %s", manifest.TargetCluster.Manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
+		cmd = fmt.Sprintf("echo '%v' > %s && kubectl apply -f %s && rm -f %s", manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		log.Infof("Manifest:\n%v\n", cmd)
 		output, _, err := osutils.ExecShell(cmd)
 		if err != nil {
@@ -123,7 +123,7 @@ func (targetCluster *WorkflowTargetCluster) DeregisterFromControlPlane() error {
 		if err != nil {
 			return fmt.Errorf("Failed while getting platform manifests: %v\n", err)
 		}
-		cmd = fmt.Sprintf("echo '%v' > %s && kubectl delete -f %s && rm -f %s", manifest.TargetCluster.Manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
+		cmd = fmt.Sprintf("echo '%v' > %s && kubectl delete -f %s && rm -f %s", manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		output, _, err := osutils.ExecShell(cmd)
 		if err != nil {
 			return fmt.Errorf("Failed uninstalling Platform manifests: %v\n", err)
@@ -180,9 +180,9 @@ func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName strin
 	}
 
 	var index int
-	for index = 0; index < len(tcList); index++ {
-		if *tcList[index].Meta.Name == clusterName {
-			return *tcList[index].Meta.Uid, nil
+	for index = 0; index < len(tcList.Clusters); index++ {
+		if *tcList.Clusters[index].Meta.Name == clusterName {
+			return *tcList.Clusters[index].Meta.Uid, nil
 		}
 	}
 	return "", fmt.Errorf("Cluster Name not found in list of targetclusters\n")
@@ -195,10 +195,10 @@ func (targetCluster *WorkflowTargetCluster) GetTargetClusterHealth(clusterName s
 		return err
 	}
 	var index int
-	for index = 0; index < len(tcList); index++ {
-		if *tcList[index].Meta.Name == clusterName {
-			phase := tcList[index].Status.Phase
-			if phase != targetClusterHealthOK {
+	for index = 0; index < len(tcList.Clusters); index++ {
+		if *tcList.Clusters[index].Meta.Name == clusterName {
+			phase := tcList.Clusters[index].Status.Phase
+			if string(*phase) != targetClusterHealthOK {
 				return fmt.Errorf("Target Cluster found in %v Phase\n", phase)
 			} else {
 				return nil

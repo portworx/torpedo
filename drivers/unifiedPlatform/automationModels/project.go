@@ -1,6 +1,6 @@
 package automationModels
 
-type PlaformProject struct {
+type PlaformProjectRequest struct {
 	Create     PlatformCreateProject    `copier:"must,nopanic"`
 	Get        PlatformGetProject       `copier:"must,nopanic"`
 	Delete     PlatformDeleteProject    `copier:"must,nopanic"`

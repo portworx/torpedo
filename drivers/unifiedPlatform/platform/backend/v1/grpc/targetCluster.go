@@ -6,6 +6,7 @@ import (
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	publictcapis "github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1"
 	"google.golang.org/grpc"
@@ -30,8 +31,10 @@ func (tcGrpc *PlatformGrpc) getTargetClusterClient() (context.Context, publictca
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *PlatformTargetCluster) ([]WorkFlowResponse, error) {
-	tcResponse := []WorkFlowResponse{}
+func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error) {
+	tcResponse := PlatformTargetClusterResponse{
+		ListTargetClusters: V1ListTargetClustersResponse{},
+	}
 	ctx, client, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -47,18 +50,20 @@ func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *PlatformTargetCluster)
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `ListTargetClusters`: %v\n.", err)
 	}
-	err = copier.Copy(&tcResponse, apiResponse.Clusters)
+	err = utilities.CopyStruct(apiResponse, &tcResponse.ListTargetClusters)
 	if err != nil {
 		return nil, err
 	}
 
-	return tcResponse, nil
+	return &tcResponse, nil
 
 }
 
-func (tcGrpc *PlatformGrpc) GetTargetCluster(getTCRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) GetTargetCluster(getTCRequest *PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error) {
 	var getRequest *publictcapis.GetTargetClusterRequest
-	getTcResponse := WorkFlowResponse{}
+	tcResponse := PlatformTargetClusterResponse{
+		GetTargetCluster: V1TargetCluster{},
+	}
 	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -71,36 +76,36 @@ func (tcGrpc *PlatformGrpc) GetTargetCluster(getTCRequest *PlatformTargetCluster
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting the target cluster: %v\n", err)
 	}
-	err = copier.Copy(&getTcResponse, apiResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &getTcResponse, nil
-}
-
-func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
-	var patchRequest *publictcapis.UpdateTargetClusterRequest
-	tcResponse := WorkFlowResponse{}
-	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
-	}
-	err = copier.Copy(&patchRequest, tcRequest)
-	if err != nil {
-		return nil, err
-	}
-	dtModel, err := dtClient.UpdateTargetCluster(ctx, patchRequest)
-	if err != nil {
-		return nil, fmt.Errorf("Error when calling `UpdateTargetCluster`: %v\n.", err)
-	}
-	err = copier.Copy(&tcResponse, dtModel)
+	err = utilities.CopyStruct(apiResponse, &tcResponse.GetTargetCluster)
 	if err != nil {
 		return nil, err
 	}
 	return &tcResponse, nil
 }
 
-func (tcGrpc *PlatformGrpc) DeleteTargetCluster(tcRequest *PlatformTargetCluster) error {
+//func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error) {
+//	var patchRequest *publictcapis.UpdateTargetClusterRequest
+//	tcResponse := WorkFlowResponse{}
+//	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
+//	if err != nil {
+//		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+//	}
+//	err = copier.Copy(&patchRequest, tcRequest)
+//	if err != nil {
+//		return nil, err
+//	}
+//	dtModel, err := dtClient.UpdateTargetCluster(ctx, patchRequest)
+//	if err != nil {
+//		return nil, fmt.Errorf("Error when calling `UpdateTargetCluster`: %v\n.", err)
+//	}
+//	err = copier.Copy(&tcResponse, dtModel)
+//	if err != nil {
+//		return nil, err
+//	}
+//	return &tcResponse, nil
+//}
+
+func (tcGrpc *PlatformGrpc) DeleteTargetCluster(tcRequest *PlatformTargetClusterRequest) error {
 	var deleteRequest *publictcapis.DeleteTargetClusterRequest
 	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {

@@ -34,7 +34,7 @@ func (ProjectV1 *PLATFORM_API_V1) GetProjectList(pageNumber int, pageSize int) (
 }
 
 // GetProject returns the project details of the project id
-func (ProjectV1 *PLATFORM_API_V1) GetProject(getProject *PlaformProject) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PLATFORM_API_V1) GetProject(getProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	ctx, client, err := ProjectV1.getProjectClient()
 	projectResponse := PlaformProjectResponse{
 		Get: V1Project{},
@@ -55,7 +55,7 @@ func (ProjectV1 *PLATFORM_API_V1) GetProject(getProject *PlaformProject) (*Plafo
 }
 
 // CreateProject creates a new project under the given tenant
-func (ProjectV1 *PLATFORM_API_V1) CreateProject(createProject *PlaformProject, tenantId string) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PLATFORM_API_V1) CreateProject(createProject *PlaformProjectRequest, tenantId string) (*PlaformProjectResponse, error) {
 	ctx, client, err := ProjectV1.getProjectClient()
 	projectResponse := PlaformProjectResponse{
 		Create: V1Project{},
@@ -89,7 +89,7 @@ func (ProjectV1 *PLATFORM_API_V1) CreateProject(createProject *PlaformProject, t
 }
 
 // DeleteProject deletes the project
-func (ProjectV1 *PLATFORM_API_V1) DeleteProject(deleteProject *PlaformProject) error {
+func (ProjectV1 *PLATFORM_API_V1) DeleteProject(deleteProject *PlaformProjectRequest) error {
 	ctx, client, err := ProjectV1.getProjectClient()
 	if err != nil {
 		return fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -105,7 +105,7 @@ func (ProjectV1 *PLATFORM_API_V1) DeleteProject(deleteProject *PlaformProject) e
 }
 
 // AssociateToProject associates the given resurces to the project
-func (ProjectV1 *PLATFORM_API_V1) AssociateToProject(associateProject *PlaformProject) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PLATFORM_API_V1) AssociateToProject(associateProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	ctx, client, err := ProjectV1.getProjectClient()
 	response := PlaformProjectResponse{
 		Associate: V1Project{},
@@ -140,7 +140,7 @@ func (ProjectV1 *PLATFORM_API_V1) AssociateToProject(associateProject *PlaformPr
 }
 
 // DissociateFromProject dissociates the given resurces from the project
-func (ProjectV1 *PLATFORM_API_V1) DissociateFromProject(dissociateProject *PlaformProject) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PLATFORM_API_V1) DissociateFromProject(dissociateProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	ctx, client, err := ProjectV1.getProjectClient()
 	response := PlaformProjectResponse{
 		Dissociate: V1Project{},
