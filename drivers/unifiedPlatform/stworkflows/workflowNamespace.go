@@ -31,7 +31,7 @@ func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (
 		return workflowNamespace, err
 	}
 
-	uid, err := workflowNamespace.GetNamespaeUID(namespace)
+	uid, err := workflowNamespace.GetNamespaceUID(namespace)
 	if err != nil {
 		return workflowNamespace, err
 	}
@@ -64,7 +64,7 @@ func (workflowNamespace *WorkflowNamespace) DeleteNamespace(namespace string) er
 
 func (workflowNamespace *WorkflowNamespace) ValidateNamespaceDeletion(namespaceName string) error {
 	checkForNs := func() (interface{}, bool, error) {
-		_, err := workflowNamespace.GetNamespaeUID(namespaceName)
+		_, err := workflowNamespace.GetNamespaceUID(namespaceName)
 		if err != nil {
 			return nil, false, nil
 		}
@@ -90,19 +90,29 @@ func (workflowNamespace *WorkflowNamespace) ListNamespaces(tenantId string, labe
 	return allNamespaces, nil
 }
 
-func (workflowNamespace *WorkflowNamespace) GetNamespaeUID(namespace string) (string, error) {
-	allNamespaces, err := workflowNamespace.ListNamespaces(
-		workflowNamespace.TargetCluster.Platform.TenantId, "", "", "")
+func (workflowNamespace *WorkflowNamespace) GetNamespaceUID(namespace string) (string, error) {
+	waitForNSToReflect := func() (interface{}, bool, error) {
+		allNamespaces, err := workflowNamespace.ListNamespaces(
+			workflowNamespace.TargetCluster.Platform.TenantId, "", "", "")
 
-	if err != nil {
-		return "", err
-	}
-
-	for _, eachNamespace := range allNamespaces.List.Namespaces {
-		log.Infof("Namespace - [%s]", *eachNamespace.Meta.Name)
-		if *eachNamespace.Meta.Name == namespace {
-			return *eachNamespace.Meta.Uid, nil
+		if err != nil {
+			return "", true, err
 		}
+
+		for _, eachNamespace := range allNamespaces.List.Namespaces {
+			log.Infof("Namespace - [%s]", *eachNamespace.Meta.Name)
+			if *eachNamespace.Meta.Name == namespace {
+				return *eachNamespace.Meta.Uid, false, nil
+			}
+		}
+
+		return "", true, fmt.Errorf("Namespace [%s] not found in the list of namespaces", namespace)
 	}
-	return "", fmt.Errorf("Namespace [%s] not found in the list of namespaces", namespace)
+
+	ns, err := task.DoRetryWithTimeout(waitForNSToReflect, retryTimeout, retryInterval)
+	if err != nil {
+		return "", fmt.Errorf("Namespace [%s] not found in the list of namespaces", namespace)
+	}
+
+	return ns.(string), nil
 }
