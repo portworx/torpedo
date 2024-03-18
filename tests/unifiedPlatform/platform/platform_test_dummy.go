@@ -6,10 +6,12 @@ import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
 	"strconv"
+	"strings"
 )
 
 //var _ = Describe("{TenantsCRUD}", func() {
@@ -141,8 +143,8 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 	It("CreateAndGeBackupLocation", func() {
 		Step("create credentials and backup location", func() {
 			var (
-				workflowCc  stworkflows.WorkflowCloudCredentials
-				cloudCredId string
+				workflowCc     stworkflows.WorkflowCloudCredentials
+				workflowbkpLoc stworkflows.WorkflowBackupLocation
 			)
 
 			tenantId, err := platformLibs.GetDefaultTenantId(accID)
@@ -152,21 +154,32 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 			cc, err := workflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error occured while creating cloud credentials")
 
-			for key, value := range cc.CloudCredentials {
-				log.Infof("cloud credentials name: [%s]", key)
+			for _, value := range cc.CloudCredentials {
+				log.Infof("cloud credentials name: [%s]", value.Name)
 				log.Infof("cloud credentials id: [%s]", value.ID)
 				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
-				cloudCredId = value.ID
 			}
 
-			//credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
-			//log.FailOnError(err, "error while creating cloud creds")
-			//log.Infof("creds resp [%+v]", credResp.Create.Config.Credentials.S3Credentials.AccessKey)
-			//log.Infof("creds id [%+v]", *credResp.Create.Meta.Uid)
+			workflowbkpLoc.WfCloudCredentials.CloudCredentials = cc.CloudCredentials
+			workflowbkpLoc.WfCloudCredentials.Platform.TenantId = tenantId
 
-			resp, err := platformLibs.CreateBackupLocation(tenantId, cloudCredId, "test-bucket", NewPdsParams.BackUpAndRestore.TargetLocation)
+			bucketName := strings.ToLower("pds-test-bucket-" + utilities.RandString(5))
+
+			wfbkpLoc, err := workflowbkpLoc.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating backup location")
-			log.Infof("backup location id: [%s]", *resp.Meta.Uid)
+			log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
+
+			bkpLocations, err := workflowbkpLoc.ListBackupLocation()
+			log.FailOnError(err, "error while listing backup location")
+
+			for _, bkpLocation := range bkpLocations {
+				log.Infof("wfBkpLoc Name: [%s]", bkpLocation.BkpLocation.Name)
+				log.Infof("wfBkpLoc Id: [%s]", bkpLocation.BkpLocation.BkpLocationId)
+				for _, cred := range bkpLocation.WfCloudCredentials.CloudCredentials {
+					log.Infof("credentials Id: [%s]", cred.ID)
+				}
+			}
 		})
 	})
 

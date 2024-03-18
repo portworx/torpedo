@@ -51,7 +51,7 @@ type ApplicationInterface interface {
 }
 
 type BackupLocationInterface interface {
-	ListBackupLocations(*BackupLocation) ([]BackupLocation, error)
+	ListBackupLocations(*BackupLocation) ([]*BackupLocation, error)
 	GetBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)
 	CreateBackupLocation(*BackupLocation) (*BackupLocation, error)
 	UpdateBackupLocation(*WorkFlowRequest) (*WorkFlowResponse, error)

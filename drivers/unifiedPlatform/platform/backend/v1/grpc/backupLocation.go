@@ -13,6 +13,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+type Provider_Type int32
+
 // getBackupLocClient updates the header with bearer token and returns the new client
 func (BackupLocGrpcV1 *PlatformGrpc) getBackupLocClient() (context.Context, publicbackuplocapi.BackupLocationServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
@@ -35,9 +37,9 @@ func (BackupLocGrpcV1 *PlatformGrpc) getBackupLocClient() (context.Context, publ
 }
 
 // ListBackupLocations return lis of backup locations
-func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocation) ([]BackupLocation, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocation) ([]*BackupLocation, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	bckpLocResponse := []BackupLocation{}
+	bkpLocResponse := []*BackupLocation{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -48,13 +50,14 @@ func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocation
 	backupLocationModels, err := backupLocationClient.ListBackupLocations(ctx, listbkpLocationRequest, grpc.PerRPCCredentials(credentials))
 	log.Infof("Value of tenants - [%v]", backupLocationModels)
 
-	//err = copier.Copy(&bckpLocResponse, backupLocationModels.BackupLocations)
-	//if err != nil {
-	//	return nil, err
-	//}
+	for _, bkpLocation := range backupLocationModels.BackupLocations {
+		log.Infof("printing cloud provider type [%s]", bkpLocation.Config.Provider.GetCloudProvider())
+		resp := copyCloudLocationResponse(bkpLocation)
+		bkpLocResponse = append(bkpLocResponse, resp)
+	}
 
-	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResponse)
-	return bckpLocResponse, nil
+	log.Infof("Value of backupLocation after copy - [%v]", bkpLocResponse)
+	return bkpLocResponse, nil
 }
 
 // GetBackupLocation get backup location model by its ID.
@@ -148,7 +151,7 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 	}
 }
 
-func copyCloudLocationResponse(providerType int32, bkpLocation *publicbackuplocapi.BackupLocation) *BackupLocation {
+func copyCloudLocationResponse(bkpLocation *publicbackuplocapi.BackupLocation) *BackupLocation {
 	bkpLocResp := BackupLocation{}
 
 	//Test Print
@@ -156,18 +159,19 @@ func copyCloudLocationResponse(providerType int32, bkpLocation *publicbackuploca
 	log.Infof("end point before copy [%s]", bkpLocation.Config.GetS3Storage().Endpoint)
 	log.Infof("region before copy [%s]", bkpLocation.Config.GetS3Storage().Region)
 
-	switch providerType {
-	case PROVIDER_S3:
+	switch bkpLocation.Config.Provider.GetCloudProvider() {
+	case 3:
 		log.Debugf("copying s3 location")
 		bkpLocResp.Meta.Uid = &bkpLocation.Meta.Uid
 		bkpLocResp.Meta.Name = &bkpLocation.Meta.Name
+		bkpLocResp.Config.CloudCredentialsId = bkpLocation.Config.GetCloudCredentialId()
 		bkpLocResp.Config.BkpLocation.S3Storage.BucketName = bkpLocation.Config.GetS3Storage().BucketName
 		bkpLocResp.Config.BkpLocation.S3Storage.Endpoint = bkpLocation.Config.GetS3Storage().Endpoint
 		bkpLocResp.Config.BkpLocation.S3Storage.Region = bkpLocation.Config.GetS3Storage().Region
-	case PROVIDER_AZURE:
+	case 1:
 		log.Debugf("copying azure location")
 		bkpLocResp.Config.BkpLocation.AzureStorage.ContainerName = bkpLocation.Config.GetAzureStorage().ContainerName
-	case PROVIDER_GOOGLE:
+	case 2:
 		log.Debugf("copying gcp credentials")
 		bkpLocResp.Config.BkpLocation.GoogleStorage.BucketName = bkpLocation.Config.GetGoogleStorage().BucketName
 	}
@@ -204,7 +208,7 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupL
 
 	log.Infof("Value of backupLocation - [%v]", backupLocationModel)
 
-	bkpLocationResponse := copyCloudLocationResponse(createRequest.Config.Provider.CloudProvider, backupLocationModel)
+	bkpLocationResponse := copyCloudLocationResponse(backupLocationModel)
 
 	log.Infof("Value of backupLocation after copy - [%v]", bkpLocationResponse)
 	return bkpLocationResponse, nil
