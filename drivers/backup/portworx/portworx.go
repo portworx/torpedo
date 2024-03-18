@@ -66,6 +66,8 @@ type portworx struct {
 	versionManager          api.VersionClient
 	activityTimeLineManager api.ActivityTimeLineClient
 	metricsManager          api.MetricsClient
+	receiverManager         api.ReceiverClient
+	recipientManager        api.RecipientClient
 
 	schedulerDriver scheduler.Driver
 	nodeDriver      node.Driver
@@ -191,6 +193,8 @@ func (p *portworx) testAndSetEndpoint(endpoint string) error {
 	p.activityTimeLineManager = api.NewActivityTimeLineClient(conn)
 	p.metricsManager = api.NewMetricsClient(conn)
 	p.roleManager = api.NewRoleClient(conn)
+	p.receiverManager = api.NewReceiverClient(conn)
+	p.recipientManager = api.NewRecipientClient(conn)
 
 	log.Infof("Using %v as endpoint for portworx backup driver", pxEndpoint)
 
@@ -2028,6 +2032,26 @@ func (p *portworx) GetBackupName(ctx context.Context, backupUid string, orgID st
 	return "", fmt.Errorf("backup with uid '%s' not found for org '%s'", backupUid, orgID)
 }
 
+// func GetBackupStatusWithReason return backup status and reason for a given backup name.
+func (p *portworx) GetBackupStatusWithReason(backupName string, ctx context.Context, orgID string) (api.BackupInfo_StatusInfo_Status, string, error) {
+	backupUid, err := p.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return 0, "", err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := p.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return 0, "", err
+	}
+	status := resp.GetBackup().GetStatus().Status
+	reason := resp.GetBackup().GetStatus().Reason
+	return status, reason, nil
+}
+
 func (p *portworx) GetAllScheduleBackupNames(ctx context.Context, scheduleName string, orgID string) ([]string, error) {
 	var scheduleBackupNames []string
 	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
@@ -2642,6 +2666,61 @@ func (p *portworx) UpdateRole(ctx context.Context, req *api.RoleUpdateRequest) (
 
 func (p *portworx) InspectRole(ctx context.Context, req *api.RoleInspectRequest) (*api.RoleInspectResponse, error) {
 	return p.roleManager.Inspect(ctx, req)
+}
+
+// CreateReceiver creates receiver object
+func (p *portworx) CreateReceiver(ctx context.Context, req *api.ReceiverCreateRequest) (*api.ReceiverCreateResponse, error) {
+	return p.receiverManager.Create(ctx, req)
+}
+
+// DeleteReceiver deletes receiver object
+func (p *portworx) DeleteReceiver(ctx context.Context, req *api.ReceiverDeleteRequest) (*api.ReceiverDeleteResponse, error) {
+	return p.receiverManager.Delete(ctx, req)
+}
+
+// EnumerateReceiver enumerates receiver object
+func (p *portworx) EnumerateReceiver(ctx context.Context, req *api.ReceiverEnumerateRequest) (*api.ReceiverEnumerateResponse, error) {
+	return p.receiverManager.Enumerate(ctx, req)
+}
+
+// UpdateReceiver updates receiver object
+func (p *portworx) UpdateReceiver(ctx context.Context, req *api.ReceiverUpdateRequest) (*api.ReceiverUpdateResponse, error) {
+	return p.receiverManager.Update(ctx, req)
+}
+
+// InspectReceiver inspects receiver object
+func (p *portworx) InspectReceiver(ctx context.Context, req *api.ReceiverInspectRequest) (*api.ReceiverInspectResponse, error) {
+	return p.receiverManager.Inspect(ctx, req)
+}
+
+// ValidateReceiver validates receiver object
+func (p *portworx) ValidateReceiver(ctx context.Context, req *api.ReceiverValidateSMTPRequest) (*api.ReceiverValidateSMTPResponse, error) {
+	return p.receiverManager.ValidateSMTP(ctx, req)
+}
+
+// CreateRecipient creates recipient object
+func (p *portworx) CreateRecipient(ctx context.Context, req *api.RecipientCreateRequest) (*api.RecipientCreateResponse, error) {
+	return p.recipientManager.Create(ctx, req)
+}
+
+// DeleteRecipient deletes recipient object
+func (p *portworx) DeleteRecipient(ctx context.Context, req *api.RecipientDeleteRequest) (*api.RecipientDeleteResponse, error) {
+	return p.recipientManager.Delete(ctx, req)
+}
+
+// EnumerateRecipient enumerates recipient object
+func (p *portworx) EnumerateRecipient(ctx context.Context, req *api.RecipientEnumerateRequest) (*api.RecipientEnumerateResponse, error) {
+	return p.recipientManager.Enumerate(ctx, req)
+}
+
+// UpdateRecipient updates recipient object
+func (p *portworx) UpdateRecipient(ctx context.Context, req *api.RecipientUpdateRequest) (*api.RecipientUpdateResponse, error) {
+	return p.recipientManager.Update(ctx, req)
+}
+
+// InspectRecipient inspects recipient object
+func (p *portworx) InspectRecipient(ctx context.Context, req *api.RecipientInspectRequest) (*api.RecipientInspectResponse, error) {
+	return p.recipientManager.Inspect(ctx, req)
 }
 
 func init() {

@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,34 +21,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
-)
-
-// TestcaseAuthor List
-const (
-	Ak             TestcaseAuthor = "ak-px"
-	Apimpalgaonkar TestcaseAuthor = "apimpalgaonkar"
-	KPhalgun       TestcaseAuthor = "kphalgun-px"
-	Kshithijiyer   TestcaseAuthor = "kshithijiyer-px"
-	Mkoppal        TestcaseAuthor = "mkoppal-px"
-	Sagrawal       TestcaseAuthor = "sagrawal-px"
-	Skonda         TestcaseAuthor = "skonda-px"
-	Sn             TestcaseAuthor = "sn-px"
-	Tthurlapati    TestcaseAuthor = "tthurlapati-px"
-	Vpinisetti     TestcaseAuthor = "vpinisetti-px"
-	Sabrarhussaini TestcaseAuthor = "sabrarhussaini"
-	ATrivedi       TestcaseAuthor = "atrivedi-px"
-)
-
-// TestcaseQuarter List
-const (
-	Q4FY23 TestcaseQuarter = "Q4FY23"
-	Q1FY24 TestcaseQuarter = "Q1FY24"
-	Q2FY24 TestcaseQuarter = "Q2FY24"
-	Q3FY24 TestcaseQuarter = "Q3FY24"
-	Q4FY24 TestcaseQuarter = "Q4FY24"
-	Q1FY25 TestcaseQuarter = "Q1FY25"
-	Q2FY25 TestcaseQuarter = "Q2FY25"
-	Q3FY25 TestcaseQuarter = "Q3FY25"
 )
 
 func getBucketNameSuffix() string {
@@ -112,6 +85,7 @@ func BackupInitInstance() {
 		VolDriverName:      Inst().V.String(),
 		StorageProvisioner: Inst().Provisioner,
 		NodeDriverName:     Inst().N.String(),
+		CustomAppConfig:    Inst().CustomAppConfig,
 	})
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
 	err = Inst().N.Init(node.InitOptions{
@@ -143,6 +117,7 @@ func BackupInitInstance() {
 	// Getting Px-Backup server version info and setting Aetos Dashboard tags
 	PxBackupVersion, err = GetPxBackupVersionString()
 	log.FailOnError(err, "Error getting Px Backup version")
+	log.Infof("Running with px-backup version <<< %s >>>", PxBackupVersion)
 	PxBackupBuildDate, err := GetPxBackupBuildDate()
 	log.FailOnError(err, "Error getting Px Backup build date")
 	t.Tags["px-backup-version"] = PxBackupVersion
@@ -229,6 +204,37 @@ var _ = BeforeSuite(func() {
 		}
 	} else {
 		log.Infof("Locked bucket name not provided")
+	}
+
+	// Create Global pre-rule and post-rule for the application used
+	flagFromEnv := os.Getenv("USE_GLOBAL_RULES")
+	if flagFromEnv == "" {
+		GlobalRuleFlag = false
+	} else {
+		GlobalRuleFlag, err = strconv.ParseBool(flagFromEnv)
+		dash.VerifyFatal(err, nil, "Parsing USE_GLOBAL_RULES environment variable")
+	}
+
+	if GlobalRuleFlag {
+		ctx, err := backup.GetAdminCtxFromSecret()
+		log.FailOnError(err, "Fetching px-central-admin ctx")
+		GlobalPreRuleName, GlobalPostRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, Inst().AppList, ctx)
+		dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of pre and post exec rules for applications from px-admin"))
+
+		if GlobalPreRuleName != "" {
+			GlobalPreRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, GlobalPreRuleName)
+			log.FailOnError(err, "Fetching pre backup rule [%s] uid", GlobalPreRuleName)
+			log.Infof("Pre backup rule [%s] uid: [%s]", GlobalPreRuleName, GlobalPreRuleUid)
+			err = AddRuleOwnership(GlobalPreRuleName, GlobalPreRuleUid, nil, nil, Invalid, Admin, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global pre-rule of application"))
+		}
+		if GlobalPostRuleName != "" {
+			GlobalPostRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, GlobalPostRuleName)
+			log.FailOnError(err, "Fetching post backup rule [%s] uid", GlobalPostRuleName)
+			log.Infof("Post backup rule [%s] uid: [%s]", GlobalPostRuleName, GlobalPostRuleUid)
+			err = AddRuleOwnership(GlobalPostRuleName, GlobalPostRuleUid, nil, nil, Invalid, Admin, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying updation of ownership for Global Post-rule of application"))
+		}
 	}
 })
 

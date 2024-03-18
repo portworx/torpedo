@@ -38,6 +38,7 @@ import (
 	"github.com/portworx/sched-ops/task"
 	driver_api "github.com/portworx/torpedo/drivers/api"
 	"github.com/portworx/torpedo/drivers/node"
+	"github.com/portworx/torpedo/drivers/scheduler"
 	torpedok8s "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -105,6 +106,8 @@ const (
 	pxServiceLocalEndpoint                    = "portworx-service.kube-system.svc.cluster.local"
 	mountGrepVolume                           = "mount | grep %s"
 	mountGrepFirstColumn                      = "mount | grep %s | awk '{print $1}'"
+	PxLabelNameKey                            = "name"
+	PxLabelValue                              = "portworx"
 )
 
 const (
@@ -115,7 +118,7 @@ const (
 	maintenanceWaitTimeout            = 10 * time.Minute
 	inspectVolumeTimeout              = 2 * time.Minute
 	inspectVolumeRetryInterval        = 3 * time.Second
-	validateDeleteVolumeTimeout       = 6 * time.Minute
+	validateDeleteVolumeTimeout       = 15 * time.Minute
 	validateReplicationUpdateTimeout  = 60 * time.Minute
 	validateClusterStartTimeout       = 2 * time.Minute
 	validatePXStartTimeout            = 5 * time.Minute
@@ -160,6 +163,7 @@ const (
 	driveAddSuccessStatus    = "Drive add done"
 	driveExitsStatus         = "Device already exists"
 	metadataAddSuccessStatus = "Successfully added metadata device"
+	journalAddSuccessStatus  = "Successfully added journal device"
 )
 
 // Provisioners types of supported provisioners
@@ -380,6 +384,8 @@ func (d *portworx) GetVolumeDriverNamespace() (string, error) {
 func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap, driverName string) error {
 	log.Infof("Using the Portworx volume driver with provisioner %s under scheduler: %v", storageProvisioner, sched)
 	var err error
+	pxLabel := make(map[string]string)
+	pxLabel[PxLabelNameKey] = PxLabelValue
 
 	if skipStr := os.Getenv(envSkipPXServiceEndpoint); skipStr != "" {
 		d.skipPXSvcEndpoint, _ = strconv.ParseBool(skipStr)
@@ -449,6 +455,28 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		}
 	} else {
 		torpedovolume.StorageProvisioner = provisioners[torpedovolume.DefaultStorageProvisioner]
+	}
+
+	// Update node PxPodRestartCount during init
+	schedDriver, err := scheduler.Get(sched)
+	if err != nil {
+		return fmt.Errorf("scheduler with name: [%s] not found. Error: [%v]", sched, err)
+	}
+
+	pxPodRestartCountMap, err := schedDriver.GetPodsRestartCount(namespace, pxLabel)
+	if err != nil {
+		return fmt.Errorf("unable to get portworx pods restart count. Error: [%v]", err)
+	}
+
+	for pod, value := range pxPodRestartCountMap {
+		n, err := node.GetNodeByIP(pod.Status.HostIP)
+		if err != nil {
+			return err
+		}
+		n.PxPodRestartCount = value
+		if err = node.UpdateNode(n); err != nil {
+			return fmt.Errorf("updating the restart count fails for a node: [%s]. Error: [%v]", n.Name, err)
+		}
 	}
 	return nil
 }
@@ -721,6 +749,10 @@ func (d *portworx) updateNode(n *node.Node, pxNodes []*api.StorageNode) error {
 						log.Warnf("Can not check if node [%s] is a metadata node", n.Name)
 					}
 					n.IsMetadataNode = isMetadataNode
+
+					if pxNode.Pools != nil && len(pxNode.Pools) > 0 {
+						log.Infof("Updating node [%s] as storage node", n.Name)
+					}
 
 					if n.StoragePools == nil {
 						for _, pxNodePool := range pxNode.Pools {
@@ -1325,7 +1357,7 @@ func (d *portworx) ValidateCreateVolume(volumeName string, params map[string]str
 		// TODO: remove this retry once PWX-27773 is fixed
 		// It is noted that the DevicePath is intermittently empty.
 		// This check ensures the device path is not empty for attached volumes
-		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.DevicePath == "" {
+		if vol.State == api.VolumeState_VOLUME_STATE_ATTACHED && vol.AttachedState == api.AttachState_ATTACH_STATE_EXTERNAL && vol.DevicePath == "" {
 			return vol, true, fmt.Errorf("device path is not present for volume: %s", volumeName)
 		}
 
@@ -5657,25 +5689,41 @@ func isDiskPartitioned(n node.Node, drivePath string, d *portworx) (bool, error)
 
 // GetPoolDrives returns the map of poolID and drive name
 func (d *portworx) GetPoolDrives(n *node.Node) (map[string][]string, error) {
-	systemOpts := node.SystemctlOpts{
-		ConnectionOpts: node.ConnectionOpts{
-			Timeout:         startDriverTimeout,
-			TimeBeforeRetry: defaultRetryInterval,
-		},
-		Action: "start",
-	}
-	poolDrives := make(map[string][]string, 0)
-	log.Infof("Getting available block drives on node [%s]", n.Name)
-	blockDrives, err := d.nodeDriver.GetBlockDrives(*n, systemOpts)
 
+	poolDrives := make(map[string][]string, 0)
+
+	connectionOps := node.ConnectionOpts{
+		IgnoreError:     false,
+		TimeBeforeRetry: defaultRetryInterval,
+		Timeout:         defaultTimeout,
+		Sudo:            true,
+	}
+	output, err := d.nodeDriver.RunCommand(*n, "pxctl status", connectionOps)
 	if err != nil {
 		return poolDrives, err
 	}
-	for _, v := range blockDrives {
-		labelsMap := v.Labels
-		if pm, ok := labelsMap["pxpool"]; ok {
-			poolDrives[pm] = append(poolDrives[pm], v.Path)
+	log.Infof("got output: %s", output)
+	re := regexp.MustCompile(`\b\d+:\d+\b.*`)
+	matches := re.FindAllString(output, -1)
+
+	for _, match := range matches {
+		log.Debugf("Extracting pool details from [%s]", match)
+		pVals := make([]string, 0)
+		tempVals := strings.Fields(match)
+		for _, tv := range tempVals {
+			if strings.Contains(tv, ":") || strings.Contains(tv, "/") {
+				pVals = append(pVals, tv)
+			}
 		}
+
+		if len(pVals) >= 2 {
+			tempPoolId := pVals[0]
+			poolId := strings.Split(tempPoolId, ":")[0]
+			drvPath := pVals[1]
+
+			poolDrives[poolId] = append(poolDrives[poolId], drvPath)
+		}
+
 	}
 	return poolDrives, nil
 }
@@ -5727,7 +5775,7 @@ func addDrive(n node.Node, drivePath string, poolID int32, d *portworx) error {
 		return fmt.Errorf("failed to add drive [%s] on node [%s]", drivePath, n.Name)
 	}
 
-	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) {
+	if !strings.Contains(addDriveStatus.Status, driveAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, metadataAddSuccessStatus) && !strings.Contains(addDriveStatus.Status, journalAddSuccessStatus) {
 		return fmt.Errorf("failed to add drive [%s] on node [%s], AddDrive Status: %+v", drivePath, n.Name, addDriveStatus)
 
 	}

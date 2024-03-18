@@ -80,8 +80,12 @@ fi
 
 FOCUS_ARG=""
 if [ -n "$FOCUS_TESTS" ]; then
-    focusRegex=$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')
+    focusRegex="$(echo $FOCUS_TESTS | sed -e 's/,/}|{/g')"
     FOCUS_ARG="--focus={$focusRegex}"
+fi
+
+if [ -n "$LABEL_FILTER" ]; then
+    FOCUS_ARG="--label-filter=$LABEL_FILTER"
 fi
 
 if [ -z "${UPGRADE_ENDPOINT_URL}" ]; then
@@ -247,7 +251,17 @@ done
 
 echo "checking if we need to override test suite: ${TEST_SUITE}"
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]]; then
+# TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
+case $FOCUS_TESTS in
+  Longevity|UpgradeLongevity|BackupLongevity)
+    TEST_SUITE="bin/longevity.test"
+    echo "Warning: Based on the FOCUS_TESTS ('$FOCUS_TESTS'), the TEST_SUITE ('$TEST_SUITE') is set to 'bin/longevity.test'"
+    ;;
+  *)
+    ;;
+esac
+
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 
@@ -308,6 +322,11 @@ VOLUMES="${TESTRESULTS_VOLUME}"
 if [ "${STORAGE_DRIVER}" == "aws" ]; then
   VOLUMES="${VOLUMES},${AWS_VOLUME}"
   VOLUME_MOUNTS="${VOLUME_MOUNTS},${AWS_VOLUME_MOUNT}"
+fi
+
+JUNIT_REPORT_PATH="/testresults/junit_basic.xml"
+if [ "${SCHEDULER}" == "openshift" ]; then
+    SECURITY_CONTEXT=true
 fi
 
 if [ -n "${PROVIDERS}" ]; then
@@ -374,14 +393,9 @@ K8S_VENDOR_KEY=""
 if [ -z "${NODE_DRIVER}" ]; then
     NODE_DRIVER="ssh"
 fi
+
 if [ -n "${K8S_VENDOR}" ]; then
     case "$K8S_VENDOR" in
-        gke)
-            NODE_DRIVER="gke"
-            ;;
-        aks)
-            NODE_DRIVER="aks"
-            ;;
         oracle)
             NODE_DRIVER="oracle"
             ;;
@@ -501,7 +515,7 @@ spec:
             "--timeout", "${TIMEOUT}",
             "$FAIL_FAST",
             "--poll-progress-after", "10m",
-            --junit-report=/testresults/junit_basic.xml,
+            --junit-report=$JUNIT_REPORT_PATH,
             "$FOCUS_ARG",
             "$SKIP_ARG",
             $TEST_SUITE,
@@ -540,6 +554,7 @@ spec:
             "--vault-addr=$VAULT_ADDR",
             "--vault-token=$VAULT_TOKEN",
             "--px-runtime-opts=$PX_RUNTIME_OPTS",
+            "--px-cluster-opts=$PX_CLUSTER_OPTS",
             "--anthos-ws-node-ip=$ANTHOS_ADMIN_WS_NODE",
             "--anthos-inst-path=$ANTHOS_INST_PATH",
             "--autopilot-upgrade-version=$AUTOPILOT_UPGRADE_VERSION",
@@ -758,6 +773,20 @@ spec:
       value: "${PX_BACKUP_MONGODB_PASSWORD}"
     - name: ENABLE_GRAFANA
       value: "${ENABLE_GRAFANA}"
+    - name: USE_GLOBAL_RULES
+      value: "${USE_GLOBAL_RULES}"
+    - name: EKS_CLUSTER_NAME
+      value: "${EKS_CLUSTER_NAME}"
+    - name: EKS_CLUSTER_REGION
+      value: "${EKS_CLUSTER_REGION}"
+    - name: EKS_PX_NODEGROUP_NAME
+      value: "${EKS_PX_NODEGROUP_NAME}"
+    - name: IKS_CLUSTER_NAME
+      value: "${IKS_CLUSTER_NAME}"
+    - name: IKS_PX_WORKERPOOL_NAME
+      value: "${IKS_PX_WORKERPOOL_NAME}"
+    - name: IKS_CLUSTER_REGION
+      value: "${IKS_CLUSTER_REGION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

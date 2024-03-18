@@ -15,13 +15,10 @@ import (
 	"github.com/libopenstorage/openstorage/api"
 	storkv1 "github.com/libopenstorage/stork/pkg/apis/stork/v1alpha1"
 	"github.com/portworx/sched-ops/k8s/core"
-	"github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
 	"github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
-	v1 "k8s.io/api/core/v1"
-	storageApi "k8s.io/api/storage/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	opsapi "github.com/libopenstorage/openstorage/api"
@@ -976,7 +973,7 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		retain := 8
-		interval := 3
+		interval := 2
 
 		n := node.GetStorageDriverNodes()[0]
 		uuidCmd := "pxctl cred list -j | grep uuid"
@@ -1158,16 +1155,56 @@ var _ = Describe("{CloudsnapAndRestore}", func() {
 
 		stepLog = "Verify cloud snap restore"
 		Step(stepLog, func() {
-			for ns, volSnap := range volSnapMap {
-				for vol, snap := range volSnap {
-					restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
-						Name:      vol.Name,
-						Namespace: vol.Namespace,
-					}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: snap.Name, SourceNamespace: ns, GroupSnapshot: false}}
-					restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
-					log.FailOnError(err, fmt.Sprintf("error creating volume snapshot restore for %s", snap.Name))
-					err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, time.Duration(5*15)*defaultCommandTimeout, defaultReadynessTimeout)
-					dash.VerifyFatal(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destination: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+			for _, ctx := range contexts {
+
+				if strings.Contains(ctx.App.Key, "cloudsnap") {
+
+					appNamespace := ctx.App.Key + "-" + ctx.UID
+					snapSchedList, err := storkops.Instance().ListSnapshotSchedules(appNamespace)
+					log.FailOnError(err, "error getting snapshot list")
+
+					vols, err := Inst().S.GetVolumes(ctx)
+					log.FailOnError(err, "error getting volumes")
+
+					for _, vol := range vols {
+						var snapshotScheduleName string
+						for _, snap := range snapSchedList.Items {
+							snapshotScheduleName = snap.Name
+							if strings.Contains(snapshotScheduleName, vol.Name) {
+								break
+							}
+						}
+						resp, err := storkops.Instance().GetSnapshotSchedule(snapshotScheduleName, appNamespace)
+						log.FailOnError(err, "error getting snapshot schedule for [%s] in namespace [%s]", snapshotScheduleName, appNamespace)
+						var volumeSnapshotStatus *storkv1.ScheduledVolumeSnapshotStatus
+					outer:
+						for _, snapshotStatuses := range resp.Status.Items {
+							for _, vsStatus := range snapshotStatuses {
+								if vsStatus.Status == snapv1.VolumeSnapshotConditionReady {
+									volumeSnapshotStatus = vsStatus
+									break outer
+								}
+							}
+						}
+						if volumeSnapshotStatus != nil {
+							restoreSpec := &storkv1.VolumeSnapshotRestore{ObjectMeta: meta_v1.ObjectMeta{
+								Name:      vol.Name,
+								Namespace: vol.Namespace,
+							}, Spec: storkv1.VolumeSnapshotRestoreSpec{SourceName: volumeSnapshotStatus.Name, SourceNamespace: appNamespace, GroupSnapshot: false}}
+							restore, err := storkops.Instance().CreateVolumeSnapshotRestore(restoreSpec)
+							log.FailOnError(err, "error CreateVolumeSnapshotRestore")
+							err = storkops.Instance().ValidateVolumeSnapshotRestore(restore.Name, restore.Namespace, snapshotScheduleRetryTimeout, snapshotScheduleRetryInterval)
+							dash.VerifySafely(err, nil, fmt.Sprintf("validate snapshot restore source: %s , destnation: %s in namespace %s", restore.Name, vol.Name, vol.Namespace))
+							if err == nil {
+								err = storkops.Instance().DeleteVolumeSnapshotRestore(restore.Name, restore.Namespace)
+								log.FailOnError(err, "error deleting volume snapshot restore object")
+							}
+						} else {
+							log.FailOnError(fmt.Errorf("no snapshot with Ready status found for vol[%s] in namespace[%s]", vol.Name, vol.Namespace), "error getting volume snapshot")
+						}
+
+					}
+
 				}
 			}
 
@@ -1520,9 +1557,10 @@ var _ = Describe("{CreateFastpathVolumeRebootNode}", func() {
 	var pxNode node.Node
 	var contexts []*scheduler.Context
 	var volumrlidttr []*api.Volume
-	var applist = Inst().AppList
+
 	stepLog := "Create fastpath Volume reboot node and check if fastpath is active"
 	It(stepLog, func() {
+		applist := Inst().AppList
 		log.InfoD(stepLog)
 		revertAppList := func() {
 			Inst().AppList = applist
@@ -2990,87 +3028,215 @@ var _ = Describe("{SharedVolFuseTest}", func() {
 	})
 })
 
-func SetupProxyServer(n node.Node) error {
+var _ = Describe("{FioClonedVolumeFaultInjection}", func() {
+	/*
+		https://portworx.atlassian.net/browse/PTX-15687
+			1. Create 1 Volume,  Run fio
+			2. Create the Clone of Volume in step 1 , Run Fio on the cloned volume
+			3. Perform HA increase/Decrease
+			4. Perform Volume resize
+			4. Inject faults ( like portworx restart)
+			6. Repeat step 1-5 for 10 iterations
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("FioClonedVolumeFaultInjectoin", "Create fio clone volume and inject faults,HA increase and volume resize", nil, 0)
+	})
 
-	createDirCommand := "mkdir -p /exports/testnfsexportdir"
-	output, err := Inst().N.RunCommandWithNoRetry(n, createDirCommand, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
+	itLog := "FioClonedVolumeFaultInjectoin"
+	It(itLog, func() {
+		log.InfoD(itLog)
 
-	addVersionCmd := "echo -e \"MOUNTD_NFS_V4=\"yes\"\nRPCNFSDARGS=\"-N 2 -N 4\"\" >> /etc/sysconfig/nfs"
-	output, err = Inst().N.RunCommandWithNoRetry(n, addVersionCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
+		var secretId = "secret"
+		var secretValue = "password"
+		selectedNode := node.GetStorageDriverNodes()[0]
 
-	updateExportsCmd := "echo \"/exports/testnfsexportdir *(rw,sync,no_root_squash)\" > /etc/exports"
-	output, err = Inst().N.RunCommandWithNoRetry(n, updateExportsCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
-	exportCmd := "exportfs -a"
-	output, err = Inst().N.RunCommandWithNoRetry(n, exportCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
+		numberOfTotalVolumes := 10
+		numberofVolumeCreationInParallel := 5
 
-	enableNfsServerCmd := "systemctl enable nfs-server"
-	output, err = Inst().N.RunCommandWithNoRetry(n, enableNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
-	})
-	if err != nil {
-		return err
-	}
-	log.Infof(output)
+		numberofIterations := numberOfTotalVolumes / numberofVolumeCreationInParallel
+		var Wg sync.WaitGroup
 
-	startNfsServerCmd := "systemctl restart nfs-server"
-	output, err = Inst().N.RunCommandWithNoRetry(n, startNfsServerCmd, node.ConnectionOpts{
-		Sudo: true,
+		for j := 0; j < numberofIterations; j++ {
+			var once sync.Once
+			stepLog := "Create a secret using pxctl secrets kvdb"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				cmd := fmt.Sprintf("pxctl secrets kvdb login | pxctl secrets kvdb put-secret --secret_id %v --secret_value %v", secretId, secretValue)
+
+				out, err := Inst().N.RunCommandWithNoRetry(selectedNode, cmd, node.ConnectionOpts{
+					Timeout:         2 * time.Minute,
+					TimeBeforeRetry: 10 * time.Second,
+				})
+				log.FailOnError(err, "Unable to execute the pxctl show command")
+				log.InfoD("Succesfully created secrets for secure volume: %v", out)
+			})
+
+			for i := 0; i < numberofVolumeCreationInParallel; i++ {
+				// Create a px secure volume using pxctl.
+				volName := fmt.Sprintf("fio-clone-fault-injection-%d", i)
+				var cloneVol string
+				Wg.Add(1)
+				go func(i int) {
+					defer Wg.Done()
+					defer GinkgoRecover()
+
+					stepLog = "Create 1 Volume,  Run fio"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+
+						pxctlCreateVolumeCmd := fmt.Sprintf("volume create --secure --size 10 %v --secret_key %v", volName, secretId)
+						output, err := runPxctlCommand(pxctlCreateVolumeCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to create volume using pxctl")
+						log.InfoD("Successfully created volume: %v", output)
+
+						//attach volume to host
+						attachCmd := fmt.Sprintf("pxctl host attach %s --secret_key %v", volName, secretId)
+						cmdConnectionOpts := node.ConnectionOpts{
+							Timeout:         15 * time.Second,
+							TimeBeforeRetry: 5 * time.Second,
+							Sudo:            true,
+						}
+
+						_, err = Inst().N.RunCommandWithNoRetry(selectedNode, attachCmd, cmdConnectionOpts)
+						log.FailOnError(err, "Failed to attach volume to host")
+
+						err = writeFioDataToVolume(volName, selectedNode, 5)
+						log.FailOnError(err, "Failed to write data to volume")
+
+					})
+
+					stepLog = "Create a clone of volume and run fio on the cloned volume"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+						cloneVol, err = Inst().V.CloneVolume(volName)
+						log.FailOnError(err, "Failed to clone volume")
+						log.InfoD("successfully create clone of volume :%v -> %v", volName, cloneVol)
+
+						//attach volume to host
+						attachCmd := fmt.Sprintf("pxctl host attach %s --secret_key %v", cloneVol, secretId)
+						cmdConnectionOpts := node.ConnectionOpts{
+							Timeout:         15 * time.Second,
+							TimeBeforeRetry: 5 * time.Second,
+							Sudo:            true,
+						}
+
+						_, err = Inst().N.RunCommandWithNoRetry(selectedNode, attachCmd, cmdConnectionOpts)
+						log.FailOnError(err, "Failed to attach volume to host")
+
+						err = writeFioDataToVolume(cloneVol, selectedNode, 2)
+						log.FailOnError(err, "Failed to write data to volume")
+					})
+
+					stepLog = "Perform HA Increase/Decrease"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+
+						// Increase replication factor to 2
+						pxctlHAUpdateCmd := fmt.Sprintf("v ha-update --repl 2 %v", volName)
+						_, err = runPxctlCommand(pxctlHAUpdateCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to increase replication factor to 2")
+						log.InfoD("Successfully increase replication factor to 2")
+
+						time.Sleep(2 * time.Minute)
+
+						// Decrease replication factor to 1
+						pxctlHAUpdateCmd = fmt.Sprintf("v ha-update --repl 1 %v", volName)
+						_, err = runPxctlCommand(pxctlHAUpdateCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to increase replication factor to 1")
+						log.InfoD("Successfully increase replication factor to 1")
+
+						time.Sleep(30 * time.Second)
+					})
+
+					stepLog = "Perform volume resize"
+					Step(stepLog, func() {
+						log.InfoD(stepLog)
+
+						pxctlVolResizeCmd := fmt.Sprintf("v update %v --size %v", volName, 20)
+						_, err = runPxctlCommand(pxctlVolResizeCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to resize volume: %v", volName)
+						log.InfoD("Succesfully resized volume: %v", volName)
+
+						volInspect, err := Inst().V.InspectVolume(volName)
+						log.FailOnError(err, "Failed to inspect volume")
+						log.InfoD("Volume size: %v", volInspect.Spec.Size)
+
+						time.Sleep(30 * time.Second)
+
+					})
+					stepLog = "Delete the volume and clone of the volume"
+					Step(stepLog, func() {
+						//unmount volume
+						pxctlUnmountCmd := fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", volName, volName)
+						_, err = runPxctlCommand(pxctlUnmountCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to unmount volume: %v", volName)
+						log.InfoD("Succesfully unmounted volume: %v", volName)
+
+						err = Inst().V.DeleteVolume(volName)
+						log.FailOnError(err, "Failed to delete volume:%v", volName)
+
+						pxctlUnmountCmd = fmt.Sprintf("host unmount --path /var/lib/osd/mounts/%s %s", cloneVol, cloneVol)
+						_, err = runPxctlCommand(pxctlUnmountCmd, selectedNode, nil)
+						log.FailOnError(err, "Failed to unmount volume: %v", volName)
+						log.InfoD("Succesfully unmounted volume: %v", volName)
+
+						//Delete the clone volume
+						err = Inst().V.DeleteVolume(cloneVol)
+						log.FailOnError(err, "Failed to delete volume:%v", cloneVol)
+					})
+				}(i)
+			}
+			Wg.Wait()
+
+			once.Do(func() {
+				stepLog = "Restart portworx where the volume is attached"
+				Step(stepLog, func() {
+					log.InfoD(stepLog)
+					log.Infof("Stop volume driver [%s] on node: [%s]", Inst().V.String(), selectedNode.Name)
+					StopVolDriverAndWait([]node.Node{selectedNode})
+					log.Infof("Starting volume driver [%s] on node [%s]", Inst().V.String(), selectedNode.Name)
+					StartVolDriverAndWait([]node.Node{selectedNode})
+					time.Sleep(30 * time.Second)
+				})
+			})
+		}
 	})
+})
+
+func writeFioDataToVolume(volName string, n node.Node, size int64) error {
+	mountPath := fmt.Sprintf("/var/lib/osd/mounts/%s", volName)
+	creatDir := fmt.Sprintf("mkdir %s", mountPath)
+
+	cmdConnectionOpts := node.ConnectionOpts{
+		Timeout:         15 * time.Second,
+		TimeBeforeRetry: 5 * time.Second,
+		Sudo:            true,
+	}
+
+	log.Infof("Running command %s on %s", creatDir, n.Name)
+	_, err := Inst().N.RunCommandWithNoRetry(n, creatDir, cmdConnectionOpts)
+
 	if err != nil {
 		return err
 	}
-	log.Infof(output)
+
+	mountCmd := fmt.Sprintf("pxctl host mount --path %s %s", mountPath, volName)
+	log.Infof("Running command %s on %s", mountCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, mountCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
+
+	writeCmd := fmt.Sprintf("fio --name=%s --ioengine=libaio --rw=write --bs=4k --numjobs=1 --size=%vG --iodepth=256 --directory=%s --output=/tmp/vol_write.log --verify=meta --direct=1 --randrepeat=1 --verify_pattern=0xbeddacef --end_fsync=1", volName, size, mountPath)
+
+	log.Infof("Running command %s on %s", writeCmd, n.Name)
+	_, err = Inst().N.RunCommandWithNoRetry(n, writeCmd, cmdConnectionOpts)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
-}
 
-func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
-	params := make(map[string]string)
-	params["repl"] = "1"
-	params["io_profile"] = "none"
-	params["proxy_endpoint"] = fmt.Sprintf("nfs://%s", nfsServer)
-	params["proxy_nfs_exportpath"] = fmt.Sprintf("%s", mountPath)
-	params["mount_options"] = "vers=4.0"
-	v1obj := meta_v1.ObjectMeta{
-		Name: scName,
-	}
-	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
-	bindMode := storageApi.VolumeBindingImmediate
-	allowWxpansion := true
-	scObj := storageApi.StorageClass{
-		ObjectMeta:           v1obj,
-		Provisioner:          "kubernetes.io/portworx-volume",
-		Parameters:           params,
-		ReclaimPolicy:        &reclaimPolicyDelete,
-		VolumeBindingMode:    &bindMode,
-		AllowVolumeExpansion: &allowWxpansion,
-	}
-
-	k8sStorage := storage.Instance()
-	_, err = k8sStorage.CreateStorageClass(&scObj)
-	return err
 }
