@@ -78,17 +78,17 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*ApplicationServiceAPI* | [**ApplicationServiceGetApplication**](docs/ApplicationServiceAPI.md#applicationservicegetapplication) | **Get** /v1/applications/{id} | GetApplication API returns the info about application with given id.
-*ApplicationServiceAPI* | [**ApplicationServiceGetApplication2**](docs/ApplicationServiceAPI.md#applicationservicegetapplication2) | **Get** /v1/clusters/{clusterId}/applications/{id} | GetApplication API returns the info about application with given id.
-*ApplicationServiceAPI* | [**ApplicationServiceInstallApplication**](docs/ApplicationServiceAPI.md#applicationserviceinstallapplication) | **Post** /v1/clusters/{clusterId}/applications | InstallApplication API installs specified application on the target cluster.
-*ApplicationServiceAPI* | [**ApplicationServiceListApplications**](docs/ApplicationServiceAPI.md#applicationservicelistapplications) | **Get** /v1/clusters/{clusterId}/applications | ListApplications API lists the applications installed on the target cluster.
-*ApplicationServiceAPI* | [**ApplicationServiceUninstallApplication**](docs/ApplicationServiceAPI.md#applicationserviceuninstallapplication) | **Delete** /v1/applications/{id} | UninstallApplication API uninstalls the specified application on the target cluster.
-*ApplicationServiceAPI* | [**ApplicationServiceUninstallApplication2**](docs/ApplicationServiceAPI.md#applicationserviceuninstallapplication2) | **Delete** /v1/clusters/{clusterId}/applications/{id} | UninstallApplication API uninstalls the specified application on the target cluster.
-*TargetClusterServiceAPI* | [**TargetClusterServiceDeleteTargetCluster**](docs/TargetClusterServiceAPI.md#targetclusterservicedeletetargetcluster) | **Delete** /v1/clusters/{id} | DeleteTargetCluster API deletes the specified TargetCluster.
-*TargetClusterServiceAPI* | [**TargetClusterServiceGetTargetCluster**](docs/TargetClusterServiceAPI.md#targetclusterservicegettargetcluster) | **Get** /v1/clusters/{id} | GetTargetCluster API returns the info about the TargetCluster for given name.
-*TargetClusterServiceAPI* | [**TargetClusterServiceListTargetClusters**](docs/TargetClusterServiceAPI.md#targetclusterservicelisttargetclusters) | **Get** /v1/clusters | List API lists all the target clusters for a tenant
-*TargetClusterServiceAPI* | [**TargetClusterServiceListTargetClusters2**](docs/TargetClusterServiceAPI.md#targetclusterservicelisttargetclusters2) | **Post** /v1/clusters:search | List API lists all the target clusters for a tenant
-*TargetClusterServiceAPI* | [**TargetClusterServiceUpdateTargetCluster**](docs/TargetClusterServiceAPI.md#targetclusterserviceupdatetargetcluster) | **Put** /v1/clusters/{targetCluster.meta.uid} | UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster.
+*ApplicationServiceAPI* | [**ApplicationServiceGetApplication**](docs/ApplicationServiceAPI.md#applicationservicegetapplication) | **Get** /core/v1/applications/{id} | GetApplication API returns the info about application with given id.
+*ApplicationServiceAPI* | [**ApplicationServiceGetApplication2**](docs/ApplicationServiceAPI.md#applicationservicegetapplication2) | **Get** /core/v1/clusters/{clusterId}/applications/{id} | GetApplication API returns the info about application with given id.
+*ApplicationServiceAPI* | [**ApplicationServiceInstallApplication**](docs/ApplicationServiceAPI.md#applicationserviceinstallapplication) | **Post** /core/v1/clusters/{clusterId}/applications | InstallApplication API installs specified application on the target cluster.
+*ApplicationServiceAPI* | [**ApplicationServiceListApplications**](docs/ApplicationServiceAPI.md#applicationservicelistapplications) | **Get** /core/v1/clusters/{clusterId}/applications | ListApplications API lists the applications installed on the target cluster.
+*ApplicationServiceAPI* | [**ApplicationServiceUninstallApplication**](docs/ApplicationServiceAPI.md#applicationserviceuninstallapplication) | **Delete** /core/v1/applications/{id} | UninstallApplication API uninstalls the specified application on the target cluster.
+*ApplicationServiceAPI* | [**ApplicationServiceUninstallApplication2**](docs/ApplicationServiceAPI.md#applicationserviceuninstallapplication2) | **Delete** /core/v1/clusters/{clusterId}/applications/{id} | UninstallApplication API uninstalls the specified application on the target cluster.
+*TargetClusterServiceAPI* | [**TargetClusterServiceDeleteTargetCluster**](docs/TargetClusterServiceAPI.md#targetclusterservicedeletetargetcluster) | **Delete** /core/v1/clusters/{id} | DeleteTargetCluster API deletes the specified TargetCluster.
+*TargetClusterServiceAPI* | [**TargetClusterServiceGetTargetCluster**](docs/TargetClusterServiceAPI.md#targetclusterservicegettargetcluster) | **Get** /core/v1/clusters/{id} | GetTargetCluster API returns the info about the TargetCluster for given name.
+*TargetClusterServiceAPI* | [**TargetClusterServiceListTargetClusters**](docs/TargetClusterServiceAPI.md#targetclusterservicelisttargetclusters) | **Get** /core/v1/clusters | List API lists all the target clusters for a tenant
+*TargetClusterServiceAPI* | [**TargetClusterServiceListTargetClusters2**](docs/TargetClusterServiceAPI.md#targetclusterservicelisttargetclusters2) | **Post** /core/v1/clusters:search | List API lists all the target clusters for a tenant
+*TargetClusterServiceAPI* | [**TargetClusterServiceUpdateTargetCluster**](docs/TargetClusterServiceAPI.md#targetclusterserviceupdatetargetcluster) | **Put** /core/v1/clusters/{targetCluster.meta.uid} | UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster.
 
 
 ## Documentation For Models
@@ -119,6 +119,7 @@ Class | Method | HTTP request | Description
  - [V1PageBasedPaginationResponse](docs/V1PageBasedPaginationResponse.md)
  - [V1Reference](docs/V1Reference.md)
  - [V1ResourceSelector](docs/V1ResourceSelector.md)
+ - [V1RespData](docs/V1RespData.md)
  - [V1Selector](docs/V1Selector.md)
  - [V1Sort](docs/V1Sort.md)
  - [V1SortOrderValue](docs/V1SortOrderValue.md)

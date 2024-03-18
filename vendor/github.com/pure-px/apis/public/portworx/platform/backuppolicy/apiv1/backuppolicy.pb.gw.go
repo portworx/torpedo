@@ -239,6 +239,32 @@ func local_request_BackupPolicyService_ListBackupPolicies_0(ctx context.Context,
 
 }
 
+func request_BackupPolicyService_ListBackupPolicies_1(ctx context.Context, marshaler runtime.Marshaler, client BackupPolicyServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListBackupPoliciesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.ListBackupPolicies(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_BackupPolicyService_ListBackupPolicies_1(ctx context.Context, marshaler runtime.Marshaler, server BackupPolicyServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListBackupPoliciesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.ListBackupPolicies(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 func request_BackupPolicyService_DeleteBackupPolicy_0(ctx context.Context, marshaler runtime.Marshaler, client BackupPolicyServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq DeleteBackupPolicyRequest
 	var metadata runtime.ServerMetadata
@@ -305,7 +331,7 @@ func RegisterBackupPolicyServiceHandlerServer(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/GetBackupPolicy", runtime.WithHTTPPathPattern("/v1/backupPolicies/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/GetBackupPolicy", runtime.WithHTTPPathPattern("/core/v1/backupPolicies/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -330,7 +356,7 @@ func RegisterBackupPolicyServiceHandlerServer(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/CreateBackupPolicy", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/backupPolicies"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/CreateBackupPolicy", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/backupPolicies"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -355,7 +381,7 @@ func RegisterBackupPolicyServiceHandlerServer(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/UpdateBackupPolicyMeta", runtime.WithHTTPPathPattern("/v1/backupPolicies/{meta.uid}:metaUpdate"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/UpdateBackupPolicyMeta", runtime.WithHTTPPathPattern("/core/v1/backupPolicies/{meta.uid}:metaUpdate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -380,7 +406,7 @@ func RegisterBackupPolicyServiceHandlerServer(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/ListBackupPolicies", runtime.WithHTTPPathPattern("/v1/backupPolicies"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/ListBackupPolicies", runtime.WithHTTPPathPattern("/core/v1/backupPolicies"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -397,6 +423,31 @@ func RegisterBackupPolicyServiceHandlerServer(ctx context.Context, mux *runtime.
 
 	})
 
+	mux.Handle("POST", pattern_BackupPolicyService_ListBackupPolicies_1, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/ListBackupPolicies", runtime.WithHTTPPathPattern("/core/v1/backupPolicies:search"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_BackupPolicyService_ListBackupPolicies_1(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_BackupPolicyService_ListBackupPolicies_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("DELETE", pattern_BackupPolicyService_DeleteBackupPolicy_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -405,7 +456,7 @@ func RegisterBackupPolicyServiceHandlerServer(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/DeleteBackupPolicy", runtime.WithHTTPPathPattern("/v1/backupPolicies/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/DeleteBackupPolicy", runtime.WithHTTPPathPattern("/core/v1/backupPolicies/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -469,7 +520,7 @@ func RegisterBackupPolicyServiceHandlerClient(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/GetBackupPolicy", runtime.WithHTTPPathPattern("/v1/backupPolicies/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/GetBackupPolicy", runtime.WithHTTPPathPattern("/core/v1/backupPolicies/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -491,7 +542,7 @@ func RegisterBackupPolicyServiceHandlerClient(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/CreateBackupPolicy", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/backupPolicies"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/CreateBackupPolicy", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/backupPolicies"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -513,7 +564,7 @@ func RegisterBackupPolicyServiceHandlerClient(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/UpdateBackupPolicyMeta", runtime.WithHTTPPathPattern("/v1/backupPolicies/{meta.uid}:metaUpdate"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/UpdateBackupPolicyMeta", runtime.WithHTTPPathPattern("/core/v1/backupPolicies/{meta.uid}:metaUpdate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -535,7 +586,7 @@ func RegisterBackupPolicyServiceHandlerClient(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/ListBackupPolicies", runtime.WithHTTPPathPattern("/v1/backupPolicies"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/ListBackupPolicies", runtime.WithHTTPPathPattern("/core/v1/backupPolicies"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -551,13 +602,35 @@ func RegisterBackupPolicyServiceHandlerClient(ctx context.Context, mux *runtime.
 
 	})
 
+	mux.Handle("POST", pattern_BackupPolicyService_ListBackupPolicies_1, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/ListBackupPolicies", runtime.WithHTTPPathPattern("/core/v1/backupPolicies:search"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_BackupPolicyService_ListBackupPolicies_1(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_BackupPolicyService_ListBackupPolicies_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	mux.Handle("DELETE", pattern_BackupPolicyService_DeleteBackupPolicy_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/DeleteBackupPolicy", runtime.WithHTTPPathPattern("/v1/backupPolicies/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuppolicy.v1.BackupPolicyService/DeleteBackupPolicy", runtime.WithHTTPPathPattern("/core/v1/backupPolicies/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -577,15 +650,17 @@ func RegisterBackupPolicyServiceHandlerClient(ctx context.Context, mux *runtime.
 }
 
 var (
-	pattern_BackupPolicyService_GetBackupPolicy_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backupPolicies", "id"}, ""))
+	pattern_BackupPolicyService_GetBackupPolicy_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "backupPolicies", "id"}, ""))
 
-	pattern_BackupPolicyService_CreateBackupPolicy_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "tenants", "tenant_id", "backupPolicies"}, ""))
+	pattern_BackupPolicyService_CreateBackupPolicy_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "backupPolicies"}, ""))
 
-	pattern_BackupPolicyService_UpdateBackupPolicyMeta_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backupPolicies", "meta.uid"}, "metaUpdate"))
+	pattern_BackupPolicyService_UpdateBackupPolicyMeta_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "backupPolicies", "meta.uid"}, "metaUpdate"))
 
-	pattern_BackupPolicyService_ListBackupPolicies_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backupPolicies"}, ""))
+	pattern_BackupPolicyService_ListBackupPolicies_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "backupPolicies"}, ""))
 
-	pattern_BackupPolicyService_DeleteBackupPolicy_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backupPolicies", "id"}, ""))
+	pattern_BackupPolicyService_ListBackupPolicies_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "backupPolicies"}, "search"))
+
+	pattern_BackupPolicyService_DeleteBackupPolicy_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "backupPolicies", "id"}, ""))
 )
 
 var (
@@ -596,6 +671,8 @@ var (
 	forward_BackupPolicyService_UpdateBackupPolicyMeta_0 = runtime.ForwardResponseMessage
 
 	forward_BackupPolicyService_ListBackupPolicies_0 = runtime.ForwardResponseMessage
+
+	forward_BackupPolicyService_ListBackupPolicies_1 = runtime.ForwardResponseMessage
 
 	forward_BackupPolicyService_DeleteBackupPolicy_0 = runtime.ForwardResponseMessage
 )

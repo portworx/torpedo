@@ -59,7 +59,7 @@ func (a *WhoAmIServiceAPIService) WhoAmIServiceWhoAmIExecute(r ApiWhoAmIServiceW
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/whoami"
+	localVarPath := localBasePath + "/core/v1/whoami"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}

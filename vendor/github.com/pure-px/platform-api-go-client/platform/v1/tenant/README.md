@@ -78,12 +78,12 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*ApplicationServiceAPI* | [**ApplicationServiceListAvailableApplications**](docs/ApplicationServiceAPI.md#applicationservicelistavailableapplications) | **Get** /v1/tenants/{tenantId}:listAvailableApplications | ListAvailableApplications API lists all the applications visible to a caller.
-*TenantServiceAPI* | [**TenantServiceCreateTenant**](docs/TenantServiceAPI.md#tenantservicecreatetenant) | **Post** /v1/tenants | CreateTenant API creates a new Tenant.
-*TenantServiceAPI* | [**TenantServiceDeleteTenant**](docs/TenantServiceAPI.md#tenantservicedeletetenant) | **Delete** /v1/tenants/{tenantId} | Delete tenant removes a tenant record.
-*TenantServiceAPI* | [**TenantServiceGetTenant**](docs/TenantServiceAPI.md#tenantservicegettenant) | **Get** /v1/tenants/{tenantId} | GetTenant API returns the info about  for given tenant id.
-*TenantServiceAPI* | [**TenantServiceListTenants**](docs/TenantServiceAPI.md#tenantservicelisttenants) | **Get** /v1/tenants | ListTenants API lists the tenants visible to the caller for the current account.
-*TenantServiceAPI* | [**TenantServiceUpdateTenant**](docs/TenantServiceAPI.md#tenantserviceupdatetenant) | **Put** /v1/tenants/{tenant.meta.uid} | UpdateTenant API updates tenant.
+*ApplicationServiceAPI* | [**ApplicationServiceListAvailableApplications**](docs/ApplicationServiceAPI.md#applicationservicelistavailableapplications) | **Get** /core/v1/tenants/{tenantId}:listAvailableApplications | ListAvailableApplications API lists all the applications visible to a caller.
+*TenantServiceAPI* | [**TenantServiceCreateTenant**](docs/TenantServiceAPI.md#tenantservicecreatetenant) | **Post** /core/v1/tenants | CreateTenant API creates a new Tenant.
+*TenantServiceAPI* | [**TenantServiceDeleteTenant**](docs/TenantServiceAPI.md#tenantservicedeletetenant) | **Delete** /core/v1/tenants/{tenantId} | Delete tenant removes a tenant record.
+*TenantServiceAPI* | [**TenantServiceGetTenant**](docs/TenantServiceAPI.md#tenantservicegettenant) | **Get** /core/v1/tenants/{tenantId} | GetTenant API returns the info about  for given tenant id.
+*TenantServiceAPI* | [**TenantServiceListTenants**](docs/TenantServiceAPI.md#tenantservicelisttenants) | **Get** /core/v1/tenants | ListTenants API lists the tenants visible to the caller for the current account.
+*TenantServiceAPI* | [**TenantServiceUpdateTenant**](docs/TenantServiceAPI.md#tenantserviceupdatetenant) | **Put** /core/v1/tenants/{tenant.meta.uid} | UpdateTenant API updates tenant.
 
 
 ## Documentation For Models

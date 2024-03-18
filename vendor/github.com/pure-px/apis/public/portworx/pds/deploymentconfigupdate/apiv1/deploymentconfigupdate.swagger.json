@@ -200,7 +200,7 @@
         },
         "/pds/v1/deployments/{deploymentConfigUpdate.config.deploymentMeta.uid}/deploymentConfigUpdates": {
             "put": {
-                "summary": "CreateDeploymentConfigUpdate API creates a deployment config update.\n(-- api-linter: core::0133::http-method=disabled\n    aip.dev/not-precedent: We need to do this because here we are actually updating deployment config. --)",
+                "summary": "CreateDeploymentConfigUpdate API creates a deployment config update.",
                 "operationId": "DeploymentConfigUpdateService_CreateDeploymentConfigUpdate",
                 "responses": {
                     "200": {
@@ -496,13 +496,13 @@
                         },
                         "description": "Source IP ranges to use for the deployed Load Balancer."
                     },
-                    "resourceTemplate": {
+                    "resourceSettings": {
                         "$ref": "#/components/schemas/v1Template"
                     },
-                    "applicationTemplate": {
+                    "serviceConfigurations": {
                         "$ref": "#/components/schemas/v1Template"
                     },
-                    "storageTemplate": {
+                    "storageOptions": {
                         "$ref": "#/components/schemas/v1Template"
                     }
                 },

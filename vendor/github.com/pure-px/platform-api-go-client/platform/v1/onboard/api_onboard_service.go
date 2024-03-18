@@ -67,7 +67,7 @@ func (a *OnboardServiceAPIService) OnboardServiceCreateAccountRegistrationExecut
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/registration"
+	localVarPath := localBasePath + "/core/v1/registration"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -187,7 +187,7 @@ func (a *OnboardServiceAPIService) OnboardServiceUpdateAccountRegistrationExecut
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/registration/{accountRegistration.meta.uid}"
+	localVarPath := localBasePath + "/core/v1/registration/{accountRegistration.meta.uid}"
 	localVarPath = strings.Replace(localVarPath, "{"+"accountRegistration.meta.uid"+"}", url.PathEscape(parameterValueToString(r.accountRegistrationMetaUid, "accountRegistrationMetaUid")), -1)
 
 	localVarHeaderParams := make(map[string]string)

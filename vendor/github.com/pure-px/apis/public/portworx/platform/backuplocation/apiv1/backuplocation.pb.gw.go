@@ -349,7 +349,7 @@ func RegisterBackupLocationServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/GetBackupLocation", runtime.WithHTTPPathPattern("/v1/backupLocations/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/GetBackupLocation", runtime.WithHTTPPathPattern("/core/v1/backupLocations/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -374,7 +374,7 @@ func RegisterBackupLocationServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/CreateBackupLocation", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/backupLocations"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/CreateBackupLocation", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/backupLocations"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -399,7 +399,7 @@ func RegisterBackupLocationServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/UpdateBackupLocation", runtime.WithHTTPPathPattern("/v1/backupLocations/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/UpdateBackupLocation", runtime.WithHTTPPathPattern("/core/v1/backupLocations/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -424,7 +424,7 @@ func RegisterBackupLocationServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/v1/backupLocations"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/core/v1/backupLocations"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -449,7 +449,7 @@ func RegisterBackupLocationServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/v1/backupLocations:search"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/core/v1/backupLocations:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -474,7 +474,7 @@ func RegisterBackupLocationServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/DeleteBackupLocation", runtime.WithHTTPPathPattern("/v1/backupLocations/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/DeleteBackupLocation", runtime.WithHTTPPathPattern("/core/v1/backupLocations/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -538,7 +538,7 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/GetBackupLocation", runtime.WithHTTPPathPattern("/v1/backupLocations/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/GetBackupLocation", runtime.WithHTTPPathPattern("/core/v1/backupLocations/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -560,7 +560,7 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/CreateBackupLocation", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/backupLocations"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/CreateBackupLocation", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/backupLocations"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -582,7 +582,7 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/UpdateBackupLocation", runtime.WithHTTPPathPattern("/v1/backupLocations/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/UpdateBackupLocation", runtime.WithHTTPPathPattern("/core/v1/backupLocations/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -604,7 +604,7 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/v1/backupLocations"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/core/v1/backupLocations"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -626,7 +626,7 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/v1/backupLocations:search"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/ListBackupLocations", runtime.WithHTTPPathPattern("/core/v1/backupLocations:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -648,7 +648,7 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/DeleteBackupLocation", runtime.WithHTTPPathPattern("/v1/backupLocations/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.backuplocation.v1.BackupLocationService/DeleteBackupLocation", runtime.WithHTTPPathPattern("/core/v1/backupLocations/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -668,17 +668,17 @@ func RegisterBackupLocationServiceHandlerClient(ctx context.Context, mux *runtim
 }
 
 var (
-	pattern_BackupLocationService_GetBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backupLocations", "id"}, ""))
+	pattern_BackupLocationService_GetBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "backupLocations", "id"}, ""))
 
-	pattern_BackupLocationService_CreateBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "tenants", "tenant_id", "backupLocations"}, ""))
+	pattern_BackupLocationService_CreateBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "backupLocations"}, ""))
 
-	pattern_BackupLocationService_UpdateBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backupLocations", "id"}, ""))
+	pattern_BackupLocationService_UpdateBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "backupLocations", "id"}, ""))
 
-	pattern_BackupLocationService_ListBackupLocations_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backupLocations"}, ""))
+	pattern_BackupLocationService_ListBackupLocations_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "backupLocations"}, ""))
 
-	pattern_BackupLocationService_ListBackupLocations_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "backupLocations"}, "search"))
+	pattern_BackupLocationService_ListBackupLocations_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "backupLocations"}, "search"))
 
-	pattern_BackupLocationService_DeleteBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "backupLocations", "id"}, ""))
+	pattern_BackupLocationService_DeleteBackupLocation_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "backupLocations", "id"}, ""))
 )
 
 var (

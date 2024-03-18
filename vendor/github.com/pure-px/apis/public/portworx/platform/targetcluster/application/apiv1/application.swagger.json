@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/applications/{id}": {
+        "/core/v1/applications/{id}": {
             "get": {
-                "summary": "GetApplication API returns the info about application with given id",
+                "summary": "GetApplication API returns the info about application with given id.",
                 "operationId": "ApplicationService_GetApplication",
                 "responses": {
                     "200": {
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "Unique identifier of the application whose details needs to be fetched",
+                        "description": "Unique identifier of the application whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -48,7 +48,7 @@
                     },
                     {
                         "name": "clusterId",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -61,7 +61,7 @@
                 ]
             },
             "delete": {
-                "summary": "(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because\n    delete method is required for deleting resource. --)\n UninstallApplication API uninstalls the specified application on the target cluster",
+                "summary": "UninstallApplication API uninstalls the specified application on the target cluster.",
                 "operationId": "ApplicationService_UninstallApplication",
                 "responses": {
                     "200": {
@@ -89,7 +89,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "unique identifier of the application",
+                        "description": "unique identifier of the application.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -98,7 +98,7 @@
                     },
                     {
                         "name": "clusterId",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -111,9 +111,9 @@
                 ]
             }
         },
-        "/v1/clusters/{clusterId}/applications": {
+        "/core/v1/clusters/{clusterId}/applications": {
             "get": {
-                "summary": "ListApplications API lists the applications installed on the target cluster",
+                "summary": "ListApplications API lists the applications installed on the target cluster.",
                 "operationId": "ApplicationService_ListApplications",
                 "responses": {
                     "200": {
@@ -140,7 +140,7 @@
                 "parameters": [
                     {
                         "name": "clusterId",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -173,7 +173,7 @@
                 ]
             },
             "post": {
-                "summary": "InstallApplication API installs specified application on the target cluster",
+                "summary": "InstallApplication API installs specified application on the target cluster.",
                 "operationId": "ApplicationService_InstallApplication",
                 "responses": {
                     "200": {
@@ -200,7 +200,7 @@
                 "parameters": [
                     {
                         "name": "clusterId",
-                        "description": "unique identifier of the cluster where application needs to be installed\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field because\n    application needs to be associated with cluster id. --)",
+                        "description": "unique identifier of the cluster where application needs to be installed",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -216,7 +216,7 @@
                             }
                         }
                     },
-                    "description": "application to be installed",
+                    "description": "application to be installed.",
                     "required": true
                 },
                 "tags": [
@@ -224,9 +224,9 @@
                 ]
             }
         },
-        "/v1/clusters/{clusterId}/applications/{id}": {
+        "/core/v1/clusters/{clusterId}/applications/{id}": {
             "get": {
-                "summary": "GetApplication API returns the info about application with given id",
+                "summary": "GetApplication API returns the info about application with given id.",
                 "operationId": "ApplicationService_GetApplication2",
                 "responses": {
                     "200": {
@@ -253,7 +253,7 @@
                 "parameters": [
                     {
                         "name": "clusterId",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -262,7 +262,7 @@
                     },
                     {
                         "name": "id",
-                        "description": "Unique identifier of the application whose details needs to be fetched",
+                        "description": "Unique identifier of the application whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -275,7 +275,7 @@
                 ]
             },
             "delete": {
-                "summary": "(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because\n    delete method is required for deleting resource. --)\n UninstallApplication API uninstalls the specified application on the target cluster",
+                "summary": "UninstallApplication API uninstalls the specified application on the target cluster.",
                 "operationId": "ApplicationService_UninstallApplication2",
                 "responses": {
                     "200": {
@@ -303,7 +303,7 @@
                 "parameters": [
                     {
                         "name": "clusterId",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -312,7 +312,7 @@
                     },
                     {
                         "name": "id",
-                        "description": "unique identifier of the application",
+                        "description": "unique identifier of the application.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -339,21 +339,20 @@
                     "DELETING"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "- PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - PENDING: Application yet to be installed\n - DEPLOYING: Application deployment on the target cluster in progress\n - SUCCEEDED: Installed successfully\n - FAILED: Application failed to install\n - DELETING: Application is being deleted",
-                "title": "AppStatus determines status of an application"
+                "description": "AppStatus determines status of an application.\n\n - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - PENDING: Application yet to be installed.\n - DEPLOYING: Application deployment on the target cluster in progress.\n - SUCCEEDED: Installed successfully.\n - FAILED: Application failed to install.\n - DELETING: Application is being deleted."
             },
             "applicationv1Status": {
                 "type": "object",
                 "properties": {
                     "version": {
                         "type": "string",
-                        "title": "current application chart version"
+                        "description": "current application chart version."
                     },
                     "phase": {
                         "$ref": "#/components/schemas/ApplicationPhasePhase"
                     }
                 },
-                "title": "Status of the Application"
+                "description": "Status of the Application."
             },
             "googlerpcStatus": {
                 "type": "object",
@@ -395,7 +394,7 @@
                         "$ref": "#/components/schemas/applicationv1Status"
                     }
                 },
-                "description": "Application is a high level entity for the application resource\nfor e.g. PXE, BaaS, etc."
+                "description": "Application is a high level entity for the application resource.\nfor e.g. PXE, BaaS, etc."
             },
             "v1Config": {
                 "type": "object",
@@ -407,11 +406,11 @@
                     },
                     "version": {
                         "type": "string",
-                        "title": "desired application chart version",
+                        "description": "desired application chart version.",
                         "readOnly": true
                     }
                 },
-                "title": "Desired configuration of the Application"
+                "description": "Desired configuration of the Application."
             },
             "v1ListApplicationsResponse": {
                 "type": "object",
@@ -421,13 +420,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1Application"
                         },
-                        "title": "list of applications visible to the caller"
+                        "description": "list of applications visible to the caller."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "ListApplicationsResponse is the response to the ListApplications API"
+                "description": "ListApplicationsResponse is the response to the ListApplications API."
             },
             "v1Meta": {
                 "type": "object",

@@ -27,7 +27,7 @@ var _ = BeforeSuite(func() {
 		pdsLabels["clusterType"] = infraParams.ClusterType
 
 		log.InfoD("Get Account ID")
-		accID = "acc:a7e9dff1-a2f4-40ce-b8cf-09d27deff80e"
+		accID = "acc:64aca1a3-cec4-44b0-9b24-7fd41c9b63d1"
 
 		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
@@ -47,7 +47,7 @@ var _ = BeforeSuite(func() {
 
 	Step("Create Buckets", func() {
 		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-			bucketName := strings.ToLower("pds-automation-" + utilities.RandString(5))
+			bucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
 			switch NewPdsParams.BackUpAndRestore.TargetLocation {
 			case "s3-comp":
 				err := platformUtils.CreateS3CompBucket(bucketName)

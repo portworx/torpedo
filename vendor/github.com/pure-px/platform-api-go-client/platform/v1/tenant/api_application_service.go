@@ -63,7 +63,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceListAvailableApplicatio
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}:listAvailableApplications"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}:listAvailableApplications"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)

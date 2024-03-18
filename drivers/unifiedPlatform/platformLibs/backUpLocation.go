@@ -19,43 +19,43 @@ func ListBackupLocation(tenantId string) ([]*automationModels.BackupLocationResp
 }
 
 func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string) (*automationModels.BackupLocationResponse, error) {
-	req := automationModels.BackupLocationRequest{}
+	createReq := automationModels.BackupLocationRequest{}
 	bkpLocName := strings.ToLower("pds-bkp-loc-" + utilities.RandString(5))
-	createReq := req.Create
-	createReq.TenantID = tenantId
-	createReq.Meta.Name = &bkpLocName
+
+	createReq.Create.TenantID = tenantId
+	createReq.Create.Meta.Name = &bkpLocName
 	switch bkpLocation {
 	case "s3":
-		createReq.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.Config.CloudCredentialsId = cloudCredId
-		createReq.Config.BkpLocation.S3Storage.BucketName = bucketName
-		createReq.Config.BkpLocation.S3Storage.Region = os.Getenv(envAwsRegion)
-		createReq.Config.BkpLocation.S3Storage.Endpoint = os.Getenv(envMinioEndPoint)
+		createReq.Create.Config.Provider.CloudProvider = PROVIDER_S3
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
+		createReq.Create.Config.BkpLocation.S3Storage.BucketName = bucketName
+		createReq.Create.Config.BkpLocation.S3Storage.Region = os.Getenv(envAwsRegion)
+		createReq.Create.Config.BkpLocation.S3Storage.Endpoint = os.Getenv(envMinioEndPoint)
 
 	case "s3-comp":
-		createReq.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.Config.CloudCredentialsId = cloudCredId
-		createReq.Config.BkpLocation.S3Storage.BucketName = bucketName
-		createReq.Config.BkpLocation.S3Storage.Region = os.Getenv(envMinioRegion)
-		createReq.Config.BkpLocation.S3Storage.Endpoint = os.Getenv(envMinioEndPoint)
+		createReq.Create.Config.Provider.CloudProvider = PROVIDER_S3
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
+		createReq.Create.Config.BkpLocation.S3Storage.BucketName = bucketName
+		createReq.Create.Config.BkpLocation.S3Storage.Region = os.Getenv(envMinioRegion)
+		createReq.Create.Config.BkpLocation.S3Storage.Endpoint = os.Getenv(envMinioEndPoint)
 
 	case "azure":
-		createReq.Config.Provider.CloudProvider = PROVIDER_AZURE
-		createReq.Config.BkpLocation.AzureStorage.ContainerName = bucketName
+		createReq.Create.Config.Provider.CloudProvider = PROVIDER_AZURE
+		createReq.Create.Config.BkpLocation.AzureStorage.ContainerName = bucketName
 
 	case "gcp":
-		createReq.Config.Provider.CloudProvider = PROVIDER_GOOGLE
-		createReq.Config.BkpLocation.GoogleStorage.BucketName = bucketName
+		createReq.Create.Config.Provider.CloudProvider = PROVIDER_GOOGLE
+		createReq.Create.Config.BkpLocation.GoogleStorage.BucketName = bucketName
 
 	default:
-		createReq.Config.Provider.CloudProvider = PROVIDER_S3
-		createReq.Config.CloudCredentialsId = cloudCredId
-		createReq.Config.BkpLocation.S3Storage.BucketName = bucketName
-		createReq.Config.BkpLocation.S3Storage.Region = os.Getenv(envMinioRegion)
-		createReq.Config.BkpLocation.S3Storage.Endpoint = os.Getenv(envMinioEndPoint)
+		createReq.Create.Config.Provider.CloudProvider = PROVIDER_S3
+		createReq.Create.Config.CloudCredentialsId = cloudCredId
+		createReq.Create.Config.BkpLocation.S3Storage.BucketName = bucketName
+		createReq.Create.Config.BkpLocation.S3Storage.Region = os.Getenv(envMinioRegion)
+		createReq.Create.Config.BkpLocation.S3Storage.Endpoint = os.Getenv(envMinioEndPoint)
 
 	}
-	resp, err := v2Components.Platform.CreateBackupLocation(&req)
+	resp, err := v2Components.Platform.CreateBackupLocation(&createReq)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create backup location: %v\n", err)
 	}

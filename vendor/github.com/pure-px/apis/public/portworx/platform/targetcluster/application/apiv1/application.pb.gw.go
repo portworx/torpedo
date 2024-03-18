@@ -459,7 +459,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/ListApplications", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/ListApplications", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -484,7 +484,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/v1/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/core/v1/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -509,7 +509,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -534,7 +534,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/InstallApplication", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/InstallApplication", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -559,7 +559,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/v1/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/core/v1/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -584,7 +584,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -648,7 +648,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/ListApplications", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/ListApplications", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -670,7 +670,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/v1/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/core/v1/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -692,7 +692,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/GetApplication", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -714,7 +714,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/InstallApplication", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/InstallApplication", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -736,7 +736,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/v1/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/core/v1/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -758,7 +758,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/v1/clusters/{cluster_id}/applications/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetcluster.application.v1.ApplicationService/UninstallApplication", runtime.WithHTTPPathPattern("/core/v1/clusters/{cluster_id}/applications/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -778,17 +778,17 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 }
 
 var (
-	pattern_ApplicationService_ListApplications_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "clusters", "cluster_id", "applications"}, ""))
+	pattern_ApplicationService_ListApplications_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "clusters", "cluster_id", "applications"}, ""))
 
-	pattern_ApplicationService_GetApplication_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "applications", "id"}, ""))
+	pattern_ApplicationService_GetApplication_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "applications", "id"}, ""))
 
-	pattern_ApplicationService_GetApplication_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "clusters", "cluster_id", "applications", "id"}, ""))
+	pattern_ApplicationService_GetApplication_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"core", "v1", "clusters", "cluster_id", "applications", "id"}, ""))
 
-	pattern_ApplicationService_InstallApplication_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "clusters", "cluster_id", "applications"}, ""))
+	pattern_ApplicationService_InstallApplication_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "clusters", "cluster_id", "applications"}, ""))
 
-	pattern_ApplicationService_UninstallApplication_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "applications", "id"}, ""))
+	pattern_ApplicationService_UninstallApplication_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "applications", "id"}, ""))
 
-	pattern_ApplicationService_UninstallApplication_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "clusters", "cluster_id", "applications", "id"}, ""))
+	pattern_ApplicationService_UninstallApplication_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"core", "v1", "clusters", "cluster_id", "applications", "id"}, ""))
 )
 
 var (

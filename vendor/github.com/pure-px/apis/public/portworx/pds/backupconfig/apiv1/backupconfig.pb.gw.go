@@ -119,15 +119,11 @@ func local_request_BackupConfigService_ListBackupConfigs_0(ctx context.Context, 
 
 }
 
-var (
-	filter_BackupConfigService_CreateBackupConfig_0 = &utilities.DoubleArray{Encoding: map[string]int{"backup_config": 0, "project_id": 1}, Base: []int{1, 1, 2, 0, 0}, Check: []int{0, 1, 1, 2, 3}}
-)
-
 func request_BackupConfigService_CreateBackupConfig_0(ctx context.Context, marshaler runtime.Marshaler, client BackupConfigServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var protoReq CreateBackupConfigRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.BackupConfig); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -146,13 +142,6 @@ func request_BackupConfigService_CreateBackupConfig_0(ctx context.Context, marsh
 	protoReq.ProjectId, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
-	}
-
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BackupConfigService_CreateBackupConfig_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
 	msg, err := client.CreateBackupConfig(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -164,7 +153,7 @@ func local_request_BackupConfigService_CreateBackupConfig_0(ctx context.Context,
 	var protoReq CreateBackupConfigRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.BackupConfig); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -185,13 +174,6 @@ func local_request_BackupConfigService_CreateBackupConfig_0(ctx context.Context,
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "project_id", err)
 	}
 
-	if err := req.ParseForm(); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_BackupConfigService_CreateBackupConfig_0); err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-
 	msg, err := server.CreateBackupConfig(ctx, &protoReq)
 	return msg, metadata, err
 
@@ -201,7 +183,7 @@ func request_BackupConfigService_UpdateBackupConfig_0(ctx context.Context, marsh
 	var protoReq UpdateBackupConfigRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.BackupConfig); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -212,14 +194,14 @@ func request_BackupConfigService_UpdateBackupConfig_0(ctx context.Context, marsh
 		_   = err
 	)
 
-	val, ok = pathParams["backup_config.meta.uid"]
+	val, ok = pathParams["id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "backup_config.meta.uid")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "backup_config.meta.uid", val)
+	protoReq.Id, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "backup_config.meta.uid", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
 
 	msg, err := client.UpdateBackupConfig(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
@@ -231,7 +213,7 @@ func local_request_BackupConfigService_UpdateBackupConfig_0(ctx context.Context,
 	var protoReq UpdateBackupConfigRequest
 	var metadata runtime.ServerMetadata
 
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq.BackupConfig); err != nil && err != io.EOF {
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && err != io.EOF {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 
@@ -242,14 +224,14 @@ func local_request_BackupConfigService_UpdateBackupConfig_0(ctx context.Context,
 		_   = err
 	)
 
-	val, ok = pathParams["backup_config.meta.uid"]
+	val, ok = pathParams["id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "backup_config.meta.uid")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
 	}
 
-	err = runtime.PopulateFieldFromPath(&protoReq, "backup_config.meta.uid", val)
+	protoReq.Id, err = runtime.String(val)
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "backup_config.meta.uid", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
 	}
 
 	msg, err := server.UpdateBackupConfig(ctx, &protoReq)
@@ -398,7 +380,7 @@ func RegisterBackupConfigServiceHandlerServer(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.backupconfig.v1.BackupConfigService/UpdateBackupConfig", runtime.WithHTTPPathPattern("/pds/v1/backupConfigs/{backup_config.meta.uid}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.backupconfig.v1.BackupConfigService/UpdateBackupConfig", runtime.WithHTTPPathPattern("/pds/v1/backupConfigs/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -553,7 +535,7 @@ func RegisterBackupConfigServiceHandlerClient(ctx context.Context, mux *runtime.
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.backupconfig.v1.BackupConfigService/UpdateBackupConfig", runtime.WithHTTPPathPattern("/pds/v1/backupConfigs/{backup_config.meta.uid}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.backupconfig.v1.BackupConfigService/UpdateBackupConfig", runtime.WithHTTPPathPattern("/pds/v1/backupConfigs/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -601,7 +583,7 @@ var (
 
 	pattern_BackupConfigService_CreateBackupConfig_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"pds", "v1", "projects", "project_id", "backupConfigs"}, ""))
 
-	pattern_BackupConfigService_UpdateBackupConfig_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"pds", "v1", "backupConfigs", "backup_config.meta.uid"}, ""))
+	pattern_BackupConfigService_UpdateBackupConfig_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"pds", "v1", "backupConfigs", "id"}, ""))
 
 	pattern_BackupConfigService_DeleteBackupConfig_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"pds", "v1", "backupConfigs", "id"}, ""))
 )

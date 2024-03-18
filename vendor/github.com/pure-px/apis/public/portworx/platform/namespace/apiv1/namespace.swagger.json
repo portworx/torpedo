@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/namespaces": {
+        "/core/v1/namespaces": {
             "get": {
-                "summary": "ListNamespaces API will return all the namespaces on the control plane",
+                "summary": "List API lists all the namespaces for a tenant",
                 "operationId": "NamespaceService_ListNamespaces",
                 "responses": {
                     "200": {
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "tenant ID for which namespace need to be fetched",
+                        "description": "tenant ID for which namespace need to be fetched.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -47,30 +47,19 @@
                         }
                     },
                     {
-                        "name": "clusterId",
-                        "description": "cluster ID for which namespaces need to be fetched",
+                        "name": "respData",
+                        "description": "Response data flags for listing cloud credentials.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
                         "in": "query",
                         "required": false,
                         "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "projectId",
-                        "description": "project ID for which namespaces need to be fetched",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "label",
-                        "description": "for label based filtering of the namespaces",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "enum": [
+                                "RESP_DATA_UNSPECIFIED",
+                                "INDEX",
+                                "LITE",
+                                "FULL"
+                            ],
+                            "default": "RESP_DATA_UNSPECIFIED"
                         }
                     },
                     {
@@ -130,6 +119,91 @@
                     "NamespaceService"
                 ]
             }
+        },
+        "/core/v1/namespaces/{id}": {
+            "delete": {
+                "summary": "DeleteNamespace API will trigger deletion and cleanup on the control plane.",
+                "operationId": "NamespaceService_DeleteNamespace",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {}
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "name": "id",
+                        "description": "ID of the namespace instance.",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "NamespaceService"
+                ]
+            }
+        },
+        "/core/v1/namespaces:search": {
+            "post": {
+                "summary": "List API lists all the namespaces for a tenant",
+                "operationId": "NamespaceService_ListNamespaces2",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListNamespacesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1ListNamespacesRequest"
+                            }
+                        }
+                    },
+                    "description": "ListNamespacesRequest request message for the ListNamespaces API.",
+                    "required": true
+                },
+                "tags": [
+                    "NamespaceService"
+                ]
+            }
         }
     },
     "components": {
@@ -140,11 +214,64 @@
                     "PHASE_UNSPECIFIED",
                     "AVAILABLE",
                     "RESERVED",
-                    "UNAVAILABLE"
+                    "UNAVAILABLE",
+                    "TERMINATING",
+                    "TOMBSTONED",
+                    "DELETE_PENDING",
+                    "DELETE_IN_PROGRESS",
+                    "DELETE_FAILED"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "- PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - AVAILABLE: Available namespaces can be used to deploy applications, they have \"<platform-domain>/available: true\" label\n - RESERVED: Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have \"<platform-domain>/reserved: true\" label\n - UNAVAILABLE: Unavailable namespaces are the ones deleted by user with active deployments or by removing available label",
-                "title": "Phase is the status of the namespace based on the label type"
+                "description": "Phase is the status of the namespace based on the label type.\n\n - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - AVAILABLE: Available namespaces can be used to deploy applications, they have \"<platform-domain>/available: true\" label.\n - RESERVED: Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have \"<platform-domain>/reserved: true\" label.\n - UNAVAILABLE: Unavailable namespaces are the ones deleted by user with active deployments or by removing available label.\n - TERMINATING: Termintaing state represents, namespace deletion is in progress on the target cluster.\n - TOMBSTONED: Tombstoned state represents namespace has been deleted from the cluster.\n - DELETE_PENDING: Deletion of namespace is yet to start.\n - DELETE_IN_PROGRESS: Deletion of the namespace is scheduled and in progress.\n - DELETE_FAILED: Deletion failed."
+            },
+            "ResourceSelectorResourceFilter": {
+                "type": "object",
+                "properties": {
+                    "resourceType": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs."
+                    }
+                },
+                "description": "ResourceFilter is filter for a given resource type."
+            },
+            "SelectorFilter": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Key of key,value pair against which filtering needs to be performs."
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array."
+                    }
+                },
+                "description": "Filter for a given key."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
             },
             "SortByField": {
                 "type": "string",
@@ -157,16 +284,6 @@
                 ],
                 "default": "FIELD_UNSPECIFIED",
                 "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
-            },
-            "SortOrderValue": {
-                "type": "string",
-                "enum": [
-                    "VALUE_UNSPECIFIED",
-                    "ASC",
-                    "DESC"
-                ],
-                "default": "VALUE_UNSPECIFIED",
-                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             },
             "protobufAny": {
                 "type": "object",
@@ -195,6 +312,51 @@
                     }
                 }
             },
+            "v1InfraResourceType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACCOUNT",
+                    "TENANT",
+                    "PROJECT",
+                    "TARGET_CLUSTER",
+                    "NAMESPACE",
+                    "CREDENTIAL",
+                    "BACKUP_LOCATION",
+                    "BACKUP_POLICY",
+                    "TEMPLATE"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
+            },
+            "v1ListNamespacesRequest": {
+                "type": "object",
+                "properties": {
+                    "tenantId": {
+                        "type": "string",
+                        "description": "tenant ID for which namespace need to be fetched."
+                    },
+                    "labelSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "fieldSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "infraResourceSelector": {
+                        "$ref": "#/components/schemas/v1ResourceSelector"
+                    },
+                    "respData": {
+                        "$ref": "#/components/schemas/v1RespData"
+                    },
+                    "sort": {
+                        "$ref": "#/components/schemas/v1Sort"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
+                    }
+                },
+                "description": "ListNamespacesRequest request message for the ListNamespaces API."
+            },
             "v1ListNamespacesResponse": {
                 "type": "object",
                 "properties": {
@@ -203,13 +365,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1Namespace"
                         },
-                        "title": "list of namespaces"
+                        "description": "list of namespaces."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "ListNamespacesResponse response message for the ListNamespaces API"
+                "description": "ListNamespacesResponse response message for the ListNamespaces API."
             },
             "v1Meta": {
                 "type": "object",
@@ -289,7 +451,7 @@
                         "$ref": "#/components/schemas/NamespacePhasePhase"
                     }
                 },
-                "title": "NamespaceStatus represents the status of the namespace resource"
+                "description": "NamespaceStatus represents the status of the namespace resource."
             },
             "v1PageBasedPaginationRequest": {
                 "type": "object",
@@ -361,6 +523,43 @@
                 },
                 "description": "Reference identifies the resource type, version of the uid and the resource."
             },
+            "v1ResourceSelector": {
+                "type": "object",
+                "properties": {
+                    "infraResourceFilters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
+                        },
+                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
+                    }
+                },
+                "description": "ResourceSelector is used to query resources using the associated infra resources."
+            },
+            "v1RespData": {
+                "type": "string",
+                "enum": [
+                    "RESP_DATA_UNSPECIFIED",
+                    "INDEX",
+                    "LITE",
+                    "FULL"
+                ],
+                "default": "RESP_DATA_UNSPECIFIED",
+                "description": "RespData provides flags which provides info about the fields that should be populated in the response.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated."
+            },
+            "v1Selector": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SelectorFilter"
+                        },
+                        "description": "FilterList is the list of all filters that should be applied."
+                    }
+                },
+                "description": "Selector is used to query resources using the associated labels or field names."
+            },
             "v1Sort": {
                 "type": "object",
                 "properties": {
@@ -368,10 +567,20 @@
                         "$ref": "#/components/schemas/SortByField"
                     },
                     "sortOrder": {
-                        "$ref": "#/components/schemas/SortOrderValue"
+                        "$ref": "#/components/schemas/v1SortOrderValue"
                     }
                 },
                 "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             }
         }
     }

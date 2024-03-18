@@ -28,6 +28,7 @@ type V1ListTargetClustersRequest struct {
 	FieldSelector *V1Selector `json:"fieldSelector,omitempty"`
 	InfraResourceSelector *V1ResourceSelector `json:"infraResourceSelector,omitempty"`
 	Sort *V1Sort `json:"sort,omitempty"`
+	RespData *V1RespData `json:"respData,omitempty"`
 }
 
 type _V1ListTargetClustersRequest V1ListTargetClustersRequest
@@ -39,6 +40,8 @@ type _V1ListTargetClustersRequest V1ListTargetClustersRequest
 func NewV1ListTargetClustersRequest(tenantId string) *V1ListTargetClustersRequest {
 	this := V1ListTargetClustersRequest{}
 	this.TenantId = tenantId
+	var respData V1RespData = V1RESPDATA_RESP_DATA_UNSPECIFIED
+	this.RespData = &respData
 	return &this
 }
 
@@ -47,6 +50,8 @@ func NewV1ListTargetClustersRequest(tenantId string) *V1ListTargetClustersReques
 // but it doesn't guarantee that properties required by API are set
 func NewV1ListTargetClustersRequestWithDefaults() *V1ListTargetClustersRequest {
 	this := V1ListTargetClustersRequest{}
+	var respData V1RespData = V1RESPDATA_RESP_DATA_UNSPECIFIED
+	this.RespData = &respData
 	return &this
 }
 
@@ -234,6 +239,38 @@ func (o *V1ListTargetClustersRequest) SetSort(v V1Sort) {
 	o.Sort = &v
 }
 
+// GetRespData returns the RespData field value if set, zero value otherwise.
+func (o *V1ListTargetClustersRequest) GetRespData() V1RespData {
+	if o == nil || IsNil(o.RespData) {
+		var ret V1RespData
+		return ret
+	}
+	return *o.RespData
+}
+
+// GetRespDataOk returns a tuple with the RespData field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *V1ListTargetClustersRequest) GetRespDataOk() (*V1RespData, bool) {
+	if o == nil || IsNil(o.RespData) {
+		return nil, false
+	}
+	return o.RespData, true
+}
+
+// HasRespData returns a boolean if a field has been set.
+func (o *V1ListTargetClustersRequest) HasRespData() bool {
+	if o != nil && !IsNil(o.RespData) {
+		return true
+	}
+
+	return false
+}
+
+// SetRespData gets a reference to the given V1RespData and assigns it to the RespData field.
+func (o *V1ListTargetClustersRequest) SetRespData(v V1RespData) {
+	o.RespData = &v
+}
+
 func (o V1ListTargetClustersRequest) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -259,6 +296,9 @@ func (o V1ListTargetClustersRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Sort) {
 		toSerialize["sort"] = o.Sort
+	}
+	if !IsNil(o.RespData) {
+		toSerialize["respData"] = o.RespData
 	}
 	return toSerialize, nil
 }

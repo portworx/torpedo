@@ -20,6 +20,7 @@ import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
 import "google/api/annotations.proto";
 
+import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/revision.proto";
 import "public/portworx/common/apiv1/selector.proto";
 import "public/portworx/common/apiv1/pagination.proto";
@@ -36,7 +37,7 @@ service TemplateDefinitionService{
   rpc GetRevision (public.portworx.common.v1.GetRevisionRequest)
       returns (public.portworx.common.v1.Revision){
       option(google.api.http) = {
-        get: "/pds/v1/catalog/templatedefinition/revision"
+        get: "/pds/v1/catalog/templateDefinition/revisions:get"
       };
     }
 
@@ -44,7 +45,7 @@ service TemplateDefinitionService{
   rpc ListRevisions (public.portworx.common.v1.ListRevisionsRequest)
       returns (public.portworx.common.v1.ListRevisionsResponse){
       option(google.api.http) = {
-        get: "/pds/v1/catalog/templatedefinition/revisions"
+        get: "/pds/v1/catalog/templateDefinition/revisions"
       };
     }
 
@@ -52,10 +53,34 @@ service TemplateDefinitionService{
   rpc ListTemplateKinds (ListTemplateKindsRequest)
     returns (ListTemplateKindsResponse){
       option(google.api.http) = {
-        get: "/pds/v1/catalog/templatedefinition/kinds"
+        get: "/pds/v1/catalog/templateDefinition/kinds"
       };
     }
    // TODO (PDS): Add RPCs to display UI friendly options to pick a schema template.
+
+  // ListTemplateTypes API returns the list of all supported template types.
+  rpc ListTemplateTypes (ListTemplateTypesRequest)
+      returns (ListTemplateTypesResponse) {
+    option(google.api.http) = {
+      get: "/pds/v1/catalog/templateDefinition/types"
+    };
+  }
+
+  // GetTemplateType API returns the template type by id.
+  rpc GetTemplateType(GetTemplateTypeRequest)
+      returns (TemplateType) {
+    option(google.api.http) = {
+      get: "/pds/v1/catalog/templateDefinition/types/{id}"
+    };
+  }
+
+  // ListTemplateSamples: Used to list template sample schema.
+  rpc ListTemplateSamples (ListTemplateSamplesRequest)
+      returns (ListTemplateSamplesResponse){
+    option(google.api.http) = {
+      get: "/pds/v1/catalog/templateDefinition/samples"
+    };
+  }
 }
 
 // ListTemplateKindResponse listing request.
@@ -80,4 +105,78 @@ message ListTemplateKindsResponse{
   //     aip.dev/not-precedent: We need this field for pagination. --)
   // Pagination metadata for this response.
   public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to list all template types.
+message ListTemplateTypesRequest {
+  // Pagination parameters for listing template types.
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 1 [(google.api.field_behavior) = OPTIONAL];
+
+  // Sorting details using which requested list of template types to be sorted.
+  public.portworx.common.v1.Sort sort = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Response for list template types.
+message ListTemplateTypesResponse {
+  // List of template types.
+  repeated TemplateType template_types = 1;
+
+  // Pagination metadata for this response.
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// Request to get template type.
+message GetTemplateTypeRequest {
+  // unique id of template type.
+  string id = 1;
+}
+
+// Template type containing id, mame and description.
+message TemplateType {
+  // UID of the template type.
+  int64 uid = 1 ;
+
+  // Name of the template type.
+  string name = 2;
+
+  // Description of the template type.
+  string description = 3;
+}
+
+// ListTemplateSamplesRequest list templates samples request.
+message ListTemplateSamplesRequest{
+  // filter sample templates based on kind, this accepts wild card, eg: pds:service:postgre*
+  string kind = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListTemplateSamplesResponse list templates samples response.
+message ListTemplateSamplesResponse{
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this to list all template samples. --)
+  // List of template samples.
+  repeated TemplateSample template_samples = 1;
+  // (-- api-linter: core::0132::response-unknown-fields=disabled
+  //     aip.dev/not-precedent: We need this field for pagination. --)
+  // Pagination metadata for this response.
+  public.portworx.common.v1.PageBasedPaginationResponse pagination = 2;
+}
+
+// TemplateSample represents the sample template schema.
+message TemplateSample {
+  // Metadata of the resource.
+  public.portworx.common.v1.Meta meta = 1;
+
+  // Status of the sample templates.
+  Info info = 2;
+}
+
+// Info of sample template.
+message Info {
+  // Kind of the template
+  string kind = 1;
+
+  // values of the sample template.
+  map<string, string> values = 2;
 }

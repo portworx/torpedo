@@ -32,19 +32,19 @@ option java_outer_classname = "TenantProto";
 // Tenant service provides APIs to interact with the Tenant entity.
 service TenantService {
 
-  // GetTenant API returns the info about  for given tenant id
+  // GetTenant API returns the info about  for given tenant id.
   rpc GetTenant(GetTenantRequest)
       returns (Tenant) {
     option(google.api.http) = {
-      get: "/v1/tenants/{tenant_id}"
+      get: "/core/v1/tenants/{tenant_id}"
     };
   }
 
-  // CreateTenant API creates a new Tenant
+  // CreateTenant API creates a new Tenant.
   rpc CreateTenant(CreateTenantRequest)
       returns (Tenant) {
     option(google.api.http) = {
-      post: "/v1/tenants"
+      post: "/core/v1/tenants"
       body: "tenant"
     };
   }
@@ -53,7 +53,7 @@ service TenantService {
   rpc UpdateTenant(UpdateTenantRequest)
       returns (Tenant) {
     option(google.api.http) = {
-      put: "/v1/tenants/{tenant.meta.uid}"
+      put: "/core/v1/tenants/{tenant.meta.uid}"
       body: "tenant"
     };
   }
@@ -62,7 +62,7 @@ service TenantService {
   rpc DeleteTenant(DeleteTenantRequest)
       returns (google.protobuf.Empty) {
     option(google.api.http) = {
-      delete: "/v1/tenants/{tenant_id}"
+      delete: "/core/v1/tenants/{tenant_id}"
     };
   }
 
@@ -70,21 +70,21 @@ service TenantService {
   rpc ListTenants(ListTenantsRequest)
       returns (ListTenantsResponse) {
     option(google.api.http) = {
-      get: "/v1/tenants"
+      get: "/core/v1/tenants"
     };
   }
 }
 
-// ListTenantsRequest  is the request message to the ListTenants API
+// ListTenantsRequest  is the request message to the ListTenants API.
 message ListTenantsRequest {
   // Pagination parameters for listing tenants.
   public.portworx.common.v1.PageBasedPaginationRequest pagination = 1;
 }
 
 // ListTenantsResponse is the response message to the ListTenants API and contains
-// the list of tenants visible to the caller
+// the list of tenants visible to the caller.
 message ListTenantsResponse {
-  // list of tenant response
+  // list of tenant response.
   repeated Tenant tenants = 1;
   // Pagination metadata for this response.
   // (-- api-linter: core::0132::response-unknown-fields=disabled
@@ -101,13 +101,13 @@ message GetTenantRequest {
 
 // Request for updating a tenant.
 message UpdateTenantRequest {
-  //tenant which  needs to be updated
+  //tenant which  needs to be updated.
   Tenant tenant = 1;
 }
 
 // Request for creating a tenant.
 message CreateTenantRequest {
-  // tenant to be created
+  // tenant to be created.
   Tenant tenant = 1;
 }
 
@@ -122,7 +122,7 @@ message DeleteTenantRequest {
 message Tenant {
   // Metadata of the tenant.
   public.portworx.common.v1.Meta meta = 1;
-  // status of the tenant
+  // status of the tenant.
   Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
@@ -146,5 +146,7 @@ message Phase {
     DELETE_PENDING = 2;
     // Deletion of the tenant is scheduled and in progress.
     DELETE_IN_PROGRESS = 3;
+    // Deletion is failed
+    DELETE_FAILED=4;
   }
 }

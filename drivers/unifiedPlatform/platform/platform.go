@@ -62,7 +62,7 @@ type CloudCredentialsInterface interface {
 	ListCloudCredentials(*CloudCredentials) ([]CloudCredentials, error)
 	GetCloudCredentials(*CloudCredentials) (*CloudCredentialsResponse, error)
 	CreateCloudCredentials(*CloudCredentials) (*CloudCredentialsResponse, error)
-	DeleteCloudCredential(credentials *CloudCredentials) error
+	DeleteCloudCredential(*CloudCredentials) error
 	UpdateCloudCredentials(*WorkFlowRequest) (*WorkFlowResponse, error)
 }
 type NamespaceInterface interface {

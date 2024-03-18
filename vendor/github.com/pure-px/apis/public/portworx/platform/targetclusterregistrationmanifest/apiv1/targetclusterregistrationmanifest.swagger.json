@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/tenants/{tenantId}:registrationManifests": {
+        "/core/v1/tenants/{tenantId}:registrationManifests": {
             "post": {
-                "summary": "GetTargetClusterRegistrationManifest fetches registration manifest for the given request",
+                "summary": "GetTargetClusterRegistrationManifest fetches registration manifest for the given request.",
                 "operationId": "TargetClusterRegistrationManifestService_GenerateTargetClusterRegistrationManifest",
                 "responses": {
                     "200": {
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "tenanat_id is the id of the tenant for which manifest is requested",
+                        "description": "tenanat_id is the id of the tenant for which manifest is requested.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -70,13 +70,13 @@
                 "properties": {
                     "clusterName": {
                         "type": "string",
-                        "title": "cluster_name which the user wants to use"
+                        "description": "cluster_name which the user wants to use."
                     },
                     "config": {
                         "$ref": "#/components/schemas/v1Config"
                     }
                 },
-                "title": "GetTargetClusterRegistrationManifestRequest is the request message to the GetTargetClusterRegistrationManifest API"
+                "description": "GetTargetClusterRegistrationManifestRequest is the request message to the GetTargetClusterRegistrationManifest API."
             },
             "protobufAny": {
                 "type": "object",
@@ -115,73 +115,73 @@
                         "$ref": "#/components/schemas/v1ProxyConfig"
                     }
                 },
-                "title": "Configuration of the target cluster registration manifest"
+                "description": "Configuration of the target cluster registration manifest."
             },
             "v1CustomImageRegistryConfig": {
                 "type": "object",
                 "properties": {
                     "registryUrl": {
                         "type": "string",
-                        "title": "registry url/domain, e.g. - in org.example.com/namespace/sub-namespace/repo:tag, here `org.example.com` is\nthe registry url"
+                        "description": "registry url/domain, e.g. - in org.example.com/namespace/sub-namespace/repo:tag, here `org.example.com` is\nthe registry url."
                     },
                     "registryNamespace": {
                         "type": "string",
-                        "title": "registry namespace, e.g. - in org.example.com/namespace/sub-namespace/repo:tag, here `namespace/sub-namespace` is\nthe registry namespace"
+                        "description": "registry namespace, e.g. - in org.example.com/namespace/sub-namespace/repo:tag, here `namespace/sub-namespace` is\nthe registry namespace."
                     },
                     "username": {
                         "type": "string",
-                        "title": "username for authenticating to a private registry"
+                        "description": "username for authenticating to a private registry."
                     },
                     "password": {
                         "type": "string",
-                        "title": "password for authenticating to a private registry"
+                        "description": "password for authenticating to a private registry."
                     },
                     "caCert": {
                         "type": "string",
-                        "title": "ca cert of the registry server"
+                        "description": "ca cert of the registry server."
                     }
                 },
-                "title": "CustomImageRegistryConfig holds image registry credential configs"
+                "description": "CustomImageRegistryConfig holds image registry credential configs."
             },
             "v1ProxyConfig": {
                 "type": "object",
                 "properties": {
                     "httpUrl": {
                         "type": "string",
-                        "title": "http proxy url with port, e.g. - http://192.168.0.1:1234"
+                        "description": "http proxy url with port, e.g. - http://192.168.0.1:1234."
                     },
                     "httpsUrl": {
                         "type": "string",
-                        "title": "https proxy url with port, e.g. - https://192.168.0.1:4567"
+                        "description": "https proxy url with port, e.g. - https://192.168.0.1:4567."
                     },
                     "username": {
                         "type": "string",
-                        "title": "username for authenticating to the proxy server"
+                        "description": "username for authenticating to the proxy server."
                     },
                     "password": {
                         "type": "string",
-                        "title": "password for authenticating to the proxy server"
+                        "description": "password for authenticating to the proxy server."
                     },
                     "noProxy": {
                         "type": "string",
-                        "title": "comma separated no proxy urls list, e.g. - 127.0.0.1,localhost,.svc,192.168.0.1/16,github.com,KUBERNETES_SERVICE_HOST"
+                        "description": "comma separated no proxy urls list, e.g. - 127.0.0.1,localhost,.svc,192.168.0.1/16,github.com,KUBERNETES_SERVICE_HOST."
                     },
                     "caCert": {
                         "type": "string",
-                        "title": "ca cert of the proxy server"
+                        "description": "ca cert of the proxy server."
                     }
                 },
-                "title": "ProxyConfig holds proxy configs"
+                "description": "ProxyConfig holds proxy configs."
             },
             "v1TargetClusterRegistrationManifest": {
                 "type": "object",
                 "properties": {
                     "manifest": {
                         "type": "string",
-                        "title": "manifest contains the yaml string of the registration manifest"
+                        "description": "manifest contains the yaml string of the registration manifest."
                     }
                 },
-                "title": "TargetClusterRegistrationManifest is the response message of the GetTargetClusterRegistrationManifest API"
+                "description": "TargetClusterRegistrationManifest is the response message of the GetTargetClusterRegistrationManifest API."
             }
         }
     }

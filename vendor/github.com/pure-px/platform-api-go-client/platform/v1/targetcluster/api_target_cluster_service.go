@@ -70,7 +70,7 @@ func (a *TargetClusterServiceAPIService) TargetClusterServiceDeleteTargetCluster
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{id}"
+	localVarPath := localBasePath + "/core/v1/clusters/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -182,7 +182,7 @@ func (a *TargetClusterServiceAPIService) TargetClusterServiceGetTargetClusterExe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{id}"
+	localVarPath := localBasePath + "/core/v1/clusters/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -259,6 +259,7 @@ type ApiTargetClusterServiceListTargetClustersRequest struct {
 	paginationPageSize *string
 	sortSortBy *string
 	sortSortOrder *string
+	respData *string
 }
 
 // List target clusters associated with a tenant.
@@ -288,6 +289,12 @@ func (r ApiTargetClusterServiceListTargetClustersRequest) SortSortBy(sortSortBy 
 // Order of sorting to be applied on requested list. If sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.   - VALUE_UNSPECIFIED: Unspecified, do not use.  - ASC: Sort order ascending.  - DESC: Sort order descending.
 func (r ApiTargetClusterServiceListTargetClustersRequest) SortSortOrder(sortSortOrder string) ApiTargetClusterServiceListTargetClustersRequest {
 	r.sortSortOrder = &sortSortOrder
+	return r
+}
+
+// Response data flags for listing target clusters.   - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.  - INDEX: only uid, name, labels should be populated.  - LITE: only meta data should be populated.  - FULL: complete resource should be populated.
+func (r ApiTargetClusterServiceListTargetClustersRequest) RespData(respData string) ApiTargetClusterServiceListTargetClustersRequest {
+	r.respData = &respData
 	return r
 }
 
@@ -323,7 +330,7 @@ func (a *TargetClusterServiceAPIService) TargetClusterServiceListTargetClustersE
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters"
+	localVarPath := localBasePath + "/core/v1/clusters"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -350,6 +357,12 @@ func (a *TargetClusterServiceAPIService) TargetClusterServiceListTargetClustersE
 	} else {
 		var defaultValue string = "VALUE_UNSPECIFIED"
 		r.sortSortOrder = &defaultValue
+	}
+	if r.respData != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "respData", r.respData, "")
+	} else {
+		var defaultValue string = "RESP_DATA_UNSPECIFIED"
+		r.respData = &defaultValue
 	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -457,7 +470,7 @@ func (a *TargetClusterServiceAPIService) TargetClusterServiceListTargetClusters2
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters:search"
+	localVarPath := localBasePath + "/core/v1/clusters:search"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -577,7 +590,7 @@ func (a *TargetClusterServiceAPIService) TargetClusterServiceUpdateTargetCluster
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{targetCluster.meta.uid}"
+	localVarPath := localBasePath + "/core/v1/clusters/{targetCluster.meta.uid}"
 	localVarPath = strings.Replace(localVarPath, "{"+"targetCluster.meta.uid"+"}", url.PathEscape(parameterValueToString(r.targetClusterMetaUid, "targetClusterMetaUid")), -1)
 
 	localVarHeaderParams := make(map[string]string)

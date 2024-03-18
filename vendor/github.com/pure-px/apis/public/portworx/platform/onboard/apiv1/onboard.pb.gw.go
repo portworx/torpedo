@@ -131,7 +131,7 @@ func RegisterOnboardServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/CreateAccountRegistration", runtime.WithHTTPPathPattern("/v1/registration"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/CreateAccountRegistration", runtime.WithHTTPPathPattern("/core/v1/registration"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -156,7 +156,7 @@ func RegisterOnboardServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/UpdateAccountRegistration", runtime.WithHTTPPathPattern("/v1/registration/{account_registration.meta.uid}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/UpdateAccountRegistration", runtime.WithHTTPPathPattern("/core/v1/registration/{account_registration.meta.uid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -220,7 +220,7 @@ func RegisterOnboardServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/CreateAccountRegistration", runtime.WithHTTPPathPattern("/v1/registration"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/CreateAccountRegistration", runtime.WithHTTPPathPattern("/core/v1/registration"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -242,7 +242,7 @@ func RegisterOnboardServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/UpdateAccountRegistration", runtime.WithHTTPPathPattern("/v1/registration/{account_registration.meta.uid}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.onboard.v1.OnboardService/UpdateAccountRegistration", runtime.WithHTTPPathPattern("/core/v1/registration/{account_registration.meta.uid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -262,9 +262,9 @@ func RegisterOnboardServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 }
 
 var (
-	pattern_OnboardService_CreateAccountRegistration_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "registration"}, ""))
+	pattern_OnboardService_CreateAccountRegistration_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "registration"}, ""))
 
-	pattern_OnboardService_UpdateAccountRegistration_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "registration", "account_registration.meta.uid"}, ""))
+	pattern_OnboardService_UpdateAccountRegistration_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "registration", "account_registration.meta.uid"}, ""))
 )
 
 var (

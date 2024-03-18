@@ -32,27 +32,27 @@ service WhoAmIService {
   rpc WhoAmI(google.protobuf.Empty)
     returns (WhoAmIResponse) {
     option(google.api.http) = {
-      get: "/v1/whoami"
+      get: "/core/v1/whoami"
     };
   }
 }
 
-// WhoAmI response return accounts for current actor
+// WhoAmI response return accounts for current actor.
 message WhoAmIResponse {
-  // id of current actor
+  // id of current actor.
   string id  = 1;
-  // email of current actor
+  // email of current actor.
   string email =2;
-  // accounts of current actor
+  // accounts of current actor.
   repeated Account accounts = 3;
 }
 
-// Account details in WhoAmI Respose
+// Account details in WhoAmI Response.
 message Account {
-  // Id of an account
+  // Id of an account.
   string id =1;
-  // Account DNS name
+  // Account DNS name.
   string dns_name = 2;
-  // Name of Account
+  // Name of Account.
   string name = 3;
 }

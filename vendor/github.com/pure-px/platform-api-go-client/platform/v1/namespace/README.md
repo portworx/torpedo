@@ -78,8 +78,9 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*NamespaceServiceAPI* | [**NamespaceServiceListNamespaces**](docs/NamespaceServiceAPI.md#namespaceservicelistnamespaces) | **Get** /v1/namespaces | List API lists all the namespaces for a tenant
-*NamespaceServiceAPI* | [**NamespaceServiceListNamespaces2**](docs/NamespaceServiceAPI.md#namespaceservicelistnamespaces2) | **Post** /v1/namespaces:search | List API lists all the namespaces for a tenant
+*NamespaceServiceAPI* | [**NamespaceServiceDeleteNamespace**](docs/NamespaceServiceAPI.md#namespaceservicedeletenamespace) | **Delete** /core/v1/namespaces/{id} | DeleteNamespace API will trigger deletion and cleanup on the control plane.
+*NamespaceServiceAPI* | [**NamespaceServiceListNamespaces**](docs/NamespaceServiceAPI.md#namespaceservicelistnamespaces) | **Get** /core/v1/namespaces | List API lists all the namespaces for a tenant
+*NamespaceServiceAPI* | [**NamespaceServiceListNamespaces2**](docs/NamespaceServiceAPI.md#namespaceservicelistnamespaces2) | **Post** /core/v1/namespaces:search | List API lists all the namespaces for a tenant
 
 
 ## Documentation For Models

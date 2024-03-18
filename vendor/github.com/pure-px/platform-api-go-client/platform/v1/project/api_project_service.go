@@ -69,7 +69,7 @@ func (a *ProjectServiceAPIService) ProjectServiceAssociateResourcesExecute(r Api
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects/{projectId}:associate"
+	localVarPath := localBasePath + "/core/v1/projects/{projectId}:associate"
 	localVarPath = strings.Replace(localVarPath, "{"+"projectId"+"}", url.PathEscape(parameterValueToString(r.projectId, "projectId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -189,7 +189,7 @@ func (a *ProjectServiceAPIService) ProjectServiceCreateProjectExecute(r ApiProje
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}/projects"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}/projects"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -303,7 +303,7 @@ func (a *ProjectServiceAPIService) ProjectServiceDeleteProjectExecute(r ApiProje
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects/{projectId}"
+	localVarPath := localBasePath + "/core/v1/projects/{projectId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"projectId"+"}", url.PathEscape(parameterValueToString(r.projectId, "projectId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -418,7 +418,7 @@ func (a *ProjectServiceAPIService) ProjectServiceDisassociateResourcesExecute(r 
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects/{projectId}:disassociate"
+	localVarPath := localBasePath + "/core/v1/projects/{projectId}:disassociate"
 	localVarPath = strings.Replace(localVarPath, "{"+"projectId"+"}", url.PathEscape(parameterValueToString(r.projectId, "projectId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -532,7 +532,7 @@ func (a *ProjectServiceAPIService) ProjectServiceGetProjectExecute(r ApiProjectS
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects/{projectId}"
+	localVarPath := localBasePath + "/core/v1/projects/{projectId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"projectId"+"}", url.PathEscape(parameterValueToString(r.projectId, "projectId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -680,7 +680,7 @@ func (a *ProjectServiceAPIService) ProjectServiceListProjectsExecute(r ApiProjec
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects"
+	localVarPath := localBasePath + "/core/v1/projects"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -819,7 +819,7 @@ func (a *ProjectServiceAPIService) ProjectServiceListProjects2Execute(r ApiProje
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects:search"
+	localVarPath := localBasePath + "/core/v1/projects:search"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -938,7 +938,7 @@ func (a *ProjectServiceAPIService) ProjectServiceUpdateProjectExecute(r ApiProje
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/projects/{meta.uid}"
+	localVarPath := localBasePath + "/core/v1/projects/{meta.uid}"
 	localVarPath = strings.Replace(localVarPath, "{"+"meta.uid"+"}", url.PathEscape(parameterValueToString(r.metaUid, "metaUid")), -1)
 
 	localVarHeaderParams := make(map[string]string)

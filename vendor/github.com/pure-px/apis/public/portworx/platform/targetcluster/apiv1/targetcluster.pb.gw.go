@@ -289,7 +289,7 @@ func RegisterTargetClusterServiceHandlerServer(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/v1/clusters"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/core/v1/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -314,7 +314,7 @@ func RegisterTargetClusterServiceHandlerServer(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/v1/clusters:search"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/core/v1/clusters:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -339,7 +339,7 @@ func RegisterTargetClusterServiceHandlerServer(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/GetTargetCluster", runtime.WithHTTPPathPattern("/v1/clusters/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/GetTargetCluster", runtime.WithHTTPPathPattern("/core/v1/clusters/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -364,7 +364,7 @@ func RegisterTargetClusterServiceHandlerServer(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/DeleteTargetCluster", runtime.WithHTTPPathPattern("/v1/clusters/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/DeleteTargetCluster", runtime.WithHTTPPathPattern("/core/v1/clusters/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -389,7 +389,7 @@ func RegisterTargetClusterServiceHandlerServer(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/UpdateTargetCluster", runtime.WithHTTPPathPattern("/v1/clusters/{target_cluster.meta.uid}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/UpdateTargetCluster", runtime.WithHTTPPathPattern("/core/v1/clusters/{target_cluster.meta.uid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -453,7 +453,7 @@ func RegisterTargetClusterServiceHandlerClient(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/v1/clusters"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/core/v1/clusters"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -475,7 +475,7 @@ func RegisterTargetClusterServiceHandlerClient(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/v1/clusters:search"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/ListTargetClusters", runtime.WithHTTPPathPattern("/core/v1/clusters:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -497,7 +497,7 @@ func RegisterTargetClusterServiceHandlerClient(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/GetTargetCluster", runtime.WithHTTPPathPattern("/v1/clusters/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/GetTargetCluster", runtime.WithHTTPPathPattern("/core/v1/clusters/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -519,7 +519,7 @@ func RegisterTargetClusterServiceHandlerClient(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/DeleteTargetCluster", runtime.WithHTTPPathPattern("/v1/clusters/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/DeleteTargetCluster", runtime.WithHTTPPathPattern("/core/v1/clusters/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -541,7 +541,7 @@ func RegisterTargetClusterServiceHandlerClient(ctx context.Context, mux *runtime
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/UpdateTargetCluster", runtime.WithHTTPPathPattern("/v1/clusters/{target_cluster.meta.uid}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.TargetCluster.v1.TargetClusterService/UpdateTargetCluster", runtime.WithHTTPPathPattern("/core/v1/clusters/{target_cluster.meta.uid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -561,15 +561,15 @@ func RegisterTargetClusterServiceHandlerClient(ctx context.Context, mux *runtime
 }
 
 var (
-	pattern_TargetClusterService_ListTargetClusters_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "clusters"}, ""))
+	pattern_TargetClusterService_ListTargetClusters_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "clusters"}, ""))
 
-	pattern_TargetClusterService_ListTargetClusters_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "clusters"}, "search"))
+	pattern_TargetClusterService_ListTargetClusters_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "clusters"}, "search"))
 
-	pattern_TargetClusterService_GetTargetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "clusters", "id"}, ""))
+	pattern_TargetClusterService_GetTargetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "clusters", "id"}, ""))
 
-	pattern_TargetClusterService_DeleteTargetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "clusters", "id"}, ""))
+	pattern_TargetClusterService_DeleteTargetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "clusters", "id"}, ""))
 
-	pattern_TargetClusterService_UpdateTargetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "clusters", "target_cluster.meta.uid"}, ""))
+	pattern_TargetClusterService_UpdateTargetCluster_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "clusters", "target_cluster.meta.uid"}, ""))
 )
 
 var (
