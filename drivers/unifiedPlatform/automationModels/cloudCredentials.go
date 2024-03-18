@@ -22,6 +22,7 @@ type CreateCloudCredentials struct {
 
 type Provider struct {
 	CloudProvider int32
+	Name          string
 }
 
 type CloudConfig struct {

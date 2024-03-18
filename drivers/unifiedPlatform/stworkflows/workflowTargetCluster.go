@@ -15,7 +15,6 @@ import (
 
 type WorkflowTargetCluster struct {
 	KubeConfig string
-	Platform   WorkflowPlatform
 	Project    WorkflowProject
 	ClusterUID string
 }
@@ -44,7 +43,7 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 	// Get Manifest from API
 
 	clusterName := fmt.Sprintf("Cluster_%v", time.Now().Unix())
-	manifest, err := platformLibs.GetManifest(targetCluster.Platform.TenantId, clusterName)
+	manifest, err := platformLibs.GetManifest(targetCluster.Project.Platform.TenantId, clusterName)
 	if err != nil {
 		return targetCluster, fmt.Errorf("Failed while getting Manifests: %v\n", err)
 	}
@@ -119,7 +118,7 @@ func (targetCluster *WorkflowTargetCluster) DeregisterFromControlPlane() error {
 	if len(pods.Items) > 0 {
 		log.InfoD("Uninstalling Manifests ...")
 		// Get Manifest from API
-		manifest, err := platformLibs.GetManifest(targetCluster.Platform.TenantId, "")
+		manifest, err := platformLibs.GetManifest(targetCluster.Project.Platform.TenantId, "")
 		if err != nil {
 			return fmt.Errorf("Failed while getting platform manifests: %v\n", err)
 		}
@@ -153,7 +152,7 @@ func (targetCluster *WorkflowTargetCluster) ValidatePlatformComponents() error {
 
 func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC() error {
 
-	availableApps, err := platformLibs.ListAvailableApplicationsForTenant(targetCluster.ClusterUID, targetCluster.Platform.TenantId)
+	availableApps, err := platformLibs.ListAvailableApplicationsForTenant(targetCluster.ClusterUID, targetCluster.Project.Platform.TenantId)
 	if err != nil {
 		return fmt.Errorf("Failed to get list of available Apps: %v\n", err)
 	}
@@ -174,7 +173,7 @@ func (targetCluster *WorkflowTargetCluster) InstallPDSAppOnTC() error {
 }
 
 func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName string) (string, error) {
-	tcList, err := platformLibs.ListTargetClusters(targetCluster.Platform.TenantId)
+	tcList, err := platformLibs.ListTargetClusters(targetCluster.Project.Platform.TenantId)
 	if err != nil {
 		return "", err
 	}
@@ -190,7 +189,7 @@ func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName strin
 }
 
 func (targetCluster *WorkflowTargetCluster) GetTargetClusterHealth(clusterName string) error {
-	tcList, err := platformLibs.ListTargetClusters(targetCluster.Platform.TenantId)
+	tcList, err := platformLibs.ListTargetClusters(targetCluster.Project.Platform.TenantId)
 	if err != nil {
 		return err
 	}
