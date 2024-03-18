@@ -37,17 +37,17 @@ type AppInfo struct {
 	IPAddress        string
 }
 
-type awsCompatibleStorageClient struct {
-	endpoint  string
-	accessKey string
-	secretKey string
-	region    string
+type AwsCompatibleStorageClient struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Region    string
 }
 
-type awsStorageClient struct {
-	accessKey string
-	secretKey string
-	region    string
+type AwsStorageClient struct {
+	AccessKey string
+	SecretKey string
+	Region    string
 }
 
 const (
@@ -74,12 +74,12 @@ func RandomString(length int) string {
 	return randomString
 }
 
-func (awsObj *awsStorageClient) CreateS3Bucket(bucketName string) error {
+func (awsObj *AwsStorageClient) CreateS3Bucket(bucketName string) error {
 	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
-			Region:      aws.String(awsObj.region),
-			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			Region:      aws.String(awsObj.Region),
+			Credentials: credentials.NewStaticCredentials(awsObj.AccessKey, awsObj.SecretKey, ""),
 		},
 	})
 
@@ -108,13 +108,13 @@ func (awsObj *awsStorageClient) CreateS3Bucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsCompatibleStorageClient) CreateS3CompBucket(bucketName string) error {
+func (awsObj *AwsCompatibleStorageClient) CreateS3CompBucket(bucketName string) error {
 	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
-			Endpoint:         aws.String(awsObj.endpoint),
-			Region:           aws.String(awsObj.region),
-			Credentials:      credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			Endpoint:         aws.String(awsObj.Endpoint),
+			Region:           aws.String(awsObj.Region),
+			Credentials:      credentials.NewStaticCredentials(awsObj.AccessKey, awsObj.SecretKey, ""),
 			S3ForcePathStyle: aws.Bool(true),
 		},
 	})

@@ -1,5 +1,15 @@
 package automationModels
 
+type BackupLocationRequest struct {
+	Create BackupLocation
+	List   BackupLocation
+}
+
+type BackupLocationResponse struct {
+	Create BackupLocation
+	List   BackupLocation
+}
+
 type BackupLocation struct {
 	TenantID string
 	Meta     Meta

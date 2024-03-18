@@ -37,14 +37,14 @@ func (BackupLocGrpcV1 *PlatformGrpc) getBackupLocClient() (context.Context, publ
 }
 
 // ListBackupLocations return lis of backup locations
-func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocation) ([]*BackupLocation, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocationRequest) ([]*BackupLocationResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	bkpLocResponse := []*BackupLocation{}
+	bkpLocResponse := []*BackupLocationResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	listbkpLocationRequest := &publicbackuplocapi.ListBackupLocationsRequest{
-		TenantId:   request.TenantID,
+		TenantId:   request.List.TenantID,
 		Pagination: NewPaginationRequest(1, 50),
 	}
 	backupLocationModels, err := backupLocationClient.ListBackupLocations(ctx, listbkpLocationRequest, grpc.PerRPCCredentials(credentials))
@@ -85,7 +85,79 @@ func (BackupLocGrpcV1 *PlatformGrpc) GetBackupLocation(getReq *WorkFlowRequest) 
 	return &bckpLocResp, nil
 }
 
-func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Config {
+// CreateBackupLocation return newly created backup location model.
+func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(request *BackupLocationRequest) (*BackupLocationResponse, error) {
+	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	createRequest := request.Create
+	createAppRequest := &publicbackuplocapi.CreateBackupLocationRequest{
+		TenantId: createRequest.TenantID,
+		BackupLocation: &publicbackuplocapi.BackupLocation{
+			Meta: &commonapiv1.Meta{
+				Name: *createRequest.Meta.Name,
+			},
+			Config: backupLocationConfig(request),
+		},
+	}
+
+	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createAppRequest, grpc.PerRPCCredentials(credentials))
+	if err != nil {
+		return nil, fmt.Errorf("error when called `BackupLocationServiceCreateBackupLocation` to create backup target - %v", err)
+	}
+
+	log.Infof("Value of backupLocation - [%v]", backupLocationModel)
+
+	bkpLocationResponse := copyCloudLocationResponse(backupLocationModel)
+
+	log.Infof("Value of backupLocation after copy - [%v]", bkpLocationResponse)
+	return bkpLocationResponse, nil
+}
+
+// UpdateBackupLocation return updated backup location model.
+func (BackupLocGrpcV1 *PlatformGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
+	bckpLocResp := WorkFlowResponse{}
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	var updateAppRequest *publicbackuplocapi.UpdateBackupLocationRequest
+	err = copier.Copy(&updateAppRequest, updateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupLocationModel, err := backupLocationClient.UpdateBackupLocation(ctx, updateAppRequest, grpc.PerRPCCredentials(credentials))
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	err = copier.Copy(&bckpLocResp, backupLocationModel)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
+	return &bckpLocResp, nil
+
+}
+
+// SyncToBackupLocation returned synced backup location model.
+
+// DeleteBackupLocation delete backup location and return status.
+func (BackupLocGrpcV1 *PlatformGrpc) DeleteBackupLocation(backupLocation *BackupLocationRequest) error {
+	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
+	if err != nil {
+		return fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	deleteRequest := &publicbackuplocapi.DeleteBackupLocationRequest{Id: *backupLocation.List.Meta.Uid}
+	_, err = backupLocationClient.DeleteBackupLocation(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
+	if err != nil {
+		return fmt.Errorf("Error when calling `BackupLocationServiceDeleteBackupLocation`: %v\n", err)
+	}
+	return nil
+}
+
+func backupLocationConfig(request *BackupLocationRequest) *publicbackuplocapi.Config {
+	createRequest := request.Create
 	PROVIDER_TYPE := createRequest.Config.Provider.CloudProvider
 
 	switch PROVIDER_TYPE {
@@ -151,8 +223,9 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 	}
 }
 
-func copyCloudLocationResponse(bkpLocation *publicbackuplocapi.BackupLocation) *BackupLocation {
-	bkpLocResp := BackupLocation{}
+func copyCloudLocationResponse(bkpLocation *publicbackuplocapi.BackupLocation) *BackupLocationResponse {
+	resp := BackupLocationResponse{}
+	bkpLocResp := resp.Create
 
 	//Test Print
 	log.Infof("bucket Name before copy [%s]", bkpLocation.Config.GetS3Storage().BucketName)
@@ -181,76 +254,6 @@ func copyCloudLocationResponse(bkpLocation *publicbackuplocapi.BackupLocation) *
 	log.Infof("end point after copy [%s]", bkpLocResp.Config.BkpLocation.S3Storage.Endpoint)
 	log.Infof("region after copy [%s]", bkpLocResp.Config.BkpLocation.S3Storage.Region)
 
-	return &bkpLocResp
+	return &resp
 
-}
-
-// CreateBackupLocation return newly created backup location model.
-func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupLocation) (*BackupLocation, error) {
-	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	createAppRequest := &publicbackuplocapi.CreateBackupLocationRequest{
-		TenantId: createRequest.TenantID,
-		BackupLocation: &publicbackuplocapi.BackupLocation{
-			Meta: &commonapiv1.Meta{
-				Name: *createRequest.Meta.Name,
-			},
-			Config: backupLocationConfig(createRequest),
-		},
-	}
-
-	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createAppRequest, grpc.PerRPCCredentials(credentials))
-	if err != nil {
-		return nil, fmt.Errorf("error when called `BackupLocationServiceCreateBackupLocation` to create backup target - %v", err)
-	}
-
-	log.Infof("Value of backupLocation - [%v]", backupLocationModel)
-
-	bkpLocationResponse := copyCloudLocationResponse(backupLocationModel)
-
-	log.Infof("Value of backupLocation after copy - [%v]", bkpLocationResponse)
-	return bkpLocationResponse, nil
-}
-
-// UpdateBackupLocation return updated backup location model.
-func (BackupLocGrpcV1 *PlatformGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
-	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	bckpLocResp := WorkFlowResponse{}
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	var updateAppRequest *publicbackuplocapi.UpdateBackupLocationRequest
-	err = copier.Copy(&updateAppRequest, updateRequest)
-	if err != nil {
-		return nil, err
-	}
-	backupLocationModel, err := backupLocationClient.UpdateBackupLocation(ctx, updateAppRequest, grpc.PerRPCCredentials(credentials))
-	if err != nil {
-		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	err = copier.Copy(&bckpLocResp, backupLocationModel)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Value of backupLocation after copy - [%v]", bckpLocResp)
-	return &bckpLocResp, nil
-
-}
-
-// SyncToBackupLocation returned synced backup location model.
-
-// DeleteBackupLocation delete backup location and return status.
-func (BackupLocGrpcV1 *PlatformGrpc) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
-	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	if err != nil {
-		return fmt.Errorf("Error in getting context for api call: %v\n", err)
-	}
-	deleteRequest := &publicbackuplocapi.DeleteBackupLocationRequest{Id: backupLocationID.Id}
-	_, err = backupLocationClient.DeleteBackupLocation(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
-	if err != nil {
-		return fmt.Errorf("Error when calling `BackupLocationServiceDeleteBackupLocation`: %v\n", err)
-	}
-	return nil
 }

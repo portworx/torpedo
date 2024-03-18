@@ -180,6 +180,10 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 					log.Infof("credentials Id: [%s]", cred.ID)
 				}
 			}
+
+			//Deleting the backuplocation ID
+			err = wfbkpLoc.DeleteBackupLocation(wfbkpLoc.BkpLocation.BkpLocationId)
+			log.FailOnError(err, "error while deleting backup location")
 		})
 	})
 

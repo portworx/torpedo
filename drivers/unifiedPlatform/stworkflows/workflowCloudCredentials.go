@@ -32,3 +32,7 @@ func (cloudCredentials *WorkflowCloudCredentials) CreateCloudCredentials(backUpT
 
 	return cloudCredentials, nil
 }
+
+func (cloudCredentials *WorkflowCloudCredentials) DeleteCloudCredentials(cloudCredentialId string) error {
+	return platformLibs.DeleteCloudCredential(cloudCredentialId)
+}

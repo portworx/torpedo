@@ -66,7 +66,7 @@ func (cloudCredGrpcV1 *PlatformGrpc) ListCloudCredentials(request *CloudCredenti
 }
 
 // GetCloudCredentials gets cloud credentials by ts id
-func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *CloudCredentials) (*CloudCredentials, error) {
+func (cloudCredGrpcV1 *PlatformGrpc) GetCloudCredentials(getWorkflowRequest *CloudCredentials) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -149,8 +149,8 @@ func cloudConfig(createRequest *CloudCredentials) *publiccloudcredapi.Config {
 	}
 }
 
-func copyCloudCredResponse(providerType int32, cloudCredModel *publiccloudcredapi.CloudCredential) *CloudCredentials {
-	cloudCredResponse := CloudCredentials{}
+func copyCloudCredResponse(providerType int32, cloudCredModel *publiccloudcredapi.CloudCredential) *CloudCredentialsResponse {
+	cloudCredResponse := CloudCredentialsResponse{}
 
 	//Test Print
 	log.Infof("access key before copy [%s]", cloudCredModel.Config.GetS3Credentials().AccessKey)
@@ -187,7 +187,7 @@ func copyCloudCredResponse(providerType int32, cloudCredModel *publiccloudcredap
 }
 
 // CreateCloudCredentials return newly created cloud credentials
-func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentials, error) {
+func (cloudCredGrpcV1 *PlatformGrpc) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -251,12 +251,12 @@ func (cloudCredGrpcV1 *PlatformGrpc) UpdateCloudCredentials(updateRequest *WorkF
 }
 
 // DeleteCloudCredential delete cloud cred model.
-func (cloudCredGrpcV1 *PlatformGrpc) DeleteCloudCredential(cloudCredId *WorkFlowRequest) error {
+func (cloudCredGrpcV1 *PlatformGrpc) DeleteCloudCredential(cloudCred *CloudCredentials) error {
 	ctx, cloudCredsClient, _, err := cloudCredGrpcV1.getCloudCredClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	deleteRequest := &publiccloudcredapi.DeleteCloudCredentialRequest{Id: cloudCredId.Id}
+	deleteRequest := &publiccloudcredapi.DeleteCloudCredentialRequest{Id: cloudCred.Get.CloudCredentialsId}
 	_, err = cloudCredsClient.DeleteCloudCredential(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return fmt.Errorf("Error when calling `DeleteCloudCredential`: %v\n", err)
