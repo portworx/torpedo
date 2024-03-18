@@ -2,14 +2,14 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"os"
 	"strings"
 )
 
-func ListBackupLocation(tenantId string) ([]*apiStructs.BackupLocation, error) {
-	listReq := apiStructs.BackupLocation{}
+func ListBackupLocation(tenantId string) ([]*automationModels.BackupLocation, error) {
+	listReq := automationModels.BackupLocation{}
 	listReq.TenantID = tenantId
 	bkpLocations, err := v2Components.Platform.ListBackupLocations(&listReq)
 	if err != nil {
@@ -18,8 +18,8 @@ func ListBackupLocation(tenantId string) ([]*apiStructs.BackupLocation, error) {
 	return bkpLocations, nil
 }
 
-func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string) (*apiStructs.BackupLocation, error) {
-	createReq := apiStructs.BackupLocation{}
+func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string) (*automationModels.BackupLocation, error) {
+	createReq := automationModels.BackupLocation{}
 	bkpLocName := strings.ToLower("pds-bkp-loc-" + utilities.RandString(5))
 	createReq.TenantID = tenantId
 	createReq.Meta.Name = &bkpLocName

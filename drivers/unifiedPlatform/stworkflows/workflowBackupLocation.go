@@ -1,7 +1,7 @@
 package stworkflows
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
 )
@@ -17,7 +17,7 @@ type BkpLocationType struct {
 }
 
 func (bkpLoc *WorkflowBackupLocation) CreateBackupLocation(bucketName, backUpTargetType string) (*WorkflowBackupLocation, error) {
-	var bkpLocation *apiStructs.BackupLocation
+	var bkpLocation *automationModels.BackupLocation
 	var err error
 
 	tenantId := bkpLoc.WfCloudCredentials.Platform.TenantId

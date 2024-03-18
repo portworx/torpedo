@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 // PlatformOnboardAccount to create account.
 type PlatformOnboardAccount struct {

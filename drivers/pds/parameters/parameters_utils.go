@@ -158,10 +158,12 @@ type NewPDSParams struct {
 		SkipTargetClusterCheck bool     `json:"SkipTargetClusterCheck"`
 	}
 	Users struct {
-		AdminUsername    string `json:"AdminUsername"`
-		AdminPassword    string `json:"AdminPassword"`
-		NonAdminUsername string `json:"NonAdminUsername"`
-		NonAdminPassword string `json:"NonAdminPassword"`
+		AdminUsername        string `json:"AdminUsername"`
+		AdminPassword        string `json:"AdminPassword"`
+		AdminEmailAddress    string `json:"AdminEmailAddress"`
+		NonAdminUsername     string `json:"NonAdminUsername"`
+		NonAdminPassword     string `json:"NonAdminPassword"`
+		NonAdminEmailAddress string `json:"NonAdminEmailAddress"`
 	} `json:"Users"`
 	ResiliencyTest struct {
 		CheckTillReplica int32 `json:"CheckTillReplica"`

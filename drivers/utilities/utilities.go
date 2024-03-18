@@ -74,7 +74,7 @@ func RandomString(length int) string {
 	return randomString
 }
 
-func (awsObj *awsStorageClient) createS3Bucket(bucketName string) error {
+func (awsObj *awsStorageClient) CreateS3Bucket(bucketName string) error {
 	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
@@ -108,7 +108,7 @@ func (awsObj *awsStorageClient) createS3Bucket(bucketName string) error {
 	return nil
 }
 
-func (awsObj *awsCompatibleStorageClient) createS3CompBucket(bucketName string) error {
+func (awsObj *awsCompatibleStorageClient) CreateS3CompBucket(bucketName string) error {
 	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
 	sess, err := session.NewSessionWithOptions(session.Options{
 		Config: aws.Config{
@@ -426,4 +426,24 @@ func syncData(namespace string) {
 		}
 	}
 
+}
+
+// DeleteElementFromSlice deletes an element from a slice
+func DeleteElementFromSlice(slice []string, element string) ([]string, error) {
+	// Find the index of the element to delete
+	index := -1
+	for i, v := range slice {
+		if v == element {
+			index = i
+			break
+		}
+	}
+
+	// If element not found, return the original slice
+	if index == -1 {
+		return slice, fmt.Errorf("[%s] not found in [%s]", element, slice)
+	}
+
+	// Delete the element by slicing the original slice
+	return append(slice[:index], slice[index+1:]...), nil
 }

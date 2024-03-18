@@ -2,7 +2,7 @@ package pdslibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	"strconv"
 )
@@ -35,10 +35,10 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) {
+func UpdateDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Update Data service will be performed")
 
-	depInputs := apiStructs.WorkFlowRequest{}
+	depInputs := automationModels.WorkFlowRequest{}
 
 	// TODO call the below methods and fill up the structs
 	// Get TargetClusterID
@@ -46,21 +46,21 @@ func UpdateDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 	// Get ProjectID
 	// Get App, Resource and storage Template Ids
 
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []apiStructs.DeploymentTopology{{}}
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
 	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
 	depInputs.Deployment.NamespaceID = "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &automationModels.Template{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &automationModels.Template{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &automationModels.Template{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,
@@ -75,10 +75,10 @@ func UpdateDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
-	depInputs := apiStructs.WorkFlowRequest{}
+	depInputs := automationModels.WorkFlowRequest{}
 
 	// TODO call the below methods and fill up the structs
 	// Get TargetClusterID
@@ -86,21 +86,21 @@ func DeployDataService(ds PDSDataService) (*apiStructs.WorkFlowResponse, error) 
 	// Get ProjectID
 	// Get App, Resource and storage Template Ids
 
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []apiStructs.DeploymentTopology{{}}
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
 	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
 	depInputs.Deployment.NamespaceID = "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &automationModels.Template{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &automationModels.Template{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &apiStructs.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &automationModels.Template{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,

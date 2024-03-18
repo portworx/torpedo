@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	whoamiv1 "github.com/pure-px/platform-api-go-client/platform/v1/whoami"
 	status "net/http"
 )

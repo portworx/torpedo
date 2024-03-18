@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type CloudCredentials struct {
 	Create CreateCloudCredentials

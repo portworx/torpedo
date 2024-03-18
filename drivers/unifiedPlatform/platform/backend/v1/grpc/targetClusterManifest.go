@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	publictcapis "github.com/pure-px/apis/public/portworx/platform/targetclusterregistrationmanifest/apiv1"
@@ -29,7 +29,7 @@ func (tcGrpc *PlatformGrpc) getTargetClusterManifestClient() (context.Context, p
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
 
 	response := &WorkFlowResponse{
 		TargetCluster: PlatformTargetClusterOutput{
@@ -43,8 +43,8 @@ func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequ
 	}
 
 	getTcManifestRequest := &publictcapis.GenerateTargetClusterRegistrationManifestRequest{
-		ClusterName: getManifestRequest.TargetCluster.GetManifest.ClusterName,
-		TenantId:    getManifestRequest.TargetCluster.GetManifest.TenantId,
+		ClusterName: getManifestRequest.GetManifest.ClusterName,
+		TenantId:    getManifestRequest.GetManifest.TenantId,
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, tcGrpc.AccountId)

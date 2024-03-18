@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type BackupLocation struct {
 	TenantID string

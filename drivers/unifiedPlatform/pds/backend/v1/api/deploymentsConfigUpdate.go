@@ -2,15 +2,17 @@ package api
 
 import (
 	"fmt"
-	"github.com/jinzhu/copier"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
 	status "net/http"
+
+	"github.com/jinzhu/copier"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+
+	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
 )
 
-func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	var updateRequest deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
-	dsResponse := apiStructs.WorkFlowResponse{}
+	dsResponse := automationModels.WorkFlowResponse{}
 
 	_, dsClient, err := ds.getDeploymentConfigClient()
 	if err != nil {

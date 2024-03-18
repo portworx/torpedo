@@ -2,7 +2,7 @@ package pdslibs
 
 import (
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type WorkflowBackupInput struct {
@@ -14,18 +14,18 @@ type WorkflowBackupInput struct {
 }
 
 // CreateBackupConfig created backup config for the deployment
-func CreateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+func CreateBackupConfig(backupConfig WorkflowBackupInput) (*automationModels.WorkFlowResponse, error) {
 
-	createBackupConfigRequest := apiStructs.WorkFlowRequest{}
+	createBackupConfigRequest := automationModels.WorkFlowRequest{}
 
-	createBackupConfigRequest.BackupConfig.Create.BackupConfig = &apiStructs.V1BackupConfig{
-		Meta: &apiStructs.Meta{
+	createBackupConfigRequest.BackupConfig.Create.BackupConfig = &automationModels.V1BackupConfig{
+		Meta: &automationModels.Meta{
 			Uid: intToPointerString(10),
 		},
-		Config: &apiStructs.Config{
+		Config: &automationModels.Config{
 			UserEmail: intToPointerString(15),
 		},
-		Status: &apiStructs.Backupconfigv1Status{
+		Status: &automationModels.Backupconfigv1Status{
 			CustomResourceName: intToPointerString(70),
 		},
 	}
@@ -40,18 +40,18 @@ func CreateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 }
 
 // UpdateBackupConfig updates backup config of the deployment
-func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*automationModels.WorkFlowResponse, error) {
 
-	updateBackupConfigRequest := apiStructs.WorkFlowRequest{}
+	updateBackupConfigRequest := automationModels.WorkFlowRequest{}
 
-	updateBackupConfigRequest.BackupConfig.Update.BackupConfig = &apiStructs.V1BackupConfig{
-		Meta: &apiStructs.Meta{
+	updateBackupConfigRequest.BackupConfig.Update.BackupConfig = &automationModels.V1BackupConfig{
+		Meta: &automationModels.Meta{
 			Uid: intToPointerString(10),
 		},
-		Config: &apiStructs.Config{
+		Config: &automationModels.Config{
 			UserEmail: intToPointerString(15),
 		},
-		Status: &apiStructs.Backupconfigv1Status{
+		Status: &automationModels.Backupconfigv1Status{
 			CustomResourceName: intToPointerString(70),
 		},
 	}
@@ -64,9 +64,9 @@ func UpdateBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 }
 
 // DeleteBackupConfig deletes backup config of the deployment
-func DeleteBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+func DeleteBackupConfig(backupConfig WorkflowBackupInput) (*automationModels.WorkFlowResponse, error) {
 
-	deleteBackupConfigRequest := apiStructs.WorkFlowRequest{}
+	deleteBackupConfigRequest := automationModels.WorkFlowRequest{}
 
 	deleteBackupConfigRequest.BackupConfig.Delete.Id = "SomeID"
 
@@ -78,9 +78,9 @@ func DeleteBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowR
 }
 
 // GetBackupConfig fetches backup config for the deployment
-func GetBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResponse, error) {
+func GetBackupConfig(backupConfig WorkflowBackupInput) (*automationModels.WorkFlowResponse, error) {
 
-	getBackupConfigRequest := apiStructs.WorkFlowRequest{}
+	getBackupConfigRequest := automationModels.WorkFlowRequest{}
 
 	getBackupConfigRequest.BackupConfig.Get.Id = "SomeID"
 
@@ -92,13 +92,13 @@ func GetBackupConfig(backupConfig WorkflowBackupInput) (*apiStructs.WorkFlowResp
 }
 
 // ListBackupConfig lists backup config for the deployment
-func ListBackupConfig(backupConfig WorkflowBackupInput) ([]apiStructs.WorkFlowResponse, error) {
+func ListBackupConfig(backupConfig WorkflowBackupInput) ([]automationModels.WorkFlowResponse, error) {
 
-	listBackupConfig := apiStructs.WorkFlowRequest{}
+	listBackupConfig := automationModels.WorkFlowRequest{}
 
-	listBackupConfig.BackupConfig.List.Sort = &apiStructs.Sort{
-		SortBy:    apiStructs.SortBy_Field(int32(90)),
-		SortOrder: apiStructs.SortOrder_Value(int32(15)),
+	listBackupConfig.BackupConfig.List.Sort = &automationModels.Sort{
+		SortBy:    automationModels.SortBy_Field(int32(90)),
+		SortOrder: automationModels.SortOrder_Value(int32(15)),
 	}
 
 	backupResponse, err := v2Components.PDS.ListBackupConfig(&listBackupConfig)

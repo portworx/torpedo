@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -28,9 +28,9 @@ func (tempDef *PdsGrpc) getTemplateDefClient() (context.Context, publicTempDefap
 }
 
 // ListTemplateKinds will list all template kinds available for PDS
-func (tempDef *PdsGrpc) ListTemplateKinds(listTempKindReq *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (tempDef *PdsGrpc) ListTemplateKinds(listTempKindReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	ctx, tempDefClient, _, err := tempDef.getTemplateDefClient()
-	templateResponse := []apiStructs.WorkFlowResponse{}
+	templateResponse := []automationModels.WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -46,9 +46,9 @@ func (tempDef *PdsGrpc) ListTemplateKinds(listTempKindReq *apiStructs.WorkFlowRe
 	return templateResponse, nil
 }
 
-func (tempDef *PdsGrpc) ListTemplateRevisions(listTempRevReq *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (tempDef *PdsGrpc) ListTemplateRevisions(listTempRevReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	ctx, tempDefClient, _, err := tempDef.getTemplateDefClient()
-	templateResponse := []apiStructs.WorkFlowResponse{}
+	templateResponse := []automationModels.WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -64,9 +64,9 @@ func (tempDef *PdsGrpc) ListTemplateRevisions(listTempRevReq *apiStructs.WorkFlo
 	return templateResponse, nil
 }
 
-func (tempDef *PdsGrpc) GetTemplateRevisions(getTempRevReq *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (tempDef *PdsGrpc) GetTemplateRevisions(getTempRevReq *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	ctx, tempDefClient, _, err := tempDef.getTemplateDefClient()
-	templateResponse := apiStructs.WorkFlowResponse{}
+	templateResponse := automationModels.WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

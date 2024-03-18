@@ -1,12 +1,12 @@
 package platformLibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
 // GetAccountListv1
-//func GetAccountListv1() ([]apiStructs.WorkFlowResponse, error) {
+//func GetAccountListv1() ([]automationModels.WorkFlowResponse, error) {
 //	accList, err := v2Components.Platform.GetAccountList()
 //	if err != nil {
 //		return nil, err
@@ -15,8 +15,13 @@ import (
 //}
 
 // GetAccount
-func GetAccount(accountID string) (*apiStructs.WorkFlowResponse, error) {
-	acc, err := v2Components.Platform.GetAccount(accountID)
+func GetAccount(accountID string) (*automationModels.WorkFlowResponse, error) {
+	request := automationModels.PlatformAccount{
+		Get: automationModels.PlatformGetAccount{
+			AccountId: accountID,
+		},
+	}
+	acc, err := v2Components.Platform.GetAccount(&request)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +29,7 @@ func GetAccount(accountID string) (*apiStructs.WorkFlowResponse, error) {
 }
 
 // GetPlatformAccountID
-func GetPlatformAccountID(accList []apiStructs.WorkFlowResponse, accountName string) string {
+func GetPlatformAccountID(accList []automationModels.WorkFlowResponse, accountName string) string {
 	var accID string
 	for _, acc := range accList {
 		if *acc.Meta.Name == accountName {
