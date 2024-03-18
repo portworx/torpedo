@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
@@ -56,7 +56,7 @@ func (ProjectV1 *PlatformGrpc) GetProjectList() ([]WorkFlowResponse, error) {
 }
 
 // GetProject returns the project details of the project id
-func (ProjectV1 *PlatformGrpc) GetProject(projectId string) (
+func (ProjectV1 *PlatformGrpc) GetProject(projectReq *PlaformProject) (
 	WorkFlowResponse, error) {
 
 	projectResponse := WorkFlowResponse{}
@@ -66,7 +66,7 @@ func (ProjectV1 *PlatformGrpc) GetProject(projectId string) (
 	}
 
 	getProjRequest := publicprojectapis.GetProjectRequest{
-		ProjectId: projectId,
+		ProjectId: projectReq.Get.ProjectId,
 	}
 
 	apiResponse, err := client.GetProject(ctx, &getProjRequest, grpc.PerRPCCredentials(credentials))
@@ -83,7 +83,7 @@ func (ProjectV1 *PlatformGrpc) GetProject(projectId string) (
 }
 
 // CreateProject creates a new project under the given tenant
-func (ProjectV1 *PlatformGrpc) CreateProject(projectName string, tenantId string) (WorkFlowResponse, error) {
+func (ProjectV1 *PlatformGrpc) CreateProject(projectReq *PlaformProject, tenantId string) (WorkFlowResponse, error) {
 	projectResponse := WorkFlowResponse{}
 	ctx, client, _, err := ProjectV1.getProjectClient()
 	if err != nil {
@@ -94,7 +94,7 @@ func (ProjectV1 *PlatformGrpc) CreateProject(projectName string, tenantId string
 		TenantId: tenantId,
 		Project: &publicprojectapis.Project{
 			Meta: &commonapiv1.Meta{
-				Name: projectName,
+				Name: *projectReq.Create.Project.Meta.Name,
 			},
 		},
 	}
@@ -113,7 +113,7 @@ func (ProjectV1 *PlatformGrpc) CreateProject(projectName string, tenantId string
 }
 
 // DeleteProject deletes the project
-func (ProjectV1 *PlatformGrpc) DeleteProject(projectId string) error {
+func (ProjectV1 *PlatformGrpc) DeleteProject(projectReq *PlaformProject) error {
 
 	ctx, client, _, err := ProjectV1.getProjectClient()
 	if err != nil {
@@ -121,7 +121,7 @@ func (ProjectV1 *PlatformGrpc) DeleteProject(projectId string) error {
 	}
 
 	deleteProjRequest := publicprojectapis.DeleteProjectRequest{
-		ProjectId: projectId,
+		ProjectId: projectReq.Delete.ProjectId,
 	}
 	_, err = client.DeleteProject(ctx, &deleteProjRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
@@ -129,4 +129,17 @@ func (ProjectV1 *PlatformGrpc) DeleteProject(projectId string) error {
 	}
 
 	return nil
+}
+
+// AssociateToProject associates the given resurces to the project
+func (ProjectV1 *PlatformGrpc) AssociateToProject(associateProject *PlaformProject) (WorkFlowResponse, error) {
+	log.Warnf("AssociateToProject is not implemented for GRPC")
+	return WorkFlowResponse{}, nil
+}
+
+// DissociateFromProject dissociates the given resurces from the project
+func (ProjectV1 *PlatformGrpc) DissociateFromProject(dissociateProject *PlaformProject) (WorkFlowResponse, error) {
+	log.Warnf("DissociateFromProject is not implemented for GRPC")
+	return WorkFlowResponse{}, nil
+
 }

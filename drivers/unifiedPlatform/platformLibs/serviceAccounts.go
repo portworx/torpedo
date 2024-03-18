@@ -2,13 +2,13 @@ package platformLibs
 
 import (
 	"context"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	serviceaccountv1 "github.com/pure-px/platform-api-go-client/platform/v1/serviceaccount"
 )
 
 var (
-	saInputs      *apiStructs.WorkFlowRequest
+	saInputs      *automationModels.WorkFlowRequest
 	saListRequest serviceaccountv1.ApiServiceAccountServiceListServiceAccountRequest
 	namespaceId   string
 	ServiceIdFlag bool
@@ -17,7 +17,7 @@ var (
 )
 
 // ListServiceAccountsForTenant lists all serviceAccounts for a given tenant
-func ListServiceAccountsForTenant(tenantID string) ([]apiStructs.WorkFlowResponse, error) {
+func ListServiceAccountsForTenant(tenantID string) ([]automationModels.WorkFlowResponse, error) {
 	saListRequest = saListRequest.TenantId(tenantID)
 	saListRequest = saListRequest.ApiService.ServiceAccountServiceListServiceAccount(context.Background())
 	err = utilities.CopyStruct(&saInputs, saListRequest)
@@ -29,8 +29,8 @@ func ListServiceAccountsForTenant(tenantID string) ([]apiStructs.WorkFlowRespons
 }
 
 // GetServiceAccountForTenant fetch ServiceAccount by its ID
-func GetServiceAccountForTenant(saId, tenantId string) (*apiStructs.WorkFlowResponse, error) {
-	saIdModel := apiStructs.WorkFlowRequest{TenantId: tenantId,
+func GetServiceAccountForTenant(saId, tenantId string) (*automationModels.WorkFlowResponse, error) {
+	saIdModel := automationModels.WorkFlowRequest{TenantId: tenantId,
 		Id: saId}
 	saList, err := v2Components.Platform.GetServiceAccount(&saIdModel)
 	if err != nil {
@@ -40,7 +40,7 @@ func GetServiceAccountForTenant(saId, tenantId string) (*apiStructs.WorkFlowResp
 }
 
 // CreateServiceAccountForRBAC creates a new service account for a given tenant
-func CreateServiceAccountForRBAC(saName, tenantId string) (*apiStructs.WorkFlowResponse, error) {
+func CreateServiceAccountForRBAC(saName, tenantId string) (*automationModels.WorkFlowResponse, error) {
 	saInputs.ServiceAccountRequest.Create.V1ServiceAccount.Meta.Name = &saName
 	saInputs.ServiceAccountRequest.Create.TenantId = tenantId
 	saModel, err := v2Components.Platform.CreateServiceAccount(saInputs)
@@ -51,7 +51,7 @@ func CreateServiceAccountForRBAC(saName, tenantId string) (*apiStructs.WorkFlowR
 }
 
 // GenerateServiceAccountAccessToken used to generate ServiceAccount JWT token
-func GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret string) (*apiStructs.WorkFlowResponse, error) {
+func GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret string) (*automationModels.WorkFlowResponse, error) {
 	saInputs.ServiceAccountRequest.CreateToken.TenantId = tenantId
 	saInputs.ServiceAccountRequest.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientId = &clientID
 	saInputs.ServiceAccountRequest.CreateToken.ServiceAccountServiceGetAccessTokenBody.ClientSecret = &clientSecret
@@ -62,8 +62,8 @@ func GenerateServiceAccountAccessToken(tenantId, clientID, clientSecret string) 
 	return tokenModel, nil
 }
 
-func GetServiceAccFromSaName(tenantId, saName string) (*apiStructs.WorkFlowResponse, error) {
-	var saModel *apiStructs.WorkFlowResponse
+func GetServiceAccFromSaName(tenantId, saName string) (*automationModels.WorkFlowResponse, error) {
+	var saModel *automationModels.WorkFlowResponse
 	saList, err := ListServiceAccountsForTenant(tenantId)
 	if err != nil {
 		return nil, err

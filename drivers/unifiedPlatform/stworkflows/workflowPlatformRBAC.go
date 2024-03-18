@@ -1,7 +1,7 @@
 package stworkflows
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -14,14 +14,14 @@ type WorkflowRBAC struct {
 // Public method to verify any user access on platform
 func (user *WorkflowRBAC) VerifyUserPlatformAccess() error {
 	switch user.AccountName {
-	case apiStructs.User:
+	case automationModels.User:
 		err := user.verifyUserAccess()
 		return err
-	case apiStructs.ProjectAdmin:
+	case automationModels.ProjectAdmin:
 		err := user.verifyProjectAdminAccess()
 		return err
 
-	case apiStructs.TenantAdmin:
+	case automationModels.TenantAdmin:
 		err := user.verifyTenantAdminAccess()
 		return err
 	default:

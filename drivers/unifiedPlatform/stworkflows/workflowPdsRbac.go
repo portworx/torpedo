@@ -3,7 +3,7 @@ package stworkflows
 import (
 	"fmt"
 	_ "github.com/gobwas/glob/syntax/ast"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
@@ -13,7 +13,7 @@ type UserWithRbac struct {
 	UserRoles map[string]string
 }
 
-func (svcUser *UserWithRbac) CreateNewPdsUser(accId, saName, roleName, resourceId string) (*apiStructs.WorkFlowResponse, error) {
+func (svcUser *UserWithRbac) CreateNewPdsUser(accId, saName, roleName, resourceId string) (*automationModels.WorkFlowResponse, error) {
 	saModel, err := platformLibs.CreateUser(saName, accId)
 	if err != nil {
 		return nil, err

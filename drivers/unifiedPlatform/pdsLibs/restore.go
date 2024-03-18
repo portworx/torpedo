@@ -1,7 +1,7 @@
 package pdslibs
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type WorkflowRestore struct {
@@ -11,14 +11,14 @@ type WorkflowRestore struct {
 }
 
 // CreateRestore creates restore for the backup
-func (restore WorkflowRestore) CreateRestore() (*apiStructs.WorkFlowResponse, error) {
+func (restore WorkflowRestore) CreateRestore() (*automationModels.WorkFlowResponse, error) {
 
-	createRestoreRequest := apiStructs.WorkFlowRequest{}
+	createRestoreRequest := automationModels.WorkFlowRequest{}
 
-	createRestoreRequest.Restore.Create.SourceReferences = &apiStructs.SourceReferences{
+	createRestoreRequest.Restore.Create.SourceReferences = &automationModels.SourceReferences{
 		BackupId: "BackupID",
 	}
-	createRestoreRequest.Restore.Create.DestinationReferences = &apiStructs.DestinationReferences{
+	createRestoreRequest.Restore.Create.DestinationReferences = &automationModels.DestinationReferences{
 		TargetClusterId: "TargetClusterID",
 	}
 	createRestoreRequest.Restore.Create.SourceReferences.BackupId = "SomeBackupID"
@@ -32,9 +32,9 @@ func (restore WorkflowRestore) CreateRestore() (*apiStructs.WorkFlowResponse, er
 }
 
 // ReCreateRestore recreates restore of the deployment
-func (restore WorkflowRestore) ReCreateRestore() (*apiStructs.WorkFlowResponse, error) {
+func (restore WorkflowRestore) ReCreateRestore() (*automationModels.WorkFlowResponse, error) {
 
-	recreateRestore := apiStructs.WorkFlowRequest{}
+	recreateRestore := automationModels.WorkFlowRequest{}
 
 	recreateRestore.Restore.ReCreate.Id = "SomeID"
 
@@ -46,9 +46,9 @@ func (restore WorkflowRestore) ReCreateRestore() (*apiStructs.WorkFlowResponse, 
 }
 
 // DeleteRestore deletes restore of the deployment
-func (restore WorkflowRestore) DeleteRestore() (*apiStructs.WorkFlowResponse, error) {
+func (restore WorkflowRestore) DeleteRestore() (*automationModels.WorkFlowResponse, error) {
 
-	deleteRestoreRequest := apiStructs.WorkFlowRequest{}
+	deleteRestoreRequest := automationModels.WorkFlowRequest{}
 
 	deleteRestoreRequest.Restore.Delete.Id = "SomeRestoreID"
 
@@ -60,9 +60,9 @@ func (restore WorkflowRestore) DeleteRestore() (*apiStructs.WorkFlowResponse, er
 }
 
 // GetBackupConfig fetches backup config for the deployment
-func (restore WorkflowRestore) GetRestore() (*apiStructs.WorkFlowResponse, error) {
+func (restore WorkflowRestore) GetRestore() (*automationModels.WorkFlowResponse, error) {
 
-	getRestoreRequest := apiStructs.WorkFlowRequest{}
+	getRestoreRequest := automationModels.WorkFlowRequest{}
 
 	getRestoreRequest.Restore.Get.Id = "SomeRestoreID"
 
@@ -74,13 +74,13 @@ func (restore WorkflowRestore) GetRestore() (*apiStructs.WorkFlowResponse, error
 }
 
 // ListBackupConfig lists backup config for the deployment
-func (restore WorkflowRestore) ListRestore() ([]apiStructs.WorkFlowResponse, error) {
+func (restore WorkflowRestore) ListRestore() ([]automationModels.WorkFlowResponse, error) {
 
-	listRestoreRequest := apiStructs.WorkFlowRequest{}
+	listRestoreRequest := automationModels.WorkFlowRequest{}
 
-	listRestoreRequest.Restore.List.Sort = &apiStructs.Sort{
-		SortBy:    apiStructs.SortBy_Field(int32(90)),
-		SortOrder: apiStructs.SortOrder_Value(int32(15)),
+	listRestoreRequest.Restore.List.Sort = &automationModels.Sort{
+		SortBy:    automationModels.SortBy_Field(int32(90)),
+		SortOrder: automationModels.SortOrder_Value(int32(15)),
 	}
 
 	restoreResponse, err := v2Components.PDS.ListRestore(&listRestoreRequest)

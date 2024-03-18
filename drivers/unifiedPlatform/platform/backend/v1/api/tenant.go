@@ -3,7 +3,7 @@ package api
 import (
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	status "net/http"
 )
@@ -26,7 +26,8 @@ func (tenant *PLATFORM_API_V1) ListTenants() ([]WorkFlowResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Value of accounts after copy - [%v]", tenantsResponse)
+	log.Infof("Value of tenants after copy - [%s], [%s]", *tenantsResponse[0].Meta.Name, *tenantsResponse[0].Meta.Uid)
+	log.Infof("Value of tenants after copy - [%s], [%s]", &tenantsResponse[0].Meta.Name, &tenantsResponse[0].Meta.Uid)
 
 	return tenantsResponse, nil
 }

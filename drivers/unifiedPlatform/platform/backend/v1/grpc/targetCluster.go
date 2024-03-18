@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	publictcapis "github.com/pure-px/apis/public/portworx/platform/targetcluster/apiv1"
@@ -30,7 +30,7 @@ func (tcGrpc *PlatformGrpc) getTargetClusterClient() (context.Context, publictca
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *PlatformTargetCluster) ([]WorkFlowResponse, error) {
 	tcResponse := []WorkFlowResponse{}
 	ctx, client, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {
@@ -56,14 +56,14 @@ func (tcGrpc *PlatformGrpc) ListTargetClusters(tcRequest *WorkFlowRequest) ([]Wo
 
 }
 
-func (tcGrpc *PlatformGrpc) GetTarget(getTCRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) GetTargetCluster(getTCRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
 	var getRequest *publictcapis.GetTargetClusterRequest
 	getTcResponse := WorkFlowResponse{}
 	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
-	err = copier.Copy(&getRequest, getTCRequest)
+	getRequest.Id = getTCRequest.GetTargetCluster.Id
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (tcGrpc *PlatformGrpc) GetTarget(getTCRequest *WorkFlowRequest) (*WorkFlowR
 	return &getTcResponse, nil
 }
 
-func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
 	var patchRequest *publictcapis.UpdateTargetClusterRequest
 	tcResponse := WorkFlowResponse{}
 	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
@@ -100,7 +100,7 @@ func (tcGrpc *PlatformGrpc) PatchTargetCluster(tcRequest *WorkFlowRequest) (*Wor
 	return &tcResponse, nil
 }
 
-func (tcGrpc *PlatformGrpc) DeleteTargetCluster(tcRequest *WorkFlowRequest) error {
+func (tcGrpc *PlatformGrpc) DeleteTargetCluster(tcRequest *PlatformTargetCluster) error {
 	var deleteRequest *publictcapis.DeleteTargetClusterRequest
 	ctx, dtClient, _, err := tcGrpc.getTargetClusterClient()
 	if err != nil {

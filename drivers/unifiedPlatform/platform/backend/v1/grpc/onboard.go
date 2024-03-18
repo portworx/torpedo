@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -31,9 +31,9 @@ func (onboard *PlatformGrpc) getOnboardClient() (context.Context, publiconboarda
 	return ctx, onboardClient, token, nil
 }
 
-func (onboard *PlatformGrpc) OnboardNewAccount(onboardAccountRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (onboard *PlatformGrpc) OnboardNewAccount(onboardAccountRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	onboardRequest := publiconboardapis.CreateAccountRegistrationRequest{
 		AccountRegistration: &publiconboardapis.AccountRegistration{

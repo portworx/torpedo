@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/jinzhu/copier"
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapis "github.com/pure-px/apis/public/portworx/common/apiv1"
@@ -79,7 +79,7 @@ func NewPaginationRequest(pageNumber, pageSize int) *commonapis.PageBasedPaginat
 //	return accountsResponse, nil
 //}
 
-func (AccountV1 *PlatformGrpc) GetAccount(accountID string) (*WorkFlowResponse, error) {
+func (AccountV1 *PlatformGrpc) GetAccount(accountReq *PlatformAccount) (*WorkFlowResponse, error) {
 	accountsResponse := WorkFlowResponse{}
 	ctx, client, _, err := AccountV1.getAccountClient()
 	if err != nil {
@@ -87,10 +87,10 @@ func (AccountV1 *PlatformGrpc) GetAccount(accountID string) (*WorkFlowResponse, 
 	}
 
 	getAccRequest := &publicaccountapis.GetAccountRequest{
-		AccountId: accountID,
+		AccountId: accountReq.Get.AccountId,
 	}
 
-	ctx = WithAccountIDMetaCtx(ctx, accountID)
+	ctx = WithAccountIDMetaCtx(ctx, accountReq.Get.AccountId)
 
 	apiResponse, err := client.GetAccount(ctx, getAccRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
@@ -105,14 +105,4 @@ func (AccountV1 *PlatformGrpc) GetAccount(accountID string) (*WorkFlowResponse, 
 	log.Infof("Value of accounts after copy - [%v]", *accountsResponse.Meta.Name)
 
 	return &accountsResponse, nil
-}
-
-// CreateAccount return pds account model.
-func (AccountV1 *PlatformGrpc) CreateAccount(accountName, displayName, userMail string) (WorkFlowResponse, error) {
-	var accResponse WorkFlowResponse
-	return accResponse, fmt.Errorf("Create Account is not implemented in grpc client\n")
-}
-
-func (AccountV1 *PlatformGrpc) DeleteAccount(accountId string) error {
-	return fmt.Errorf("DeleteBackuplocation is not implemented in grpc client\n")
 }

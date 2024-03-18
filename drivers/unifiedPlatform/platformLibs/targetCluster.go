@@ -2,7 +2,7 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 	"time"
 )
@@ -12,13 +12,18 @@ const (
 )
 
 // GetManifest Get the manifest for the account and tenant-id that can be used to install the platform agent
-func GetManifest(tenantId string, clusterName string) (*apiStructs.WorkFlowResponse, error) {
+func GetManifest(tenantId string, clusterName string) (*automationModels.WorkFlowResponse, error) {
 
-	response := &apiStructs.WorkFlowResponse{
-		TargetCluster: apiStructs.PlatformTargetClusterOutput{
-			Manifest: apiStructs.PlatformManifestOutput{}}}
+	response := &automationModels.WorkFlowResponse{
+		TargetCluster: automationModels.PlatformTargetClusterOutput{
+			Manifest: automationModels.PlatformManifestOutput{}}}
 
-	manifestInputs := apiStructs.WorkFlowRequest{}
+	manifestInputs := automationModels.PlatformTargetCluster{
+		GetManifest: automationModels.PlatformGetTargetClusterManifest{
+			ClusterName: clusterName,
+			TenantId:    tenantId,
+		},
+	}
 
 	// TODO: Proxy and Registry configs need to be added to this call
 
@@ -26,9 +31,7 @@ func GetManifest(tenantId string, clusterName string) (*apiStructs.WorkFlowRespo
 		clusterName = fmt.Sprintf("Cluster_%v", time.Now().Unix())
 	}
 
-	manifestInputs.TargetCluster.GetManifest.ClusterName = clusterName
-	manifestInputs.TargetCluster.GetManifest.TenantId = tenantId
-	log.Infof("cluster name [%s]", manifestInputs.TargetCluster.GetManifest.ClusterName)
+	log.Infof("cluster name [%s]", manifestInputs.GetManifest.ClusterName)
 
 	// Get Manifest from API
 	manifest, err := v2Components.Platform.GetTargetClusterRegistrationManifest(&manifestInputs)
@@ -41,14 +44,13 @@ func GetManifest(tenantId string, clusterName string) (*apiStructs.WorkFlowRespo
 	return response, nil
 }
 
-func ListTargetClusters(tenantId string) ([]apiStructs.WorkFlowResponse, error) {
-	wfRequest := apiStructs.WorkFlowRequest{
-		TargetCluster: apiStructs.PlatformTargetCluster{
-			ListTargetClusters: apiStructs.PlatformListTargetCluster{},
+func ListTargetClusters(tenantId string) ([]automationModels.WorkFlowResponse, error) {
+	wfRequest := automationModels.PlatformTargetCluster{
+		ListTargetClusters: automationModels.PlatformListTargetCluster{
+			TenantId: tenantId,
 		},
 	}
 
-	wfRequest.TargetCluster.ListTargetClusters.TenantId = tenantId
 	tcList, err := v2Components.Platform.ListTargetClusters(&wfRequest)
 	if err != nil {
 		return tcList, err

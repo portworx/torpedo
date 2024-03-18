@@ -1,7 +1,7 @@
 package stworkflows
 
 import (
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
@@ -20,7 +20,7 @@ func startStep(name string) {
 	log.Infof("---------------------------------------")
 }
 
-func addResultToResponse(result []apiStructs.WorkFlowResponse, stepName string, resultMap map[string][]apiStructs.WorkFlowResponse) {
+func addResultToResponse(result []automationModels.WorkFlowResponse, stepName string, resultMap map[string][]automationModels.WorkFlowResponse) {
 	if _, ok := resultMap[stepName]; ok {
 		log.Infof("Already found result for %s in result map, appending result to same key", stepName)
 		resultMap[stepName] = append(resultMap[stepName], result...)

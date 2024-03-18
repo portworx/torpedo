@@ -3,37 +3,38 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/jinzhu/copier"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/deployment"
 	status "net/http"
+
+	"github.com/jinzhu/copier"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	deploymentV1 "github.com/pure-px/platform-api-go-client/pds/v1/deployment"
 )
 
 var (
 	DeploymentRequestBody deploymentV1.V1Deployment
 )
 
-func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
-	dsResponse := apiStructs.WorkFlowResponse{}
+func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
+	dsResponse := automationModels.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
-func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) (*apiStructs.WorkFlowResponse, error) {
-	dsResponse := apiStructs.WorkFlowResponse{}
+func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
+	dsResponse := automationModels.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
-func (ds *PDS_API_V1) ListDeployment() (*apiStructs.WorkFlowResponse, error) {
-	dsResponse := apiStructs.WorkFlowResponse{}
+func (ds *PDS_API_V1) ListDeployment() (*automationModels.WorkFlowResponse, error) {
+	dsResponse := automationModels.WorkFlowResponse{}
 
 	return &dsResponse, nil
 }
 
 // CreateDeployment return newly created deployment model.
-func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
-	dsResponse := apiStructs.WorkFlowResponse{}
+func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+	dsResponse := automationModels.WorkFlowResponse{}
 	depCreateRequest := deploymentV1.ApiDeploymentServiceCreateDeploymentRequest{}
 
 	_, dsClient, err := ds.getDeploymentClient()

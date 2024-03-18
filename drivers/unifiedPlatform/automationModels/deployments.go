@@ -1,4 +1,4 @@
-package apiStructs
+package automationModels
 
 type DeploymentTopology struct {
 	Name *string `copier:"must,nopanic"`

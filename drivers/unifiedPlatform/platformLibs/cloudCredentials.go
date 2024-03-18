@@ -2,10 +2,11 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
-	utilities "github.com/portworx/torpedo/drivers/utilities"
 	"os"
 	"strings"
+
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	utilities "github.com/portworx/torpedo/drivers/utilities"
 )
 
 var (
@@ -14,8 +15,8 @@ var (
 	provider int32
 )
 
-func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*apiStructs.CloudCredentials, error) {
-	getReq := apiStructs.CloudCredentials{}
+func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*automationModels.CloudCredentials, error) {
+	getReq := automationModels.CloudCredentials{}
 	getReq.Get.CloudCredentialsId = credId
 	getReq.Get.IsConfigRequired = isConfigRequired
 
@@ -34,14 +35,14 @@ func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*api
 
 	wfResponse, err := v2Components.Platform.GetCloudCredentials(&getReq)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create cloudcredentials: %v\n", err)
+		return nil, fmt.Errorf("failed to create cloudcredentials: %v\n", err)
 	}
 
 	return wfResponse, nil
 }
 
-func CreateCloudCredentials(tenantId, backupType string) (*apiStructs.CloudCredentials, error) {
-	createReq := apiStructs.CloudCredentials{}
+func CreateCloudCredentials(tenantId, backupType string) (*automationModels.CloudCredentials, error) {
+	createReq := automationModels.CloudCredentials{}
 	credsName := strings.ToLower("pds-bkp-creds-" + utilities.RandString(5))
 	createReq.Create.TenantID = tenantId
 	createReq.Create.Meta.Name = &credsName
@@ -71,7 +72,7 @@ func CreateCloudCredentials(tenantId, backupType string) (*apiStructs.CloudCrede
 
 	wfResponse, err := v2Components.Platform.CreateCloudCredentials(&createReq)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create cloudcredentials: %v\n", err)
+		return nil, fmt.Errorf("failed to create cloudcredentials: %v\n", err)
 	}
 	return wfResponse, nil
 }

@@ -2,7 +2,7 @@ package pdslibs
 
 import (
 	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type WorkflowBackup struct {
@@ -14,9 +14,9 @@ type WorkflowBackup struct {
 }
 
 // DeleteBackup deletes backup config of the deployment
-func DeleteBackup(backup WorkflowBackup) (*apiStructs.WorkFlowResponse, error) {
+func DeleteBackup(backup WorkflowBackup) (*automationModels.WorkFlowResponse, error) {
 
-	deleteBackupRequest := apiStructs.WorkFlowRequest{}
+	deleteBackupRequest := automationModels.WorkFlowRequest{}
 
 	deleteBackupRequest.Backup.Delete.Id = "SomeID"
 
@@ -28,9 +28,9 @@ func DeleteBackup(backup WorkflowBackup) (*apiStructs.WorkFlowResponse, error) {
 }
 
 // GetBackup fetches backup config for the deployment
-func GetBackup(backup WorkflowBackup) (*apiStructs.WorkFlowResponse, error) {
+func GetBackup(backup WorkflowBackup) (*automationModels.WorkFlowResponse, error) {
 
-	getBackupRequest := apiStructs.WorkFlowRequest{}
+	getBackupRequest := automationModels.WorkFlowRequest{}
 
 	getBackupRequest.Backup.Get.Id = "SomeID"
 
@@ -42,13 +42,13 @@ func GetBackup(backup WorkflowBackup) (*apiStructs.WorkFlowResponse, error) {
 }
 
 // ListBackup lists backup config for the deployment
-func ListBackup(backup WorkflowBackup) ([]apiStructs.WorkFlowResponse, error) {
+func ListBackup(backup WorkflowBackup) ([]automationModels.WorkFlowResponse, error) {
 
-	listBackup := apiStructs.WorkFlowRequest{}
+	listBackup := automationModels.WorkFlowRequest{}
 
-	listBackup.Backup.List.Sort = &apiStructs.Sort{
-		SortBy:    apiStructs.SortBy_Field(int32(25)),
-		SortOrder: apiStructs.SortOrder_Value(int32(32)),
+	listBackup.Backup.List.Sort = &automationModels.Sort{
+		SortBy:    automationModels.SortBy_Field(int32(25)),
+		SortOrder: automationModels.SortOrder_Value(int32(32)),
 	}
 
 	backupResponse, err := v2Components.PDS.ListBackup(&listBackup)

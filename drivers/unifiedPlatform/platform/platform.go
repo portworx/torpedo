@@ -1,7 +1,7 @@
 package platform
 
 import (
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
 type Platform interface {
@@ -17,11 +17,12 @@ type Platform interface {
 	ServiceAccountsInterface
 	TemplatesInterface
 	Onboard
+	Project
 }
 
 type AccountInterface interface {
 	//GetAccountList() ([]WorkFlowResponse, error) // not used as of now
-	GetAccount(string) (*WorkFlowResponse, error)
+	GetAccount(*PlatformAccount) (*WorkFlowResponse, error)
 }
 
 type TenantInterface interface {
@@ -29,14 +30,14 @@ type TenantInterface interface {
 }
 
 type TargetClusterInterface interface {
-	ListTargetClusters(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	GetTarget(*WorkFlowRequest) (*WorkFlowResponse, error)
-	PatchTargetCluster(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteTargetCluster(request *WorkFlowRequest) error
+	ListTargetClusters(*PlatformTargetCluster) ([]WorkFlowResponse, error)
+	GetTargetCluster(*PlatformTargetCluster) (*WorkFlowResponse, error)
+	PatchTargetCluster(*PlatformTargetCluster) (*WorkFlowResponse, error)
+	DeleteTargetCluster(request *PlatformTargetCluster) error
 }
 
 type TargetClusterManifestInterface interface {
-	GetTargetClusterRegistrationManifest(*WorkFlowRequest) (*WorkFlowResponse, error)
+	GetTargetClusterRegistrationManifest(cluster *PlatformTargetCluster) (*WorkFlowResponse, error)
 }
 
 type ApplicationInterface interface {
@@ -65,7 +66,7 @@ type CloudCredentialsInterface interface {
 	DeleteCloudCredential(*WorkFlowRequest) error
 }
 type NamespaceInterface interface {
-	ListNamespaces(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListNamespaces(namespace *PlatformNamespace) (*PlatformNamespaceResponse, error)
 }
 
 type IamRoleBindingsInterface interface {
@@ -97,4 +98,13 @@ type TemplatesInterface interface {
 
 type Onboard interface {
 	OnboardNewAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+}
+
+type Project interface {
+	GetProjectList() ([]WorkFlowResponse, error)
+	CreateProject(*PlaformProject, string) (WorkFlowResponse, error)
+	DeleteProject(*PlaformProject) error
+	GetProject(*PlaformProject) (WorkFlowResponse, error)
+	AssociateToProject(*PlaformProject) (WorkFlowResponse, error)
+	DissociateFromProject(*PlaformProject) (WorkFlowResponse, error)
 }

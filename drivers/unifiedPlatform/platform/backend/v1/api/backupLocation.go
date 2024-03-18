@@ -6,10 +6,9 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/pure-px/platform-api-go-client/platform/v1/backuplocation"
 
-	. "github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	status "net/http"
 )
-
 
 // ListBackupLocations return lis of backup locatiobackuploc
 func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) ([]BackupLocation, error) {

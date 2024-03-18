@@ -2,14 +2,14 @@ package platformLibs
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"os"
 	"strings"
 )
 
-func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string) (*apiStructs.BackupLocation, error) {
-	createReq := apiStructs.BackupLocation{}
+func CreateBackupLocation(tenantId, cloudCredId, bucketName, bkpLocation string) (*automationModels.BackupLocation, error) {
+	createReq := automationModels.BackupLocation{}
 	bkpLocName := strings.ToLower("pds-bkp-loc-" + utilities.RandString(5))
 	createReq.TenantID = tenantId
 	createReq.Meta.Name = &bkpLocName

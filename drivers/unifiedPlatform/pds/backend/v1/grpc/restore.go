@@ -3,7 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/apiStructs"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
@@ -27,10 +27,10 @@ func (restore *PdsGrpc) getRestoreClient() (context.Context, publicRestoreapis.R
 }
 
 // CreateRestore will create restore for a given backup
-func (restore *PdsGrpc) CreateRestore(createRestoreRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (restore *PdsGrpc) CreateRestore(createRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup Create - [%+v]", createBackupConfigRequest.BackupConfig.Create)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	createRequest := &publicRestoreapis.CreateRestoreRequest{}
 	// log.Infof("Restore Create Request - [%v], Restore Config - [%v]", createRequest, createRequest.Restore)
@@ -62,11 +62,11 @@ func (restore *PdsGrpc) CreateRestore(createRestoreRequest *apiStructs.WorkFlowR
 }
 
 // ReCreateRestore will recreate restore for a given deployment
-func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 
 	// log.Infof("Backup Update - [%+v]", updateBackupConfigRequest.BackupConfig.Update)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	recreateRequest := &publicRestoreapis.RecreateRestoreRequest{}
 	// log.Infof("Restore Recretae - [%v]", recreateRequest)
@@ -99,10 +99,10 @@ func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *apiStructs.WorkF
 }
 
 // GetRestore will fetch restore for a given deployment
-func (restore *PdsGrpc) GetRestore(getRestoreRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	getRequest := &publicRestoreapis.GetRestoreRequest{}
 	// log.Infof("Restore Get - [%v]", getRequest)
@@ -135,10 +135,10 @@ func (restore *PdsGrpc) GetRestore(getRestoreRequest *apiStructs.WorkFlowRequest
 }
 
 // DeleteRestore will delete restore for a given deployment
-func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *apiStructs.WorkFlowRequest) (*apiStructs.WorkFlowResponse, error) {
+func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup Delete - [%+v]", deleteBackupConfigRequest.BackupConfig.Delete)
 
-	response := &apiStructs.WorkFlowResponse{}
+	response := &automationModels.WorkFlowResponse{}
 
 	deleteRequest := &publicRestoreapis.DeleteRestoreRequest{}
 	// log.Infof("Restore Delete - [%v]", deleteRequest)
@@ -170,10 +170,10 @@ func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *apiStructs.WorkFlowR
 }
 
 // ListRestore will list restores for a given deployment
-func (restore *PdsGrpc) ListRestore(listRestoresRequest *apiStructs.WorkFlowRequest) ([]apiStructs.WorkFlowResponse, error) {
+func (restore *PdsGrpc) ListRestore(listRestoresRequest *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	// log.Infof("Backup List - [%+v]", listBackupConfigRequest.BackupConfig.List)
 
-	response := []apiStructs.WorkFlowResponse{}
+	response := []automationModels.WorkFlowResponse{}
 
 	listRequest := &publicRestoreapis.ListRestoresRequest{}
 	// log.Infof("Restore List - [%v]", listRequest)
