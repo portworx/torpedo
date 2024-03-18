@@ -3813,14 +3813,6 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 // ValidateVolumes Validates the volumes
 func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
 	options *scheduler.VolumeOptions) error {
-
-	isAutopilotPodAvailable, err := k.IsAutopilotEnabled()
-	if err != nil {
-		return fmt.Errorf("Failed to find autopilot pod, Err: %v", err)
-	} else if isAutopilotPodAvailable == false {
-		return fmt.Errorf("Autopilot feature is not enabled")
-	}
-
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if ctx.SkipClusterScopedObject {
@@ -3859,9 +3851,13 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 					return err
 				}
 			}
-			autopilotLabels := make(map[string]string)
-			autopilotLabels["name"] = "autopilot"
 			if autopilotEnabledOnPvc {
+				isAutopilotPodAvailable, err := k.IsAutopilotEnabled()
+				if err != nil {
+					return err
+				} else if isAutopilotPodAvailable == false {
+					return fmt.Errorf("Autopilot is not enabled")
+				}
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
 					return err
@@ -6716,7 +6712,6 @@ func (k *K8s) IsAutopilotEnabled() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	//ns = ""
 	if len(pods.Items) == 0 {
 		return false, fmt.Errorf("Failed to find autopilot pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
 	}
