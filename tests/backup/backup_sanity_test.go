@@ -261,7 +261,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Fetching the name of the next schedule backup for schedule: [%s] for backup location %s", forceKdmpSchBackupName, forceKdmpSchBackupName))
 			scheduleUid, err := Inst().Backup.GetBackupScheduleUID(ctx, kdmpScheduleName, BackupOrgID)
 			err = DeleteScheduleWithUIDAndWait(forceKdmpSchBackupName, scheduleUid, SourceClusterName, sourceClusterUid, BackupOrgID, ctx)
-			log.FailOnError(err, "Fetching px-central-admin %s", err)
+			log.FailOnError(err, "Fetching px-central-admin %s")
 		})
 
 		/*		Step("Taking backup of application from source cluster", func() {
