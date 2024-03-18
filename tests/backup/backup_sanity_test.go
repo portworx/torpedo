@@ -112,6 +112,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		schedulePolicyName                string
 		schedulePolicyUID                 string
 		schedulePolicyInterval            = int64(15)
+		forceKdmpSchBackupName            string
 	)
 
 	JustBeforeEach(func() {
@@ -306,7 +307,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
-		
+
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
@@ -339,6 +340,9 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 		}
 		DestroyApps(restoredAppContexts, opts)
+
+		scheduleUid, err := Inst().Backup.GetBackupScheduleUID(ctx, forceKdmpSchBackupName, BackupOrgID)
+		err = DeleteScheduleWithUIDAndWait(forceKdmpSchBackupName, scheduleUid, SourceClusterName, sourceClusterUid, BackupOrgID, ctx)
 
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
