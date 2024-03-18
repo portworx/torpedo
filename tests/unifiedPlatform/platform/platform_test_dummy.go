@@ -179,7 +179,6 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 				for _, cred := range bkpLocation.WfCloudCredentials.CloudCredentials {
 					log.Infof("credentials Id: [%s]", cred.ID)
 				}
-
 			}
 		})
 	})

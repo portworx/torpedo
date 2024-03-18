@@ -3,6 +3,11 @@ package utilities
 import (
 	"context"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jinzhu/copier"
 	"github.com/portworx/sched-ops/k8s/kubevirt"
 	"github.com/portworx/torpedo/drivers/node"
@@ -32,6 +37,19 @@ type AppInfo struct {
 	IPAddress        string
 }
 
+type awsCompatibleStorageClient struct {
+	endpoint  string
+	accessKey string
+	secretKey string
+	region    string
+}
+
+type awsStorageClient struct {
+	accessKey string
+	secretKey string
+	region    string
+}
+
 const (
 	svcAnnotationKey                = "startDataSupported"
 	userAnnotationKey               = "username"
@@ -54,6 +72,76 @@ func RandomString(length int) string {
 	}
 	randomString := string(randomBytes)
 	return randomString
+}
+
+func (awsObj *awsStorageClient) createS3Bucket(bucketName string) error {
+	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Region:      aws.String(awsObj.region),
+			Credentials: credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	bucketObj, err := client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if (aerr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou) || (aerr.Code() == s3.ErrCodeBucketAlreadyExists) {
+				log.Infof("Bucket: %v ,already exist.", bucketName)
+				return nil
+			} else {
+				return fmt.Errorf("couldn't create bucket: %v", err)
+			}
+
+		}
+	}
+
+	log.Infof("[AWS]Successfully created the bucket. Info: %v", bucketObj)
+	return nil
+}
+
+func (awsObj *awsCompatibleStorageClient) createS3CompBucket(bucketName string) error {
+	log.Debugf("Creating s3 bucket with name [%s]", bucketName)
+	sess, err := session.NewSessionWithOptions(session.Options{
+		Config: aws.Config{
+			Endpoint:         aws.String(awsObj.endpoint),
+			Region:           aws.String(awsObj.region),
+			Credentials:      credentials.NewStaticCredentials(awsObj.accessKey, awsObj.secretKey, ""),
+			S3ForcePathStyle: aws.Bool(true),
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize new session: %v", err)
+	}
+
+	client := s3.New(sess)
+	bucketObj, err := client.CreateBucket(&s3.CreateBucketInput{
+		Bucket: aws.String(bucketName),
+	})
+
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if (aerr.Code() == s3.ErrCodeBucketAlreadyOwnedByYou) || (aerr.Code() == s3.ErrCodeBucketAlreadyExists) {
+				log.Infof("Bucket: %v ,already exist.", bucketName)
+				return nil
+			} else {
+				return fmt.Errorf("couldn't create bucket: %v", err)
+			}
+
+		}
+	}
+
+	log.Infof("[AWS]Successfully created the bucket. Info: %v", bucketObj)
+	return nil
 }
 
 // GenerateRandomSQLCommands generates pairs of INSERT, UPDATE, SELECT and DELETE queries for a database
