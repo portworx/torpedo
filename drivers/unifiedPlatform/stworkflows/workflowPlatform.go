@@ -28,6 +28,7 @@ func (platform *WorkflowPlatform) OnboardAccounts() (map[string][]automationMode
 			return resultMap, err
 		} else {
 			log.Infof("Account Onboarded - UID - [%s]", *accCreationResponse.OnboardAccount.Meta.Uid)
+			platform.AdminAccountId = *accCreationResponse.OnboardAccount.Meta.Uid
 			addResultToResponse([]automationModels.WorkFlowResponse{*accCreationResponse}, automationModels.CreatePlatformAccountV1, resultMap)
 		}
 	}
@@ -36,7 +37,6 @@ func (platform *WorkflowPlatform) OnboardAccounts() (map[string][]automationMode
 }
 
 func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
-
 	wfTenant := WorkflowTenant{
 		AccountID: platform.AdminAccountId,
 	}
@@ -44,7 +44,7 @@ func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
 	if err != nil {
 		return platform, err
 	}
-	
+
 	platform.TenantId = tenantId
 
 	return platform, nil

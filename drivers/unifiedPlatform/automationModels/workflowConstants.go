@@ -10,6 +10,7 @@ const (
 	CreatePlatformAccountV1    = "CreatePlatformAccountV1"
 	GetAccountListv1           = "GetAccountListv1"
 	GetTenantListV1            = "GetTenantListV1"
+	GetDefaultTenant           = "GetDefaultTenant"
 	DeployeDataserviceOnDemand = "DeployeDataserviceOnDemand"
 )
 

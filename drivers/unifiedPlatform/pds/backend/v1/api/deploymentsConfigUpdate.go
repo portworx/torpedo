@@ -1,33 +1,20 @@
 package api
 
 import (
-	"context"
 	"fmt"
-	"github.com/jinzhu/copier"
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	status "net/http"
+
+	"github.com/jinzhu/copier"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+
+	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
 )
 
-// GetClient updates the header with bearer token and returns the new client
-func (ds *PDSV2_API) GetDeploymentConfigClient() (context.Context, *pdsv2.DeploymentConfigUpdateServiceAPIService, error) {
-	ctx, token, err := utils.GetBearerToken()
-	if err != nil {
-		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
-	}
-	ds.ApiClientV2.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	ds.ApiClientV2.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
-	client := ds.ApiClientV2.DeploymentConfigUpdateServiceAPI
-
-	return ctx, client, nil
-}
-
-func (ds *PDSV2_API) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
-	var updateRequest pdsv2.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
+func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+	var updateRequest deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
 	dsResponse := automationModels.WorkFlowResponse{}
 
-	_, dsClient, err := ds.GetDeploymentConfigClient()
+	_, dsClient, err := ds.getDeploymentConfigClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}

@@ -6,17 +6,17 @@ import (
 )
 
 // ListTemplateKinds will list all template kinds available for PDS
-func (tempDef *PDSV2_API) ListTemplateKinds(listTempKindReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
+func (tempDef *PDS_API_V1) ListTemplateKinds(listTempKindReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	log.Infof("Value of Template - [%v]", listTempKindReq)
 	return nil, nil
 }
 
-func (tempDef *PDSV2_API) ListTemplateRevisions(listTempRevReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
+func (tempDef *PDS_API_V1) ListTemplateRevisions(listTempRevReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
 	log.Infof("Value of Template - [%v]", listTempRevReq)
 	return nil, nil
 }
 
-func (tempDef *PDSV2_API) GetTemplateRevisions(getTempRevReq *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (tempDef *PDS_API_V1) GetTemplateRevisions(getTempRevReq *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
 	log.Infof("Value of Template - [%v]", getTempRevReq)
 	return nil, nil
 }

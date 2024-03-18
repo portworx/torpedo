@@ -148,7 +148,7 @@ func backupLocationConfig(createRequest *BackupLocation) *publicbackuplocapi.Con
 	}
 }
 
-func copyCloudLocationResponse(providerType int32, bkpLocation publicbackuplocapi.BackupLocation) *BackupLocation {
+func copyCloudLocationResponse(providerType int32, bkpLocation *publicbackuplocapi.BackupLocation) *BackupLocation {
 	bkpLocResp := BackupLocation{}
 
 	//Test Print
@@ -204,7 +204,7 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupL
 
 	log.Infof("Value of backupLocation - [%v]", backupLocationModel)
 
-	bkpLocationResponse := copyCloudLocationResponse(createRequest.Config.Provider.CloudProvider, *backupLocationModel)
+	bkpLocationResponse := copyCloudLocationResponse(createRequest.Config.Provider.CloudProvider, backupLocationModel)
 
 	log.Infof("Value of backupLocation after copy - [%v]", bkpLocationResponse)
 	return bkpLocationResponse, nil
