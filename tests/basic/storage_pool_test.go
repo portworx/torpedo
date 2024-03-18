@@ -11472,7 +11472,7 @@ var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", func() {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				waitForMetadataRebalance(done, wg, devicePath, selectedNode)
+				waitForMetadataRebalance(done, devicePath, selectedNode)
 			}()
 		})
 		wg.Wait()
@@ -11481,21 +11481,21 @@ var _ = Describe("{DriveAddMetaDataDiskStatusCheck}", func() {
 			log.InfoD(stepLog)
 			done := make(chan struct{})
 			wg.Add(1)
-			go func(done chan<- struct{}) {
+			go func() {
 				defer GinkgoRecover()
 				defer wg.Done()
 				defer close(done)
 				err := AddCloudDrive(selectedNode, 0)
 				log.FailOnError(err, "Failed to add a drive to the pool")
-			}(done)
-			go waitForMetadataRebalance(done, wg, devicePath, selectedNode)
+			}()
+			go waitForMetadataRebalance(done, devicePath, selectedNode)
 		})
 		wg.Wait()
 	})
 })
 
 // This function checks for metadata disk to be in rebalance state
-func waitForMetadataRebalance(done <-chan struct{}, wg sync.WaitGroup, devicePath string, selectedNode node.Node) {
+func waitForMetadataRebalance(done <-chan struct{}, devicePath string, selectedNode node.Node) {
 	defer GinkgoRecover()
 	for {
 		select {
