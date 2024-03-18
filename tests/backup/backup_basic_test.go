@@ -85,6 +85,7 @@ func BackupInitInstance() {
 		VolDriverName:      Inst().V.String(),
 		StorageProvisioner: Inst().Provisioner,
 		NodeDriverName:     Inst().N.String(),
+		CustomAppConfig:    Inst().CustomAppConfig,
 	})
 	log.FailOnError(err, "Error occurred while Scheduler Driver Initialization")
 	err = Inst().N.Init(node.InitOptions{
@@ -116,6 +117,7 @@ func BackupInitInstance() {
 	// Getting Px-Backup server version info and setting Aetos Dashboard tags
 	PxBackupVersion, err = GetPxBackupVersionString()
 	log.FailOnError(err, "Error getting Px Backup version")
+	log.Infof("Running with px-backup version <<< %s >>>", PxBackupVersion)
 	PxBackupBuildDate, err := GetPxBackupBuildDate()
 	log.FailOnError(err, "Error getting Px Backup build date")
 	t.Tags["px-backup-version"] = PxBackupVersion

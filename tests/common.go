@@ -135,6 +135,9 @@ import (
 	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
@@ -168,6 +171,9 @@ import (
 
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
@@ -1705,7 +1711,8 @@ func TearDownContext(ctx *scheduler.Context, opts map[string]bool) {
 		})
 
 		if !ctx.SkipVolumeValidation {
-			ValidateVolumesDeleted(ctx.App.Key, vols)
+			err = ValidateVolumesDeleted(ctx.App.Key, vols)
+			log.FailOnError(err, "Failed to delete volumes for app %s", ctx.App.Key)
 		}
 
 		// Delete Cluster Scope objects
@@ -1743,23 +1750,32 @@ func DeleteVolumes(ctx *scheduler.Context, options *scheduler.VolumeOptions) []*
 }
 
 // ValidateVolumesDeleted checks it given volumes got deleted
-func ValidateVolumesDeleted(appName string, vols []*volume.Volume) {
+func ValidateVolumesDeleted(appName string, vols []*volume.Volume) error {
 	for _, vol := range vols {
+		var err error
 		Step(fmt.Sprintf("validate %s app's volume %s has been deleted in the volume driver",
 			appName, vol.Name), func() {
 			log.InfoD("validate %s app's volume %s has been deleted in the volume driver",
 				appName, vol.Name)
-			err := Inst().V.ValidateDeleteVolume(vol)
-			log.FailOnError(err, fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
-			dash.VerifyFatal(err, nil, fmt.Sprintf("%s's volume %s deleted successfully?", appName, vol.Name))
+			err = Inst().V.ValidateDeleteVolume(vol)
+			if err != nil {
+				log.Errorf(fmt.Sprintf("%s's volume %s deletion failed", appName, vol.Name))
+				return
+			}
+
 		})
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // DeleteVolumesAndWait deletes volumes of given context and waits till they are deleted
-func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) {
+func DeleteVolumesAndWait(ctx *scheduler.Context, options *scheduler.VolumeOptions) error {
 	vols := DeleteVolumes(ctx, options)
-	ValidateVolumesDeleted(ctx.App.Key, vols)
+	err := ValidateVolumesDeleted(ctx.App.Key, vols)
+	return err
 }
 
 // GetAppNamespace returns namespace in which context is created
@@ -2097,7 +2113,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -7108,8 +7124,21 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-// RebootNodeAndWait reboots node and waits for to be up
-func RebootNodeAndWait(n node.Node) error {
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 	if &n == nil {
 		return fmt.Errorf("no Node is provided to reboot")
@@ -7138,10 +7167,6 @@ func RebootNodeAndWait(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
-	if err != nil {
-		return err
-	}
-	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}

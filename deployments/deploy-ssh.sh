@@ -251,6 +251,16 @@ done
 
 echo "checking if we need to override test suite: ${TEST_SUITE}"
 
+# TODO: Remove this after all longevity jobs switch to 'bin/longevity.test' for TEST_SUITE.
+case $FOCUS_TESTS in
+  Longevity|UpgradeLongevity|BackupLongevity)
+    TEST_SUITE="bin/longevity.test"
+    echo "Warning: Based on the FOCUS_TESTS ('$FOCUS_TESTS'), the TEST_SUITE ('$TEST_SUITE') is set to 'bin/longevity.test'"
+    ;;
+  *)
+    ;;
+esac
+
 if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"longevity.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
@@ -765,6 +775,18 @@ spec:
       value: "${ENABLE_GRAFANA}"
     - name: USE_GLOBAL_RULES
       value: "${USE_GLOBAL_RULES}"
+    - name: EKS_CLUSTER_NAME
+      value: "${EKS_CLUSTER_NAME}"
+    - name: EKS_CLUSTER_REGION
+      value: "${EKS_CLUSTER_REGION}"
+    - name: EKS_PX_NODEGROUP_NAME
+      value: "${EKS_PX_NODEGROUP_NAME}"
+    - name: IKS_CLUSTER_NAME
+      value: "${IKS_CLUSTER_NAME}"
+    - name: IKS_PX_WORKERPOOL_NAME
+      value: "${IKS_PX_WORKERPOOL_NAME}"
+    - name: IKS_CLUSTER_REGION
+      value: "${IKS_CLUSTER_REGION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
