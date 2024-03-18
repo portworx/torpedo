@@ -3,7 +3,7 @@ package platformLibs
 import "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 
 // CreateProject will create a project in given tenant
-func CreateProject(projectName string, tenantID string) (*automationModels.WorkFlowResponse, error) {
+func CreateProject(projectName string, tenantID string) (*automationModels.V1Project, error) {
 	request := automationModels.PlaformProject{
 		Create: automationModels.PlatformCreateProject{
 			Project: &automationModels.V1Project{
@@ -20,20 +20,20 @@ func CreateProject(projectName string, tenantID string) (*automationModels.WorkF
 	if err != nil {
 		return nil, err
 	}
-	return &project, nil
+	return &project.Create, nil
 }
 
 // GetProjectList will get the list of projects in given tenant
-func GetProjectList() ([]automationModels.WorkFlowResponse, error) {
-	projects, err := v2Components.Platform.GetProjectList()
+func GetProjectList(pageNumber int, pageSize int) (*automationModels.V1ListProjectsResponse, error) {
+	projects, err := v2Components.Platform.GetProjectList(pageNumber, pageSize)
 	if err != nil {
 		return nil, err
 	}
-	return projects, nil
+	return &projects.List, nil
 }
 
 // GetProject will get the project details of given project id
-func GetProject(projectID string) (*automationModels.WorkFlowResponse, error) {
+func GetProject(projectID string) (*automationModels.V1Project, error) {
 	request := automationModels.PlaformProject{
 		Get: automationModels.PlatformGetProject{
 			ProjectId: projectID,
@@ -43,7 +43,7 @@ func GetProject(projectID string) (*automationModels.WorkFlowResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &project, nil
+	return &project.Get, nil
 }
 
 // DeleteProject will delete the project of given project id
@@ -61,7 +61,7 @@ func DeleteProject(projectID string) error {
 }
 
 // Associate will associate the resources to the project
-func Associate(clusters []string, namespaces []string, credentials []string, backupLocations []string, templates []string, backupPolicies []string, projectId string) (*automationModels.WorkFlowResponse, error) {
+func Associate(clusters []string, namespaces []string, credentials []string, backupLocations []string, templates []string, backupPolicies []string, projectId string) (*automationModels.V1Project, error) {
 	request := automationModels.PlaformProject{
 		Associate: automationModels.PlatformAssociateProject{
 			ProjectId: projectId,
@@ -79,13 +79,13 @@ func Associate(clusters []string, namespaces []string, credentials []string, bac
 	}
 	response, err := v2Components.Platform.AssociateToProject(&request)
 	if err != nil {
-		return &response, err
+		return &response.Associate, err
 	}
-	return &response, nil
+	return &response.Associate, nil
 }
 
 // Dissociate will dissociate the resources from the project
-func Dissociate(clusters []string, namespaces []string, credentials []string, backupLocations []string, templates []string, backupPolicies []string, projectId string) (*automationModels.WorkFlowResponse, error) {
+func Dissociate(clusters []string, namespaces []string, credentials []string, backupLocations []string, templates []string, backupPolicies []string, projectId string) (*automationModels.V1Project, error) {
 	request := automationModels.PlaformProject{
 		Associate: automationModels.PlatformAssociateProject{
 			ProjectId: projectId,
@@ -103,7 +103,7 @@ func Dissociate(clusters []string, namespaces []string, credentials []string, ba
 	}
 	response, err := v2Components.Platform.AssociateToProject(&request)
 	if err != nil {
-		return &response, err
+		return &response.Dissociate, err
 	}
-	return &response, nil
+	return &response.Dissociate, nil
 }

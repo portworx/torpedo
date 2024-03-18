@@ -101,10 +101,10 @@ type Onboard interface {
 }
 
 type Project interface {
-	GetProjectList() ([]WorkFlowResponse, error)
-	CreateProject(*PlaformProject, string) (WorkFlowResponse, error)
+	GetProjectList(int, int) (*PlaformProjectResponse, error)
+	CreateProject(*PlaformProject, string) (*PlaformProjectResponse, error)
 	DeleteProject(*PlaformProject) error
-	GetProject(*PlaformProject) (WorkFlowResponse, error)
-	AssociateToProject(*PlaformProject) (WorkFlowResponse, error)
-	DissociateFromProject(*PlaformProject) (WorkFlowResponse, error)
+	GetProject(*PlaformProject) (*PlaformProjectResponse, error)
+	AssociateToProject(*PlaformProject) (*PlaformProjectResponse, error)
+	DissociateFromProject(*PlaformProject) (*PlaformProjectResponse, error)
 }
