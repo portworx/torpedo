@@ -306,8 +306,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			err := SetClusterContext("")
 			log.FailOnError(err, "failed to SetClusterContext to default cluster")
 		}()
-
-		policyList := []string{intervalName, dailyName, weeklyName, monthlyName}
+		
 		ctx, err := backup.GetAdminCtxFromSecret()
 		log.FailOnError(err, "Fetching px-central-admin ctx")
 		if len(preRuleNameList) > 0 {
@@ -322,8 +321,6 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 				dash.VerifySafely(err, nil, fmt.Sprintf("Deleting backup post rules [%s]", ruleName))
 			}
 		}
-		err = Inst().Backup.DeleteBackupSchedulePolicy(BackupOrgID, policyList)
-		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
 
