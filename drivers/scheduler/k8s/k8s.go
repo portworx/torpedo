@@ -3813,6 +3813,14 @@ func (k *K8s) GetVolumeParameters(ctx *scheduler.Context) (map[string]map[string
 // ValidateVolumes Validates the volumes
 func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval time.Duration,
 	options *scheduler.VolumeOptions) error {
+
+	isAutopilotPodAvailable, err := k.IsAutopilotEnabled()
+	if err != nil {
+		return fmt.Errorf("Failed to find autopilot pod, Err: %v", err)
+	} else if isAutopilotPodAvailable == false {
+		return fmt.Errorf("Autopilot feature is not enabled")
+	}
+
 	for _, specObj := range ctx.App.SpecList {
 		if obj, ok := specObj.(*storageapi.StorageClass); ok {
 			if ctx.SkipClusterScopedObject {
@@ -3853,17 +3861,6 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 			}
 			autopilotLabels := make(map[string]string)
 			autopilotLabels["name"] = "autopilot"
-
-			namespace, err := k.GetAutopilotNamespace()
-			if err != nil {
-				return fmt.Errorf("failed to get Autopilot namespace, Err: %v", err)
-			}
-			log.Debugf("Autopilot namespace %s ", namespace)
-			autopilotPods, err := k8sCore.GetPods(namespace, autopilotLabels)
-			if err != nil {
-				return fmt.Errorf("failed to get [autopilot] pods, Err: %v", err)
-			}
-			autopilotEnabledOnPvc = autopilotEnabledOnPvc && !(len(autopilotPods.Items) == 0)
 			if autopilotEnabledOnPvc {
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
 				if err != nil {
@@ -6703,9 +6700,27 @@ func (k *K8s) GetAutopilotNamespace() (string, error) {
 		ns = pods.Items[0].Namespace
 	}
 	if len(ns) == 0 {
-		return ns, fmt.Errorf("error: can't find autopilot namespace using pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
+		return ns, fmt.Errorf("Failed to find autopilot namespace using pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
 	}
 	return ns, nil
+}
+
+// IsAutopilotEnabled returns the autopilot enabled or not
+func (k *K8s) IsAutopilotEnabled() (bool, error) {
+	var pods *corev1.PodList
+	var err error
+	//Find out autopilot pod deployed or not
+	pods, err = k8sCore.ListPods(map[string]string{
+		AutopilotLabelNameKey: AutopilotLabelValue,
+	})
+	if err != nil {
+		return false, err
+	}
+	//ns = ""
+	if len(pods.Items) == 0 {
+		return false, fmt.Errorf("Failed to find autopilot pods with label [%s=%s]", AutopilotLabelNameKey, AutopilotLabelValue)
+	}
+	return true, nil
 }
 
 // GetPortworxNamespace returns namespace where Portworx is deployed based on the portworx-service location

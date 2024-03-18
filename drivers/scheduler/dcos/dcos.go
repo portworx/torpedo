@@ -788,6 +788,14 @@ func (d *dcos) GetAutopilotNamespace() (string, error) {
 	}
 }
 
+func (d *dcos) IsAutopilotEnabled() (bool, error) {
+	// TODO implement this method
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "GetAutopilotNamespace()",
+	}
+}
+
 // GetPortworxNamespace returns portworx namespace
 func (d *dcos) GetPortworxNamespace() (string, error) {
 	// TODO implement this method
