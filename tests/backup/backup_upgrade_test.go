@@ -1021,6 +1021,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 				err = SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
+				log.InfoD("Waiting for nodes to stabilise")
 				time.Sleep(120 * time.Minute)
 
 			})
