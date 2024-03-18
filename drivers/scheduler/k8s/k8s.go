@@ -3855,7 +3855,7 @@ func (k *K8s) ValidateVolumes(ctx *scheduler.Context, timeout, retryInterval tim
 				isAutopilotPodAvailable, err := k.IsAutopilotEnabled()
 				if err != nil {
 					return err
-				} else if isAutopilotPodAvailable == false {
+				} else if !isAutopilotPodAvailable {
 					return fmt.Errorf("Autopilot is not enabled")
 				}
 				listApRules, err := k8sAutopilot.ListAutopilotRules()
@@ -6737,7 +6737,7 @@ func (k *K8s) GetPortworxNamespace() (string, error) {
 			log.Debugf("Found [%s] service in 2 different namespaces %s", portworxServiceName, namespaces)
 			for _, namespace := range namespaces {
 				if namespace != "kube-system" {
-					log.Debugf("When Portworx deployed outside of [kube-system] namespace, it also creates [%s] service in the [kube-system ] namespace as well as in the namespace it is deployed in", portworxServiceName)
+					log.Debugf("When Portworx deployed outside of [kube-system] namespace, it also creates [%s] service in the [kube-system] namespace as well as in the namespace it is deployed in", portworxServiceName)
 					log.Debugf("Will assume Portworx is deployed in [%s] namespace", namespace)
 					return namespace, nil
 				}
