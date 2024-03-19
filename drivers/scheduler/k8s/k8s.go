@@ -1074,6 +1074,9 @@ func (k *K8s) CreateSpecObjects(app *spec.AppSpec, namespace string, options sch
 
 	for _, appSpec := range app.SpecList {
 		t := func() (interface{}, bool, error) {
+			log.InfoD("kiyer ns debug: %s", ns)
+			log.InfoD("kiyer app debug: %s", app)
+			log.InfoD("kiyer appSpec debug: %s", appSpec)
 			obj, err := k.createTektonObjects(appSpec, ns, app)
 			if err != nil {
 				return nil, true, err
@@ -5412,6 +5415,8 @@ func (k *K8s) createTektonObjects(
 		if obj.Namespace != "kube-system" {
 			obj.Namespace = ns.Name
 		}
+		log.InfoD("kiyer debug ns.name: %s", ns.Name)
+		log.InfoD("kiyer debug obj.Namespace: %s", obj.Namespace)
 		task, err := k8stektoncd.CreateTask(obj, obj.Namespace)
 		if k8serrors.IsAlreadyExists(err) {
 			if task, err = k8stektoncd.GetTask(obj.Namespace, obj.Name); err == nil {
@@ -5434,6 +5439,9 @@ func (k *K8s) createTektonObjects(
 		if obj.Namespace != "kube-system" {
 			obj.Namespace = ns.Name
 		}
+
+		log.InfoD("kiyer debug ns.name: %s", ns.Name)
+		log.InfoD("kiyer debug obj.Namespace: %s", obj.Namespace)
 		pipeline, err := k8stektoncd.CreatePipeline(obj, obj.Namespace)
 		if k8serrors.IsAlreadyExists(err) {
 			if pipeline, err = k8stektoncd.GetPipeline(obj.Namespace, obj.Name); err == nil {
