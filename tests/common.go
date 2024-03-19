@@ -50,6 +50,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
+	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -171,6 +172,9 @@ import (
 
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
@@ -761,6 +765,56 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			})
 		}
 	})
+}
+
+func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isClusterParallelyUpgraded *bool, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	currentPdbValue, _ := GetPDBValue()
+	if currentPdbValue == -1 {
+		err := fmt.Errorf("failed to get PDB value")
+		processError(err, errChan...)
+	}
+	Step("Validate PDB minAvailable for px storage", func() {
+		if currentPdbValue != pdbValue {
+			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
+			processError(err, errChan...)
+		}
+
+	})
+	Step("Validate number of disruptions ", func() {
+		nodes, err := Inst().V.GetDriverNodes()
+		if err != nil {
+			processError(err, errChan...)
+		}
+		currentNumNodes := len(nodes)
+		if allowedDisruptions < initialNumNodes-currentNumNodes {
+			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+			processError(err, errChan...)
+		}
+		if initialNumNodes-currentNumNodes > 1 {
+			*isClusterParallelyUpgraded = true
+			
+		}
+	})
+
+}
+
+func GetPDBValue() (int, int) {
+	// if Inst().V.GetDriverNodes()
+	stc, err := Inst().V.GetDriver()
+	if err != nil {
+		return -1, -1
+	}
+	pdb, err := policyops.Instance().GetPodDisruptionBudget("px-storage", stc.Namespace)
+	if err != nil {
+		return -1, -1
+	}
+	return pdb.Spec.MinAvailable.IntValue(), int(pdb.Status.DisruptionsAllowed)
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -2110,7 +2164,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -7121,8 +7175,21 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-// RebootNodeAndWait reboots node and waits for to be up
-func RebootNodeAndWait(n node.Node) error {
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 	if &n == nil {
 		return fmt.Errorf("no Node is provided to reboot")
@@ -7151,10 +7218,6 @@ func RebootNodeAndWait(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
-	if err != nil {
-		return err
-	}
-	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}
