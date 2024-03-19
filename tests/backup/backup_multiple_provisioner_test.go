@@ -142,8 +142,6 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", multipleNsSchBackupName, backupLocationName))
 				err = IsFullBackup(multipleNsSchBackupName, BackupOrgID, ctx)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying if the first schedule backup [%s] for backup location %s is a full backup", multipleNsSchBackupName, backupLocationName))
-				scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, multipleProvisionerSameNsScheduleName, BackupOrgID)
-				err = DeleteScheduleWithUIDAndWait(multipleProvisionerSameNsScheduleName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 				backupUID, err := Inst().Backup.GetBackupUID(ctx, multipleNsSchBackupName, BackupOrgID)
 				log.FailOnError(err, fmt.Sprintf("Getting UID for backup %v", multipleNsSchBackupName))
 				backupInspectRequest := &api.BackupInspectRequest{
@@ -155,7 +153,6 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				volumeObjlist := resp.Backup.Volumes
 				var volumeNames []string
 				for _, obj := range volumeObjlist {
-					log.Infof("sleep for 60s %v", obj.Name)
 					volumeNames = append(volumeNames, obj.Name)
 				}
 				DeleteSnapshotsForVolumes(volumeNames)
@@ -170,7 +167,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				namespaceMappingMultiApp := make(map[string]string)
 				for _, appCtx := range scheduledAppContextsForMultipleAppSinleNs {
-					namespaceMappingMultiApp[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mul-app-snigle-ns"
+					namespaceMappingMultiApp[appCtx.ScheduleOptions.Namespace] = appCtx.ScheduleOptions.Namespace + "-mul-app-snigle-ns" + RandomString(randomStringLength)
 				}
 				restoreName := fmt.Sprintf("%s-%s-%s", "test-restore", "multi-app-single-ns", RandomString(randomStringLength))
 				log.InfoD("Restoring namespaces from the [%s] backup", multipleNsSchBackupName)
@@ -198,6 +195,9 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
+
+		scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, multipleProvisionerSameNsScheduleName, BackupOrgID)
+		err = DeleteScheduleWithUIDAndWait(multipleProvisionerSameNsScheduleName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
 
 		// Delete restores
 		log.Info("Delete restores")
