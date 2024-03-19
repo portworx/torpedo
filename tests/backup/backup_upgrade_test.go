@@ -1002,7 +1002,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 		dash.VerifyFatal(len(versions) > 0, true, "Check if upgrade versions provided is provided")
 
 		for _, version := range versions {
-			Step("Upgrading OCP cluster", func() {
+			Step("Upgrading K8s cluster", func() {
 
 				err := SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
@@ -1073,14 +1073,14 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 				})
 			}
 
-			Step("Create backups after OCP upgrade with and without pre and post exec rules", func() {
+			Step("Create backups after cluster upgrade with and without pre and post exec rules", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				createBackupWithRulesTask := func(appName string) {
 					namespace := srcClusterAppNamespaces[appName][0]
 					backupName := fmt.Sprintf("%s-%s-%v-with-rules", BackupNamePrefix, namespace, time.Now().Unix())
 					labelSelectors := make(map[string]string, 0)
-					log.InfoD("Creating a backup of namespace [%s] after OCP upgrade with pre and post exec rules", namespace)
+					log.InfoD("Creating a backup of namespace [%s] after cluster upgrade with pre and post exec rules", namespace)
 					appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, preRuleNames[appName], preRuleUids[appName], postRuleNames[appName], postRuleUids[appName])
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
@@ -1092,7 +1092,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 					namespace := srcClusterAppNamespaces[appName][0]
 					backupName := fmt.Sprintf("%s-%s-%v-without-rules", BackupNamePrefix, namespace, time.Now().Unix())
 					labelSelectors := make(map[string]string, 0)
-					log.InfoD("Creating a backup of namespace [%s] after OCP upgrade without pre and post exec rules", namespace)
+					log.InfoD("Creating a backup of namespace [%s] after cluster upgrade without pre and post exec rules", namespace)
 					appContextsToBackup := FilterAppContextsByNamespace(srcClusterContexts, []string{namespace})
 					err = CreateBackupWithValidation(ctx, backupName, SourceClusterName, backupLocationName, backupLocationUid, appContextsToBackup, labelSelectors, BackupOrgID, srcClusterUid, "", "", "", "")
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of backup [%s]", backupName))
@@ -1101,10 +1101,10 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 				}
 				_ = TaskHandler(Inst().AppList, createBackupWithoutRulesTask, Parallel)
 			})
-			Step("Restore backups created before OCP upgrade with and without pre and post exec rules", func() {
+			Step("Restore backups created before cluster upgrade with and without pre and post exec rules", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
-				log.InfoD("Restoring backups [%s] created before OCP upgrade with rules", backupWithRuleNames)
+				log.InfoD("Restoring backups [%s] created before cluster upgrade with rules", backupWithRuleNames)
 				for _, backupName := range backupWithRuleNames {
 					namespaceMapping := make(map[string]string, 0)
 					storageClassMapping := make(map[string]string, 0)
@@ -1114,7 +1114,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, DestinationClusterName))
 					restoreNames = append(restoreNames, restoreName)
 				}
-				log.InfoD("Restoring backups [%s] created before OCP upgrade without rules", backupWithoutRuleNames)
+				log.InfoD("Restoring backups [%s] created before cluster upgrade without rules", backupWithoutRuleNames)
 				for _, backupName := range backupWithoutRuleNames {
 					namespaceMapping := make(map[string]string, 0)
 					storageClassMapping := make(map[string]string, 0)
@@ -1125,7 +1125,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 					restoreNames = append(restoreNames, restoreName)
 				}
 			})
-			Step("Restore backups created after OCP upgrade with and without pre and post exec rules", func() {
+			Step("Restore backups created after cluster upgrade with and without pre and post exec rules", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				log.InfoD("Restoring backups [%s] created after px-backup upgrade with rules", backupWithRuleNames)
@@ -1138,7 +1138,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 					dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying restoration [%s] of backup [%s] in cluster [%s]", restoreName, backupName, DestinationClusterName))
 					restoreNames = append(restoreNames, restoreName)
 				}
-				log.InfoD("Restoring backups [%s] created after OCP upgrade without rules", backupWithoutRuleNames)
+				log.InfoD("Restoring backups [%s] created after cluster upgrade without rules", backupWithoutRuleNames)
 				for _, backupName := range backupAfterUpgradeWithoutRuleNames {
 					namespaceMapping := make(map[string]string, 0)
 					storageClassMapping := make(map[string]string, 0)
@@ -1149,7 +1149,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 					restoreNames = append(restoreNames, restoreName)
 				}
 			})
-			// By the time the next single namespace schedule backups are taken, the OCP upgrade would have been completed
+			// By the time the next single namespace schedule backups are taken, the cluster upgrade would have been completed
 			Step("Restore latest single namespace schedule backups", func() {
 				ctx, err := backup.GetAdminCtxFromSecret()
 				dash.VerifyFatal(err, nil, "Fetching px-central-admin ctx")
