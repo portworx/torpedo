@@ -351,6 +351,12 @@ var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 			appList:         []string{},
 		},
 	},
+	"ibm": {
+		"vpc.block.csi.ibm.io": {
+			snapshotClasses: []string{},
+			defaultSnapshot: "ibmc-vpcblock-snapshot",
+		},
+	},
 	"aws": {
 		"aws-provisioner": {
 			snapshotClasses: []string{"aws-snapshot-class", "aws-snapshot-class-2"},
