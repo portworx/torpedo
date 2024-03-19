@@ -44,23 +44,23 @@ func UpdateDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, e
 	// Get TargetClusterID
 	// Get ImageID
 	// Get ProjectID
-	// Get App, Resource and storage Template Ids
+	// Get App, Resource and storage PdsTemplates Ids
 
 	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
 	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
 	depInputs.Deployment.NamespaceID = "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &automationModels.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &automationModels.PdsTemplates{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &automationModels.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &automationModels.PdsTemplates{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &automationModels.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &automationModels.PdsTemplates{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,
@@ -84,23 +84,23 @@ func DeployDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, e
 	// Get TargetClusterID
 	// Get ImageID
 	// Get ProjectID
-	// Get App, Resource and storage Template Ids
+	// Get App, Resource and storage PdsTemplates Ids
 
 	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
 	depInputs.Deployment.V1Deployment.Meta.Name = &ds.DeploymentName
 	depInputs.Deployment.NamespaceID = "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &automationModels.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate = &automationModels.PdsTemplates{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &automationModels.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate = &automationModels.PdsTemplates{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &automationModels.Template{
+	depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate = &automationModels.PdsTemplates{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,
@@ -109,9 +109,9 @@ func DeployDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, e
 	//TODO: Get the namespaceID, write method to get the namespaceID from the give namespace
 
 	log.Infof("deployment name  [%s]", *depInputs.Deployment.V1Deployment.Meta.Name)
-	log.Infof("app template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
-	log.Infof("resource template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
-	log.Infof("storage template ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate.Id)
+	log.Infof("app PdsTemplates ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ApplicationTemplate.Id)
+	log.Infof("resource PdsTemplates ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	log.Infof("storage PdsTemplates ids [%s]", *depInputs.Deployment.V1Deployment.Config.DeploymentTopologies[0].StorageTemplate.Id)
 
 	log.Infof("depInputs [+%v]", depInputs.Deployment)
 	deployment, err := v2Components.PDS.CreateDeployment(&depInputs)

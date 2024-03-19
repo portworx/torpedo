@@ -1,6 +1,7 @@
 package automationModels
 
 import (
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	"time"
 )
 
@@ -52,6 +53,13 @@ type V1Config3 struct {
 	ActorId      *string `json:"actorId,omitempty"`
 	ActorType    *string `json:"actorType,omitempty"`
 	AccessPolicy *V1AccessPolicy
+}
+
+type V1Config struct {
+	Kind            *string          `json:"kind,omitempty"`
+	SemanticVersion *string          `json:"semanticVersion,omitempty"`
+	RevisionUid     *string          `json:"revisionUid,omitempty"`
+	TemplateValues  *structpb.Struct `json:"templateValues,omitempty"`
 }
 
 type V1Deployment struct {
@@ -130,3 +138,13 @@ type DestinationReferences struct {
 }
 
 type V1PhaseType string
+
+type Templatev1Status struct {
+	Phase *StatusPhase `json:"phase,omitempty"`
+}
+
+type Template struct {
+	Meta   *V1Meta           `json:"meta,omitempty"`
+	Config *V1Config         `json:"config,omitempty"`
+	Status *Templatev1Status `json:"status,omitempty"`
+}

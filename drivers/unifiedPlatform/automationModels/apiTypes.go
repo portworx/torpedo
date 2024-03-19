@@ -27,4 +27,5 @@ type WorkFlowRequest struct {
 	Pagination            PaginationRequest      `copier:"must,nopanic"`
 	ServiceAccountRequest PDSServiceAccount      `copier:"must,nopanic"`
 	Iam                   PDSIam                 `copier:"must,nopanic"`
+	Templates             PlatformTemplates      `copier:"must,nopanic"`
 }

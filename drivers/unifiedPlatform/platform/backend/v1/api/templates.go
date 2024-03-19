@@ -1,38 +1,127 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
+	templatesv1 "github.com/pure-px/platform-api-go-client/platform/v1/template"
+	status "net/http"
 )
 
-// ListTemplates return service identities models for a project.
-func (template *PLATFORM_API_V1) ListTemplates(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
-	log.Infof("Value of Template - [%v]", listReq)
-	return nil, nil
+// ListTemplatesForTenants return service identities models for a template.
+func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTemplates) ([]WorkFlowResponse, error) {
+	ctx, client, err := template.getTemplateClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	templateResponse := []WorkFlowResponse{}
+	var listRequest templatesv1.ApiTemplateServiceListTemplatesRequest
+	listRequest = listRequest.ApiService.TemplateServiceListTemplates(ctx)
+	listRequest = listRequest.TenantId(templateReq.ListForTenant.TenantId)
+	templatesList, res, err := client.TemplateServiceListTemplatesExecute(listRequest)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `TemplateServiceListTemplatesExecute`: %v\n.Full HTTP response: %v", err, res)
+	}
+	err = utilities.CopyStruct(&templateResponse, templatesList.Templates)
+	if err != nil {
+		return nil, err
+	}
+	return templateResponse, nil
 }
 
-// CreateTemplates returns newly create template RoleBinding object
-func (template *PLATFORM_API_V1) CreateTemplates(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-
-	log.Infof("Value of Template - [%v]", createReq)
-	return nil, nil
+// ListTemplates return service identities models for a template.
+func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplates) ([]WorkFlowResponse, error) {
+	ctx, client, err := template.getTemplateClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	templateResponse := []WorkFlowResponse{}
+	var listRequest templatesv1.ApiTemplateServiceListTemplates2Request
+	listRequest = listRequest.ApiService.TemplateServiceListTemplates2(ctx)
+	templatesList, res, err := client.TemplateServiceListTemplates2Execute(listRequest)
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `TemplateServiceListTemplates2Execute`: %v\n.Full HTTP response: %v", err, res)
+	}
+	err = utilities.CopyStruct(&templateResponse, templatesList.Templates)
+	if err != nil {
+		return nil, err
+	}
+	return templateResponse, nil
 }
 
-func (template *PLATFORM_API_V1) UpdateTemplates(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+// CreateTemplates returns newly create template  object
+func (template *PLATFORM_API_V1) CreateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+	_, client, err := template.getTemplateClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
+	templateResponse := WorkFlowResponse{}
+	templateCreateRequest := templatesv1.ApiTemplateServiceCreateTemplateRequest{}
+	templateCreateRequest = templateCreateRequest.ApiService.TemplateServiceCreateTemplate(context.Background(), templateReq.Create.TenantId)
+	var tempCreate templatesv1.V1Template
+	templateCreateRequest = templateCreateRequest.V1Template(tempCreate)
+	templateModel, res, err := client.TemplateServiceCreateTemplateExecute(templateCreateRequest)
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `TemplateServiceCreateTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
+	}
+	err = utilities.CopyStruct(&templateResponse, templateModel)
+	return &templateResponse, err
 
-	log.Infof("Value of Template - [%v]", updateReq)
-	return nil, nil
 }
 
-// GetTemplateByID return template model.
-func (template *PLATFORM_API_V1) GetTemplateByID(templateId *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (template *PLATFORM_API_V1) UpdateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+	_, client, err := template.getTemplateClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
+	templateResponse := WorkFlowResponse{}
+	templateUpdateRequest := templatesv1.ApiTemplateServiceUpdateTemplateRequest{}
+	templateUpdateRequest = templateUpdateRequest.ApiService.TemplateServiceUpdateTemplate(context.Background(), templateReq.Update.Id)
+	var updateRequest templatesv1.V1Template
+	templateUpdateRequest = templateUpdateRequest.V1Template(updateRequest)
+	templateModel, res, err := client.TemplateServiceUpdateTemplateExecute(templateUpdateRequest)
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `TemplateServiceCreateTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
+	}
+	err = utilities.CopyStruct(&templateResponse, templateModel)
+	return &templateResponse, err
+}
 
-	log.Infof("Value of Template - [%v]", templateId)
-	return nil, nil
+// GetTemplates return template model.
+func (template *PLATFORM_API_V1) GetTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+
+	ctx, client, err := template.getTemplateClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	templateResponse := WorkFlowResponse{}
+	templateModel, res, err := client.TemplateServiceGetTemplate(ctx, templateReq.Get.Id).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `TemplateServiceGetTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
+	}
+	log.InfoD("Successfully fetched the template Roles")
+	log.Infof("Value of template - [%v]", templateModel)
+	err = utilities.CopyStruct(&templateResponse, templateModel)
+	log.Infof("Value of template after copy - [%v]", templateResponse)
+	return &templateResponse, nil
 }
 
 // DeleteTemplate delete template and return status.
-func (template *PLATFORM_API_V1) DeleteTemplate(templateId *WorkFlowRequest) error {
-	log.Infof("Value of Template after copy - [%v]", templateId)
+func (template *PLATFORM_API_V1) DeleteTemplate(templateReq *PlatformTemplates) error {
+	ctx, templateClient, err := template.getTemplateClient()
+	if err != nil {
+		return fmt.Errorf("Error in getting context for api call: %v\n", err)
+	}
+	templateResponse := WorkFlowResponse{}
+	templateModel, res, err := templateClient.TemplateServiceDeleteTemplate(ctx, templateReq.Delete.Id).Execute()
+	if err != nil && res.StatusCode != status.StatusOK {
+		return fmt.Errorf("Error when calling `templateServiceDeletetemplateExecute`: %v\n.Full HTTP response: %v", err, res)
+	}
+	log.InfoD("Successfully DELETED the template Roles")
+	log.Infof("Value of template - [%v]", templateModel)
+	err = utilities.CopyStruct(&templateResponse, templateModel)
+	log.Infof("Value of template after copy - [%v]", templateResponse)
 	return nil
 }

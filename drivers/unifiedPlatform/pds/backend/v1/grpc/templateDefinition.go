@@ -3,18 +3,18 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
-	publicTempDefapis "github.com/pure-px/apis/public/portworx/pds/catalog/templatedefinition/apiv1"
+	publictempdefapis "github.com/pure-px/apis/public/portworx/pds/catalog/templatedefinition/apiv1"
 	"google.golang.org/grpc"
 )
 
-func (tempDef *PdsGrpc) getTemplateDefClient() (context.Context, publicTempDefapis.TemplateDefinitionServiceClient, string, error) {
+func (tempDefGrpcGrpc *PdsGrpc) getTemplateDefClient() (context.Context, publictempdefapis.TemplateDefinitionServiceClient, string, error) {
 	log.Infof("Creating client from grpc package")
-	var depClient publicTempDefapis.TemplateDefinitionServiceClient
+	var depClient publictempdefapis.TemplateDefinitionServiceClient
 
 	ctx, token, err := GetBearerToken()
 	if err != nil {
@@ -23,61 +23,58 @@ func (tempDef *PdsGrpc) getTemplateDefClient() (context.Context, publicTempDefap
 	credentials = &Credentials{
 		Token: token,
 	}
-	depClient = publicTempDefapis.NewTemplateDefinitionServiceClient(tempDef.ApiClientV2)
+	depClient = publictempdefapis.NewTemplateDefinitionServiceClient(tempDefGrpcGrpc.ApiClientV2)
 	return ctx, depClient, token, nil
 }
 
 // ListTemplateKinds will list all template kinds available for PDS
-func (tempDef *PdsGrpc) ListTemplateKinds(listTempKindReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
-	ctx, tempDefClient, _, err := tempDef.getTemplateDefClient()
-	templateResponse := []automationModels.WorkFlowResponse{}
+func (tempDefGrpc *PdsGrpc) ListTemplateKinds() ([]WorkFlowResponse, error) {
+	ctx, tempDefGrpcClient, _, err := tempDefGrpc.getTemplateDefClient()
+	templateResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var firstPageRequest *publicTempDefapis.ListTemplateKindsRequest
-	err = utilities.CopyStruct(&firstPageRequest, listTempKindReq)
-	templateModel, err := tempDefClient.ListTemplateKinds(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
+	var firstPageRequest *publictempdefapis.ListTemplateKindsRequest
+	apiResponse, err := tempDefGrpcClient.ListTemplateKinds(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `ListTemplates` call: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = utilities.CopyStruct(&templateResponse, templateModel.Kinds)
+	log.Infof("Value of Template - [%v]", apiResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse.Kinds)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
 	return templateResponse, nil
 }
 
-func (tempDef *PdsGrpc) ListTemplateRevisions(listTempRevReq *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
-	ctx, tempDefClient, _, err := tempDef.getTemplateDefClient()
-	templateResponse := []automationModels.WorkFlowResponse{}
+func (tempDefGrpc *PdsGrpc) ListTemplateRevisions() ([]WorkFlowResponse, error) {
+	ctx, tempDefGrpcClient, _, err := tempDefGrpc.getTemplateDefClient()
+	templateResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var firstPageRequest *commonapiv1.ListRevisionsRequest
-	err = utilities.CopyStruct(&firstPageRequest, listTempRevReq)
-	templateModel, err := tempDefClient.ListRevisions(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := tempDefGrpcClient.ListRevisions(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `ListTemplates` call: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = utilities.CopyStruct(&templateResponse, templateModel.Revisions)
+	log.Infof("Value of Template - [%v]", apiResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse.Revisions)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
 	return templateResponse, nil
 }
 
-func (tempDef *PdsGrpc) GetTemplateRevisions(getTempRevReq *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
-	ctx, tempDefClient, _, err := tempDef.getTemplateDefClient()
-	templateResponse := automationModels.WorkFlowResponse{}
+func (tempDefGrpcGrpc *PdsGrpc) GetTemplateRevisions() (*WorkFlowResponse, error) {
+	ctx, tempDefGrpcClient, _, err := tempDefGrpcGrpc.getTemplateDefClient()
+	templateResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var getRequest *commonapiv1.GetRevisionRequest
-	err = utilities.CopyStruct(&getRequest, getTempRevReq)
-	templateModel, err := tempDefClient.GetRevision(ctx, getRequest, grpc.PerRPCCredentials(credentials))
+	var getReq *commonapiv1.GetRevisionRequest
+	apiResponse, err := tempDefGrpcClient.GetRevision(ctx, getReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `ListTemplates` call: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = utilities.CopyStruct(&templateResponse, templateModel)
+	log.Infof("Value of Template - [%v]", apiResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
 	return &templateResponse, nil
 }

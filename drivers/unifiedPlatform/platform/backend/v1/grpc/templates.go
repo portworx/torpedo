@@ -3,10 +3,11 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
+	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publictemplateapis "github.com/pure-px/apis/public/portworx/platform/template/apiv1"
 	"google.golang.org/grpc"
 )
@@ -31,125 +32,109 @@ func (templateGrpc *PlatformGrpc) getTemplateClient() (context.Context, publicte
 }
 
 // ListTemplates return service identities models for a project.
-func (templateGrpc *PlatformGrpc) ListTemplates(listReq *WorkFlowRequest) ([]WorkFlowResponse, error) {
+func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplates) ([]WorkFlowResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
 	templateResponse := []WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	var firstPageRequest *publictemplateapis.ListTemplatesRequest
-	err = copier.Copy(&firstPageRequest, listReq)
-	if err != nil {
-		return nil, err
-	}
-	templateModel, err := templateClient.ListTemplates(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
+	firstPageRequest.TenantId = templateReqReq.List.V1ListTemplatesRequest.TenantId
+	apiResponse, err := templateClient.ListTemplates(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `ListTemplates` call: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = copier.Copy(&templateResponse, templateModel.Templates)
-	if err != nil {
-		return nil, err
-	}
+	log.Infof("Value of Template - [%v]", apiResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse.Templates)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
 	return templateResponse, nil
 }
 
-// CreateTemplates returns newly create template RoleBinding object
-func (templateGrpc *PlatformGrpc) CreateTemplates(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+// CreateTemplates returns newly create template  object
+func (templateGrpc *PlatformGrpc) CreateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
 	templateResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var templateCreateRequest *publictemplateapis.CreateTemplateRequest
-	err = copier.Copy(&templateCreateRequest, createReq)
-	if err != nil {
-		return nil, err
+	createTemplateReq := publictemplateapis.CreateTemplateRequest{
+		TenantId: templateReq.Create.TenantId,
+		Template: &publictemplateapis.Template{
+			Meta: &commonapiv1.Meta{Name: *templateReq.Create.Template.Meta.Name},
+			Config: &publictemplateapis.Config{
+				Kind:            *templateReq.Create.Template.Config.Kind,
+				SemanticVersion: *templateReq.Create.Template.Config.SemanticVersion,
+				RevisionUid:     *templateReq.Create.Template.Config.RevisionUid,
+				TemplateValues:  templateReq.Create.Template.Config.TemplateValues},
+		},
 	}
-	templateModel, err := templateClient.CreateTemplate(ctx, templateCreateRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := templateClient.CreateTemplate(ctx, &createTemplateReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return nil, fmt.Errorf("Error in calling `CreateTemplate` call: %v\n", err)
+		return nil, fmt.Errorf("Error while creating the project: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = copier.Copy(&templateResponse, templateModel)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Value of Template after copy - [%v]", templateResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse)
 	return &templateResponse, nil
 }
 
-func (templateGrpc *PlatformGrpc) UpdateTemplates(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
 	templateResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var templateUpdateRequest *publictemplateapis.UpdateTemplateRequest
-	err = copier.Copy(&templateUpdateRequest, updateReq)
-	if err != nil {
-		return nil, err
+	updateTemplateReq := publictemplateapis.UpdateTemplateRequest{
+		Id: templateReq.Update.Id,
+		Template: &publictemplateapis.Template{
+			Meta: &commonapiv1.Meta{Name: *templateReq.Create.Template.Meta.Name},
+			Config: &publictemplateapis.Config{
+				Kind:            *templateReq.Create.Template.Config.Kind,
+				SemanticVersion: *templateReq.Create.Template.Config.SemanticVersion,
+				RevisionUid:     *templateReq.Create.Template.Config.RevisionUid,
+				TemplateValues:  templateReq.Create.Template.Config.TemplateValues},
+		},
 	}
-	templateModel, err := templateClient.UpdateTemplate(ctx, templateUpdateRequest, grpc.PerRPCCredentials(credentials))
+	apiResponse, err := templateClient.UpdateTemplate(ctx, &updateTemplateReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return nil, fmt.Errorf("Error in calling `UpdateTemplate` call: %v\n", err)
+		return nil, fmt.Errorf("Error while creating the project: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = copier.Copy(&templateResponse, templateModel)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("Value of Template after copy - [%v]", templateResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse)
 	return &templateResponse, nil
 }
 
-// GetTemplateByID return template model.
-func (templateGrpc *PlatformGrpc) GetTemplateByID(templateId *WorkFlowRequest) (*WorkFlowResponse, error) {
+// GetTemplates return template model.
+func (templateGrpc *PlatformGrpc) GetTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
 	templateResponse := WorkFlowResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var templateGetRequest *publictemplateapis.GetTemplateRequest
-	err = copier.Copy(&templateGetRequest, templateId)
-	if err != nil {
-		return nil, err
-	}
-	templateModel, err := templateClient.GetTemplate(ctx, templateGetRequest, grpc.PerRPCCredentials(credentials))
+	templateGetRequest := publictemplateapis.GetTemplateRequest{Id: templateReq.Get.Id}
+
+	apiResponse, err := templateClient.GetTemplate(ctx, &templateGetRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error in calling `GetTemplate` call: %v\n", err)
 	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = copier.Copy(&templateResponse, templateModel)
-	if err != nil {
-		return nil, err
-	}
+	log.Infof("Value of Template - [%v]", apiResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
 	return &templateResponse, nil
 }
 
 // DeleteTemplate delete template and return status.
-func (templateGrpc *PlatformGrpc) DeleteTemplate(templateId *WorkFlowRequest) error {
+func (templateGrpc *PlatformGrpc) DeleteTemplate(templateReq *PlatformTemplates) error {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
 	templateResponse := WorkFlowResponse{}
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var templateDelRequest *publictemplateapis.DeleteTemplateRequest
-	err = copier.Copy(&templateDelRequest, templateId)
+	templateDelRequest := publictemplateapis.DeleteTemplateRequest{Id: templateReq.Get.Id}
+
+	apiResponse, err := templateClient.DeleteTemplate(ctx, &templateDelRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return err
+		return fmt.Errorf("Error in calling `GetTemplate` call: %v\n", err)
 	}
-	templateModel, err := templateClient.DeleteTemplate(ctx, templateDelRequest, grpc.PerRPCCredentials(credentials))
-	if err != nil {
-		return fmt.Errorf("Error in calling `DeleteTemplate` call: %v\n", err)
-	}
-	log.Infof("Value of Template - [%v]", templateModel)
-	err = copier.Copy(&templateResponse, templateModel)
-	if err != nil {
-		return err
-	}
+	log.Infof("Value of Template - [%v]", apiResponse)
+	err = utilities.CopyStruct(&templateResponse, apiResponse)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
 	return nil
 }
