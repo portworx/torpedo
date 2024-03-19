@@ -70,7 +70,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceGetApplicationExecute(r
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/applications/{id}"
+	localVarPath := localBasePath + "/core/v1/applications/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -185,7 +185,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceGetApplication2Execute(
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{clusterId}/applications/{id}"
+	localVarPath := localBasePath + "/core/v1/clusters/{clusterId}/applications/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"clusterId"+"}", url.PathEscape(parameterValueToString(r.clusterId, "clusterId")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
@@ -302,7 +302,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceInstallApplicationExecu
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{clusterId}/applications"
+	localVarPath := localBasePath + "/core/v1/clusters/{clusterId}/applications"
 	localVarPath = strings.Replace(localVarPath, "{"+"clusterId"+"}", url.PathEscape(parameterValueToString(r.clusterId, "clusterId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -430,7 +430,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceListApplicationsExecute
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{clusterId}/applications"
+	localVarPath := localBasePath + "/core/v1/clusters/{clusterId}/applications"
 	localVarPath = strings.Replace(localVarPath, "{"+"clusterId"+"}", url.PathEscape(parameterValueToString(r.clusterId, "clusterId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -552,7 +552,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceUninstallApplicationExe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/applications/{id}"
+	localVarPath := localBasePath + "/core/v1/applications/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -667,7 +667,7 @@ func (a *ApplicationServiceAPIService) ApplicationServiceUninstallApplication2Ex
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/clusters/{clusterId}/applications/{id}"
+	localVarPath := localBasePath + "/core/v1/clusters/{clusterId}/applications/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"clusterId"+"}", url.PathEscape(parameterValueToString(r.clusterId, "clusterId")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 

@@ -78,7 +78,7 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*TargetClusterRegistrationManifestServiceAPI* | [**TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest**](docs/TargetClusterRegistrationManifestServiceAPI.md#targetclusterregistrationmanifestservicegeneratetargetclusterregistrationmanifest) | **Post** /v1/tenants/{tenantId}:registrationManifests | GetTargetClusterRegistrationManifest fetches registration manifest for the given request.
+*TargetClusterRegistrationManifestServiceAPI* | [**TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest**](docs/TargetClusterRegistrationManifestServiceAPI.md#targetclusterregistrationmanifestservicegeneratetargetclusterregistrationmanifest) | **Post** /core/v1/tenants/{tenantId}:registrationManifests | GetTargetClusterRegistrationManifest fetches registration manifest for the given request.
 
 
 ## Documentation For Models

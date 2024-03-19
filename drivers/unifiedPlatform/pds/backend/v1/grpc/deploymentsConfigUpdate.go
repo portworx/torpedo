@@ -70,7 +70,7 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationM
 							Name:        "",
 							Description: "",
 							Replicas:    4,
-							ResourceTemplate: &deploymenttopology.Template{
+							ResourceSettings: &deploymenttopology.Template{
 								Id:              "",
 								ResourceVersion: "",
 								Values:          nil,

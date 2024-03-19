@@ -36,7 +36,7 @@ service RestoreService {
     returns (Restore) {
     option(google.api.http) = {
       post: "/pds/v1/namespaces/{namespace_id}/restores"
-      body: "restore"
+      body: "*"
     };
   }
 
@@ -89,15 +89,21 @@ message CreateRestoreRequest {
   // UID of the namespace where restore will be created.
   // (-- api-linter: core::0133::request-unknown-fields=disabled
   //     aip.dev/not-precedent: We really need this field because namespace is the parent of the restore. --)
-  string namespace_id = 1;
+  // (-- api-linter: core::0133::request-required-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required
+  //     to support creation of the resource in the deployment context.. --)
+  string namespace_id = 1 [(google.api.field_behavior) = REQUIRED];
 
   // UID of the project associated with the restore.
   // (-- api-linter: core::0133::request-unknown-fields=disabled
   //     aip.dev/not-precedent: We need this field for to know the project with which the restore is associated with. --)
-  string project_id = 2;
+  // (-- api-linter: core::0133::request-required-fields=disabled
+  //     aip.dev/not-precedent: We really need this field to be required
+  //     to support creation of the resource in the deployment context.. --)
+  string project_id = 2 [(google.api.field_behavior) = REQUIRED];
 
   // Restore resource.
-  Restore restore = 3;
+  Restore restore = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Request to get a restore.
@@ -146,13 +152,13 @@ message DeleteRestoreRequest {
 // Request to recreate a restore.
 message RecreateRestoreRequest {
   // UID of the existing restore.
-  string id = 1;
-  // UID of the target cluster where restore will be created.
-  string target_cluster_id = 2;
+  string id = 1 [(google.api.field_behavior) = REQUIRED];
   // Name of the restore.
-  string name = 3;
+  string name = 2 [(google.api.field_behavior) = REQUIRED];
+  // UID of the project associated with the restore.
+  string project_id = 3 [(google.api.field_behavior) = REQUIRED];
   // UID of namespace where restore will be created.
-  string namespace_id = 4;
+  string namespace_id = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Restore represents a data service restore.
@@ -180,7 +186,7 @@ message SourceReferences {
   // UID of the deployment which was backed up.
   string deployment_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
   // UID of the backup.
-  string backup_id = 2;
+  string backup_id = 2 [(google.api.field_behavior) = REQUIRED];
   // UID of the backup location.
   string backup_location_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
   // UID of the cloud snapshot of the backup volume used for restore.

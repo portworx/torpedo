@@ -24,6 +24,8 @@ import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/pagination.proto";
 import "public/portworx/common/apiv1/sort.proto";
 import "public/portworx/common/apiv1/platformresource.proto";
+import "public/portworx/common/apiv1/selector.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 
 option go_package = "github.com/pure-px/apis/public/portworx/platform/project/apiv1;project";
 option java_multiple_files = true;
@@ -37,16 +39,16 @@ service ProjectService {
   rpc CreateProject(CreateProjectRequest)
     returns (Project) {
       option(google.api.http) = {
-        post: "/v1/tenants/{tenant_id}/projects"
+        post: "/core/v1/tenants/{tenant_id}/projects"
         body: "*"
      };
   }
 
-  // Update project api updates a project meta
+  // Update project api updates a project meta.
   rpc UpdateProject(UpdateProjectRequest)
     returns (Project) {
       option(google.api.http) = {
-        put: "/v1/projects/{meta.uid}"
+        put: "/core/v1/projects/{meta.uid}"
         body: "*"
      };
   }
@@ -55,23 +57,33 @@ service ProjectService {
   rpc GetProject(GetProjectRequest)
     returns (Project) {
       option(google.api.http) = {
-        get: "/v1/projects/{project_id}"
+        get: "/core/v1/projects/{project_id}"
       };
   }
 
-  // ListProjects API lists the projects visible to the caller for the provided tenant.
+  // (-- api-linter: core::0132::http-body=disabled
+  //     api-linter: core::0132::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
+  // List Projects API lists the projects visible to the caller for the provided tenant.
   rpc ListProjects(ListProjectsRequest)
     returns (ListProjectsResponse) {
     option(google.api.http) = {
-      get: "/v1/projects"
+      get: "/core/v1/projects"
+      additional_bindings: {
+        post: "/core/v1/projects:search"
+        body: "*"
+      }
     };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List API lists all the projects for a tenant"
+  };
   }
 
   // Deletes a project and its associated resources.
   rpc DeleteProject(DeleteProjectRequest)
     returns (google.protobuf.Empty) {
       option (google.api.http) = {
-        delete: "/v1/projects/{project_id}"
+        delete: "/core/v1/projects/{project_id}"
       };
   }
 
@@ -81,7 +93,7 @@ service ProjectService {
   rpc AssociateResources(AssociateResourcesRequest)
     returns (Project) {
       option(google.api.http) = {
-        put: "/v1/projects/{project_id}:associate"
+        put: "/core/v1/projects/{project_id}:associate"
         body: "*"
       };
   }
@@ -92,7 +104,7 @@ service ProjectService {
   rpc DisassociateResources(DisassociateResourcesRequest)
     returns (Project) {
       option(google.api.http) = {
-        put: "/v1/projects/{project_id}:disassociate"
+        put: "/core/v1/projects/{project_id}:disassociate"
         body: "*"
       };
   }
@@ -114,6 +126,13 @@ message Status {
   string reason = 1;
   // Current phase of the project.
   Phase.Type phase = 2;
+  // Map of infra resources and their count, associated to the project.
+  // ie.
+  // {
+  //   "key": "namespaces",
+  //   "value": 2
+  // }
+  map<string, int32> associated_resources = 3;
 }
 
 // Phase represents the current status of the project.
@@ -136,7 +155,7 @@ message Phase {
 message Config {
   // Infra resources access ownership to the project.
   Resources infra_resources = 1;
-  // Application resources access ownership to the project
+  // Application resources access ownership to the project.
   ApplicationResources applications_resources = 2;
 }
 
@@ -199,15 +218,23 @@ message GetProjectRequest {
 }
 
 // ListProjectsRequest  is the request message to the ListProjects API
-// and it takes the resource details for which the projects visible to the caller
+// and it takes the multiple selector details for which the projects visible to the caller
 // will be returned.
 message ListProjectsRequest {
-  // Filtering list of projects based on the provided resource details.
-  Filter query = 1;
-  // Sorting details using which requested list of projects to be sorted.
-  public.portworx.common.v1.Sort sort = 2;
+  // Tenant id for which projects to be listed.
+  string tenant_id = 1;
+  // Filtering list of projects based on the provided resource details..
+  public.portworx.common.v1.ResourceSelector resource_selector = 2;
+  // Provides the key in labels and associated values for which projects need to be listed.
+  public.portworx.common.v1.Selector label_selector = 3;
+  // Field selector is used to filter projects based on the fields in the project's proto message.
+  public.portworx.common.v1.Selector field_selector = 4;
+  // Response data flags for listing projects.
+  public.portworx.common.v1.RespData resp_data= 5;
   // Pagination parameters for listing projects.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 3 [(google.api.field_behavior) = OPTIONAL];
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6 [(google.api.field_behavior) = OPTIONAL];
+  // Sorting details using which requested list of projects to be sorted.
+  public.portworx.common.v1.Sort sort = 7;
 }
 
 // ListProjectsResponse is the response message to the ListProjects API and contains

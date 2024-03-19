@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/registration": {
+        "/core/v1/registration": {
             "post": {
-                "summary": "creates a new account registration request",
+                "summary": "creates a new account registration request.",
                 "operationId": "OnboardService_CreateAccountRegistration",
                 "responses": {
                     "200": {
@@ -44,7 +44,7 @@
                             }
                         }
                     },
-                    "description": "account to be created and onboarded",
+                    "description": "account to be created and onboarded.",
                     "required": true
                 },
                 "tags": [
@@ -52,9 +52,9 @@
                 ]
             }
         },
-        "/v1/registration/{accountRegistration.meta.uid}": {
+        "/core/v1/registration/{accountRegistration.meta.uid}": {
             "put": {
-                "summary": "For updating account subscription info",
+                "summary": "For updating account subscription info.",
                 "operationId": "OnboardService_UpdateAccountRegistration",
                 "responses": {
                     "200": {
@@ -155,11 +155,11 @@
                                         "$ref": "#/components/schemas/v1AccountConfig"
                                     }
                                 },
-                                "title": "account for which subscription info needs to be updated"
+                                "title": "account for which subscription info needs to be updated."
                             }
                         }
                     },
-                    "description": "account for which subscription info needs to be updated",
+                    "description": "account for which subscription info needs to be updated.",
                     "required": true
                 },
                 "tags": [
@@ -205,27 +205,27 @@
                     },
                     "pdsAwsRegistrationToken": {
                         "type": "string",
-                        "title": "AWS registration token"
+                        "description": "AWS registration token."
                     },
                     "pdsZuoraSubscription": {
                         "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
                     },
                     "pxeAwsRegistrationToken": {
                         "type": "string",
-                        "title": "AWS registration token"
+                        "description": "AWS registration token."
                     },
                     "pxeZuoraSubscription": {
                         "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
                     },
                     "baasAwsRegistrationToken": {
                         "type": "string",
-                        "title": "AWS registration token"
+                        "description": "AWS registration token."
                     },
                     "baasZuoraSubscription": {
                         "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
                     }
                 },
-                "title": "Account Configuration Info used for Registration"
+                "description": "Account Configuration Info used for Registration."
             },
             "v1AccountRegistration": {
                 "type": "object",
@@ -237,7 +237,7 @@
                         "$ref": "#/components/schemas/v1AccountConfig"
                     }
                 },
-                "title": "AccountRegistration has all details about the acccount and its subscriptions"
+                "description": "AccountRegistration has all details about the account and its subscriptions."
             },
             "v1AccountType": {
                 "type": "string",
@@ -247,41 +247,40 @@
                     "ENTERPRISE"
                 ],
                 "default": "ACCOUNT_TYPE_UNSPECIFIED",
-                "description": "- ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use\n - FREEMIUM: Account is of freemium type for all three Portworx Service\n - ENTERPRISE: Account has a active subscription for atleast one of the Portworx Services",
-                "title": "Accepted account types"
+                "description": "Accepted account types.\n\n - ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use.\n - FREEMIUM: Account is of freemium type for all three Portworx Service.\n - ENTERPRISE: Account has a active subscription for at least one of the Portworx Services."
             },
             "v1AwsSubscriptionInfo": {
                 "type": "object",
                 "properties": {
                     "clientId": {
                         "type": "string",
-                        "title": "Aws client id associated with the installed product"
+                        "description": "Aws client id associated with the installed product."
                     },
                     "productId": {
                         "type": "string",
-                        "title": "Aws product id of the installed product"
+                        "description": "Aws product id of the installed product."
                     },
                     "accountId": {
                         "type": "string",
-                        "title": "Aws account id associated with the installed product"
+                        "description": "Aws account id associated with the installed product."
                     }
                 },
-                "title": "AWS subscription info for one product"
+                "description": "AWS subscription info for one product."
             },
             "v1Config": {
                 "type": "object",
                 "properties": {
                     "userEmail": {
                         "type": "string",
-                        "title": "email of the first account user"
+                        "description": "email of the first account user."
                     },
                     "dnsName": {
                         "type": "string",
-                        "title": "Account DNS name"
+                        "description": "Account DNS name."
                     },
                     "displayName": {
                         "type": "string",
-                        "title": "Display name of Account"
+                        "description": "Display name of Account."
                     },
                     "accountType": {
                         "$ref": "#/components/schemas/v1AccountType"
@@ -302,7 +301,7 @@
                         "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
                     }
                 },
-                "title": "Desired configuration of the account"
+                "description": "Desired configuration of the account."
             },
             "v1Meta": {
                 "type": "object",
@@ -386,14 +385,14 @@
                 "properties": {
                     "subscriptionId": {
                         "type": "string",
-                        "title": "id associated installed product"
+                        "description": "id associated installed product."
                     },
                     "accountId": {
                         "type": "string",
-                        "title": "id associated with the customer account"
+                        "description": "id associated with the customer account."
                     }
                 },
-                "title": "Zuora Subscription info for a particular installed product"
+                "description": "Zuora Subscription info for a particular installed product."
             }
         }
     }

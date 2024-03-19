@@ -19,46 +19,71 @@ package public.portworx.platform.namespace.v1;
 
 import "google/api/field_behavior.proto";
 import "google/api/annotations.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "public/portworx/common/apiv1/selector.proto";
 import "public/portworx/common/apiv1/sort.proto";
 import "public/portworx/common/apiv1/pagination.proto";
 import "public/portworx/common/apiv1/meta.proto";
+import "google/protobuf/empty.proto";
+
 
 option go_package = "github.com/pure-px/apis/public/portworx/platform/namespace/apiv1;namespace";
 option java_multiple_files = true;
 option java_package = "com.public.portworx.platform.namespace.v1";
 option java_outer_classname = "NamespaceProto";
 
-// NamespaceService provides APIs to list namespaces on the control plane
+// (-- api-linter: core::0132::http-body=disabled
+//     api-linter: core::0132::http-method=disabled
+//     aip.dev/not-precedent: We need to do this because we can't have advance filters as query params. --)
+// NamespaceService provides APIs to list namespaces on the control plane.
 service NamespaceService {
-  // ListNamespaces API will return all the namespaces on the control plane
+  // ListNamespaces API will return all the namespaces on the control plane.
   rpc ListNamespaces(ListNamespacesRequest)
       returns (ListNamespacesResponse) {
     option(google.api.http) = {
-      get: "/v1/namespaces"
+      get: "/core/v1/namespaces"
+      additional_bindings: {
+        post: "/core/v1/namespaces:search"
+        body: "*"
+      }
+    };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List API lists all the namespaces for a tenant"
+    };
+  }
+
+  // DeleteNamespace API will trigger deletion and cleanup on the control plane.
+  rpc DeleteNamespace(DeleteNamespaceRequest)
+      returns (google.protobuf.Empty) {
+    option(google.api.http) = {
+      delete: "/core/v1/namespaces/{id}"
     };
   }
 }
 
-// ListNamespacesRequest request message for the ListNamespaces API
+// ListNamespacesRequest request message for the ListNamespaces API.
 message ListNamespacesRequest {
-  // tenant ID for which namespace need to be fetched
+  // tenant ID for which namespace need to be fetched.
   string tenant_id = 1;
-  // cluster ID for which namespaces need to be fetched
-  string cluster_id = 2;
-  // project ID for which namespaces need to be fetched
-  string project_id = 3 [(google.api.field_behavior) = OPTIONAL];
-  // for label based filtering of the namespaces
-  string label = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Provides the key in labels and associated values for which namespaces need to be listed.
+  public.portworx.common.v1.Selector label_selector = 2;
+  // Field selector is used to filter namespaces based on the fields in the namespace's proto message.
+  public.portworx.common.v1.Selector field_selector = 3;
+  // Infra_resource_selector is used to filter namespaces based on the infra resources associated with the namespace.
+  // Supported infra resource filters: PROJECT, CLUSTER.
+  public.portworx.common.v1.ResourceSelector infra_resource_selector = 4;
+  // Response data flags for listing cloud credentials.
+  public.portworx.common.v1.RespData resp_data= 5;
   // Sorting details using which requested list of namespaces to be sorted.
-  public.portworx.common.v1.Sort sort = 5 [(google.api.field_behavior) = OPTIONAL];
+  public.portworx.common.v1.Sort sort = 6 [(google.api.field_behavior) = OPTIONAL];
   // Pagination parameters for listing namespaces.
-  public.portworx.common.v1.PageBasedPaginationRequest pagination = 6 [(google.api.field_behavior) = OPTIONAL];
+  public.portworx.common.v1.PageBasedPaginationRequest pagination = 7 [(google.api.field_behavior) = OPTIONAL];
 
 }
 
-// ListNamespacesResponse response message for the ListNamespaces API
+// ListNamespacesResponse response message for the ListNamespaces API.
 message ListNamespacesResponse {
-  // list of namespaces
+  // list of namespaces.
   repeated Namespace namespaces = 1;
   // Pagination metadata for this response.
   // (-- api-linter: core::0132::response-unknown-fields=disabled
@@ -71,27 +96,43 @@ message ListNamespacesResponse {
 message Namespace {
   // Metadata of the namespace.
   public.portworx.common.v1.Meta meta = 1;
-  // status of the namespace resource
+  // status of the namespace resource.
   NamespaceStatus status = 2;
 }
 
-// NamespaceStatus represents the status of the namespace resource
+// NamespaceStatus represents the status of the namespace resource.
 message NamespaceStatus {
-  // phase of a namespace is determined based on the available label on the namespace object
+  // phase of a namespace is determined based on the available label on the namespace object.
   NamespacePhase.Phase phase = 1;
 }
 
-// NamespaceStatus is the current state of the namespace
+// Delete namespace request.
+message DeleteNamespaceRequest{
+  // ID of the namespace instance.
+  string id = 1;
+}
+
+// NamespaceStatus is the current state of the namespace.
 message NamespacePhase {
-  // Phase is the status of the namespace based on the label type
+  // Phase is the status of the namespace based on the label type.
   enum Phase {
     // Must be set in the proto file; ignore.
     PHASE_UNSPECIFIED = 0;
-    // Available namespaces can be used to deploy applications, they have "<platform-domain>/available: true" label
+    // Available namespaces can be used to deploy applications, they have "<platform-domain>/available: true" label.
     AVAILABLE = 1;
-    // Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have "<platform-domain>/reserved: true" label
+    // Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have "<platform-domain>/reserved: true" label.
     RESERVED = 2;
-    // Unavailable namespaces are the ones deleted by user with active deployments or by removing available label
+    // Unavailable namespaces are the ones deleted by user with active deployments or by removing available label.
     UNAVAILABLE = 3;
+    // Termintaing state represents, namespace deletion is in progress on the target cluster.
+    TERMINATING = 4;
+    // Tombstoned state represents namespace has been deleted from the cluster.
+    TOMBSTONED = 5;
+    // Deletion of namespace is yet to start.
+    DELETE_PENDING = 6;
+    // Deletion of the namespace is scheduled and in progress.
+    DELETE_IN_PROGRESS = 7;
+    // Deletion failed.
+    DELETE_FAILED = 8;
   }
 }

@@ -30,12 +30,12 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentials
 }
 
 // GetCloudCredentials gets cloud credentials by ts id
-func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentials) (*CloudCredentials, error) {
+func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentials) (*CloudCredentialsResponse, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := CloudCredentials{}
+	cloudCredsResponse := CloudCredentialsResponse{}
 	var getCloudCredReq cloudCredentialv1.ApiCloudCredentialServiceGetCloudCredentialRequest
 	err = copier.Copy(&getCloudCredReq, getReq)
 	if err != nil {
@@ -55,12 +55,12 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentials) 
 }
 
 // CreateCloudCredentials return newly created cloud credentials
-func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentials, error) {
+func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentialsResponse, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	cloudCredsResponse := CloudCredentials{}
+	cloudCredsResponse := CloudCredentialsResponse{}
 	var createCloudCredRequest cloudCredentialv1.ApiCloudCredentialServiceCreateCloudCredentialRequest
 	err = copier.Copy(&createCloudCredRequest, createRequest)
 	if err != nil {
@@ -103,12 +103,12 @@ func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequ
 }
 
 // DeleteCloudCredential delete cloud cred model.
-func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCredId *WorkFlowRequest) error {
+func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCreds *CloudCredentials) error {
 	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	_, res, _ := cloudCredsClient.CloudCredentialServiceDeleteCloudCredential(ctx, cloudCredId.Id).Execute()
+	_, res, _ := cloudCredsClient.CloudCredentialServiceDeleteCloudCredential(ctx, cloudCreds.Get.CloudCredentialsId).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `CloudCredentialServiceDeleteCloudCredential`: %v\n.Full HTTP response: %v", err, res)
 	}

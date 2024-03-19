@@ -46,13 +46,13 @@ message DeploymentTopology {
   repeated string load_balancer_source_ranges = 6 [(google.api.field_behavior) = OPTIONAL];
 
   // Resource Settings Template.
-  Template resource_template = 7;
+  Template resource_settings = 7;
 
-  // Application Template.
-  Template application_template = 8;
+  // Service Configurations Template.
+  Template service_configurations = 8;
 
-  // Storage Template.
-  Template storage_template = 9;
+  // Storage Options Template.
+  Template storage_options = 9;
 }
 
 // Template.

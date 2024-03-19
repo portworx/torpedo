@@ -78,7 +78,7 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*WhoAmIServiceAPI* | [**WhoAmIServiceWhoAmI**](docs/WhoAmIServiceAPI.md#whoamiservicewhoami) | **Get** /v1/whoami | WhoAmI API returns the current actor accounts.
+*WhoAmIServiceAPI* | [**WhoAmIServiceWhoAmI**](docs/WhoAmIServiceAPI.md#whoamiservicewhoami) | **Get** /core/v1/whoami | WhoAmI API returns the current actor accounts.
 
 
 ## Documentation For Models

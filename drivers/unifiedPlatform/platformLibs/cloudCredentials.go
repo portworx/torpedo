@@ -15,7 +15,7 @@ var (
 	provider int32
 )
 
-func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*automationModels.CloudCredentials, error) {
+func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*automationModels.CloudCredentialsResponse, error) {
 	getReq := automationModels.CloudCredentials{}
 	getReq.Get.CloudCredentialsId = credId
 	getReq.Get.IsConfigRequired = isConfigRequired
@@ -41,7 +41,17 @@ func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*aut
 	return wfResponse, nil
 }
 
-func CreateCloudCredentials(tenantId, backupType string) (*automationModels.CloudCredentials, error) {
+func DeleteCloudCredential(cloudCredentialsId string) error {
+	req := automationModels.CloudCredentials{}
+	req.Get.CloudCredentialsId = cloudCredentialsId
+	err := v2Components.Platform.DeleteCloudCredential(&req)
+	if err != nil {
+		return fmt.Errorf("failed to delete cloudcredentials: %v\n", err)
+	}
+	return nil
+}
+
+func CreateCloudCredentials(tenantId, backupType string) (*automationModels.CloudCredentialsResponse, error) {
 	createReq := automationModels.CloudCredentials{}
 	credsName := strings.ToLower("pds-bkp-creds-" + utilities.RandString(5))
 	createReq.Create.TenantID = tenantId

@@ -69,7 +69,7 @@ func (a *TargetClusterRegistrationManifestServiceAPIService) TargetClusterRegist
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}:registrationManifests"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}:registrationManifests"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)

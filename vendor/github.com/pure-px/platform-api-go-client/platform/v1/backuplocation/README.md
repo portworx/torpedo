@@ -78,12 +78,12 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*BackupLocationServiceAPI* | [**BackupLocationServiceCreateBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationservicecreatebackuplocation) | **Post** /v1/tenants/{tenantId}/backupLocations | Create API creates a backup location for a tenant.
-*BackupLocationServiceAPI* | [**BackupLocationServiceDeleteBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationservicedeletebackuplocation) | **Delete** /v1/backupLocations/{id} | Delete API deletes a backup location.
-*BackupLocationServiceAPI* | [**BackupLocationServiceGetBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationservicegetbackuplocation) | **Get** /v1/backupLocations/{id} | Get API returns the backup location.
-*BackupLocationServiceAPI* | [**BackupLocationServiceListBackupLocations**](docs/BackupLocationServiceAPI.md#backuplocationservicelistbackuplocations) | **Get** /v1/backupLocations | List API lists all the backup locations for a tenant
-*BackupLocationServiceAPI* | [**BackupLocationServiceListBackupLocations2**](docs/BackupLocationServiceAPI.md#backuplocationservicelistbackuplocations2) | **Post** /v1/backupLocations:search | List API lists all the backup locations for a tenant
-*BackupLocationServiceAPI* | [**BackupLocationServiceUpdateBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationserviceupdatebackuplocation) | **Put** /v1/backupLocations/{id} | Update API updates a backup location.
+*BackupLocationServiceAPI* | [**BackupLocationServiceCreateBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationservicecreatebackuplocation) | **Post** /core/v1/tenants/{tenantId}/backupLocations | Create API creates a backup location for a tenant.
+*BackupLocationServiceAPI* | [**BackupLocationServiceDeleteBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationservicedeletebackuplocation) | **Delete** /core/v1/backupLocations/{id} | Delete API deletes a backup location.
+*BackupLocationServiceAPI* | [**BackupLocationServiceGetBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationservicegetbackuplocation) | **Get** /core/v1/backupLocations/{id} | Get API returns the backup location.
+*BackupLocationServiceAPI* | [**BackupLocationServiceListBackupLocations**](docs/BackupLocationServiceAPI.md#backuplocationservicelistbackuplocations) | **Get** /core/v1/backupLocations | List API lists all the backup locations for a tenant
+*BackupLocationServiceAPI* | [**BackupLocationServiceListBackupLocations2**](docs/BackupLocationServiceAPI.md#backuplocationservicelistbackuplocations2) | **Post** /core/v1/backupLocations:search | List API lists all the backup locations for a tenant
+*BackupLocationServiceAPI* | [**BackupLocationServiceUpdateBackupLocation**](docs/BackupLocationServiceAPI.md#backuplocationserviceupdatebackuplocation) | **Put** /core/v1/backupLocations/{id} | Update API updates a backup location.
 
 
 ## Documentation For Models

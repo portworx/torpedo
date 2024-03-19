@@ -70,7 +70,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceCreateCloudCred
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}/cloudCredentials"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}/cloudCredentials"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -184,7 +184,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceDeleteCloudCred
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/cloudCredentials/{id}"
+	localVarPath := localBasePath + "/core/v1/cloudCredentials/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -300,7 +300,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceGetCloudCredent
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/cloudcredentials/{id}"
+	localVarPath := localBasePath + "/core/v1/cloudcredentials/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -451,7 +451,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceListCloudCreden
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/cloudCredentials"
+	localVarPath := localBasePath + "/core/v1/cloudCredentials"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -590,7 +590,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceListCloudCreden
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/cloudCredentials:search"
+	localVarPath := localBasePath + "/core/v1/cloudCredentials:search"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -717,7 +717,7 @@ func (a *CloudCredentialServiceAPIService) CloudCredentialServiceUpdateCloudCred
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/cloudCredentials/{id}"
+	localVarPath := localBasePath + "/core/v1/cloudCredentials/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)

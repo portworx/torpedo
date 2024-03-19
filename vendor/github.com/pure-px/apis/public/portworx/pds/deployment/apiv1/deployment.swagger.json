@@ -412,18 +412,9 @@
                 "parameters": [
                     {
                         "name": "namespaceId",
-                        "description": "UID of the namespace resource where this deployment will be created.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the namespace context. --)",
+                        "description": "UID of the namespace resource where this deployment will be created.",
                         "in": "path",
                         "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "projectId",
-                        "description": "UID of the project.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to know the project with which the deployment is associated with. --)",
-                        "in": "query",
-                        "required": false,
                         "schema": {
                             "type": "string"
                         }
@@ -433,11 +424,10 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/v1Deployment"
+                                "$ref": "#/components/schemas/DeploymentServiceCreateDeploymentBody"
                             }
                         }
                     },
-                    "description": "Deployment resource.",
                     "required": true
                 },
                 "tags": [
@@ -448,6 +438,19 @@
     },
     "components": {
         "schemas": {
+            "DeploymentServiceCreateDeploymentBody": {
+                "type": "object",
+                "properties": {
+                    "projectId": {
+                        "type": "string",
+                        "description": "UID of the project."
+                    },
+                    "deployment": {
+                        "$ref": "#/components/schemas/v1Deployment"
+                    }
+                },
+                "description": "Request to create the Deployment resource."
+            },
             "SortByField": {
                 "type": "string",
                 "enum": [
@@ -655,13 +658,13 @@
                         },
                         "description": "Source IP ranges to use for the deployed Load Balancer."
                     },
-                    "resourceTemplate": {
+                    "resourceSettings": {
                         "$ref": "#/components/schemas/v1Template"
                     },
-                    "applicationTemplate": {
+                    "serviceConfigurations": {
                         "$ref": "#/components/schemas/v1Template"
                     },
-                    "storageTemplate": {
+                    "storageOptions": {
                         "$ref": "#/components/schemas/v1Template"
                     }
                 },

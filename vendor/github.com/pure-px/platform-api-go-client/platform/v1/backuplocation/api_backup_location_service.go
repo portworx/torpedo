@@ -70,7 +70,7 @@ func (a *BackupLocationServiceAPIService) BackupLocationServiceCreateBackupLocat
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}/backupLocations"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}/backupLocations"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -184,7 +184,7 @@ func (a *BackupLocationServiceAPIService) BackupLocationServiceDeleteBackupLocat
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/backupLocations/{id}"
+	localVarPath := localBasePath + "/core/v1/backupLocations/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -293,7 +293,7 @@ func (a *BackupLocationServiceAPIService) BackupLocationServiceGetBackupLocation
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/backupLocations/{id}"
+	localVarPath := localBasePath + "/core/v1/backupLocations/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -441,7 +441,7 @@ func (a *BackupLocationServiceAPIService) BackupLocationServiceListBackupLocatio
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/backupLocations"
+	localVarPath := localBasePath + "/core/v1/backupLocations"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -580,7 +580,7 @@ func (a *BackupLocationServiceAPIService) BackupLocationServiceListBackupLocatio
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/backupLocations:search"
+	localVarPath := localBasePath + "/core/v1/backupLocations:search"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -707,7 +707,7 @@ func (a *BackupLocationServiceAPIService) BackupLocationServiceUpdateBackupLocat
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/backupLocations/{id}"
+	localVarPath := localBasePath + "/core/v1/backupLocations/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
 
 	localVarHeaderParams := make(map[string]string)

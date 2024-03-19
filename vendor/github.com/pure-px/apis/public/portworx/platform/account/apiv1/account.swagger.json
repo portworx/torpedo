@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/accounts/{accountId}": {
+        "/core/v1/accounts/{accountId}": {
             "get": {
-                "summary": "GetAccount API returns the info about account for given account id",
+                "summary": "GetAccount API returns the info about account for given account id.",
                 "operationId": "AccountService_GetAccount",
                 "responses": {
                     "200": {
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "accountId",
-                        "description": "account id for which account details need to be fetched",
+                        "description": "account id for which account details need to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -66,6 +66,13 @@
                     },
                     "baas": {
                         "$ref": "#/components/schemas/v1StatusType"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Textual information for the current state of the account."
+                    },
+                    "phase": {
+                        "$ref": "#/components/schemas/v1PhaseType"
                     }
                 },
                 "title": "Subscription Status for Portworx Services"
@@ -110,7 +117,7 @@
                         "$ref": "#/components/schemas/accountv1Status"
                     }
                 },
-                "title": "Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants"
+                "description": "Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants."
             },
             "v1AccountType": {
                 "type": "string",
@@ -120,41 +127,40 @@
                     "ENTERPRISE"
                 ],
                 "default": "ACCOUNT_TYPE_UNSPECIFIED",
-                "description": "- ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use\n - FREEMIUM: Account is of freemium type for all three Portworx Service\n - ENTERPRISE: Account has a active subscription for atleast one of the Portworx Services",
-                "title": "Accepted account types"
+                "description": "Accepted account types.\n\n - ACCOUNT_TYPE_UNSPECIFIED: Unspecified, do not use.\n - FREEMIUM: Account is of freemium type for all three Portworx Service.\n - ENTERPRISE: Account has a active subscription for at least one of the Portworx Services."
             },
             "v1AwsSubscriptionInfo": {
                 "type": "object",
                 "properties": {
                     "clientId": {
                         "type": "string",
-                        "title": "Aws client id associated with the installed product"
+                        "description": "Aws client id associated with the installed product."
                     },
                     "productId": {
                         "type": "string",
-                        "title": "Aws product id of the installed product"
+                        "description": "Aws product id of the installed product."
                     },
                     "accountId": {
                         "type": "string",
-                        "title": "Aws account id associated with the installed product"
+                        "description": "Aws account id associated with the installed product."
                     }
                 },
-                "title": "AWS subscription info for one product"
+                "description": "AWS subscription info for one product."
             },
             "v1Config": {
                 "type": "object",
                 "properties": {
                     "userEmail": {
                         "type": "string",
-                        "title": "email of the first account user"
+                        "description": "email of the first account user."
                     },
                     "dnsName": {
                         "type": "string",
-                        "title": "Account DNS name"
+                        "description": "Account DNS name."
                     },
                     "displayName": {
                         "type": "string",
-                        "title": "Display name of Account"
+                        "description": "Display name of Account."
                     },
                     "accountType": {
                         "$ref": "#/components/schemas/v1AccountType"
@@ -175,7 +181,7 @@
                         "$ref": "#/components/schemas/v1ZuoraSubscriptionInfo"
                     }
                 },
-                "title": "Desired configuration of the account"
+                "description": "Desired configuration of the account."
             },
             "v1Meta": {
                 "type": "object",
@@ -236,6 +242,18 @@
                 },
                 "description": "Meta holds general resource metadata."
             },
+            "v1PhaseType": {
+                "type": "string",
+                "enum": [
+                    "TYPE_UNSPECIFIED",
+                    "ACTIVE",
+                    "DELETE_PENDING",
+                    "DELETE_IN_PROGRESS",
+                    "DELETE_FAILED"
+                ],
+                "default": "TYPE_UNSPECIFIED",
+                "description": "Type of phase the account is in currently should be one of the below.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACTIVE: The account is in use and active.\n - DELETE_PENDING: Deletion of account has not started.\n - DELETE_IN_PROGRESS: Deletion of the account is scheduled and in progress.\n - DELETE_FAILED: Deletion of account is failed"
+            },
             "v1Reference": {
                 "type": "object",
                 "properties": {
@@ -267,22 +285,21 @@
                     "ZUORA_UNSUBSCRIBE"
                 ],
                 "default": "STATUS_TYPE_UNSPECIFIED",
-                "description": "- STATUS_TYPE_UNSPECIFIED: Unspecified, do not use\n - FREEMIUM_SUCCESS: A successfully freemium account setup\n - AWS_SUBSCRIBE_SUCCESS: Customer has subscribed product on aws marketplace\n - AWS_SUBSCRIBE_FAIL: Customer has subscribed product on aws marketplace but aws encountered failure during account setup\n - AWS_UNSUBSCRIBE_PENDING: Customer has unsubscribed from marketplace and now we have 1 hour to report final billing\nand perform other deboarding processes\n - AWS_UNSUBSCRIBE_SUCCESS: Customer successfully unsubscribed and we can't report billing to aws for this account anymore\n - ZUORA_SUBSCRIBE: Customer successfully subscribed to Zuora\n - ZUORA_UNSUBSCRIBE: Customer has unsubscribed from Zuora",
-                "title": "Accepted status types for various cloud providers"
+                "description": "Accepted status types for various cloud providers.\n\n - STATUS_TYPE_UNSPECIFIED: Unspecified, do not use.\n - FREEMIUM_SUCCESS: A successfully freemium account setup.\n - AWS_SUBSCRIBE_SUCCESS: Customer has subscribed product on aws marketplace.\n - AWS_SUBSCRIBE_FAIL: Customer has subscribed product on aws marketplace but aws encountered failure during account setup.\n - AWS_UNSUBSCRIBE_PENDING: Customer has unsubscribed from marketplace and now we have 1 hour to report final billing.\nand perform other de-boarding processes.\n - AWS_UNSUBSCRIBE_SUCCESS: Customer successfully unsubscribed and we can't report billing to aws for this account anymore.\n - ZUORA_SUBSCRIBE: Customer successfully subscribed to Zuora.\n - ZUORA_UNSUBSCRIBE: Customer has unsubscribed from Zuora."
             },
             "v1ZuoraSubscriptionInfo": {
                 "type": "object",
                 "properties": {
                     "subscriptionId": {
                         "type": "string",
-                        "title": "id associated installed product"
+                        "description": "id associated installed product."
                     },
                     "accountId": {
                         "type": "string",
-                        "title": "id associated with the customer account"
+                        "description": "id associated with the customer account."
                     }
                 },
-                "title": "Zuora Subscription info for a particular installed product"
+                "description": "Zuora Subscription info for a particular installed product."
             }
         }
     }

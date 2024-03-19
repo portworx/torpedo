@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/iam": {
+        "/core/v1/iam": {
             "get": {
-                "summary": "ListIAM API lists the role bindings",
+                "summary": "ListIAM API lists the role bindings.",
                 "operationId": "IAMService_ListIAM",
                 "responses": {
                     "200": {
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "actorId",
-                        "description": "Actor ID for which the IAM should be listed",
+                        "description": "Actor ID for which the IAM should be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -48,7 +48,7 @@
                     },
                     {
                         "name": "accountId",
-                        "description": "Account UID for which the IAM should be listed",
+                        "description": "Account UID for which the IAM should be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -57,7 +57,7 @@
                     },
                     {
                         "name": "tenantId",
-                        "description": "Tenant UID for which the IAM should be listed",
+                        "description": "Tenant UID for which the IAM should be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -66,11 +66,40 @@
                     },
                     {
                         "name": "projectId",
-                        "description": "Project UID for which the IAM should be listed",
+                        "description": "Project UID for which the IAM should be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "sort.sortBy",
+                        "description": "Name of the attribute to sort results by.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - EMAIL: Sorting based on the email of the iam.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "FIELD_UNSPECIFIED",
+                                "EMAIL"
+                            ],
+                            "default": "FIELD_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "sort.sortOrder",
+                        "description": "Order of sorting to be applied on requested list.\nIf sort_by having some value and sort_order is not provided, by default ascending order will be used to sort the list.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "VALUE_UNSPECIFIED",
+                                "ASC",
+                                "DESC"
+                            ],
+                            "default": "VALUE_UNSPECIFIED"
                         }
                     },
                     {
@@ -99,7 +128,7 @@
                 ]
             },
             "post": {
-                "summary": "CreateIAM API creates a new IAM rolebinding",
+                "summary": "CreateIAM API creates a new IAM role-binding.",
                 "operationId": "IAMService_CreateIAM",
                 "responses": {
                     "200": {
@@ -139,9 +168,9 @@
                 ]
             }
         },
-        "/v1/iam/permissions": {
+        "/core/v1/iam/permissions": {
             "get": {
-                "summary": "ListIAMPermissions API list permissions for Roles in IAM\n(-- api-linter: core::0132::request-message-name=disabled\n    aip.dev/not-precedent: We need to do this because reasons. we don't need any parameter in request --)",
+                "summary": "ListIAMPermissions API list permissions for Roles in IAM.",
                 "operationId": "IAMService_ListIAMPermissions",
                 "responses": {
                     "200": {
@@ -170,9 +199,9 @@
                 ]
             }
         },
-        "/v1/iam/{actorId}": {
+        "/core/v1/iam/{actorId}": {
             "get": {
-                "summary": "GetIAM API returns the info about IAM for given IAM id",
+                "summary": "GetIAM API returns the info about IAM for given IAM id.",
                 "operationId": "IAMService_GetIAM",
                 "responses": {
                     "200": {
@@ -199,7 +228,7 @@
                 "parameters": [
                     {
                         "name": "actorId",
-                        "description": "Actor ID for which the details need to be fetched",
+                        "description": "Actor ID for which the details need to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -212,7 +241,7 @@
                 ]
             },
             "delete": {
-                "summary": "DeleteIAM API delete IAM, currently required only for name",
+                "summary": "DeleteIAM API delete IAM, currently required only for name.",
                 "operationId": "IAMService_DeleteIAM",
                 "responses": {
                     "200": {
@@ -253,9 +282,9 @@
                 ]
             }
         },
-        "/v1/iam/{iam.config.actorId}:grant": {
+        "/core/v1/iam/{iam.config.actorId}:grant": {
             "post": {
-                "summary": "GrantIAM API creates new IAM rolebinding at tenant, project and account level",
+                "summary": "GrantIAM API creates new IAM role-binding at tenant, project and account level.",
                 "operationId": "IAMService_GrantIAM",
                 "responses": {
                     "200": {
@@ -282,7 +311,7 @@
                 "parameters": [
                     {
                         "name": "iam.config.actorId",
-                        "description": "Actor ID for the associated actor",
+                        "description": "Actor ID for the associated actor.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -305,9 +334,9 @@
                 ]
             }
         },
-        "/v1/iam/{iam.config.actorId}:revoke": {
+        "/core/v1/iam/{iam.config.actorId}:revoke": {
             "post": {
-                "summary": "RevokeIAM API delete IAM rolebinding at tenant, project and account level",
+                "summary": "RevokeIAM API delete IAM role-binding at tenant, project and account level.",
                 "operationId": "IAMService_RevokeIAM",
                 "responses": {
                     "200": {
@@ -334,7 +363,7 @@
                 "parameters": [
                     {
                         "name": "iam.config.actorId",
-                        "description": "Actor ID for the associated actor",
+                        "description": "Actor ID for the associated actor.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -357,7 +386,7 @@
                 ]
             }
         },
-        "/v1/iam/{iam.meta.uid}": {
+        "/core/v1/iam/{iam.meta.uid}": {
             "put": {
                 "summary": "UpdateIAM API updates IAM with the new set of role bindings. The request replaces the existing set of bindings.",
                 "operationId": "IAMService_UpdateIAM",
@@ -453,17 +482,18 @@
                                                 "readOnly": true
                                             }
                                         },
-                                        "title": "Metadata for IAM"
+                                        "description": "Metadata for IAM.",
+                                        "title": "Metadata for IAM."
                                     },
                                     "config": {
                                         "$ref": "#/components/schemas/v1Config"
                                     }
                                 },
-                                "title": "IAM to be updated"
+                                "title": "IAM to be updated."
                             }
                         }
                     },
-                    "description": "IAM to be updated",
+                    "description": "IAM to be updated.",
                     "required": true
                 },
                 "tags": [
@@ -479,15 +509,15 @@
                 "properties": {
                     "accountId": {
                         "type": "string",
-                        "title": "Account UID under which user wants to add role binding"
+                        "description": "Account UID under which user wants to add role binding."
                     },
                     "tenantId": {
                         "type": "string",
-                        "title": "Tenant UID  under which user wants to add role binding"
+                        "description": "Tenant UID  under which user wants to add role binding."
                     },
                     "projectId": {
                         "type": "string",
-                        "title": "Project UID under which user wants to add role binding"
+                        "description": "Project UID under which user wants to add role binding."
                     },
                     "iam": {
                         "type": "object",
@@ -500,41 +530,42 @@
                                 "properties": {
                                     "actorType": {
                                         "type": "string",
-                                        "title": "Actor Type gives the actor type for the concerned actor_id",
+                                        "description": "Actor Type gives the actor type for the concerned actor_id.",
                                         "readOnly": true
                                     },
                                     "actorEmail": {
                                         "type": "string",
-                                        "title": "Actor email for actorType USER",
+                                        "description": "Actor email for actorType USER.",
                                         "readOnly": true
                                     },
                                     "accessPolicy": {
                                         "$ref": "#/components/schemas/v1AccessPolicy"
                                     }
                                 },
-                                "title": "Desired configuration of the IAM"
+                                "description": "Desired configuration of the IAM.",
+                                "title": "Desired configuration of the IAM."
                             }
                         },
                         "description": "Specifies the IAM role binding that needs to be added or granted for the user.",
                         "title": "Specifies the IAM role binding that needs to be added or granted for the user."
                     }
                 },
-                "title": "GrantIAMRequest to grant/add a new role binding at tenant, project or account"
+                "description": "GrantIAMRequest to grant/add a new role binding at tenant, project or account."
             },
             "IAMServiceRevokeIAMBody": {
                 "type": "object",
                 "properties": {
                     "accountId": {
                         "type": "string",
-                        "title": "Account UID under which user wants to delete role binding"
+                        "description": "Account UID under which user wants to delete role binding."
                     },
                     "tenantId": {
                         "type": "string",
-                        "title": "Tenant UID  under which user wants to delete role binding"
+                        "description": "Tenant UID  under which user wants to delete role binding."
                     },
                     "projectId": {
                         "type": "string",
-                        "title": "Project UID under which user wants to delete role binding"
+                        "description": "Project UID under which user wants to delete role binding."
                     },
                     "iam": {
                         "type": "object",
@@ -547,26 +578,58 @@
                                 "properties": {
                                     "actorType": {
                                         "type": "string",
-                                        "title": "Actor Type gives the actor type for the concerned actor_id",
+                                        "description": "Actor Type gives the actor type for the concerned actor_id.",
                                         "readOnly": true
                                     },
                                     "actorEmail": {
                                         "type": "string",
-                                        "title": "Actor email for actorType USER",
+                                        "description": "Actor email for actorType USER.",
                                         "readOnly": true
                                     },
                                     "accessPolicy": {
                                         "$ref": "#/components/schemas/v1AccessPolicy"
                                     }
                                 },
-                                "title": "Desired configuration of the IAM"
+                                "description": "Desired configuration of the IAM.",
+                                "title": "Desired configuration of the IAM."
                             }
                         },
                         "description": "Specifies the IAM role binding that needs to be deleted/revoked for the user.",
                         "title": "Specifies the IAM role binding that needs to be deleted/revoked for the user."
                     }
                 },
-                "title": "RevokeIAMRequest to revoke/delete a role binding at tenant, project or account"
+                "description": "RevokeIAMRequest to revoke/delete a role binding at tenant, project or account."
+            },
+            "SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
+            },
+            "platformiamv1Sort": {
+                "type": "object",
+                "properties": {
+                    "sortBy": {
+                        "$ref": "#/components/schemas/platformiamv1SortByField"
+                    },
+                    "sortOrder": {
+                        "$ref": "#/components/schemas/SortOrderValue"
+                    }
+                },
+                "description": "The details of the attribute for which the requested list of IAM to be sorted."
+            },
+            "platformiamv1SortByField": {
+                "type": "string",
+                "enum": [
+                    "FIELD_UNSPECIFIED",
+                    "EMAIL"
+                ],
+                "default": "FIELD_UNSPECIFIED",
+                "description": "Field names for sorting the list of IAMs.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - EMAIL: Sorting based on the email of the iam."
             },
             "protobufAny": {
                 "type": "object",
@@ -603,35 +666,35 @@
                         "items": {
                             "type": "string"
                         },
-                        "title": "Global scope represents the global role names"
+                        "description": "Global scope represents the global role names."
                     },
                     "account": {
                         "type": "array",
                         "items": {
                             "type": "string"
                         },
-                        "title": "Account represents the account role names"
+                        "description": "Account represents the account role names."
                     },
                     "tenant": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/v1RoleBinding"
                         },
-                        "title": "Tenant represents the tenant level role bindings and resource IDs"
+                        "description": "Tenant represents the tenant level role bindings and resource IDs."
                     },
                     "project": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/v1RoleBinding"
                         },
-                        "title": "Project represents the project level role bindings and resource IDS"
+                        "description": "Project represents the project level role bindings and resource IDS."
                     },
                     "namespace": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/v1RoleBinding"
                         },
-                        "title": "Namespace represents the namespace level role bindings and resource IDS"
+                        "description": "Namespace represents the namespace level role bindings and resource IDS."
                     }
                 },
                 "description": "Access Policy controls access to control plane resources. With IAM, one can centrally manage permissions that control which resources users can access."
@@ -641,34 +704,34 @@
                 "properties": {
                     "actorId": {
                         "type": "string",
-                        "title": "Actor ID for the associated actor"
+                        "description": "Actor ID for the associated actor."
                     },
                     "actorType": {
                         "type": "string",
-                        "title": "Actor Type gives the actor type for the concerned actor_id",
+                        "description": "Actor Type gives the actor type for the concerned actor_id.",
                         "readOnly": true
                     },
                     "actorEmail": {
                         "type": "string",
-                        "title": "Actor email for actorType USER",
+                        "description": "Actor email for actorType USER.",
                         "readOnly": true
                     },
                     "accessPolicy": {
                         "$ref": "#/components/schemas/v1AccessPolicy"
                     }
                 },
-                "title": "Config represents the details of the data for IAM across different levels"
+                "description": "Config represents the details of the data for IAM across different levels."
             },
             "v1GrantIAMResponse": {
                 "type": "object",
                 "properties": {
                     "message": {
                         "type": "string",
-                        "title": "Any error or success message to show for GrantIAM response",
+                        "description": "Any error or success message to show for GrantIAM response.",
                         "readOnly": true
                     }
                 },
-                "title": "GrantIAMResponse is response for GrantIAM API"
+                "description": "GrantIAMResponse is response for GrantIAM API."
             },
             "v1IAM": {
                 "type": "object",
@@ -680,7 +743,7 @@
                         "$ref": "#/components/schemas/v1Config"
                     }
                 },
-                "title": "IAM returns the created IAM for given data"
+                "description": "IAM returns the created IAM for given data."
             },
             "v1ListIAMPermissionsResponse": {
                 "type": "object",
@@ -690,10 +753,10 @@
                         "items": {
                             "type": "string"
                         },
-                        "title": "permssions is list of permissions\n(-- api-linter: core::0132::response-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field to list permissions for roles in IAM. --)"
+                        "description": "permissions is list of permissions."
                     }
                 },
-                "title": "ListIAMPermissionsResponse is response which contains permission for actor"
+                "description": "ListIAMPermissionsResponse is response which contains permission for actor."
             },
             "v1ListIAMResponse": {
                 "type": "object",
@@ -703,13 +766,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1IAM"
                         },
-                        "title": "the list of IAMs"
+                        "description": "the list of IAMs."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "ListIAMResponse is the response to the ListIAM API and contains the list of IAMs visible to the caller"
+                "description": "ListIAMResponse is the response to the ListIAM API and contains the list of IAMs visible to the caller."
             },
             "v1Meta": {
                 "type": "object",
@@ -845,11 +908,11 @@
                 "properties": {
                     "message": {
                         "type": "string",
-                        "title": "Any error or success message to show for GrantIAM response",
+                        "description": "Any error or success message to show for GrantIAM response.",
                         "readOnly": true
                     }
                 },
-                "title": "GrantIAMResponse is response for GrantIAM API"
+                "description": "GrantIAMResponse is response for GrantIAM API."
             },
             "v1RoleBinding": {
                 "type": "object",

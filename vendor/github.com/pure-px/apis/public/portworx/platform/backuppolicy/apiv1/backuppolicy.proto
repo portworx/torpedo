@@ -19,6 +19,7 @@ package public.portworx.platform.backuppolicy.v1;
 import "google/api/annotations.proto";
 import "google/api/field_behavior.proto";
 import "google/protobuf/empty.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
 import "public/portworx/common/apiv1/meta.proto";
 import "public/portworx/common/apiv1/selector.proto";
 import "public/portworx/common/apiv1/pagination.proto";
@@ -35,7 +36,7 @@ service BackupPolicyService {
   rpc GetBackupPolicy(GetBackupPolicyRequest)
       returns(BackupPolicy) {
     option(google.api.http) = {
-      get: "/v1/backupPolicies/{id}"
+      get: "/core/v1/backupPolicies/{id}"
     };
   }
 
@@ -43,7 +44,7 @@ service BackupPolicyService {
   rpc CreateBackupPolicy(CreateBackupPolicyRequest)
       returns(BackupPolicy) {
     option(google.api.http) = {
-      post: "/v1/tenants/{tenant_id}/backupPolicies"
+      post: "/core/v1/tenants/{tenant_id}/backupPolicies"
       body: "backup_policy"
     };
   }
@@ -56,24 +57,35 @@ service BackupPolicyService {
   rpc UpdateBackupPolicyMeta(UpdateBackupPolicyMetaRequest)
       returns(BackupPolicy) {
     option(google.api.http) = {
-      put: "/v1/backupPolicies/{meta.uid}:metaUpdate"
+      put: "/core/v1/backupPolicies/{meta.uid}:metaUpdate"
       body: "meta"
     };
   }
-
+  // (-- api-linter: core::0132::http-body=disabled
+  //     api-linter: core::0132::http-method=disabled
+  //     aip.dev/not-precedent: We need to do this because
+  // we can't have advance filters as query params.
+  // --)
   // List API lists all the backup policies for a tenant.
   rpc ListBackupPolicies(ListBackupPoliciesRequest)
       returns(ListBackupPoliciesResponse) {
     option(google.api.http) = {
-      get: "/v1/backupPolicies"
+      get: "/core/v1/backupPolicies"
+      additional_bindings: {
+        post: "/core/v1/backupPolicies:search"
+        body: "*"
+      }
     };
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "List API lists all the backup policies for a tenant"
+  };
   }
 
   // Delete API deletes a backup policy.
   rpc DeleteBackupPolicy(DeleteBackupPolicyRequest)
       returns(google.protobuf.Empty) {
     option(google.api.http) = {
-      delete: "/v1/backupPolicies/{id}"
+      delete: "/core/v1/backupPolicies/{id}"
     };
   }
 }
@@ -115,14 +127,14 @@ message ListBackupPoliciesRequest {
   // Pagination metadata for listing backup policies.
   public.portworx.common.v1.PageBasedPaginationRequest pagination = 2 [(google.api.field_behavior) = OPTIONAL];
 
-  // Provides the key in labels and associated values for which backup policy need to be listed
+  // Provides the key in labels and associated values for which backup policy need to be listed.
   public.portworx.common.v1.Selector label_selector = 3;
 
-  // Field selector is used to filter backup policies based on the fields in the backup policy's proto message
+  // Field selector is used to filter backup policies based on the fields in the backup policy's proto message.
   public.portworx.common.v1.Selector field_selector = 4;
 
   // Infra_resource_selector is used to filter backup policies based on the infra resources associated with the backup policy.
-  // Supported infra resource filters: PROJECT
+  // Supported infra resource filters: PROJECT.
   public.portworx.common.v1.ResourceSelector infra_resource_selector = 5;
 
   // Sorting details using which requested list of backup policies to be sorted.

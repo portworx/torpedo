@@ -10,7 +10,7 @@
         }
     ],
     "paths": {
-        "/v1/tenants": {
+        "/core/v1/tenants": {
             "get": {
                 "summary": "ListTenants API lists the tenants visible to the caller for the current account.",
                 "operationId": "TenantService_ListTenants",
@@ -63,7 +63,7 @@
                 ]
             },
             "post": {
-                "summary": "CreateTenant API creates a new Tenant",
+                "summary": "CreateTenant API creates a new Tenant.",
                 "operationId": "TenantService_CreateTenant",
                 "responses": {
                     "200": {
@@ -95,7 +95,7 @@
                             }
                         }
                     },
-                    "description": "tenant to be created",
+                    "description": "tenant to be created.",
                     "required": true
                 },
                 "tags": [
@@ -103,7 +103,7 @@
                 ]
             }
         },
-        "/v1/tenants/{tenant.meta.uid}": {
+        "/core/v1/tenants/{tenant.meta.uid}": {
             "put": {
                 "summary": "UpdateTenant API updates tenant.",
                 "operationId": "TenantService_UpdateTenant",
@@ -206,11 +206,11 @@
                                         "$ref": "#/components/schemas/tenantv1Status"
                                     }
                                 },
-                                "title": "tenant which  needs to be updated"
+                                "title": "tenant which  needs to be updated."
                             }
                         }
                     },
-                    "description": "tenant which  needs to be updated",
+                    "description": "tenant which  needs to be updated.",
                     "required": true
                 },
                 "tags": [
@@ -218,9 +218,9 @@
                 ]
             }
         },
-        "/v1/tenants/{tenantId}": {
+        "/core/v1/tenants/{tenantId}": {
             "get": {
-                "summary": "GetTenant API returns the info about  for given tenant id",
+                "summary": "GetTenant API returns the info about  for given tenant id.",
                 "operationId": "TenantService_GetTenant",
                 "responses": {
                     "200": {
@@ -352,13 +352,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1Tenant"
                         },
-                        "title": "list of tenant response"
+                        "description": "list of tenant response."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "ListTenantsResponse is the response message to the ListTenants API and contains\nthe list of tenants visible to the caller"
+                "description": "ListTenantsResponse is the response message to the ListTenants API and contains\nthe list of tenants visible to the caller."
             },
             "v1Meta": {
                 "type": "object",
@@ -477,10 +477,11 @@
                     "TYPE_UNSPECIFIED",
                     "ACTIVE",
                     "DELETE_PENDING",
-                    "DELETE_IN_PROGRESS"
+                    "DELETE_IN_PROGRESS",
+                    "DELETE_FAILED"
                 ],
                 "default": "TYPE_UNSPECIFIED",
-                "description": "Type of phase the tenant is in currently should be one of the below.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACTIVE: The tenant is in use and active.\n - DELETE_PENDING: Deletion of tenant has not started.\n - DELETE_IN_PROGRESS: Deletion of the tenant is scheduled and in progress."
+                "description": "Type of phase the tenant is in currently should be one of the below.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACTIVE: The tenant is in use and active.\n - DELETE_PENDING: Deletion of tenant has not started.\n - DELETE_IN_PROGRESS: Deletion of the tenant is scheduled and in progress.\n - DELETE_FAILED: Deletion is failed"
             },
             "v1Reference": {
                 "type": "object",

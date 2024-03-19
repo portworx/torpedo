@@ -6,12 +6,10 @@ import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
-	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
 	"strconv"
-	"strings"
 )
 
 //var _ = Describe("{TenantsCRUD}", func() {
@@ -163,14 +161,30 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 			workflowbkpLoc.WfCloudCredentials.CloudCredentials = cc.CloudCredentials
 			workflowbkpLoc.WfCloudCredentials.Platform.TenantId = tenantId
 
-			bucketName := strings.ToLower("pds-test-bucket-" + utilities.RandString(5))
-
 			wfbkpLoc, err := workflowbkpLoc.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating backup location")
 			log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
 			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 
+			// Listing backuplocation after creation
 			bkpLocations, err := workflowbkpLoc.ListBackupLocation()
+			log.FailOnError(err, "error while listing backup location")
+
+			for _, bkpLocation := range bkpLocations {
+				log.Infof("wfBkpLoc Name: [%s]", bkpLocation.BkpLocation.Name)
+				log.Infof("wfBkpLoc Id: [%s]", bkpLocation.BkpLocation.BkpLocationId)
+				for _, cred := range bkpLocation.WfCloudCredentials.CloudCredentials {
+					log.Infof("credentials Id: [%s]", cred.ID)
+				}
+			}
+
+			//Deleting the backuplocation ID
+			log.Infof("Deleting backuplocation id [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
+			err = wfbkpLoc.DeleteBackupLocation(wfbkpLoc.BkpLocation.BkpLocationId)
+			log.FailOnError(err, "error while deleting backup location")
+
+			// Listing backup location after deletion
+			bkpLocations, err = workflowbkpLoc.ListBackupLocation()
 			log.FailOnError(err, "error while listing backup location")
 
 			for _, bkpLocation := range bkpLocations {

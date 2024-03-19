@@ -25,6 +25,7 @@ var (
 	customParams *parameters.Customparams
 	pdsLabels    = make(map[string]string)
 	accID        string
+	bucketName   string
 )
 
 // ReadParams reads the params from given or default json
