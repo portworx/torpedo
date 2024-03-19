@@ -24,6 +24,7 @@ func (ProjectV1 *PlatformGrpc) getProjectClient() (context.Context, publicprojec
 	credentials = &Credentials{
 		Token: token,
 	}
+	ctx = WithAccountIDMetaCtx(ctx, ProjectV1.AccountId)
 
 	projectClient = publicprojectapis.NewProjectServiceClient(ProjectV1.ApiClientV1)
 
@@ -138,13 +139,68 @@ func (ProjectV1 *PlatformGrpc) DeleteProject(projectReq *PlaformProjectRequest) 
 
 // AssociateToProject associates the given resurces to the project
 func (ProjectV1 *PlatformGrpc) AssociateToProject(associateProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
-	log.Warnf("AssociateToProject is not implemented for GRPC")
-	return &PlaformProjectResponse{}, nil
+
+	projectsResponse := PlaformProjectResponse{
+		Associate: V1Project{},
+	}
+
+	ctx, client, _, err := ProjectV1.getProjectClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+	}
+
+	request := publicprojectapis.AssociateResourcesRequest{
+		ProjectId: associateProject.Associate.ProjectId,
+		InfraResource: &publicprojectapis.Resources{
+			Clusters:        associateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Clusters,
+			Namespaces:      associateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Namespaces,
+			Credentials:     associateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Credentials,
+			BackupLocations: associateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.BackupLocations,
+			Templates:       associateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Templates,
+			BackupPolicies:  associateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.BackupPolicies,
+		},
+	}
+
+	projectDetails, err := client.AssociateResources(ctx, &request, grpc.PerRPCCredentials(credentials))
+	if err != nil {
+		return nil, fmt.Errorf("Error while associating the resources: %v\n", err)
+	}
+
+	err = utilities.CopyStruct(projectDetails, &projectsResponse.Associate)
+
+	return &projectsResponse, nil
 }
 
 // DissociateFromProject dissociates the given resurces from the project
 func (ProjectV1 *PlatformGrpc) DissociateFromProject(dissociateProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
-	log.Warnf("DissociateFromProject is not implemented for GRPC")
-	return &PlaformProjectResponse{}, nil
+	projectsResponse := PlaformProjectResponse{
+		Dissociate: V1Project{},
+	}
+
+	ctx, client, _, err := ProjectV1.getProjectClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+	}
+
+	request := publicprojectapis.DisassociateResourcesRequest{
+		ProjectId: dissociateProject.Associate.ProjectId,
+		InfraResource: &publicprojectapis.Resources{
+			Clusters:        dissociateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Clusters,
+			Namespaces:      dissociateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Namespaces,
+			Credentials:     dissociateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Credentials,
+			BackupLocations: dissociateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.BackupLocations,
+			Templates:       dissociateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.Templates,
+			BackupPolicies:  dissociateProject.Associate.ProjectServiceAssociateResourcesBody.InfraResource.BackupPolicies,
+		},
+	}
+
+	projectDetails, err := client.DisassociateResources(ctx, &request, grpc.PerRPCCredentials(credentials))
+	if err != nil {
+		return nil, fmt.Errorf("Error while dissociating the resources: %v\n", err)
+	}
+
+	err = utilities.CopyStruct(projectDetails, &projectsResponse.Dissociate)
+
+	return &projectsResponse, nil
 
 }

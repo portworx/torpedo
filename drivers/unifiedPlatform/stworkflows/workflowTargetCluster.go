@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/osutils"
@@ -68,7 +69,7 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 
 	if !isRegistered {
 		log.InfoD("Installing Manifests..")
-		cmd = fmt.Sprintf("echo '%v' > %s && kubectl apply -f %s && rm -f %s", manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
+		cmd = fmt.Sprintf("echo '%s' > %s && kubectl apply -f %s && rm -f %s", *manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		log.Infof("Manifest:\n%v\n", cmd)
 		output, _, err := osutils.ExecShell(cmd)
 		if err != nil {
@@ -79,9 +80,9 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 
 	log.InfoD("Verify the TargetCluster is connected to Control Plane")
 	err = wait.Poll(DefaultRetryInterval, targetClusterHealthTimeOut, func() (bool, error) {
-		err := targetCluster.GetTargetClusterHealth(clusterName)
+		err := targetCluster.CheckTargetClusterHealth()
 		if err != nil {
-			return false, nil
+			return false, fmt.Errorf("Error - [%s]", err.Error())
 		}
 		return true, nil
 	})
@@ -122,7 +123,7 @@ func (targetCluster *WorkflowTargetCluster) DeregisterFromControlPlane() error {
 		if err != nil {
 			return fmt.Errorf("Failed while getting platform manifests: %v\n", err)
 		}
-		cmd = fmt.Sprintf("echo '%v' > %s && kubectl delete -f %s && rm -f %s", manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
+		cmd = fmt.Sprintf("echo '%s' > %s && kubectl delete -f %s && rm -f %s", *manifest.Manifest, ManifestPath, ManifestPath, ManifestPath)
 		output, _, err := osutils.ExecShell(cmd)
 		if err != nil {
 			return fmt.Errorf("Failed uninstalling Platform manifests: %v\n", err)
@@ -179,7 +180,10 @@ func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName strin
 	}
 
 	var index int
+	log.Infof("All clusters - [%+v]", tcList)
 	for index = 0; index < len(tcList.Clusters); index++ {
+		log.Infof("Cluster Details - [%+v]", *tcList.Clusters[index].Meta)
+		log.Infof("Cluster Name - [%s]", *tcList.Clusters[index].Meta.Name)
 		if *tcList.Clusters[index].Meta.Name == clusterName {
 			return *tcList.Clusters[index].Meta.Uid, nil
 		}
@@ -188,21 +192,22 @@ func (targetCluster *WorkflowTargetCluster) GetClusterIdByName(clusterName strin
 
 }
 
-func (targetCluster *WorkflowTargetCluster) GetTargetClusterHealth(clusterName string) error {
-	tcList, err := platformLibs.ListTargetClusters(targetCluster.Project.Platform.TenantId)
+func (targetCluster *WorkflowTargetCluster) GetTargetCluster() (*automationModels.V1TargetCluster, error) {
+	tc, err := platformLibs.GetTargetCluster(targetCluster.ClusterUID)
+	if err != nil {
+		return nil, err
+	}
+	return tc, nil
+}
+
+func (targetCluster *WorkflowTargetCluster) CheckTargetClusterHealth() error {
+	tc, err := targetCluster.GetTargetCluster()
 	if err != nil {
 		return err
 	}
-	var index int
-	for index = 0; index < len(tcList.Clusters); index++ {
-		if *tcList.Clusters[index].Meta.Name == clusterName {
-			phase := tcList.Clusters[index].Status.Phase
-			if string(*phase) != targetClusterHealthOK {
-				return fmt.Errorf("Target Cluster found in %v Phase\n", phase)
-			} else {
-				return nil
-			}
-		}
+	if string(tc.Status.Phase) != targetClusterHealthOK {
+		return fmt.Errorf("Target Cluster found in %v Phase\n", tc.Status.Phase)
 	}
-	return fmt.Errorf("Cluster Name not found in list of targetclusters\n")
+
+	return nil
 }

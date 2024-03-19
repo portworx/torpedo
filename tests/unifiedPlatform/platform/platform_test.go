@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo/v2"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/drivers/utilities"
@@ -19,6 +20,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 		workflowCloudCreds     stworkflows.WorkflowCloudCredentials
 		workflowBackupLocation stworkflows.WorkflowBackupLocation
 		namespace              string
+		VARIABLE_FROM_JENKINS  string
 	)
 	JustBeforeEach(func() {
 
@@ -36,6 +38,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 				automationModels.UserEmail:       NewPdsParams.Users.NonAdminEmailAddress,
 			},
 		}
+		VARIABLE_FROM_JENKINS = GetEnv(unifiedPlatform.UNIFIED_PLATFORM_INTERFACE, unifiedPlatform.REST_API)
 	})
 
 	It("Onboard accounts", func() {
@@ -49,23 +52,29 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 		})
 
 		Step("Create Cloud Credentials", func() {
-			workflowCloudCreds.Platform = workflowPlatform
-			workflowCloudCreds.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
-			_, err := workflowCloudCreds.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
-			log.FailOnError(err, "Unable to create cloud credentials")
-			for _, value := range workflowCloudCreds.CloudCredentials {
-				log.Infof("cloud credentials name: [%s]", value.Name)
-				log.Infof("cloud credentials id: [%s]", value.ID)
-				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+			// TODO: This needs to be removed once API support is added for cloud creds
+			if VARIABLE_FROM_JENKINS == unifiedPlatform.GRPC {
+				workflowCloudCreds.Platform = workflowPlatform
+				workflowCloudCreds.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
+				_, err := workflowCloudCreds.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
+				log.FailOnError(err, "Unable to create cloud credentials")
+				for _, value := range workflowCloudCreds.CloudCredentials {
+					log.Infof("cloud credentials name: [%s]", value.Name)
+					log.Infof("cloud credentials id: [%s]", value.ID)
+					log.Infof("cloud provider type: [%s]", value.CloudProviderType)
+				}
 			}
 		})
 
 		Step("Create Backup Location", func() {
-			workflowBackupLocation.WfCloudCredentials = workflowCloudCreds
-			_, err := workflowBackupLocation.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
-			log.FailOnError(err, "error while creating backup location")
-			log.Infof("wfBkpLoc id: [%s]", workflowBackupLocation.BkpLocation.BkpLocationId)
-			log.Infof("wfBkpLoc name: [%s]", workflowBackupLocation.BkpLocation.Name)
+			//// TODO: This needs to be removed once API support is added for backup location
+			if VARIABLE_FROM_JENKINS == unifiedPlatform.GRPC {
+				workflowBackupLocation.WfCloudCredentials = workflowCloudCreds
+				_, err := workflowBackupLocation.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+				log.FailOnError(err, "error while creating backup location")
+				log.Infof("wfBkpLoc id: [%s]", workflowBackupLocation.BkpLocation.BkpLocationId)
+				log.Infof("wfBkpLoc name: [%s]", workflowBackupLocation.BkpLocation.Name)
+			}
 		})
 
 		Step("Create Project", func() {

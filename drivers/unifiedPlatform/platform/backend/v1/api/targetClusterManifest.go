@@ -38,7 +38,7 @@ func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManif
 		return response, fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	*response.GetManifest.Manifest = dtModels.GetManifest()
+	response.GetManifest.Manifest = dtModels.Manifest
 
 	log.Infof("Manifest - [%s]", *response.GetManifest.Manifest)
 

@@ -50,3 +50,16 @@ func ListTargetClusters(tenantId string) (*automationModels.V1ListTargetClusters
 	}
 	return &tcList.ListTargetClusters, nil
 }
+
+func GetTargetCluster(clusterId string) (*automationModels.V1TargetCluster, error) {
+	wfRequest := automationModels.PlatformTargetClusterRequest{
+		GetTargetCluster: automationModels.PlatformGetTargetCluster{
+			Id: clusterId,
+		},
+	}
+	tc, err := v2Components.Platform.GetTargetCluster(&wfRequest)
+	if err != nil {
+		return nil, err
+	}
+	return &tc.GetTargetCluster, nil
+}

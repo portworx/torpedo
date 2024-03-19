@@ -57,11 +57,11 @@ type V1TargetCluster struct {
 }
 
 type PlatformTargetClusterv1Status struct {
-	Metadata             *V1Metadata                         `copier:"must,nopanic"`
-	Phase                *V1TargetClusterPhasePhase          `copier:"must,nopanic"`
-	LastStatusUpdateTime *time.Time                          `copier:"must,nopanic"`
-	PlatformAgent        *V1ApplicationPhasePhase            `copier:"must,nopanic"`
-	Applications         *map[string]V1ApplicationPhasePhase `copier:"must,nopanic"`
+	Metadata             V1Metadata                         `copier:"must,nopanic"`
+	Phase                V1TargetClusterPhasePhase          `copier:"must,nopanic"`
+	LastStatusUpdateTime *time.Time                         `copier:"must,nopanic"`
+	PlatformAgent        V1ApplicationPhasePhase            `copier:"must,nopanic"`
+	Applications         map[string]V1ApplicationPhasePhase `copier:"must,nopanic"`
 }
 
 type V1TargetClusterPhasePhase string
