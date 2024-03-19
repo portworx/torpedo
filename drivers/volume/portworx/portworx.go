@@ -432,7 +432,8 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 
 	for _, n := range node.GetStorageDriverNodes() {
 		if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
-			return err
+			//return err
+			log.Info("PX failed to come up on node %v", n.Name)
 		}
 	}
 
