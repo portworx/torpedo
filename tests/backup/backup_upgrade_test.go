@@ -1004,6 +1004,8 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 		for _, version := range versions {
 			Step("Upgrading K8s cluster", func() {
 
+				log.InfoD("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version)
+
 				err := SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
@@ -1021,6 +1023,7 @@ var _ = Describe("{PXBackupClusterUpgradeTest}", func() {
 				err = SwitchBothKubeConfigANDContext("source")
 				dash.VerifyFatal(err, nil, "Switching context and kubeconfig to source cluster")
 
+				// TODO: Change this to a logic with DoRetryTimeout
 				log.InfoD("Waiting for nodes to stabilise")
 				time.Sleep(120 * time.Minute)
 
