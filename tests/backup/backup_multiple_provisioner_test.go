@@ -14,7 +14,7 @@ import (
 	"math/rand"
 )
 
-// This MultipleProvisionerBackupAndRestore testcase to test Backup and restore of namespaces with multiple provisioners using csi and kdmp
+// This MultipleProvisionerCsiSnapshotDeleteBackupAndRestore testcase to test restore of namespaces with multiple provisioners using backup when snapshot is deleted
 var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func() {
 
 	var (
