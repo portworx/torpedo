@@ -355,6 +355,7 @@ var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 		"vpc.block.csi.ibm.io": {
 			snapshotClasses: []string{},
 			defaultSnapshot: "ibmc-vpcblock-snapshot",
+			appList:         []string{"postgres-csi"},
 		},
 	},
 	"aws": {
