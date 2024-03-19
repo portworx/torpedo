@@ -2,9 +2,11 @@ package ginkgo
 
 import (
 	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/tests/ginkgo/ginkgo-dsl"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -15,8 +17,187 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"sync"
 )
+
+//type fieldPathReporter struct {
+//	path    cmp.Path // Tracks the current path in the comparison
+//	paths   []string // Accumulates paths to fields with differences
+//	changes []string
+//}
+//
+//// PushStep is called when descending into a part of the data structure.
+//func (r *fieldPathReporter) PushStep(ps cmp.PathStep) {
+//	r.path = append(r.path, ps)
+//}
+//
+//// PopStep is called when ascending out of a part of the data structure.
+//func (r *fieldPathReporter) PopStep() {
+//	r.path = r.path[:len(r.path)-1]
+//}
+
+//// Report is called for each part of the data structure that is compared.
+//func (r *fieldPathReporter) Report(rs cmp.Result) {
+//	if !rs.Equal() {
+//		// Join the path elements into a human-readable string and store it.
+//		var pathStr []string
+//		for _, step := range r.path {
+//			if step, ok := step.(cmp.MapIndex); ok {
+//				pathStr = append(pathStr, fmt.Sprintf("[%v]", step.Key()))
+//				continue
+//			}
+//			if step, ok := step.(cmp.SliceIndex); ok {
+//				pathStr = append(pathStr, fmt.Sprintf("[%v]", step.Key()))
+//				continue
+//			}
+//			pathStr = append(pathStr, fmt.Sprintf(".%v", step))
+//		}
+//		fullPath := strings.TrimPrefix(strings.Join(pathStr, ""), ".")
+//		r.paths = append(r.paths, fullPath)
+//	}
+//}
+
+//func (r *fieldPathReporter) Report(rs cmp.Result) {
+//	if !rs.Equal() {
+//		// Convert each PathStep to a string and accumulate them.
+//		var pathSteps []string
+//		for _, step := range rs.Path() {
+//			pathSteps = append(pathSteps, step.String())
+//		}
+//		pathStr := strings.Join(pathSteps, ".")
+//		r.changes = append(r.changes, fmt.Sprintf("Changed: %s", pathStr))
+//	}
+//}
+//
+//var reporter = &fieldPathReporter{}
+
+type DiffReporter struct {
+	path  cmp.Path
+	diffs []string
+}
+
+func (r *DiffReporter) PushStep(ps cmp.PathStep) {
+	r.path = append(r.path, ps)
+}
+
+func (r *DiffReporter) Report(rs cmp.Result) {
+	if !rs.Equal() {
+		// Use cmp.Path.String() to get the simplified path
+		simplifiedPath := r.path.String()
+		// Append the simplified path to the diffs slice
+		r.diffs = append(r.diffs, simplifiedPath)
+	}
+}
+
+func (r *DiffReporter) String() string {
+	if len(r.diffs) == 0 {
+		return "No differences"
+	}
+	// Join and format the paths of all detected changes
+	return "Changed fields:\n" + strings.Join(r.diffs, "\n")
+}
+
+//func (r *DiffReporter) Report(rs cmp.Result) {
+//	if !rs.Equal() {
+//		vx, vy := r.path.Last().Values()
+//		r.diffs = append(r.diffs, fmt.Sprintf("%#v:\n\t-: %+v\n\t+: %+v\n", r.path, vx, vy))
+//	}
+//}
+
+//func (r *DiffReporter) Report(rs cmp.Result) {
+//	if !rs.Equal() {
+//		vx, vy := r.path.Last().Values()
+//		// Simplify the path for YAML-like output
+//		simplifiedPath := simplifyPath(r.path)
+//		r.diffs = append(r.diffs, fmt.Sprintf("%s:\n\t-: %+v\n\t+: %+v\n", simplifiedPath, vx, vy))
+//	}
+//}
+//
+//func simplifyPath(path cmp.Path) string {
+//	var simplified []string
+//	for _, step := range path {
+//		// Only include steps that contribute to the hierarchical path
+//		if ps, ok := step.(cmp.Indirect); ok {
+//			simplified = append(simplified, fmt.Sprintf("%v", ps))
+//		} else if ps, ok := step.(cmp.Transform); ok {
+//			simplified = append(simplified, ps.String())
+//		}
+//		// Extend with more cases as necessary to handle different types of steps
+//	}
+//	return strings.Join(simplified, "; ")
+//}
+
+//func (r *DiffReporter) Report(rs cmp.Result) {
+//	if !rs.Equal() {
+//		vx, vy := r.path.Last().Values()
+//		pathStr := formatPath(r.path)
+//		r.diffs = append(r.diffs, fmt.Sprintf("%s:\n\t-: %+v\n\t+: %+v", pathStr, vx, vy))
+//	}
+//}
+
+//func formatPath(path cmp.Path) string {
+//	var pathParts []string
+//	for _, step := range path {
+//		switch s := step.(type) {
+//		case cmp.MapIndex:
+//			pathParts = append(pathParts, fmt.Sprintf("[%v]", s.Key()))
+//		case cmp.SliceIndex:
+//			pathParts = append(pathParts, fmt.Sprintf("[%d]", s.Key()))
+//		case cmp.Indirect:
+//			continue // Skip indirect steps to simplify output
+//		case cmp.TypeAssertion:
+//			continue // Skip type assertions to focus on field names
+//		default:
+//			pathParts = append(pathParts, fmt.Sprint(s))
+//		}
+//	}
+//	return strings.Join(pathParts, ".")
+//}
+
+func (r *DiffReporter) PopStep() {
+	r.path = r.path[:len(r.path)-1]
+}
+
+//func (r *DiffReporter) String() string {
+//	return strings.Join(r.diffs, "\n")
+//}
+
+//func (r *DiffReporter) Report(rs cmp.Result) {
+//	if !rs.Equal() {
+//		// Dynamically format the path to reflect its structure
+//		pathStr := dynamicFormatPath(r.path)
+//		// Append the formatted path to the diffs slice
+//		r.diffs = append(r.diffs, pathStr)
+//	}
+//}
+//
+//// dynamicFormatPath generates a string representation of the path that led to the difference.
+//func dynamicFormatPath(path cmp.Path) string {
+//	var parts []string
+//	for _, p := range path {
+//		switch v := p.(type) {
+//		case cmp.MapIndex, cmp.SliceIndex:
+//			// Handle collection indices
+//			parts = append(parts, fmt.Sprintf("[%v]", v))
+//		default:
+//			// For other types, use the string representation
+//			parts = append(parts, fmt.Sprintf("%v", p))
+//		}
+//	}
+//	return strings.Join(parts, ".")
+//}
+//
+//func (r *DiffReporter) String() string {
+//	if len(r.diffs) == 0 {
+//		return "No differences"
+//	}
+//	// Join and format the paths of all detected changes
+//	return "Changed fields:\n" + strings.Join(r.diffs, "\n")
+//}
+
+var reporter = &DiffReporter{}
 
 var (
 	initialSyncDone = false
@@ -151,16 +332,13 @@ var _ = ginkgo_dsl.NewDescribe("Describe 1", ginkgo.Label("D1"), func() {
 			log.Fatalf("Error retrieving API Resources: %s", err.Error())
 		}
 
-		// Initialize dynamic client
 		dynamicClient, err := dynamic.NewForConfig(config)
 		if err != nil {
 			log.Fatalf("Error creating dynamic client: %s", err.Error())
 		}
 
-		// Initialize dynamic informer factory
 		factory := dynamicinformer.NewDynamicSharedInformerFactory(dynamicClient, 0)
 
-		// Setup informers for each resource
 		for _, apiResource := range apiResourceList {
 			gv, err := schema.ParseGroupVersion(apiResource.GroupVersion)
 			if err != nil {
@@ -168,7 +346,6 @@ var _ = ginkgo_dsl.NewDescribe("Describe 1", ginkgo.Label("D1"), func() {
 			}
 
 			for _, resource := range apiResource.APIResources {
-				// Filter out subresources
 
 				//if len(resource.Verbs) == 0 {
 				//	log.Infof("[len(resource.Verbs) == 0] Skipping resource: %s", resource.Name)
@@ -190,10 +367,11 @@ var _ = ginkgo_dsl.NewDescribe("Describe 1", ginkgo.Label("D1"), func() {
 					continue
 				}
 				if resource.Namespaced {
-					if !(resource.Kind == "Pod") {
+					/*if !(resource.Kind == "Pod") {
 						log.Errorf("[resource.Namespaced] Skipping resource: %s", resource.Name)
 						continue
-					}
+					}*/
+					continue
 				}
 
 				//if len(resource.Verbs) == 0 || resource.Namespaced || containsString(resource.Verbs, "watch") == false {
@@ -251,7 +429,33 @@ var _ = ginkgo_dsl.NewDescribe("Describe 1", ginkgo.Label("D1"), func() {
 								//compareNodes(&unstrOldObj, &unstrNewObj)
 							} else {
 								fmt.Printf("Update event detected for [%s/%s] in %s\n", unstrNewObj.GetKind(), unstrNewObj.GetName(), unstrNewObj.GetNamespace())
+
+								if oldSC, ok := oldObj.(*storagev1.StorageClass); ok {
+									newSC := oldObj.(*storagev1.StorageClass)
+									fmt.Println("Old object is of type StorageClass")
+									cmp.Equal(oldSC, newSC, cmp.Reporter(reporter))
+									fmt.Println("Changed fields:", reporter.diffs)
+								} else {
+									fmt.Printf("Type of oldObj: %v\n", reflect.TypeOf(oldObj))
+									oldSC, err := convertToStorageClass(oldObj.(*unstructured.Unstructured))
+									if err != nil {
+										log.Errorf("Error converting to OLD StorageClass: %s", err)
+									}
+									log.Infof("OLD SC LABELS [%#v]", oldSC.Labels)
+									newSC, err := convertToStorageClass(newObj.(*unstructured.Unstructured))
+									if err != nil {
+										log.Errorf("Error converting to OLD StorageClass: %s", err)
+									}
+									log.Infof("NEW SC LABELS [%#v]", oldSC.ObjectMeta.Labels)
+									cmp.Equal(oldSC, newSC, cmp.Reporter(reporter))
+									fmt.Println("Changed fields:", reporter.String())
+								}
 							}
+
+							//diff := cmp.Diff(unstrOldObj.Object, unstrNewObj.Object)
+							//if diff != "" {
+							//	fmt.Printf("Resource has changed: %s\n", diff)
+							//}
 						}
 					},
 					DeleteFunc: func(obj interface{}) {
@@ -389,4 +593,13 @@ func compareNodes(oldNode, newNode *unstructured.Unstructured) {
 	//}
 
 	// Extend this function to compare other aspects, like annotations or status conditions
+}
+
+func convertToStorageClass(u *unstructured.Unstructured) (*storagev1.StorageClass, error) {
+	var sc storagev1.StorageClass
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.UnstructuredContent(), &sc)
+	if err != nil {
+		return nil, err
+	}
+	return &sc, nil
 }
