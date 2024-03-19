@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/backupPolicies": {
+        "/core/v1/backupPolicies": {
             "get": {
-                "summary": "List API lists all the backup policies for a tenant.",
+                "summary": "List API lists all the backup policies for a tenant",
                 "operationId": "BackupPolicyService_ListBackupPolicies",
                 "responses": {
                     "200": {
@@ -104,7 +104,7 @@
                 ]
             }
         },
-        "/v1/backupPolicies/{id}": {
+        "/core/v1/backupPolicies/{id}": {
             "get": {
                 "summary": "Get API returns the backup policy for the given ID.",
                 "operationId": "BackupPolicyService_GetBackupPolicy",
@@ -187,9 +187,9 @@
                 ]
             }
         },
-        "/v1/backupPolicies/{meta.uid}:metaUpdate": {
+        "/core/v1/backupPolicies/{meta.uid}:metaUpdate": {
             "put": {
-                "summary": "Update API updates a the meta data of a backup policy.\n(-- api-linter: core::0134::response-message-name=disabled\n    aip.dev/not-precedent: We need to do this because we need to return the whole Schedule after the update. --)\n(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because we are updating only the meta data of the schedule and not config. --)",
+                "summary": "Update API updates a the meta data of a backup policy.",
                 "operationId": "BackupPolicyService_UpdateBackupPolicyMeta",
                 "responses": {
                     "200": {
@@ -280,11 +280,11 @@
                                         "readOnly": true
                                     }
                                 },
-                                "title": "Metadata of the backup policy to be updated.\n(-- api-linter: core::0134::request-required-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required because\nmeta data which needs to be updated has to be passed in the request. --)"
+                                "title": "Metadata of the backup policy to be updated."
                             }
                         }
                     },
-                    "description": "Metadata of the backup policy to be updated.\n(-- api-linter: core::0134::request-required-fields=disabled\n    aip.dev/not-precedent: We really need this field to be required because\nmeta data which needs to be updated has to be passed in the request. --)",
+                    "description": "Metadata of the backup policy to be updated.",
                     "required": true
                 },
                 "tags": [
@@ -292,7 +292,49 @@
                 ]
             }
         },
-        "/v1/tenants/{tenantId}/backupPolicies": {
+        "/core/v1/backupPolicies:search": {
+            "post": {
+                "summary": "List API lists all the backup policies for a tenant",
+                "operationId": "BackupPolicyService_ListBackupPolicies2",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListBackupPoliciesResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/rpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1ListBackupPoliciesRequest"
+                            }
+                        }
+                    },
+                    "description": "Request to list the backup policies for a tenant.",
+                    "required": true
+                },
+                "tags": [
+                    "BackupPolicyService"
+                ]
+            }
+        },
+        "/core/v1/tenants/{tenantId}/backupPolicies": {
             "post": {
                 "summary": "Create API creates a backup policy for a tenant.",
                 "operationId": "BackupPolicyService_CreateBackupPolicy",
@@ -321,7 +363,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "The parent tenant id under which schedule will be created.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the tenant context. --)",
+                        "description": "The parent tenant id under which schedule will be created.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -409,16 +451,6 @@
                 "default": "FIELD_UNSPECIFIED",
                 "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
             },
-            "SortOrderValue": {
-                "type": "string",
-                "enum": [
-                    "VALUE_UNSPECIFIED",
-                    "ASC",
-                    "DESC"
-                ],
-                "default": "VALUE_UNSPECIFIED",
-                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
-            },
             "protobufAny": {
                 "type": "object",
                 "properties": {
@@ -476,7 +508,7 @@
                 "properties": {
                     "time": {
                         "type": "string",
-                        "title": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                        "description": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm."
                     }
                 },
                 "description": "Daily Policy."
@@ -508,6 +540,31 @@
                     }
                 },
                 "description": "Interval Policy."
+            },
+            "v1ListBackupPoliciesRequest": {
+                "type": "object",
+                "properties": {
+                    "tenantId": {
+                        "type": "string",
+                        "description": "Tenant ID for which the backup policies will be listed."
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
+                    },
+                    "labelSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "fieldSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "infraResourceSelector": {
+                        "$ref": "#/components/schemas/v1ResourceSelector"
+                    },
+                    "sort": {
+                        "$ref": "#/components/schemas/v1Sort"
+                    }
+                },
+                "description": "Request to list the backup policies for a tenant."
             },
             "v1ListBackupPoliciesResponse": {
                 "type": "object",
@@ -590,11 +647,11 @@
                     "date": {
                         "type": "string",
                         "format": "int64",
-                        "title": "Date of the month when the policy should be triggered. If a given date doesn't exist in a month it'll rollover to the next date of the month.\nFor example if 31 is specified, it'll trigger on either 1st or 2nd March depending on if it is a leap year.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                        "description": "Date of the month when the policy should be triggered. If a given date doesn't exist in a month it'll rollover to the next date of the month.\nFor example if 31 is specified, it'll trigger on either 1st or 2nd March depending on if it is a leap year."
                     },
                     "time": {
                         "type": "string",
-                        "title": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                        "description": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm."
                     }
                 },
                 "description": "Monthly Policy."
@@ -734,10 +791,20 @@
                         "$ref": "#/components/schemas/SortByField"
                     },
                     "sortOrder": {
-                        "$ref": "#/components/schemas/SortOrderValue"
+                        "$ref": "#/components/schemas/v1SortOrderValue"
                     }
                 },
                 "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             },
             "v1WeeklyPolicy": {
                 "type": "object",
@@ -748,7 +815,7 @@
                     },
                     "time": {
                         "type": "string",
-                        "title": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm.\n(-- api-linter: core::0142::time-field-type=disabled\n    aip.dev/not-precedent: We need to do this to take input in string format. --)"
+                        "description": "Time, when the policy should be triggered. Expected format is time. Eg 12:04PM or 12:04pm."
                     }
                 },
                 "description": "Weekly Policy."

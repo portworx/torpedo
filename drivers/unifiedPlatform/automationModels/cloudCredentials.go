@@ -5,6 +5,10 @@ type CloudCredentials struct {
 	Get    GetCloudCredentials
 }
 
+type CloudCredentialsResponse struct {
+	Create CreateCloudCredentials
+}
+
 type GetCloudCredentials struct {
 	CloudCredentialsId string
 	IsConfigRequired   bool

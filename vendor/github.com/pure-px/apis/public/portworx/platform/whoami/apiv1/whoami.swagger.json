@@ -10,7 +10,7 @@
         }
     ],
     "paths": {
-        "/v1/whoami": {
+        "/core/v1/whoami": {
             "get": {
                 "summary": "WhoAmI API returns the current actor accounts.",
                 "operationId": "WhoAmIService_WhoAmI",
@@ -76,39 +76,39 @@
                 "properties": {
                     "id": {
                         "type": "string",
-                        "title": "Id of an account"
+                        "description": "Id of an account."
                     },
                     "dnsName": {
                         "type": "string",
-                        "title": "Account DNS name"
+                        "description": "Account DNS name."
                     },
                     "name": {
                         "type": "string",
-                        "title": "Name of Account"
+                        "description": "Name of Account."
                     }
                 },
-                "title": "Account details in WhoAmI Respose"
+                "description": "Account details in WhoAmI Response."
             },
             "v1WhoAmIResponse": {
                 "type": "object",
                 "properties": {
                     "id": {
                         "type": "string",
-                        "title": "id of current actor"
+                        "description": "id of current actor."
                     },
                     "email": {
                         "type": "string",
-                        "title": "email of current actor"
+                        "description": "email of current actor."
                     },
                     "accounts": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/v1Account"
                         },
-                        "title": "accounts of current actor"
+                        "description": "accounts of current actor."
                     }
                 },
-                "title": "WhoAmI response return accounts for current actor"
+                "description": "WhoAmI response return accounts for current actor."
             }
         }
     }

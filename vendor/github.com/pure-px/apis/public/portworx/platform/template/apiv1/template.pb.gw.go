@@ -331,7 +331,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/GetTemplate", runtime.WithHTTPPathPattern("/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/GetTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -356,7 +356,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/CreateTemplate", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/templates"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/CreateTemplate", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -381,7 +381,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -406,7 +406,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/v1/templates"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/core/v1/templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -431,7 +431,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/v1/templates:search"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/core/v1/templates:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -456,7 +456,7 @@ func RegisterTemplateServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/DeleteTemplate", runtime.WithHTTPPathPattern("/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/DeleteTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -520,7 +520,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/GetTemplate", runtime.WithHTTPPathPattern("/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/GetTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -542,7 +542,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/CreateTemplate", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/templates"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/CreateTemplate", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -564,7 +564,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/UpdateTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -586,7 +586,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/v1/templates"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/core/v1/templates"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -608,7 +608,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/v1/templates:search"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/ListTemplates", runtime.WithHTTPPathPattern("/core/v1/templates:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -630,7 +630,7 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/DeleteTemplate", runtime.WithHTTPPathPattern("/v1/templates/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.template.v1.TemplateService/DeleteTemplate", runtime.WithHTTPPathPattern("/core/v1/templates/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -650,17 +650,17 @@ func RegisterTemplateServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_TemplateService_GetTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "templates", "id"}, ""))
+	pattern_TemplateService_GetTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "templates", "id"}, ""))
 
-	pattern_TemplateService_CreateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "tenants", "tenant_id", "templates"}, ""))
+	pattern_TemplateService_CreateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "templates"}, ""))
 
-	pattern_TemplateService_UpdateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "templates", "id"}, ""))
+	pattern_TemplateService_UpdateTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "templates", "id"}, ""))
 
-	pattern_TemplateService_ListTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "templates"}, ""))
+	pattern_TemplateService_ListTemplates_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "templates"}, ""))
 
-	pattern_TemplateService_ListTemplates_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "templates"}, "search"))
+	pattern_TemplateService_ListTemplates_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "templates"}, "search"))
 
-	pattern_TemplateService_DeleteTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "templates", "id"}, ""))
+	pattern_TemplateService_DeleteTemplate_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "templates", "id"}, ""))
 )
 
 var (

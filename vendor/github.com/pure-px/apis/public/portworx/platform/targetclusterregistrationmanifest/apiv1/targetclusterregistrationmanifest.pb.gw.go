@@ -105,7 +105,7 @@ func RegisterTargetClusterRegistrationManifestServiceHandlerServer(ctx context.C
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetclusterregistrationmanifest.v1.TargetClusterRegistrationManifestService/GenerateTargetClusterRegistrationManifest", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}:registrationManifests"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.targetclusterregistrationmanifest.v1.TargetClusterRegistrationManifestService/GenerateTargetClusterRegistrationManifest", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}:registrationManifests"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -169,7 +169,7 @@ func RegisterTargetClusterRegistrationManifestServiceHandlerClient(ctx context.C
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetclusterregistrationmanifest.v1.TargetClusterRegistrationManifestService/GenerateTargetClusterRegistrationManifest", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}:registrationManifests"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.targetclusterregistrationmanifest.v1.TargetClusterRegistrationManifestService/GenerateTargetClusterRegistrationManifest", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}:registrationManifests"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -189,7 +189,7 @@ func RegisterTargetClusterRegistrationManifestServiceHandlerClient(ctx context.C
 }
 
 var (
-	pattern_TargetClusterRegistrationManifestService_GenerateTargetClusterRegistrationManifest_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "tenants", "tenant_id"}, "registrationManifests"))
+	pattern_TargetClusterRegistrationManifestService_GenerateTargetClusterRegistrationManifest_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "tenants", "tenant_id"}, "registrationManifests"))
 )
 
 var (

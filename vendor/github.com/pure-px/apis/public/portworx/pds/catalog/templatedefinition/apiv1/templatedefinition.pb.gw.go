@@ -140,6 +140,130 @@ func local_request_TemplateDefinitionService_ListTemplateKinds_0(ctx context.Con
 
 }
 
+var (
+	filter_TemplateDefinitionService_ListTemplateTypes_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+)
+
+func request_TemplateDefinitionService_ListTemplateTypes_0(ctx context.Context, marshaler runtime.Marshaler, client TemplateDefinitionServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListTemplateTypesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_TemplateDefinitionService_ListTemplateTypes_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.ListTemplateTypes(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_TemplateDefinitionService_ListTemplateTypes_0(ctx context.Context, marshaler runtime.Marshaler, server TemplateDefinitionServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListTemplateTypesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_TemplateDefinitionService_ListTemplateTypes_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.ListTemplateTypes(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+func request_TemplateDefinitionService_GetTemplateType_0(ctx context.Context, marshaler runtime.Marshaler, client TemplateDefinitionServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetTemplateTypeRequest
+	var metadata runtime.ServerMetadata
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+
+	protoReq.Id, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+
+	msg, err := client.GetTemplateType(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_TemplateDefinitionService_GetTemplateType_0(ctx context.Context, marshaler runtime.Marshaler, server TemplateDefinitionServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq GetTemplateTypeRequest
+	var metadata runtime.ServerMetadata
+
+	var (
+		val string
+		ok  bool
+		err error
+		_   = err
+	)
+
+	val, ok = pathParams["id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "id")
+	}
+
+	protoReq.Id, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "id", err)
+	}
+
+	msg, err := server.GetTemplateType(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
+var (
+	filter_TemplateDefinitionService_ListTemplateSamples_0 = &utilities.DoubleArray{Encoding: map[string]int{}, Base: []int(nil), Check: []int(nil)}
+)
+
+func request_TemplateDefinitionService_ListTemplateSamples_0(ctx context.Context, marshaler runtime.Marshaler, client TemplateDefinitionServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListTemplateSamplesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_TemplateDefinitionService_ListTemplateSamples_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := client.ListTemplateSamples(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+
+}
+
+func local_request_TemplateDefinitionService_ListTemplateSamples_0(ctx context.Context, marshaler runtime.Marshaler, server TemplateDefinitionServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var protoReq ListTemplateSamplesRequest
+	var metadata runtime.ServerMetadata
+
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_TemplateDefinitionService_ListTemplateSamples_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	msg, err := server.ListTemplateSamples(ctx, &protoReq)
+	return msg, metadata, err
+
+}
+
 // RegisterTemplateDefinitionServiceHandlerServer registers the http handlers for service TemplateDefinitionService to "mux".
 // UnaryRPC     :call TemplateDefinitionServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -154,7 +278,7 @@ func RegisterTemplateDefinitionServiceHandlerServer(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetRevision", runtime.WithHTTPPathPattern("/pds/v1/catalog/templatedefinition/revision"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetRevision", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/revisions:get"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -179,7 +303,7 @@ func RegisterTemplateDefinitionServiceHandlerServer(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListRevisions", runtime.WithHTTPPathPattern("/pds/v1/catalog/templatedefinition/revisions"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListRevisions", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/revisions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -204,7 +328,7 @@ func RegisterTemplateDefinitionServiceHandlerServer(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateKinds", runtime.WithHTTPPathPattern("/pds/v1/catalog/templatedefinition/kinds"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateKinds", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/kinds"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -218,6 +342,81 @@ func RegisterTemplateDefinitionServiceHandlerServer(ctx context.Context, mux *ru
 		}
 
 		forward_TemplateDefinitionService_ListTemplateKinds_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_TemplateDefinitionService_ListTemplateTypes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateTypes", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/types"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TemplateDefinitionService_ListTemplateTypes_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TemplateDefinitionService_ListTemplateTypes_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_TemplateDefinitionService_GetTemplateType_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetTemplateType", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/types/{id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TemplateDefinitionService_GetTemplateType_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TemplateDefinitionService_GetTemplateType_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_TemplateDefinitionService_ListTemplateSamples_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateSamples", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/samples"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_TemplateDefinitionService_ListTemplateSamples_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TemplateDefinitionService_ListTemplateSamples_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 
 	})
 
@@ -268,7 +467,7 @@ func RegisterTemplateDefinitionServiceHandlerClient(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetRevision", runtime.WithHTTPPathPattern("/pds/v1/catalog/templatedefinition/revision"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetRevision", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/revisions:get"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -290,7 +489,7 @@ func RegisterTemplateDefinitionServiceHandlerClient(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListRevisions", runtime.WithHTTPPathPattern("/pds/v1/catalog/templatedefinition/revisions"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListRevisions", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/revisions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -312,7 +511,7 @@ func RegisterTemplateDefinitionServiceHandlerClient(ctx context.Context, mux *ru
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateKinds", runtime.WithHTTPPathPattern("/pds/v1/catalog/templatedefinition/kinds"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateKinds", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/kinds"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -328,15 +527,87 @@ func RegisterTemplateDefinitionServiceHandlerClient(ctx context.Context, mux *ru
 
 	})
 
+	mux.Handle("GET", pattern_TemplateDefinitionService_ListTemplateTypes_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateTypes", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/types"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TemplateDefinitionService_ListTemplateTypes_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TemplateDefinitionService_ListTemplateTypes_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_TemplateDefinitionService_GetTemplateType_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/GetTemplateType", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/types/{id}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TemplateDefinitionService_GetTemplateType_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TemplateDefinitionService_GetTemplateType_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
+	mux.Handle("GET", pattern_TemplateDefinitionService_ListTemplateSamples_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		var err error
+		var annotatedContext context.Context
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.pds.catalog.templatedefinition.v1.TemplateDefinitionService/ListTemplateSamples", runtime.WithHTTPPathPattern("/pds/v1/catalog/templateDefinition/samples"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_TemplateDefinitionService_ListTemplateSamples_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_TemplateDefinitionService_ListTemplateSamples_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+
+	})
+
 	return nil
 }
 
 var (
-	pattern_TemplateDefinitionService_GetRevision_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templatedefinition", "revision"}, ""))
+	pattern_TemplateDefinitionService_GetRevision_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templateDefinition", "revisions"}, "get"))
 
-	pattern_TemplateDefinitionService_ListRevisions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templatedefinition", "revisions"}, ""))
+	pattern_TemplateDefinitionService_ListRevisions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templateDefinition", "revisions"}, ""))
 
-	pattern_TemplateDefinitionService_ListTemplateKinds_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templatedefinition", "kinds"}, ""))
+	pattern_TemplateDefinitionService_ListTemplateKinds_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templateDefinition", "kinds"}, ""))
+
+	pattern_TemplateDefinitionService_ListTemplateTypes_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templateDefinition", "types"}, ""))
+
+	pattern_TemplateDefinitionService_GetTemplateType_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"pds", "v1", "catalog", "templateDefinition", "types", "id"}, ""))
+
+	pattern_TemplateDefinitionService_ListTemplateSamples_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"pds", "v1", "catalog", "templateDefinition", "samples"}, ""))
 )
 
 var (
@@ -345,4 +616,10 @@ var (
 	forward_TemplateDefinitionService_ListRevisions_0 = runtime.ForwardResponseMessage
 
 	forward_TemplateDefinitionService_ListTemplateKinds_0 = runtime.ForwardResponseMessage
+
+	forward_TemplateDefinitionService_ListTemplateTypes_0 = runtime.ForwardResponseMessage
+
+	forward_TemplateDefinitionService_GetTemplateType_0 = runtime.ForwardResponseMessage
+
+	forward_TemplateDefinitionService_ListTemplateSamples_0 = runtime.ForwardResponseMessage
 )

@@ -67,7 +67,7 @@ func (a *TenantServiceAPIService) TenantServiceCreateTenantExecute(r ApiTenantSe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants"
+	localVarPath := localBasePath + "/core/v1/tenants"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -180,7 +180,7 @@ func (a *TenantServiceAPIService) TenantServiceDeleteTenantExecute(r ApiTenantSe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -289,7 +289,7 @@ func (a *TenantServiceAPIService) TenantServiceGetTenantExecute(r ApiTenantServi
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenantId}"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenantId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenantId"+"}", url.PathEscape(parameterValueToString(r.tenantId, "tenantId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -409,7 +409,7 @@ func (a *TenantServiceAPIService) TenantServiceListTenantsExecute(r ApiTenantSer
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants"
+	localVarPath := localBasePath + "/core/v1/tenants"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -530,7 +530,7 @@ func (a *TenantServiceAPIService) TenantServiceUpdateTenantExecute(r ApiTenantSe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/tenants/{tenant.meta.uid}"
+	localVarPath := localBasePath + "/core/v1/tenants/{tenant.meta.uid}"
 	localVarPath = strings.Replace(localVarPath, "{"+"tenant.meta.uid"+"}", url.PathEscape(parameterValueToString(r.tenantMetaUid, "tenantMetaUid")), -1)
 
 	localVarHeaderParams := make(map[string]string)

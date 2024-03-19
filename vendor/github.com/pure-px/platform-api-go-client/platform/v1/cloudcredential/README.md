@@ -78,12 +78,12 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*CloudCredentialServiceAPI* | [**CloudCredentialServiceCreateCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicecreatecloudcredential) | **Post** /v1/tenants/{tenantId}/cloudCredentials | Create API creates a set of cloud credentials for a tenant.
-*CloudCredentialServiceAPI* | [**CloudCredentialServiceDeleteCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicedeletecloudcredential) | **Delete** /v1/cloudCredentials/{id} | Delete API deletes the cloud credentials.
-*CloudCredentialServiceAPI* | [**CloudCredentialServiceGetCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicegetcloudcredential) | **Get** /v1/cloudcredentials/{id} | Get API returns the cloud credential details sans the actual credentials.
-*CloudCredentialServiceAPI* | [**CloudCredentialServiceListCloudCredentials**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicelistcloudcredentials) | **Get** /v1/cloudCredentials | List API lists all the cloud credentials for a tenant
-*CloudCredentialServiceAPI* | [**CloudCredentialServiceListCloudCredentials2**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicelistcloudcredentials2) | **Post** /v1/cloudCredentials:search | List API lists all the cloud credentials for a tenant
-*CloudCredentialServiceAPI* | [**CloudCredentialServiceUpdateCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialserviceupdatecloudcredential) | **Put** /v1/cloudCredentials/{id} | Update API updates a cloud credential.
+*CloudCredentialServiceAPI* | [**CloudCredentialServiceCreateCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicecreatecloudcredential) | **Post** /core/v1/tenants/{tenantId}/cloudCredentials | Create API creates a set of cloud credentials for a tenant.
+*CloudCredentialServiceAPI* | [**CloudCredentialServiceDeleteCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicedeletecloudcredential) | **Delete** /core/v1/cloudCredentials/{id} | Delete API deletes the cloud credentials.
+*CloudCredentialServiceAPI* | [**CloudCredentialServiceGetCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicegetcloudcredential) | **Get** /core/v1/cloudcredentials/{id} | Get API returns the cloud credential details sans the actual credentials.
+*CloudCredentialServiceAPI* | [**CloudCredentialServiceListCloudCredentials**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicelistcloudcredentials) | **Get** /core/v1/cloudCredentials | List API lists all the cloud credentials for a tenant
+*CloudCredentialServiceAPI* | [**CloudCredentialServiceListCloudCredentials2**](docs/CloudCredentialServiceAPI.md#cloudcredentialservicelistcloudcredentials2) | **Post** /core/v1/cloudCredentials:search | List API lists all the cloud credentials for a tenant
+*CloudCredentialServiceAPI* | [**CloudCredentialServiceUpdateCloudCredential**](docs/CloudCredentialServiceAPI.md#cloudcredentialserviceupdatecloudcredential) | **Put** /core/v1/cloudCredentials/{id} | Update API updates a cloud credential.
 
 
 ## Documentation For Models

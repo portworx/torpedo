@@ -39,18 +39,9 @@
                 "parameters": [
                     {
                         "name": "namespaceId",
-                        "description": "UID of the namespace where restore will be created.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field because namespace is the parent of the restore. --)",
+                        "description": "UID of the namespace where restore will be created.",
                         "in": "path",
                         "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "projectId",
-                        "description": "UID of the project associated with the restore.\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to know the project with which the restore is associated with. --)",
-                        "in": "query",
-                        "required": false,
                         "schema": {
                             "type": "string"
                         }
@@ -60,11 +51,10 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/v1Restore"
+                                "$ref": "#/components/schemas/RestoreServiceCreateRestoreBody"
                             }
                         }
                     },
-                    "description": "Restore resource.",
                     "required": true
                 },
                 "tags": [
@@ -339,7 +329,7 @@
         },
         "/pds/v1/restores:restorabilityMatrix": {
             "get": {
-                "summary": "GetRestorabilityMatrix API returns the compatibility matrix for restore.\n(-- api-linter: core::0131::request-message-name=disabled\n    aip.dev/not-precedent: We need to do this because we don't need any parameter in request --)",
+                "summary": "GetRestorabilityMatrix API returns the compatibility matrix for restore.",
                 "operationId": "RestoreService_GetRestorabilityMatrix",
                 "responses": {
                     "200": {
@@ -371,23 +361,45 @@
     },
     "components": {
         "schemas": {
+            "RestoreServiceCreateRestoreBody": {
+                "type": "object",
+                "properties": {
+                    "projectId": {
+                        "type": "string",
+                        "description": "UID of the project associated with the restore."
+                    },
+                    "restore": {
+                        "$ref": "#/components/schemas/v1Restore"
+                    }
+                },
+                "description": "Request to create a restore.",
+                "required": [
+                    "projectId",
+                    "restore"
+                ]
+            },
             "RestoreServiceRecreateRestoreBody": {
                 "type": "object",
                 "properties": {
-                    "targetClusterId": {
-                        "type": "string",
-                        "description": "UID of the target cluster where restore will be created."
-                    },
                     "name": {
                         "type": "string",
                         "description": "Name of the restore."
+                    },
+                    "projectId": {
+                        "type": "string",
+                        "description": "UID of the project associated with the restore."
                     },
                     "namespaceId": {
                         "type": "string",
                         "description": "UID of namespace where restore will be created."
                     }
                 },
-                "description": "Request to recreate a restore."
+                "description": "Request to recreate a restore.",
+                "required": [
+                    "name",
+                    "projectId",
+                    "namespaceId"
+                ]
             },
             "SortByField": {
                 "type": "string",
@@ -444,12 +456,12 @@
                     "startedAt": {
                         "type": "string",
                         "format": "date-time",
-                        "description": "(-- api-linter: core::0142::time-field-names=disabled\n    aip.dev/not-precedent: We need to do this because we need different name for the field. --)\nTime when restore was started."
+                        "description": "\nTime when restore was started."
                     },
                     "completedAt": {
                         "type": "string",
                         "format": "date-time",
-                        "description": "(-- api-linter: core::0142::time-field-names=disabled\n    aip.dev/not-precedent: We need to do this because we need different name for the field. --)\nTime when restore was completed."
+                        "description": "\nTime when restore was completed."
                     },
                     "errorCode": {
                         "$ref": "#/components/schemas/v1ErrorCode"
@@ -777,7 +789,10 @@
                         "readOnly": true
                     }
                 },
-                "description": "SourceReferences for the restore."
+                "description": "SourceReferences for the restore.",
+                "required": [
+                    "backupId"
+                ]
             }
         }
     }

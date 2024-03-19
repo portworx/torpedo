@@ -11,9 +11,9 @@ import (
 )
 
 // ListBackupLocations return lis of backup locatiobackuploc
-func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocation) ([]*BackupLocation, error) {
+func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocationRequest) ([]*BackupLocationResponse, error) {
 	ctx, backupLocationClient, err := backuploc.getBackupLocClient()
-	backupLocResp := []*BackupLocation{}
+	backupLocResp := []*BackupLocationResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -56,9 +56,9 @@ func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*W
 }
 
 // CreateBackupLocation return newly created backup location model.
-func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocation) (*BackupLocation, error) {
+func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocationRequest) (*BackupLocationResponse, error) {
 	_, backupLocationClient, err := backuploc.getBackupLocClient()
-	bckpLocResp := BackupLocation{}
+	bckpLocResp := BackupLocationResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -107,12 +107,12 @@ func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq *WorkFlowReques
 // SyncToBackupLocation returned synced backup location model.
 
 // DeleteBackupLocation delete backup location and return status.
-func (backuploc *PLATFORM_API_V1) DeleteBackupLocation(backupLocationID *WorkFlowRequest) error {
+func (backuploc *PLATFORM_API_V1) DeleteBackupLocation(backupLocation *BackupLocationRequest) error {
 	ctx, backupLocationClient, err := backuploc.getBackupLocClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	_, res, err := backupLocationClient.BackupLocationServiceDeleteBackupLocation(ctx, backupLocationID.Id).Execute()
+	_, res, err := backupLocationClient.BackupLocationServiceDeleteBackupLocation(ctx, *backupLocation.List.Meta.Uid).Execute()
 	if err != nil {
 		return fmt.Errorf("Error when calling `BackupLocatiobackuplocerviceDeleteBackupLocation`: %v\n.Full HTTP respobackuploce: %v", err, res)
 	}

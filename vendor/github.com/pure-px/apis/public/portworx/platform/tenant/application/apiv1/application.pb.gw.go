@@ -97,7 +97,7 @@ func RegisterApplicationServiceHandlerServer(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.tenant.application.v1.ApplicationService/ListAvailableApplications", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}:listAvailableApplications"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.tenant.application.v1.ApplicationService/ListAvailableApplications", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}:listAvailableApplications"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -161,7 +161,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.tenant.application.v1.ApplicationService/ListAvailableApplications", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}:listAvailableApplications"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.tenant.application.v1.ApplicationService/ListAvailableApplications", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}:listAvailableApplications"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -181,7 +181,7 @@ func RegisterApplicationServiceHandlerClient(ctx context.Context, mux *runtime.S
 }
 
 var (
-	pattern_ApplicationService_ListAvailableApplications_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "tenants", "tenant_id"}, "listAvailableApplications"))
+	pattern_ApplicationService_ListAvailableApplications_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "tenants", "tenant_id"}, "listAvailableApplications"))
 )
 
 var (

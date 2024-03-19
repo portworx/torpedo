@@ -63,7 +63,7 @@ func (a *AccountServiceAPIService) AccountServiceGetAccountExecute(r ApiAccountS
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/accounts/{accountId}"
+	localVarPath := localBasePath + "/core/v1/accounts/{accountId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"accountId"+"}", url.PathEscape(parameterValueToString(r.accountId, "accountId")), -1)
 
 	localVarHeaderParams := make(map[string]string)

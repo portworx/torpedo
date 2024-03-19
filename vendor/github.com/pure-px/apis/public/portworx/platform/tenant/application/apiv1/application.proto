@@ -25,39 +25,39 @@ option java_package = "com.public.portworx.platform.tenant.application.v1";
 option java_outer_classname = "ApplicationProto";
 
 
-// Application service provides APIs to interact with the Application entity
+// Application service provides APIs to interact with the Application entity.
 service ApplicationService {
 
-  // ListAvailableApplications API lists all the applications visible to a caller
+  // ListAvailableApplications API lists all the applications visible to a caller.
   rpc ListAvailableApplications(ListAvailableApplicationsRequest)
       returns (ListAvailableApplicationsResponse) {
     option(google.api.http) = {
-      get: "/v1/tenants/{tenant_id}:listAvailableApplications"
+      get: "/core/v1/tenants/{tenant_id}:listAvailableApplications"
     };
   }
 
 }
 
-// ListAvailableApplicationsRequest is the request to the ListAvailableApplications API
+// ListAvailableApplicationsRequest is the request to the ListAvailableApplications API.
 message ListAvailableApplicationsRequest {
-  // tenant_id for which list of applications needs to be fetched
+  // tenant_id for which list of applications needs to be fetched.
   string tenant_id = 1;
 }
 
-// ListAvailableApplicationsResponse is the request to the ListAvailableApplications API
+// ListAvailableApplicationsResponse is the request to the ListAvailableApplications API.
 message ListAvailableApplicationsResponse {
-  // list of applications visible to the caller
+  // list of applications visible to the caller.
   // (-- api-linter: core::0132::response-unknown-fields=disabled
   //     aip.dev/not-precedent: We need this field to see all
   //     the applications available to install for that tenant id. --)
   repeated Application applications = 1;
 }
 
-// Application is a high level entity for the application resource
+// Application is a high level entity for the application resource.
 message Application {
-  // name of the application
+  // name of the application.
   string name = 1;
-  // Version of application
+  // Version of application.
   string version = 2;
 }
 

@@ -367,7 +367,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/v1/cloudcredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudcredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -392,7 +392,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/CreateCloudCredential", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/cloudCredentials"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/CreateCloudCredential", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/cloudCredentials"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -417,7 +417,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/UpdateCloudCredential", runtime.WithHTTPPathPattern("/v1/cloudCredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/UpdateCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -442,7 +442,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/v1/cloudCredentials"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -467,7 +467,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/v1/cloudCredentials:search"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -492,7 +492,7 @@ func RegisterCloudCredentialServiceHandlerServer(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/DeleteCloudCredential", runtime.WithHTTPPathPattern("/v1/cloudCredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/DeleteCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -556,7 +556,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/v1/cloudcredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/GetCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudcredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -578,7 +578,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/CreateCloudCredential", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/cloudCredentials"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/CreateCloudCredential", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/cloudCredentials"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -600,7 +600,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/UpdateCloudCredential", runtime.WithHTTPPathPattern("/v1/cloudCredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/UpdateCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -622,7 +622,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/v1/cloudCredentials"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -644,7 +644,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/v1/cloudCredentials:search"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/ListCloudCredentials", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials:search"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -666,7 +666,7 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/DeleteCloudCredential", runtime.WithHTTPPathPattern("/v1/cloudCredentials/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.cloudcredential.v1.CloudCredentialService/DeleteCloudCredential", runtime.WithHTTPPathPattern("/core/v1/cloudCredentials/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -686,17 +686,17 @@ func RegisterCloudCredentialServiceHandlerClient(ctx context.Context, mux *runti
 }
 
 var (
-	pattern_CloudCredentialService_GetCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "cloudcredentials", "id"}, ""))
+	pattern_CloudCredentialService_GetCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "cloudcredentials", "id"}, ""))
 
-	pattern_CloudCredentialService_CreateCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "tenants", "tenant_id", "cloudCredentials"}, ""))
+	pattern_CloudCredentialService_CreateCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "cloudCredentials"}, ""))
 
-	pattern_CloudCredentialService_UpdateCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "cloudCredentials", "id"}, ""))
+	pattern_CloudCredentialService_UpdateCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "cloudCredentials", "id"}, ""))
 
-	pattern_CloudCredentialService_ListCloudCredentials_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "cloudCredentials"}, ""))
+	pattern_CloudCredentialService_ListCloudCredentials_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "cloudCredentials"}, ""))
 
-	pattern_CloudCredentialService_ListCloudCredentials_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "cloudCredentials"}, "search"))
+	pattern_CloudCredentialService_ListCloudCredentials_1 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "cloudCredentials"}, "search"))
 
-	pattern_CloudCredentialService_DeleteCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "cloudCredentials", "id"}, ""))
+	pattern_CloudCredentialService_DeleteCloudCredential_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "cloudCredentials", "id"}, ""))
 )
 
 var (

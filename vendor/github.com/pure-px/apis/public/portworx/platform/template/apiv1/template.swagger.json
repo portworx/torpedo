@@ -10,7 +10,7 @@
         }
     ],
     "paths": {
-        "/v1/templates": {
+        "/core/v1/templates": {
             "get": {
                 "summary": "List API lists all the templates for a tenant",
                 "operationId": "TemplateService_ListTemplates",
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "Tenant ID for which the credentials will be listed",
+                        "description": "Tenant ID for which the credentials will be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -68,7 +68,7 @@
                     },
                     {
                         "name": "respData",
-                        "description": "Response data flags for listing templates\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
+                        "description": "Response data flags for listing templates.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -120,9 +120,9 @@
                 ]
             }
         },
-        "/v1/templates/{id}": {
+        "/core/v1/templates/{id}": {
             "get": {
-                "summary": "Get API returns the template details sans the actual credentials",
+                "summary": "Get API returns the template details sans the actual credentials.",
                 "operationId": "TemplateService_GetTemplate",
                 "responses": {
                     "200": {
@@ -149,7 +149,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "ID of the template instance",
+                        "description": "ID of the template instance.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -162,7 +162,7 @@
                 ]
             },
             "delete": {
-                "summary": "Delete API deletes the templates",
+                "summary": "Delete API deletes the templates.",
                 "operationId": "TemplateService_DeleteTemplate",
                 "responses": {
                     "200": {
@@ -190,7 +190,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "ID of the template instance",
+                        "description": "ID of the template instance.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -203,7 +203,7 @@
                 ]
             },
             "put": {
-                "summary": "Update API updates a template",
+                "summary": "Update API updates a template.",
                 "operationId": "TemplateService_UpdateTemplate",
                 "responses": {
                     "200": {
@@ -230,7 +230,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "ID of the template to be updated",
+                        "description": "ID of the template to be updated.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -246,7 +246,7 @@
                             }
                         }
                     },
-                    "description": "Desired template configuration",
+                    "description": "Desired template configuration.",
                     "required": true
                 },
                 "tags": [
@@ -254,7 +254,7 @@
                 ]
             }
         },
-        "/v1/templates:search": {
+        "/core/v1/templates:search": {
             "post": {
                 "summary": "List API lists all the templates for a tenant",
                 "operationId": "TemplateService_ListTemplates2",
@@ -288,6 +288,7 @@
                             }
                         }
                     },
+                    "description": "Request to list the templates for a tenant.",
                     "required": true
                 },
                 "tags": [
@@ -295,9 +296,9 @@
                 ]
             }
         },
-        "/v1/tenants/{tenantId}/templates": {
+        "/core/v1/tenants/{tenantId}/templates": {
             "post": {
-                "summary": "Create API creates a set of templates for a tenant",
+                "summary": "Create API creates a set of templates for a tenant.",
                 "operationId": "TemplateService_CreateTemplate",
                 "responses": {
                     "200": {
@@ -324,7 +325,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "The parent tenant id under which template will be created\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the tenant context. --)",
+                        "description": "The parent tenant id under which template will be created.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -340,7 +341,7 @@
                             }
                         }
                     },
-                    "description": "Information about the template instance that needs to be created",
+                    "description": "Information about the template instance that needs to be created.",
                     "required": true
                 },
                 "tags": [
@@ -416,12 +417,11 @@
                 "type": "string",
                 "enum": [
                     "PHASE_UNSPECIFIED",
-                    "ACITVE",
+                    "ACTIVE",
                     "DEPRECATED"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "- PHASE_UNSPECIFIED: Phase unspecified\n - ACITVE: Template instance is active\n - DEPRECATED: Template instance is deprecated",
-                "title": "Different phases of template instance"
+                "description": "Different phases of template instance.\n\n - PHASE_UNSPECIFIED: Phase unspecified.\n - ACTIVE: Template instance is active.\n - DEPRECATED: Template instance is deprecated."
             },
             "googlerpcStatus": {
                 "type": "object",
@@ -465,29 +465,29 @@
                         "$ref": "#/components/schemas/StatusPhase"
                     }
                 },
-                "title": "Status provides the current status of template"
+                "description": "Status provides the current status of template."
             },
             "v1Config": {
                 "type": "object",
                 "properties": {
                     "kind": {
                         "type": "string",
-                        "title": "Kind to the template instance used to identify the template schema"
+                        "description": "Kind to the template instance used to identify the template schema."
                     },
                     "semanticVersion": {
                         "type": "string",
-                        "title": "Semantic version of the template used to identify template schema \nand latest revison for the given template instance kind"
+                        "description": "Semantic version of the template used to identify template schema.\nand latest revision for the given template instance kind."
                     },
                     "revisionUid": {
                         "type": "string",
-                        "title": "Uid of the schema used to create the template instance"
+                        "description": "Uid of the schema used to create the template instance."
                     },
                     "templateValues": {
                         "type": "object",
-                        "title": "Key, value pairs of the template instance"
+                        "description": "Key, value pairs of the template instance."
                     }
                 },
-                "title": "Config provides configurational data of the template instance"
+                "description": "Config provides configuration data of the template instance."
             },
             "v1InfraResourceType": {
                 "type": "string",
@@ -511,7 +511,7 @@
                 "properties": {
                     "tenantId": {
                         "type": "string",
-                        "title": "Tenant ID for which the credentials will be listed"
+                        "description": "Tenant ID for which the credentials will be listed."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
@@ -532,7 +532,7 @@
                         "$ref": "#/components/schemas/v1Sort"
                     }
                 },
-                "title": "Request to list the templates for a tenant"
+                "description": "Request to list the templates for a tenant."
             },
             "v1ListTemplatesResponse": {
                 "type": "object",
@@ -542,13 +542,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1Template"
                         },
-                        "title": "The list of templates scoped to a tenant"
+                        "description": "The list of templates scoped to a tenant."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "Response of list templates"
+                "description": "Response of list templates."
             },
             "v1Meta": {
                 "type": "object",
@@ -751,7 +751,7 @@
                         "$ref": "#/components/schemas/templatev1Status"
                     }
                 },
-                "title": "Resource representing a template"
+                "description": "Resource representing a template."
             }
         }
     }

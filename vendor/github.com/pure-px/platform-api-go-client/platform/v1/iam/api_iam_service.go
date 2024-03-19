@@ -67,7 +67,7 @@ func (a *IAMServiceAPIService) IAMServiceCreateIAMExecute(r ApiIAMServiceCreateI
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam"
+	localVarPath := localBasePath + "/core/v1/iam"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -180,7 +180,7 @@ func (a *IAMServiceAPIService) IAMServiceDeleteIAMExecute(r ApiIAMServiceDeleteI
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam/{actorId}"
+	localVarPath := localBasePath + "/core/v1/iam/{actorId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"actorId"+"}", url.PathEscape(parameterValueToString(r.actorId, "actorId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -289,7 +289,7 @@ func (a *IAMServiceAPIService) IAMServiceGetIAMExecute(r ApiIAMServiceGetIAMRequ
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam/{actorId}"
+	localVarPath := localBasePath + "/core/v1/iam/{actorId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"actorId"+"}", url.PathEscape(parameterValueToString(r.actorId, "actorId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -404,7 +404,7 @@ func (a *IAMServiceAPIService) IAMServiceGrantIAMExecute(r ApiIAMServiceGrantIAM
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam/{iam.config.actorId}:grant"
+	localVarPath := localBasePath + "/core/v1/iam/{iam.config.actorId}:grant"
 	localVarPath = strings.Replace(localVarPath, "{"+"iam.config.actorId"+"}", url.PathEscape(parameterValueToString(r.iamConfigActorId, "iamConfigActorId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -571,7 +571,7 @@ func (a *IAMServiceAPIService) IAMServiceListIAMExecute(r ApiIAMServiceListIAMRe
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam"
+	localVarPath := localBasePath + "/core/v1/iam"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -706,7 +706,7 @@ func (a *IAMServiceAPIService) IAMServiceListIAMPermissionsExecute(r ApiIAMServi
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam/permissions"
+	localVarPath := localBasePath + "/core/v1/iam/permissions"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -820,7 +820,7 @@ func (a *IAMServiceAPIService) IAMServiceRevokeIAMExecute(r ApiIAMServiceRevokeI
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam/{iam.config.actorId}:revoke"
+	localVarPath := localBasePath + "/core/v1/iam/{iam.config.actorId}:revoke"
 	localVarPath = strings.Replace(localVarPath, "{"+"iam.config.actorId"+"}", url.PathEscape(parameterValueToString(r.iamConfigActorId, "iamConfigActorId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -941,7 +941,7 @@ func (a *IAMServiceAPIService) IAMServiceUpdateIAMExecute(r ApiIAMServiceUpdateI
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/v1/iam/{iam.meta.uid}"
+	localVarPath := localBasePath + "/core/v1/iam/{iam.meta.uid}"
 	localVarPath = strings.Replace(localVarPath, "{"+"iam.meta.uid"+"}", url.PathEscape(parameterValueToString(r.iamMetaUid, "iamMetaUid")), -1)
 
 	localVarHeaderParams := make(map[string]string)

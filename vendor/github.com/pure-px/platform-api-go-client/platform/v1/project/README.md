@@ -78,14 +78,14 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*ProjectServiceAPI* | [**ProjectServiceAssociateResources**](docs/ProjectServiceAPI.md#projectserviceassociateresources) | **Put** /v1/projects/{projectId}:associate | AssociateResources will append the supplied resources to existing infra resources of a given project config.
-*ProjectServiceAPI* | [**ProjectServiceCreateProject**](docs/ProjectServiceAPI.md#projectservicecreateproject) | **Post** /v1/tenants/{tenantId}/projects | Create project api creates a project.
-*ProjectServiceAPI* | [**ProjectServiceDeleteProject**](docs/ProjectServiceAPI.md#projectservicedeleteproject) | **Delete** /v1/projects/{projectId} | Deletes a project and its associated resources.
-*ProjectServiceAPI* | [**ProjectServiceDisassociateResources**](docs/ProjectServiceAPI.md#projectservicedisassociateresources) | **Put** /v1/projects/{projectId}:disassociate | DisassociateResource will remove the infra resources supplied in the request from the project config.
-*ProjectServiceAPI* | [**ProjectServiceGetProject**](docs/ProjectServiceAPI.md#projectservicegetproject) | **Get** /v1/projects/{projectId} | Get project apis returns a requested project.
-*ProjectServiceAPI* | [**ProjectServiceListProjects**](docs/ProjectServiceAPI.md#projectservicelistprojects) | **Get** /v1/projects | List API lists all the projects for a tenant
-*ProjectServiceAPI* | [**ProjectServiceListProjects2**](docs/ProjectServiceAPI.md#projectservicelistprojects2) | **Post** /v1/projects:search | List API lists all the projects for a tenant
-*ProjectServiceAPI* | [**ProjectServiceUpdateProject**](docs/ProjectServiceAPI.md#projectserviceupdateproject) | **Put** /v1/projects/{meta.uid} | Update project api updates a project meta.
+*ProjectServiceAPI* | [**ProjectServiceAssociateResources**](docs/ProjectServiceAPI.md#projectserviceassociateresources) | **Put** /core/v1/projects/{projectId}:associate | AssociateResources will append the supplied resources to existing infra resources of a given project config.
+*ProjectServiceAPI* | [**ProjectServiceCreateProject**](docs/ProjectServiceAPI.md#projectservicecreateproject) | **Post** /core/v1/tenants/{tenantId}/projects | Create project api creates a project.
+*ProjectServiceAPI* | [**ProjectServiceDeleteProject**](docs/ProjectServiceAPI.md#projectservicedeleteproject) | **Delete** /core/v1/projects/{projectId} | Deletes a project and its associated resources.
+*ProjectServiceAPI* | [**ProjectServiceDisassociateResources**](docs/ProjectServiceAPI.md#projectservicedisassociateresources) | **Put** /core/v1/projects/{projectId}:disassociate | DisassociateResource will remove the infra resources supplied in the request from the project config.
+*ProjectServiceAPI* | [**ProjectServiceGetProject**](docs/ProjectServiceAPI.md#projectservicegetproject) | **Get** /core/v1/projects/{projectId} | Get project apis returns a requested project.
+*ProjectServiceAPI* | [**ProjectServiceListProjects**](docs/ProjectServiceAPI.md#projectservicelistprojects) | **Get** /core/v1/projects | List API lists all the projects for a tenant
+*ProjectServiceAPI* | [**ProjectServiceListProjects2**](docs/ProjectServiceAPI.md#projectservicelistprojects2) | **Post** /core/v1/projects:search | List API lists all the projects for a tenant
+*ProjectServiceAPI* | [**ProjectServiceUpdateProject**](docs/ProjectServiceAPI.md#projectserviceupdateproject) | **Put** /core/v1/projects/{meta.uid} | Update project api updates a project meta.
 
 
 ## Documentation For Models

@@ -435,7 +435,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/CreateServiceAccount", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/serviceAccounts"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/CreateServiceAccount", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/serviceAccounts"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -460,7 +460,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -485,7 +485,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/ListServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/ListServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -510,7 +510,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/UpdateServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/UpdateServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -535,7 +535,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/RegenerateServiceAccountSecret", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}:regenerate"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/RegenerateServiceAccountSecret", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}:regenerate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -560,7 +560,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetAccessToken", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}:getToken"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetAccessToken", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}:getToken"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -585,7 +585,7 @@ func RegisterServiceAccountServiceHandlerServer(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/DeleteServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}"))
+		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/DeleteServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -649,7 +649,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/CreateServiceAccount", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}/serviceAccounts"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/CreateServiceAccount", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}/serviceAccounts"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -671,7 +671,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -693,7 +693,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/ListServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/ListServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -715,7 +715,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/UpdateServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/UpdateServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -737,7 +737,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/RegenerateServiceAccountSecret", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}:regenerate"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/RegenerateServiceAccountSecret", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}:regenerate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -759,7 +759,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetAccessToken", runtime.WithHTTPPathPattern("/v1/tenants/{tenant_id}:getToken"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/GetAccessToken", runtime.WithHTTPPathPattern("/core/v1/tenants/{tenant_id}:getToken"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -781,7 +781,7 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		var err error
 		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/DeleteServiceAccount", runtime.WithHTTPPathPattern("/v1/serviceAccounts/{id}"))
+		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/public.portworx.platform.serviceaccount.v1.ServiceAccountService/DeleteServiceAccount", runtime.WithHTTPPathPattern("/core/v1/serviceAccounts/{id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -801,19 +801,19 @@ func RegisterServiceAccountServiceHandlerClient(ctx context.Context, mux *runtim
 }
 
 var (
-	pattern_ServiceAccountService_CreateServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "tenants", "tenant_id", "serviceAccounts"}, ""))
+	pattern_ServiceAccountService_CreateServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"core", "v1", "tenants", "tenant_id", "serviceAccounts"}, ""))
 
-	pattern_ServiceAccountService_GetServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "serviceAccounts", "id"}, ""))
+	pattern_ServiceAccountService_GetServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "serviceAccounts", "id"}, ""))
 
-	pattern_ServiceAccountService_ListServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "serviceAccounts"}, ""))
+	pattern_ServiceAccountService_ListServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"core", "v1", "serviceAccounts"}, ""))
 
-	pattern_ServiceAccountService_UpdateServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "serviceAccounts", "id"}, ""))
+	pattern_ServiceAccountService_UpdateServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "serviceAccounts", "id"}, ""))
 
-	pattern_ServiceAccountService_RegenerateServiceAccountSecret_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "serviceAccounts", "id"}, "regenerate"))
+	pattern_ServiceAccountService_RegenerateServiceAccountSecret_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "serviceAccounts", "id"}, "regenerate"))
 
-	pattern_ServiceAccountService_GetAccessToken_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "tenants", "tenant_id"}, "getToken"))
+	pattern_ServiceAccountService_GetAccessToken_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "tenants", "tenant_id"}, "getToken"))
 
-	pattern_ServiceAccountService_DeleteServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "serviceAccounts", "id"}, ""))
+	pattern_ServiceAccountService_DeleteServiceAccount_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"core", "v1", "serviceAccounts", "id"}, ""))
 )
 
 var (

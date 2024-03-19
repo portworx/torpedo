@@ -10,9 +10,9 @@
         }
     ],
     "paths": {
-        "/v1/projects": {
+        "/core/v1/projects": {
             "get": {
-                "summary": "ListProjects API lists the projects visible to the caller for the provided tenant.",
+                "summary": "List API lists all the projects for a tenant",
                 "operationId": "ProjectService_ListProjects",
                 "responses": {
                     "200": {
@@ -38,51 +38,48 @@
                 },
                 "parameters": [
                     {
-                        "name": "query.appResource",
-                        "description": "Type of the application managed resource for which projects to be listed.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - PDS_DEPLOYMENT: List of supported PDS application resources.\nPDS application resource of type deployment.\n - PDS_BACKUPCONFIG: PDS application resource of type backup.\n - PDS_RESTORE: PDS application resource of type restore.\n - BAAS_BACKUP: List of supported BAAS application resources.\nBAAS application resource of type backup.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "TYPE_UNSPECIFIED",
-                                "PDS_DEPLOYMENT",
-                                "PDS_BACKUPCONFIG",
-                                "PDS_RESTORE",
-                                "BAAS_BACKUP"
-                            ],
-                            "default": "TYPE_UNSPECIFIED"
-                        }
-                    },
-                    {
-                        "name": "query.infraResource",
-                        "description": "Type of the infra resource for which projects to be listed.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "enum": [
-                                "TYPE_UNSPECIFIED",
-                                "ACCOUNT",
-                                "TENANT",
-                                "PROJECT",
-                                "TARGET_CLUSTER",
-                                "NAMESPACE",
-                                "CREDENTIAL",
-                                "BACKUP_LOCATION",
-                                "BACKUP_POLICY",
-                                "TEMPLATE"
-                            ],
-                            "default": "TYPE_UNSPECIFIED"
-                        }
-                    },
-                    {
-                        "name": "query.resourceId",
-                        "description": "ID of the resource for which projects to be listed.",
+                        "name": "tenantId",
+                        "description": "Tenant id for which projects to be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
                             "type": "string"
+                        }
+                    },
+                    {
+                        "name": "respData",
+                        "description": "Response data flags for listing projects.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "RESP_DATA_UNSPECIFIED",
+                                "INDEX",
+                                "LITE",
+                                "FULL"
+                            ],
+                            "default": "RESP_DATA_UNSPECIFIED"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageNumber",
+                        "description": "Page number is the page number to return based on the size.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "pagination.pageSize",
+                        "description": "Page size is the maximum number of records to include per page.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "int64"
                         }
                     },
                     {
@@ -116,26 +113,6 @@
                             ],
                             "default": "VALUE_UNSPECIFIED"
                         }
-                    },
-                    {
-                        "name": "pagination.pageNumber",
-                        "description": "Page number is the page number to return based on the size.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "int64"
-                        }
-                    },
-                    {
-                        "name": "pagination.pageSize",
-                        "description": "Page size is the maximum number of records to include per page.",
-                        "in": "query",
-                        "required": false,
-                        "schema": {
-                            "type": "string",
-                            "format": "int64"
-                        }
                     }
                 ],
                 "tags": [
@@ -143,9 +120,9 @@
                 ]
             }
         },
-        "/v1/projects/{meta.uid}": {
+        "/core/v1/projects/{meta.uid}": {
             "put": {
-                "summary": "Update project api updates a project meta",
+                "summary": "Update project api updates a project meta.",
                 "operationId": "ProjectService_UpdateProject",
                 "responses": {
                     "200": {
@@ -195,7 +172,7 @@
                 ]
             }
         },
-        "/v1/projects/{projectId}": {
+        "/core/v1/projects/{projectId}": {
             "get": {
                 "summary": "Get project apis returns a requested project.",
                 "operationId": "ProjectService_GetProject",
@@ -278,9 +255,9 @@
                 ]
             }
         },
-        "/v1/projects/{projectId}:associate": {
+        "/core/v1/projects/{projectId}:associate": {
             "put": {
-                "summary": "AssociateResources will append the supplied resources to existing infra resources of a given project config.\n(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because renaming creating issues with other apis)",
+                "summary": "AssociateResources will append the supplied resources to existing infra resources of a given project config.",
                 "operationId": "ProjectService_AssociateResources",
                 "responses": {
                     "200": {
@@ -330,9 +307,9 @@
                 ]
             }
         },
-        "/v1/projects/{projectId}:disassociate": {
+        "/core/v1/projects/{projectId}:disassociate": {
             "put": {
-                "summary": "DisassociateResource will remove the infra resources supplied in the request from the project config.\n(-- api-linter: core::0136::http-method=disabled\n    aip.dev/not-precedent: We need to do this because renaming creating issues with other apis)",
+                "summary": "DisassociateResource will remove the infra resources supplied in the request from the project config.",
                 "operationId": "ProjectService_DisassociateResources",
                 "responses": {
                     "200": {
@@ -382,7 +359,49 @@
                 ]
             }
         },
-        "/v1/tenants/{tenantId}/projects": {
+        "/core/v1/projects:search": {
+            "post": {
+                "summary": "List API lists all the projects for a tenant",
+                "operationId": "ProjectService_ListProjects2",
+                "responses": {
+                    "200": {
+                        "description": "A successful response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/v1ListProjectsResponse"
+                                }
+                            }
+                        }
+                    },
+                    "default": {
+                        "description": "An unexpected error response.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/googlerpcStatus"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/v1ListProjectsRequest"
+                            }
+                        }
+                    },
+                    "description": "ListProjectsRequest  is the request message to the ListProjects API\nand it takes the multiple selector details for which the projects visible to the caller\nwill be returned.",
+                    "required": true
+                },
+                "tags": [
+                    "ProjectService"
+                ]
+            }
+        },
+        "/core/v1/tenants/{tenantId}/projects": {
             "post": {
                 "summary": "Create project api creates a project.",
                 "operationId": "ProjectService_CreateProject",
@@ -411,7 +430,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "The parent tenant under which project will be created\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the tenant context. --)",
+                        "description": "The parent tenant under which project will be created",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -524,7 +543,36 @@
                         "title": "Metadata of the project."
                     }
                 },
-                "title": "Request to update a project meta.\n(-- api-linter: core::0134::request-resource-required=disabled\n    aip.dev/not-precedent: We need to do this because reasons.\nwe are onlu updating project meta--)"
+                "description": "Request to update a project meta."
+            },
+            "ResourceSelectorResourceFilter": {
+                "type": "object",
+                "properties": {
+                    "resourceType": {
+                        "$ref": "#/components/schemas/v1InfraResourceType"
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs."
+                    }
+                },
+                "description": "ResourceFilter is filter for a given resource type."
+            },
+            "SelectorOperator": {
+                "type": "string",
+                "enum": [
+                    "OPERATOR_UNSPECIFIED",
+                    "IN",
+                    "NOT_IN"
+                ],
+                "default": "OPERATOR_UNSPECIFIED",
+                "description": "Operator specifies the relationship between the provided (key,value) pairs in the response.\n\n - OPERATOR_UNSPECIFIED: Unspecified, do not use.\n - IN: IN specifies that the key should be associated with atleast 1 of the element in value list.\n - NOT_IN: NOT_IN specifies that the key should not be associated with any of the element in value list."
             },
             "SortByField": {
                 "type": "string",
@@ -537,16 +585,6 @@
                 ],
                 "default": "FIELD_UNSPECIFIED",
                 "description": "Field names for sorting the list of resources.\n\n - FIELD_UNSPECIFIED: Unspecified, do not use.\n - NAME: Sorting based on the name of the resource.\n - CREATED_AT: Sorting on create time of the resource.\n - UPDATED_AT: Sorting on update time of the resource.\n - PHASE: Sorting on phase of the resource."
-            },
-            "SortOrderValue": {
-                "type": "string",
-                "enum": [
-                    "VALUE_UNSPECIFIED",
-                    "ASC",
-                    "DESC"
-                ],
-                "default": "VALUE_UNSPECIFIED",
-                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             },
             "googlerpcStatus": {
                 "type": "object",
@@ -575,6 +613,14 @@
                     },
                     "phase": {
                         "$ref": "#/components/schemas/v1PhaseType"
+                    },
+                    "associatedResources": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "integer",
+                            "format": "int32"
+                        },
+                        "title": "Map of infra resources and their count, associated to the project.\nie.\n{\n  \"key\": \"namespaces\",\n  \"value\": 2\n}"
                     }
                 },
                 "description": "Status represents the current state of the project."
@@ -587,18 +633,6 @@
                     }
                 },
                 "additionalProperties": {}
-            },
-            "v1ApplicationResourceType": {
-                "type": "string",
-                "enum": [
-                    "TYPE_UNSPECIFIED",
-                    "PDS_DEPLOYMENT",
-                    "PDS_BACKUPCONFIG",
-                    "PDS_RESTORE",
-                    "BAAS_BACKUP"
-                ],
-                "default": "TYPE_UNSPECIFIED",
-                "description": "Type of the resource can be associated to the project.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - PDS_DEPLOYMENT: List of supported PDS application resources.\nPDS application resource of type deployment.\n - PDS_BACKUPCONFIG: PDS application resource of type backup.\n - PDS_RESTORE: PDS application resource of type restore.\n - BAAS_BACKUP: List of supported BAAS application resources.\nBAAS application resource of type backup."
             },
             "v1ApplicationResources": {
                 "type": "object",
@@ -621,22 +655,6 @@
                 },
                 "description": "Configuration represents the associated resource details for project."
             },
-            "v1Filter": {
-                "type": "object",
-                "properties": {
-                    "appResource": {
-                        "$ref": "#/components/schemas/v1ApplicationResourceType"
-                    },
-                    "infraResource": {
-                        "$ref": "#/components/schemas/v1InfraResourceType"
-                    },
-                    "resourceId": {
-                        "type": "string",
-                        "description": "ID of the resource for which projects to be listed."
-                    }
-                },
-                "description": "Filter clubs the infra and application resource details, to filter the requested list of projects."
-            },
             "v1InfraResourceType": {
                 "type": "string",
                 "enum": [
@@ -653,6 +671,34 @@
                 ],
                 "default": "TYPE_UNSPECIFIED",
                 "description": "Type of the resource.\n\n - TYPE_UNSPECIFIED: Unspecified, do not use.\n - ACCOUNT: Currently supported infra resources.\nInfra resource of type account.\n - TENANT: Infra resource of type tenant.\n - PROJECT: Infra resource of type projects.\n - TARGET_CLUSTER: Infra resource target cluster.\n - NAMESPACE: Infra resource of type namespace.\n - CREDENTIAL: Infra resource of type credential.\n - BACKUP_LOCATION: Infra resource of type backup location.\n - BACKUP_POLICY: Infra resource of type backup policy.\n - TEMPLATE: Infra resource of type template."
+            },
+            "v1ListProjectsRequest": {
+                "type": "object",
+                "properties": {
+                    "tenantId": {
+                        "type": "string",
+                        "description": "Tenant id for which projects to be listed."
+                    },
+                    "resourceSelector": {
+                        "$ref": "#/components/schemas/v1ResourceSelector"
+                    },
+                    "labelSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "fieldSelector": {
+                        "$ref": "#/components/schemas/v1Selector"
+                    },
+                    "respData": {
+                        "$ref": "#/components/schemas/v1RespData"
+                    },
+                    "pagination": {
+                        "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
+                    },
+                    "sort": {
+                        "$ref": "#/components/schemas/v1Sort"
+                    }
+                },
+                "description": "ListProjectsRequest  is the request message to the ListProjects API\nand it takes the multiple selector details for which the projects visible to the caller\nwill be returned."
             },
             "v1ListProjectsResponse": {
                 "type": "object",
@@ -852,6 +898,19 @@
                 },
                 "description": "Reference identifies the resource type, version of the uid and the resource."
             },
+            "v1ResourceSelector": {
+                "type": "object",
+                "properties": {
+                    "infraResourceFilters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ResourceSelectorResourceFilter"
+                        },
+                        "description": "Infra_resource_filters is the list of all filters that should be applied to fetch data related to infra resource.\nEach filter will have AND relationship."
+                    }
+                },
+                "description": "ResourceSelector is used to query resources using the associated infra resources."
+            },
             "v1Resources": {
                 "type": "object",
                 "properties": {
@@ -900,6 +959,50 @@
                 },
                 "description": "Infra resource are platform managed resources, used by associated applications."
             },
+            "v1RespData": {
+                "type": "string",
+                "enum": [
+                    "RESP_DATA_UNSPECIFIED",
+                    "INDEX",
+                    "LITE",
+                    "FULL"
+                ],
+                "default": "RESP_DATA_UNSPECIFIED",
+                "description": "RespData provides flags which provides info about the fields that should be populated in the response.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated."
+            },
+            "v1Selector": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/v1SelectorFilter"
+                        },
+                        "description": "FilterList is the list of all filters that should be applied."
+                    }
+                },
+                "description": "Selector is used to query resources using the associated labels or field names."
+            },
+            "v1SelectorFilter": {
+                "type": "object",
+                "properties": {
+                    "key": {
+                        "type": "string",
+                        "description": "Key of key,value pair against which filtering needs to be performs."
+                    },
+                    "op": {
+                        "$ref": "#/components/schemas/SelectorOperator"
+                    },
+                    "values": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "Value of key,value pair against which filtering needs to be performs if operator is EXIST, value should be an empty array."
+                    }
+                },
+                "description": "Filter for a given key."
+            },
             "v1Sort": {
                 "type": "object",
                 "properties": {
@@ -907,10 +1010,20 @@
                         "$ref": "#/components/schemas/SortByField"
                     },
                     "sortOrder": {
-                        "$ref": "#/components/schemas/SortOrderValue"
+                        "$ref": "#/components/schemas/v1SortOrderValue"
                     }
                 },
                 "description": "The details of the attribute for which the requested list of resource to be sorted."
+            },
+            "v1SortOrderValue": {
+                "type": "string",
+                "enum": [
+                    "VALUE_UNSPECIFIED",
+                    "ASC",
+                    "DESC"
+                ],
+                "default": "VALUE_UNSPECIFIED",
+                "description": "Value of sort order for the list of resources.\n\n - VALUE_UNSPECIFIED: Unspecified, do not use.\n - ASC: Sort order ascending.\n - DESC: Sort order descending."
             }
         }
     }

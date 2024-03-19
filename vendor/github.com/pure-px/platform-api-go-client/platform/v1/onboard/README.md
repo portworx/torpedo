@@ -78,8 +78,8 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*OnboardServiceAPI* | [**OnboardServiceCreateAccountRegistration**](docs/OnboardServiceAPI.md#onboardservicecreateaccountregistration) | **Post** /v1/registration | creates a new account registration request.
-*OnboardServiceAPI* | [**OnboardServiceUpdateAccountRegistration**](docs/OnboardServiceAPI.md#onboardserviceupdateaccountregistration) | **Put** /v1/registration/{accountRegistration.meta.uid} | For updating account subscription info.
+*OnboardServiceAPI* | [**OnboardServiceCreateAccountRegistration**](docs/OnboardServiceAPI.md#onboardservicecreateaccountregistration) | **Post** /core/v1/registration | creates a new account registration request.
+*OnboardServiceAPI* | [**OnboardServiceUpdateAccountRegistration**](docs/OnboardServiceAPI.md#onboardserviceupdateaccountregistration) | **Put** /core/v1/registration/{accountRegistration.meta.uid} | For updating account subscription info.
 
 
 ## Documentation For Models

@@ -15,7 +15,7 @@ import (
 	"fmt"
 )
 
-// NamespacePhasePhase Phase is the status of the namespace based on the label type.   - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.  - AVAILABLE: Available namespaces can be used to deploy applications, they have \"<platform-domain>/available: true\" label.  - RESERVED: Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have \"<platform-domain>/reserved: true\" label.  - UNAVAILABLE: Unavailable namespaces are the ones deleted by user with active deployments or by removing available label.  - DELETE_PENDING: Deletion of namespace has not started.  - DELETE_IN_PROGRESS: Deletion of the namespace is scheduled and in progress.  - DELETE_FAILED: Deletion is failed
+// NamespacePhasePhase Phase is the status of the namespace based on the label type.   - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.  - AVAILABLE: Available namespaces can be used to deploy applications, they have \"<platform-domain>/available: true\" label.  - RESERVED: Reserved namespaces are used by platform agents and cannot be used to deploy applications, they have \"<platform-domain>/reserved: true\" label.  - UNAVAILABLE: Unavailable namespaces are the ones deleted by user with active deployments or by removing available label.  - TERMINATING: Termintaing state represents, namespace deletion is in progress on the target cluster.  - TOMBSTONED: Tombstoned state represents namespace has been deleted from the cluster.  - DELETE_PENDING: Deletion of namespace is yet to start.  - DELETE_IN_PROGRESS: Deletion of the namespace is scheduled and in progress.  - DELETE_FAILED: Deletion failed.
 type NamespacePhasePhase string
 
 // List of NamespacePhasePhase
@@ -24,6 +24,8 @@ const (
 	NAMESPACEPHASEPHASE_AVAILABLE NamespacePhasePhase = "AVAILABLE"
 	NAMESPACEPHASEPHASE_RESERVED NamespacePhasePhase = "RESERVED"
 	NAMESPACEPHASEPHASE_UNAVAILABLE NamespacePhasePhase = "UNAVAILABLE"
+	NAMESPACEPHASEPHASE_TERMINATING NamespacePhasePhase = "TERMINATING"
+	NAMESPACEPHASEPHASE_TOMBSTONED NamespacePhasePhase = "TOMBSTONED"
 	NAMESPACEPHASEPHASE_DELETE_PENDING NamespacePhasePhase = "DELETE_PENDING"
 	NAMESPACEPHASEPHASE_DELETE_IN_PROGRESS NamespacePhasePhase = "DELETE_IN_PROGRESS"
 	NAMESPACEPHASEPHASE_DELETE_FAILED NamespacePhasePhase = "DELETE_FAILED"
@@ -35,6 +37,8 @@ var AllowedNamespacePhasePhaseEnumValues = []NamespacePhasePhase{
 	"AVAILABLE",
 	"RESERVED",
 	"UNAVAILABLE",
+	"TERMINATING",
+	"TOMBSTONED",
 	"DELETE_PENDING",
 	"DELETE_IN_PROGRESS",
 	"DELETE_FAILED",

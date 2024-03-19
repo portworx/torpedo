@@ -17,7 +17,7 @@ type BkpLocationType struct {
 }
 
 func (bkpLoc *WorkflowBackupLocation) CreateBackupLocation(bucketName, backUpTargetType string) (*WorkflowBackupLocation, error) {
-	var bkpLocation *automationModels.BackupLocation
+	var bkpLocation *automationModels.BackupLocationResponse
 	var err error
 
 	tenantId := bkpLoc.WfCloudCredentials.Platform.TenantId
@@ -34,8 +34,8 @@ func (bkpLoc *WorkflowBackupLocation) CreateBackupLocation(bucketName, backUpTar
 	}
 
 	bkpLoc.BkpLocation = BkpLocationType{
-		BkpLocationId: *bkpLocation.Meta.Uid,
-		Name:          *bkpLocation.Meta.Name,
+		BkpLocationId: *bkpLocation.Create.Meta.Uid,
+		Name:          *bkpLocation.Create.Meta.Name,
 	}
 
 	return bkpLoc, nil
@@ -52,14 +52,18 @@ func (bkpLoc *WorkflowBackupLocation) ListBackupLocation() ([]*WorkflowBackupLoc
 		newBackupLocation := &WorkflowBackupLocation{
 			WfCloudCredentials: WorkflowCloudCredentials{
 				Platform:         bkpLoc.WfCloudCredentials.Platform,
-				CloudCredentials: []CloudCredentialsType{{ID: bkpLocation.Config.CloudCredentialsId}},
+				CloudCredentials: []CloudCredentialsType{{ID: bkpLocation.Create.Config.CloudCredentialsId}},
 			},
 			BkpLocation: BkpLocationType{
-				BkpLocationId: *bkpLocation.Meta.Uid,
-				Name:          *bkpLocation.Meta.Name,
+				BkpLocationId: *bkpLocation.Create.Meta.Uid,
+				Name:          *bkpLocation.Create.Meta.Name,
 			},
 		}
 		bkpLocResponses = append(bkpLocResponses, newBackupLocation)
 	}
 	return bkpLocResponses, nil
+}
+
+func (bkpLoc *WorkflowBackupLocation) DeleteBackupLocation(bkpLocationId string) error {
+	return platformLibs.DeleteBackupLocation(bkpLocationId)
 }

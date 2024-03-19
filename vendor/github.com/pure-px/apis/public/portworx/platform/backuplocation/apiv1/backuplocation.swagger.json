@@ -10,7 +10,7 @@
         }
     ],
     "paths": {
-        "/v1/backupLocations": {
+        "/core/v1/backupLocations": {
             "get": {
                 "summary": "List API lists all the backup locations for a tenant",
                 "operationId": "BackupLocationService_ListBackupLocations",
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "Tenant ID for which the backup locations will be listed",
+                        "description": "Tenant ID for which the backup locations will be listed.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -68,7 +68,7 @@
                     },
                     {
                         "name": "respData",
-                        "description": "Response data flags for listing backup locations\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
+                        "description": "Response data flags for listing backup locations.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -120,9 +120,9 @@
                 ]
             }
         },
-        "/v1/backupLocations/{id}": {
+        "/core/v1/backupLocations/{id}": {
             "get": {
-                "summary": "Get API returns the backup location",
+                "summary": "Get API returns the backup location.",
                 "operationId": "BackupLocationService_GetBackupLocation",
                 "responses": {
                     "200": {
@@ -149,7 +149,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "ID of the backup location",
+                        "description": "ID of the backup location.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -162,7 +162,7 @@
                 ]
             },
             "delete": {
-                "summary": "Delete API deletes a backup location",
+                "summary": "Delete API deletes a backup location.",
                 "operationId": "BackupLocationService_DeleteBackupLocation",
                 "responses": {
                     "200": {
@@ -190,7 +190,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "ID of the backup location",
+                        "description": "ID of the backup location.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -203,7 +203,7 @@
                 ]
             },
             "put": {
-                "summary": "Update API updates a backup location",
+                "summary": "Update API updates a backup location.",
                 "operationId": "BackupLocationService_UpdateBackupLocation",
                 "responses": {
                     "200": {
@@ -230,7 +230,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "ID of the backup location",
+                        "description": "ID of the backup location.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -239,7 +239,7 @@
                     },
                     {
                         "name": "updateMask",
-                        "description": "Specifies the field that should be updated to the value specified in backup_location",
+                        "description": "Specifies the field that should be updated to the value specified in backup_location.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -255,7 +255,7 @@
                             }
                         }
                     },
-                    "description": "Desired backup location configuration",
+                    "description": "Desired backup location configuration.",
                     "required": true
                 },
                 "tags": [
@@ -263,7 +263,7 @@
                 ]
             }
         },
-        "/v1/backupLocations:search": {
+        "/core/v1/backupLocations:search": {
             "post": {
                 "summary": "List API lists all the backup locations for a tenant",
                 "operationId": "BackupLocationService_ListBackupLocations2",
@@ -297,6 +297,7 @@
                             }
                         }
                     },
+                    "description": "Request to list the backup locations for a tenant or a project.",
                     "required": true
                 },
                 "tags": [
@@ -304,9 +305,9 @@
                 ]
             }
         },
-        "/v1/tenants/{tenantId}/backupLocations": {
+        "/core/v1/tenants/{tenantId}/backupLocations": {
             "post": {
-                "summary": "Create API creates a backup location for a tenant",
+                "summary": "Create API creates a backup location for a tenant.",
                 "operationId": "BackupLocationService_CreateBackupLocation",
                 "responses": {
                     "200": {
@@ -333,7 +334,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "The parent tenant id under which backup location will be created\n(-- api-linter: core::0133::request-unknown-fields=disabled\n    aip.dev/not-precedent: We need this field for to support creation of\n    the resource in the tenant context. --)",
+                        "description": "The parent tenant id under which backup location will be created.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -349,7 +350,7 @@
                             }
                         }
                     },
-                    "description": "Backup location configuration",
+                    "description": "Backup location configuration.",
                     "required": true
                 },
                 "tags": [
@@ -430,8 +431,7 @@
                     "NOT_APPLICABLE"
                 ],
                 "default": "VALIDITY_UNSPECIFIED",
-                "description": "- VALIDITY_UNSPECIFIED: Validity unspecified\n - VALID: Valid backup location indicating its reachable\n - INVALID: Invalid backup location indicating its unreachable\n - NOT_APPLICABLE: NOT_APPLICABLE backup location specifies that status can not be defined\nfor the backup location eg: S3Compatible location",
-                "title": "Validity of the backup location"
+                "description": "Validity of the backup location.\n\n - VALIDITY_UNSPECIFIED: Validity unspecified.\n - VALID: Valid backup location indicating its reachable.\n - INVALID: Invalid backup location indicating its unreachable.\n - NOT_APPLICABLE: NOT_APPLICABLE backup location specifies that status can not be defined.\nfor the backup location eg: S3Compatible location."
             },
             "backuplocationv1Status": {
                 "type": "object",
@@ -440,7 +440,7 @@
                         "$ref": "#/components/schemas/StatusValidity"
                     }
                 },
-                "title": "Status of the backup location"
+                "description": "Status of the backup location."
             },
             "googlerpcStatus": {
                 "type": "object",
@@ -468,7 +468,7 @@
                     },
                     "cloudCredentialId": {
                         "type": "string",
-                        "title": "id of the cloud credential associated with the backup location"
+                        "description": "id of the cloud credential associated with the backup location."
                     },
                     "azureStorage": {
                         "$ref": "#/components/schemas/v1AzureBlobStorage"
@@ -480,7 +480,7 @@
                         "$ref": "#/components/schemas/v1S3ObjectStorage"
                     }
                 },
-                "title": "Desired configuration of the backup location"
+                "description": "Desired configuration of the backup location."
             },
             "protobufAny": {
                 "type": "object",
@@ -496,10 +496,10 @@
                 "properties": {
                     "containerName": {
                         "type": "string",
-                        "title": "Name of container"
+                        "description": "Name of container."
                     }
                 },
-                "title": "Azure blob storage location"
+                "description": "Azure blob storage location."
             },
             "v1BackupLocation": {
                 "type": "object",
@@ -514,17 +514,17 @@
                         "$ref": "#/components/schemas/backuplocationv1Status"
                     }
                 },
-                "title": "Resource representing a backup location"
+                "description": "Resource representing a backup location."
             },
             "v1GoogleCloudStorage": {
                 "type": "object",
                 "properties": {
                     "bucketName": {
                         "type": "string",
-                        "title": "Bucket name"
+                        "description": "Bucket name."
                     }
                 },
-                "title": "Google cloud storage location"
+                "description": "Google cloud storage location."
             },
             "v1InfraResourceType": {
                 "type": "string",
@@ -548,7 +548,7 @@
                 "properties": {
                     "tenantId": {
                         "type": "string",
-                        "title": "Tenant ID for which the backup locations will be listed"
+                        "description": "Tenant ID for which the backup locations will be listed."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
@@ -569,7 +569,7 @@
                         "$ref": "#/components/schemas/v1Sort"
                     }
                 },
-                "title": "Request to list the backup locations for a tenant or a project"
+                "description": "Request to list the backup locations for a tenant or a project."
             },
             "v1ListBackupLocationsResponse": {
                 "type": "object",
@@ -579,13 +579,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1BackupLocation"
                         },
-                        "title": "The list of cloud credentials scoped to a tenant or a project"
+                        "description": "The list of cloud credentials scoped to a tenant or a project."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "Response of list backup locations"
+                "description": "Response of list backup locations."
             },
             "v1Meta": {
                 "type": "object",
@@ -766,18 +766,18 @@
                 "properties": {
                     "bucketName": {
                         "type": "string",
-                        "title": "Bucket name"
+                        "description": "Bucket name."
                     },
                     "region": {
                         "type": "string",
-                        "title": "Region where bucket is hosted"
+                        "description": "Region where bucket is hosted."
                     },
                     "endpoint": {
                         "type": "string",
-                        "title": "Endpoint to reach S3/S3 compatible storage (defaults to s3.amazonaws.com)"
+                        "description": "Endpoint to reach S3/S3 compatible storage (defaults to s3.amazonaws.com)."
                     }
                 },
-                "title": "S3 object storage location"
+                "description": "S3 object storage location."
             },
             "v1Selector": {
                 "type": "object",

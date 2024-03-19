@@ -78,14 +78,14 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*IAMServiceAPI* | [**IAMServiceCreateIAM**](docs/IAMServiceAPI.md#iamservicecreateiam) | **Post** /v1/iam | CreateIAM API creates a new IAM role-binding.
-*IAMServiceAPI* | [**IAMServiceDeleteIAM**](docs/IAMServiceAPI.md#iamservicedeleteiam) | **Delete** /v1/iam/{actorId} | DeleteIAM API delete IAM, currently required only for name.
-*IAMServiceAPI* | [**IAMServiceGetIAM**](docs/IAMServiceAPI.md#iamservicegetiam) | **Get** /v1/iam/{actorId} | GetIAM API returns the info about IAM for given IAM id.
-*IAMServiceAPI* | [**IAMServiceGrantIAM**](docs/IAMServiceAPI.md#iamservicegrantiam) | **Post** /v1/iam/{iam.config.actorId}:grant | GrantIAM API creates new IAM role-binding at tenant, project and account level.
-*IAMServiceAPI* | [**IAMServiceListIAM**](docs/IAMServiceAPI.md#iamservicelistiam) | **Get** /v1/iam | ListIAM API lists the role bindings.
-*IAMServiceAPI* | [**IAMServiceListIAMPermissions**](docs/IAMServiceAPI.md#iamservicelistiampermissions) | **Get** /v1/iam/permissions | ListIAMPermissions API list permissions for Roles in IAM.
-*IAMServiceAPI* | [**IAMServiceRevokeIAM**](docs/IAMServiceAPI.md#iamservicerevokeiam) | **Post** /v1/iam/{iam.config.actorId}:revoke | RevokeIAM API delete IAM role-binding at tenant, project and account level.
-*IAMServiceAPI* | [**IAMServiceUpdateIAM**](docs/IAMServiceAPI.md#iamserviceupdateiam) | **Put** /v1/iam/{iam.meta.uid} | UpdateIAM API updates IAM with the new set of role bindings. The request replaces the existing set of bindings.
+*IAMServiceAPI* | [**IAMServiceCreateIAM**](docs/IAMServiceAPI.md#iamservicecreateiam) | **Post** /core/v1/iam | CreateIAM API creates a new IAM role-binding.
+*IAMServiceAPI* | [**IAMServiceDeleteIAM**](docs/IAMServiceAPI.md#iamservicedeleteiam) | **Delete** /core/v1/iam/{actorId} | DeleteIAM API delete IAM, currently required only for name.
+*IAMServiceAPI* | [**IAMServiceGetIAM**](docs/IAMServiceAPI.md#iamservicegetiam) | **Get** /core/v1/iam/{actorId} | GetIAM API returns the info about IAM for given IAM id.
+*IAMServiceAPI* | [**IAMServiceGrantIAM**](docs/IAMServiceAPI.md#iamservicegrantiam) | **Post** /core/v1/iam/{iam.config.actorId}:grant | GrantIAM API creates new IAM role-binding at tenant, project and account level.
+*IAMServiceAPI* | [**IAMServiceListIAM**](docs/IAMServiceAPI.md#iamservicelistiam) | **Get** /core/v1/iam | ListIAM API lists the role bindings.
+*IAMServiceAPI* | [**IAMServiceListIAMPermissions**](docs/IAMServiceAPI.md#iamservicelistiampermissions) | **Get** /core/v1/iam/permissions | ListIAMPermissions API list permissions for Roles in IAM.
+*IAMServiceAPI* | [**IAMServiceRevokeIAM**](docs/IAMServiceAPI.md#iamservicerevokeiam) | **Post** /core/v1/iam/{iam.config.actorId}:revoke | RevokeIAM API delete IAM role-binding at tenant, project and account level.
+*IAMServiceAPI* | [**IAMServiceUpdateIAM**](docs/IAMServiceAPI.md#iamserviceupdateiam) | **Put** /core/v1/iam/{iam.meta.uid} | UpdateIAM API updates IAM with the new set of role bindings. The request replaces the existing set of bindings.
 
 
 ## Documentation For Models

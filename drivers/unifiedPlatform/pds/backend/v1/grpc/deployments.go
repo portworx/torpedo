@@ -121,7 +121,7 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 						Name:        *dep.Meta.Name,
 						Description: "",
 						Replicas:    3,
-						ResourceTemplate: &deploymenttopology.Template{
+						ResourceSettings: &deploymenttopology.Template{
 							Id:              *dep.Config.DeploymentTopologies[0].ResourceTemplate.Id,
 							ResourceVersion: "",
 							Values:          nil,

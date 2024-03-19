@@ -28,129 +28,151 @@ option java_package = "com.public.portworx.platform.account.v1";
 option java_outer_classname = "AccountProto";
 
 
-// Account service provides APIs to interact with the Account entity
+// Account service provides APIs to interact with the Account entity.
 service AccountService {
-  // GetAccount API returns the info about account for given account id
+  // GetAccount API returns the info about account for given account id.
   rpc GetAccount(GetAccountRequest)
       returns (Account) {
     option(google.api.http) = {
-      get: "/v1/accounts/{account_id}"
+      get: "/core/v1/accounts/{account_id}"
     };
   }
 }
 
-// GetAccountRequest is the request message to GetAccount API
+// GetAccountRequest is the request message to GetAccount API.
 message GetAccountRequest {
-  // account id for which account details need to be fetched
+  // account id for which account details need to be fetched.
   string account_id = 1;
 }
 
-// Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants
+// Account is a high level entity that represents one large company(e.g. a Pure). An account has multiple tenants.
 message Account {
   // Metadata of the account.
   public.portworx.common.v1.Meta meta = 1;
 
-  // Desired configuration of the Account
+  // Desired configuration of the Account.
   Config config = 2;
 
-  //Subscription Status for Portworx Services
+  //Subscription Status for Portworx Services.
   Status status = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+
 }
 
-// Desired configuration of the account
+// Desired configuration of the account.
 message Config {
 
-  // email of the first account user
+  // email of the first account user.
   string user_email = 1;
 
- // Account DNS name
+ // Account DNS name.
   string dns_name = 2 [(google.api.field_behavior) = OPTIONAL];
 
-  // Display name of Account
+  // Display name of Account.
   string display_name = 3 [(google.api.field_behavior) = OPTIONAL];
 
-  // Describes whether it is a Freemium or an Enterprise account
+  // Describes whether it is a Freemium or an Enterprise account.
   AccountType account_type =4;
 
-  //Product subscription info
+  //Product subscription info.
   oneof pds_subscription{
-    //Zuora subscription info
+    //Zuora subscription info.
     ZuoraSubscriptionInfo pds_zuora_subscription = 101;
   }
 
   oneof pxe_subscription{
-    //AWS registration token
+    //AWS registration token.
     AwsSubscriptionInfo pxe_aws_subscription = 200;
-    //Zuora subscription info
+    //Zuora subscription info.
     ZuoraSubscriptionInfo pxe_zuora_subscription = 201;
   }
 
   oneof baas_subscription{
-    //AWS registration token
+    //AWS registration token.
     AwsSubscriptionInfo baas_aws_subscription = 300;
-    //Zuora subscription info
+    //Zuora subscription info.
     ZuoraSubscriptionInfo baas_zuora_subscription = 301;
   }
 
 }
-// AWS subscription info for one product
+// AWS subscription info for one product.
 message AwsSubscriptionInfo{
-    // Aws client id associated with the installed product
+    // Aws client id associated with the installed product.
     string client_id = 1;
-    // Aws product id of the installed product
+    // Aws product id of the installed product.
     string product_id = 2;
-    // Aws account id associated with the installed product
+    // Aws account id associated with the installed product.
     string account_id = 3;
 }
 
-// Zuora Subscription info for a particular installed product
+// Zuora Subscription info for a particular installed product.
 message ZuoraSubscriptionInfo {
-  // id associated installed product
+  // id associated installed product.
   string subscription_id = 1;
-  // id associated with the customer account
+  // id associated with the customer account.
   string account_id = 2;
+}
+
+// Phase represents the account status of the account.
+message Phase {
+  // Type of phase the account is in currently should be one of the below.
+  enum Type {
+    // Unspecified, do not use.
+    TYPE_UNSPECIFIED = 0;
+    // The account is in use and active.
+    ACTIVE = 1;
+    // Deletion of account has not started.
+    DELETE_PENDING = 2;
+    // Deletion of the account is scheduled and in progress.
+    DELETE_IN_PROGRESS = 3;
+    // Deletion of account is failed
+    DELETE_FAILED=4;
+  }
 }
 
 // Subscription Status for Portworx Services
 message Status{
-  //Subscription status of Portworx Enterprise
+  //Subscription status of Portworx Enterprise.
   StatusType pxe = 1;
-  //Subscription status of Portworx DataServices
+  //Subscription status of Portworx DataServices.
   StatusType pds = 2;
   //Subscription status of Portworx Backup
   StatusType baas= 3;
+  // Textual information for the current state of the account.
+  string reason = 4 ;
+  // Current phase of the account.
+  Phase.Type phase = 5;
 }
 
-// Accepted status types for various cloud providers
+// Accepted status types for various cloud providers.
 enum StatusType {
-  // Unspecified, do not use
+  // Unspecified, do not use.
   STATUS_TYPE_UNSPECIFIED = 0;
 
-  // A successfully freemium account setup
+  // A successfully freemium account setup.
   FREEMIUM_SUCCESS=1;
 
-  // Customer has subscribed product on aws marketplace
+  // Customer has subscribed product on aws marketplace.
   AWS_SUBSCRIBE_SUCCESS = 2;
-  // Customer has subscribed product on aws marketplace but aws encountered failure during account setup
+  // Customer has subscribed product on aws marketplace but aws encountered failure during account setup.
   AWS_SUBSCRIBE_FAIL = 3;
-  // Customer has unsubscribed from marketplace and now we have 1 hour to report final billing
-  // and perform other deboarding processes
+  // Customer has unsubscribed from marketplace and now we have 1 hour to report final billing.
+  // and perform other de-boarding processes.
   AWS_UNSUBSCRIBE_PENDING = 4;
-  // Customer successfully unsubscribed and we can't report billing to aws for this account anymore
+  // Customer successfully unsubscribed and we can't report billing to aws for this account anymore.
   AWS_UNSUBSCRIBE_SUCCESS = 5;
 
-  // Customer successfully subscribed to Zuora
+  // Customer successfully subscribed to Zuora.
   ZUORA_SUBSCRIBE = 6;
-  // Customer has unsubscribed from Zuora
+  // Customer has unsubscribed from Zuora.
   ZUORA_UNSUBSCRIBE = 7;
 }
 
-//Accepted account types
+//Accepted account types.
 enum AccountType{
-  // Unspecified, do not use
+  // Unspecified, do not use.
   ACCOUNT_TYPE_UNSPECIFIED = 0;
-  //Account is of freemium type for all three Portworx Service
+  //Account is of freemium type for all three Portworx Service.
   FREEMIUM = 1;
-  //Account has a active subscription for atleast one of the Portworx Services
+  //Account has a active subscription for at least one of the Portworx Services.
   ENTERPRISE = 2;
 }

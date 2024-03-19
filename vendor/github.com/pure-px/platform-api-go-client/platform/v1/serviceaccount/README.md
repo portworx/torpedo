@@ -78,13 +78,13 @@ All URIs are relative to *http://localhost*
 
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceCreateServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicecreateserviceaccount) | **Post** /v1/tenants/{tenantId}/serviceAccounts | Create a requested service account.
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceDeleteServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicedeleteserviceaccount) | **Delete** /v1/serviceAccounts/{id} | Initiates deletion of a service account.
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceGetAccessToken**](docs/ServiceAccountServiceAPI.md#serviceaccountservicegetaccesstoken) | **Post** /v1/tenants/{tenantId}:getToken | Get access token for a service account.
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceGetServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicegetserviceaccount) | **Get** /v1/serviceAccounts/{id} | Returns a requested service account.
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceListServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicelistserviceaccount) | **Get** /v1/serviceAccounts | Returns a requested list of service accounts.
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceRegenerateServiceAccountSecret**](docs/ServiceAccountServiceAPI.md#serviceaccountserviceregenerateserviceaccountsecret) | **Get** /v1/serviceAccounts/{id}:regenerate | Regenerate access token for a service account.
-*ServiceAccountServiceAPI* | [**ServiceAccountServiceUpdateServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountserviceupdateserviceaccount) | **Put** /v1/serviceAccounts/{id} | Updates a service account.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceCreateServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicecreateserviceaccount) | **Post** /core/v1/tenants/{tenantId}/serviceAccounts | Create a requested service account.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceDeleteServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicedeleteserviceaccount) | **Delete** /core/v1/serviceAccounts/{id} | Initiates deletion of a service account.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceGetAccessToken**](docs/ServiceAccountServiceAPI.md#serviceaccountservicegetaccesstoken) | **Post** /core/v1/tenants/{tenantId}:getToken | Get access token for a service account.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceGetServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicegetserviceaccount) | **Get** /core/v1/serviceAccounts/{id} | Returns a requested service account.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceListServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountservicelistserviceaccount) | **Get** /core/v1/serviceAccounts | Returns a requested list of service accounts.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceRegenerateServiceAccountSecret**](docs/ServiceAccountServiceAPI.md#serviceaccountserviceregenerateserviceaccountsecret) | **Get** /core/v1/serviceAccounts/{id}:regenerate | Regenerate access token for a service account.
+*ServiceAccountServiceAPI* | [**ServiceAccountServiceUpdateServiceAccount**](docs/ServiceAccountServiceAPI.md#serviceaccountserviceupdateserviceaccount) | **Put** /core/v1/serviceAccounts/{id} | Updates a service account.
 
 
 ## Documentation For Models

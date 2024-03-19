@@ -52,7 +52,7 @@ service BackupConfigService {
     returns(BackupConfig) {
     option(google.api.http) = {
       post: "/pds/v1/projects/{project_id}/backupConfigs"
-      body: "backup_config"
+      body: "*"
     };
   }
 
@@ -60,8 +60,8 @@ service BackupConfigService {
   rpc UpdateBackupConfig(UpdateBackupConfigRequest)
     returns(BackupConfig) {
     option(google.api.http) = {
-      put: "/pds/v1/backupConfigs/{backup_config.meta.uid}"
-      body: "backup_config"
+      put: "/pds/v1/backupConfigs/{id}"
+      body: "*"
     };
   }
 
@@ -146,9 +146,20 @@ message CreateBackupConfigRequest {
 }
 
 // Request to update a backup configuration.
+// (-- api-linter: core::0134::request-resource-required=disabled
+//     aip.dev/not-precedent: We need to do this because we don't need the full backup config object for update. --)
 message UpdateBackupConfigRequest {
-  // Desired backup configuration.
-  BackupConfig backup_config = 1 [(google.api.field_behavior) = REQUIRED];
+  // ID of the backup configuration.
+  string id = 1;
+
+  // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
+  int32 job_history_limit = 2;
+
+  // Labels to apply to the Backup Config object.
+  map<string, string> labels = 3;
+
+  // Annotations for the Backup Config object.
+  map<string, string> annotations = 4;
 }
 
 // Request to delete a backup configuration.
@@ -177,8 +188,8 @@ message Config {
   // Job History Limit is a number of retained backup jobs. Must be greater than or equal to 1.
   int32 job_history_limit = 2;
 
-  // Schedule associated with the backup config.
-  Schedule schedule = 3 [(google.api.field_behavior) = OPTIONAL];
+  // BackupPolicy associated with the backup config.
+  BackupPolicy backup_policy = 3 [(google.api.field_behavior) = OPTIONAL];
 
   // Suspend flag is used to suspend a scheduled backup from creating new backup jobs.
   bool suspend = 4;
@@ -232,21 +243,21 @@ message Config {
 // References to the associated resources for backup configuration.
 message References {
   // UID of the deployment to which the backup configuration belong.
-  string deployment_id = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  string deployment_id = 1 [(google.api.field_behavior) = REQUIRED];
 
   // UID of the backup target to which the backup configuration belong.
-  string backup_location_id = 2;
+  string backup_location_id = 2 [(google.api.field_behavior) = REQUIRED];
 
   // UID of the data service to which the backup configuration belong.
   string data_service_id = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
 
-// Schedule associated with the backup config.
-message Schedule {
-  // UID of the schedule associated with the backup configuration.
+// BackupPolicy associated with the backup config.
+message BackupPolicy {
+  // UID of the backup policy associated with the backup configuration.
   string id = 1;
 
-  // Resource version of the schedule.
+  // Resource version of the backup policy.
   string resource_version = 2;
 }
 
@@ -257,17 +268,20 @@ message Status {
     // Unspecified state.
     PHASE_UNSPECIFIED = 0;
 
-    // Pending state.
-    PENDING = 1;
+    // Preparing state before creation is successful.
+    PREPARING = 1;
+
+    // Applied state when create/update is successful.
+    APPLIED = 2;
+
+    // Updating state.
+    UPDATING = 3;
 
     // Failed state.
-    FAILED = 2;
-
-    // Created state.
-    CREATED = 3;
+    FAILED = 4;
 
     // Suspended state.
-    SUSPENDED = 4;
+    SUSPENDED = 5;
   }
 
   // Phase specifies the phase of backup CR in target cluster.
@@ -276,8 +290,8 @@ message Status {
   // Custom Resource Name is the kubernetes resource name for the backup that is built from ID.
   string custom_resource_name = 2;
 
-  // Flag to check if the schedule is synchronized or not.
-  bool is_schedule_synchronized = 3;
+  // Flag to check if the backup policy is synchronized or not.
+  bool is_backup_policy_synchronized = 3;
 
   // Deployment Meta Data.
   DeploymentMetaData deployment_meta_data = 4;

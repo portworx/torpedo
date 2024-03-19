@@ -39,7 +39,7 @@ service DeploymentService {
     returns (Deployment) {
     option(google.api.http) = {
       post: "/pds/v1/namespace/{namespace_id}/deployment"
-      body: "deployment"
+      body: "*"
     };
   }
 

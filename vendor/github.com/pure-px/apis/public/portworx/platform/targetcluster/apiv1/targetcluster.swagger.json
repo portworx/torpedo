@@ -10,7 +10,7 @@
         }
     ],
     "paths": {
-        "/v1/clusters": {
+        "/core/v1/clusters": {
             "get": {
                 "summary": "List API lists all the target clusters for a tenant",
                 "operationId": "TargetClusterService_ListTargetClusters",
@@ -39,7 +39,7 @@
                 "parameters": [
                     {
                         "name": "tenantId",
-                        "description": "List target clusters associated with a tenant",
+                        "description": "List target clusters associated with a tenant.",
                         "in": "query",
                         "required": true,
                         "schema": {
@@ -97,6 +97,22 @@
                             ],
                             "default": "VALUE_UNSPECIFIED"
                         }
+                    },
+                    {
+                        "name": "respData",
+                        "description": "Response data flags for listing target clusters.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated.",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "RESP_DATA_UNSPECIFIED",
+                                "INDEX",
+                                "LITE",
+                                "FULL"
+                            ],
+                            "default": "RESP_DATA_UNSPECIFIED"
+                        }
                     }
                 ],
                 "tags": [
@@ -104,9 +120,9 @@
                 ]
             }
         },
-        "/v1/clusters/{id}": {
+        "/core/v1/clusters/{id}": {
             "get": {
-                "summary": "GetTargetCluster API returns the info about the TargetCluster for given name",
+                "summary": "GetTargetCluster API returns the info about the TargetCluster for given name.",
                 "operationId": "TargetClusterService_GetTargetCluster",
                 "responses": {
                     "200": {
@@ -133,7 +149,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -146,7 +162,7 @@
                 ]
             },
             "delete": {
-                "summary": "DeleteTargetCluster API deletes the specified TargetCluster",
+                "summary": "DeleteTargetCluster API deletes the specified TargetCluster.",
                 "operationId": "TargetClusterService_DeleteTargetCluster",
                 "responses": {
                     "200": {
@@ -174,7 +190,7 @@
                 "parameters": [
                     {
                         "name": "id",
-                        "description": "Unique identifier of the cluster whose details needs to be fetched",
+                        "description": "Unique identifier of the cluster whose details needs to be fetched.",
                         "in": "path",
                         "required": true,
                         "schema": {
@@ -183,7 +199,7 @@
                     },
                     {
                         "name": "force",
-                        "description": "Flag to indicate force delete",
+                        "description": "Flag to indicate force delete.",
                         "in": "query",
                         "required": false,
                         "schema": {
@@ -196,9 +212,9 @@
                 ]
             }
         },
-        "/v1/clusters/{targetCluster.meta.uid}": {
+        "/core/v1/clusters/{targetCluster.meta.uid}": {
             "put": {
-                "summary": "UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster",
+                "summary": "UpdateTargetCluster API updates the metadata(e.g name/labels/annotations and desc) of the specified TargetCluster.",
                 "operationId": "TargetClusterService_UpdateTargetCluster",
                 "responses": {
                     "200": {
@@ -292,7 +308,8 @@
                                                 "readOnly": true
                                             }
                                         },
-                                        "title": "Metadata of the target cluster(Resource Meta)"
+                                        "description": "Metadata of the target cluster(Resource Meta).",
+                                        "title": "Metadata of the target cluster(Resource Meta)."
                                     },
                                     "config": {
                                         "$ref": "#/components/schemas/platformTargetClusterv1Config"
@@ -301,11 +318,11 @@
                                         "$ref": "#/components/schemas/platformTargetClusterv1Status"
                                     }
                                 },
-                                "title": "Target cluster details"
+                                "title": "Target cluster details."
                             }
                         }
                     },
-                    "description": "Target cluster details",
+                    "description": "Target cluster details.",
                     "required": true
                 },
                 "tags": [
@@ -313,7 +330,7 @@
                 ]
             }
         },
-        "/v1/clusters:search": {
+        "/core/v1/clusters:search": {
             "post": {
                 "summary": "List API lists all the target clusters for a tenant",
                 "operationId": "TargetClusterService_ListTargetClusters2",
@@ -439,7 +456,7 @@
             },
             "platformTargetClusterv1Config": {
                 "type": "object",
-                "title": "Desired configuration of the Target Cluster"
+                "description": "Desired configuration of the Target Cluster."
             },
             "platformTargetClusterv1Status": {
                 "type": "object",
@@ -453,7 +470,7 @@
                     "lastStatusUpdateTime": {
                         "type": "string",
                         "format": "date-time",
-                        "title": "Timestamp of cluster's last status update to control plane"
+                        "description": "Timestamp of cluster's last status update to control plane."
                     },
                     "platformAgent": {
                         "$ref": "#/components/schemas/v1ApplicationPhasePhase"
@@ -463,10 +480,10 @@
                         "additionalProperties": {
                             "$ref": "#/components/schemas/v1ApplicationPhasePhase"
                         },
-                        "title": "Status of applications running in the target cluster eg: BAAS, PDS, MPXE"
+                        "description": "Status of applications running in the target cluster eg: BAAS, PDS, MPXE."
                     }
                 },
-                "title": "Status of the Target Cluster"
+                "description": "Status of the Target Cluster."
             },
             "protobufAny": {
                 "type": "object",
@@ -488,8 +505,7 @@
                     "DELETING"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "- PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - PENDING: Application yet to be installed\n - DEPLOYING: Application deployment on the target cluster in progress\n - SUCCEEDED: Installed successfully\n - FAILED: Application failed to install\n - DELETING: Application is being deleted",
-                "title": "AppStatus determines status of an application"
+                "description": "AppStatus determines status of an application.\n\n - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - PENDING: Application yet to be installed.\n - DEPLOYING: Application deployment on the target cluster in progress.\n - SUCCEEDED: Installed successfully.\n - FAILED: Application failed to install.\n - DELETING: Application is being deleted."
             },
             "v1InfraResourceType": {
                 "type": "string",
@@ -520,15 +536,14 @@
                     "UNKNOWN"
                 ],
                 "default": "TYPE_UNSPECIFIED",
-                "description": "- TYPE_UNSPECIFIED: Unsepecified\n - AWS: Aws platform\n - AZURE: Azure platform\n - OCP: Openshift cloud platform\n - GCP: Google cloud platform\n - VSPHERE: VMware vSphere\n - UNKNOWN: Unknown platform",
-                "title": "kubeplatform values"
+                "description": "kubeplatform values.\n\n - TYPE_UNSPECIFIED: Unsepecified.\n - AWS: Aws platform.\n - AZURE: Azure platform.\n - OCP: Openshift cloud platform.\n - GCP: Google cloud platform.\n - VSPHERE: VMware vSphere.\n - UNKNOWN: Unknown platform."
             },
             "v1ListTargetClustersRequest": {
                 "type": "object",
                 "properties": {
                     "tenantId": {
                         "type": "string",
-                        "title": "List target clusters associated with a tenant"
+                        "description": "List target clusters associated with a tenant."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationRequest"
@@ -544,6 +559,9 @@
                     },
                     "sort": {
                         "$ref": "#/components/schemas/v1Sort"
+                    },
+                    "respData": {
+                        "$ref": "#/components/schemas/v1RespData"
                     }
                 },
                 "description": "ListTargetClusterRequest is a request message to the List TargetCluster API.",
@@ -559,13 +577,13 @@
                         "items": {
                             "$ref": "#/components/schemas/v1TargetCluster"
                         },
-                        "title": "(-- api-linter: core::0132::response-unknown-fields=disabled\n    aip.dev/not-precedent: We really need this field because cluster details are required in the response --)\nThe list of TargetClusters visible to the caller"
+                        "description": "\nThe list of TargetClusters visible to the caller."
                     },
                     "pagination": {
                         "$ref": "#/components/schemas/v1PageBasedPaginationResponse"
                     }
                 },
-                "title": "ListTargetClusterResponse is the response message to the List TargetCluster API"
+                "description": "ListTargetClusterResponse is the response message to the List TargetCluster API."
             },
             "v1Meta": {
                 "type": "object",
@@ -631,7 +649,7 @@
                 "properties": {
                     "kubeServerVersion": {
                         "type": "string",
-                        "title": "Version of kubernetes api server"
+                        "description": "Version of kubernetes api server."
                     },
                     "kubePlatform": {
                         "$ref": "#/components/schemas/v1KubePlatformType"
@@ -640,7 +658,7 @@
                         "$ref": "#/components/schemas/v1PXEMetadata"
                     }
                 },
-                "title": "TargetClusterMetadata represents the metadata of a cluster"
+                "description": "TargetClusterMetadata represents the metadata of a cluster."
             },
             "v1PXEMetadata": {
                 "type": "object",
@@ -747,6 +765,17 @@
                 },
                 "description": "ResourceSelector is used to query resources using the associated infra resources."
             },
+            "v1RespData": {
+                "type": "string",
+                "enum": [
+                    "RESP_DATA_UNSPECIFIED",
+                    "INDEX",
+                    "LITE",
+                    "FULL"
+                ],
+                "default": "RESP_DATA_UNSPECIFIED",
+                "description": "RespData provides flags which provides info about the fields that should be populated in the response.\n\n - RESP_DATA_UNSPECIFIED: RespData Unspecified. complete resource will be populated.\n - INDEX: only uid, name, labels should be populated.\n - LITE: only meta data should be populated.\n - FULL: complete resource should be populated."
+            },
             "v1Selector": {
                 "type": "object",
                 "properties": {
@@ -807,8 +836,7 @@
                     "DELETING"
                 ],
                 "default": "PHASE_UNSPECIFIED",
-                "description": "- PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - CONNECTED: Represents target cluster is connected to control plane\n - DISCONNECTED: Represents target cluster is disconnected from control plane if\nheartbeat is not received for three consecutive cycles\n - FAILED: Represents target cluster failed to setup agent\n - DELETING: Represents target cluster deletion in progress",
-                "title": "Supported values of phase of target cluster"
+                "description": "Supported values of phase of target cluster.\n\n - PHASE_UNSPECIFIED: Must be set in the proto file; ignore.\n - CONNECTED: Represents target cluster is connected to control plane.\n - DISCONNECTED: Represents target cluster is disconnected from control plane if\nheartbeat is not received for three consecutive cycles.\n - FAILED: Represents target cluster failed to setup agent.\n - DELETING: Represents target cluster deletion in progress."
             }
         }
     }
