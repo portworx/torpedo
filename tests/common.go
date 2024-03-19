@@ -5720,7 +5720,7 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 		if err != nil {
 			return fmt.Errorf("error listing snapshots: %s", err)
 		}
-
+		log.Infof("volumes from the vpc service %s", snapshots)
 		// Delete snapshots associated with the volume
 		for _, snapshot := range snapshots.Snapshots {
 			if *snapshot.SourceVolume.ID == volumeID {

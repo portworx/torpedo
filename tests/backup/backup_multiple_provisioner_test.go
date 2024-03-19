@@ -144,6 +144,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				for _, obj := range volumeObjlist {
 					volumeNames = append(volumeNames, obj.Name)
 				}
+				log.Infof("volume name %s", volumeNames)
 				err = DeleteSnapshotsForVolumes(volumeNames)
 				log.FailOnError(err, fmt.Sprintf("Deleteing snapshot failed for volumes %v", volumeNames))
 			} else {
