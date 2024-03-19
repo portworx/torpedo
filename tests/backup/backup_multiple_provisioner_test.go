@@ -15,7 +15,7 @@ import (
 )
 
 // This MultipleProvisionerBackupAndRestore testcase to test Backup and restore of namespaces with multiple provisioners using csi and kdmp
-var _ = Describe("{MultipleProvisionerCsiKdmpBackupAndRestore}", func() {
+var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func() {
 
 	var (
 		//backupNames                               []string
