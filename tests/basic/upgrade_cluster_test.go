@@ -92,7 +92,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 					time.Sleep(30 * time.Minute)
 				}
 
-				printK8sCluterInfo()
+				PrintK8sCluterInfo()
 			})
 
 			Step("validate storage components", func() {
