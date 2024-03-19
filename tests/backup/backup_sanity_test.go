@@ -272,10 +272,7 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 			for _, obj := range volumeObjlist {
 				volumeNames = append(volumeNames, obj.Name)
 			}
-			for _, provider := range providers {
-				DeleteSnapshotsForVolumes(provider, volumeNames)
-			}
-
+			DeleteSnapshotsForVolumes(volumeNames)
 		})
 
 		Step("Restoring the backed up namespaces", func() {
