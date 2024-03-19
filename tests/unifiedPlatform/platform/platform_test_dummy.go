@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"math/rand"
+	"strconv"
+
 	. "github.com/onsi/ginkgo/v2"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -8,8 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
-	"strconv"
 )
 
 //var _ = Describe("{TenantsCRUD}", func() {
