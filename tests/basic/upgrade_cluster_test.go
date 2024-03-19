@@ -67,7 +67,6 @@ var _ = Describe("{UpgradeCluster}", func() {
 				stopSignal := make(chan struct{})
 
 				var mError error
-				// pxOperator := operator.Instance()
 				opver, err := oputil.GetPxOperatorVersion()
 				if err == nil && opver.GreaterThanOrEqual(OpVer24_1_0) {
 					go doPDBValidation(stopSignal, &mError)
@@ -77,7 +76,7 @@ var _ = Describe("{UpgradeCluster}", func() {
 				}
 
 				err = Inst().S.UpgradeScheduler(version)
-				dash.VerifyFatal(mError, nil, "validate PDB during PX upgrade")
+				dash.VerifyFatal(mError, nil, "validation of PDB of px-storage during cluster upgrade successful")
 				dash.VerifyFatal(err, nil, fmt.Sprintf("verify [%s] upgrade to [%s] is successful", Inst().S.String(), version))
 
 				// Sleep needed for AKS cluster upgrades
