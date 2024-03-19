@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
+  name: postgres-cephfs
 spec:
   strategy:
     rollingUpdate:
@@ -58,4 +58,4 @@ spec:
       volumes:
       - name: postgredb
         persistentVolumeClaim:
-          claimName: postgres-data
+          claimName: postgres-cephfs-data

@@ -2,9 +2,9 @@
 kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
-  name: postgres-data
+  name: postgres-rbd-data
 spec:
-  storageClassName: postgres-sc
+  storageClassName: postgres-rbd-sc
   accessModes:
     - ReadWriteOnce
   resources:
