@@ -5714,6 +5714,7 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 			continue
 		}
 		volumeID := *volumes.Volumes[0].ID
+		log.Infof("vol id name %s", volumeID)
 
 		// List all snapshots
 		snapshots, _, err := vpcService.ListSnapshots(vpcService.NewListSnapshotsOptions())
@@ -5723,10 +5724,13 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 		log.Infof("volumes from the vpc service %s", snapshots)
 		// Delete snapshots associated with the volume
 		for _, snapshot := range snapshots.Snapshots {
+			log.Infof("snapshot name %s", snapshot.SourceVolume.ID)
+			log.Infof("vol id name %s", volumeID)
 			if *snapshot.SourceVolume.ID == volumeID {
 				// Snapshot belongs to the specified volume, delete it
 				snapshotID := *snapshot.ID
 				snapshotName := *snapshot.Name
+				log.Infof("snapshot name %s", snapshotName)
 				log.Infof("Deleting snapshot %s associated with volume %s", snapshotName, volumeName)
 				_, err = vpcService.DeleteSnapshot(vpcService.NewDeleteSnapshotOptions(snapshotID))
 				if err != nil {
