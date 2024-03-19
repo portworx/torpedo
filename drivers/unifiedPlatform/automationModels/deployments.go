@@ -41,3 +41,8 @@ type PDSDeployment struct {
 	NamespaceID  string       `copier:"must,nopanic"`
 	V1Deployment V1Deployment `copier:"must,nopanic"`
 }
+
+type PDSDeploymentRequest struct {
+	Create PDSDeployment
+	Update PDSDeployment
+}

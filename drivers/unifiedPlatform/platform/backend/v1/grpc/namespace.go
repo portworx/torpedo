@@ -55,7 +55,7 @@ func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *PlatformNamespace) 
 		log.Infof("namespace -  [%v]", ns.Meta.Name)
 	}
 
-	err = copier.Copy(&namespaceResponse.List, nsResponse)
+	err = copier.Copy(&namespaceResponse.List.Namespaces, nsResponse.Namespaces)
 	if err != nil {
 		return nil, err
 	}

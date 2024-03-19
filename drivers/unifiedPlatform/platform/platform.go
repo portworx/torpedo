@@ -26,7 +26,7 @@ type AccountInterface interface {
 }
 
 type TenantInterface interface {
-	ListTenants() ([]WorkFlowResponse, error)
+	ListTenants() ([]PlatformTenant, error)
 }
 
 type TargetClusterInterface interface {
@@ -101,7 +101,7 @@ type Onboard interface {
 }
 
 type Project interface {
-	GetProjectList() ([]WorkFlowResponse, error)
+	GetProjectList(*PlaformProject) ([]WorkFlowResponse, error)
 	CreateProject(*PlaformProject, string) (WorkFlowResponse, error)
 	DeleteProject(*PlaformProject) error
 	GetProject(*PlaformProject) (WorkFlowResponse, error)

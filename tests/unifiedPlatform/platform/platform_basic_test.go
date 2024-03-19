@@ -45,6 +45,31 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 
+	Step("Get Default Tenant", func() {
+		log.Infof("Initialising values for tenant")
+		workflowPlatform.AdminAccountId = accID
+		workflowPlatform.TenantInit()
+	})
+
+	Step("Get Default Project", func() {
+		var err error
+		workflowProject.Platform = workflowPlatform
+		projectId, err = workflowProject.GetDefaultProject(defaultProject)
+		log.FailOnError(err, "Unable to get default project")
+		log.Infof("Default project ID - [%s]", projectId)
+		workflowProject.ProjectId = projectId
+		workflowProject.ProjectName = defaultProject
+	})
+
+	//Step("Register Target Cluster", func() {
+	//	workflowTargetCluster.Platform = workflowPlatform
+	//	workflowTargetCluster.Project = workflowProject
+	//	log.Infof("Tenant ID [%s]", workflowTargetCluster.Platform.TenantId)
+	//	workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
+	//	log.FailOnError(err, "Unable to register target cluster")
+	//	log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
+	//})
+
 	Step("Create Buckets", func() {
 		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
 			bucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))

@@ -25,20 +25,25 @@ func (ProjectV1 *PlatformGrpc) getProjectClient() (context.Context, publicprojec
 		Token: token,
 	}
 
+	ctx = WithAccountIDMetaCtx(ctx, ProjectV1.AccountId)
+
 	projectClient = publicprojectapis.NewProjectServiceClient(ProjectV1.ApiClientV1)
 
 	return ctx, projectClient, token, nil
 }
 
 // GetProjectList returns the list of projects under account
-func (ProjectV1 *PlatformGrpc) GetProjectList() ([]WorkFlowResponse, error) {
+func (ProjectV1 *PlatformGrpc) GetProjectList(project *PlaformProject) ([]WorkFlowResponse, error) {
 	projectsResponse := []WorkFlowResponse{}
 	ctx, client, _, err := ProjectV1.getProjectClient() //AccountV1.getAccountClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
+	log.Infof("tenant id in grpc %s", project.List.TenantId)
+
 	listProjRequest := publicprojectapis.ListProjectsRequest{
+		TenantId:   project.List.TenantId,
 		Pagination: NewPaginationRequest(1, 50),
 	}
 
@@ -47,7 +52,7 @@ func (ProjectV1 *PlatformGrpc) GetProjectList() ([]WorkFlowResponse, error) {
 		return nil, fmt.Errorf("Error while listing the projects: %v\n", err)
 	}
 
-	err = copier.Copy(&projectsResponse, apiResponse)
+	err = copier.Copy(&projectsResponse, apiResponse.Projects)
 	if err != nil {
 		return nil, err
 	}

@@ -106,12 +106,12 @@ func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {
 	return &depResponse, nil
 }
 
-func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeploymentRequest) (*WorkFlowResponse, error) {
 	depResponse := WorkFlowResponse{}
-	dep := createDeploymentRequest.Deployment.V1Deployment
+	dep := createDeploymentRequest.Create.V1Deployment
 
 	createRequest := &publicdeploymentapis.CreateDeploymentRequest{
-		NamespaceId: createDeploymentRequest.Deployment.NamespaceID,
+		NamespaceId: createDeploymentRequest.Create.NamespaceID,
 		Deployment: &publicdeploymentapis.Deployment{
 			Meta: nil,
 			Config: &publicdeploymentapis.Config{
@@ -138,8 +138,8 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 	}
 
 	log.Debugf("Account ID: [%s]", deployment.AccountId)
-	log.Debugf("Namespace ID: [%s]", createDeploymentRequest.Deployment.NamespaceID)
-	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	log.Debugf("Namespace ID: [%s]", createDeploymentRequest.Create.NamespaceID)
+	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
 

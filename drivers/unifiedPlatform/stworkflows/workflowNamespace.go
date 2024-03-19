@@ -10,13 +10,11 @@ import (
 )
 
 type WorkflowNamespace struct {
-	Namespaces    map[string]map[string]string
+	Namespaces    map[string]string
 	TargetCluster WorkflowTargetCluster
 }
 
 const (
-	NamespaceName = "namesace_name"
-	NamespaceUID  = "namespace_uid"
 	retryTimeout  = 10 * time.Minute
 	retryInterval = 30 * time.Second
 )
@@ -36,11 +34,9 @@ func (workflowNamespace *WorkflowNamespace) CreateNamespaces(namespace string) (
 		return workflowNamespace, err
 	}
 
-	workflowNamespace.Namespaces[namespace] = make(map[string]string)
-	workflowNamespace.Namespaces[namespace][NamespaceName] = namespace
-	workflowNamespace.Namespaces[namespace][NamespaceUID] = uid
+	workflowNamespace.Namespaces[namespace] = uid
 
-	log.Infof("Namespace Name - [%s], UID - [%s]", workflowNamespace.Namespaces[namespace][NamespaceName], workflowNamespace.Namespaces[namespace][NamespaceUID])
+	log.Infof("Namespace Name - [%s], UID - [%s]", workflowNamespace.Namespaces[namespace], workflowNamespace.Namespaces[namespace])
 
 	return workflowNamespace, nil
 }

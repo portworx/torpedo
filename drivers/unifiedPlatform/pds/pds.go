@@ -14,14 +14,14 @@ type Pds interface {
 }
 
 type Deployment interface {
-	CreateDeployment(depRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateDeployment(*PDSDeploymentRequest) (*WorkFlowResponse, error)
 	ListDeployment() (*WorkFlowResponse, error)
 	GetDeployment(string) (*WorkFlowResponse, error)
 	DeleteDeployment(string) (*WorkFlowResponse, error)
 }
 
 type DeploymentConfig interface {
-	UpdateDeployment(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateDeployment(updateRequest *PDSDeploymentRequest) (*WorkFlowResponse, error)
 }
 
 type BackupConfig interface {

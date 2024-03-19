@@ -65,7 +65,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 
 		Step("Create a PDS Namespace", func() {
 			workflowNamespace.TargetCluster = workflowTargetCluster
-			workflowNamespace.Namespaces = make(map[string]map[string]string)
+			workflowNamespace.Namespaces = make(map[string]string)
 			_, err := workflowNamespace.CreateNamespaces(namespace)
 			log.FailOnError(err, "Unable to create namespace")
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
@@ -74,7 +74,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 		Step("Associate namespace and cluster to Project", func() {
 			err := workflowProject.Associate(
 				[]string{workflowTargetCluster.ClusterUID},
-				[]string{workflowNamespace.Namespaces[namespace][stworkflows.NamespaceUID]},
+				[]string{workflowNamespace.Namespaces[namespace]},
 				[]string{},
 				[]string{},
 				[]string{},
@@ -87,7 +87,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 		Step("Dissociate cluster from Project", func() {
 			err := workflowProject.Dissociate(
 				[]string{workflowTargetCluster.ClusterUID},
-				[]string{workflowNamespace.Namespaces[namespace][stworkflows.NamespaceUID]},
+				[]string{workflowNamespace.Namespaces[namespace]},
 				[]string{},
 				[]string{},
 				[]string{},
@@ -95,7 +95,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 			)
 			log.FailOnError(err, "Unable to dissociated Cluster from Project")
 			log.Infof("Dissociated Clusters - [%s]", workflowTargetCluster.ClusterUID)
-			log.Infof("Dissociated namespaces - [%s]", workflowNamespace.Namespaces[namespace][stworkflows.NamespaceUID])
+			log.Infof("Dissociated namespaces - [%s]", workflowNamespace.Namespaces[namespace])
 			log.Infof("Associated Resources - [%+v]", workflowProject.AssociatedResources)
 		})
 

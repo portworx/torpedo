@@ -6,10 +6,12 @@ import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	"math/rand"
 	"strconv"
+	"strings"
 )
 
 //var _ = Describe("{TenantsCRUD}", func() {
@@ -70,17 +72,33 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
 	})
+	var (
+		workflowDataservice *stworkflows.WorkflowDataService
+	)
 
 	It("Deploy and Validate DataService", func() {
+
+		Step("Create a PDS Namespace", func() {
+			namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			workflowNamespace.TargetCluster.Platform = workflowPlatform
+			workflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := workflowNamespace.CreateNamespaces(namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[namespace])
+		})
+
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := stworkflows.DeployDataService(ds)
+			workflowDataservice.Namespace.Namespaces[namespace] = workflowNamespace.Namespaces[namespace]
+			workflowDataservice.NamespaceName = namespace
+			_, err := workflowDataservice.DeployDataService(ds)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 	})
 
 	It("Update DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := stworkflows.UpdateDataService(ds)
+			_, err := workflowDataservice.UpdateDataService(ds)
 			log.FailOnError(err, "Error while updating ds")
 		}
 	})
