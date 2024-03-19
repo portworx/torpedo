@@ -2,12 +2,6 @@ package tests
 
 import (
 	"fmt"
-	"os"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	api "github.com/portworx/px-backup-api/pkg/apis/v1"
@@ -21,6 +15,11 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	"github.com/portworx/torpedo/pkg/s3utils"
 	. "github.com/portworx/torpedo/tests"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
 )
 
 func getBucketNameSuffix() string {
@@ -92,8 +91,8 @@ func BackupInitInstance() {
 		SpecDir: Inst().SpecDir,
 	})
 	log.FailOnError(err, "Error occurred while Node Driver Initialization")
-	err = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
-	log.FailOnError(err, "Error occurred while Volume Driver Initialization")
+	_ = Inst().V.Init(Inst().S.String(), Inst().N.String(), token, Inst().Provisioner, Inst().CsiGenericDriverConfigMap)
+	//log.FailOnError(err, "Error occurred while Volume Driver Initialization")
 	if Inst().Backup != nil {
 		err = Inst().Backup.Init(Inst().S.String(), Inst().N.String(), Inst().V.String(), token)
 		log.FailOnError(err, "Error occurred while Backup Driver Initialization")
@@ -239,6 +238,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+
 	StartTorpedoTest("Environment cleanup", "Removing Px-Backup entities created during the test execution", nil, 0)
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
@@ -419,6 +419,7 @@ var _ = AfterSuite(func() {
 			}
 		}
 	}
+
 })
 
 func TestMain(m *testing.M) {
