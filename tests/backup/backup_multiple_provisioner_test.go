@@ -18,46 +18,34 @@ import (
 var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func() {
 
 	var (
-		//backupNames                               []string
-		restoreNames         []string
-		scheduledAppContexts []*scheduler.Context
-		//sourceClusterUid                          string
-		cloudCredName      string
-		cloudCredUID       string
-		backupLocationUID  string
-		backupLocationName string
-		backupLocationMap  map[string]string
-		//labelSelectors                            map[string]string
-		providers []string
-		//firstBkpLocationName   string
-		schedulePolicyName     string
-		schedulePolicyUID      string
-		scheduleUid            string
-		srcClusterUid          string
-		schedulePolicyInterval = int64(15)
-		//scheduledAppContextsForDefaultVscBackup   []*scheduler.Context
-		allAppContext []*scheduler.Context
-		//defaultSchBackupName string
-		scheduleList []string
-		//defaultProvisionerScheduleName            string
-		//nonDefaultVscSchBackupName                string
-		randomStringLength = 10
-		//forceKdmpSchBackupName                    string
-		appSpecList []string
-		//kdmpScheduleName                          string
+		restoreNames                              []string
+		scheduledAppContexts                      []*scheduler.Context
+		cloudCredName                             string
+		cloudCredUID                              string
+		backupLocationUID                         string
+		backupLocationName                        string
+		backupLocationMap                         map[string]string
+		providers                                 []string
+		schedulePolicyName                        string
+		schedulePolicyUID                         string
+		scheduleUid                               string
+		srcClusterUid                             string
+		schedulePolicyInterval                    = int64(15)
+		allAppContext                             []*scheduler.Context
+		scheduleList                              []string
+		randomStringLength                        = 10
+		appSpecList                               []string
 		scheduledAppContextsForMultipleAppSinleNs []*scheduler.Context
 		multipleProvisionerSameNsScheduleName     string
 		multipleNsSchBackupName                   string
 		clusterProviderName                       = GetClusterProvider()
 		provisionerDefaultSnapshotClassMap        = GetProvisionerDefaultSnapshotMap(clusterProviderName)
-		//provisionerSnapshotClassMap               = GetProvisionerSnapshotClassesMap(clusterProviderName)
 	)
 
 	JustBeforeEach(func() {
-		StartPxBackupTorpedoTest("MultipleProvisionerCsiKdmpBackupAndRestore", "Backup and restore of namespaces with multiple provisioners using csi and kdmp", nil, 296724, Sn, Q4FY24)
+		StartPxBackupTorpedoTest("MultipleProvisionerCsiSnapshotDeleteBackupAndRestore", "Delete Csi snapshot and restore namespaces from backup", nil, 296725, Sn, Q4FY24)
 
 		backupLocationMap = make(map[string]string)
-		//labelSelectors = make(map[string]string)
 		providers = GetBackupProviders()
 
 		// Deploy application for Default backup
@@ -150,12 +138,14 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 					OrgId: BackupOrgID,
 				}
 				resp, err := Inst().Backup.InspectBackup(ctx, backupInspectRequest)
+				log.FailOnError(err, fmt.Sprintf("Inspect backup %v", multipleNsSchBackupName))
 				volumeObjlist := resp.Backup.Volumes
 				var volumeNames []string
 				for _, obj := range volumeObjlist {
 					volumeNames = append(volumeNames, obj.Name)
 				}
-				DeleteSnapshotsForVolumes(volumeNames)
+				err = DeleteSnapshotsForVolumes(volumeNames)
+				log.FailOnError(err, fmt.Sprintf("Deleteing snapshot failed for volumes %v", volumeNames))
 			} else {
 				log.InfoD("Skipping this step as provisioner with default volume snapshot class is not found")
 			}
@@ -198,6 +188,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 
 		scheduleUid, err = Inst().Backup.GetBackupScheduleUID(ctx, multipleProvisionerSameNsScheduleName, BackupOrgID)
 		err = DeleteScheduleWithUIDAndWait(multipleProvisionerSameNsScheduleName, scheduleUid, SourceClusterName, srcClusterUid, BackupOrgID, ctx)
+		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting schedule [%s]", multipleProvisionerSameNsScheduleName))
 
 		// Delete restores
 		log.Info("Delete restores")

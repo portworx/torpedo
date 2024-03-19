@@ -5580,29 +5580,19 @@ func DeleteBucket(provider string, bucketName string) {
 }
 
 // DeleteSnapshotsForVolumes for all the volumes from the
-func DeleteSnapshotsForVolumes(volumes []string) {
-	Step(fmt.Sprintf("Delete snapshots of volumes %v", volumes), func() {
-
-		if GetClusterProvider() == "ibm" {
-			log.Infof("inside ibm provider")
-			err := DeleteIbmSnapshotsForVolumes(volumes)
-			if err != nil {
-				log.Errorf("Error deleting IBM snapshots for volumes: %v", err)
-			}
+func DeleteSnapshotsForVolumes(volumes []string) error {
+	var err error
+	if GetClusterProvider() == "ibm" {
+		err = DeleteIbmSnapshotsForVolumes(volumes)
+		if err != nil {
+			return err
 		}
-	})
+	}
+	return nil
 }
 
 func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 	apiKey, err := GetIBMApiKey("default")
-	if err != nil {
-		log.Errorf("Error getting IBM API key: %v", err)
-		log.Infof("error %v", err)
-		log.Infof("error not nil")
-	}
-	if apiKey != "" {
-		log.Infof("key not empty")
-	}
 	if err != nil {
 		return err
 	}
@@ -5616,16 +5606,11 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 	}
 	vpcService, err := vpcv1.NewVpcV1(options)
 	if err != nil {
-		log.Infof("vpc service not created")
-		log.Infof("vpc service not created %s", err)
 		return fmt.Errorf("error creating VPC service client: %s", err)
 	}
 
-	log.Infof("vpc client serive created successfully")
-
 	// Iterate over each volume name
 	for _, volumeName := range volumeNames {
-		log.Infof("volume name %s", volumeName)
 		// Find the volume by name
 		findVolumeOptions := vpcService.NewListVolumesOptions()
 		findVolumeOptions.SetName(volumeName)
@@ -5635,31 +5620,23 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 			return fmt.Errorf("error finding volume '%s': %s", volumeName, err)
 		}
 		if len(volumes.Volumes) == 0 {
-			fmt.Printf("Volume '%s' not found.\n", volumeName)
 			continue
 		}
 		volumeID := *volumes.Volumes[0].ID
-		log.Infof("volume id %s", volumeID)
 
 		// List all snapshots
 		snapshots, _, err := vpcService.ListSnapshots(vpcService.NewListSnapshotsOptions())
-		log.Infof("snaps %s", snapshots)
 		if err != nil {
 			return fmt.Errorf("error listing snapshots: %s", err)
 		}
 
 		// Delete snapshots associated with the volume
 		for _, snapshot := range snapshots.Snapshots {
-			log.Infof("snapid %s", *snapshot.SourceVolume.ID)
-			log.Infof("snapid %s", snapshot.SourceVolume.ID)
 			if *snapshot.SourceVolume.ID == volumeID {
 				// Snapshot belongs to the specified volume, delete it
 				snapshotID := *snapshot.ID
 				snapshotName := *snapshot.Name
-				fmt.Printf("Deleting snapshot '%s' associated with volume '%s'\n", snapshotName, volumeName)
-				fmt.Println("Deleting snapshot '%s' associated with volume '%s'\n", snapshotName, volumeName)
 				log.Infof("Deleting snapshot %s associated with volume %s", snapshotName, volumeName)
-
 				_, err = vpcService.DeleteSnapshot(vpcService.NewDeleteSnapshotOptions(snapshotID))
 				if err != nil {
 					return fmt.Errorf("error deleting snapshot '%s': %s", snapshotName, err)
