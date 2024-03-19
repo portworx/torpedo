@@ -32,9 +32,9 @@ func (templateGrpc *PlatformGrpc) getTemplateClient() (context.Context, publicte
 }
 
 // ListTemplates return service identities models for a project.
-func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplates) ([]WorkFlowResponse, error) {
+func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
-	templateResponse := []WorkFlowResponse{}
+	templateResponse := []PlatformTemplatesResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -51,9 +51,9 @@ func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplate
 }
 
 // CreateTemplates returns newly create template  object
-func (templateGrpc *PlatformGrpc) CreateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+func (templateGrpc *PlatformGrpc) CreateTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -76,9 +76,9 @@ func (templateGrpc *PlatformGrpc) CreateTemplates(templateReq *PlatformTemplates
 	return &templateResponse, nil
 }
 
-func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -102,9 +102,9 @@ func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplates
 }
 
 // GetTemplates return template model.
-func (templateGrpc *PlatformGrpc) GetTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+func (templateGrpc *PlatformGrpc) GetTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -121,9 +121,9 @@ func (templateGrpc *PlatformGrpc) GetTemplates(templateReq *PlatformTemplates) (
 }
 
 // DeleteTemplate delete template and return status.
-func (templateGrpc *PlatformGrpc) DeleteTemplate(templateReq *PlatformTemplates) error {
+func (templateGrpc *PlatformGrpc) DeleteTemplate(templateReq *PlatformTemplatesRequest) error {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

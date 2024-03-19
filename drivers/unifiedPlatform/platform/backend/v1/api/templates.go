@@ -11,12 +11,12 @@ import (
 )
 
 // ListTemplatesForTenants return service identities models for a template.
-func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTemplates) ([]WorkFlowResponse, error) {
+func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error) {
 	ctx, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := []WorkFlowResponse{}
+	templateResponse := []PlatformTemplatesResponse{}
 	var listRequest templatesv1.ApiTemplateServiceListTemplatesRequest
 	listRequest = listRequest.ApiService.TemplateServiceListTemplates(ctx)
 	listRequest = listRequest.TenantId(templateReq.ListForTenant.TenantId)
@@ -32,12 +32,12 @@ func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTe
 }
 
 // ListTemplates return service identities models for a template.
-func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplates) ([]WorkFlowResponse, error) {
+func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error) {
 	ctx, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := []WorkFlowResponse{}
+	templateResponse := []PlatformTemplatesResponse{}
 	var listRequest templatesv1.ApiTemplateServiceListTemplates2Request
 	listRequest = listRequest.ApiService.TemplateServiceListTemplates2(ctx)
 	templatesList, res, err := client.TemplateServiceListTemplates2Execute(listRequest)
@@ -52,12 +52,12 @@ func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplates) (
 }
 
 // CreateTemplates returns newly create template  object
-func (template *PLATFORM_API_V1) CreateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+func (template *PLATFORM_API_V1) CreateTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	_, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	templateCreateRequest := templatesv1.ApiTemplateServiceCreateTemplateRequest{}
 	templateCreateRequest = templateCreateRequest.ApiService.TemplateServiceCreateTemplate(context.Background(), templateReq.Create.TenantId)
 	var tempCreate templatesv1.V1Template
@@ -71,12 +71,12 @@ func (template *PLATFORM_API_V1) CreateTemplates(templateReq *PlatformTemplates)
 
 }
 
-func (template *PLATFORM_API_V1) UpdateTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+func (template *PLATFORM_API_V1) UpdateTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	_, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	templateUpdateRequest := templatesv1.ApiTemplateServiceUpdateTemplateRequest{}
 	templateUpdateRequest = templateUpdateRequest.ApiService.TemplateServiceUpdateTemplate(context.Background(), templateReq.Update.Id)
 	var updateRequest templatesv1.V1Template
@@ -90,13 +90,13 @@ func (template *PLATFORM_API_V1) UpdateTemplates(templateReq *PlatformTemplates)
 }
 
 // GetTemplates return template model.
-func (template *PLATFORM_API_V1) GetTemplates(templateReq *PlatformTemplates) (*WorkFlowResponse, error) {
+func (template *PLATFORM_API_V1) GetTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 
 	ctx, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	templateModel, res, err := client.TemplateServiceGetTemplate(ctx, templateReq.Get.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `TemplateServiceGetTemplateExecute`: %v\n.Full HTTP response: %v", err, res)
@@ -109,12 +109,12 @@ func (template *PLATFORM_API_V1) GetTemplates(templateReq *PlatformTemplates) (*
 }
 
 // DeleteTemplate delete template and return status.
-func (template *PLATFORM_API_V1) DeleteTemplate(templateReq *PlatformTemplates) error {
+func (template *PLATFORM_API_V1) DeleteTemplate(templateReq *PlatformTemplatesRequest) error {
 	ctx, templateClient, err := template.getTemplateClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := WorkFlowResponse{}
+	templateResponse := PlatformTemplatesResponse{}
 	templateModel, res, err := templateClient.TemplateServiceDeleteTemplate(ctx, templateReq.Delete.Id).Execute()
 	if err != nil && res.StatusCode != status.StatusOK {
 		return fmt.Errorf("Error when calling `templateServiceDeletetemplateExecute`: %v\n.Full HTTP response: %v", err, res)

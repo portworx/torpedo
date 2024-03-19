@@ -28,9 +28,9 @@ func (tempDefGrpcGrpc *PdsGrpc) getTemplateDefClient() (context.Context, publict
 }
 
 // ListTemplateKinds will list all template kinds available for PDS
-func (tempDefGrpc *PdsGrpc) ListTemplateKinds() ([]WorkFlowResponse, error) {
+func (tempDefGrpc *PdsGrpc) ListTemplateKinds() ([]TemplateDefinitionResponse, error) {
 	ctx, tempDefGrpcClient, _, err := tempDefGrpc.getTemplateDefClient()
-	templateResponse := []WorkFlowResponse{}
+	templateResponse := []TemplateDefinitionResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -45,9 +45,9 @@ func (tempDefGrpc *PdsGrpc) ListTemplateKinds() ([]WorkFlowResponse, error) {
 	return templateResponse, nil
 }
 
-func (tempDefGrpc *PdsGrpc) ListTemplateRevisions() ([]WorkFlowResponse, error) {
+func (tempDefGrpc *PdsGrpc) ListTemplateRevisions() ([]TemplateDefinitionResponse, error) {
 	ctx, tempDefGrpcClient, _, err := tempDefGrpc.getTemplateDefClient()
-	templateResponse := []WorkFlowResponse{}
+	templateResponse := []TemplateDefinitionResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -62,9 +62,9 @@ func (tempDefGrpc *PdsGrpc) ListTemplateRevisions() ([]WorkFlowResponse, error) 
 	return templateResponse, nil
 }
 
-func (tempDefGrpcGrpc *PdsGrpc) GetTemplateRevisions() (*WorkFlowResponse, error) {
+func (tempDefGrpcGrpc *PdsGrpc) GetTemplateRevisions() (*TemplateDefinitionResponse, error) {
 	ctx, tempDefGrpcClient, _, err := tempDefGrpcGrpc.getTemplateDefClient()
-	templateResponse := WorkFlowResponse{}
+	templateResponse := TemplateDefinitionResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

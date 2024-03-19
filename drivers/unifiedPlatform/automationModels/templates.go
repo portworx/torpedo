@@ -1,12 +1,21 @@
 package automationModels
 
-type PlatformTemplates struct {
+type PlatformTemplatesRequest struct {
 	Create        CreatePlatformTemplates
 	List          ListTemplates
 	ListForTenant ListTemplatesForTenant
 	Update        UpdatePlatformTemplates
 	Get           GetPlatformTemplates
 	Delete        DeletePlatformTemplates
+}
+
+type PlatformTemplatesResponse struct {
+	Create        V1Template
+	List          V1ListTemplateResopnse
+	ListForTenant V1ListTemplateResopnse
+	Update        V1Template
+	Get           V1Template
+	Delete        V1Template
 }
 
 type CreatePlatformTemplates struct {
@@ -70,3 +79,13 @@ type SelectorOperator string
 type V1InfraResourceType string
 
 type V1RespData string
+
+type V1Template struct {
+	Meta   *V1Meta           `json:"meta,omitempty"`
+	Config *V1Config         `json:"config,omitempty"`
+	Status *Templatev1Status `json:"status,omitempty"`
+}
+
+type V1ListTemplateResopnse struct {
+	Templates []V1Template
+}

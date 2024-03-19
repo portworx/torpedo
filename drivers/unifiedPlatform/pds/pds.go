@@ -47,7 +47,7 @@ type RestoreInterface interface {
 }
 
 type TemplateDefinitionsInterface interface {
-	ListTemplateKinds() ([]WorkFlowResponse, error)
-	ListTemplateRevisions() ([]WorkFlowResponse, error)
-	GetTemplateRevisions() (*WorkFlowResponse, error)
+	ListTemplateKinds() ([]TemplateDefinitionResponse, error)
+	ListTemplateRevisions() ([]TemplateDefinitionResponse, error)
+	GetTemplateRevisions() (*TemplateDefinitionResponse, error)
 }
