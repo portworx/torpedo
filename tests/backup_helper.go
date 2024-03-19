@@ -357,11 +357,11 @@ var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 	},
 	"openshift": {
 		"cephfs-csi": {
-			snapshotClasses: []string{"ocs-storagecluster-cephfsplugin-snapclass"},
+			snapshotClasses: []string{""},
 			defaultSnapshot: "ocs-storagecluster-cephfsplugin-snapclass",
 			appList:         []string{"postgres-cephfs-csi"},
 		}, "rbd-csi": {
-			snapshotClasses: []string{"ocs-storagecluster-rbdplugin-snapclass"},
+			snapshotClasses: []string{""},
 			defaultSnapshot: "ocs-storagecluster-rbdplugin-snapclass",
 			appList:         []string{"postgres-rbd-csi"},
 		},
