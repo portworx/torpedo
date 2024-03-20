@@ -42,11 +42,11 @@ type ListTemplateKindsResponse struct {
 }
 
 type ListTemplateTypesResponse struct {
-	TemplateTypes []string
+	TemplateTypes []string `copier:"must,nopanic"`
 }
 
 type ListTemplateSamplesResponse struct {
-	TemplateSamples []string
+	TemplateSamples []string `copier:"must,nopanic"`
 }
 type Revision struct {
 	Meta *Meta         `copier:"must,nopanic"`
