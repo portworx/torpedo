@@ -4741,9 +4741,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if backupRequest.VolumeSnapshotClassMapping == nil {
-			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
@@ -4752,9 +4750,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if backupRequest.VolumeSnapshotClassMapping == nil {
-			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeAzure):
 		log.Infof("Detected backup type - %s", NativeAzure)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
@@ -4785,9 +4781,7 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if backupScheduleRequest.VolumeSnapshotClassMapping == nil {
-			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
@@ -4796,9 +4790,7 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if backupScheduleRequest.VolumeSnapshotClassMapping == nil {
-			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeAzure):
 		log.Infof("Detected backup type - %s", NativeAzure)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
