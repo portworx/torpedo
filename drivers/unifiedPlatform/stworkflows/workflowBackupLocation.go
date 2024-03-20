@@ -51,8 +51,10 @@ func (bkpLoc *WorkflowBackupLocation) ListBackupLocation() ([]*WorkflowBackupLoc
 	for _, bkpLocation := range bkplocs {
 		newBackupLocation := &WorkflowBackupLocation{
 			WfCloudCredentials: WorkflowCloudCredentials{
-				Platform:         bkpLoc.WfCloudCredentials.Platform,
-				CloudCredentials: []CloudCredentialsType{{ID: bkpLocation.Create.Config.CloudCredentialsId}},
+				Platform: bkpLoc.WfCloudCredentials.Platform,
+				CloudCredentials: map[string]CloudCredentialsType{
+					bkpLocation.Create.Config.Provider.Name: {ID: bkpLocation.Create.Config.CloudCredentialsId},
+				},
 			},
 			BkpLocation: BkpLocationType{
 				BkpLocationId: *bkpLocation.Create.Meta.Uid,

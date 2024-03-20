@@ -13,6 +13,8 @@ type WorkflowProject struct {
 	ProjectName         string
 	ProjectId           string
 	AssociatedResources AssociatedResources
+	PageNumber          int
+	PageSize            int
 }
 
 type AssociatedResources struct {
@@ -63,8 +65,8 @@ func (workflowProject *WorkflowProject) DeleteProject() error {
 }
 
 // GetProjectList will get the list of projects in given tenant
-func (workflowProject *WorkflowProject) GetProjectList() ([]automationModels.WorkFlowResponse, error) {
-	projects, err := platformLibs.GetProjectList()
+func (workflowProject *WorkflowProject) GetProjectList() (*automationModels.V1ListProjectsResponse, error) {
+	projects, err := platformLibs.GetProjectList(workflowProject.PageNumber, workflowProject.PageSize)
 	if err != nil {
 		return nil, err
 	}

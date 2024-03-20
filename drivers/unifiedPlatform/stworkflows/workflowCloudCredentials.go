@@ -7,7 +7,7 @@ import (
 
 type WorkflowCloudCredentials struct {
 	Platform         WorkflowPlatform
-	CloudCredentials []CloudCredentialsType
+	CloudCredentials map[string]CloudCredentialsType
 }
 
 type CloudCredentialsType struct {
@@ -22,12 +22,10 @@ func (cloudCredentials *WorkflowCloudCredentials) CreateCloudCredentials(backUpT
 		return cloudCredentials, fmt.Errorf("Failed while creating cloud credentials: %v\n", err)
 	}
 
-	cloudCredentials.CloudCredentials = []CloudCredentialsType{
-		{
-			ID:                *cloudCreds.Create.Meta.Uid,
-			Name:              *cloudCreds.Create.Meta.Name,
-			CloudProviderType: backUpTargetType,
-		},
+	cloudCredentials.CloudCredentials[backUpTargetType] = CloudCredentialsType{
+		ID:                *cloudCreds.Create.Meta.Uid,
+		Name:              *cloudCreds.Create.Meta.Name,
+		CloudProviderType: backUpTargetType,
 	}
 
 	return cloudCredentials, nil
