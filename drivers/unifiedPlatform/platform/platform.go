@@ -98,7 +98,7 @@ type TemplatesInterface interface {
 }
 
 type Onboard interface {
-	OnboardNewAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	OnboardNewAccount(*PlatformOnboardAccountRequest) (*PlatformOnboardAccountResponse, error)
 }
 
 type Project interface {

@@ -1,9 +1,15 @@
 package automationModels
 
-// PlatformOnboardAccount to create account.
-type PlatformOnboardAccount struct {
+// PlatformOnboardAccountRequest to create account.
+type PlatformOnboardAccountRequest struct {
 	// account to be created and onboarded
 	Register *PlatformRegisterAccount `copier:"must,nopanic"`
+}
+
+// PlatformOnboardAccountRequest to create account.
+type PlatformOnboardAccountResponse struct {
+	// account to be created and onboarded
+	Register *AccountRegistration `copier:"must,nopanic"`
 }
 
 type PlatformRegisterAccount struct {

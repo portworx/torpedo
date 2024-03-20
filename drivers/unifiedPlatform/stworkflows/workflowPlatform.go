@@ -27,9 +27,8 @@ func (platform *WorkflowPlatform) OnboardAccounts() (map[string][]automationMode
 		if err != nil {
 			return resultMap, err
 		} else {
-			log.Infof("Account Onboarded - UID - [%s]", *accCreationResponse.OnboardAccount.Meta.Uid)
-			platform.AdminAccountId = *accCreationResponse.OnboardAccount.Meta.Uid
-			addResultToResponse([]automationModels.WorkFlowResponse{*accCreationResponse}, automationModels.CreatePlatformAccountV1, resultMap)
+			log.Infof("Account Onboarded - UID - [%s]", *accCreationResponse.Register.Meta.Uid)
+			platform.AdminAccountId = *accCreationResponse.Register.Meta.Uid
 		}
 	}
 
