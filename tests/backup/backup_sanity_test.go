@@ -112,7 +112,6 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		schedulePolicyName                string
 		schedulePolicyUID                 string
 		schedulePolicyInterval            = int64(15)
-		forceKdmpSchBackupName            string
 	)
 
 	JustBeforeEach(func() {
