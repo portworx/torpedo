@@ -11,13 +11,13 @@ type DeploymentTopology struct {
 	// Service name is the name of service as provided by user.
 	ServiceName *string `copier:"must,nopanic"`
 	// Source IP ranges to use for the deployed Load Balancer.
-	LoadBalancerSourceRanges []string  `copier:"must,nopanic"`
-	ResourceTemplate         *Template `copier:"must,nopanic"`
-	ApplicationTemplate      *Template `copier:"must,nopanic"`
-	StorageTemplate          *Template `copier:"must,nopanic"`
+	LoadBalancerSourceRanges []string      `copier:"must,nopanic"`
+	ResourceTemplate         *PdsTemplates `copier:"must,nopanic"`
+	ApplicationTemplate      *PdsTemplates `copier:"must,nopanic"`
+	StorageTemplate          *PdsTemplates `copier:"must,nopanic"`
 }
 
-type Template struct {
+type PdsTemplates struct {
 	// UID of the Template.
 	Id *string `copier:"must,nopanic"`
 	// Resource version of the template.
