@@ -916,7 +916,8 @@ func CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName string, clust
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
-		DirectKdmp: forceKdmp,
+		VolumeSnapshotClassMapping: provisionerVolumeSnapshotClassMap,
+		DirectKdmp:                 forceKdmp,
 	}
 
 	err := AdditionalBackupRequestParams(bkpCreateRequest)
@@ -1153,7 +1154,8 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
-		DirectKdmp: forceKdmp,
+		VolumeSnapshotClassMapping: provisionerVolumeSnapshotClassMap,
+		DirectKdmp:                 forceKdmp,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
