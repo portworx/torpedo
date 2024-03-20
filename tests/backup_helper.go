@@ -5026,6 +5026,9 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		}
 		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
 			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
+			for key, value := range provisionerVolumeSnapshotClassMap {
+				log.Infof("printing provisionerVolumeSnapshotClassMap Key: %s, Value: %s", key, value)
+			}
 		} else {
 			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 		}
