@@ -45,13 +45,13 @@ type ListTemplates struct {
 }
 
 type V1ListTemplatesRequest struct {
-	TenantId              string             `json:"tenantId,omitempty"`
-	Pagination            PaginationRequest  `json:"pagination,omitempty"`
-	LabelSelector         V1Selector         `json:"labelSelector,omitempty"`
-	FieldSelector         V1Selector         `json:"fieldSelector,omitempty"`
-	InfraResourceSelector V1ResourceSelector `json:"infraResourceSelector,omitempty"`
-	RespData              V1RespData         `json:"respData,omitempty"`
-	Sort                  Sort               `json:"sort,omitempty"`
+	TenantId              string             `copier:"must,nopanic"`
+	Pagination            PaginationRequest  `copier:"must,nopanic"`
+	LabelSelector         V1Selector         `copier:"must,nopanic"`
+	FieldSelector         V1Selector         `copier:"must,nopanic"`
+	InfraResourceSelector V1ResourceSelector `copier:"must,nopanic"`
+	RespData              V1RespData         `copier:"must,nopanic"`
+	Sort                  Sort               `copier:"must,nopanic"`
 }
 
 type V1Selector struct {
@@ -59,19 +59,19 @@ type V1Selector struct {
 }
 
 type SelectorFilter struct {
-	Key    string           `json:"key,omitempty"`
-	Op     SelectorOperator `json:"op,omitempty"`
-	Values []string         `json:"values,omitempty"`
+	Key    string           `copier:"must,nopanic"`
+	Op     SelectorOperator `copier:"must,nopanic"`
+	Values []string         `copier:"must,nopanic"`
 }
 
 type V1ResourceSelector struct {
-	InfraResourceFilters []ResourceSelectorResourceFilter `json:"infraResourceFilters,omitempty"`
+	InfraResourceFilters []ResourceSelectorResourceFilter `copier:"must,nopanic"`
 }
 
 type ResourceSelectorResourceFilter struct {
-	ResourceType V1InfraResourceType `json:"resourceType,omitempty"`
-	Op           SelectorOperator    `json:"op,omitempty"`
-	Values       []string            `json:"values,omitempty"`
+	ResourceType V1InfraResourceType `copier:"must,nopanic"`
+	Op           SelectorOperator    `copier:"must,nopanic"`
+	Values       []string            `copier:"must,nopanic"`
 }
 
 type SelectorOperator string
@@ -81,9 +81,9 @@ type V1InfraResourceType string
 type V1RespData string
 
 type V1Template struct {
-	Meta   *V1Meta           `json:"meta,omitempty"`
-	Config *V1Config         `json:"config,omitempty"`
-	Status *Templatev1Status `json:"status,omitempty"`
+	Meta   *V1Meta           `copier:"must,nopanic"`
+	Config *V1Config         `copier:"must,nopanic"`
+	Status *Templatev1Status `copier:"must,nopanic"`
 }
 
 type V1ListTemplateResopnse struct {
