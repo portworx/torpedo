@@ -11540,7 +11540,6 @@ func getMetaDataDiskPath(n node.Node) (string, error) {
 	return path, nil
 }
 
-
 var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
 	/*
 	   https://portworx.atlassian.net/browse/PTX-15473
@@ -11567,7 +11566,7 @@ var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
 			selectedNode = storageNodes[rand.Intn(len(storageNodes))]
 
 			AppList := Inst().AppList
-			Inst().AppList = []string{"fio"}
+			Inst().AppList = []string{"fio-fastpath-repl1"}
 
 			var err error
 			defer func() {
@@ -11642,5 +11641,10 @@ var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
 			log.InfoD("Successfully expanded the pool and removing network delay for the node: %v", selectedNode.Name)
 
 		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
 	})
 })
