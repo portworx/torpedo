@@ -35,7 +35,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, error) {
+func UpdateDataService(ds PDSDataService, namespaceId, projectId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Update Data service will be performed")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
@@ -43,24 +43,24 @@ func UpdateDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, e
 	// TODO call the below methods and fill up the structs
 	// Get TargetClusterID
 	// Get ImageID
-	// Get ProjectID
-	// Get App, Resource and storage Template Ids
+	// Get App, Resource and storage PdsTemplates Ids
 
 	depInputs.Update.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
 	depInputs.Update.V1Deployment.Meta.Name = &ds.DeploymentName
-	depInputs.Update.NamespaceID = "nam:6a9bead4-5e2e-473e-b325-ceeda5bbbce6"
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.Template{
+	depInputs.Create.NamespaceID = namespaceId
+	depInputs.Create.ProjectID = projectId
+	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.Template{
+	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.Template{
+	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,
@@ -75,32 +75,33 @@ func UpdateDataService(ds PDSDataService) (*automationModels.WorkFlowResponse, e
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService, namespaceId, projectId string) (*automationModels.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
 
 	// TODO call the below methods and fill up the structs
-	// Get TargetClusterID
 	// Get ImageID
-	// Get App, Resource and storage Template Ids
+	// Get App, Resource and storage PdsTemplates Ids
 
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
 	depInputs.Create.V1Deployment.Meta.Name = &ds.DeploymentName
 	depInputs.Create.NamespaceID = namespaceId
 	depInputs.Create.ProjectID = projectId
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.Template{
+	depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
+	depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
+	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.Template{
+	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
 		Id:              intToPointerString(11),
 		ResourceVersion: nil,
 		Values:          nil,
 	}
-	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.Template{
+	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
 		Id:              intToPointerString(12),
 		ResourceVersion: nil,
 		Values:          nil,

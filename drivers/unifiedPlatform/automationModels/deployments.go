@@ -11,13 +11,13 @@ type DeploymentTopology struct {
 	// Service name is the name of service as provided by user.
 	ServiceName *string `copier:"must,nopanic"`
 	// Source IP ranges to use for the deployed Load Balancer.
-	LoadBalancerSourceRanges []string  `copier:"must,nopanic"`
-	ResourceSettings         *Template `copier:"must,nopanic"`
-	ServiceConfigurations    *Template `copier:"must,nopanic"`
-	StorageOptions           *Template `copier:"must,nopanic"`
+	LoadBalancerSourceRanges []string      `copier:"must,nopanic"`
+	ResourceSettings         *PdsTemplates `copier:"must,nopanic"`
+	ServiceConfigurations    *PdsTemplates `copier:"must,nopanic"`
+	StorageOptions           *PdsTemplates `copier:"must,nopanic"`
 }
 
-type Template struct {
+type PdsTemplates struct {
 	// UID of the Template.
 	Id *string `copier:"must,nopanic"`
 	// Resource version of the template.
@@ -28,7 +28,7 @@ type Template struct {
 
 type Reference struct {
 	// UID of the target cluster in which Data Service will be deployed.
-	TargetClusterId *string `copier:"must,nopanic"`
+	TargetClusterId string `copier:"must,nopanic"`
 	// UID of the image to be used for the Data Service Deployment.
 	ImageId *string `copier:"must,nopanic"`
 	// UID of the project to which DataService Deployment associated.

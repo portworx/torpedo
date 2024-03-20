@@ -52,6 +52,7 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 	fmt.Println("Storage Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].StorageOptions.Id)
 	fmt.Println("App Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
 	fmt.Println("Resource Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	fmt.Println("TargetClusterId: ", *DeploymentRequest.Config.References.TargetClusterId)
 
 	DeploymentRequestBody := deploymentV1.DeploymentServiceCreateDeploymentBody{
 		ProjectId:  &createDeploymentRequest.Create.ProjectID,

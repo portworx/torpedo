@@ -91,10 +91,11 @@ type ServiceAccountsInterface interface {
 }
 
 type TemplatesInterface interface {
-	ListTemplates(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	CreateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteTemplate(*WorkFlowRequest) error
+	ListTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	CreateTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	UpdateTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	GetTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	DeleteTemplate(*PlatformTemplatesRequest) error
 }
 
 type Onboard interface {
