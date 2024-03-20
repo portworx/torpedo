@@ -348,9 +348,6 @@ var _ = Describe("{BasicBackupCreationDummyTest}", func() {
 		}
 		DestroyApps(restoredAppContexts, opts)
 
-		scheduleUid, err := Inst().Backup.GetBackupScheduleUID(ctx, forceKdmpSchBackupName, BackupOrgID)
-		err = DeleteScheduleWithUIDAndWait(forceKdmpSchBackupName, scheduleUid, SourceClusterName, sourceClusterUid, BackupOrgID, ctx)
-
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
