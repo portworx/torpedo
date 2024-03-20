@@ -366,6 +366,23 @@ func setUpgradeStorageDriverEndpointList(configData *map[string]string) {
 	delete(*configData, UpgradeEndpoints)
 }
 
+func setSchedUpgradeHops(configData *map[string]string) {
+	// Get scheduler upgrade hops from configMap
+	if schedUpgradeHops, ok := (*configData)[SchedUpgradeHops]; !ok {
+		log.Warnf("No [%s] field found in [%s] config-map in [%s] namespace.", SchedUpgradeHops, testTriggersConfigMap, configMapNS)
+	} else if schedUpgradeHops != "" {
+		currentCount := len(strings.Split(Inst().SchedUpgradeHops, ","))
+		newCount := len(strings.Split(schedUpgradeHops, ","))
+		if Inst().SchedUpgradeHops == "" || newCount >= currentCount {
+			Inst().SchedUpgradeHops = schedUpgradeHops
+		} else {
+			log.Warnf("schedUpgradeHops reduced from [%s] to [%s], removal not supported.", Inst().SchedUpgradeHops, schedUpgradeHops)
+		}
+		log.Infof("The SchedUpgradeHops is set to %s", Inst().SchedUpgradeHops)
+	}
+	delete(*configData, SchedUpgradeHops)
+}
+
 func populateTriggers(triggers *map[string]string) error {
 	for triggerType, chaosLevel := range *triggers {
 		chaosLevelInt, err := strconv.Atoi(chaosLevel)
