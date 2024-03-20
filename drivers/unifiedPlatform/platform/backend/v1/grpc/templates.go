@@ -32,9 +32,11 @@ func (templateGrpc *PlatformGrpc) getTemplateClient() (context.Context, publicte
 }
 
 // ListTemplates return service identities models for a project.
-func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error) {
+func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	ctx, templateClient, _, err := templateGrpc.getTemplateClient()
-	templateResponse := []PlatformTemplatesResponse{}
+	templateResponse := PlatformTemplatesResponse{
+		List: V1ListTemplateResopnse{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -47,7 +49,7 @@ func (templateGrpc *PlatformGrpc) ListTemplates(templateReqReq *PlatformTemplate
 	log.Infof("Value of Template - [%v]", apiResponse)
 	err = utilities.CopyStruct(&templateResponse, apiResponse.Templates)
 	log.Infof("Value of Template after copy - [%v]", templateResponse)
-	return templateResponse, nil
+	return &templateResponse, nil
 }
 
 // CreateTemplates returns newly create template  object

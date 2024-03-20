@@ -91,7 +91,7 @@ type ServiceAccountsInterface interface {
 }
 
 type TemplatesInterface interface {
-	ListTemplates(*PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error)
+	ListTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
 	CreateTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
 	UpdateTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
 	GetTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)

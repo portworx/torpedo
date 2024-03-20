@@ -3,24 +3,26 @@ package automationModels
 import structpb "google.golang.org/protobuf/types/known/structpb"
 
 type TemplateDefinitionRequest struct {
-	GetType GetTemplateDefinitionType
+	GetType GetTemplateDefinitionType `copier:"must,nopanic"`
 }
 
 type TemplateDefinitionResponse struct {
-	GetType      V1TemplateType
-	ListRevision ListRevisionResponse
-	ListKinds    ListTemplateKindsResponse
-	GetRevision  Revision
+	GetType      V1TemplateType              `copier:"must,nopanic"`
+	ListRevision ListRevisionResponse        `copier:"must,nopanic"`
+	ListKinds    ListTemplateKindsResponse   `copier:"must,nopanic"`
+	ListTypes    ListTemplateTypesResponse   `copier:"must,nopanic"`
+	ListSamples  ListTemplateSamplesResponse `copier:"must,nopanic"`
+	GetRevision  Revision                    `copier:"must,nopanic"`
 }
 
 type GetTemplateDefinitionType struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type V1TemplateType struct {
 	Uid         *string `copier:"must,nopanic"`
 	Name        *string `copier:"must,nopanic"`
-	Description *string
+	Description *string `copier:"must,nopanic"`
 }
 
 type ListRevisionResponse struct {
@@ -35,10 +37,17 @@ type RevisionInfo struct {
 }
 
 type ListTemplateKindsResponse struct {
-	Kinds      []string `copier:"must,nopanic"`
-	Pagination *PageBasedPaginationResponse
+	Kinds      []string                     `copier:"must,nopanic"`
+	Pagination *PageBasedPaginationResponse `copier:"must,nopanic"`
 }
 
+type ListTemplateTypesResponse struct {
+	TemplateTypes []string
+}
+
+type ListTemplateSamplesResponse struct {
+	TemplateSamples []string
+}
 type Revision struct {
 	Meta *Meta         `copier:"must,nopanic"`
 	Info *RevisionInfo `copier:"must,nopanic"`

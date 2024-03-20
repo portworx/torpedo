@@ -11,12 +11,14 @@ import (
 )
 
 // ListTemplatesForTenants return service identities models for a template.
-func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error) {
+func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
+	templateResponse := PlatformTemplatesResponse{
+		ListForTenant: V1ListTemplateResopnse{},
+	}
 	ctx, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := []PlatformTemplatesResponse{}
 	var listRequest templatesv1.ApiTemplateServiceListTemplatesRequest
 	listRequest = listRequest.ApiService.TemplateServiceListTemplates(ctx)
 	listRequest = listRequest.TenantId(templateReq.ListForTenant.TenantId)
@@ -28,16 +30,18 @@ func (template *PLATFORM_API_V1) ListTemplatesForTenants(templateReq *PlatformTe
 	if err != nil {
 		return nil, err
 	}
-	return templateResponse, nil
+	return &templateResponse, nil
 }
 
 // ListTemplates return service identities models for a template.
-func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplatesRequest) ([]PlatformTemplatesResponse, error) {
+func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplatesRequest) (*PlatformTemplatesResponse, error) {
 	ctx, client, err := template.getTemplateClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	templateResponse := []PlatformTemplatesResponse{}
+	templateResponse := PlatformTemplatesResponse{
+		List: V1ListTemplateResopnse{},
+	}
 	var listRequest templatesv1.ApiTemplateServiceListTemplates2Request
 	listRequest = listRequest.ApiService.TemplateServiceListTemplates2(ctx)
 	templatesList, res, err := client.TemplateServiceListTemplates2Execute(listRequest)
@@ -48,7 +52,7 @@ func (template *PLATFORM_API_V1) ListTemplates(templateReq *PlatformTemplatesReq
 	if err != nil {
 		return nil, err
 	}
-	return templateResponse, nil
+	return &templateResponse, nil
 }
 
 // CreateTemplates returns newly create template  object

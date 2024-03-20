@@ -1,47 +1,47 @@
 package automationModels
 
 type PlatformTemplatesRequest struct {
-	Create        CreatePlatformTemplates
-	List          ListTemplates
-	ListForTenant ListTemplatesForTenant
-	Update        UpdatePlatformTemplates
-	Get           GetPlatformTemplates
-	Delete        DeletePlatformTemplates
+	Create        CreatePlatformTemplates `copier:"must,nopanic"`
+	List          ListTemplates           `copier:"must,nopanic"`
+	ListForTenant ListTemplatesForTenant  `copier:"must,nopanic"`
+	Update        UpdatePlatformTemplates `copier:"must,nopanic"`
+	Get           GetPlatformTemplates    `copier:"must,nopanic"`
+	Delete        DeletePlatformTemplates `copier:"must,nopanic"`
 }
 
 type PlatformTemplatesResponse struct {
-	Create        V1Template
-	List          V1ListTemplateResopnse
-	ListForTenant V1ListTemplateResopnse
-	Update        V1Template
-	Get           V1Template
-	Delete        V1Template
+	Create        V1Template             `copier:"must,nopanic"`
+	List          V1ListTemplateResopnse `copier:"must,nopanic"`
+	ListForTenant V1ListTemplateResopnse `copier:"must,nopanic"`
+	Update        V1Template             `copier:"must,nopanic"`
+	Get           V1Template             `copier:"must,nopanic"`
+	Delete        V1Template             `copier:"must,nopanic"`
 }
 
 type CreatePlatformTemplates struct {
-	TenantId string
-	Template *Template
+	TenantId string    `copier:"must,nopanic"`
+	Template *Template `copier:"must,nopanic"`
 }
 
 type UpdatePlatformTemplates struct {
-	Id       string
-	Template *Template
+	Id       string    `copier:"must,nopanic"`
+	Template *Template `copier:"must,nopanic"`
 }
 
 type DeletePlatformTemplates struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type GetPlatformTemplates struct {
-	Id string
+	Id string `copier:"must,nopanic"`
 }
 
 type ListTemplatesForTenant struct {
-	TenantId string
+	TenantId string `copier:"must,nopanic"`
 }
 
 type ListTemplates struct {
-	V1ListTemplatesRequest V1ListTemplatesRequest
+	V1ListTemplatesRequest V1ListTemplatesRequest `copier:"must,nopanic"`
 }
 
 type V1ListTemplatesRequest struct {
@@ -55,7 +55,7 @@ type V1ListTemplatesRequest struct {
 }
 
 type V1Selector struct {
-	Filters []SelectorFilter
+	Filters []SelectorFilter `copier:"must,nopanic"`
 }
 
 type SelectorFilter struct {
@@ -87,5 +87,5 @@ type V1Template struct {
 }
 
 type V1ListTemplateResopnse struct {
-	Templates []V1Template
+	Templates []V1Template `copier:"must,nopanic"`
 }

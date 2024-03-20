@@ -10,12 +10,14 @@ import (
 )
 
 // ListTemplateKinds will list all tempDef kinds available for PDS
-func (tempDef *PDS_API_V1) ListTemplateKinds() ([]TemplateDefinitionResponse, error) {
+func (tempDef *PDS_API_V1) ListTemplateKinds() (*TemplateDefinitionResponse, error) {
 	ctx, client, err := tempDef.getTemplateDefinitionClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	tempDefResponse := []TemplateDefinitionResponse{}
+	tempDefResponse := TemplateDefinitionResponse{
+		ListKinds: ListTemplateKindsResponse{},
+	}
 	var listRequest tempDefv1.ApiTemplateDefinitionServiceListTemplateKindsRequest
 	listRequest = listRequest.ApiService.TemplateDefinitionServiceListTemplateKinds(ctx)
 	templatesList, res, err := client.TemplateDefinitionServiceListTemplateKindsExecute(listRequest)
@@ -26,15 +28,17 @@ func (tempDef *PDS_API_V1) ListTemplateKinds() ([]TemplateDefinitionResponse, er
 	if err != nil {
 		return nil, err
 	}
-	return tempDefResponse, nil
+	return &tempDefResponse, nil
 }
 
-func (tempDef *PDS_API_V1) ListTemplateTypes() ([]TemplateDefinitionResponse, error) {
+func (tempDef *PDS_API_V1) ListTemplateTypes() (*TemplateDefinitionResponse, error) {
 	ctx, client, err := tempDef.getTemplateDefinitionClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	tempDefResponse := []TemplateDefinitionResponse{}
+	tempDefResponse := TemplateDefinitionResponse{
+		ListTypes: ListTemplateTypesResponse{},
+	}
 	var listRequest tempDefv1.ApiTemplateDefinitionServiceListTemplateTypesRequest
 	listRequest = listRequest.ApiService.TemplateDefinitionServiceListTemplateTypes(ctx)
 	templatesList, res, err := client.TemplateDefinitionServiceListTemplateTypesExecute(listRequest)
@@ -45,15 +49,17 @@ func (tempDef *PDS_API_V1) ListTemplateTypes() ([]TemplateDefinitionResponse, er
 	if err != nil {
 		return nil, err
 	}
-	return tempDefResponse, nil
+	return &tempDefResponse, nil
 }
 
-func (tempDef *PDS_API_V1) ListTemplateSamples() ([]TemplateDefinitionResponse, error) {
+func (tempDef *PDS_API_V1) ListTemplateSamples() (*TemplateDefinitionResponse, error) {
 	ctx, client, err := tempDef.getTemplateDefinitionClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	tempDefResponse := []TemplateDefinitionResponse{}
+	tempDefResponse := TemplateDefinitionResponse{
+		ListSamples: ListTemplateSamplesResponse{},
+	}
 	var listRequest tempDefv1.ApiTemplateDefinitionServiceListTemplateSamplesRequest
 	listRequest = listRequest.ApiService.TemplateDefinitionServiceListTemplateSamples(ctx)
 	templatesList, res, err := client.TemplateDefinitionServiceListTemplateSamplesExecute(listRequest)
@@ -64,15 +70,17 @@ func (tempDef *PDS_API_V1) ListTemplateSamples() ([]TemplateDefinitionResponse, 
 	if err != nil {
 		return nil, err
 	}
-	return tempDefResponse, nil
+	return &tempDefResponse, nil
 }
 
-func (tempDef *PDS_API_V1) ListTemplateRevisions() ([]TemplateDefinitionResponse, error) {
+func (tempDef *PDS_API_V1) ListTemplateRevisions() (*TemplateDefinitionResponse, error) {
 	ctx, client, err := tempDef.getTemplateDefinitionClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	tempDefResponse := []TemplateDefinitionResponse{}
+	tempDefResponse := TemplateDefinitionResponse{
+		ListRevision: ListRevisionResponse{},
+	}
 	var listRequest tempDefv1.ApiTemplateDefinitionServiceListRevisionsRequest
 	listRequest = listRequest.ApiService.TemplateDefinitionServiceListRevisions(ctx)
 	templatesList, res, err := client.TemplateDefinitionServiceListRevisionsExecute(listRequest)
@@ -83,7 +91,7 @@ func (tempDef *PDS_API_V1) ListTemplateRevisions() ([]TemplateDefinitionResponse
 	if err != nil {
 		return nil, err
 	}
-	return tempDefResponse, nil
+	return &tempDefResponse, nil
 }
 
 func (tempDef *PDS_API_V1) GetTemplateRevisions() (*TemplateDefinitionResponse, error) {
