@@ -10627,3 +10627,48 @@ func installGrafana(namespace string) {
 	}
 
 }
+
+// This function returns a map of poolID and its corresponding drive size
+func GetPoolDriveSize(n node.Node) (map[int]string, error) {
+	cmd := "pxctl sv pool show | grep 'Size' | awk '{print $2}'"
+	output, err := Inst().N.RunCommandWithNoRetry(n, cmd, node.ConnectionOpts{
+		Timeout:         2 * time.Minute,
+		TimeBeforeRetry: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	//split the output based on new line
+	sizes := strings.Split(output, "\n")
+
+	// create a map to store poolID and its corresponding drive size
+	poolDriveSize := make(map[int]string)
+	drvMap, err := Inst().V.GetPoolDrives(&n)
+
+	for i, size := range sizes {
+		poolDriveSize[i] = size
+	}
+	return poolDriveSize, nil
+
+}
+
+// MaxCloudDrive returns how many cloud drives can a storage pool have
+func MaxCloudDrive() (int, error) {
+	var err error
+
+	namespace, err := Inst().V.GetVolumeDriverNamespace()
+	if err != nil {
+		return 0, err
+	}
+
+	var maxCloudDrives int
+	if _, err := core.Instance().GetSecret(PX_VSPHERE_SCERET_NAME, namespace); err == nil {
+		maxCloudDrives = VSPHERE_MAX_CLOUD_DRIVES
+	} else if _, err := core.Instance().GetSecret(PX_PURE_SECRET_NAME, namespace); err == nil {
+		maxCloudDrives = FA_MAX_CLOUD_DRIVES
+	} else {
+		maxCloudDrives = CLOUD_PROVIDER_MAX_CLOUD_DRIVES
+	}
+
+	return maxCloudDrives, nil
+}

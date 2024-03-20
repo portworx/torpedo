@@ -11024,27 +11024,43 @@ var _ = Describe("{CheckPoolOffline}", func() {
 
 })
 
-//[DMThin + cloud drive + Pool delete + Max drive ] : Even after Pool delete, we are unable to add new cloud drive “ProviderInternal Error: No more free devices” error seen [PWX-28328]
-
 var _ = Describe("{PoolDeleteMaxDrive}", func() {
-	/*
-								1. Enter pool maintenance and create 4 pool with 2 drives - total of 8 drives
-							    2. Delete 2 pools ( i.e Pool 4 and Pool 3)
-						        3. Run pxctl command and check if the drives are deleted.
-					            4. Try adding a new drive cloud drive in the maintenance mode
-				                5. Retry adding a new drive cloud drive in maintenance mode , drive add fails
-			                    6. Exit Maintenance mode and retry adding a new drive cloud drive online
-		           Result: Drive add should not fail in both maintenance and online mode with free “: No more free devices Failed to add cloud drive”
+	/*  PTX: https://portworx.atlassian.net/browse/PTX-15713
+			Please run this test only for dmthin.
+	1. Enter pool maintenance and create 4 pool with 2 drives - total of 8 drives
+	2. Delete 2 pools ( i.e Pool 4 and Pool 3)
+	3. Run pxctl command and check if the drives are deleted.
+	4. Try adding a new drive cloud drive in the maintenance mode
+	5. Retry adding a new drive cloud drive in maintenance mode , drive add fails
+	6. Exit Maintenance mode and retry adding a new drive cloud drive online
+	           Result: Drive add should not fail in both maintenance and online mode with free “: No more free devices Failed to add cloud drive”
 	*/
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolDeleteMaxDrive", "Pool delete with max drive", nil, 0)
 	})
+	var maxDriversPerNode int
+	var maxPoolPerNode = 6
 
 	itLog := "PoolDeleteMaxDrive"
 	It(itLog, func() {
-		stepLog := "Check how many more pools to create and how many drives to add"
+		stepLog := "Check if the storage driver is dmthin"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
+			dmThin, err := IsDMthin()
+			log.FailOnError(err, "Failed to check if the storage driver is dmthin")
+
+			if !dmThin {
+				Skip("Skipping the test as the storage driver is not dmthin")
+			}
+		})
+
+		stepLog = "Check how many more pools to create and how many drives to add"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			maxDriversPerNode, err = MaxCloudDrive()
+			log.FailOnError(err, "Failed to get maximum cloud drives for a storage node")
+			log.InfoD("Maximum cloud drives for this platform is: %v", maxDriversPerNode)
+
 			// Get the node with the least number of pools
 			selectedNode := GetNodeWithLeastPools()
 			log.InfoD("Selected Node: %v", selectedNode.Name)
@@ -11055,16 +11071,90 @@ var _ = Describe("{PoolDeleteMaxDrive}", func() {
 			drvMap, err := Inst().V.GetPoolDrives(&selectedNode)
 			log.FailOnError(err, "error getting pool drives from node [%s]", selectedNode.Name)
 
-			pools, err := GetPoolsDetailsOnNode(selectedNode)
+			totalCloudDrives := 0
+			totalPools := 0
+
+			// Count the total number of cloud drives and pools
+			for _, drives := range drvMap {
+				totalCloudDrives += len(drives)
+				totalPools += 1
+			}
+
+			// calculate how many more pools to create and how many drives to add
+			poolsToCreate := maxPoolPerNode - totalPools
+			drivesToAdd := maxDriversPerNode - totalCloudDrives
+			log.InfoD("Pools to create: %v, Drives to add: %v", poolsToCreate, drivesToAdd)
+
+			// Create a new pool using drive add
+			for i := 0; i < poolsToCreate; i++ {
+				deviceSpec := fmt.Sprintf("size=%d", 40+rand.Intn(10)*i)
+				err = Inst().V.AddCloudDrive(&selectedNode, deviceSpec, -1)
+				poolsToCreate++
+				drivesToAdd++
+			}
+
+			// Check if the new pools are created
+			newPools, err := GetPoolsDetailsOnNode(selectedNode)
 			log.FailOnError(err, "Failed to get pool details on node: %v", selectedNode.Name)
 
-			for _, pool := range pools {
-				drvs := drvMap[fmt.Sprintf("%d", pool.ID)]
-				if len(drvs) > (POOL_MAX_CLOUD_DRIVES - 2) {
-					continue
+			newPoolsId := make(map[string]*api.StoragePool, 0)
+
+			for _, pool := range newPools {
+				// check if this id is present in the pool list before add drive
+				if ok := drvMap[pool.Uuid]; len(ok) == 0 {
+					newPoolsId[pool.Uuid] = pool
 				}
-				break
 			}
+
+			// Add drive to the newly created pool or else add drives to the existing pools
+			newPoolDriveMap := make(map[string]int)
+			drvMap, err = Inst().V.GetPoolDrives(&selectedNode)
+			log.FailOnError(err, "error getting pool drives from node [%s]", selectedNode.Name)
+
+			for poolID, drives := range drvMap {
+				newPoolDriveMap[poolID] = len(drives)
+			}
+
+			// Add drives to the newly created pools
+			if drivesToAdd>0{
+				for _, pool := range newPoolsId {
+					//check how many more drives we can add to the pool
+					driveAddCount := maxDriversPerNode-newPoolDriveMap[pool.Uuid]
+
+					poolID := pool.ID
+					driveSize :=
+					for i:=0; i<driveAddCount; i++{
+						deviceSpec := fmt.Sprintf("size=%d")
+						err = Inst().V.AddCloudDrive(&selectedNode, deviceSpec, -1)
+						log.FailOnError(err, "error adding cloud drive to the pool")
+						log.InfoD("Drive added to the pool: %v", pool.Uuid)
+						drivesToAdd--
+					}
+
+
+				}
+			}
+
+
+			// Check if more drives needs to be added
+			for poolID, drives := range drvMap {
+				if len(drives) < maxDriversPerNode && drivesToAdd > 0 {
+					pool, err := GetStoragePoolByUUID(poolID)
+					log.FailOnError(err, "Failed to get storage pools %v", poolID)
+					driveSize := pool.TotalSize
+
+					log.InfoD("Drive size of the pool: %v", driveSize)
+					deviceSpec := fmt.Sprintf("size=%d", driveSize)
+					err = Inst().V.AddCloudDrive(&selectedNode, deviceSpec, pool.ID)
+					log.FailOnError(err, "Failed to add drive on pool: %v", pool.ID)
+					drivesToAdd--
+				}
+			}
+		})
+
+		stepLog = "Delete 2 pools"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
 
 		})
 	})
