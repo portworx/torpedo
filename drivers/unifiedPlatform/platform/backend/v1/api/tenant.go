@@ -9,8 +9,8 @@ import (
 )
 
 // ListTenants return pds tenants models.
-func (tenant *PLATFORM_API_V1) ListTenants() ([]WorkFlowResponse, error) {
-	tenantsResponse := []WorkFlowResponse{}
+func (tenant *PLATFORM_API_V1) ListTenants() ([]PlatformTenant, error) {
+	tenantsResponse := []PlatformTenant{}
 	ctx, tenantClient, err := tenant.getTenantClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)

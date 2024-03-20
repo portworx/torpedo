@@ -64,9 +64,18 @@ func (workflowProject *WorkflowProject) DeleteProject() error {
 	return err
 }
 
+func (workflowProject *WorkflowProject) GetDefaultProject(projectName string) (string, error) {
+	log.Infof("Tenant id [%s]", workflowProject.Platform.TenantId)
+	projectId, err := platformLibs.GetDefaultProjectId(projectName, workflowProject.Platform.TenantId)
+	if err != nil {
+		return "", err
+	}
+	return projectId, nil
+}
+
 // GetProjectList will get the list of projects in given tenant
 func (workflowProject *WorkflowProject) GetProjectList() (*automationModels.V1ListProjectsResponse, error) {
-	projects, err := platformLibs.GetProjectList(workflowProject.PageNumber, workflowProject.PageSize)
+	projects, err := platformLibs.GetProjectList(workflowProject.Platform.TenantId)
 	if err != nil {
 		return nil, err
 	}

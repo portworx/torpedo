@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/torpedo/drivers/pds/parameters"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	"io/ioutil"
 	"path/filepath"
@@ -12,6 +13,8 @@ import (
 const (
 	envControlPlaneUrl     = "CONTROL_PLANE_URL"
 	defaultTestAccount     = "pds-qa"
+	defaultProject         = "px-system-project"
+	defaultTenant          = "px-system-tenant"
 	envPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
 	envAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
 	envUserMailId          = "USER_MAIL_ID"
@@ -21,11 +24,20 @@ const (
 )
 
 var (
-	NewPdsParams *parameters.NewPDSParams
-	customParams *parameters.Customparams
-	pdsLabels    = make(map[string]string)
-	accID        string
-	bucketName   string
+	accID      string
+	bucketName string
+	namespace  string
+	projectId  string
+)
+
+var (
+	workflowPlatform      stworkflows.WorkflowPlatform
+	workflowTargetCluster stworkflows.WorkflowTargetCluster
+	workflowProject       stworkflows.WorkflowProject
+	workflowNamespace     stworkflows.WorkflowNamespace
+	NewPdsParams          *parameters.NewPDSParams
+	customParams          *parameters.Customparams
+	pdsLabels             = make(map[string]string)
 )
 
 // ReadParams reads the params from given or default json

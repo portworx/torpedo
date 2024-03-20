@@ -6,7 +6,7 @@ import (
 )
 
 // GetTenantListV1
-func GetTenantListV1() ([]automationModels.WorkFlowResponse, error) {
+func GetTenantListV1() ([]automationModels.PlatformTenant, error) {
 	tenList, err := v2Components.Platform.ListTenants()
 	if err != nil {
 		return nil, err

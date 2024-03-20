@@ -35,7 +35,7 @@ type Config struct {
 }
 
 type V1Config1 struct {
-	References *Reference `copier:"must,nopanic"`
+	References Reference `copier:"must,nopanic"`
 	// Flag to enable TLS for the Data Service.
 	TlsEnabled *bool `copier:"must,nopanic"`
 	// A deployment topology contains a number of nodes that have various attributes as a collective group.

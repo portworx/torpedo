@@ -24,6 +24,7 @@ func (ProjectV1 *PlatformGrpc) getProjectClient() (context.Context, publicprojec
 	credentials = &Credentials{
 		Token: token,
 	}
+
 	ctx = WithAccountIDMetaCtx(ctx, ProjectV1.AccountId)
 
 	projectClient = publicprojectapis.NewProjectServiceClient(ProjectV1.ApiClientV1)
@@ -32,7 +33,7 @@ func (ProjectV1 *PlatformGrpc) getProjectClient() (context.Context, publicprojec
 }
 
 // GetProjectList returns the list of projects under account
-func (ProjectV1 *PlatformGrpc) GetProjectList(pageNumber int, pageSize int) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PlatformGrpc) GetProjectList(project *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	projectsResponse := PlaformProjectResponse{
 		List: V1ListProjectsResponse{},
 	}
@@ -41,8 +42,11 @@ func (ProjectV1 *PlatformGrpc) GetProjectList(pageNumber int, pageSize int) (*Pl
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
+	log.Infof("tenant id in grpc %s", project.List.TenantId)
+
 	listProjRequest := publicprojectapis.ListProjectsRequest{
-		Pagination: NewPaginationRequest(pageNumber, pageSize),
+		TenantId:   project.List.TenantId,
+		Pagination: NewPaginationRequest(1, 50),
 	}
 
 	apiResponse, err := client.ListProjects(ctx, &listProjRequest, grpc.PerRPCCredentials(credentials))

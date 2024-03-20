@@ -33,7 +33,7 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 	return ctx, depClient, token, nil
 }
 
-func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.WorkFlowResponse, error) {
 	depResponse := automationModels.WorkFlowResponse{}
 	updateRequest := &publicdeploymentConfigUpdate.CreateDeploymentConfigUpdateRequest{
 		DeploymentConfigUpdate: &publicdeploymentConfigUpdate.DeploymentConfigUpdate{

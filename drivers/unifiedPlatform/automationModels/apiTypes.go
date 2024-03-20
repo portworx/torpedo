@@ -7,6 +7,7 @@ type WorkFlowResponse struct {
 	OnboardAccount    AccountRegistration         `copier:"must,nopanic"`
 	Status            Status                      `copier:"must,nopanic"`
 	TargetCluster     PlatformTargetClusterOutput `copier:"must,nopanic"`
+	PDSDeployment     PDSDeployment               `copier:"must,nopanic"`
 	PdsServiceAccount PDSServiceAccount
 }
 
