@@ -122,7 +122,7 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeployme
 						Description: "",
 						Replicas:    3,
 						ResourceSettings: &deploymenttopology.Template{
-							Id:              *dep.Config.DeploymentTopologies[0].ResourceTemplate.Id,
+							Id:              *dep.Config.DeploymentTopologies[0].ResourceSettings.Id,
 							ResourceVersion: "",
 							Values:          nil,
 						},
@@ -139,7 +139,7 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeployme
 
 	log.Debugf("Account ID: [%s]", deployment.AccountId)
 	log.Debugf("Namespace ID: [%s]", createDeploymentRequest.Create.NamespaceID)
-	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
 

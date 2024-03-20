@@ -74,7 +74,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
 	})
 	var (
-		workflowDataservice *stworkflows.WorkflowDataService
+		workflowDataservice stworkflows.WorkflowDataService
 	)
 
 	It("Deploy and Validate DataService", func() {

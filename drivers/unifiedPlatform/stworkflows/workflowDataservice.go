@@ -6,15 +6,17 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace     WorkflowNamespace
-	NamespaceName string
+	Namespace               WorkflowNamespace
+	NamespaceName           string
+	DataServiceDeploymentId string
 }
 
 func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService) (*automationModels.WorkFlowResponse, error) {
-	deployment, err := dslibs.DeployDataService(ds, wfDataService.Namespace.Namespaces[wfDataService.NamespaceName])
+	deployment, err := dslibs.DeployDataService(ds, wfDataService.Namespace.Namespaces[wfDataService.NamespaceName], wfDataService.Namespace.TargetCluster.Project.ProjectId)
 	if err != nil {
 		return nil, err
 	}
+	wfDataService.DataServiceDeploymentId = *deployment.PDSDeployment.V1Deployment.Meta.Uid
 	return deployment, nil
 }
 

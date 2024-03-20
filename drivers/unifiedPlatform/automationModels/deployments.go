@@ -12,9 +12,9 @@ type DeploymentTopology struct {
 	ServiceName *string `copier:"must,nopanic"`
 	// Source IP ranges to use for the deployed Load Balancer.
 	LoadBalancerSourceRanges []string  `copier:"must,nopanic"`
-	ResourceTemplate         *Template `copier:"must,nopanic"`
-	ApplicationTemplate      *Template `copier:"must,nopanic"`
-	StorageTemplate          *Template `copier:"must,nopanic"`
+	ResourceSettings         *Template `copier:"must,nopanic"`
+	ServiceConfigurations    *Template `copier:"must,nopanic"`
+	StorageOptions           *Template `copier:"must,nopanic"`
 }
 
 type Template struct {
@@ -39,6 +39,7 @@ type Reference struct {
 
 type PDSDeployment struct {
 	NamespaceID  string       `copier:"must,nopanic"`
+	ProjectID    string       `copier:"must,nopanic"`
 	V1Deployment V1Deployment `copier:"must,nopanic"`
 }
 
