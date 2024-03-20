@@ -30,14 +30,15 @@ type TenantInterface interface {
 }
 
 type TargetClusterInterface interface {
-	ListTargetClusters(*PlatformTargetCluster) ([]WorkFlowResponse, error)
-	GetTargetCluster(*PlatformTargetCluster) (*WorkFlowResponse, error)
-	PatchTargetCluster(*PlatformTargetCluster) (*WorkFlowResponse, error)
-	DeleteTargetCluster(request *PlatformTargetCluster) error
+	ListTargetClusters(*PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error)
+	GetTargetCluster(*PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error)
+	// TODO: Uncomment this method when it is implemented with validation
+	//PatchTargetCluster(*PlatformTargetClusterRequest) (*WorkFlowResponse, error)
+	DeleteTargetCluster(request *PlatformTargetClusterRequest) error
 }
 
 type TargetClusterManifestInterface interface {
-	GetTargetClusterRegistrationManifest(cluster *PlatformTargetCluster) (*WorkFlowResponse, error)
+	GetTargetClusterRegistrationManifest(cluster *PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error)
 }
 
 type ApplicationInterface interface {
@@ -101,10 +102,10 @@ type Onboard interface {
 }
 
 type Project interface {
-	GetProjectList(*PlaformProject) ([]WorkFlowResponse, error)
-	CreateProject(*PlaformProject, string) (WorkFlowResponse, error)
-	DeleteProject(*PlaformProject) error
-	GetProject(*PlaformProject) (WorkFlowResponse, error)
-	AssociateToProject(*PlaformProject) (WorkFlowResponse, error)
-	DissociateFromProject(*PlaformProject) (WorkFlowResponse, error)
+	GetProjectList(*PlaformProjectRequest) (*PlaformProjectResponse, error)
+	CreateProject(*PlaformProjectRequest, string) (*PlaformProjectResponse, error)
+	DeleteProject(*PlaformProjectRequest) error
+	GetProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)
+	AssociateToProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)
+	DissociateFromProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)
 }

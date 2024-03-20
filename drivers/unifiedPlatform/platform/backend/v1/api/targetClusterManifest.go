@@ -10,12 +10,10 @@ import (
 	"time"
 )
 
-func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *automationModels.PlatformTargetCluster) (*automationModels.WorkFlowResponse, error) {
+func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManifestRequest *automationModels.PlatformTargetClusterRequest) (*automationModels.PlatformTargetClusterResponse, error) {
 
-	response := &automationModels.WorkFlowResponse{
-		TargetCluster: automationModels.PlatformTargetClusterOutput{
-			Manifest: automationModels.PlatformManifestOutput{},
-		},
+	response := &automationModels.PlatformTargetClusterResponse{
+		GetManifest: automationModels.V1TargetClusterRegistrationManifest{},
 	}
 	var tcManifestRequest targetClusterManifestv1.ApiTargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifestRequest
 
@@ -40,9 +38,9 @@ func (tcManifest *PLATFORM_API_V1) GetTargetClusterRegistrationManifest(getManif
 		return response, fmt.Errorf("Error when calling `TargetClusterRegistrationManifestServiceGenerateTargetClusterRegistrationManifest`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	response.TargetCluster.Manifest.Manifest = dtModels.GetManifest()
+	response.GetManifest.Manifest = dtModels.Manifest
 
-	log.Infof("Manifest - [%s]", response.TargetCluster.Manifest.Manifest)
+	log.Infof("Manifest - [%s]", *response.GetManifest.Manifest)
 
 	return response, nil
 

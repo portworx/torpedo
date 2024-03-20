@@ -61,14 +61,13 @@ var _ = BeforeSuite(func() {
 		workflowProject.ProjectName = defaultProject
 	})
 
-	//Step("Register Target Cluster", func() {
-	//	workflowTargetCluster.Platform = workflowPlatform
-	//	workflowTargetCluster.Project = workflowProject
-	//	log.Infof("Tenant ID [%s]", workflowTargetCluster.Platform.TenantId)
-	//	workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
-	//	log.FailOnError(err, "Unable to register target cluster")
-	//	log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
-	//})
+	Step("Register Target Cluster", func() {
+		workflowTargetCluster.Project = workflowProject
+		log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
+		workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
+		log.FailOnError(err, "Unable to register target cluster")
+		log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
+	})
 
 	Step("Create Buckets", func() {
 		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {

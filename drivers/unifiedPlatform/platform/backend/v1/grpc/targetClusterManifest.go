@@ -24,17 +24,17 @@ func (tcGrpc *PlatformGrpc) getTargetClusterManifestClient() (context.Context, p
 		Token: token,
 	}
 
+	ctx = WithAccountIDMetaCtx(ctx, tcGrpc.AccountId)
+
 	tcClient = publictcapis.NewTargetClusterRegistrationManifestServiceClient(tcGrpc.ApiClientV1)
 
 	return ctx, tcClient, token, nil
 }
 
-func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *PlatformTargetCluster) (*WorkFlowResponse, error) {
+func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequest *PlatformTargetClusterRequest) (*PlatformTargetClusterResponse, error) {
 
-	response := &WorkFlowResponse{
-		TargetCluster: PlatformTargetClusterOutput{
-			Manifest: PlatformManifestOutput{},
-		},
+	response := &PlatformTargetClusterResponse{
+		GetManifest: V1TargetClusterRegistrationManifest{},
 	}
 
 	ctx, client, _, err := tcGrpc.getTargetClusterManifestClient()
@@ -46,16 +46,17 @@ func (tcGrpc *PlatformGrpc) GetTargetClusterRegistrationManifest(getManifestRequ
 		ClusterName: getManifestRequest.GetManifest.ClusterName,
 		TenantId:    getManifestRequest.GetManifest.TenantId,
 	}
-
-	ctx = WithAccountIDMetaCtx(ctx, tcGrpc.AccountId)
+	log.Infof("Request - [%+v]", getTcManifestRequest)
 
 	apiResponse, err := client.GenerateTargetClusterRegistrationManifest(ctx, getTcManifestRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return response, fmt.Errorf("Error when calling `GenerateTargetClusterRegistrationManifest`: %v\n.", err)
 	}
+	log.Infof("Response - [%s]", apiResponse.GetManifest())
 
-	response.TargetCluster.Manifest.Manifest = apiResponse.GetManifest()
-	log.Infof("Manifest - [%s]", response.TargetCluster.Manifest.Manifest)
+	response.GetManifest.Manifest = &apiResponse.Manifest
+
+	log.Infof("Manifest - [%s]", *response.GetManifest.Manifest)
 
 	return response, nil
 

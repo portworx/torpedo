@@ -25,6 +25,8 @@ func (NamespaceGrpcV1 *PlatformGrpc) getNamespaceClient() (context.Context, publ
 		Token: token,
 	}
 
+	ctx = WithAccountIDMetaCtx(ctx, NamespaceGrpcV1.AccountId)
+
 	accountClient = publicnamespaceapis.NewNamespaceServiceClient(NamespaceGrpcV1.ApiClientV1)
 
 	return ctx, accountClient, token, nil
@@ -41,12 +43,13 @@ func (NamespaceGrpcV1 *PlatformGrpc) ListNamespaces(request *PlatformNamespace) 
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	var firstPageRequest *publicnamespaceapis.ListNamespacesRequest
-	err = copier.Copy(&firstPageRequest, request)
+	firstPageRequest := publicnamespaceapis.ListNamespacesRequest{
+		TenantId: request.List.TenantId,
+	}
 	if err != nil {
 		return nil, err
 	}
-	nsResponse, err := nsClient.ListNamespaces(ctx, firstPageRequest, grpc.PerRPCCredentials(credentials))
+	nsResponse, err := nsClient.ListNamespaces(ctx, &firstPageRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListTenants`: %v\n.", err)
 	}

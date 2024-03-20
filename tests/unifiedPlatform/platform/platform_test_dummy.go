@@ -1,6 +1,10 @@
 package tests
 
 import (
+	"math/rand"
+	"strconv"
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -9,9 +13,6 @@ import (
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
-	"strconv"
-	"strings"
 )
 
 //var _ = Describe("{TenantsCRUD}", func() {
@@ -80,7 +81,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 		Step("Create a PDS Namespace", func() {
 			namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
-			workflowNamespace.TargetCluster.Platform = workflowPlatform
+			workflowNamespace.TargetCluster = workflowTargetCluster
 			workflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := workflowNamespace.CreateNamespaces(namespace)
 			log.FailOnError(err, "Unable to create namespace")
@@ -89,7 +90,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			workflowDataservice.Namespace.Namespaces[namespace] = workflowNamespace.Namespaces[namespace]
+			workflowDataservice.Namespace = workflowNamespace
 			workflowDataservice.NamespaceName = namespace
 			_, err := workflowDataservice.DeployDataService(ds)
 			log.FailOnError(err, "Error while deploying ds")
@@ -167,6 +168,7 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 			log.FailOnError(err, "error occured while fetching tenantID")
 
 			workflowCc.Platform.TenantId = tenantId
+			workflowCc.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
 			cc, err := workflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error occured while creating cloud credentials")
 
@@ -176,8 +178,7 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
 			}
 
-			workflowbkpLoc.WfCloudCredentials.CloudCredentials = cc.CloudCredentials
-			workflowbkpLoc.WfCloudCredentials.Platform.TenantId = tenantId
+			workflowbkpLoc.WfCloudCredentials = workflowCc
 
 			wfbkpLoc, err := workflowbkpLoc.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating backup location")
