@@ -38,8 +38,9 @@ var (
 	// other triggers are allowed to happen only after existing triggers are complete.
 	disruptiveTriggers map[string]bool
 
-	triggerFunctions     map[string]func(*[]*scheduler.Context, *chan *EventRecord)
-	emailTriggerFunction map[string]func()
+	triggerFunctions       map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	triggerBackupFunctions map[string]func(*[]*scheduler.Context, *chan *EventRecord)
+	emailTriggerFunction   map[string]func()
 
 	// Pure Topology is disabled by default
 	pureTopologyEnabled = false
@@ -95,6 +96,7 @@ func populateBackupDisruptiveTriggers() {
 func populateBackupIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[CreatePxBackup] = map[int]time.Duration{}
+	triggerInterval[CreatePxLockedBackup] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[CreatePxBackupAndRestore] = map[int]time.Duration{}
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
@@ -112,6 +114,17 @@ func populateBackupIntervals() {
 	triggerInterval[CreatePxBackup][3] = 48 * baseInterval
 	triggerInterval[CreatePxBackup][2] = 54 * baseInterval
 	triggerInterval[CreatePxBackup][1] = 60 * baseInterval
+
+	triggerInterval[CreatePxLockedBackup][10] = 6 * baseInterval
+	triggerInterval[CreatePxLockedBackup][9] = 12 * baseInterval
+	triggerInterval[CreatePxLockedBackup][8] = 18 * baseInterval
+	triggerInterval[CreatePxLockedBackup][7] = 24 * baseInterval
+	triggerInterval[CreatePxLockedBackup][6] = 30 * baseInterval
+	triggerInterval[CreatePxLockedBackup][5] = 36 * baseInterval
+	triggerInterval[CreatePxLockedBackup][4] = 42 * baseInterval
+	triggerInterval[CreatePxLockedBackup][3] = 48 * baseInterval
+	triggerInterval[CreatePxLockedBackup][2] = 54 * baseInterval
+	triggerInterval[CreatePxLockedBackup][1] = 60 * baseInterval
 
 	triggerInterval[CreatePxBackupAndRestore][10] = 6 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][9] = 12 * baseInterval
@@ -1588,7 +1601,7 @@ func isTriggerEnabled(triggerType string) (time.Duration, bool) {
 	if baseInterval, ok := ChaosMap[BaseInterval]; ok {
 		return GetWaitTime(chaosLevel, time.Duration(baseInterval)*time.Minute), true
 	} else {
-		return GetWaitTime(chaosLevel, defaultBaseInterval), true
+		return GetWaitTime(chaosLevel, triggerInterval[triggerType][maximumChaosLevel]), true
 	}
 }
 
