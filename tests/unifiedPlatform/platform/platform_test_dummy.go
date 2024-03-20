@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"math/rand"
+	"strconv"
+
 	. "github.com/onsi/ginkgo/v2"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -8,8 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
-	"strconv"
 )
 
 //var _ = Describe("{TenantsCRUD}", func() {
@@ -149,6 +150,7 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 			log.FailOnError(err, "error occured while fetching tenantID")
 
 			workflowCc.Platform.TenantId = tenantId
+			workflowCc.CloudCredentials = make(map[string]stworkflows.CloudCredentialsType)
 			cc, err := workflowCc.CreateCloudCredentials(NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error occured while creating cloud credentials")
 
@@ -158,8 +160,7 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 				log.Infof("cloud provider type: [%s]", value.CloudProviderType)
 			}
 
-			workflowbkpLoc.WfCloudCredentials.CloudCredentials = cc.CloudCredentials
-			workflowbkpLoc.WfCloudCredentials.Platform.TenantId = tenantId
+			workflowbkpLoc.WfCloudCredentials = workflowCc
 
 			wfbkpLoc, err := workflowbkpLoc.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating backup location")

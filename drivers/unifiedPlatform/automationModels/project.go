@@ -1,11 +1,19 @@
 package automationModels
 
-type PlaformProject struct {
+type PlaformProjectRequest struct {
 	Create     PlatformCreateProject    `copier:"must,nopanic"`
 	Get        PlatformGetProject       `copier:"must,nopanic"`
 	Delete     PlatformDeleteProject    `copier:"must,nopanic"`
 	Associate  PlatformAssociateProject `copier:"must,nopanic"`
 	Dissociate PlatformAssociateProject `copier:"must,nopanic"`
+}
+
+type PlaformProjectResponse struct {
+	Create     V1Project              `copier:"must,nopanic"`
+	Get        V1Project              `copier:"must,nopanic"`
+	Associate  V1Project              `copier:"must,nopanic"`
+	Dissociate V1Project              `copier:"must,nopanic"`
+	List       V1ListProjectsResponse `copier:"must,nopanic"`
 }
 
 type PlatformCreateProject struct {
@@ -71,4 +79,8 @@ type ProjectServiceAssociateResourcesBody struct {
 
 type ProjectServiceDisassociateResourcesBody struct {
 	InfraResource *V1Resources `copier:"must,nopanic"`
+}
+
+type V1ListProjectsResponse struct {
+	Projects []V1Project `copier:"must,nopanic"`
 }

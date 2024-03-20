@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"fmt"
+
 	"github.com/jinzhu/copier"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
@@ -239,12 +240,15 @@ func copyCloudLocationResponse(bkpLocation *publicbackuplocapi.BackupLocation) *
 		bkpLocResp.Create.Config.BkpLocation.S3Storage.BucketName = bkpLocation.Config.GetS3Storage().BucketName
 		bkpLocResp.Create.Config.BkpLocation.S3Storage.Endpoint = bkpLocation.Config.GetS3Storage().Endpoint
 		bkpLocResp.Create.Config.BkpLocation.S3Storage.Region = bkpLocation.Config.GetS3Storage().Region
+		bkpLocResp.Create.Config.Provider.Name = "s3"
 	case 1:
 		log.Debugf("copying azure location")
 		bkpLocResp.Create.Config.BkpLocation.AzureStorage.ContainerName = bkpLocation.Config.GetAzureStorage().ContainerName
+		bkpLocResp.Create.Config.Provider.Name = "azure"
 	case 2:
 		log.Debugf("copying gcp credentials")
 		bkpLocResp.Create.Config.BkpLocation.GoogleStorage.BucketName = bkpLocation.Config.GetGoogleStorage().BucketName
+		bkpLocResp.Create.Config.Provider.Name = "gcp"
 	}
 
 	//Test Print

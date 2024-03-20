@@ -130,3 +130,18 @@ type DestinationReferences struct {
 }
 
 type V1PhaseType string
+
+type V1Metadata struct {
+	KubeServerVersion *string             `copier:"must,nopanic"`
+	KubePlatform      *V1KubePlatformType `copier:"must,nopanic"`
+	PxeMetadata       *V1PXEMetadata      `copier:"must,nopanic"`
+}
+
+type V1KubePlatformType string
+
+type V1PXEMetadata struct {
+	CsiEnabled       *bool   `copier:"must,nopanic"`
+	ServiceName      *string `copier:"must,nopanic"`
+	ServiceNamespace *string `copier:"must,nopanic"`
+	Version          *string `copier:"must,nopanic"`
+}
