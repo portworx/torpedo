@@ -641,6 +641,7 @@ func startLongevityTest(testName string) {
 	dash.TestCaseBegin(testName, fmt.Sprintf("validating %s in longevity cluster", testName), "", nil)
 }
 func endLongevityTest() {
+	PrintPxctlStatus()
 	dash.TestCaseEnd()
 	CloseLogger(longevityLogger)
 }
