@@ -56,10 +56,10 @@ type V1Config3 struct {
 }
 
 type V1Config struct {
-	Kind            *string          `json:"kind,omitempty"`
-	SemanticVersion *string          `json:"semanticVersion,omitempty"`
-	RevisionUid     *string          `json:"revisionUid,omitempty"`
-	TemplateValues  *structpb.Struct `json:"templateValues,omitempty"`
+	Kind            *string          `copier:"must,nopanic"`
+	SemanticVersion *string          `copier:"must,nopanic"`
+	RevisionUid     *string          `copier:"must,nopanic"`
+	TemplateValues  *structpb.Struct `copier:"must,nopanic"`
 }
 
 type V1Deployment struct {
@@ -139,15 +139,20 @@ type DestinationReferences struct {
 
 type V1PhaseType string
 
-
 type Templatev1Status struct {
-	Phase *StatusPhase `json:"phase,omitempty"`
+	Phase *StatusPhase `copier:"must,nopanic"`
 }
 
 type Template struct {
-	Meta   *V1Meta           `json:"meta,omitempty"`
-	Config *V1Config         `json:"config,omitempty"`
-	Status *Templatev1Status `json:"status,omitempty"`
+	Meta   *V1Meta           `copier:"must,nopanic"`
+	Config *V1Config         `copier:"must,nopanic"`
+	Status *Templatev1Status `copier:"must,nopanic"`
+}
+
+type ProtobufAny struct {
+	Type                 *string `copier:"must,nopanic"`
+	AdditionalProperties map[string]interface{}
+}
 
 type V1Metadata struct {
 	KubeServerVersion *string             `copier:"must,nopanic"`
@@ -162,5 +167,4 @@ type V1PXEMetadata struct {
 	ServiceName      *string `copier:"must,nopanic"`
 	ServiceNamespace *string `copier:"must,nopanic"`
 	Version          *string `copier:"must,nopanic"`
-
 }
