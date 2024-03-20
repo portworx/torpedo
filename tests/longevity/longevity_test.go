@@ -229,6 +229,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
 		disruptiveTriggerWrapper func(fn TriggerFunction) TriggerFunction
 		contexts                 []*scheduler.Context
+		upgradeCounter           = NewCounter[string]()
 	)
 
 	JustBeforeEach(func() {
@@ -260,6 +261,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		// Creating a distinct trigger to ensure upgrade is triggered after a specified number of events have occurred
 		upgradeTriggerFunction = map[string]TriggerFunction{
 			UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
+			UpgradeCluster:      TriggerUpdateCluster,
 		}
 		if !populateDone {
 			tags := map[string]string{
@@ -344,56 +346,89 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		Step("Register upgrade trigger", func() {
 			log.InfoD("Registering upgrade trigger")
 			wg.Add(1)
-			for triggerType, triggerFunc := range upgradeTriggerFunction {
-				go func(triggerType string, triggerFunc TriggerFunction) {
-					defer wg.Done()
-					start := time.Now().Local()
-					timeout := Inst().MinRunTimeMins * 60
-					currentEndpointIndex := 0
-					for {
-						upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
-						if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
-							log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
+			go func() {
+				defer wg.Done()
+				start := time.Now().Local()
+				timeout := Inst().MinRunTimeMins * 60
+				currentUpgradeIndex := 0
+				for {
+					upgradeEndpoints := strings.Split(Inst().UpgradeStorageDriverEndpointList, ",")
+					upgradeSchedHops := strings.Split(Inst().SchedUpgradeHops, ",")
+					if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
+						log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
+						break
+					}
+					if upgradeCounter.GetCount(UpgradeVolumeDriver) >= len(upgradeEndpoints) && upgradeCounter.GetCount(UpgradeCluster) >= len(upgradeSchedHops) {
+						// upgradeExecutionThreshold will be 0 when triggering only upgrades
+						if upgradeExecutionThreshold == 0 {
+							log.InfoD("All upgrades are completed. Closing StopLongevityChan")
+							close(StopLongevityChan)
 							break
 						}
-						if currentEndpointIndex >= len(upgradeEndpoints) {
-							continue
-						}
-						minTestExecCount := math.MaxInt32
-						// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
-						for trigger := range triggerFunctions {
+						continue
+					}
+					minTestExecCount := math.MaxInt32
+					// Iterating over triggerFunctions to calculate testExecSum and minTestExecCount
+					for trigger := range triggerFunctions {
+						if ChaosMap[trigger] != 0 {
 							count := TestExecutionCounter.GetCount(trigger)
 							if count < minTestExecCount {
 								minTestExecCount = count
 							}
 						}
-						// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
-						for trigger := range disruptiveTriggerFunctions {
-							if ChaosMap[trigger] != 0 {
-								count := TestExecutionCounter.GetCount(trigger)
-								if count < minTestExecCount {
-									minTestExecCount = count
-								}
+					}
+					// Iterating over disruptiveTriggerFunctions to update testExecSum and minTestExecCount
+					for trigger := range disruptiveTriggerFunctions {
+						if ChaosMap[trigger] != 0 {
+							count := TestExecutionCounter.GetCount(trigger)
+							if count < minTestExecCount {
+								minTestExecCount = count
 							}
 						}
-						if minTestExecCount >= (currentEndpointIndex+1)*upgradeExecutionThreshold {
-							Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[currentEndpointIndex]
-							currentEndpointIndex++
-							log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
-							// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
-							disruptiveTriggerLock.Lock()
-							log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
-							log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
-							triggerFunc(&contexts, &triggerEventsChan)
-							log.Infof("Trigger Function completed for [%s]\n", triggerType)
-							disruptiveTriggerLock.Unlock()
-							log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
-							Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
-						}
-						time.Sleep(controlLoopSleepTime)
 					}
-				}(triggerType, triggerFunc)
-			}
+					if minTestExecCount >= (currentUpgradeIndex+1)*upgradeExecutionThreshold {
+						triggerType := ""
+						if currentUpgradeIndex%2 == 0 {
+							if upgradeCounter.GetCount(UpgradeVolumeDriver) < len(upgradeEndpoints) {
+								Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[upgradeCounter.GetCount(UpgradeVolumeDriver)]
+								triggerType = UpgradeVolumeDriver
+							} else {
+								log.Warnf("No endpoint to upgrade; index [%d] exceeds the set [%d] endpoints.", upgradeCounter.GetCount(UpgradeVolumeDriver), len(upgradeEndpoints))
+								currentUpgradeIndex++
+								continue
+							}
+						} else {
+							if upgradeCounter.GetCount(UpgradeCluster) < len(upgradeSchedHops) {
+								Inst().SchedUpgradeHops = upgradeSchedHops[upgradeCounter.GetCount(UpgradeCluster)]
+								triggerType = UpgradeCluster
+							} else {
+								log.Warnf("No hop to upgrade cluster; index [%d] exceeds the set [%d] hops.", upgradeCounter.GetCount(UpgradeCluster), len(upgradeSchedHops))
+								currentUpgradeIndex++
+								continue
+							}
+						}
+						currentUpgradeIndex++
+						triggerFunc, ok := upgradeTriggerFunction[triggerType]
+						if !ok {
+							log.Warnf("Trigger type [%s] has not associated Trigger function in upgradeTriggerFunction", triggerType)
+							continue
+						}
+						log.Infof("Waiting for lock for trigger [%s]\n", triggerType)
+						// Using disruptiveTriggerLock to avoid concurrent execution with any running disruptive test
+						disruptiveTriggerLock.Lock()
+						log.Infof("Successfully taken lock for trigger [%s]\n", triggerType)
+						log.Warnf("Triggering function %s based on TextExecutionCountMap: %+v", triggerType, TestExecutionCounter)
+						triggerFunc(&contexts, &triggerEventsChan)
+						log.Infof("Trigger Function completed for [%s]\n", triggerType)
+						disruptiveTriggerLock.Unlock()
+						log.Infof("Successfully released lock for trigger [%s]\n", triggerType)
+						Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
+						Inst().SchedUpgradeHops = strings.Join(upgradeSchedHops, ",")
+						upgradeCounter.Increment(triggerType)
+					}
+					time.Sleep(controlLoopSleepTime)
+				}
+			}()
 			log.InfoD("Finished registering upgrade trigger")
 		})
 
@@ -433,6 +468,14 @@ func testTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 
 	for {
+		select {
+		case <-StopLongevityChan:
+			log.InfoD("Received stop signal. Exiting longevity test trigger [%s] loop", triggerType)
+			return
+		default:
+			// Continuing the loop as no stop signal is received
+		}
+
 		// if timeout is 0, run indefinitely
 		if timeout != 0 && int(time.Since(start).Seconds()) > timeout {
 			log.InfoD("Longevity Tests timed out with timeout %d  minutes", minRunTime)
