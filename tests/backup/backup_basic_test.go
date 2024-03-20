@@ -48,10 +48,9 @@ func getGlobalBucketName(provider string) string {
 }
 
 func getGlobalLockedBucketName(provider string) string {
-	switch provider {
-	case drivers.ProviderAws:
+	if provider == drivers.ProviderAws {
 		return GlobalAWSLockedBucketName
-	default:
+	} else {
 		log.Errorf("environment variable [%s] not provided with valid values", "PROVIDERS")
 		return ""
 	}
@@ -117,6 +116,7 @@ func BackupInitInstance() {
 	// Getting Px-Backup server version info and setting Aetos Dashboard tags
 	PxBackupVersion, err = GetPxBackupVersionString()
 	log.FailOnError(err, "Error getting Px Backup version")
+	log.Infof("Running with px-backup version <<< %s >>>", PxBackupVersion)
 	PxBackupBuildDate, err := GetPxBackupBuildDate()
 	log.FailOnError(err, "Error getting Px Backup build date")
 	t.Tags["px-backup-version"] = PxBackupVersion
