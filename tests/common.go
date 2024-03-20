@@ -1963,9 +1963,7 @@ func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, pr
 	options := scheduler.ScheduleOptions{
 		AppKeys:            []string{appSpec},
 		StorageProvisioner: provisioner,
-		Namespace:          taskName,
 	}
-	//taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
 	taskName = fmt.Sprintf("%s", testname)
 	contexts, err = Inst().S.Schedule(taskName, options)
 	// Need to check err != nil before calling processError
