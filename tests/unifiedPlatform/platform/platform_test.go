@@ -9,6 +9,7 @@ import (
 	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
 var _ = Describe("{PlatformOnboardingTest}", func() {
@@ -70,7 +71,7 @@ var _ = Describe("{PlatformOnboardingTest}", func() {
 			//// TODO: This needs to be removed once API support is added for backup location
 			if VARIABLE_FROM_JENKINS == unifiedPlatform.GRPC {
 				workflowBackupLocation.WfCloudCredentials = workflowCloudCreds
-				_, err := workflowBackupLocation.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+				_, err := workflowBackupLocation.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
 				log.FailOnError(err, "error while creating backup location")
 				log.Infof("wfBkpLoc id: [%s]", workflowBackupLocation.BkpLocation.BkpLocationId)
 				log.Infof("wfBkpLoc name: [%s]", workflowBackupLocation.BkpLocation.Name)

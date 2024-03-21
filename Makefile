@@ -110,7 +110,7 @@ build-pds: $(GOPATH)/bin/ginkgo
 	chmod -R 755 bin/*
 
 # this target builds the unifiedPlatform.test binary only.
-build-unifiedPlatform: GINKGO_BUILD_DIR=./tests/unifiedPlatform/platform
+build-unifiedPlatform: GINKGO_BUILD_DIR=./tests/unifiedPlatform/platform ./tests/unifiedPlatform/pds2
 build-unifiedPlatform: $(GOPATH)/bin/ginkgo
 	mkdir -p $(BIN)
 	go build -tags "$(TAGS)" $(BUILDFLAGS) $(PKGS)

@@ -11,33 +11,33 @@ import (
 )
 
 const (
-	envControlPlaneUrl     = "CONTROL_PLANE_URL"
-	defaultTestAccount     = "pds-qa"
-	defaultProject         = "px-system-project"
-	defaultTenant          = "px-system-tenant"
-	envPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
-	envAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
-	envUserMailId          = "USER_MAIL_ID"
+	EnvControlPlaneUrl     = "CONTROL_PLANE_URL"
+	DefaultTestAccount     = "pds-qa"
+	DefaultProject         = "px-system-project"
+	DefaultTenant          = "px-system-tenant"
+	EnvPlatformAccountName = "PLATFORM_ACCOUNT_NAME"
+	EnvAccountDisplayName  = "PLATFORM_ACCOUNT_DISPLAY_NAME"
+	EnvUserMailId          = "USER_MAIL_ID"
 	defaultParams          = "../drivers/pds/parameters/pds_default_parameters.json"
 	pdsParamsConfigmap     = "pds-params"
 	configmapNamespace     = "default"
 )
 
 var (
-	accID      string
-	bucketName string
-	namespace  string
-	projectId  string
+	AccID         string
+	PDSBucketName string
+	Namespace     string
+	ProjectId     string
 )
 
 var (
-	workflowPlatform      stworkflows.WorkflowPlatform
-	workflowTargetCluster stworkflows.WorkflowTargetCluster
-	workflowProject       stworkflows.WorkflowProject
-	workflowNamespace     stworkflows.WorkflowNamespace
+	WorkflowPlatform      stworkflows.WorkflowPlatform
+	WorkflowTargetCluster stworkflows.WorkflowTargetCluster
+	WorkflowProject       stworkflows.WorkflowProject
+	WorkflowNamespace     stworkflows.WorkflowNamespace
 	NewPdsParams          *parameters.NewPDSParams
-	customParams          *parameters.Customparams
-	pdsLabels             = make(map[string]string)
+	CustomParams          *parameters.Customparams
+	PdsLabels             = make(map[string]string)
 )
 
 // ReadParams reads the params from given or default json
