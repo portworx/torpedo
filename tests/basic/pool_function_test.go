@@ -1092,14 +1092,14 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 		log.InfoD(stepLog)
 		var nodeDetail *node.Node
 		var err error
-		stepLog = "Move node to maintenance mode"
+		stepLog = "Move Pool to maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to get Node Details using PoolUUID [%v]", poolToResize.Uuid))
 
-			log.InfoD("Bring Node to Maintenance Mode")
-			err = Inst().V.EnterMaintenance(*nodeDetail)
+			log.InfoD("Bring Pool to Maintenance Mode")
+			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] to Mainteinance Mode", nodeDetail.Name))
 		})
 
@@ -1119,8 +1119,8 @@ var _ = Describe("{PoolExpandResizeDiskInMaintenanceMode}", func() {
 		stepLog = "Exit node out of maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
-			log.InfoD("Bring Node out of Maintenance Mode")
-			err = Inst().V.ExitMaintenance(*nodeDetail)
+			log.InfoD("Bring Pool out of Maintenance Mode")
+			err = Inst().V.ExitPoolMaintenance(*nodeDetail)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] out of Mainteinance Mode", nodeDetail.Name))
 		})
 
@@ -1172,14 +1172,14 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 		log.InfoD(stepLog)
 		var nodeDetail *node.Node
 		var err error
-		stepLog = "Move node to maintenance mode"
+		stepLog = "Move pool to maintenance mode"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodeDetail, err = GetNodeWithGivenPoolID(poolToResize.Uuid)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to get Node Details using PoolUUID [%v]", poolToResize.Uuid))
 
-			log.InfoD("Bring Node to Maintenance Mode")
-			err = Inst().V.EnterMaintenance(*nodeDetail)
+			log.InfoD("Bring Pool to Maintenance Mode")
+			err = Inst().V.EnterPoolMaintenance(*nodeDetail)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] to Mainteinance Mode", nodeDetail.Name))
 		})
 
@@ -1193,24 +1193,33 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
-			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+
+			if isDMthin, _ := IsDMthin(); isDMthin {
+				dash.VerifyFatal(err != nil, true,
+					"Pool expansion request of add-disk type should be rejected with dmthin")
+				dash.VerifyFatal(strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2"), true, fmt.Sprintf("check error message: %v", err.Error()))
+			} else {
+				dash.VerifyFatal(err, nil, "pool expansion requested successfully")
+			}
 		})
 
-		stepLog = "Exit node out of maintenance mode"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			log.InfoD("Bring Node out of Maintenance Mode")
-			err = Inst().V.ExitMaintenance(*nodeDetail)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] out of Mainteinance Mode", nodeDetail.Name))
-		})
+		if isDMthin, _ := IsDMthin(); !isDMthin {
+			stepLog = "Exit Pool out of maintenance mode"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				log.InfoD("Bring Node out of Maintenance Mode")
+				err = Inst().V.ExitMaintenance(*nodeDetail)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Failed to shift Node [%s] out of Mainteinance Mode", nodeDetail.Name))
+			})
 
-		stepLog = "Verify pool expand completes successfully"
-		Step(stepLog, func() {
-			log.InfoD(stepLog)
-			resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
-			dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
-			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
-		})
+			stepLog = "Verify pool expand completes successfully"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				resizeErr := waitForOngoingPoolExpansionToComplete(poolIDToResize)
+				dash.VerifyFatal(resizeErr, nil, "Pool expansion does not result in error")
+				verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
+			})
+		}
 	})
 })
 
@@ -1767,11 +1776,9 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 
 	var testrailID = 34542835
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/tests/view/34542835
-	var runID int
 
 	JustBeforeEach(func() {
 		StartTorpedoTest("PoolExpandStorageFullPoolResize", "Feed a pool full, then expand the pool using resize-disk", nil, testrailID)
-		runID = testrailuttils.AddRunsToMilestone(testrailID)
 	})
 
 	var contexts []*scheduler.Context
@@ -1865,7 +1872,7 @@ var _ = Describe("{PoolExpandStorageFullPoolResize}", func() {
 
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
-		AfterEachTest(contexts, testrailID, runID)
+		// AfterEachTest(contexts, testrailID, runID)
 	})
 })
 
