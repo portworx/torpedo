@@ -1301,13 +1301,17 @@ github.com/portworx/kvdb/mem
 # github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e
 ## explicit; go 1.21.4
 github.com/portworx/pds-api-go-client/pds/v1alpha1
+<<<<<<< HEAD
 github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1
 # github.com/portworx/px-backup-api v1.2.2-0.20240223100835-84b57faae78f
+=======
+# github.com/portworx/px-backup-api v1.2.2-0.20240229114136-e58baeb9fbe1
+>>>>>>> 1c1d8bb56c39e8adb0398646733d0c27e9d773b7
 ## explicit; go 1.19
 github.com/portworx/px-backup-api/pkg/apis/v1
 github.com/portworx/px-backup-api/pkg/kubeauth
 github.com/portworx/px-backup-api/pkg/kubeauth/gcp
-# github.com/portworx/sched-ops v1.20.4-rc1.0.20240214081459-b1e25baf33c9
+# github.com/portworx/sched-ops v1.20.4-rc1.0.20240320023245-5179eafab0c0
 ## explicit; go 1.19
 github.com/portworx/sched-ops/k8s/admissionregistration
 github.com/portworx/sched-ops/k8s/apiextensions

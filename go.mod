@@ -3,7 +3,7 @@ module github.com/portworx/torpedo
 go 1.21
 
 require (
-	cloud.google.com/go/storage v1.38.0
+	cloud.google.com/go/storage v1.30.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.0.0
 	github.com/Azure/azure-storage-blob-go v0.14.0
 	github.com/LINBIT/golinstor v0.27.0
@@ -36,9 +36,9 @@ require (
 	github.com/oracle/oci-go-sdk/v65 v65.13.1
 	github.com/pborman/uuid v1.2.1
 	github.com/pkg/errors v0.9.1
-	github.com/portworx/pds-api-go-client v0.0.0-20240131073202-d74f0af3534e
-	github.com/portworx/px-backup-api v1.2.2-0.20240223100835-84b57faae78f
-	github.com/portworx/sched-ops v1.20.4-rc1.0.20240214081459-b1e25baf33c9
+	github.com/portworx/pds-api-go-client v0.0.0-20231102112445-993d38984eae
+	github.com/portworx/px-backup-api v1.2.2-0.20240229114136-e58baeb9fbe1
+	github.com/portworx/sched-ops v1.20.4-rc1.0.20240320023245-5179eafab0c0
 	github.com/portworx/talisman v1.1.3
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.63.0
 	github.com/prometheus/client_golang v1.15.1
