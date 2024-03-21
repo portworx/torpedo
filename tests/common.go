@@ -177,6 +177,9 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
 
+	"github.com/IBM/vpc-go-sdk/vpcv1"
+
+	ibmcore "github.com/IBM/go-sdk-core/v5/core"
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )
@@ -366,6 +369,7 @@ const (
 	defaultTorpedoJob                     = "torpedo-job"
 	defaultTorpedoJobType                 = "functional"
 	labelNameKey                          = "name"
+	serviceURL                            = "https://us-east.iaas.cloud.ibm.com/v1"
 )
 
 const (
@@ -1946,6 +1950,35 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	return contexts
 }
 
+// ScheduleApplicationsWithScheduleOptions schedules *the* applications taking scheduleOptions as input and returns the scheduler.Contexts for each app (corresponds to a namespace). NOTE: does not wait for applications
+func ScheduleApplicationsWithScheduleOptions(testname string, appSpec string, provisioner string, errChan ...*chan error) []*scheduler.Context {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+	var contexts []*scheduler.Context
+	var taskName string
+	var err error
+	options := scheduler.ScheduleOptions{
+		AppKeys:            []string{appSpec},
+		StorageProvisioner: provisioner,
+		Namespace:          taskName,
+	}
+	//taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+	taskName = fmt.Sprintf("%s", testname)
+	contexts, err = Inst().S.Schedule(taskName, options)
+	// Need to check err != nil before calling processError
+	if err != nil {
+		processError(err, errChan...)
+	}
+	if len(contexts) == 0 {
+		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
+	}
+
+	return contexts
+}
+
 // ScheduleApplicationsOnNamespace ScheduleApplications schedules *the* applications and returns
 // the scheduler.Contexts for each app (corresponds to given namespace). NOTE: does not wait for applications
 func ScheduleApplicationsOnNamespace(namespace string, testname string, errChan ...*chan error) []*scheduler.Context {
@@ -3352,7 +3385,7 @@ func SetClusterContext(clusterConfigPath string) error {
 		return nil
 	}
 	log.InfoD("Switching context to [%s]", clusterConfigPathForLog)
-	provider := getClusterProvider()
+	provider := GetClusterProvider()
 	if clusterConfigPath != "" {
 		switch provider {
 		case drivers.ProviderGke:
@@ -5634,6 +5667,76 @@ func DeleteBucket(provider string, bucketName string) {
 			DeleteGcpBucket(bucketName)
 		}
 	})
+}
+
+// DeleteSnapshotsForVolumes for all the volumes from the
+func DeleteSnapshotsForVolumes(volumes []string) error {
+	var err error
+	if GetClusterProvider() == "ibm" {
+		err = DeleteIbmSnapshotsForVolumes(volumes)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
+	apiKey, err := GetIBMApiKey("default")
+	if err != nil {
+		return err
+	}
+	// Initialize the IBM Cloud VPC service client
+	authenticator := &ibmcore.IamAuthenticator{
+		ApiKey: apiKey,
+	}
+
+	options := &vpcv1.VpcV1Options{
+		URL:           serviceURL,
+		Authenticator: authenticator,
+	}
+	vpcService, err := vpcv1.NewVpcV1(options)
+	if err != nil {
+		return fmt.Errorf("error creating VPC service client: %s", err)
+	}
+
+	// Iterate over each volume name
+	for _, volumeName := range volumeNames {
+		// Find the volume by name
+		findVolumeOptions := vpcService.NewListVolumesOptions()
+		findVolumeOptions.SetName(volumeName)
+		volumes, _, err := vpcService.ListVolumes(findVolumeOptions)
+		log.Infof("volumes from the vpc service %s", volumes)
+		if err != nil {
+			return fmt.Errorf("error finding volume '%s': %s", volumeName, err)
+		}
+		if len(volumes.Volumes) == 0 {
+			continue
+		}
+		volumeID := *volumes.Volumes[0].ID
+
+		// List all snapshots
+		snapshots, _, err := vpcService.ListSnapshots(vpcService.NewListSnapshotsOptions())
+		if err != nil {
+			return fmt.Errorf("error listing snapshots: %s", err)
+		}
+
+		// Delete snapshots associated with the volume
+		for _, snapshot := range snapshots.Snapshots {
+			if *snapshot.SourceVolume.ID == volumeID {
+				// Snapshot belongs to the specified volume, delete it
+				snapshotID := *snapshot.ID
+				snapshotName := *snapshot.Name
+				log.Infof("Deleting snapshot %s associated with volume %s", snapshotName, volumeName)
+				_, err = vpcService.DeleteSnapshot(vpcService.NewDeleteSnapshotOptions(snapshotID))
+				if err != nil {
+					return fmt.Errorf("error deleting snapshot '%s': %s", snapshotName, err)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // HaIncreaseRebootTargetNode repl increase and reboot target node
@@ -10234,7 +10337,7 @@ func GetAllPoolsOnNode(nodeUuid string) ([]string, error) {
 }
 
 // Set default provider as aws
-func getClusterProvider() string {
+func GetClusterProvider() string {
 	clusterProvider = os.Getenv("CLUSTER_PROVIDER")
 	return clusterProvider
 }
