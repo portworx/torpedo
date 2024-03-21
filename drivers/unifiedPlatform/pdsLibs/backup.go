@@ -1,8 +1,8 @@
 package pdslibs
 
 import (
-	pdsv2 "github.com/portworx/pds-api-go-client/unifiedcp/v1alpha1"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	pdsv2 "github.com/pure-px/platform-api-go-client/pds/v1/backupconfig"
 )
 
 type WorkflowBackup struct {
