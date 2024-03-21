@@ -413,5 +413,5 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	KubevirtInPlaceRestoreWithReplaceAndRetain:                       {KubevirtInPlaceRestoreWithReplaceAndRetainLabel, KubevirtAppLabel},
 	KubevirtVMRestoreWithAfterChangingVMConfig:                       {KubevirtVMRestoreWithAfterChangingVMConfigLabel, KubevirtAppLabel},
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                 {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
-	KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDelete, KubevirtAppLabel},
+	KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},
 }
