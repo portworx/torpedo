@@ -2,8 +2,9 @@ package tests
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/pkg/log"
 	"sync"
+
+	"github.com/portworx/torpedo/pkg/log"
 
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/portworx/torpedo/drivers/scheduler"
@@ -19,11 +20,12 @@ var _ = Describe("{BackupLongevity}", func() {
 	var emailTriggerLock sync.Mutex
 	var populateDone bool
 	triggerEventsChan := make(chan *EventRecord, 100)
-	triggerFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
+	triggerBackupFunctions = map[string]func(*[]*scheduler.Context, *chan *EventRecord){
 		CreatePxBackup:           TriggerCreateBackup,
 		CreatePxBackupAndRestore: TriggerCreateBackupAndRestore,
 		CreateRandomRestore:      TriggerCreateRandomRestore,
 		DeployBackupApps:         TriggerDeployBackupApps,
+		CreatePxLockedBackup:     TriggerCreateLockedBackup,
 	}
 	//Creating a distinct trigger to make sure email triggers at regular intervals
 	emailTriggerFunction = map[string]func(){
@@ -56,10 +58,11 @@ var _ = Describe("{BackupLongevity}", func() {
 		TriggerDeployBackupApps(&contexts, &triggerEventsChan)
 		TriggerAddBackupCluster(&contexts, &triggerEventsChan)
 		TriggerAddBackupCredAndBucket(&contexts, &triggerEventsChan)
+		TriggerAddLockedBackupCredAndBucket(&contexts, &triggerEventsChan)
 
 		var wg sync.WaitGroup
 		Step("Register test triggers", func() {
-			for triggerType, triggerFunc := range triggerFunctions {
+			for triggerType, triggerFunc := range triggerBackupFunctions {
 				log.InfoD("Registering trigger: [%v]", triggerType)
 				go backupEventTrigger(&wg, &contexts, triggerType, triggerFunc, &triggerLock, &triggerEventsChan)
 				wg.Add(1)

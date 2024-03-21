@@ -50,6 +50,7 @@ import (
 	"github.com/portworx/sched-ops/k8s/apps"
 	"github.com/portworx/sched-ops/k8s/core"
 	"github.com/portworx/sched-ops/k8s/operator"
+	policyops "github.com/portworx/sched-ops/k8s/policy"
 	k8sStorage "github.com/portworx/sched-ops/k8s/storage"
 	storkops "github.com/portworx/sched-ops/k8s/stork"
 	"github.com/portworx/sched-ops/task"
@@ -135,6 +136,9 @@ import (
 	// import aks scheduler driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
 
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/eks"
+
 	// import gke scheduler driver to invoke it's init
 	"github.com/portworx/torpedo/drivers/scheduler/gke"
 	_ "github.com/portworx/torpedo/drivers/scheduler/gke"
@@ -168,6 +172,9 @@ import (
 
 	// import ibm driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ibm"
+
+	// import scheduler drivers to invoke it's init
+	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
 
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
@@ -673,71 +680,141 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 			close(*errChan[0])
 		}
 	}()
+	Step(fmt.Sprintf("For validation of %s app", ctx.App.Key), func() {
+		var timeout time.Duration
+		log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
+		appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
+		if Inst().ScaleAppTimeout != time.Duration(0) {
+			timeout = Inst().ScaleAppTimeout
+		} else if ctx.ReadinessTimeout == time.Duration(0) {
+			timeout = appScaleFactor * defaultTimeout
+		} else {
+			timeout = appScaleFactor * ctx.ReadinessTimeout
+		}
 
-	var timeout time.Duration
-	log.InfoD(fmt.Sprintf("Validating %s app", ctx.App.Key))
-	appScaleFactor := time.Duration(Inst().GlobalScaleFactor)
-	if Inst().ScaleAppTimeout != time.Duration(0) {
-		timeout = Inst().ScaleAppTimeout
-	} else if ctx.ReadinessTimeout == time.Duration(0) {
-		timeout = appScaleFactor * defaultTimeout
-	} else {
-		timeout = appScaleFactor * ctx.ReadinessTimeout
+		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
+			if !ctx.SkipVolumeValidation {
+				log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
+				ValidateVolumes(ctx, errChan...)
+			}
+		})
+
+		stepLog := fmt.Sprintf("wait for %s app to start running", ctx.App.Key)
+
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+			if err != nil {
+				PrintDescribeContext(ctx)
+				processError(err, errChan...)
+				return
+			}
+		})
+
+		// Validating Topology Labels for apps if Topology is enabled
+		if len(Inst().TopologyLabels) > 0 {
+			stepLog = fmt.Sprintf("validate topology labels for %s app", ctx.App.Key)
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				err := Inst().S.ValidateTopologyLabel(ctx)
+				if err != nil {
+					processError(err, errChan...)
+					return
+				}
+			})
+		}
+		stepLog = fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key)
+
+		Step(stepLog, func() {
+			if ctx.SkipVolumeValidation {
+				return
+			}
+			log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
+
+			var vols []*volume.Volume
+			var err error
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
+
+			if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				processError(err, errChan...)
+			}
+
+			for _, vol := range vols {
+				stepLog = fmt.Sprintf("validate if %s app's volume: %v is setup", ctx.App.Key, vol)
+				Step(stepLog, func() {
+					log.Infof(stepLog)
+					err := Inst().V.ValidateVolumeSetup(vol)
+					if err != nil {
+						processError(err, errChan...)
+					}
+				})
+			}
+		})
+
+		// Validating px pod restart count only for portworx volume driver
+		if Inst().V.String() == "pxd" {
+			Step("Validate Px pod restart count", func() {
+				ValidatePxPodRestartCount(ctx, errChan...)
+			})
+		}
+	})
+}
+
+func ValidatePDB(pdbValue int, allowedDisruptions int, initialNumNodes int, isClusterParallelyUpgraded *bool, errChan ...*chan error) {
+	defer func() {
+		if len(errChan) > 0 {
+			close(*errChan[0])
+		}
+	}()
+
+	currentPdbValue, _ := GetPDBValue()
+	if currentPdbValue == -1 {
+		err := fmt.Errorf("failed to get PDB value")
+		processError(err, errChan...)
 	}
+	Step("Validate PDB minAvailable for px storage", func() {
+		if currentPdbValue != pdbValue {
+			err := fmt.Errorf("PDB minAvailable value has changed. Expected: %d, Actual: %d", pdbValue, currentPdbValue)
+			processError(err, errChan...)
+		}
 
-	if !ctx.SkipVolumeValidation {
-		log.InfoD(fmt.Sprintf("Validating %s app's volumes", ctx.App.Key))
-		ValidateVolumes(ctx, errChan...)
-	}
+	})
+	Step("Validate number of disruptions ", func() {
+		nodes, err := Inst().V.GetDriverNodes()
+		if err != nil {
+			processError(err, errChan...)
+		}
+		currentNumNodes := len(nodes)
+		if allowedDisruptions < initialNumNodes-currentNumNodes {
+			err := fmt.Errorf("number of nodes down is more than allowed disruptions . Expected: %d, Actual: %d", allowedDisruptions, initialNumNodes-currentNumNodes)
+			processError(err, errChan...)
+		}
+		if initialNumNodes-currentNumNodes > 1 {
+			*isClusterParallelyUpgraded = true
+			
+		}
+	})
 
-	err := Inst().S.WaitForRunning(ctx, timeout, defaultRetryInterval)
+}
+
+func GetPDBValue() (int, int) {
+	// if Inst().V.GetDriverNodes()
+	stc, err := Inst().V.GetDriver()
 	if err != nil {
-		PrintDescribeContext(ctx)
-		processError(err, errChan...)
-		return
+		return -1, -1
 	}
-
-	// Validating Topology Labels for apps if Topology is enabled
-	if len(Inst().TopologyLabels) > 0 {
-		err := Inst().S.ValidateTopologyLabel(ctx)
-		if err != nil {
-			processError(err, errChan...)
-			return
-		}
-
+	pdb, err := policyops.Instance().GetPodDisruptionBudget("px-storage", stc.Namespace)
+	if err != nil {
+		return -1, -1
 	}
-
-	if ctx.SkipVolumeValidation {
-		return
-	}
-	log.InfoD(fmt.Sprintf("validate if %s app's volumes are setup", ctx.App.Key))
-
-	var vols []*volume.Volume
-	t := func() (interface{}, bool, error) {
-		vols, err = Inst().S.GetVolumes(ctx)
-		if err != nil {
-			return "", true, err
-		}
-		return "", false, nil
-	}
-
-	if _, err = task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
-		log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-		processError(err, errChan...)
-	}
-
-	for _, vol := range vols {
-		err := Inst().V.ValidateVolumeSetup(vol)
-		if err != nil {
-			processError(err, errChan...)
-		}
-
-	}
-
-	// Validating px pod restart count only for portworx volume driver
-	if Inst().V.String() == "pxd" {
-		ValidatePxPodRestartCount(ctx, errChan...)
-	}
+	return pdb.Spec.MinAvailable.IntValue(), int(pdb.Status.DisruptionsAllowed)
 }
 
 func ValidatePureCloudDriveTopologies() error {
@@ -1027,67 +1104,71 @@ func ValidateContextForPureVolumesPXCTL(ctx *scheduler.Context, errChan ...*chan
 
 // ValidateVolumes is the ginkgo spec for validating volumes of a context
 func ValidateVolumes(ctx *scheduler.Context, errChan ...*chan error) {
-	var err error
-	var vols []*volume.Volume
-	t := func() (interface{}, bool, error) {
-		vols, err = Inst().S.GetVolumes(ctx)
-		if err != nil {
-			return "", true, err
-		}
-		return "", false, nil
-	}
+	Step("For validation of an app's volumes", func() {
+		var err error
+		Step(fmt.Sprintf("inspect %s app's volumes", ctx.App.Key), func() {
+			var vols []*volume.Volume
+			t := func() (interface{}, bool, error) {
+				vols, err = Inst().S.GetVolumes(ctx)
+				if err != nil {
+					return "", true, err
+				}
+				return "", false, nil
+			}
 
-	if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
-		log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
-		processError(err, errChan...)
-	}
-	volScaleFactor := 1
-	if len(vols) > 10 {
-		// Take into account the number of volumes in the app. More volumes will
-		// take longer to format if the backend storage has limited bandwidth. Even if the
-		// GlobalScaleFactor is 1, high number of volumes in a single app instance
-		// may slow things down.
-		volScaleFactor = len(vols) / 10
-		log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
-	}
-	scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
-	// If provisioner is IBM increase the timeout to 8 min
-	if Inst().Provisioner == "ibm" {
-		err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
-	} else {
-		err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
-	}
-	if err != nil {
-		PrintDescribeContext(ctx)
-		processError(err, errChan...)
-	}
+			if _, err := task.DoRetryWithTimeout(t, 2*time.Minute, 5*time.Second); err != nil {
+				log.Errorf("Failed to get app %s's volumes", ctx.App.Key)
+				processError(err, errChan...)
+			}
+			volScaleFactor := 1
+			if len(vols) > 10 {
+				// Take into account the number of volumes in the app. More volumes will
+				// take longer to format if the backend storage has limited bandwidth. Even if the
+				// GlobalScaleFactor is 1, high number of volumes in a single app instance
+				// may slow things down.
+				volScaleFactor = len(vols) / 10
+				log.Infof("Using vol scale factor of %d for app %s", volScaleFactor, ctx.App.Key)
+			}
+			scaleFactor := time.Duration(Inst().GlobalScaleFactor * volScaleFactor)
+			// If provisioner is IBM increase the timeout to 8 min
+			if Inst().Provisioner == "ibm" {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultIbmVolScaleTimeout, defaultRetryInterval, nil)
+			} else {
+				err = Inst().S.ValidateVolumes(ctx, scaleFactor*defaultVolScaleTimeout, defaultRetryInterval, nil)
+			}
+			if err != nil {
+				PrintDescribeContext(ctx)
+				processError(err, errChan...)
+			}
+		})
 
-	var volsMap map[string]map[string]string
-
-	volsMap, err = Inst().S.GetVolumeParameters(ctx)
-	if err != nil {
-		processError(err, errChan...)
-	}
-
-	for vol, params := range volsMap {
-		if Inst().ConfigMap != "" {
-			params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+		var vols map[string]map[string]string
+		Step(fmt.Sprintf("get %s app's volume's custom parameters", ctx.App.Key), func() {
+			vols, err = Inst().S.GetVolumeParameters(ctx)
 			if err != nil {
 				processError(err, errChan...)
 			}
-		}
-		if ctx.RefreshStorageEndpoint {
-			params["refresh-endpoint"] = "true"
-		}
+		})
 
-		err = Inst().V.ValidateCreateVolume(vol, params)
-		if err != nil {
-			PrintDescribeContext(ctx)
-			processError(err, errChan...)
+		for vol, params := range vols {
+			if Inst().ConfigMap != "" {
+				params[authTokenParam], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
+				if err != nil {
+					processError(err, errChan...)
+				}
+			}
+			if ctx.RefreshStorageEndpoint {
+				params["refresh-endpoint"] = "true"
+			}
+			Step(fmt.Sprintf("get %s app's volume: %s inspected by the volume driver", ctx.App.Key, vol), func() {
+				err = Inst().V.ValidateCreateVolume(vol, params)
+				if err != nil {
+					PrintDescribeContext(ctx)
+					processError(err, errChan...)
+				}
+			})
 		}
-
-	}
-
+	})
 }
 
 // ValidatePureSnapshotsSDK is the ginkgo spec for validating Pure direct access volume snapshots using API for a context
@@ -1291,7 +1372,7 @@ func ValidatePureVolumeStatisticsDynamicUpdate(ctx *scheduler.Context, errChan .
 			processError(err, errChan...)
 			fmt.Println("sleeping to let volume usage get reflected")
 			// wait until the backends size is reflected before making the REST call
-			time.Sleep(time.Minute * 2)
+			time.Sleep(time.Minute * 5)
 
 			byteUsedAfter, err := Inst().V.ValidateGetByteUsedForVolume(vols[0].ID, make(map[string]string))
 			fmt.Printf("after writing random bytes to the file the byteUsed in volume %s is %v\n", vols[0].ID, byteUsedAfter)
@@ -1786,6 +1867,7 @@ func CreateScheduleOptions(namespace string, errChan ...*chan error) scheduler.S
 	//if not hyper converged set up deploy apps only on storageless nodes
 	if !Inst().IsHyperConverged {
 		var err error
+
 		log.Infof("ScheduleOptions: Scheduling apps only on storageless nodes")
 		storagelessNodes := node.GetStorageLessNodes()
 		if len(storagelessNodes) == 0 {
@@ -1834,28 +1916,30 @@ func ScheduleApplications(testname string, errChan ...*chan error) []*scheduler.
 	var contexts []*scheduler.Context
 	var taskName string
 	var err error
-	if Inst().IsPDSApps {
-		log.InfoD("Scheduling PDS Apps...")
-		pdsapps, err := Inst().Pds.DeployPDSDataservices()
-		if err != nil {
-			processError(err, errChan...)
+	Step("schedule applications", func() {
+		if Inst().IsPDSApps {
+			log.InfoD("Scheduling PDS Apps...")
+			pdsapps, err := Inst().Pds.DeployPDSDataservices()
+			if err != nil {
+				processError(err, errChan...)
+			}
+			contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
+			if err != nil {
+				processError(err, errChan...)
+			}
+		} else {
+			options := CreateScheduleOptions("", errChan...)
+			taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
+			contexts, err = Inst().S.Schedule(taskName, options)
+			// Need to check err != nil before calling processError
+			if err != nil {
+				processError(err, errChan...)
+			}
 		}
-		contexts, err = Inst().Pds.CreateSchedulerContextForPDSApps(pdsapps)
-		if err != nil {
-			processError(err, errChan...)
+		if len(contexts) == 0 {
+			processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
 		}
-	} else {
-		options := CreateScheduleOptions("", errChan...)
-		taskName = fmt.Sprintf("%s-%v", testname, Inst().InstanceID)
-		contexts, err = Inst().S.Schedule(taskName, options)
-		// Need to check err != nil before calling processError
-		if err != nil {
-			processError(err, errChan...)
-		}
-	}
-	if len(contexts) == 0 {
-		processError(fmt.Errorf("list of contexts is empty for [%s]", taskName), errChan...)
-	}
+	})
 
 	return contexts
 }
@@ -2080,7 +2164,7 @@ func CrashVolDriverAndWait(appNodes []node.Node, errChan ...*chan error) {
 
 		stepLog = fmt.Sprintf("wait for volume driver to start on nodes: %v", appNodes)
 		Step(stepLog, func() {
-			log.Info(stepLog)
+			log.InfoD(stepLog)
 			for _, n := range appNodes {
 				err := Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 				processError(err, errChan...)
@@ -2406,42 +2490,45 @@ func TogglePrometheusInStc() error {
 
 // ValidatePxPodRestartCount validates portworx restart count
 func ValidatePxPodRestartCount(ctx *scheduler.Context, errChan ...*chan error) {
-	pxLabel := make(map[string]string)
-	pxLabel[labelNameKey] = defaultStorageProvisioner
-	pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-	//Using fatal verification will abort longevity runs
-	if err != nil {
-		log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
-	}
-
-	// Validate portworx pod restart count after test
-	for pod, value := range pxPodRestartCountMap {
-		n, err := node.GetNodeByIP(pod.Status.HostIP)
-		log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
-		if n.PxPodRestartCount != value {
-			log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
-			if Inst().PortworxPodRestartCheck {
-				log.Fatalf("portworx pods restart [%d] times", value)
+	Step("Validating portworx pods restart count ...", func() {
+		Step("Getting current restart counts for portworx pods and matching", func() {
+			pxLabel := make(map[string]string)
+			pxLabel[labelNameKey] = defaultStorageProvisioner
+			pxPodRestartCountMap, err := Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+			//Using fatal verification will abort longevity runs
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
 			}
-		}
-	}
 
-	// Validate portworx operator pod check
-	pxLabel[labelNameKey] = portworxOperatorName
-	pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
-	//Using fatal verification will abort longevity runs
-	if err != nil {
-		log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
-	}
-	for _, v := range pxPodRestartCountMap {
-		if v > 0 {
-			log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
-			if Inst().PortworxPodRestartCheck {
-				log.Fatalf("portworx operator pods restart [%d] times", v)
+			// Validate portworx pod restart count after test
+			for pod, value := range pxPodRestartCountMap {
+				n, err := node.GetNodeByIP(pod.Status.HostIP)
+				log.FailOnError(err, "Failed to get node object using IP: %s", pod.Status.HostIP)
+				if n.PxPodRestartCount != value {
+					log.Warnf("Portworx pods restart count not matches, expected %d actual %d", value, n.PxPodRestartCount)
+					if Inst().PortworxPodRestartCheck {
+						log.Fatalf("portworx pods restart [%d] times", value)
+					}
+				}
 			}
-		}
-	}
 
+			// Validate portworx operator pod check
+			pxLabel[labelNameKey] = portworxOperatorName
+			pxPodRestartCountMap, err = Inst().S.GetPodsRestartCount(pxNamespace, pxLabel)
+			//Using fatal verification will abort longevity runs
+			if err != nil {
+				log.Errorf(fmt.Sprintf("Failed to get portworx pod restart count for %v, Err : %v", pxLabel, err))
+			}
+			for _, v := range pxPodRestartCountMap {
+				if v > 0 {
+					log.Warnf("Portworx operator pods restart count %d is greater than 0", v)
+					if Inst().PortworxPodRestartCheck {
+						log.Fatalf("portworx operator pods restart [%d] times", v)
+					}
+				}
+			}
+		})
+	})
 }
 
 // DescribeNamespace takes in the scheduler contexts and describes each object within the test context.
@@ -7088,8 +7175,21 @@ func WaitForExpansionToStart(poolID string) error {
 	return err
 }
 
-// RebootNodeAndWait reboots node and waits for to be up
-func RebootNodeAndWait(n node.Node) error {
+// RebootNodeAndWaitForPxUp reboots node and waits for  volume driver to be up
+func RebootNodeAndWaitForPxUp(n node.Node) error {
+
+	err := RebootNodeAndWaitForPxDown(n)
+	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+// RebootNodeAndWaitForPxDown reboots node and waits for volume driver to be down
+func RebootNodeAndWaitForPxDown(n node.Node) error {
 
 	if &n == nil {
 		return fmt.Errorf("no Node is provided to reboot")
@@ -7118,10 +7218,6 @@ func RebootNodeAndWait(n node.Node) error {
 		return err
 	}
 	err = Inst().S.IsNodeReady(n)
-	if err != nil {
-		return err
-	}
-	err = Inst().V.WaitDriverUpOnNode(n, Inst().DriverStartTimeout)
 	if err != nil {
 		return err
 	}
@@ -10697,4 +10793,158 @@ func CreateNFSProxyStorageClass(scName, nfsServer, mountPath string) error {
 	k8sStorage := k8sStorage.Instance()
 	_, err := k8sStorage.CreateStorageClass(&scObj)
 	return err
+}
+
+func GetClusterNodesInfo(stopSignal <-chan struct{}, mError *error) {
+	stNodes := node.GetStorageNodes()
+
+	nodeSchedulableStatus := make(map[string]string)
+	stNodeNames := make(map[string]bool)
+
+	for _, stNode := range stNodes {
+		stNodeNames[stNode.Name] = true
+	}
+
+	//Handling case where we have storageless node as kvdb node with dedicated kvdb device attached.
+	kvdbNodes, _ := GetAllKvdbNodes()
+	for _, kvdbNode := range kvdbNodes {
+		sNode, err := node.GetNodeDetailsByNodeID(kvdbNode.ID)
+		if err == nil {
+			stNodeNames[sNode.Name] = true
+		} else {
+			log.Errorf("got error while getting with id [%s]", kvdbNode.ID)
+		}
+	}
+
+	log.Infof("stnodes are %#v", stNodeNames)
+	itr := 1
+	for {
+		log.Infof("K8s node validation. iteration: #%d", itr)
+		select {
+		case <-stopSignal:
+			log.Infof("Exiting node validations routine")
+			return
+		default:
+			nodeList, err := core.Instance().GetNodes()
+			if err != nil {
+				log.Errorf("Got error : %s", err.Error())
+				*mError = err
+				return
+			}
+
+			nodeNotReadyeCount := 0
+			for _, k8sNode := range nodeList.Items {
+				for _, status := range k8sNode.Status.Conditions {
+					if status.Type == v1.NodeReady {
+						nodeSchedulableStatus[k8sNode.Name] = string(status.Status)
+						if status.Status != v1.ConditionTrue && stNodeNames[k8sNode.Name] {
+							nodeNotReadyeCount += 1
+						}
+						break
+					}
+				}
+
+			}
+			if nodeNotReadyeCount > 1 {
+				err = fmt.Errorf("multiple  nodes are Unschedulable at same time,"+
+					"node status:%#v", nodeSchedulableStatus)
+				log.Errorf("Got error : %s", err.Error())
+				log.Infof("Node Details: %#v", nodeList.Items)
+				output, err := Inst().N.RunCommand(stNodes[0], "pxctl status", node.ConnectionOpts{
+					IgnoreError:     false,
+					TimeBeforeRetry: defaultRetryInterval,
+					Timeout:         defaultTimeout,
+					Sudo:            true,
+				})
+				if err != nil {
+					log.Errorf("failed to get pxctl status, Err: %v", err)
+				}
+				log.Infof(output)
+				*mError = err
+				return
+			}
+		}
+		itr++
+		time.Sleep(30 * time.Second)
+	}
+}
+
+// PrintK8sClusterInfo prints info about K8s cluster nodes
+func PrintK8sCluterInfo() {
+	log.Info("Get cluster info..")
+	t := func() (interface{}, bool, error) {
+		nodeList, err := core.Instance().GetNodes()
+		if err != nil {
+			return "", true, fmt.Errorf("failed to get nodes, Err %v", err)
+		}
+		if len(nodeList.Items) > 0 {
+			for _, node := range nodeList.Items {
+				nodeType := "Worker"
+				if core.Instance().IsNodeMaster(node) {
+					nodeType = "Master"
+				}
+				log.Infof(
+					"Node Name: %s, Node Type: %s, Kernel Version: %s, Kubernetes Version: %s, OS: %s, Container Runtime: %s",
+					node.Name, nodeType,
+					node.Status.NodeInfo.KernelVersion, node.Status.NodeInfo.KubeletVersion, node.Status.NodeInfo.OSImage,
+					node.Status.NodeInfo.ContainerRuntimeVersion)
+			}
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("no nodes were found in the cluster")
+	}
+	if _, err := task.DoRetryWithTimeout(t, 1*time.Minute, 5*time.Second); err != nil {
+		log.Warnf("failed to get k8s cluster info, Err: %v", err)
+	}
+}
+
+//ExportSourceKubeConfig changes the KUBECONFIG environment variable to the source cluster config path
+func ExportSourceKubeConfig() error {
+	sourceClusterConfigPath, err := GetSourceClusterConfigPath()
+	if err != nil {
+		return err
+	}
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", sourceClusterConfigPath)
+}
+
+//ExportDestinationKubeConfig changes the KUBECONFIG environment variable to the destination cluster config path
+func ExportDestinationKubeConfig() error {
+	DestinationClusterConfigPath, err := GetDestinationClusterConfigPath()
+	if err != nil {
+		return err
+	}
+
+	err = os.Unsetenv("KUBECONFIG")
+	if err != nil {
+		return err
+	}
+	return os.Setenv("KUBECONFIG", DestinationClusterConfigPath)
+}
+
+//SwitchBothKubeConfigANDContext switches both KUBECONFIG and context to the given cluster
+func SwitchBothKubeConfigANDContext(cluster string) error {
+	if cluster == "source" {
+		err := ExportSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetSourceKubeConfig()
+		if err != nil {
+			return err
+		}
+	} else if cluster == "destination" {
+		err := ExportDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
