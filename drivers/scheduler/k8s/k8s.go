@@ -4340,27 +4340,29 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 					return nil, err
 				}
 			}
-		} else if pipeline, ok := specObj.(*tektoncdv1.PipelineRun); ok {
-			pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
-			}
-			for _, pvc := range pvcList.Items {
-				// check if the pvc has our VM as the owner
-				want := false
-				for _, ownerRef := range pvc.OwnerReferences {
-					if ownerRef.Kind == pipeline.Kind && ownerRef.Name == pipeline.Name {
-						want = true
-					}
-				}
-				if !want {
-					continue
-				}
-				vols, err = k.appendVolForPVC(vols, &pvc)
+		} else if _, ok := specObj.(*tektoncdv1.PipelineRun); ok {
+			return nil, nil
+			/*
+				pvcList, err := k8sCore.GetPersistentVolumeClaims(pipeline.Namespace, nil)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("failed to get PVCs in namespace %s: %w", pipeline.Namespace, err)
 				}
-			}
+				for _, pvc := range pvcList.Items {
+					// check if the pvc has our VM as the owner
+					want := false
+					for _, ownerRef := range pvc.OwnerReferences {
+						if ownerRef.Kind == pipeline.Kind && ownerRef.Name == pipeline.Name {
+							want = true
+						}
+					}
+					if !want {
+						continue
+					}
+					vols, err = k.appendVolForPVC(vols, &pvc)
+					if err != nil {
+						return nil, err
+					}
+				}*/
 		}
 	}
 	for _, vol := range vols {
