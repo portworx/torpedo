@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	status "net/http"
 
@@ -20,10 +19,18 @@ func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.Work
 	return &dsResponse, nil
 }
 
-func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
-	dsResponse := automationModels.WorkFlowResponse{}
+func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) error {
+	ctx, dsClient, err := ds.getDeploymentClient()
+	if err != nil {
+		return fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
 
-	return &dsResponse, nil
+	_, res, err := dsClient.DeploymentServiceDeleteDeployment(ctx, deploymentId).Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	return nil
 }
 
 func (ds *PDS_API_V1) ListDeployment() (*automationModels.WorkFlowResponse, error) {
@@ -37,7 +44,7 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 	dsResponse := automationModels.WorkFlowResponse{}
 	depCreateRequest := deploymentV1.ApiDeploymentServiceCreateDeploymentRequest{}
 
-	_, dsClient, err := ds.getDeploymentClient()
+	ctx, dsClient, err := ds.getDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
@@ -62,7 +69,7 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 	//Debug Print
 	fmt.Println("DeploymentRequest Name ", *DeploymentRequestBody.Deployment.Meta.Name)
 
-	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(context.Background(), createDeploymentRequest.Create.NamespaceID).DeploymentServiceCreateDeploymentBody(DeploymentRequestBody)
+	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(ctx, createDeploymentRequest.Create.NamespaceID).DeploymentServiceCreateDeploymentBody(DeploymentRequestBody)
 
 	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(depCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {

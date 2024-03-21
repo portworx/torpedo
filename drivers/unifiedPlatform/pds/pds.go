@@ -17,7 +17,7 @@ type Deployment interface {
 	CreateDeployment(*PDSDeploymentRequest) (*WorkFlowResponse, error)
 	ListDeployment() (*WorkFlowResponse, error)
 	GetDeployment(string) (*WorkFlowResponse, error)
-	DeleteDeployment(string) (*WorkFlowResponse, error)
+	DeleteDeployment(string) error
 }
 
 type DeploymentConfig interface {

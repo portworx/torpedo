@@ -19,7 +19,6 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 	)
 
 	It("Deploy and Validate DataService", func() {
-
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
 			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
@@ -33,9 +32,15 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds, true)
+			_, err := workflowDataservice.DeployDataService(ds)
 			log.FailOnError(err, "Error while deploying ds")
 		}
+
+		stepLog := "Running Workloads before taking backups"
+		Step(stepLog, func() {
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
+		})
 	})
 
 	It("Update DataService", func() {
@@ -43,6 +48,17 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 			_, err := workflowDataservice.UpdateDataService(ds)
 			log.FailOnError(err, "Error while updating ds")
 		}
+
+		stepLog := "Running Workloads before taking backups"
+		Step(stepLog, func() {
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
+		})
+	})
+
+	It("Delete DataServiceDeployment", func() {
+		err := workflowDataservice.DeleteDeployment()
+		log.FailOnError(err, "Error while deleting dataservice")
 	})
 
 	JustAfterEach(func() {
