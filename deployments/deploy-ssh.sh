@@ -261,7 +261,7 @@ case $FOCUS_TESTS in
     ;;
 esac
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]]; then
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]] && [[ "$TEST_SUITE" != *"pds2.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 

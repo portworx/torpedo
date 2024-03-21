@@ -7,12 +7,12 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace               WorkflowNamespace
-	NamespaceName           string
-	DataServiceDeploymentId string
+	Namespace             WorkflowNamespace
+	NamespaceName         string
+	DataServiceDeployment map[string]string
 }
 
-func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService) (*automationModels.WorkFlowResponse, error) {
+func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, validateDeployment bool) (*automationModels.WorkFlowResponse, error) {
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
@@ -21,15 +21,34 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	if err != nil {
 		return nil, err
 	}
-	wfDataService.DataServiceDeploymentId = *deployment.PDSDeployment.V1Deployment.Meta.Uid
+	wfDataService.DataServiceDeployment[*deployment.PDSDeployment.V1Deployment.Meta.Name] = *deployment.PDSDeployment.V1Deployment.Meta.Uid
+
+	if validateDeployment {
+		err = dslibs.ValidateDataServiceDeployment(wfDataService.DataServiceDeployment, namespace)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return deployment, nil
 }
 
-func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService) (*automationModels.WorkFlowResponse, error) {
-	deployment, err := dslibs.UpdateDataService(ds, wfDataService.Namespace.Namespaces[wfDataService.NamespaceName], wfDataService.Namespace.TargetCluster.Project.ProjectId)
+func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, validateDeployment bool) (*automationModels.WorkFlowResponse, error) {
+	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
+	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
+	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
+	log.Infof("targetClusterId [%s]", targetClusterId)
+
+	deployment, err := dslibs.UpdateDataService(ds, namespace, projectId)
 	if err != nil {
 		return nil, err
 	}
-	wfDataService.DataServiceDeploymentId = *deployment.PDSDeployment.V1Deployment.Meta.Uid
+	wfDataService.DataServiceDeployment[*deployment.PDSDeployment.V1Deployment.Meta.Name] = *deployment.PDSDeployment.V1Deployment.Meta.Uid
+	if validateDeployment {
+		err = dslibs.ValidateDataServiceDeployment(wfDataService.DataServiceDeployment, namespace)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return deployment, nil
 }

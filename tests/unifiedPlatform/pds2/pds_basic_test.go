@@ -6,10 +6,12 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +46,46 @@ var _ = BeforeSuite(func() {
 		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 
+	Step("Get Default Tenant", func() {
+		log.Infof("Initialising values for tenant")
+		WorkflowPlatform.AdminAccountId = AccID
+		WorkflowPlatform.TenantInit()
+	})
+
+	Step("Get Default Project", func() {
+		var err error
+		WorkflowProject.Platform = WorkflowPlatform
+		ProjectId, err = WorkflowProject.GetDefaultProject(DefaultProject)
+		log.FailOnError(err, "Unable to get default project")
+		log.Infof("Default project ID - [%s]", ProjectId)
+		WorkflowProject.ProjectId = ProjectId
+		WorkflowProject.ProjectName = DefaultProject
+	})
+
+	Step("Register Target Cluster", func() {
+		WorkflowTargetCluster.Project = WorkflowProject
+		log.Infof("Tenant ID [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
+		WorkflowTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane()
+		log.FailOnError(err, "Unable to register target cluster")
+		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
+	})
+
+	Step("Create Buckets", func() {
+		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
+			switch NewPdsParams.BackUpAndRestore.TargetLocation {
+			case "s3-comp":
+				err := platformUtils.CreateS3CompBucket(PDSBucketName)
+				log.FailOnError(err, "error while creating s3-comp bucket")
+			case "s3":
+				err := platformUtils.CreateS3Bucket(PDSBucketName)
+				log.FailOnError(err, "error while creating s3 bucket")
+			default:
+				err := platformUtils.CreateS3CompBucket(PDSBucketName)
+				log.FailOnError(err, "error while creating s3-comp bucket")
+			}
+		}
+	})
 })
 
 var _ = AfterSuite(func() {
