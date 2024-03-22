@@ -122,7 +122,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				// Modify all provisioner to select default volume snapshot class
 				provisionerSelectDefaultVolumeSnapshotClass := make(map[string]string)
 				for key := range provisionerDefaultSnapshotClassMap {
-					provisionerSelectDefaultVolumeSnapshotClass[key] = "default"
+					provisionerSelectDefaultVolumeSnapshotClass[key] = "use-default-vsc"
 				}
 				multipleProvisionerSameNsScheduleName = fmt.Sprintf("multiple-provisioner-same-namespace-schedule-%v", RandomString(randomStringLength))
 				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
