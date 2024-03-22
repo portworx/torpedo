@@ -55,11 +55,11 @@ func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*WorkFlowResponse
 	return &depResponse, nil
 }
 
-func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) (*WorkFlowResponse, error) {
-	depResponse := WorkFlowResponse{}
+func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) error {
+	//depResponse := WorkFlowResponse{}
 	ctx, client, _, err := deployment.getDeploymentClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+		return fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
 	deleteRequest := &publicdeploymentapis.DeleteDeploymentRequest{
@@ -70,13 +70,13 @@ func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) (*WorkFlowRespo
 	apiResponse, err := client.DeleteDeployment(ctx, deleteRequest)
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
-		return nil, fmt.Errorf("Error while deleting the deployment: %v\n", err)
+		return fmt.Errorf("Error while deleting the deployment: %v\n", err)
 	}
-	err = copier.Copy(&depResponse, apiResponse)
-	if err != nil {
-		return nil, fmt.Errorf("Error while copying the response:%v\n", err)
-	}
-	return &depResponse, nil
+	//err = copier.Copy(&depResponse, apiResponse)
+	//if err != nil {
+	//	return nil, fmt.Errorf("Error while copying the response:%v\n", err)
+	//}
+	return nil
 }
 
 func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {

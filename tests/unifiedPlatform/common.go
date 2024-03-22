@@ -36,7 +36,6 @@ var (
 	WorkflowProject       stworkflows.WorkflowProject
 	WorkflowNamespace     stworkflows.WorkflowNamespace
 	NewPdsParams          *parameters.NewPDSParams
-	CustomParams          *parameters.Customparams
 	PdsLabels             = make(map[string]string)
 )
 
