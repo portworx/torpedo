@@ -77,7 +77,8 @@ func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *WorkFlowRequest) (*
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(&saResponse, saModel)
+	log.Infof("API response - [%+v]", saModel)
+	err = utilities.CopyStruct(saModel, &saResponse)
 	return &saResponse, err
 }
 

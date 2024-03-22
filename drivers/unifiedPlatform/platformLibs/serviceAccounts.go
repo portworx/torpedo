@@ -41,9 +41,21 @@ func GetServiceAccountForTenant(saId, tenantId string) (*automationModels.WorkFl
 
 // CreateServiceAccountForRBAC creates a new service account for a given tenant
 func CreateServiceAccountForRBAC(saName, tenantId string) (*automationModels.WorkFlowResponse, error) {
+	saInputs := automationModels.WorkFlowRequest{
+		ServiceAccountRequest: automationModels.PDSServiceAccount{
+			Create: automationModels.CreateServiceAccounts{
+				V1ServiceAccount: automationModels.V1ServiceAccount{
+					Meta: automationModels.Meta{
+						Name: &saName,
+					},
+				},
+				TenantId: tenantId,
+			},
+		},
+	}
 	saInputs.ServiceAccountRequest.Create.V1ServiceAccount.Meta.Name = &saName
 	saInputs.ServiceAccountRequest.Create.TenantId = tenantId
-	saModel, err := v2Components.Platform.CreateServiceAccount(saInputs)
+	saModel, err := v2Components.Platform.CreateServiceAccount(&saInputs)
 	if err != nil {
 		return nil, err
 	}

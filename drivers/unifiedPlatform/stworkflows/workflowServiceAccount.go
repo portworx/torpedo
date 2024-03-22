@@ -3,18 +3,22 @@ package stworkflows
 import (
 	"fmt"
 	_ "github.com/gobwas/glob/syntax/ast"
-	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
 	"github.com/portworx/torpedo/pkg/log"
 )
 
-type UserWithRbac struct {
-	UserRoles map[string]string
+type WorkflowServiceAccount struct {
+	UserRoles map[string]SeviceAccount
 }
 
-func (svcUser *UserWithRbac) CreateNewPdsUser(accId, saName, roleName, resourceId string) (*automationModels.WorkFlowResponse, error) {
-	saModel, err := platformLibs.CreateUser(saName, accId)
+type SeviceAccount struct {
+	Token    string
+	RoleName string
+}
+
+func (svcUser *WorkflowServiceAccount) CreateServiceAccount(accId, saName, roleName, resourceId string) (*WorkflowServiceAccount, error) {
+	_, err := platformLibs.CreateUser(saName, accId)
 	if err != nil {
 		return nil, err
 	}
@@ -22,24 +26,28 @@ func (svcUser *UserWithRbac) CreateNewPdsUser(accId, saName, roleName, resourceI
 	newToken, err := platformLibs.AssignRoleBindingsToUser(saName, roleName, resourceId, accId)
 
 	rbacToken := newToken.PdsServiceAccount.GetToken.Token
-	svcUser.UserRoles[saName] = rbacToken
-	return saModel, nil
+	svcUser.UserRoles[saName] = SeviceAccount{
+		Token:    rbacToken,
+		RoleName: roleName,
+	}
+	return svcUser, nil
 }
 
-func (svcUser *UserWithRbac) SwitchPdsUser(saName string) {
-	// Check if a user exists
-	defer func() {
-		utils.RunWithRBAC = utils.RunWithRbac{
-			RbacFlag: false,
-		}
-	}()
+func (svcUser *WorkflowServiceAccount) SwitchToServiceAccount(saName string) {
 	if user, ok := svcUser.UserRoles[saName]; ok {
 		fmt.Println("User is found", user)
 		jwtToken := svcUser.UserRoles[saName]
 		// check if token expired, if expired create new and update the map
 		utils.RunWithRBAC = utils.RunWithRbac{
 			RbacFlag:  true,
-			RbacToken: jwtToken,
+			RbacToken: jwtToken.Token,
 		}
 	}
+}
+
+func (svcUser *WorkflowServiceAccount) SwitchToAdmin() error {
+	utils.RunWithRBAC = utils.RunWithRbac{
+		RbacFlag: false,
+	}
+	return nil
 }

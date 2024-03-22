@@ -15,7 +15,7 @@ func CreateUser(saName, accId string) (*automationModels.WorkFlowResponse, error
 		return nil, err
 	}
 	saAcc, err := CreateServiceAccountForRBAC(saName, tenantId)
-	log.Infof("created service account with name %s", *saAcc.Meta.Name)
+	log.Infof("created service account with name [%+v]", saAcc)
 	return saAcc, nil
 }
 
