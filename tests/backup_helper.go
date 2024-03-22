@@ -365,21 +365,6 @@ var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 			defaultSnapshot: "gke-snapshot-class-1",
 			appList:         []string{"postgres-gke-csi"},
 		},
-		"pd.csi.storage.gke.io_1": {
-			snapshotClasses: []string{},
-			defaultSnapshot: "",
-			appList:         []string{},
-		},
-		"pd.csi.storage.gke.io_2": {
-			snapshotClasses: []string{"gke-snapshot-class", "gke-snapshot-class-2"},
-			defaultSnapshot: "gke-snapshot-class-2",
-			appList:         []string{},
-		},
-		"pxd": {
-			snapshotClasses: []string{"gke-snapshot-class", "gke-snapshot-class-2"},
-			defaultSnapshot: "gke-snapshot-class",
-			appList:         []string{},
-		},
 	},
 	"ibm": {
 		"vpc.block.csi.ibm.io": {
@@ -392,12 +377,14 @@ var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 		"aws-provisioner": {
 			snapshotClasses: []string{"aws-snapshot-class", "aws-snapshot-class-2"},
 			defaultSnapshot: "aws-snapshot-class",
+			appList:         []string{},
 		},
 	},
 	"aks": {
 		"aks-provisioner": {
 			snapshotClasses: []string{"aks-snapshot-class", "aks-snapshot-class-2"},
 			defaultSnapshot: "aks-snapshot-class",
+			appList:         []string{},
 		},
 	},
 	"openshift": {
