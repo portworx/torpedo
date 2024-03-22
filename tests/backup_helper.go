@@ -837,7 +837,7 @@ func CreateBackupWithCustomResourceTypeWithoutValidation(backupName string, clus
 		ResourceTypes: resourceTypes,
 	}
 
-	err := AdditionalBackupRequestParams(bkpCreateRequest, nil)
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
 	if err != nil {
 		return err
 	}
@@ -1022,7 +1022,7 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 		},
 	}
 
-	err := AdditionalBackupRequestParams(bkpCreateRequest, nil)
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1090,7 +1090,7 @@ func CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName string, clust
 		DirectKdmp: forceKdmp,
 	}
 
-	err := AdditionalBackupRequestParams(bkpCreateRequest, provisionerVolumeSnapshotClassMap)
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1154,7 +1154,7 @@ func CreateVMBackupByNamespacesWithoutCheck(backupName string, vms []kubevirtv1.
 		SkipVmAutoExecRules: skipVMAutoExecRules,
 	}
 
-	err := AdditionalBackupRequestParams(bkpCreateRequest, nil)
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1275,7 +1275,7 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 		},
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest, nil)
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -1336,10 +1336,11 @@ func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, cluster
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
-		DirectKdmp: forceKdmp,
+		VolumeSnapshotClassMapping: provisionerVolumeSnapshotClassMap,
+		DirectKdmp:                 forceKdmp,
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest, provisionerVolumeSnapshotClassMap)
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -4077,7 +4078,7 @@ func CreateBackupWithNamespaceLabelWithoutCheck(backupName string, clusterName s
 		NsLabelSelectors: namespaceLabel,
 	}
 
-	err := AdditionalBackupRequestParams(bkpCreateRequest, nil)
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -4144,7 +4145,7 @@ func CreateScheduleBackupWithNamespaceLabelWithoutCheck(scheduleName string, clu
 		NsLabelSelectors: namespaceLabel,
 	}
 
-	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest, nil)
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -4965,22 +4966,17 @@ const (
 
 // AdditionalBackupRequestParams decorates the backupRequest with additional parameters required
 // when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
-func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provisionerVolumeSnapshotClassMap map[string]string) error {
+func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest) error {
 	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 	case string(NativeCSIWithOffloadToS3):
 		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
-		backupRequest.CsiSnapshotClassName = "ibmc-vpcblock-snapshot"
 		backupRequest.BackupType = api.BackupCreateRequest_Generic
-		/*				var csiSnapshotClassName string
-						var err error
-						if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
-							return err
-						}
-						if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-							backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-						} else {
-							backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-						}*/
+		var csiSnapshotClassName string
+		var err error
+		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
+			return err
+		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
@@ -4989,11 +4985,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-			backupRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-		} else {
-			backupRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeAzure):
 		log.Infof("Detected backup type - %s", NativeAzure)
 		backupRequest.BackupType = api.BackupCreateRequest_Normal
@@ -5014,7 +5006,7 @@ func AdditionalBackupRequestParams(backupRequest *api.BackupCreateRequest, provi
 
 // AdditionalScheduledBackupRequestParams decorates the backupScheduleRequest with additional parameters required
 // when BACKUP_TYPE is Native CSI, Direct KDMP or CSI snapshot with offload to S3
-func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupScheduleCreateRequest, provisionerVolumeSnapshotClassMap map[string]string) error {
+func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupScheduleCreateRequest) error {
 	switch strings.ToLower(os.Getenv("BACKUP_TYPE")) {
 	case string(NativeCSIWithOffloadToS3):
 		log.Infof("Detected backup type - %s", NativeCSIWithOffloadToS3)
@@ -5024,14 +5016,7 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-			for key, value := range provisionerVolumeSnapshotClassMap {
-				log.Infof("printing provisionerVolumeSnapshotClassMap Key: %s, Value: %s", key, value)
-			}
-		} else {
-			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeCSI):
 		log.Infof("Detected backup type - %s", NativeCSI)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
@@ -5040,11 +5025,7 @@ func AdditionalScheduledBackupRequestParams(backupScheduleRequest *api.BackupSch
 		if csiSnapshotClassName, err = GetCsiSnapshotClassName(); err != nil {
 			return err
 		}
-		if provisionerVolumeSnapshotClassMap != nil && len(provisionerVolumeSnapshotClassMap) > 0 {
-			backupScheduleRequest.VolumeSnapshotClassMapping = provisionerVolumeSnapshotClassMap
-		} else {
-			backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
-		}
+		backupScheduleRequest.CsiSnapshotClassName = csiSnapshotClassName
 	case string(NativeAzure):
 		log.Infof("Detected backup type - %s", NativeAzure)
 		backupScheduleRequest.BackupType = api.BackupScheduleCreateRequest_Normal
