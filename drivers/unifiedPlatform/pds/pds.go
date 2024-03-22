@@ -11,6 +11,7 @@ type Pds interface {
 	Backup
 	RestoreInterface
 	TemplateDefinitionsInterface
+	Catalog
 }
 
 type Deployment interface {
@@ -36,6 +37,12 @@ type Backup interface {
 	DeleteBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GetBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
 	ListBackup(*WorkFlowRequest) ([]WorkFlowResponse, error)
+}
+
+type Catalog interface {
+	ListDataServices() ([]WorkFlowResponse, error)
+	ListDataServiceVersions(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListDataServiceImages(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
 
 type RestoreInterface interface {

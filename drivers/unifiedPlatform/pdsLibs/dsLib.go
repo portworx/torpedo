@@ -1,6 +1,7 @@
 package pdslibs
 
 import (
+	"fmt"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
@@ -106,4 +107,33 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 		return nil, err
 	}
 	return deployment, err
+}
+
+func GetDataServiceId(dsName string) (string, error) {
+	ds, err := v2Components.PDS.ListDataServices()
+	if err != nil {
+		return "", fmt.Errorf("Failed to list DataServices: %v", err)
+	}
+	for _, dataService := range ds {
+		if dataService.Meta.Name == &dsName {
+			return dataService.Id, nil
+		}
+	}
+	return "", fmt.Errorf("Failed to find DataService with name %s", dsName)
+}
+
+func ListDataServiceVersions(dsId string) ([]automationModels.WorkFlowResponse, error) {
+	input := automationModels.WorkFlowRequest{
+		DataServiceId: dsId,
+	}
+	ds, err := v2Components.PDS.ListDataServiceVersions(&input)
+	return ds, err
+}
+
+func ListDataServiceImages(dsId string) ([]automationModels.WorkFlowResponse, error) {
+	input := automationModels.WorkFlowRequest{
+		DataServiceId: dsId,
+	}
+	ds, err := v2Components.PDS.ListDataServiceImages(&input)
+	return ds, err
 }
