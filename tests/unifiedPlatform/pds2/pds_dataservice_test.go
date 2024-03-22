@@ -40,7 +40,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 
 	It("Update DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds)
+			_, err := workflowDataservice.UpdateDataService(ds, true)
 			log.FailOnError(err, "Error while updating ds")
 		}
 	})
