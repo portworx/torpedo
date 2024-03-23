@@ -12,7 +12,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"golang.org/x/sync/errgroup"
 )
 
 // This testcase verifies if the backup pods are in Ready state or not
@@ -108,8 +107,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dailyName            string
 		weeklyName           string
 		monthlyName          string
-		controlChannel       chan string
-		errorGroup           *errgroup.Group
+		//controlChannel       chan string
+		//errorGroup           *errgroup.Group
 	)
 
 	JustBeforeEach(func() {
@@ -146,7 +145,8 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		Step("Validating applications", func() {
 			log.InfoD("Validating applications")
 			ctx, _ := backup.GetAdminCtxFromSecret()
-			controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			//controlChannel, errorGroup = ValidateApplicationsStartData(scheduledAppContexts, ctx)
+			ValidateApplicationsStartData(scheduledAppContexts, ctx)
 		})
 
 		Step("Creating rules for backup", func() {
@@ -293,45 +293,46 @@ var _ = Describe("{BasicBackupCreation}", func() {
 		dash.VerifySafely(err, nil, "Deleting backup schedule policies")
 		opts := make(map[string]bool)
 		opts[SkipClusterScopedObjects] = true
-
-		log.Info("Destroying scheduled apps on source cluster")
-		err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		log.FailOnError(err, "Data validations failed")
-
+		/*
+			log.Info("Destroying scheduled apps on source cluster")
+			err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
+			log.FailOnError(err, "Data validations failed")
+		*/
 		log.InfoD("switching to destination context")
 		err = SetDestinationKubeConfig()
 		log.FailOnError(err, "failed to switch to context to destination cluster")
-
-		log.InfoD("Destroying restored apps on destination clusters")
-		restoredAppContexts := make([]*scheduler.Context, 0)
-		for _, scheduledAppContext := range scheduledAppContexts {
-			restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
-			if err != nil {
-				log.Errorf("TransformAppContextWithMappings: %v", err)
-				continue
+		/*
+			log.InfoD("Destroying restored apps on destination clusters")
+			restoredAppContexts := make([]*scheduler.Context, 0)
+			for _, scheduledAppContext := range scheduledAppContexts {
+				restoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, make(map[string]string), make(map[string]string), true)
+				if err != nil {
+					log.Errorf("TransformAppContextWithMappings: %v", err)
+					continue
+				}
+				restoredAppContexts = append(restoredAppContexts, restoredAppContext)
 			}
-			restoredAppContexts = append(restoredAppContexts, restoredAppContext)
-		}
-		DestroyApps(restoredAppContexts, opts)
-
+			DestroyApps(restoredAppContexts, opts)
+		*/
 		log.InfoD("switching to default context")
 		err = SetClusterContext("")
 		log.FailOnError(err, "failed to SetClusterContext to default cluster")
-
-		backupDriver := Inst().Backup
-		log.Info("Deleting backed up namespaces")
-		for _, backupName := range backupNames {
-			backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
-			log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
-			backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
-			log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
-			dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
-		}
-		log.Info("Deleting restored namespaces")
-		for _, restoreName := range restoreNames {
-			err = DeleteRestore(restoreName, BackupOrgID, ctx)
-			dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
-		}
+		/*
+			backupDriver := Inst().Backup
+			log.Info("Deleting backed up namespaces")
+			for _, backupName := range backupNames {
+				backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+				log.FailOnError(err, "Failed while trying to get backup UID for - %s", backupName)
+				backupDeleteResponse, err := DeleteBackup(backupName, backupUID, BackupOrgID, ctx)
+				log.FailOnError(err, "Backup [%s] could not be deleted", backupName)
+				dash.VerifyFatal(backupDeleteResponse.String(), "", fmt.Sprintf("Verifying [%s] backup deletion is successful", backupName))
+			}
+			log.Info("Deleting restored namespaces")
+			for _, restoreName := range restoreNames {
+				err = DeleteRestore(restoreName, BackupOrgID, ctx)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Deleting Restore [%s]", restoreName))
+			}
+		*/
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })

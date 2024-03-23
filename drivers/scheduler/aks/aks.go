@@ -9,6 +9,7 @@ import (
 	"github.com/libopenstorage/cloudops"
 	"github.com/libopenstorage/cloudops/azure"
 	"github.com/portworx/sched-ops/task"
+	"github.com/portworx/torpedo/drivers/node/ssh"
 	"github.com/portworx/torpedo/drivers/scheduler"
 	kube "github.com/portworx/torpedo/drivers/scheduler/k8s"
 	"github.com/portworx/torpedo/pkg/log"
@@ -31,7 +32,8 @@ const (
 	defaultGetAksClusterInterval = 20 * time.Second
 )
 
-type aks struct {
+type Aks struct {
+	ssh.SSH
 	kube.K8s
 	ops           cloudops.Ops
 	instanceGroup string
@@ -218,16 +220,16 @@ type AKSCluster struct {
 }
 
 // String returns the string name of this driver.
-func (a *aks) String() string {
+func (a *Aks) String() string {
 	return SchedName
 }
 
 func init() {
-	a := &aks{}
+	a := &Aks{}
 	scheduler.Register(SchedName, a)
 }
 
-func (a *aks) Init(schedOpts scheduler.InitOptions) error {
+func (a *Aks) Init(schedOpts scheduler.InitOptions) error {
 	ops, err := azure.NewClientFromMetadata()
 	if err != nil {
 		return err
@@ -246,7 +248,7 @@ func (a *aks) Init(schedOpts scheduler.InitOptions) error {
 	return nil
 }
 
-func (a *aks) AzureLogin() error {
+func (a *Aks) AzureLogin() error {
 	log.Info("Authenticating with Azure")
 
 	envAzureClientId := os.Getenv("AZURE_CLIENT_ID")
@@ -273,7 +275,7 @@ func (a *aks) AzureLogin() error {
 	return nil
 }
 
-func (a *aks) UpgradeScheduler(version string) error {
+func (a *Aks) UpgradeScheduler(version string) error {
 	instanceGroup := os.Getenv("INSTANCE_GROUP")
 	if len(instanceGroup) != 0 {
 		a.instanceGroup = instanceGroup
@@ -319,7 +321,7 @@ func (a *aks) UpgradeScheduler(version string) error {
 	return nil
 }
 
-func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
+func (a *Aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error {
 	// Azure SDK requires total cluster size
 	zones, err := a.GetZones()
 	if err != nil {
@@ -333,7 +335,7 @@ func (a *aks) SetASGClusterSize(perZoneCount int64, timeout time.Duration) error
 	return nil
 }
 
-func (a *aks) GetASGClusterSize() (int64, error) {
+func (a *Aks) GetASGClusterSize() (int64, error) {
 	nodeCount, err := a.ops.GetInstanceGroupSize(a.instanceGroup)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get size of node pool %s. Error: %v", a.instanceGroup, err)
@@ -342,7 +344,7 @@ func (a *aks) GetASGClusterSize() (int64, error) {
 	return nodeCount, nil
 }
 
-func (a *aks) GetZones() ([]string, error) {
+func (a *Aks) GetZones() ([]string, error) {
 	aksCluster, err := a.GetAKSCluster()
 	if err != nil {
 		return []string{""}, err
@@ -359,7 +361,7 @@ func (a *aks) GetZones() ([]string, error) {
 }
 
 // UpgradeControlPlane Upgrades Control Plane only to a specific version
-func (a *aks) UpgradeControlPlane(version string) error {
+func (a *Aks) UpgradeControlPlane(version string) error {
 	log.Infof("Upgrade AKS Control Plane to [%s]", version)
 	cmd := fmt.Sprintf("%s aks upgrade --resource-group %s --name %s  --kubernetes-version %s --control-plane-only --no-wait --yes", azCli, a.clusterName, a.clusterName, version)
 	stdout, stderr, err := osutils.ExecShell(cmd)
@@ -371,7 +373,7 @@ func (a *aks) UpgradeControlPlane(version string) error {
 }
 
 // UpgradeNodePool Upgrades Node Pool to specified version
-func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
+func (a *Aks) UpgradeNodePool(nodePoolName, version string) error {
 	log.Infof("Upgrade AKS Node Pool [%s] to [%s]", nodePoolName, version)
 	cmd := fmt.Sprintf("%s aks nodepool upgrade --resource-group %s --cluster-name %s --nodepool-name %s  --kubernetes-version %s --no-wait --yes", azCli, a.clusterName, a.clusterName, nodePoolName, version)
 	stdout, stderr, err := osutils.ExecShell(cmd)
@@ -383,7 +385,7 @@ func (a *aks) UpgradeNodePool(nodePoolName, version string) error {
 }
 
 // GetAKSCluster Gets and return AKS cluster object
-func (a *aks) GetAKSCluster() (AKSCluster, error) {
+func (a *Aks) GetAKSCluster() (AKSCluster, error) {
 	log.Info("Get AKS cluster object")
 	var aksCluster AKSCluster
 
@@ -409,7 +411,7 @@ func (a *aks) GetAKSCluster() (AKSCluster, error) {
 }
 
 // WaitForAKSNodePoolToUpgrade Waits for AKS Node Pool to be upgraded to a specific version
-func (a *aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
+func (a *Aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
 	log.Infof("Waiting for AKS Node Pool [%s] to be upgraded to [%s]", nodePoolName, version)
 	expectedUpgradeStatus := "Succeeded"
 
@@ -444,7 +446,7 @@ func (a *aks) WaitForAKSNodePoolToUpgrade(nodePoolName, version string) error {
 }
 
 // WaitForControlPlaneToUpgrade Waits for AKS Control Plane to be upgraded to a specific version
-func (a *aks) WaitForControlPlaneToUpgrade(version string) error {
+func (a *Aks) WaitForControlPlaneToUpgrade(version string) error {
 	log.Infof("Waiting for AKS Control Plane to be upgraded to [%s]", version)
 	expectedUpgradeStatus := "Succeeded"
 

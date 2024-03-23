@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/hashicorp/go-version"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -24,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/go-version"
 
 	context1 "context"
 
@@ -135,6 +136,7 @@ import (
 	_ "github.com/portworx/torpedo/drivers/scheduler/openshift"
 
 	// import aks scheduler driver to invoke it's init
+	"github.com/portworx/torpedo/drivers/scheduler/aks"
 	_ "github.com/portworx/torpedo/drivers/scheduler/aks"
 
 	// import scheduler drivers to invoke it's init
@@ -3398,6 +3400,11 @@ func SetClusterContext(clusterConfigPath string) error {
 		err = ssh.RefreshDriver(&gkeSchedDriver.SSH)
 		if err != nil {
 			return fmt.Errorf("failed to switch to context. RefreshDriver (gkeSchedDriver.SSH) Error: [%v]", err)
+		}
+	} else if aksSchedDriver, ok := Inst().S.(*aks.Aks); ok {
+		err = ssh.RefreshDriver(&aksSchedDriver.SSH)
+		if err != nil {
+			return fmt.Errorf("failed to switch to context. RefreshDriver (aksSchedDriver.SSH) Error: [%v]", err)
 		}
 	}
 
@@ -7665,23 +7672,24 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	if currentSpecReport.Failed() {
 		log.Infof(">>>> FAILED TEST: %s", currentSpecReport.FullText())
 	}
-	// Cleanup all the namespaces created by the testcase
-	err := DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
+	/*
+		// Cleanup all the namespaces created by the testcase
+		err := DeleteAllNamespacesCreatedByTestCase()
+		if err != nil {
+			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+		}
 
-	err = SetDestinationKubeConfig()
-	if err != nil {
-		log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
-		return
-	}
+		err = SetDestinationKubeConfig()
+		if err != nil {
+			log.Errorf("Error in setting destination kubeconfig. Err: %v", err.Error())
+			return
+		}
 
-	err = DeleteAllNamespacesCreatedByTestCase()
-	if err != nil {
-		log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
-	}
-
+		err = DeleteAllNamespacesCreatedByTestCase()
+		if err != nil {
+			log.Errorf("Error in deleting namespaces created by the testcase. Err: %v", err.Error())
+		}
+	*/
 	defer func() {
 		err := SetSourceKubeConfig()
 		log.FailOnError(err, "failed to switch context to source cluster")
