@@ -9,6 +9,7 @@ type WorkFlowResponse struct {
 	TargetCluster     PlatformTargetClusterOutput `copier:"must,nopanic"`
 	PDSDeployment     PDSDeployment               `copier:"must,nopanic"`
 	PdsServiceAccount PDSServiceAccount
+	Info              V1Info
 }
 
 type WorkFlowRequest struct {

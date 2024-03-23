@@ -71,7 +71,6 @@ func (a *DeploymentServiceAPIService) DeploymentServiceCreateDeploymentExecute(r
 
 	localVarPath := localBasePath + "/pds/v1/namespace/{namespaceId}/deployment"
 	localVarPath = strings.Replace(localVarPath, "{"+"namespaceId"+"}", url.PathEscape(parameterValueToString(r.namespaceId, "namespaceId")), -1)
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
@@ -185,7 +184,6 @@ func (a *DeploymentServiceAPIService) DeploymentServiceDeleteDeploymentExecute(r
 
 	localVarPath := localBasePath + "/pds/v1/deployments/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}

@@ -183,6 +183,34 @@ func ValidateDeploymentResources(resourceTemp ResourceSettingTemplate, storageOp
 	}
 }
 
+// ValidateDataMd5Hash validates the hash of the data service deployments
+func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool {
+	count := 0
+
+	//Debug block to print hash of the database table
+	for depName, hash := range deploymentHash {
+		log.Debugf("Dep name %s and hash %s", depName, hash)
+	}
+	for depName, hash := range restoredDepHash {
+		log.Debugf("Restored Dep name %s and hash %s", depName, hash)
+	}
+
+	for key, depHash := range deploymentHash {
+		depName, _, _ := strings.Cut(key, "-")
+		for key1, resDepHash := range restoredDepHash {
+			resDepName, _, _ := strings.Cut(key1, "-")
+			if depName == resDepName && depHash == resDepHash {
+				log.InfoD("data is consistent for restored deployment %s", key1)
+				count += 1
+			}
+		}
+	}
+	if count < len(restoredDepHash) {
+		return false
+	}
+	return true
+}
+
 // InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
 func InsertDataAndReturnChecksum(deployment map[string]string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
@@ -196,14 +224,19 @@ func InsertDataAndReturnChecksum(deployment map[string]string, wkloadGenParams L
 			return "", nil, fmt.Errorf("error while deleting the workload deployment")
 		}
 	}
-	ckSum, wlDep, err := ReadDataAndReturnChecksum(deploymentName, wkloadGenParams)
+	ckSum, wlDep, err := ReadDataAndReturnChecksum(deployment, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(deploymentName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(deployment map[string]string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
+
+	deploymentName, _ := GetDeploymentNameAndId(deployment)
 	ckSum, wlDep, err := GenerateWorkload(deploymentName, wkloadGenParams)
+	if err != nil {
+		return "", nil, fmt.Errorf("error while reading the workload deployment data")
+	}
 	return ckSum, wlDep, err
 }
 
@@ -331,4 +364,44 @@ func ReadChecksum(podName, namespace, mode string) (string, error) {
 func DeleteWorkloadDeployments(wlDep *v1.Deployment) error {
 	err = k8sApps.DeleteDeployment(wlDep.Name, wlDep.Namespace)
 	return err
+}
+
+// GetDataServiceImageId returns the pds dsImageId for the given ds version and image build
+func GetDataServiceImageId(dsName, dsImageTag, dsVersionBuild string) (string, error) {
+	dsId, err := GetDataServiceId(dsName)
+	if err != nil {
+		return "", err
+	}
+
+	versionResps, err := ListDataServiceVersions(dsId)
+	if err != nil {
+		return "", err
+	}
+
+	var dsVersionId string
+	for _, versionResp := range versionResps {
+		if *versionResp.Meta.Name == dsVersionBuild {
+			dsVersionId = *versionResp.Meta.Uid
+			break
+		}
+	}
+
+	imgResps, err := ListDataServiceImages(dsId, dsVersionId)
+	if err != nil {
+		return "", err
+	}
+
+	var dsImageId string
+	for _, imgResp := range imgResps {
+		if *imgResp.Info.Tag == dsImageTag {
+			dsImageId = *imgResp.Meta.Uid
+			break
+		}
+	}
+
+	if dsImageId == "" {
+		return "", fmt.Errorf("image %s not found for data service %s version %s", dsImageTag, dsName, dsVersionBuild)
+	}
+
+	return dsImageId, nil
 }

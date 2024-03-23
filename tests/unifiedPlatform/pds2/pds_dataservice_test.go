@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-var _ = Describe("{DeployDataServicesOnDemand}", func() {
+var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
+		StartTorpedoTest("DeployDataServicesOnDemandAndScaleUp", "Deploy data services and perform scale up", nil, 0)
 	})
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
@@ -32,7 +32,7 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			workflowDataservice.Namespace = WorkflowNamespace
 			workflowDataservice.NamespaceName = Namespace
-			_, err := workflowDataservice.DeployDataService(ds)
+			_, err := workflowDataservice.DeployDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while deploying ds")
 		}
 
@@ -43,18 +43,80 @@ var _ = Describe("{DeployDataServicesOnDemand}", func() {
 		})
 	})
 
-	It("Update DataService", func() {
+	It("ScaleUp DataService", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := workflowDataservice.UpdateDataService(ds)
+			_, err := workflowDataservice.UpdateDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")
 		}
 
-		stepLog := "Running Workloads before taking backups"
+		stepLog := "Running Workloads after ScaleUp of DataService"
 		Step(stepLog, func() {
 			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
 			log.FailOnError(err, "Error while running workloads on ds")
 		})
 	})
+
+	It("Delete DataServiceDeployment", func() {
+		err := workflowDataservice.DeleteDeployment()
+		log.FailOnError(err, "Error while deleting dataservice")
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{UpgradeDataServiceImage}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data ServiceImage", nil, 0)
+	})
+	var (
+		workflowDataservice stworkflows.WorkflowDataService
+	)
+
+	It("Deploy and Validate DataService", func() {
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+		})
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		stepLog := "Running Workloads before upgrading the ds image"
+		Step(stepLog, func() {
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
+		})
+	})
+
+	//TODO: Add backup and restore workflows once we have the workflows ready
+	//TODO: Take backup of the old deployment
+
+	It("Upgrade DataServiceImage", func() {
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			_, err := workflowDataservice.UpdateDataService(ds, ds.Image, ds.Version)
+			log.FailOnError(err, "Error while updating ds")
+		}
+
+		stepLog := "Running Workloads after upgrading the ds image"
+		Step(stepLog, func() {
+			err := workflowDataservice.RunDataServiceWorkloads(NewPdsParams)
+			log.FailOnError(err, "Error while running workloads on ds")
+		})
+	})
+
+	//TODO: Restore the old deployment
+	//TODO: Upgrade the restored deployment image to latest
 
 	It("Delete DataServiceDeployment", func() {
 		err := workflowDataservice.DeleteDeployment()

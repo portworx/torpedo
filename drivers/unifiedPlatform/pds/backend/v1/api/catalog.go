@@ -11,16 +11,18 @@ import (
 // ListDataServices return list of data services in the catalog
 func (ds *PDS_API_V1) ListDataServices() ([]automationModels.WorkFlowResponse, error) {
 	dsListResponse := []automationModels.WorkFlowResponse{}
-	_, dsClient, err := ds.getCatalogClient()
+	ctx, dsClient, err := ds.getCatalogClient()
 	if err != nil {
 		return dsListResponse, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 
-	dsListRequest := catalogv1.ApiDataServicesServiceListDataServicesRequest{}
+	dsListRequest := dsClient.DataServicesServiceListDataServices(ctx)
+
+	//dsListRequest := catalogv1.ApiDataServicesServiceListDataServicesRequest{}
 
 	dsModel, res, err := dsClient.DataServicesServiceListDataServicesExecute(dsListRequest)
 
-	if err != nil && res.StatusCode != status.StatusOK {
+	if err != nil || res.StatusCode != status.StatusOK {
 		return dsListResponse, fmt.Errorf("Error when calling `DataServicesServiceListDataServices`: %v\n.Full HTTP response: %v", err, res)
 	}
 	err = copier.Copy(&dsListResponse, dsModel)
@@ -43,7 +45,7 @@ func (ds *PDS_API_V1) ListDataServiceVersions(input *automationModels.WorkFlowRe
 
 	dsVersionsModel, res, err := dsClient.DataServiceVersionServiceListDataServiceVersionsExecute(dsRequest)
 
-	if err != nil && res.StatusCode != status.StatusOK {
+	if err != nil || res.StatusCode != status.StatusOK {
 		return dsVersionsResponse, fmt.Errorf("Error when calling `DataServicesServiceGetDataServiceVersions`: %v\n.Full HTTP response: %v", err, res)
 	}
 	err = copier.Copy(&dsVersionsResponse, dsVersionsModel)
@@ -70,7 +72,7 @@ func (ds *PDS_API_V1) ListDataServiceImages(input *automationModels.WorkFlowRequ
 	if err != nil && res.StatusCode != status.StatusOK {
 		return dsImagesResponse, fmt.Errorf("Error when calling `DataServicesServiceGetDataServiceImages`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = copier.Copy(&dsImagesResponse, dsImagesModel)
+	err = copier.Copy(&dsImagesResponse, dsImagesModel.Images)
 	if err != nil {
 		return nil, err
 	}

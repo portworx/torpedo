@@ -16,7 +16,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService, namespaceId, projectId string) (*automationModels.WorkFlowResponse, error) {
+func UpdateDataService(ds PDSDataService, namespaceId, projectId, imageId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Update Data service will be performed")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
@@ -32,6 +32,7 @@ func UpdateDataService(ds PDSDataService, namespaceId, projectId string) (*autom
 	depInputs.Update.NamespaceID = namespaceId
 	depInputs.Update.ProjectID = projectId
 	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].Replicas = intToPointerString(ds.ScaleReplicas)
+	depInputs.Update.V1Deployment.Config.References.ImageId = intToPointerString(4343)
 	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
@@ -62,13 +63,12 @@ func DeleteDeployment(deployment map[string]string) error {
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId string) (*automationModels.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
 
 	// TODO call the below methods and fill up the structs
-	// Get ImageID
 	// Get App, Resource and storage PdsTemplates Ids
 
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
@@ -78,6 +78,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 	depInputs.Create.ProjectID = projectId
 	depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
 	depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
+	depInputs.Create.V1Deployment.Config.References.ImageId = intToPointerString(4343)
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
 		Id:              intToPointerString(10),
 		ResourceVersion: nil,
@@ -109,6 +110,7 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 	return deployment, err
 }
 
+// GetDataServiceId gets the DataService's ID
 func GetDataServiceId(dsName string) (string, error) {
 	ds, err := v2Components.PDS.ListDataServices()
 	if err != nil {
@@ -130,9 +132,10 @@ func ListDataServiceVersions(dsId string) ([]automationModels.WorkFlowResponse, 
 	return ds, err
 }
 
-func ListDataServiceImages(dsId string) ([]automationModels.WorkFlowResponse, error) {
+func ListDataServiceImages(dsId, dsVersionId string) ([]automationModels.WorkFlowResponse, error) {
 	input := automationModels.WorkFlowRequest{
-		DataServiceId: dsId,
+		DataServiceId:        dsId,
+		DataServiceVersionId: dsVersionId,
 	}
 	ds, err := v2Components.PDS.ListDataServiceImages(&input)
 	return ds, err
