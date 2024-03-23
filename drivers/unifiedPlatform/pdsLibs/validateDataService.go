@@ -183,6 +183,34 @@ func ValidateDeploymentResources(resourceTemp ResourceSettingTemplate, storageOp
 	}
 }
 
+// ValidateDataMd5Hash validates the hash of the data service deployments
+func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool {
+	count := 0
+
+	//Debug block to print hash of the database table
+	for depName, hash := range deploymentHash {
+		log.Debugf("Dep name %s and hash %s", depName, hash)
+	}
+	for depName, hash := range restoredDepHash {
+		log.Debugf("Restored Dep name %s and hash %s", depName, hash)
+	}
+
+	for key, depHash := range deploymentHash {
+		depName, _, _ := strings.Cut(key, "-")
+		for key1, resDepHash := range restoredDepHash {
+			resDepName, _, _ := strings.Cut(key1, "-")
+			if depName == resDepName && depHash == resDepHash {
+				log.InfoD("data is consistent for restored deployment %s", key1)
+				count += 1
+			}
+		}
+	}
+	if count < len(restoredDepHash) {
+		return false
+	}
+	return true
+}
+
 // InsertDataAndReturnChecksum Inserts Data into the db and returns the checksum
 func InsertDataAndReturnChecksum(deployment map[string]string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "write"
@@ -196,14 +224,19 @@ func InsertDataAndReturnChecksum(deployment map[string]string, wkloadGenParams L
 			return "", nil, fmt.Errorf("error while deleting the workload deployment")
 		}
 	}
-	ckSum, wlDep, err := ReadDataAndReturnChecksum(deploymentName, wkloadGenParams)
+	ckSum, wlDep, err := ReadDataAndReturnChecksum(deployment, wkloadGenParams)
 	return ckSum, wlDep, err
 }
 
 // ReadDataAndReturnChecksum Reads Data from the db and returns the checksum
-func ReadDataAndReturnChecksum(deploymentName string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
+func ReadDataAndReturnChecksum(deployment map[string]string, wkloadGenParams LoadGenParams) (string, *v1.Deployment, error) {
 	wkloadGenParams.Mode = "read"
+
+	deploymentName, _ := GetDeploymentNameAndId(deployment)
 	ckSum, wlDep, err := GenerateWorkload(deploymentName, wkloadGenParams)
+	if err != nil {
+		return "", nil, fmt.Errorf("error while reading the workload deployment data")
+	}
 	return ckSum, wlDep, err
 }
 
