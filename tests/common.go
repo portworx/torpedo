@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Masterminds/semver/v3"
 	"github.com/hashicorp/go-version"
 	"io/ioutil"
 	"math/rand"
@@ -677,6 +678,29 @@ func ValidatePDSDataServices(ctx *scheduler.Context, errChan ...*chan error) {
 			}
 		})
 	})
+}
+
+func IsPoolAddDiskSupported() (bool, error) {
+	pxVersion, err := semver.NewVersion("3.1.0")
+	if err != nil {
+		return false, err
+	}
+	DMthin, err := IsDMthin()
+	if DMthin {
+		log.Infof("DMTHIN is enabled")
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			return false, err
+		}
+		currentPxVersionOnCluster, err := semver.NewVersion(driverVersion)
+		if pxVersion.GreaterThan(currentPxVersionOnCluster) {
+			log.Infof("drive add to existing pool not supported for px-storev2 or px-cache pools")
+			return false, err
+		}
+		log.Infof("drive add to existing pool supported for px-storev2 or px-cache pools")
+		return true, nil
+	}
+	return true, nil
 }
 
 // ValidateContext is the ginkgo spec for validating a scheduled context
