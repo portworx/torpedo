@@ -2,16 +2,7 @@ package pdslibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	pdsv2 "github.com/pure-px/platform-api-go-client/pds/v1/backupconfig"
 )
-
-type WorkflowBackupInput struct {
-	ProjectId        string
-	DeploymentID     string
-	BackupConfigType *pdsv2.ConfigBackupType
-	BackupLevel      *pdsv2.ConfigBackupLevel
-	ReclaimPolicy    *pdsv2.ConfigReclaimPolicyType
-}
 
 // CreateBackupConfig created backup config for the deployment
 func CreateBackupConfig(name string, deploymentId string, projectId string) (*automationModels.PDSBackupConfigResponse, error) {
