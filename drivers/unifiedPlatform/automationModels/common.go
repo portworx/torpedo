@@ -34,6 +34,24 @@ type Config struct {
 	DisplayName *string `copier:"must,nopanic"`
 }
 
+type V1Info struct {
+	References *V1Reference
+	// Image registry where the image is stored.
+	Registry *string
+	// Image registry namespace where the image is stored.
+	Namespace *string
+	// Tag associated with the image.
+	Tag *string
+	// Build version of the image.
+	Build *string
+	// Flag indicating if TLS is supported for a data service using this image.
+	TlsSupport *bool
+	// Capabilities associated with this image.
+	Capabilities *map[string]string
+	// Additional images associated with this data service image.
+	AdditionalImages *map[string]string
+}
+
 type V1Config1 struct {
 	References Reference `copier:"must,nopanic"`
 	// Flag to enable TLS for the Data Service.
