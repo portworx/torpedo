@@ -49,7 +49,9 @@ var _ = BeforeSuite(func() {
 	Step("Get Default Tenant", func() {
 		log.Infof("Initialising values for tenant")
 		WorkflowPlatform.AdminAccountId = AccID
-		WorkflowPlatform.TenantInit()
+		tenantInit, err := WorkflowPlatform.TenantInit()
+		log.FailOnError(err, "Unable to fetch tenantId")
+		WorkflowPlatform.TenantId = tenantInit.TenantId
 	})
 
 	Step("Get Default Project", func() {
