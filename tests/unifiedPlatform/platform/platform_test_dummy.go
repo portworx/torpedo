@@ -311,6 +311,10 @@ var _ = Describe("{TestRbacForPds}", func() {
 		userName string
 	)
 	JustBeforeEach(func() {
+		log.Infof("Initialising values for tenant")
+		WorkflowPlatform.AdminAccountId = AccID
+		WorkflowPlatform.TenantInit()
+		pdsRbac.WorkflowPlatform = WorkflowPlatform
 		log.Infof("Debug PDS RBAC - [%+v]", pdsRbac)
 		pdsRbac.UserRoles = make(map[string]stworkflows.SeviceAccount)
 		log.Infof("Debug PDS RBAC - [%+v]", pdsRbac)
@@ -322,7 +326,7 @@ var _ = Describe("{TestRbacForPds}", func() {
 		log.FailOnError(err, "Failed to read params from json file")
 
 		userName = "pdsUser-" + strconv.Itoa(rand.Int())
-		_, err = pdsRbac.CreateServiceAccount(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId, WorkflowPlatform.TenantId)
+		_, err = pdsRbac.CreateServiceAccount(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId)
 		if err != nil {
 			log.Infof("Some error occurred. Error - [%s]", err.Error())
 		}
