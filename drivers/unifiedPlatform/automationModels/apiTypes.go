@@ -14,7 +14,7 @@ type WorkFlowResponse struct {
 
 type WorkFlowRequest struct {
 	Deployment            PDSDeployment                `copier:"must,nopanic"`
-	BackupConfig          PDSBackupConfig              `copier:"must,nopanic"`
+	BackupConfig          PDSBackupConfigRequest       `copier:"must,nopanic"`
 	Backup                PDSBackup                    `copier:"must,nopanic"`
 	Restore               PDSRestore                   `copier:"must,nopanic"`
 	OnboardAccount        PlatformOnboardAccount       `copier:"must,nopanic"`

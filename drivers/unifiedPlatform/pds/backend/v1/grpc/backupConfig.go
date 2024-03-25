@@ -27,14 +27,14 @@ func (backupConf *PdsGrpc) getBackupConfigClient() (context.Context, publicBacku
 }
 
 // CreateBackupConfig will create backup config for a given deployment
-func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *automationModels.PDSBackupConfigRequest) (*automationModels.PDSBackupConfigResponse, error) {
 	// log.Infof("Backup Create - [%+v]", createBackupConfigRequest.BackupConfig.Create)
 
-	response := &automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSBackupConfigResponse{}
 
 	createRequest := &publicBackupConfigapis.CreateBackupConfigRequest{}
 	// log.Infof("Backup Create Request - [%v], Backup Config - [%v]", createRequest, createRequest.BackupConfig)
-	err := utilities.CopyStruct(createBackupConfigRequest.BackupConfig.Create, createRequest)
+	err := utilities.CopyStruct(createBackupConfigRequest.Create, createRequest)
 	if err != nil {
 		return response, err
 	}
@@ -62,15 +62,15 @@ func (backupConf *PdsGrpc) CreateBackupConfig(createBackupConfigRequest *automat
 }
 
 // UpdateBackupConfig will update backup config for a given deployment
-func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *automationModels.PDSBackupConfigRequest) (*automationModels.PDSBackupConfigResponse, error) {
 
 	// log.Infof("Backup Update - [%+v]", updateBackupConfigRequest.BackupConfig.Update)
 
-	response := &automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSBackupConfigResponse{}
 
 	updateRequest := &publicBackupConfigapis.UpdateBackupConfigRequest{}
 	// log.Infof("Backup Update - [%v], Backup Config - [%v]", updateRequest, updateRequest.BackupConfig)
-	err := utilities.CopyStruct(updateBackupConfigRequest.BackupConfig.Update, updateRequest)
+	err := utilities.CopyStruct(updateBackupConfigRequest.Update, updateRequest)
 	if err != nil {
 		return response, err
 	}
@@ -99,14 +99,14 @@ func (backupConf *PdsGrpc) UpdateBackupConfig(updateBackupConfigRequest *automat
 }
 
 // GetBackupConfig will fetch backup config for a given deployment
-func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *automationModels.PDSBackupConfigRequest) (*automationModels.PDSBackupConfigResponse, error) {
 	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
 
-	response := &automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSBackupConfigResponse{}
 
 	getRequest := &publicBackupConfigapis.GetBackupConfigRequest{}
 	// log.Infof("Backup Get - [%v]", getRequest)
-	err := utilities.CopyStruct(getBackupConfigRequest.BackupConfig.Get, getRequest)
+	err := utilities.CopyStruct(getBackupConfigRequest.Get, getRequest)
 	if err != nil {
 		return response, err
 	}
@@ -135,49 +135,45 @@ func (backupConf *PdsGrpc) GetBackupConfig(getBackupConfigRequest *automationMod
 }
 
 // DeleteBackupConfig will delete backup config for a given deployment
-func (backupConf *PdsGrpc) DeleteBackupConfig(deleteBackupConfigRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) DeleteBackupConfig(deleteBackupConfigRequest *automationModels.PDSBackupConfigRequest) error {
 	// log.Infof("Backup Delete - [%+v]", deleteBackupConfigRequest.BackupConfig.Delete)
-
-	response := &automationModels.WorkFlowResponse{}
 
 	deleteRequest := &publicBackupConfigapis.DeleteBackupConfigRequest{}
 	// log.Infof("Backup Delete - [%v]", deleteRequest)
-	err := utilities.CopyStruct(deleteBackupConfigRequest.BackupConfig.Delete, deleteRequest)
+	err := utilities.CopyStruct(deleteBackupConfigRequest.Delete, deleteRequest)
 	if err != nil {
-		return response, err
+		return err
 	}
 	// log.Infof("Backup Delete - [%v]", deleteRequest)
 
 	ctx, client, _, err := backupConf.getBackupConfigClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+		return fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, backupConf.AccountId)
 
-	apiResponse, err := client.DeleteBackupConfig(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
-	log.Infof("api response [+%v]", apiResponse)
+	_, err = client.DeleteBackupConfig(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return nil, fmt.Errorf("Error while deleting the backupConfig: %v\n", err)
+		return fmt.Errorf("Error while deleting the backupConfig: %v\n", err)
 	}
 
-	err = utilities.CopyStruct(apiResponse, response)
 	if err != nil {
-		return response, err
+		return err
 	}
 
-	return response, nil
+	return nil
 }
 
 // ListBackupConfig will list backup config for a given deployment
-func (backupConf *PdsGrpc) ListBackupConfig(listBackupConfigRequest *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
+func (backupConf *PdsGrpc) ListBackupConfig(listBackupConfigRequest *automationModels.PDSBackupConfigRequest) (*automationModels.PDSBackupConfigResponse, error) {
 	// log.Infof("Backup List - [%+v]", listBackupConfigRequest.BackupConfig.List)
 
-	response := []automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSBackupConfigResponse{}
 
 	listRequest := &publicBackupConfigapis.ListBackupConfigsRequest{}
 	// log.Infof("Backup List - [%v]", listRequest)
-	err := utilities.CopyStruct(listBackupConfigRequest.BackupConfig.List, listRequest)
+	err := utilities.CopyStruct(listBackupConfigRequest.List, listRequest)
 	if err != nil {
 		return response, err
 	}
