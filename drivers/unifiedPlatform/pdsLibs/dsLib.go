@@ -52,7 +52,7 @@ func InitUnifiedApiComponents(controlPlaneURL, accountID string) error {
 	return nil
 }
 
-func UpdateDataService(ds PDSDataService, namespaceId, projectId string) (*automationModels.WorkFlowResponse, error) {
+func UpdateDataService(ds PDSDataService, namespaceId, projectId, appConfigId, resConfigId, stConfigId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Update Data service will be performed")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
@@ -68,17 +68,17 @@ func UpdateDataService(ds PDSDataService, namespaceId, projectId string) (*autom
 	depInputs.Create.NamespaceID = namespaceId
 	depInputs.Create.ProjectID = projectId
 	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
-		Id:              intToPointerString(10),
+		Id:              &resConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
 	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
-		Id:              intToPointerString(11),
+		Id:              &appConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
 	depInputs.Update.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
-		Id:              intToPointerString(12),
+		Id:              &stConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
@@ -149,14 +149,13 @@ func ValidateDataServiceDeployment(deployment map[string]string, namespace strin
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId string) (*automationModels.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, appConfigId, resConfigId, stConfigId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
 
 	// TODO call the below methods and fill up the structs
 	// Get ImageID
-	// Get App, Resource and storage PdsTemplates Ids
 
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies = []automationModels.DeploymentTopology{{}}
 
@@ -166,17 +165,17 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 	depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
 	depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
-		Id:              intToPointerString(10),
+		Id:              &resConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
-		Id:              intToPointerString(11),
+		Id:              &appConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
-		Id:              intToPointerString(12),
+		Id:              &stConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}

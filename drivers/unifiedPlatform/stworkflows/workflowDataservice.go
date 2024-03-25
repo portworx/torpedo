@@ -8,6 +8,7 @@ import (
 
 type WorkflowDataService struct {
 	Namespace             WorkflowNamespace
+	PDSTemplates          CustomTemplates
 	NamespaceName         string
 	DataServiceDeployment map[string]string
 }
@@ -16,8 +17,11 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplate[serviceConfigTempID]
+	resConfigId := wfDataService.PDSTemplates.ResourceTemplate[resourceTempID]
+	stConfigId := wfDataService.PDSTemplates.StorageTemplate[storageTempID]
 	log.Infof("targetClusterId [%s]", targetClusterId)
-	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId)
+	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
@@ -37,9 +41,12 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplate[serviceConfigTempID]
+	resConfigId := wfDataService.PDSTemplates.ResourceTemplate[resourceTempID]
+	stConfigId := wfDataService.PDSTemplates.StorageTemplate[storageTempID]
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
-	deployment, err := dslibs.UpdateDataService(ds, namespace, projectId)
+	deployment, err := dslibs.UpdateDataService(ds, namespace, projectId, appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
