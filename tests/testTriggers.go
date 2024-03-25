@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"container/ring"
 	"fmt"
+	"github.com/devans10/pugo/flasharray"
+	"github.com/portworx/torpedo/drivers/vcluster"
+	"github.com/portworx/torpedo/pkg/pureutils"
 	"math"
 	"math/rand"
 	"os"
@@ -16,9 +19,6 @@ import (
 	"sync"
 	"text/template"
 	"time"
-
-	"github.com/devans10/pugo/flasharray"
-	"github.com/portworx/torpedo/pkg/pureutils"
 
 	volsnapv1 "github.com/kubernetes-csi/external-snapshotter/client/v6/apis/volumesnapshot/v1"
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -86,6 +86,12 @@ const (
 	UpgradeEndpoints = "upgradeEndpoints"
 	// BaseInterval is a field in the configmap that represents base interval in minutes
 	BaseInterval = "baseInterval"
+	// VclusterFioRunTimeField is a field in the configmap that represents fio run time in seconds
+	VclusterFioRunTimeField = "vclusterFioRunTime"
+	// VclusterFioTotalIteration is a field in the configmap that represents number of iterations to be performed
+	VclusterFioTotalIterationField = "vclusterFioTotalIteration"
+	// VclusterFioParallelAppsField is a field in the configmap that represents number of parallel fio apps to be run in vcluster
+	VclusterFioParallelAppsField = "vclusterFioParallelApps"
 )
 
 const (
@@ -229,6 +235,15 @@ var TestPassedCount = prometheus.TorpedoTestPassCount
 // FailedTestAlert is a flag to alert test failed
 var FailedTestAlert = prometheus.TorpedoAlertTestFailed
 
+// FioRunTime is default fio run time in seconds
+var VclusterFioRunTime = "86400"
+
+// VclusterFioTotalIteration is the number of iteration  Fio to be run in vcluster
+var VclusterFioTotalIteration = "1"
+
+// VclusterParallelApps is the number of parallel apps to be run in vcluster
+var VclusterFioParallelApps = "2"
+
 // Event describes type of test trigger
 type Event struct {
 	ID   string
@@ -346,6 +361,8 @@ type VolumeIOProfile struct {
 	SpecInfo *volume.Volume
 	Profile  apios.IoProfile
 }
+
+type storageClassOption func(*storageapi.StorageClass)
 
 // GenerateUUID generates unique ID
 func GenerateUUID() string {
@@ -574,20 +591,29 @@ const (
 	//SetupBackupLockedBucketAndCreds add creds and adds locked bucket for backup
 	SetupBackupLockedBucketAndCreds = "pxbSetupBackupLockedBucketAndCreds"
 
-	// DeployBackup Apps deploys backup application
+	//DeployBackupApps deploys backup application
 	DeployBackupApps = "pxbDeployBackupApps"
 
-	// CreateBackup creates backup for longevity
+	//CreatePxBackup creates backup for longevity
 	CreatePxBackup = "pxbCreatePxBackup"
 
-	// CreateBackup creates locked backup for longevity
+	//CreatePxLockedBackup creates locked backup for longevity
 	CreatePxLockedBackup = "pxbCreatePxLockedBackup"
 
-	// CreateBackupAndRestore creates backup and Restores the backup
+	//CreatePxBackupAndRestore creates backup and Restores the backup
 	CreatePxBackupAndRestore = "pxbCreateBackupAndRestore"
 
-	// CreateBackupAndRestore creates backup and Restores the backup
+	//CreateRandomRestore creates backup and Restores the backup
 	CreateRandomRestore = "pxbCreateRandomRestore"
+
+	// CreateAndRunFioOnVcluster creates and runs fio on vcluster
+	CreateAndRunFioOnVcluster = "createAndRunFioOnVcluster"
+
+	//CreateAndRunMultipleFioOnVcluster creates and runs multiple fio on vcluster
+	CreateAndRunMultipleFioOnVcluster = "createAndRunMultipleFioOnVcluster"
+
+	//VolumeDriverDownVCluster creates and runs fio on vcluster and volume driver down
+	VolumeDriverDownVCluster = "VolumeDriverDownVCluster"
 )
 
 // TriggerCoreChecker checks if any cores got generated
@@ -1069,8 +1095,12 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 				}
 
 				if err == nil {
-					HaIncreaseRebootTargetNode(event, selctx, v, storageNodeMap, errorInj)
-					HaIncreaseRebootSourceNode(event, selctx, v, storageNodeMap, errorInj)
+					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
+					log.Error(err)
+					UpdateOutcome(event, err)
+					err = HaIncreaseErrorInjectSourceNode(event, selctx, v, storageNodeMap, errorInj)
+					log.Error(err)
+					UpdateOutcome(event, err)
 				}
 			}
 
@@ -1931,8 +1961,6 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 			Step(stepLog, func() {
 				log.InfoD(stepLog)
 				time.Sleep(15 * time.Minute)
-				validateContexts(event, contexts)
-
 			})
 			stepLog = fmt.Sprintf("exit pool maintenance on node %s", appNode.Name)
 			Step(stepLog,
@@ -6542,6 +6570,22 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
 			nodeContexts, err := GetContextsOnNode(contexts, &nodeToDecomm)
+			var suspendedScheds []*storkapi.VolumeSnapshotSchedule
+			defer func() {
+				if len(suspendedScheds) > 0 {
+					for _, sched := range suspendedScheds {
+						makeSuspend := false
+						sched.Spec.Suspend = &makeSuspend
+						_, err := storkops.Instance().UpdateSnapshotSchedule(sched)
+						log.FailOnError(err, "error resuming volumes snapshot schedule for volume [%s] ", sched.Name)
+					}
+				}
+			}()
+			err = PrereqForNodeDecomm(nodeToDecomm, suspendedScheds)
+			if err != nil {
+				UpdateOutcome(event, err)
+				return
+			}
 			err = Inst().S.PrepareNodeToDecommission(nodeToDecomm, Inst().Provisioner)
 			if err != nil {
 				UpdateOutcome(event, err)
@@ -6554,7 +6598,6 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 			if err != nil {
 				log.InfoD("Error while decommissioning the node: %v, Error:%v", nodeToDecomm.Name, err)
 				UpdateOutcome(event, err)
-				return
 			}
 
 			t := func() (interface{}, bool, error) {
@@ -6562,7 +6605,7 @@ func TriggerNodeDecommission(contexts *[]*scheduler.Context, recordChan *chan *E
 				if err != nil {
 					return false, true, fmt.Errorf("error getting node %v status", nodeToDecomm.Name)
 				}
-				if *status == opsapi.Status_STATUS_NONE {
+				if *status == opsapi.Status_STATUS_NONE || *status == opsapi.Status_STATUS_OFFLINE {
 					return true, false, nil
 				}
 				return false, true, fmt.Errorf("node %s not decomissioned yet,Current Status: %v", nodeToDecomm.Name, *status)
@@ -6754,8 +6797,6 @@ func TriggerCsiSnapShot(contexts *[]*scheduler.Context, recordChan *chan *EventR
 
 	setMetrics(*event)
 
-	err = fmt.Errorf("Testing failure alerts")
-	UpdateOutcome(event, err)
 	// Keeping retainSnapCount
 	retainSnapCount := DefaultSnapshotRetainCount
 	stepLog := "Create and Validate snapshots for FA DA volumes"
@@ -9996,6 +10037,425 @@ func TriggerReallocSharedMount(contexts *[]*scheduler.Context, recordChan *chan 
 		}
 		updateMetrics(*event)
 	})
+}
+
+// TriggerCreateAndRunFioOnVcluster creates and runs fio on vcluster
+func TriggerCreateAndRunFioOnVcluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateAndRunFioOnVcluster)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateAndRunFioOnVcluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   VclusterFioRunTime,
+		EndFsync:  1,
+	}
+
+	defer func() {
+		// VCluster, StorageClass and Namespace cleanup
+		log.InfoD("Cleaning up vcluster: %v in namespace: %v", vc.Name, vc.Namespace)
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+	}()
+
+	vc, err := vcluster.NewVCluster("my-vcluster-fio")
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+	err = vc.CreateAndWaitVCluster()
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+
+	setMetrics(*event)
+	stepLog := fmt.Sprintf("Create FIO app on VCluster and run it for %v seconds", VclusterFioRunTime)
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		err := CreateVclusterStorageClass(scName)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		jobName := "fio-job"
+
+		// Create FIO Deployment on VCluster using the above PVC
+		timeInseconds, err := strconv.Atoi(VclusterFioRunTime)
+		if err != nil {
+			log.InfoD("Failed to convert value %v to int with error: %v", VclusterFioRunTime, err)
+			UpdateOutcome(event, err)
+		}
+
+		duration := time.Duration(timeInseconds) * time.Second
+
+		err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, duration)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		updateMetrics(*event)
+	})
+
+}
+
+// TriggerCreateAndRunMultipleFioOnVcluster creates and runs multiple fio on vcluster
+func TriggerCreateAndRunMultipleFioOnVcluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(CreateAndRunMultipleFioOnVcluster)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: CreateAndRunMultipleFioOnVcluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+
+	setMetrics(*event)
+
+	vc := &vcluster.VCluster{}
+	var scName string
+	var appNS string
+
+	defer func() {
+		// VCluster, StorageClass and Namespace cleanup
+		log.InfoD("Cleaning up vcluster: %v in namespace: %v", vc.Name, vc.Namespace)
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+	}()
+
+	vc, err := vcluster.NewVCluster("my-vcluster-multi-fio")
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+
+	err = vc.CreateAndWaitVCluster()
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+
+	envValueIterations := VclusterFioTotalIteration
+	envValueBatch := VclusterFioParallelApps
+	batchCount := 2
+	totalIterations := 1
+	if envValueIterations != "" {
+		var err error
+		totalIterations, err = strconv.Atoi(envValueIterations)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueIterations, err)
+			UpdateOutcome(event, err)
+			totalIterations = 1
+		} else {
+			log.InfoD("Total iteration successfully picked up from configmap :%v", totalIterations)
+		}
+	}
+	if envValueBatch != "" {
+		var err error
+		batchCount, err = strconv.Atoi(envValueBatch)
+		if err != nil {
+			log.Errorf("Failed to convert value %v to int with error: %v", envValueBatch, err)
+			UpdateOutcome(event, err)
+			batchCount = 2
+		} else {
+			log.InfoD("batchcount successfully picked up from configmap :%v", batchCount)
+		}
+	}
+	fioOptions := vcluster.FIOOptions{
+		Name:      "mytest",
+		IOEngine:  "libaio",
+		RW:        "randwrite",
+		BS:        "4k",
+		NumJobs:   1,
+		Size:      "500m",
+		TimeBased: true,
+		Runtime:   VclusterFioRunTime,
+		EndFsync:  1,
+	}
+
+	setMetrics(*event)
+
+	stepLog := fmt.Sprintf("Create multiple FIO app on VCluster and run it for %v seconds", VclusterFioRunTime)
+
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("fio-app-sc-%v", time.Now().Unix())
+		log.InfoD("Creating StorageClass with name: %v", scName)
+		err = CreateVclusterStorageClass(scName)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+
+		appNS = scName + "-ns"
+		for i := 0; i < totalIterations; i++ {
+			var wg sync.WaitGroup
+			var jobNames []string
+			for j := 0; j < batchCount; j++ {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					pvcNameSuffix := fmt.Sprintf("-pvc-%d-%d-%d", i, j, idx)
+					jobName := fmt.Sprintf("fio-job-%d-%d-%d", i, j, idx)
+					jobNames = append(jobNames, jobName)
+					log.InfoD("creating PVC with name: %v", scName+pvcNameSuffix)
+					pvcName, err := vc.CreatePVC(scName+pvcNameSuffix, scName, appNS, "")
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
+					// Create FIO Deployment on VCluster using the above PVC
+					timeInseconds, err := strconv.Atoi(VclusterFioRunTime)
+					if err != nil {
+						log.InfoD("Failed to convert value %v to int with error: %v", VclusterFioRunTime, err)
+						UpdateOutcome(event, err)
+					}
+
+					duration := time.Duration(timeInseconds) * time.Second
+					// Create FIO Deployment on VCluster using the above PVC
+					log.InfoD("creating FIO deployment with name: %v using pvc: %v", jobName, pvcName)
+					err = vc.CreateFIODeployment(pvcName, appNS, fioOptions, jobName, duration)
+					if err != nil {
+						UpdateOutcome(event, err)
+						return
+					}
+				}(i + j)
+			}
+			wg.Wait()
+			for _, jobName := range jobNames {
+				log.Infof("deleting job with name: %v", jobName)
+				err := vc.DeleteJobOnVcluster(appNS, jobName)
+				if err != nil {
+					UpdateOutcome(event, err)
+					continue
+				}
+			}
+		}
+	})
+}
+
+func TriggerVolumeDriverDownVCluster(contexts *[]*scheduler.Context, recordChan *chan *EventRecord) {
+	defer ginkgo.GinkgoRecover()
+	defer endLongevityTest()
+	startLongevityTest(VolumeDriverDownVCluster)
+	event := &EventRecord{
+		Event: Event{
+			ID:   GenerateUUID(),
+			Type: VolumeDriverDownVCluster,
+		},
+		Start:   time.Now().Format(time.RFC1123),
+		Outcome: []error{},
+	}
+	defer func() {
+		event.End = time.Now().Format(time.RFC1123)
+		*recordChan <- event
+	}()
+	vc := &vcluster.VCluster{}
+	var scName string
+	var pvcName string
+	var appNS string
+
+	defer func() {
+		// VCluster, StorageClass and Namespace cleanup
+		log.InfoD("Cleaning up vcluster: %v in namespace: %v", vc.Name, vc.Namespace)
+		err := vc.VClusterCleanup(scName)
+		if err != nil {
+			UpdateOutcome(event, err)
+		}
+	}()
+
+	vc, err := vcluster.NewVCluster("my-vcluster-driver-down")
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+	err = vc.CreateAndWaitVCluster()
+	if err != nil {
+		UpdateOutcome(event, err)
+		return
+	}
+	stepLog := "Creates Nginx Deployment on Vcluster, Brings Down Portworx on node running Nginx and then deletes Nginx deployment. Brings up Px again"
+	Step(stepLog, func() {
+		log.InfoD(stepLog)
+
+		// Create Storage Class on Host Cluster
+		scName = fmt.Sprintf("nginx-app-sc-%v", time.Now().Unix())
+		err = CreateVclusterStorageClass(scName)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		log.Infof("Successfully created StorageClass with name: %v", scName)
+
+		// Create PVC on VCluster
+		appNS = scName + "-ns"
+		pvcName, err = vc.CreatePVC("", scName, appNS, "")
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		log.Infof("Successfully created PVC with name: %v", pvcName)
+
+		deploymentName := "nginx-deployment"
+		// Create Nginx Deployment on VCluster using the above PVC
+		err = vc.CreateNginxDeployment(pvcName, appNS, deploymentName)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+
+		log.Infof("Successfully created Nginx App on Vcluster")
+		log.Infof("Hard Sleep for 10 seconds after creation of Nginx Deployment")
+		time.Sleep(10 * time.Second)
+
+		// Validate if Nginx Deployment is healthy or not
+		err = vc.IsDeploymentHealthy(appNS, deploymentName, 1)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		log.Infof("Nginx Deployment %s is healthy. Will kill Px and delete Nginx deployment now", deploymentName)
+		podNodes, err := vc.GetDeploymentPodNodes(appNS, deploymentName)
+		if err != nil {
+			UpdateOutcome(event, err)
+			return
+		}
+		var nodesToReboot []string
+		for _, appNode := range node.GetWorkerNodes() {
+			for _, podNode := range podNodes {
+				if appNode.Name == podNode {
+					nodesToReboot = append(nodesToReboot, appNode.Name)
+				}
+			}
+		}
+		stepLog = "get nodes bounce volume driver"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			for _, appNode := range node.GetWorkerNodes() {
+				for _, nodes := range nodesToReboot {
+					if appNode.Name == nodes {
+						stepLog = fmt.Sprintf("stop volume driver %s on node: %s",
+							Inst().V.String(), appNode.Name)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								StopVolDriverAndWait([]node.Node{appNode})
+							})
+					}
+				}
+			}
+			// Validates if VCluster is still accessible or not by listing namespaces within it
+			err = vc.WaitForVClusterAccess()
+			if err != nil {
+				UpdateOutcome(event, err)
+				return
+			}
+			log.Infof("Vcluster has become responsive - going ahead with the test")
+			// Deleting Deployment from Vcluster now once it becomes accessible
+			err = vc.DeleteDeploymentOnVCluster(appNS, deploymentName)
+			if err != nil {
+				UpdateOutcome(event, err)
+				return
+			}
+			log.Infof("Successfully deleted Nginx deployment %v on Vcluster %v", deploymentName, vc.Name)
+
+			for _, appNode := range node.GetWorkerNodes() {
+				for _, nodes := range nodesToReboot {
+					if appNode.Name == nodes {
+						stepLog = fmt.Sprintf("start volume driver %s on node: %s",
+							Inst().V.String(), appNode.Name)
+						Step(stepLog,
+							func() {
+								log.InfoD(stepLog)
+								StartVolDriverAndWait([]node.Node{appNode})
+							})
+					}
+				}
+			}
+			stepLog = "Giving few seconds for volume driver to stabilize"
+			Step(stepLog, func() {
+				log.InfoD(stepLog)
+				time.Sleep(20 * time.Second)
+			})
+		})
+	})
+
+}
+
+// CreateStorageClass method creates a storageclass using host's k8s clientset on host cluster
+func CreateVclusterStorageClass(scName string, opts ...storageClassOption) error {
+	params := make(map[string]string)
+	params["repl"] = "2"
+	params["priority_io"] = "high"
+	params["io_profile"] = "auto"
+	v1obj := meta_v1.ObjectMeta{
+		Name: scName,
+	}
+	reclaimPolicyDelete := v1.PersistentVolumeReclaimDelete
+	bindMode := storageapi.VolumeBindingImmediate
+	scObj := storageapi.StorageClass{
+		ObjectMeta:        v1obj,
+		Provisioner:       k8s.CsiProvisioner,
+		Parameters:        params,
+		ReclaimPolicy:     &reclaimPolicyDelete,
+		VolumeBindingMode: &bindMode,
+	}
+	// Applying each extra option to Storage class definition
+	for _, opt := range opts {
+		opt(&scObj)
+	}
+	k8sStorage := storage.Instance()
+	if _, err := k8sStorage.CreateStorageClass(&scObj); err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetContextPVCs returns pvc from the given context
