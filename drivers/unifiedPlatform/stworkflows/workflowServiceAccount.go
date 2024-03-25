@@ -18,6 +18,11 @@ type SeviceAccount struct {
 	RoleName string
 }
 
+const (
+	ProjectAdmin = "project-admin"
+	User         = "user"
+)
+
 func (svcUser *WorkflowServiceAccount) CreateServiceAccount(accId, saName, roleName, resourceId string) (*WorkflowServiceAccount, error) {
 	_, err := platformLibs.CreateServiceAccountForRBAC(saName, svcUser.WorkflowPlatform.TenantId)
 	if err != nil {
