@@ -2,7 +2,6 @@ package platformLibs
 
 import (
 	automationModels "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 type TemplateInputs struct {
@@ -11,7 +10,7 @@ type TemplateInputs struct {
 	Kind            string
 	SemanticVersion string
 	RevisionUid     string
-	TemplateValues  structpb.Struct
+	TemplateValues  map[string]interface{}
 }
 
 func ListAvailableTemplates(tenantId string) (*automationModels.PlatformTemplatesResponse, error) {
@@ -33,7 +32,7 @@ func CreateTemplates(templateInputs TemplateInputs) (*automationModels.PlatformT
 				Kind:            &templateInputs.Kind,
 				SemanticVersion: &templateInputs.SemanticVersion,
 				RevisionUid:     &templateInputs.RevisionUid,
-				TemplateValues:  &templateInputs.TemplateValues,
+				TemplateValues:  templateInputs.TemplateValues,
 			},
 			Status: nil,
 		},
@@ -75,7 +74,7 @@ func UpdateTemplate(templateId string, templateInputs *TemplateInputs) (*automat
 				Kind:            &templateInputs.Kind,
 				SemanticVersion: &templateInputs.SemanticVersion,
 				RevisionUid:     &templateInputs.RevisionUid,
-				TemplateValues:  &templateInputs.TemplateValues,
+				TemplateValues:  templateInputs.TemplateValues,
 			},
 			Status: nil,
 		},
