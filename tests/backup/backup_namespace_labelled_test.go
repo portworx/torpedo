@@ -251,7 +251,6 @@ var _ = Describe("{BackupScheduleForOldAndNewNS}", func() {
 			contexts = append(contexts, appContexts...)
 			for _, ctx := range appContexts {
 				ctx.ReadinessTimeout = AppReadinessTimeout
-				ctx.SkipVolumeValidation = true
 				namespace := GetAppNamespace(ctx, taskName)
 				bkpNamespaces = append(bkpNamespaces, namespace)
 			}
