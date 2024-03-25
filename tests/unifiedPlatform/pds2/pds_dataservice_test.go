@@ -66,9 +66,9 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 })
 
-var _ = Describe("{UpgradeDataServiceImage}", func() {
+var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	JustBeforeEach(func() {
-		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data ServiceImage", nil, 0)
+		StartTorpedoTest("UpgradeDataServiceImage", "Upgrade Data Service Version and Image", nil, 0)
 	})
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
@@ -102,7 +102,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 	//TODO: Add backup and restore workflows once we have the workflows ready
 	//TODO: Take backup of the old deployment
 
-	It("Upgrade DataServiceImage", func() {
+	It("Upgrade DataService Version and Image", func() {
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			_, err := workflowDataservice.UpdateDataService(ds, ds.Image, ds.Version)
 			log.FailOnError(err, "Error while updating ds")
@@ -120,7 +120,7 @@ var _ = Describe("{UpgradeDataServiceImage}", func() {
 
 	It("Delete DataServiceDeployment", func() {
 		err := workflowDataservice.DeleteDeployment()
-		log.FailOnError(err, "Error while deleting dataservice")
+		log.FailOnError(err, "Error while deleting data Service")
 	})
 
 	JustAfterEach(func() {
