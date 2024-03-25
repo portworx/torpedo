@@ -261,7 +261,7 @@ case $FOCUS_TESTS in
     ;;
 esac
 
-if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]]; then
+if [[ "$TEST_SUITE" != *"pds.test"* ]] && [[ "$TEST_SUITE" != *"backup.test"* ]] && [[ "$TEST_SUITE" != *"platform.test"* ]] && [[ "$TEST_SUITE" != *"pds2.test"* ]]; then
     TEST_SUITE='"bin/basic.test"'
 fi
 
@@ -791,6 +791,12 @@ spec:
       value: "${EKS_CLUSTER_REGION}"
     - name: EKS_PX_NODEGROUP_NAME
       value: "${EKS_PX_NODEGROUP_NAME}"
+    - name: IKS_CLUSTER_NAME
+      value: "${IKS_CLUSTER_NAME}"
+    - name: IKS_PX_WORKERPOOL_NAME
+      value: "${IKS_PX_WORKERPOOL_NAME}"
+    - name: IKS_CLUSTER_REGION
+      value: "${IKS_CLUSTER_REGION}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account

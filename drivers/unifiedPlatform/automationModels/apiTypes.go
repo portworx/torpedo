@@ -7,7 +7,9 @@ type WorkFlowResponse struct {
 	OnboardAccount    AccountRegistration         `copier:"must,nopanic"`
 	Status            Status                      `copier:"must,nopanic"`
 	TargetCluster     PlatformTargetClusterOutput `copier:"must,nopanic"`
+	PDSDeployment     PDSDeployment               `copier:"must,nopanic"`
 	PdsServiceAccount PDSServiceAccount
+	Info              V1Info
 }
 
 type WorkFlowRequest struct {
@@ -27,4 +29,6 @@ type WorkFlowRequest struct {
 	Pagination            PaginationRequest             `copier:"must,nopanic"`
 	ServiceAccountRequest PDSServiceAccount             `copier:"must,nopanic"`
 	Iam                   PDSIam                        `copier:"must,nopanic"`
+	DataServiceId         string                        `copier:"must,nopanic"`
+	DataServiceVersionId  string                        `copier:"must,nopanic"`
 }

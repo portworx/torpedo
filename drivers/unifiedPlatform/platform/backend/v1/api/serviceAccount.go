@@ -62,23 +62,27 @@ func (sa *PLATFORM_API_V1) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlowRe
 }
 
 // CreateServiceAccount return new service account model.
-func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *WorkFlowRequest) (*WorkFlowResponse, error) {
-
-	saResponse := WorkFlowResponse{}
-	saCreateRequest := serviceaccountv1.ApiServiceAccountServiceCreateServiceAccountRequest{}
-
+func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
+	saResponse := PDSServiceAccountResponse{
+		Create: V1ServiceAccount{},
+	}
 	_, saClient, err := sa.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	err = utilities.CopyStruct(&SaRequestBody, createSaReq.ServiceAccountRequest.Create)
-	saCreateRequest = saClient.ServiceAccountServiceCreateServiceAccount(context.Background(), createSaReq.TenantId).V1ServiceAccount(SaRequestBody)
+	saCreateRequest := saClient.ServiceAccountServiceCreateServiceAccount(context.Background(), createSaReq.Create.TenantId)
+	saCreateRequest = saCreateRequest.V1ServiceAccount(serviceaccountv1.V1ServiceAccount{
+		Meta: &serviceaccountv1.V1Meta{
+			Name: createSaReq.Create.V1ServiceAccount.Meta.Name,
+		},
+	})
 	saModel, res, err := saClient.ServiceAccountServiceCreateServiceAccountExecute(saCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("API response - [%+v]", saModel)
-	err = utilities.CopyStruct(saModel, &saResponse)
+	err = utilities.CopyStruct(saModel, &saResponse.Create)
+	log.Infof("API response copied - [%+v]", saResponse)
 	return &saResponse, err
 }
 

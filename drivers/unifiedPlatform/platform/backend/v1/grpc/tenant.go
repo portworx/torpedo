@@ -24,14 +24,15 @@ func (Tenantgrpc *PlatformGrpc) getTenantClient() (context.Context, publictenant
 	credentials = &Credentials{
 		Token: token,
 	}
+	ctx = WithAccountIDMetaCtx(ctx, Tenantgrpc.AccountId)
 
 	tenantClient = publictenantapis.NewTenantServiceClient(Tenantgrpc.ApiClientV1)
 
 	return ctx, tenantClient, token, nil
 }
 
-func (Tenantgrpc *PlatformGrpc) ListTenants() ([]WorkFlowResponse, error) {
-	tenantsResponse := []WorkFlowResponse{}
+func (Tenantgrpc *PlatformGrpc) ListTenants() ([]PlatformTenant, error) {
+	tenantsResponse := []PlatformTenant{}
 	ctx, client, _, err := Tenantgrpc.getTenantClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
@@ -48,8 +49,9 @@ func (Tenantgrpc *PlatformGrpc) ListTenants() ([]WorkFlowResponse, error) {
 		return nil, fmt.Errorf("Error when calling `AccountServiceListTenants`: %v\n.", err)
 	}
 
+	log.Infof("Available Tenants")
 	for _, ten := range apiResponse.Tenants {
-		log.Infof("accounts - [%v]", ten.Meta.Name)
+		log.Infof("[%v]", ten.Meta.Name)
 	}
 
 	err = copier.Copy(&tenantsResponse, apiResponse.Tenants)
@@ -57,9 +59,9 @@ func (Tenantgrpc *PlatformGrpc) ListTenants() ([]WorkFlowResponse, error) {
 		return nil, err
 	}
 
-	log.Infof("Value of tenants after copy - [%v]", tenantsResponse)
+	log.Infof("Available Tenants after copy")
 	for _, ten := range tenantsResponse {
-		log.Infof("tenants - [%v]", ten.Meta.Name)
+		log.Infof("[%v]", *ten.Meta.Name)
 	}
 
 	return tenantsResponse, nil

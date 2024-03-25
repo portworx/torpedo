@@ -6,11 +6,10 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
-	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -24,43 +23,27 @@ var _ = BeforeSuite(func() {
 		NewPdsParams, err = ReadNewParams(pdsparams)
 		log.FailOnError(err, "Failed to read params from json file")
 		infraParams := NewPdsParams.InfraToTest
-		pdsLabels["clusterType"] = infraParams.ClusterType
+		PdsLabels["clusterType"] = infraParams.ClusterType
 
 		log.InfoD("Get Account ID")
-		accID = "acc:64aca1a3-cec4-44b0-9b24-7fd41c9b63d1"
+		AccID = "acc:64aca1a3-cec4-44b0-9b24-7fd41c9b63d1"
 
-		err = platformUtils.InitUnifiedApiComponents(os.Getenv(envControlPlaneUrl), "")
+		err = platformUtils.InitUnifiedApiComponents(os.Getenv(EnvControlPlaneUrl), "")
 		log.FailOnError(err, "error while initialising api components")
 
 		// accList, err := platformUtils.GetAccountListv1()
 		// log.FailOnError(err, "error while getting account list")
 		// accID = platformUtils.GetPlatformAccountID(accList, defaultTestAccount)
-		log.Infof("AccountID - [%s]", accID)
+		log.Infof("AccountID - [%s]", AccID)
 
-		err = platformUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, accID)
+		err = platformUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, AccID)
 		log.FailOnError(err, "error while initialising api components")
 
 		//Initialising UnifiedApiComponents in ds utils
-		err = dsUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, accID)
+		err = dsUtils.InitUnifiedApiComponents(infraParams.ControlPlaneURL, AccID)
 		log.FailOnError(err, "error while initialising api components in ds utils")
 	})
 
-	Step("Create Buckets", func() {
-		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-			bucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
-			switch NewPdsParams.BackUpAndRestore.TargetLocation {
-			case "s3-comp":
-				err := platformUtils.CreateS3CompBucket(bucketName)
-				log.FailOnError(err, "error while creating s3-comp bucket")
-			case "s3":
-				err := platformUtils.CreateS3Bucket(bucketName)
-				log.FailOnError(err, "error while creating s3 bucket")
-			default:
-				err := platformUtils.CreateS3CompBucket(bucketName)
-				log.FailOnError(err, "error while creating s3-comp bucket")
-			}
-		}
-	})
 })
 
 var _ = AfterSuite(func() {

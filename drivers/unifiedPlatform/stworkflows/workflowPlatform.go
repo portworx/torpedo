@@ -39,7 +39,7 @@ func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
 	wfTenant := WorkflowTenant{
 		AccountID: platform.AdminAccountId,
 	}
-	tenantId, err := wfTenant.GetDefaultTenantId()
+	tenantId, err := wfTenant.GetDefaultTenantId("px-system-tenant")
 	if err != nil {
 		return platform, err
 	}

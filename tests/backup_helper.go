@@ -10,11 +10,17 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 
 	appType "github.com/portworx/torpedo/drivers/applications/apptypes"
 
@@ -220,6 +226,30 @@ var StorkLabel = map[string]string{
 	"name": "stork",
 }
 
+// Type for customResourceObjects created by backup
+type customResourceObjectDetails struct {
+	Group         string
+	Version       string
+	Resource      string
+	SkipResources []string // If this list is populated that particular CR will not be considered for cleanup
+}
+
+// List of all the CRs to be considered for cleanup
+var crListMap = map[string]customResourceObjectDetails{
+	"applicationbackups": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationbackups",
+		SkipResources: []string{},
+	},
+	"applicationrestores": {
+		Group:         "stork.libopenstorage.org",
+		Version:       "v1alpha1",
+		Resource:      "applicationrestores",
+		SkipResources: []string{},
+	},
+}
+
 type BackupAccess int32
 
 type ReplacePolicyType int32
@@ -346,6 +376,21 @@ func CreateBackup(backupName string, clusterName string, bLocation string, bLoca
 	namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string,
 	preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context) error {
 	_, err := CreateBackupByNamespacesWithoutCheck(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx)
+	if err != nil {
+		return err
+	}
+
+	err = BackupSuccessCheck(backupName, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second, ctx)
+	if err != nil {
+		return err
+	}
+	log.Infof("Backup [%s] created successfully", backupName)
+	return nil
+}
+
+// CreateBackupWithVscMapping creates backup and checks for success
+func CreateBackupWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) error {
+	_, err := CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
 	if err != nil {
 		return err
 	}
@@ -530,6 +575,36 @@ func CreateBackupWithValidation(ctx context1.Context, backupName string, cluster
 	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
 }
 
+// CreateBackupWithValidationWithVscMapping creates backup, checks for success, and validates the backup
+func CreateBackupWithValidationWithVscMapping(ctx context1.Context, backupName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) error {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+
+	// Insert data before backup which is expected to be present after restore
+	appHandlers, commandBeforeBackup, err := InsertDataForBackupValidation(namespaces, ctx, []appDriver.ApplicationDriver{}, backupName, nil)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation. Error - [%s]", err.Error())
+	}
+
+	err = CreateBackupWithVscMapping(backupName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, uid, preRuleName, preRuleUid, postRuleName, postRuleUid, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	if err != nil {
+		return err
+	}
+
+	// Insert data after backup which is expected NOT to be present after restore
+	_, _, err = InsertDataForBackupValidation(namespaces, ctx, appHandlers, backupName, commandBeforeBackup)
+	if err != nil {
+		return fmt.Errorf("Some error occurred while inserting data for backup validation after backup success check. Error - [%s]", err.Error())
+	}
+
+	return ValidateBackup(ctx, backupName, orgID, scheduledAppContextsToBackup, make([]string, 0))
+}
+
 // CreateVMBackupWithValidation creates VM backup, checks for success, and validates the VM backup
 func CreateVMBackupWithValidation(ctx context1.Context, backupName string, vms []kubevirtv1.VirtualMachine, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, skipVMAutoExecRules bool) error {
 	namespaces := make([]string, 0)
@@ -686,6 +761,28 @@ func CreateScheduleBackup(scheduleName string, clusterName string, bLocation str
 	return nil
 }
 
+// CreateScheduleBackupWithValidationWithVscMapping creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
+func CreateScheduleBackupWithValidationWithVscMapping(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (string, error) {
+	namespaces := make([]string, 0)
+	for _, scheduledAppContext := range scheduledAppContextsToBackup {
+		namespace := scheduledAppContext.ScheduleOptions.Namespace
+		if !Contains(namespaces, namespace) {
+			namespaces = append(namespaces, namespace)
+		}
+	}
+	_, err := CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName, clusterName, bLocation, bLocationUID, namespaces, labelSelectors, orgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schPolicyName, schPolicyUID, ctx, provisionerVolumeSnapshotClassMap, forceKdmp)
+	if err != nil {
+		return "", err
+	}
+	time.Sleep(1 * time.Minute)
+	firstScheduleBackupName, err := GetFirstScheduleBackupName(ctx, scheduleName, orgID)
+	if err != nil {
+		return "", err
+	}
+	log.InfoD("first schedule backup for schedule name [%s] is [%s]", scheduleName, firstScheduleBackupName)
+	return firstScheduleBackupName, BackupSuccessCheckWithValidation(ctx, firstScheduleBackupName, scheduledAppContextsToBackup, orgID, MaxWaitPeriodForBackupCompletionInMinutes*time.Minute, 30*time.Second)
+}
+
 // CreateScheduleBackupWithValidation creates a schedule backup, checks for success of first (immediately triggered) backup, validates that backup and returns the name of that first scheduled backup
 func CreateScheduleBackupWithValidation(ctx context1.Context, scheduleName string, clusterName string, bLocation string, bLocationUID string, scheduledAppContextsToBackup []*scheduler.Context, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string) (string, error) {
 	namespaces := make([]string, 0)
@@ -798,6 +895,75 @@ func CreateBackupByNamespacesWithoutCheck(backupName string, clusterName string,
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+	}
+
+	err := AdditionalBackupRequestParams(bkpCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = backupDriver.CreateBackup(ctx, bkpCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupUid, err := backupDriver.GetBackupUID(ctx, backupName, orgID)
+	if err != nil {
+		return nil, err
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUid,
+		OrgId: orgID,
+	}
+	resp, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// CreateBackupByNamespacesWithoutCheckWithVscMapping creates backup of provided namespaces without waiting for success.
+func CreateBackupByNamespacesWithoutCheckWithVscMapping(backupName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, uid string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (*api.BackupInspectResponse, error) {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
+	backupDriver := Inst().Backup
+	bkpCreateRequest := &api.BackupCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  backupName,
+			OrgId: orgID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		ClusterRef: &api.ObjectRef{
+			Name: clusterName,
+			Uid:  uid,
+		},
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		VolumeSnapshotClassMapping: provisionerVolumeSnapshotClassMap,
+		DirectKdmp:                 forceKdmp,
 	}
 
 	err := AdditionalBackupRequestParams(bkpCreateRequest)
@@ -983,6 +1149,71 @@ func CreateScheduleBackupWithoutCheck(scheduleName string, clusterName string, b
 			Name: postRuleName,
 			Uid:  postRuleUid,
 		},
+	}
+
+	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	_, err = backupDriver.CreateBackupSchedule(ctx, bkpSchCreateRequest)
+	if err != nil {
+		return nil, err
+	}
+	backupScheduleInspectRequest := &api.BackupScheduleInspectRequest{
+		OrgId: orgID,
+		Name:  scheduleName,
+		Uid:   "",
+	}
+	resp, err := backupDriver.InspectBackupSchedule(ctx, backupScheduleInspectRequest)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
+
+// CreateScheduleBackupWithoutCheckWithVscMapping creates a schedule backup without waiting for success
+func CreateScheduleBackupWithoutCheckWithVscMapping(scheduleName string, clusterName string, bLocation string, bLocationUID string, namespaces []string, labelSelectors map[string]string, orgID string, preRuleName string, preRuleUid string, postRuleName string, postRuleUid string, schPolicyName string, schPolicyUID string, ctx context1.Context, provisionerVolumeSnapshotClassMap map[string]string, forceKdmp bool) (*api.BackupScheduleInspectResponse, error) {
+
+	if GlobalRuleFlag {
+		preRuleName = GlobalPreRuleName
+		if GlobalPreRuleName != "" {
+			preRuleUid = GlobalPreRuleUid
+		}
+
+		postRuleName = GlobalPostRuleName
+		if GlobalPostRuleName != "" {
+			postRuleUid = GlobalPostRuleUid
+		}
+	}
+
+	backupDriver := Inst().Backup
+	bkpSchCreateRequest := &api.BackupScheduleCreateRequest{
+		CreateMetadata: &api.CreateMetadata{
+			Name:  scheduleName,
+			OrgId: orgID,
+		},
+		SchedulePolicyRef: &api.ObjectRef{
+			Name: schPolicyName,
+			Uid:  schPolicyUID,
+		},
+		BackupLocationRef: &api.ObjectRef{
+			Name: bLocation,
+			Uid:  bLocationUID,
+		},
+		SchedulePolicy: schPolicyName,
+		Cluster:        clusterName,
+		Namespaces:     namespaces,
+		LabelSelectors: labelSelectors,
+		PreExecRuleRef: &api.ObjectRef{
+			Name: preRuleName,
+			Uid:  preRuleUid,
+		},
+		PostExecRuleRef: &api.ObjectRef{
+			Name: postRuleName,
+			Uid:  postRuleUid,
+		},
+		VolumeSnapshotClassMapping: provisionerVolumeSnapshotClassMap,
+		DirectKdmp:                 forceKdmp,
 	}
 
 	err := AdditionalScheduledBackupRequestParams(bkpSchCreateRequest)
@@ -1348,6 +1579,47 @@ func CreateRestoreWithReplacePolicy(restoreName string, backupName string, names
 	}
 	log.Infof("Restore [%s] created successfully", restoreName)
 	return nil
+}
+
+// CreateRestoreWithReplacePolicyWithValidation Creates in-place restore and waits for it to complete and then validates the restore
+func CreateRestoreWithReplacePolicyWithValidation(restoreName string, backupName string, namespaceMapping map[string]string, clusterName string,
+	orgID string, ctx context1.Context, storageClassMapping map[string]string, replacePolicy ReplacePolicyType, scheduledAppContexts []*scheduler.Context) (err error) {
+	err = CreateRestoreWithReplacePolicy(restoreName, backupName, namespaceMapping, clusterName, orgID, ctx, storageClassMapping, replacePolicy)
+	if err != nil {
+		return
+	}
+	originalClusterConfigPath := CurrentClusterConfigPath
+	if clusterConfigPath, ok := ClusterConfigPathMap[clusterName]; !ok {
+		err = fmt.Errorf("switching cluster context: couldn't find clusterConfigPath for cluster [%s]", clusterName)
+		return
+	} else {
+		log.InfoD("Switching cluster context to cluster [%s]", clusterName)
+		err = SetClusterContext(clusterConfigPath)
+		if err != nil {
+			return
+		}
+	}
+	defer func() {
+		log.InfoD("Switching cluster context back to cluster path [%s]", originalClusterConfigPath)
+		err = SetClusterContext(originalClusterConfigPath)
+		if err != nil {
+			err = fmt.Errorf("failed switching cluster context back to cluster path [%s]. Err: [%v]", originalClusterConfigPath, err)
+		}
+	}()
+	expectedRestoredAppContexts := make([]*scheduler.Context, 0)
+	for _, scheduledAppContext := range scheduledAppContexts {
+		expectedRestoredAppContext, err := CloneAppContextAndTransformWithMappings(scheduledAppContext, namespaceMapping, storageClassMapping, true)
+		if err != nil {
+			log.Errorf("TransformAppContextWithMappings: %v", err)
+			continue
+		}
+		expectedRestoredAppContexts = append(expectedRestoredAppContexts, expectedRestoredAppContext)
+	}
+	err = ValidateRestore(ctx, restoreName, orgID, expectedRestoredAppContexts, make([]string, 0))
+	if err != nil {
+		return
+	}
+	return
 }
 
 // CreateRestoreWithUID creates restore with UID
@@ -6357,6 +6629,88 @@ func GetAllVMsInNamespacesWithLabel(namespaceLabel map[string]string) ([]kubevir
 
 }
 
+// GetAllVMsFromScheduledContexts returns all the Kubevirt VMs in the scheduled contexts
+func GetAllVMsFromScheduledContexts(scheduledContexts []*scheduler.Context) ([]kubevirtv1.VirtualMachine, error) {
+	var vms []kubevirtv1.VirtualMachine
+
+	// Get only unique namespaces
+	uniqueNamespaces := make(map[string]bool)
+	for _, scheduledContext := range scheduledContexts {
+		uniqueNamespaces[scheduledContext.ScheduleOptions.Namespace] = true
+	}
+	namespaces := make([]string, 0, len(uniqueNamespaces))
+	for namespace := range uniqueNamespaces {
+		namespaces = append(namespaces, namespace)
+	}
+
+	// Get VMs from the unique namespaces
+	for _, n := range namespaces {
+		vmList, err := GetAllVMsInNamespace(n)
+		if err != nil {
+			return nil, err
+		}
+		vms = append(vms, vmList...)
+	}
+	return vms, nil
+}
+
+// GetVirtLauncherPodName returns the name of the virt-launcher pod in the given namespace
+func GetVirtLauncherPodName(vm kubevirtv1.VirtualMachine) (string, error) {
+	k8sCore := core.Instance()
+	pods, err := k8sCore.GetPods(vm.Namespace, make(map[string]string))
+	if err != nil {
+		return "", err
+	}
+	for _, pod := range pods.Items {
+		if strings.Contains(pod.Name, fmt.Sprintf("%s-%s", "virt-launcher", vm.Name)) {
+			log.InfoD("virt-launcher pod found for vm [%s] is [%s]", vm.Name, pod.Name)
+			return pod.Name, nil
+		}
+	}
+	return "", fmt.Errorf("virt-launcher pod not found")
+}
+
+// GetNumberOfDisksInVM returns the number of disks in the VM
+func GetNumberOfDisksInVM(vm kubevirtv1.VirtualMachine) (int, error) {
+	cmdForDiskCount := "lsblk -d | grep disk | wc -l"
+	diskCountOutput, err := RunCmdInVM(vm, cmdForDiskCount, context1.TODO())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get disk count in VM: %v", err)
+	}
+	// trim diskCountOutput and convert to int
+	diskCount, err := strconv.Atoi(strings.TrimSpace(diskCountOutput))
+	if err != nil {
+		return 0, fmt.Errorf("failed to convert disk count to int: %v", err)
+	}
+	return diskCount, nil
+}
+
+// GetVMsInBackup returns the list of VMs in the backup
+func GetVMsInBackup(ctx context1.Context, backupName string) ([]string, error) {
+	backupDriver := Inst().Backup
+	backupUID, err := backupDriver.GetBackupUID(ctx, backupName, BackupOrgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch backup UID")
+	}
+	backupInspectRequest := &api.BackupInspectRequest{
+		Name:  backupName,
+		Uid:   backupUID,
+		OrgId: BackupOrgID,
+	}
+	backupResponse, err := backupDriver.InspectBackup(ctx, backupInspectRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch backup inspect object")
+	}
+	var vmNames []string
+	for _, r := range backupResponse.GetBackup().IncludeResources {
+		if r.Kind == "VirtualMachine" && r.Group == "kubevirt.io" {
+			vmNames = append(vmNames, r.Name)
+		}
+		vmNames = append(vmNames, r.Name)
+	}
+	return vmNames, nil
+}
+
 // RunCmdInVM runs a command in the VM by SSHing into it
 func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) (string, error) {
 	var username string
@@ -6365,12 +6719,25 @@ func RunCmdInVM(vm kubevirtv1.VirtualMachine, cmd string, ctx context1.Context) 
 	k8sKubevirt := kubevirt.Instance()
 
 	// Getting IP of the VM
+	t := func() (interface{}, bool, error) {
+		vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
+		if err != nil {
+			return "", false, err
+		}
+		if len(vmInstance.Status.Interfaces) == 0 {
+			return "", true, fmt.Errorf("no interfaces found in the VM [%s] in namespace [%s]", vm.Name, vm.Namespace)
+		}
+		return "", false, nil
+
+	}
+	// Need to retry because in case of restarts that is a window where the Interface is not available
+	_, err := task.DoRetryWithTimeout(t, 5*time.Minute, 30*time.Second)
 	vmInstance, err := k8sKubevirt.GetVirtualMachineInstance(ctx, vm.Name, vm.Namespace)
 	if err != nil {
 		return "", err
 	}
-	log.Infof("VM Name - %s", vm.Name)
 	ipAddress := vmInstance.Status.Interfaces[0].IP
+	log.Infof("VM Name - %s", vm.Name)
 	log.Infof("IP Address - %s", ipAddress)
 
 	// Getting username of the VM
@@ -6816,6 +7183,8 @@ func validateBackupCRs(backupName string, clusterName string, orgID string, clus
 	clusterObj := clusterResp.GetCluster()
 
 	validateBackupCRInNamespace := func() (interface{}, bool, error) {
+		allCRsCurrently := GetAllBackupCRObjects(clusterObj)
+		log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
 		allBackupCrs, err := GetBackupCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
@@ -6856,6 +7225,10 @@ func ValidateRestoreCRs(restoreName string, clusterName string, orgID string, cl
 	clusterObj := clusterResp.GetCluster()
 
 	validateRestoreCRInNamespace := func() (interface{}, bool, error) {
+
+		allCRsCurrently := GetAllBackupCRObjects(clusterObj)
+		log.Infof("All Current CRs -\n%v\n\n", allCRsCurrently)
+
 		allRestoreCrs, err := GetRestoreCRs(currentAdminNamespace, clusterObj)
 		if err != nil {
 			return nil, true, err
@@ -7344,7 +7717,6 @@ func validateCRCleanup(resourceInterface interface{},
 		return err
 	}
 	clusterObj := clusterResp.GetCluster()
-
 	validateCRCleanupInNamespace := func() (interface{}, bool, error) {
 		allCRs, err = getCRMethod(currentAdminNamespace, clusterObj)
 		if err != nil {
@@ -7632,6 +8004,76 @@ func AddNodeToVirtualMachine(vm kubevirtv1.VirtualMachine, nodeSelector map[stri
 	return nil
 }
 
+// AddPVCsToVirtualMachine adds PVCs to virtual machine
+func AddPVCsToVirtualMachine(vm kubevirtv1.VirtualMachine, pvcs []*corev1.PersistentVolumeClaim) error {
+	k8sKubevirt := kubevirt.Instance()
+	var volumes []kubevirtv1.Volume
+	var disks []kubevirtv1.Disk
+	for i, pvc := range pvcs {
+		log.Infof("Adding PVC [%s] to VM [%s]", pvc.Name, vm.Name)
+		volumes = append(volumes, kubevirtv1.Volume{
+			Name: fmt.Sprintf("%s-%d", "datavolume-additional", i),
+			VolumeSource: kubevirtv1.VolumeSource{
+				PersistentVolumeClaim: &kubevirtv1.PersistentVolumeClaimVolumeSource{
+					PersistentVolumeClaimVolumeSource: corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvc.Name,
+					},
+					Hotpluggable: false,
+				},
+			},
+		})
+		disks = append(disks, kubevirtv1.Disk{
+			Name:       fmt.Sprintf("%s-%d", "datavolume-additional", i),
+			DiskDevice: kubevirtv1.DiskDevice{Disk: &kubevirtv1.DiskTarget{Bus: kubevirtv1.DiskBusVirtio}},
+		})
+
+	}
+	vm.Spec.Template.Spec.Volumes = append(vm.Spec.Template.Spec.Volumes, volumes...)
+
+	vm.Spec.Template.Spec.Domain.Devices.Disks = append(vm.Spec.Template.Spec.Domain.Devices.Disks, disks...)
+
+	vmUpdate, err := k8sKubevirt.UpdateVirtualMachine(&vm)
+	if err != nil {
+		return err
+	}
+	log.Infof("[%d] volumes added to VM [%s]", len(pvcs), vmUpdate.Name)
+
+	return nil
+}
+
+// CreatePVCsForVM creates PVCs for the VM
+func CreatePVCsForVM(vm kubevirtv1.VirtualMachine, numberOfPVCs int, storageClassName, resourceStorage string) ([]*corev1.PersistentVolumeClaim, error) {
+	pvcs := make([]*corev1.PersistentVolumeClaim, 0)
+	for i := 0; i < numberOfPVCs; i++ {
+		pvcName := fmt.Sprintf("%s-%s-%d", "pvc-new", vm.Name, i)
+		pvc, err := core.Instance().CreatePersistentVolumeClaim(&corev1.PersistentVolumeClaim{
+			TypeMeta: metav1.TypeMeta{
+				Kind: "PersistentVolumeClaim",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      pvcName,
+				Namespace: vm.Namespace,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteMany},
+				StorageClassName: &storageClassName,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(resourceStorage),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		// adding kind to pvc object
+		pvc.Kind = "PersistentVolumeClaim"
+		pvcs = append(pvcs, pvc)
+	}
+	return pvcs, nil
+}
+
 // CompareNodeAndStatusOfVMInNamespace compares the status and Nodes of the VMI from a particular namespace
 func CompareNodeAndStatusOfVMInNamespace(namespace string, expectedNode node.Node, expectedState string, ctx context1.Context) error {
 	k8sKubevirt := kubevirt.Instance()
@@ -7696,4 +8138,53 @@ func DeleteAllVMsInNamespace(namespace string) error {
 	}
 
 	return nil
+}
+
+// GetCRObject queries and returns any CRD defined
+func getCRObject(clusterObj *api.ClusterObject, namespace string, customResourceObjectDetails customResourceObjectDetails) (*unstructured.UnstructuredList, error) {
+
+	ctx, err := backup.GetAdminCtxFromSecret()
+	config, err := portworx.GetKubernetesRestConfig(clusterObj)
+	if err != nil {
+		return nil, err
+	}
+
+	dynamicClient := dynamic.NewForConfigOrDie(config)
+
+	// Get the GVR of the CRD.
+	gvr := metav1.GroupVersionResource{
+		Group:    customResourceObjectDetails.Group,
+		Version:  customResourceObjectDetails.Version,
+		Resource: customResourceObjectDetails.Resource,
+	}
+	objects, err := dynamicClient.Resource(schema.GroupVersionResource(gvr)).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return objects, nil
+}
+
+// GetAllBackupCRObjects returns names of all backup CR object found in the cluster
+func GetAllBackupCRObjects(clusterObj *api.ClusterObject) []string {
+
+	var allBackupCrs = make([]string, 0)
+	for crName, definition := range crListMap {
+		allCurrentCrs, err := getCRObject(clusterObj, "", definition)
+		if err != nil {
+			log.Infof("Some error occurred while checking for [%s], Error - [%s]", crName, err.Error())
+		} else {
+			if len(allCurrentCrs.Items) > 0 {
+				log.Infof("Found [%s] object in the cluster", crName)
+				for _, item := range allCurrentCrs.Items {
+					// Skip the CR if present in SkipResources
+					if !slices.Contains(definition.SkipResources, item.GetName()) {
+						allBackupCrs = append(allBackupCrs, fmt.Sprintf("%s-%s", item.GetName(), item.GetNamespace()))
+					}
+				}
+			}
+		}
+	}
+
+	return allBackupCrs
 }

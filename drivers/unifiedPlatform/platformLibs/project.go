@@ -1,6 +1,9 @@
 package platformLibs
 
-import "github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+import (
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/pkg/log"
+)
 
 // CreateProject will create a project in given tenant
 func CreateProject(projectName string, tenantID string) (*automationModels.V1Project, error) {
@@ -23,9 +26,32 @@ func CreateProject(projectName string, tenantID string) (*automationModels.V1Pro
 	return &project.Create, nil
 }
 
+func GetDefaultProjectId(projectName, tenantId string) (string, error) {
+	projects, err := GetProjectList(tenantId)
+	if err != nil {
+		return "", err
+	}
+
+	for _, project := range projects.Projects {
+		if *project.Meta.Name == projectName {
+			log.Debugf("Default ProjectId [%s]", *project.Meta.Uid)
+			return *project.Meta.Uid, nil
+		}
+	}
+
+	return "", nil
+
+}
+
 // GetProjectList will get the list of projects in given tenant
-func GetProjectList(pageNumber int, pageSize int) (*automationModels.V1ListProjectsResponse, error) {
-	projects, err := v2Components.Platform.GetProjectList(pageNumber, pageSize)
+func GetProjectList(tenantId string) (*automationModels.V1ListProjectsResponse, error) {
+	request := automationModels.PlaformProjectRequest{
+		List: automationModels.PlatformListProject{
+			TenantId: tenantId,
+		},
+	}
+
+	projects, err := v2Components.Platform.GetProjectList(&request)
 	if err != nil {
 		return nil, err
 	}

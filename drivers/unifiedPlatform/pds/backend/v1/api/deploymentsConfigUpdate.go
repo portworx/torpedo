@@ -10,7 +10,7 @@ import (
 	deploymentsConfigUpdateV1 "github.com/pure-px/platform-api-go-client/pds/v1/deploymentconfigupdate"
 )
 
-func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.WorkFlowResponse, error) {
 	var updateRequest deploymentsConfigUpdateV1.ApiDeploymentConfigUpdateServiceCreateDeploymentConfigUpdateRequest
 	dsResponse := automationModels.WorkFlowResponse{}
 

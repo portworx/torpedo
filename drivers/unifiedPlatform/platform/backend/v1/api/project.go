@@ -10,7 +10,7 @@ import (
 )
 
 // GetProjectList returns the list of projects under account
-func (ProjectV1 *PLATFORM_API_V1) GetProjectList(pageNumber int, pageSize int) (*PlaformProjectResponse, error) {
+func (ProjectV1 *PLATFORM_API_V1) GetProjectList(listProject *PlaformProjectRequest) (*PlaformProjectResponse, error) {
 	ctx, client, err := ProjectV1.getProjectClient()
 	projectResponse := PlaformProjectResponse{
 		List: V1ListProjectsResponse{},
@@ -20,7 +20,7 @@ func (ProjectV1 *PLATFORM_API_V1) GetProjectList(pageNumber int, pageSize int) (
 		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
 	}
 	var getRequest projectv1.ApiProjectServiceListProjectsRequest
-	getRequest = getRequest.ApiService.ProjectServiceListProjects(ctx)
+	getRequest = getRequest.ApiService.ProjectServiceListProjects(ctx).TenantId(listProject.List.TenantId)
 
 	projectsList, res, err := client.ProjectServiceListProjectsExecute(getRequest)
 	if err != nil && res.StatusCode != status.StatusOK {

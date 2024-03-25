@@ -11,17 +11,18 @@ type Pds interface {
 	Backup
 	RestoreInterface
 	TemplateDefinitionsInterface
+	Catalog
 }
 
 type Deployment interface {
-	CreateDeployment(depRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateDeployment(*PDSDeploymentRequest) (*WorkFlowResponse, error)
 	ListDeployment() (*WorkFlowResponse, error)
 	GetDeployment(string) (*WorkFlowResponse, error)
-	DeleteDeployment(string) (*WorkFlowResponse, error)
+	DeleteDeployment(string) error
 }
 
 type DeploymentConfig interface {
-	UpdateDeployment(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error)
+	UpdateDeployment(updateRequest *PDSDeploymentRequest) (*WorkFlowResponse, error)
 }
 
 type BackupConfig interface {
@@ -38,6 +39,12 @@ type Backup interface {
 	ListBackup(*WorkFlowRequest) ([]WorkFlowResponse, error)
 }
 
+type Catalog interface {
+	ListDataServices() ([]WorkFlowResponse, error)
+	ListDataServiceVersions(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	ListDataServiceImages(*WorkFlowRequest) ([]WorkFlowResponse, error)
+}
+
 type RestoreInterface interface {
 	CreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
 	ReCreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
@@ -47,7 +54,7 @@ type RestoreInterface interface {
 }
 
 type TemplateDefinitionsInterface interface {
-	ListTemplateKinds(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	ListTemplateRevisions(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	GetTemplateRevisions(*WorkFlowRequest) (*WorkFlowResponse, error)
+	ListTemplateKinds() (*TemplateDefinitionResponse, error)
+	ListTemplateRevisions() (*TemplateDefinitionResponse, error)
+	GetTemplateRevisions() (*TemplateDefinitionResponse, error)
 }

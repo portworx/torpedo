@@ -4,6 +4,7 @@ type PlaformProjectRequest struct {
 	Create     PlatformCreateProject    `copier:"must,nopanic"`
 	Get        PlatformGetProject       `copier:"must,nopanic"`
 	Delete     PlatformDeleteProject    `copier:"must,nopanic"`
+	List       PlatformListProject      `copier:"must,nopanic"`
 	Associate  PlatformAssociateProject `copier:"must,nopanic"`
 	Dissociate PlatformAssociateProject `copier:"must,nopanic"`
 }
@@ -14,6 +15,10 @@ type PlaformProjectResponse struct {
 	Associate  V1Project              `copier:"must,nopanic"`
 	Dissociate V1Project              `copier:"must,nopanic"`
 	List       V1ListProjectsResponse `copier:"must,nopanic"`
+}
+
+type PlatformListProject struct {
+	TenantId string `copier:"must,nopanic"`
 }
 
 type PlatformCreateProject struct {

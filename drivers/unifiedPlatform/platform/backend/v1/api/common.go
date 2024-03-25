@@ -15,6 +15,7 @@ import (
 	serviceaccountv1 "github.com/pure-px/platform-api-go-client/platform/v1/serviceaccount"
 	targetClusterv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetcluster"
 	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetclusterregistrationmanifest"
+	templatesv1 "github.com/pure-px/platform-api-go-client/platform/v1/template"
 	tenantv1 "github.com/pure-px/platform-api-go-client/platform/v1/tenant"
 	whoamiv1 "github.com/pure-px/platform-api-go-client/platform/v1/whoami"
 )
@@ -32,6 +33,7 @@ type PLATFORM_API_V1 struct {
 	TargetClusterManifestV1APIClient *targetClusterManifestv1.APIClient
 	WhoamiV1APIClient                *whoamiv1.APIClient
 	ServiceAccountV1Client           *serviceaccountv1.APIClient
+	TemplatesV1Client                *templatesv1.APIClient
 	AccountID                        string
 }
 
@@ -225,5 +227,20 @@ func (sa *PLATFORM_API_V1) getSAClient() (context.Context, *serviceaccountv1.Ser
 	sa.ServiceAccountV1Client.GetConfig().DefaultHeader["px-account-id"] = sa.AccountID
 	client := sa.ServiceAccountV1Client.ServiceAccountServiceAPI
 
+	return ctx, client, nil
+}
+
+// GetClient updates the header with bearer token and returns the new client
+func (template *PLATFORM_API_V1) getTemplateClient() (context.Context, *templatesv1.TemplateServiceAPIService, error) {
+	log.Infof("Creating client from PLATFORM_API_V1 package")
+	ctx, token, err := GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+
+	template.TemplatesV1Client.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	template.TemplatesV1Client.GetConfig().DefaultHeader["px-account-id"] = template.AccountID
+
+	client := template.TemplatesV1Client.TemplateServiceAPI
 	return ctx, client, nil
 }

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	status "net/http"
 
@@ -11,7 +10,7 @@ import (
 )
 
 var (
-	DeploymentRequestBody deploymentV1.V1Deployment
+	DeploymentRequest deploymentV1.V1Deployment
 )
 
 func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
@@ -20,10 +19,18 @@ func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.Work
 	return &dsResponse, nil
 }
 
-func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
-	dsResponse := automationModels.WorkFlowResponse{}
+func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) error {
+	ctx, dsClient, err := ds.getDeploymentClient()
+	if err != nil {
+		return fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
 
-	return &dsResponse, nil
+	_, res, err := dsClient.DeploymentServiceDeleteDeployment(ctx, deploymentId).Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	return nil
 }
 
 func (ds *PDS_API_V1) ListDeployment() (*automationModels.WorkFlowResponse, error) {
@@ -33,32 +40,42 @@ func (ds *PDS_API_V1) ListDeployment() (*automationModels.WorkFlowResponse, erro
 }
 
 // CreateDeployment return newly created deployment model.
-func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.WorkFlowResponse, error) {
 	dsResponse := automationModels.WorkFlowResponse{}
 	depCreateRequest := deploymentV1.ApiDeploymentServiceCreateDeploymentRequest{}
 
-	_, dsClient, err := ds.getDeploymentClient()
+	ctx, dsClient, err := ds.getDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
 
-	err = copier.Copy(&DeploymentRequestBody, createDeploymentRequest.Deployment.V1Deployment)
+	err = copier.Copy(&DeploymentRequest, createDeploymentRequest.Create.V1Deployment)
 	if err != nil {
 		return nil, fmt.Errorf("Error while copying the deployment request\n")
 	}
 
 	//Debug Print
-	fmt.Println("DeploymentRequestBody Name ", *DeploymentRequestBody.Meta.Name)
-	fmt.Println("Storage Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].StorageOptions.Id)
-	fmt.Println("App Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
-	fmt.Println("Resource Template Id: ", *DeploymentRequestBody.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	fmt.Println("DeploymentRequestBody Name ", *DeploymentRequest.Meta.Name)
+	fmt.Println("Storage Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].StorageOptions.Id)
+	fmt.Println("App Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].ServiceConfigurations.Id)
+	fmt.Println("Resource Template Id: ", *DeploymentRequest.Config.DeploymentTopologies[0].ResourceSettings.Id)
+	fmt.Println("TargetClusterId: ", *DeploymentRequest.Config.References.TargetClusterId)
 
-	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(context.Background(), createDeploymentRequest.Deployment.NamespaceID)
+	DeploymentRequestBody := deploymentV1.DeploymentServiceCreateDeploymentBody{
+		ProjectId:  &createDeploymentRequest.Create.ProjectID,
+		Deployment: &DeploymentRequest,
+	}
+
+	//Debug Print
+	fmt.Println("DeploymentRequest Name ", *DeploymentRequestBody.Deployment.Meta.Name)
+
+	depCreateRequest = dsClient.DeploymentServiceCreateDeployment(ctx, createDeploymentRequest.Create.NamespaceID).DeploymentServiceCreateDeploymentBody(DeploymentRequestBody)
+
 	dsModel, res, err := dsClient.DeploymentServiceCreateDeploymentExecute(depCreateRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	copier.Copy(&dsResponse, dsModel)
+	copier.Copy(&dsResponse.PDSDeployment.V1Deployment, dsModel)
 	return &dsResponse, err
 }

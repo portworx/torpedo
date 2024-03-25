@@ -26,7 +26,7 @@ type AccountInterface interface {
 }
 
 type TenantInterface interface {
-	ListTenants() ([]WorkFlowResponse, error)
+	ListTenants() ([]PlatformTenant, error)
 }
 
 type TargetClusterInterface interface {
@@ -83,7 +83,7 @@ type IamRoleBindingsInterface interface {
 type ServiceAccountsInterface interface {
 	ListAllServiceAccounts(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
-	CreateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateServiceAccount(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
 	RegenerateServiceAccountSecret(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GenerateServiceAccountAccessToken(*WorkFlowRequest) (*WorkFlowResponse, error)
@@ -91,10 +91,11 @@ type ServiceAccountsInterface interface {
 }
 
 type TemplatesInterface interface {
-	ListTemplates(*WorkFlowRequest) ([]WorkFlowResponse, error)
-	CreateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateTemplates(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteTemplate(*WorkFlowRequest) error
+	ListTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	CreateTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	UpdateTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	GetTemplates(*PlatformTemplatesRequest) (*PlatformTemplatesResponse, error)
+	DeleteTemplate(*PlatformTemplatesRequest) error
 }
 
 type Onboard interface {
@@ -102,7 +103,7 @@ type Onboard interface {
 }
 
 type Project interface {
-	GetProjectList(int, int) (*PlaformProjectResponse, error)
+	GetProjectList(*PlaformProjectRequest) (*PlaformProjectResponse, error)
 	CreateProject(*PlaformProjectRequest, string) (*PlaformProjectResponse, error)
 	DeleteProject(*PlaformProjectRequest) error
 	GetProject(*PlaformProjectRequest) (*PlaformProjectResponse, error)

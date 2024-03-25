@@ -61,3 +61,53 @@ func (ds *PDS_API_V1) getDeploymentConfigClient() (context.Context, *deployments
 
 	return ctx, client, nil
 }
+
+func (ds *PDS_API_V1) getTemplateDefinitionClient() (context.Context, *catalogV1.TemplateDefinitionServiceAPIService, error) {
+	ctx, token, err := utils.GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
+	client := ds.CatalogV1APIClient.TemplateDefinitionServiceAPI
+
+	return ctx, client, nil
+}
+
+func (ds *PDS_API_V1) getCatalogClient() (context.Context, *catalogV1.DataServicesServiceAPIService, error) {
+	ctx, token, err := utils.GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
+
+	client := ds.CatalogV1APIClient.DataServicesServiceAPI
+	return ctx, client, nil
+}
+
+func (ds *PDS_API_V1) getDSVersionsClient() (context.Context, *catalogV1.DataServiceVersionServiceAPIService, error) {
+	ctx, token, err := utils.GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
+
+	client := ds.CatalogV1APIClient.DataServiceVersionServiceAPI
+	return ctx, client, nil
+}
+
+func (ds *PDS_API_V1) getDSImagesClient() (context.Context, *catalogV1.ImageServiceAPIService, error) {
+	ctx, token, err := utils.GetBearerToken()
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	ds.CatalogV1APIClient.GetConfig().DefaultHeader["px-account-id"] = ds.AccountID
+
+	client := ds.CatalogV1APIClient.ImageServiceAPI
+	return ctx, client, nil
+}

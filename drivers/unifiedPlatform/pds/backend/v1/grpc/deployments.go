@@ -55,11 +55,11 @@ func (deployment *PdsGrpc) GetDeployment(deploymentId string) (*WorkFlowResponse
 	return &depResponse, nil
 }
 
-func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) (*WorkFlowResponse, error) {
-	depResponse := WorkFlowResponse{}
+func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) error {
+	//depResponse := WorkFlowResponse{}
 	ctx, client, _, err := deployment.getDeploymentClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+		return fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
 	deleteRequest := &publicdeploymentapis.DeleteDeploymentRequest{
@@ -70,13 +70,13 @@ func (deployment *PdsGrpc) DeleteDeployment(deploymentId string) (*WorkFlowRespo
 	apiResponse, err := client.DeleteDeployment(ctx, deleteRequest)
 	log.Infof("api response [+%v]", apiResponse)
 	if err != nil {
-		return nil, fmt.Errorf("Error while deleting the deployment: %v\n", err)
+		return fmt.Errorf("Error while deleting the deployment: %v\n", err)
 	}
-	err = copier.Copy(&depResponse, apiResponse)
-	if err != nil {
-		return nil, fmt.Errorf("Error while copying the response:%v\n", err)
-	}
-	return &depResponse, nil
+	//err = copier.Copy(&depResponse, apiResponse)
+	//if err != nil {
+	//	return nil, fmt.Errorf("Error while copying the response:%v\n", err)
+	//}
+	return nil
 }
 
 func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {
@@ -106,12 +106,12 @@ func (deployment *PdsGrpc) ListDeployment() (*WorkFlowResponse, error) {
 	return &depResponse, nil
 }
 
-func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *PDSDeploymentRequest) (*WorkFlowResponse, error) {
 	depResponse := WorkFlowResponse{}
-	dep := createDeploymentRequest.Deployment.V1Deployment
+	dep := createDeploymentRequest.Create.V1Deployment
 
 	createRequest := &publicdeploymentapis.CreateDeploymentRequest{
-		NamespaceId: createDeploymentRequest.Deployment.NamespaceID,
+		NamespaceId: createDeploymentRequest.Create.NamespaceID,
 		Deployment: &publicdeploymentapis.Deployment{
 			Meta: nil,
 			Config: &publicdeploymentapis.Config{
@@ -122,7 +122,7 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 						Description: "",
 						Replicas:    3,
 						ResourceSettings: &deploymenttopology.Template{
-							Id:              *dep.Config.DeploymentTopologies[0].ResourceTemplate.Id,
+							Id:              *dep.Config.DeploymentTopologies[0].ResourceSettings.Id,
 							ResourceVersion: "",
 							Values:          nil,
 						},
@@ -138,8 +138,8 @@ func (deployment *PdsGrpc) CreateDeployment(createDeploymentRequest *WorkFlowReq
 	}
 
 	log.Debugf("Account ID: [%s]", deployment.AccountId)
-	log.Debugf("Namespace ID: [%s]", createDeploymentRequest.Deployment.NamespaceID)
-	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Deployment.V1Deployment.Config.DeploymentTopologies[0].ResourceTemplate.Id)
+	log.Debugf("Namespace ID: [%s]", createDeploymentRequest.Create.NamespaceID)
+	log.Debugf("workflowrequest ResourceTemplateId: [%s]", *createDeploymentRequest.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings.Id)
 
 	ctx = WithAccountIDMetaCtx(ctx, deployment.AccountId)
 

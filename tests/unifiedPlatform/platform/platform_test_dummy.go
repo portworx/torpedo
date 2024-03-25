@@ -11,85 +11,8 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
+	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
-
-//var _ = Describe("{TenantsCRUD}", func() {
-//	JustBeforeEach(func() {
-//		StartTorpedoTest("TenantsCRUD", "Create and Get the Tenant", pdsLabels, 0)
-//	})
-//
-//	It("Tenants", func() {
-//		steplog := "Tenants CRUD"
-//		Step(steplog, func() {
-//			log.InfoD(steplog)
-//			var tc platformLibs.TargetCluster
-//			var tenantId string
-//			tenantList, err := platformLibs.GetTenantListV1(accID)
-//			log.FailOnError(err, "error while getting tenant list")
-//			for _, tenant := range tenantList {
-//				log.Infof("Available tenant's %s under the account id %s", *tenant.Meta.Name, accID)
-//				tenantId = *tenant.Meta.Uid
-//				break
-//			}
-//			log.Infof("TenantID [%s]", tenantId)
-//			clusterId, err := tc.RegisterToControlPlane("1.0.0", tenantId)
-//			if err != nil {
-//				log.FailOnError(err, "Failed to register Target Cluster to Control plane")
-//			}
-//			log.Infof("Registered Cluster ID is: %v\n", clusterId)
-//		})
-//	})
-//
-//	JustAfterEach(func() {
-//		defer EndTorpedoTest()
-//	})
-//})
-
-//var _ = Describe("{WhoamI}", func() {
-//	steplog := "WhoamI"
-//	JustBeforeEach(func() {
-//		StartTorpedoTest("WhoAmI", "get actor id", nil, 0)
-//	})
-//
-//	Step(steplog, func() {
-//		log.InfoD(steplog)
-//		It("WhoAmI", func() {
-//			Step("create accounts", func() {
-//				whoAmIResp, err := platformLibs.WhoAmIV1()
-//				log.FailOnError(err, "error while creating account")
-//				log.Infof("Actor ID %s", whoAmIResp.GetId())
-//			})
-//		})
-//	})
-//
-//	JustAfterEach(func() {
-//		defer EndTorpedoTest()
-//	})
-//})
-
-var _ = Describe("{DeployDataServicesOnDemand}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("DeployDataService", "Deploy data services", nil, 0)
-	})
-
-	It("Deploy and Validate DataService", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := stworkflows.DeployDataService(ds)
-			log.FailOnError(err, "Error while deploying ds")
-		}
-	})
-
-	It("Update DataService", func() {
-		for _, ds := range NewPdsParams.DataServiceToTest {
-			_, err := stworkflows.UpdateDataService(ds)
-			log.FailOnError(err, "Error while updating ds")
-		}
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
 
 var _ = Describe("{BackupConfigCRUD}", func() {
 	JustBeforeEach(func() {
@@ -146,7 +69,7 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 				workflowbkpLoc stworkflows.WorkflowBackupLocation
 			)
 
-			tenantId, err := platformLibs.GetDefaultTenantId(accID)
+			tenantId, err := platformLibs.GetDefaultTenantId(AccID)
 			log.FailOnError(err, "error occured while fetching tenantID")
 
 			workflowCc.Platform.TenantId = tenantId
@@ -162,7 +85,7 @@ var _ = Describe("{CreateAndGeBackupLocation}", func() {
 
 			workflowbkpLoc.WfCloudCredentials = workflowCc
 
-			wfbkpLoc, err := workflowbkpLoc.CreateBackupLocation(bucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
+			wfbkpLoc, err := workflowbkpLoc.CreateBackupLocation(PDSBucketName, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating backup location")
 			log.Infof("wfBkpLoc id: [%s]", wfbkpLoc.BkpLocation.BkpLocationId)
 			log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
@@ -210,7 +133,7 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 
 	It("CreateCloudCredentials", func() {
 		Step("create and cloud credentials", func() {
-			tenantId, err := platformLibs.GetDefaultTenantId(accID)
+			tenantId, err := platformLibs.GetDefaultTenantId(AccID)
 			log.FailOnError(err, "error occured while fetching tenantID")
 			credResp, err := platformLibs.CreateCloudCredentials(tenantId, NewPdsParams.BackUpAndRestore.TargetLocation)
 			log.FailOnError(err, "error while creating cloud creds")
@@ -394,12 +317,12 @@ var _ = Describe("{TestRbacForPds}", func() {
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		NewPdsParams, err := ReadNewParams(pdsparams)
 		infraParams := NewPdsParams.InfraToTest
-		pdsLabels["clusterType"] = infraParams.ClusterType
+		PdsLabels["clusterType"] = infraParams.ClusterType
 		rbacParams := NewPdsParams.RbacParams
 		log.FailOnError(err, "Failed to read params from json file")
 
 		userName = "pdsUser-" + strconv.Itoa(rand.Int())
-		_, err = pdsRbac.CreateServiceAccount(accID, userName, rbacParams.RoleName, rbacParams.ResourceId)
+		_, err = pdsRbac.CreateServiceAccount(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId)
 		if err != nil {
 			log.Infof("Some error occurred. Error - [%s]", err.Error())
 		}

@@ -1,6 +1,7 @@
 package automationModels
 
 import (
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	"time"
 )
 
@@ -33,8 +34,26 @@ type Config struct {
 	DisplayName *string `copier:"must,nopanic"`
 }
 
+type V1Info struct {
+	References *V1Reference
+	// Image registry where the image is stored.
+	Registry *string
+	// Image registry namespace where the image is stored.
+	Namespace *string
+	// Tag associated with the image.
+	Tag *string
+	// Build version of the image.
+	Build *string
+	// Flag indicating if TLS is supported for a data service using this image.
+	TlsSupport *bool
+	// Capabilities associated with this image.
+	Capabilities *map[string]string
+	// Additional images associated with this data service image.
+	AdditionalImages *map[string]string
+}
+
 type V1Config1 struct {
-	References *Reference `copier:"must,nopanic"`
+	References Reference `copier:"must,nopanic"`
 	// Flag to enable TLS for the Data Service.
 	TlsEnabled *bool `copier:"must,nopanic"`
 	// A deployment topology contains a number of nodes that have various attributes as a collective group.
@@ -52,6 +71,13 @@ type V1Config3 struct {
 	ActorId      *string `json:"actorId,omitempty"`
 	ActorType    *string `json:"actorType,omitempty"`
 	AccessPolicy *V1AccessPolicy
+}
+
+type V1Config struct {
+	Kind            *string          `copier:"must,nopanic"`
+	SemanticVersion *string          `copier:"must,nopanic"`
+	RevisionUid     *string          `copier:"must,nopanic"`
+	TemplateValues  *structpb.Struct `copier:"must,nopanic"`
 }
 
 type V1Deployment struct {
@@ -130,6 +156,21 @@ type DestinationReferences struct {
 }
 
 type V1PhaseType string
+
+type Templatev1Status struct {
+	Phase *StatusPhase `copier:"must,nopanic"`
+}
+
+type Template struct {
+	Meta   *V1Meta           `copier:"must,nopanic"`
+	Config *V1Config         `copier:"must,nopanic"`
+	Status *Templatev1Status `copier:"must,nopanic"`
+}
+
+type ProtobufAny struct {
+	Type                 *string `copier:"must,nopanic"`
+	AdditionalProperties map[string]interface{}
+}
 
 type V1Metadata struct {
 	KubeServerVersion *string             `copier:"must,nopanic"`
