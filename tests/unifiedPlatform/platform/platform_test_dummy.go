@@ -322,7 +322,7 @@ var _ = Describe("{TestRbacForPds}", func() {
 		log.FailOnError(err, "Failed to read params from json file")
 
 		userName = "pdsUser-" + strconv.Itoa(rand.Int())
-		_, err = pdsRbac.CreateServiceAccount(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId)
+		_, err = pdsRbac.CreateServiceAccount(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId, WorkflowPlatform.TenantId)
 		if err != nil {
 			log.Infof("Some error occurred. Error - [%s]", err.Error())
 		}

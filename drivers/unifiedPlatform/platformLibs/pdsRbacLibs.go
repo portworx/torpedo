@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func CreateUser(saName, accId string) (*automationModels.WorkFlowResponse, error) {
+func CreateUser(saName, accId string) (*automationModels.PDSServiceAccountResponse, error) {
 	log.InfoD("Creating Service Account...")
 	tenantId, err := GetDefaultTenantId(accId)
 	if err != nil {
@@ -21,7 +21,7 @@ func CreateUser(saName, accId string) (*automationModels.WorkFlowResponse, error
 
 func AssignRoleBindingsToUser(saName, roleName, resourceId, accId string) (*automationModels.WorkFlowResponse, error) {
 	var (
-		userModel automationModels.PDSServiceAccount
+		userModel automationModels.PDSServiceAccountRequest
 		binding   automationModels.V1RoleBinding
 		roles     []automationModels.V1RoleBinding
 	)

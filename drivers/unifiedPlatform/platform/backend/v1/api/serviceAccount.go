@@ -76,9 +76,9 @@ func (sa *PLATFORM_API_V1) CreateServiceAccount(createSaReq *PDSServiceAccountRe
 			Name: createSaReq.Create.V1ServiceAccount.Meta.Name,
 		},
 	})
-	saModel, res, err := saClient.ServiceAccountServiceCreateServiceAccountExecute(saCreateRequest)
+	saModel, res, err := saCreateRequest.Execute()
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `ServiceAccountServiceCreateServiceAccount`: %v\n.Full HTTP response: %v", err, res)
 	}
 	log.Infof("API response - [%+v]", saModel)
 	err = utilities.CopyStruct(saModel, &saResponse.Create)

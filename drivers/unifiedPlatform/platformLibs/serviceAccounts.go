@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/drivers/utilities"
+	"github.com/portworx/torpedo/pkg/log"
 	serviceaccountv1 "github.com/pure-px/platform-api-go-client/platform/v1/serviceaccount"
 )
 
@@ -40,21 +41,21 @@ func GetServiceAccountForTenant(saId, tenantId string) (*automationModels.WorkFl
 }
 
 // CreateServiceAccountForRBAC creates a new service account for a given tenant
-func CreateServiceAccountForRBAC(saName, tenantId string) (*automationModels.WorkFlowResponse, error) {
-	saInputs := automationModels.WorkFlowRequest{
-		ServiceAccountRequest: automationModels.PDSServiceAccount{
-			Create: automationModels.CreateServiceAccounts{
-				V1ServiceAccount: automationModels.V1ServiceAccount{
-					Meta: automationModels.Meta{
-						Name: &saName,
-					},
+func CreateServiceAccountForRBAC(saName, tenantId string) (*automationModels.PDSServiceAccountResponse, error) {
+	log.Infof("SA Name - [%s]", saName)
+	log.Infof("Tenant Id - [%s]", tenantId)
+	saInputs := automationModels.PDSServiceAccountRequest{
+		Create: automationModels.CreateServiceAccounts{
+			V1ServiceAccount: automationModels.V1ServiceAccount{
+				Meta: automationModels.Meta{
+					Name: &saName,
 				},
-				TenantId: tenantId,
 			},
+			TenantId: tenantId,
 		},
 	}
-	saInputs.ServiceAccountRequest.Create.V1ServiceAccount.Meta.Name = &saName
-	saInputs.ServiceAccountRequest.Create.TenantId = tenantId
+	saInputs.Create.V1ServiceAccount.Meta.Name = &saName
+	saInputs.Create.TenantId = tenantId
 	saModel, err := v2Components.Platform.CreateServiceAccount(&saInputs)
 	if err != nil {
 		return nil, err

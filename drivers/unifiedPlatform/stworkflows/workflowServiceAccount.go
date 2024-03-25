@@ -17,8 +17,8 @@ type SeviceAccount struct {
 	RoleName string
 }
 
-func (svcUser *WorkflowServiceAccount) CreateServiceAccount(accId, saName, roleName, resourceId string) (*WorkflowServiceAccount, error) {
-	_, err := platformLibs.CreateServiceAccountForRBAC(saName, accId)
+func (svcUser *WorkflowServiceAccount) CreateServiceAccount(accId, saName, roleName, resourceId string, tenantId string) (*WorkflowServiceAccount, error) {
+	_, err := platformLibs.CreateServiceAccountForRBAC(saName, tenantId)
 	if err != nil {
 		return nil, err
 	}
