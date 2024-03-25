@@ -967,9 +967,10 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 				verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 			})
 		})
-} else {
-	fmt.Sprintf("Function Skipped due to:%s", err)
-}
+	} else {
+		fmt.Sprintf("Function Skipped due to:%s", err)
+	}
+})
 
 var _ = Describe("{StorageFullPoolExpansion}", func() {
 	var (
