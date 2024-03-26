@@ -34,9 +34,9 @@ type BackupConfig interface {
 }
 
 type Backup interface {
-	DeleteBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GetBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
-	ListBackup(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	DeleteBackup(*PDSBackupRequest) error
+	GetBackup(*PDSBackupRequest) (*PDSBackupResponse, error)
+	ListBackup(*PDSBackupRequest) (*PDSBackupResponse, error)
 }
 
 type Catalog interface {

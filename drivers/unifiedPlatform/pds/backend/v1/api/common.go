@@ -36,6 +36,20 @@ func (backupConf *PDS_API_V1) getBackupConfigClient() (context.Context, *backupC
 	return ctx, client, nil
 }
 
+// getBackupClient updates the header with bearer token and returns the new client
+func (backupConf *PDS_API_V1) getBackupClient() (context.Context, *backupV1.BackupServiceAPIService, error) {
+	ctx, token, err := utils.GetBearerToken()
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
+	}
+	backupConf.BackupV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	backupConf.BackupV1APIClient.GetConfig().DefaultHeader["px-account-id"] = backupConf.AccountID
+	client := backupConf.BackupV1APIClient.BackupServiceAPI
+
+	return ctx, client, nil
+}
+
 // GetClient updates the header with bearer token and returns the new client
 func (ds *PDS_API_V1) getDeploymentClient() (context.Context, *deploymentV1.DeploymentServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
