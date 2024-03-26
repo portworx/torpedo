@@ -77,7 +77,6 @@ import (
 	netv1 "k8s.io/api/networking/v1"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	storageapi "k8s.io/api/storage/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -1748,7 +1747,7 @@ func GetUpdatedSpec(spec interface{}) (interface{}, error) {
 			return nil, err
 		}
 		return obj, nil
-	} else if specObj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+	} else if specObj, ok := spec.(*policyv1.PodDisruptionBudget); ok {
 		obj, err := k8sPolicy.GetPodDisruptionBudget(specObj.Name, specObj.Namespace)
 		if err != nil {
 			return nil, err
@@ -1921,11 +1920,13 @@ func (k *K8s) createStorageObject(spec interface{}, ns *corev1.Namespace, app *s
 	if obj, ok := spec.(*storageapi.StorageClass); ok {
 		obj.Namespace = ns.Name
 
-		if volume.GetStorageProvisioner() != PortworxStrict {
-			if app.IsCSI {
-				obj.Provisioner = CsiProvisioner
-			} else {
-				obj.Provisioner = volume.GetStorageProvisioner()
+		if options.StorageProvisioner == "" {
+			if volume.GetStorageProvisioner() != PortworxStrict {
+				if app.IsCSI {
+					obj.Provisioner = CsiProvisioner
+				} else {
+					obj.Provisioner = volume.GetStorageProvisioner()
+				}
 			}
 		}
 		log.Infof("Setting provisioner of %v to %v", obj.Name, obj.Provisioner)
@@ -4327,8 +4328,41 @@ func (k *K8s) GetVolumes(ctx *scheduler.Context) ([]*volume.Volume, error) {
 				// check if the pvc has our VM as the owner
 				want := false
 				for _, ownerRef := range pvc.OwnerReferences {
-					if ownerRef.Kind == vm.Kind && ownerRef.Name == vm.Name {
-						want = true
+					if ownerRef.Kind == vm.Kind {
+						if ownerRef.Name == vm.Name {
+							want = true
+						}
+					}
+					// If volume is still not found, try the datavolume for the virtual machine
+					if !want && ownerRef.Kind == "DataVolume" {
+						kvClient := k8sKubevirt.GetKubevirtClient()
+						dataVol, err := kvClient.CdiClient().CdiV1beta1().DataVolumes(vm.Namespace).Get(context.TODO(), ownerRef.Name, metav1.GetOptions{})
+						if err != nil && !k8serrors.IsNotFound(err) {
+							return nil, fmt.Errorf("error getting datavolume for vm: %s in namespace: %s. error: %v", vm.Name, vm.Namespace, err)
+						} else {
+							if dataVol != nil {
+								for _, ownerRef := range dataVol.OwnerReferences {
+									if ownerRef.Name == vm.Name {
+										want = true
+									}
+								}
+							}
+						}
+					}
+				}
+				// If volume is still not found, try the virt-launcher pod as well
+				if !want {
+					virtLauncherPodsList, err := k8sCore.GetPods(vm.Namespace, nil)
+					if err != nil {
+						return nil, fmt.Errorf("failed to get pods in namespace: %s: %w", vm.Namespace, err)
+					}
+					for _, virtLauncher := range virtLauncherPodsList.Items {
+						for _, ownerRef := range virtLauncher.OwnerReferences {
+							if ownerRef.Kind == "VirtualMachineInstance" && ownerRef.Name == vm.Name {
+								// since VMI name is same as VM name
+								want = true
+							}
+						}
 					}
 				}
 				if !want {
@@ -6279,7 +6313,7 @@ func (k *K8s) destroyPodDisruptionBudgetObjects(
 	spec interface{},
 	app *spec.AppSpec,
 ) error {
-	if obj, ok := spec.(*policyv1beta1.PodDisruptionBudget); ok {
+	if obj, ok := spec.(*policyv1.PodDisruptionBudget); ok {
 		err := k8sPolicy.DeletePodDisruptionBudget(obj.Name, obj.Namespace)
 		if err != nil {
 			return &scheduler.ErrFailedToDestroyApp{
