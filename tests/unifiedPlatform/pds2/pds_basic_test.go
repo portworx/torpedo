@@ -89,6 +89,7 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	//TODO: Steps to delete Backup location, Target and Bucket
 	log.InfoD("Test Finished")
 })
 

@@ -10,12 +10,13 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace                 WorkflowNamespace
-	NamespaceName             string
-	DataServiceDeployment     map[string]string
-	SkipValidatation          map[string]bool
-	SourceDeploymentMd5Hash   map[string]string
-	RestoredDeploymentMd5Hash map[string]string
+	Namespace                     WorkflowNamespace
+	NamespaceName                 string
+	DataServiceDeployment         map[string]string
+	RestoredDataServiceDeployment map[string]string
+	SkipValidatation              map[string]bool
+	SourceDeploymentMd5Hash       map[string]string
+	RestoredDeploymentMd5Hash     map[string]string
 }
 
 const (
@@ -46,7 +47,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
-			log.Infof("Skipping Validation")
+			log.Infof("Skipping DataService Deployment  Validation")
 		}
 	} else {
 		// Validate the sts object and health of the pds deployment
