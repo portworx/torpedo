@@ -595,6 +595,9 @@ func InitInstance() {
 	err = updatePxClusterOpts()
 	log.Errorf("%v", err)
 }
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
 
 func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
@@ -5651,11 +5654,15 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
+				log.Error(err)
+				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
 			if currRep == 3 {
 				err = fmt.Errorf("cannot perform repl incease as current repl factor is %d", currRep)
+				log.Warn(err)
+				UpdateOutcome(event, err)
 				return
 			}
 

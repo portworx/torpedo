@@ -1093,6 +1093,8 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						}
 					}
 				}
+				log.InfoD("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+				PrintInspectVolume(v.ID)
 
 				if err == nil {
 					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
@@ -1224,6 +1226,8 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							if err != nil {
 								log.Errorf("There is a error setting repl [%v]", err.Error())
 							}
+							log.InfoD("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot peform HA increase as new repl factor value is greater than max allowed %v", MaxRF)
@@ -1266,6 +1270,7 @@ func TriggerHAIncrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 					UpdateOutcome(event, err)
 				}
 			})
+
 		}
 		updateMetrics(*event)
 	})
@@ -1412,7 +1417,8 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 							log.Errorf("There is a error setting repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
-
+						log.InfoD("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						err = volumeResize(v)
 						UpdateOutcome(event, err)
 
@@ -1539,6 +1545,8 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							if err != nil {
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
+							log.InfoD("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF)
@@ -2778,6 +2786,8 @@ func TriggerVolumeClone(contexts *[]*scheduler.Context, recordChan *chan *EventR
 					log.InfoD(stepLog)
 					log.Infof("Calling CloneVolume()...")
 					clonedVolID, err = Inst().V.CloneVolume(vol.ID)
+					log.InfoD("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					UpdateOutcome(event, err)
 				})
 				stepLog = fmt.Sprintf("Validate successful clone %s", clonedVolID)
@@ -2881,6 +2891,8 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 							params["auth-token"], err = Inst().S.GetTokenFromConfigMap(Inst().ConfigMap)
 							UpdateOutcome(event, err)
 						}
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize ", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						err := Inst().V.ValidateUpdateVolume(v, params)
 						UpdateOutcome(event, err)
 					}
@@ -6124,6 +6136,8 @@ func getIOProfileOnVolumes(contexts *[]*scheduler.Context) (map[string]VolumeIOP
 			}
 			volumeInfo = VolumeIOProfile{v, appVol.Spec.IoProfile}
 			pvcProfileMap[v.ID] = volumeInfo
+			log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s ", v.Name, v.ID, v.Namespace)
+			PrintInspectVolume(v.ID)
 		}
 	}
 	return pvcProfileMap, nil
@@ -6246,6 +6260,8 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					log.InfoD("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
 				}
 				log.InfoD("Completed update on %v", v.ID)
+				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after IO update ", v.Name, v.ID, v.Namespace)
+				PrintInspectVolume(v.ID)
 			}
 		}
 		// setIoPriority if IO priority is set to High then next iteration will be run with low.
@@ -9569,6 +9585,16 @@ func TriggerAggrVolDepReplResizeOps(contexts *[]*scheduler.Context, recordChan *
 				UpdateOutcome(event, fmt.Errorf("error validating volume status"))
 			}
 			dash.VerifyFatal(status == true, true, "is volume status up ?")
+		}
+		for _, eachContext := range *contexts {
+			vols, err := Inst().S.GetVolumes(eachContext)
+			if err != nil {
+				log.InfoD("Failed to get app %s's volumes", eachContext.App.Key)
+			}
+			for _, vol := range vols {
+				log.InfoD("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", vol.Name, vol.ID, vol.Namespace)
+				PrintInspectVolume(vol.ID)
+			}
 		}
 		updateMetrics(*event)
 	})
