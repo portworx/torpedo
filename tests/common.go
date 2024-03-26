@@ -703,8 +703,16 @@ func IsPoolAddDiskSupported() (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		log.InfoD("current driver version", driverVersion)
-		currentPxVersionOnCluster, err := semver.NewVersion(driverVersion)
+		log.InfoD("current driver version %s", driverVersion)
+		parts := strings.Split(driverVersion, ".")
+		if len(parts) >= 3 {
+			trimmedVersion := strings.Join(parts[:3], ".")
+			fmt.Println(trimmedVersion)
+		} else {
+			fmt.Println("Invalid version string")
+		}
+		log.InfoD("trimmed version %s", trimmedVersion)
+		currentPxVersionOnCluster, err := semver.NewVersion(trimmedVersion)
 		if err != nil {
 			log.InfoD("[semver.NewVersion] error is", err)
 			return false, err
