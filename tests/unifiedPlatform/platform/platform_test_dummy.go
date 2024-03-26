@@ -14,49 +14,6 @@ import (
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 )
 
-var _ = Describe("{BackupConfigCRUD}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("BackupConfigCRUD", "Runs CRUD on backup config", nil, 0)
-	})
-
-	It("Create Backup Config", func() {
-		Step("Create Backup Config", func() {
-			_, err := dslibs.CreateBackupConfig(dslibs.WorkflowBackupInput{
-				ProjectId:    "someprojectId",
-				DeploymentID: "SomedeploymentId",
-			})
-			log.Infof("Error while creating backup config - %s", err.Error())
-		})
-
-		Step("Update Backup Config", func() {
-			_, err := dslibs.UpdateBackupConfig(dslibs.WorkflowBackupInput{
-				ProjectId:    "someprojectId2",
-				DeploymentID: "SomedeploymentId2",
-			})
-			log.Infof("Error while updating backup config - %s", err.Error())
-		})
-
-		Step("Get Backup Config", func() {
-			_, err := dslibs.GetBackupConfig(dslibs.WorkflowBackupInput{})
-			log.Infof("Error while fetching backup config - %s", err.Error())
-		})
-
-		Step("Delete Backup Config", func() {
-			_, err := dslibs.DeleteBackupConfig(dslibs.WorkflowBackupInput{})
-			log.Infof("Error while deleting backup config - %s", err.Error())
-		})
-
-		Step("List Backup Config", func() {
-			_, err := dslibs.ListBackupConfig(dslibs.WorkflowBackupInput{})
-			log.Infof("Error while listing backup config - %s", err.Error())
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
 var _ = Describe("{CreateAndGeBackupLocation}", func() {
 	JustBeforeEach(func() {
 		StartTorpedoTest("CreateAndGeBackupLocation", "create backup locations", nil, 0)
