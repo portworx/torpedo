@@ -9,7 +9,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -106,6 +105,7 @@ func GetDeploymentResources(deployment map[string]string, dataService, dataServi
 
 }
 
+// ValidateDataServiceDeployment takes the deployment map(name and id), namespace and returns error
 func ValidateDataServiceDeployment(deployment map[string]string, namespace string) error {
 	var (
 		ss *v1.StatefulSet
@@ -158,30 +158,30 @@ func ValidateDataServiceDeployment(deployment map[string]string, namespace strin
 	return err
 }
 
-func ValidateDeploymentResources(resourceTemp ResourceSettingTemplate, storageOp StorageOptions, config StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
-	log.InfoD("filesystem used %v ", config.Parameters.Fs)
-	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
-	log.InfoD("cpu requests used %v ", config.Resources.Requests.CPU)
-	log.InfoD("memory requests used %v ", config.Resources.Requests.Memory)
-	log.InfoD("storage requests used %v ", config.Resources.Requests.EphemeralStorage)
-	log.InfoD("No of nodes requested %v ", config.Replicas)
-	log.InfoD("volume group %v ", storageOp.VolumeGroup)
-
-	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Resources.Requests.CPU, "Validating CPU Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Resources.Requests.Memory, "Validating Memory Request")
-	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Resources.Requests.EphemeralStorage, "Validating storage")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Resources.Limits.CPU, "Validating CPU Limits")
-	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Resources.Limits.Memory, "Validating Memory Limits")
-	repl, err := strconv.Atoi(config.Parameters.Repl)
-	log.FailOnError(err, "failed on atoi method")
-	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
-	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
-	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
-
-	for version, build := range dataServiceVersionBuildMap {
-		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
-	}
-}
+//func ValidateDeploymentResources(resourceTemp ResourceSettingTemplate, storageOp StorageOptions, config StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
+//	log.InfoD("filesystem used %v ", config.Parameters.Fs)
+//	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
+//	log.InfoD("cpu requests used %v ", config.Resources.Requests.CPU)
+//	log.InfoD("memory requests used %v ", config.Resources.Requests.Memory)
+//	log.InfoD("storage requests used %v ", config.Resources.Requests.EphemeralStorage)
+//	log.InfoD("No of nodes requested %v ", config.Replicas)
+//	log.InfoD("volume group %v ", storageOp.VolumeGroup)
+//
+//	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Resources.Requests.CPU, "Validating CPU Request")
+//	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Resources.Requests.Memory, "Validating Memory Request")
+//	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Resources.Requests.EphemeralStorage, "Validating storage")
+//	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Resources.Limits.CPU, "Validating CPU Limits")
+//	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Resources.Limits.Memory, "Validating Memory Limits")
+//	repl, err := strconv.Atoi(config.Parameters.Repl)
+//	log.FailOnError(err, "failed on atoi method")
+//	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
+//	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
+//	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
+//
+//	for version, build := range dataServiceVersionBuildMap {
+//		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
+//	}
+//}
 
 // ValidateDataMd5Hash validates the hash of the data service deployments
 func ValidateDataMd5Hash(deploymentHash, restoredDepHash map[string]string) bool {

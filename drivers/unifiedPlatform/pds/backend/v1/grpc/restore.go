@@ -99,10 +99,10 @@ func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *automationModels
 }
 
 // GetRestore will fetch restore for a given deployment
-func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.Restore, error) {
 	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
 
-	response := &automationModels.WorkFlowResponse{}
+	response := &automationModels.Restore{}
 
 	getRequest := &publicRestoreapis.GetRestoreRequest{}
 	// log.Infof("Restore Get - [%v]", getRequest)

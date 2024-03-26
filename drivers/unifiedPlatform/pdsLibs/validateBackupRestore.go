@@ -1,0 +1,130 @@
+package pdslibs
+
+import (
+	"fmt"
+	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
+	"github.com/portworx/torpedo/pkg/log"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"reflect"
+	"strings"
+)
+
+// ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
+func ValidateAdhocBackup(backup WorkflowBackup) error {
+	var bkpJobs []automationModels.PDSBackupResponse
+
+	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
+		bkpJobs, err = ListBackup(backup)
+		if err != nil {
+			return false, err
+		}
+		log.Infof("[Backup job: %v] Status: %v", *bkpJobs[0].Meta.Name, *bkpJobs[0].Status.Phase)
+		if *bkpJobs[0].Status.Phase == "Succeeded" {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	if waitErr != nil {
+		return fmt.Errorf("error occured while polling the status of backup job object. Err:%v", waitErr)
+	}
+
+	log.Infof("Created adhoc backup successfully for %v,"+
+		" backup job: %v, backup job creation time: %v, backup job completion time: %v",
+		backup.DeploymentID, *bkpJobs[0].Meta.Name, bkpJobs[0].Status.StartTime, bkpJobs[0].Status.CompletionTime)
+	return nil
+}
+
+// ValidateRestoreDeployment takes the restoreId and namespace as param and entrypoint to validate the restored deployments
+func ValidateRestoreDeployment(restoreId, namespace string) error {
+	restore, err := ValidateRestoreStatus(restoreId)
+	if err != nil {
+		return err
+	}
+
+	newDeployment := make(map[string]string)
+	newDeployment[*restore.Meta.Name] = restore.Config.DestinationReferences.DeploymentId
+
+	err = ValidateDataServiceDeployment(newDeployment, namespace)
+	if err != nil {
+		return fmt.Errorf("error while validating restored deployment readiness")
+	}
+
+	sourceDeployment, err := v2Components.PDS.GetDeployment(restore.Config.SourceReferences.DeploymentId)
+	if err != nil {
+		return fmt.Errorf("error while fetching source deployment object")
+	}
+	destinationDeployment, err := v2Components.PDS.GetDeployment(restore.Config.DestinationReferences.DeploymentId)
+	if err != nil {
+		return fmt.Errorf("error while fetching destination deployment object")
+	}
+
+	err = ValidateRestore(sourceDeployment, destinationDeployment)
+	if err != nil {
+		return fmt.Errorf("error while validation data service entities(i.e App config, resource etc). Err: %v", err)
+	}
+
+	return nil
+}
+
+func ValidateRestore(sourceDeployment, destinationDeployment *automationModels.WorkFlowResponse) error {
+
+	//TODO : This validation needs to be revisited once we have the working pds templates api
+
+	// Validate the Resource configuration
+	sourceDep := sourceDeployment.PDSDeployment.V1Deployment.Config.DeploymentTopologies[0]
+	destDep := destinationDeployment.PDSDeployment.V1Deployment.Config.DeploymentTopologies[0]
+
+	sourceResourceSettings := sourceDep.ResourceSettings
+	destResourceSettings := destDep.ResourceSettings
+	log.Debugf("source resource settings - [%v]", sourceResourceSettings.Id)
+	if !reflect.DeepEqual(sourceResourceSettings, destResourceSettings) {
+		return fmt.Errorf("restored resource configuration are not same as backed up resource config")
+	}
+
+	// Validate the StorageOption configuration
+	sourceStorageOption := sourceDep.StorageOptions
+	destStorageOption := destDep.StorageOptions
+	if !reflect.DeepEqual(sourceStorageOption, destStorageOption) {
+		return fmt.Errorf("restored storage options configuration are not same as backed up resource storage options config")
+	}
+
+	// Validate the Application configuration
+	sourceAppConfig := sourceDep.ServiceConfigurations
+	destAppConfig := destDep.ServiceConfigurations
+	if !reflect.DeepEqual(sourceAppConfig, destAppConfig) {
+		return fmt.Errorf("restored application configuration are not same as backed up application config")
+	}
+
+	// Validate the replicas
+	sourceReplicas := sourceDep.Replicas
+	destReplicas := destDep.Replicas
+	if !reflect.DeepEqual(sourceReplicas, destReplicas) {
+		return fmt.Errorf("restored replicas are not same as backed up resource config")
+	}
+
+	return nil
+}
+
+func ValidateRestoreStatus(restoreId string) (*automationModels.Restore, error) {
+	var wfRestore WorkflowRestore
+	var restore *automationModels.Restore
+
+	err := wait.Poll(restoreTimeInterval, timeOut, func() (bool, error) {
+		restore, err = wfRestore.GetRestore(restoreId)
+		state := string(*restore.Status.Phase)
+		if err != nil {
+			log.Errorf("failed during fetching the restore object, %v", err)
+			return false, err
+		}
+		log.Infof("Restore status -  %v", state)
+		if strings.ToLower(state) != strings.ToLower("Successful") {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("Error while restoring the deployment: %v\n", err)
+	}
+	return restore, nil
+}

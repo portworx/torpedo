@@ -60,11 +60,11 @@ func (restore WorkflowRestore) DeleteRestore() (*automationModels.WorkFlowRespon
 }
 
 // GetBackupConfig fetches backup config for the deployment
-func (restore WorkflowRestore) GetRestore() (*automationModels.WorkFlowResponse, error) {
+func (restore WorkflowRestore) GetRestore(restoreId string) (*automationModels.Restore, error) {
 
 	getRestoreRequest := automationModels.WorkFlowRequest{}
 
-	getRestoreRequest.Restore.Get.Id = "SomeRestoreID"
+	getRestoreRequest.Restore.Get.Id = restoreId
 
 	restoreResponse, err := v2Components.PDS.GetRestore(&getRestoreRequest)
 	if err != nil {

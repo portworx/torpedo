@@ -15,6 +15,20 @@ var (
 
 func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
 	dsResponse := automationModels.WorkFlowResponse{}
+	ctx, dsClient, err := ds.getDeploymentClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
+
+	dsModel, res, err := dsClient.DeploymentServiceGetDeployment(ctx, deploymentId).Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	err = copier.Copy(&dsResponse.PDSDeployment.V1Deployment, dsModel)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying create deployment response: %v\n", err)
+	}
 
 	return &dsResponse, nil
 }
@@ -76,6 +90,9 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	copier.Copy(&dsResponse.PDSDeployment.V1Deployment, dsModel)
+	err = copier.Copy(&dsResponse.PDSDeployment.V1Deployment, dsModel)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying create deployment response: %v\n", err)
+	}
 	return &dsResponse, err
 }

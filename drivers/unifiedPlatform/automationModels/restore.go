@@ -1,5 +1,7 @@
 package automationModels
 
+import "time"
+
 type PDSRestore struct {
 	Create   PDSCreateRestore
 	ReCreate PDSReCreateRestore
@@ -21,9 +23,17 @@ type PDSCreateRestore struct {
 }
 
 type Restore struct {
-	Meta   *Meta   `copier:"must,nopanic"`
-	Config *Config `copier:"must,nopanic"`
-	Status *Status `copier:"must,nopanic"`
+	Meta   *Meta            `copier:"must,nopanic"`
+	Config *RestoreConfig   `copier:"must,nopanic"`
+	Status *Restorev1Status `copier:"must,nopanic"`
+}
+
+// V1Config Desired configuration of the restore.
+type RestoreConfig struct {
+	SourceReferences      *SourceReferences      `copier:"must,nopanic"`
+	DestinationReferences *DestinationReferences `copier:"must,nopanic"`
+	// K8s resource name for restore, built from [\"restore-\" + name + short-id].
+	CustomResourceName *string `copier:"must,nopanic"`
 }
 
 type PDSReCreateRestore struct {
@@ -44,4 +54,16 @@ type PDSDeleteRestore struct {
 type PDSListRestores struct {
 	Sort       *Sort                       `copier:"must,nopanic"`
 	Pagination *PageBasedPaginationRequest `copier:"must,nopanic"`
+}
+
+// Restorev1Status Status of the restore.
+type Restorev1Status struct {
+	//  Time when restore was started.
+	StartedAt *time.Time `copier:"must,nopanic"`
+	//  Time when restore was completed.
+	CompletedAt *time.Time   `copier:"must,nopanic"`
+	ErrorCode   *V1ErrorCode `copier:"must,nopanic"`
+	// Error message is description of the error in restore.
+	ErrorMessage *string  `copier:"must,nopanic"`
+	Phase        *V1Phase `copier:"must,nopanic"`
 }

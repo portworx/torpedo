@@ -8,6 +8,9 @@ import (
 type WorkflowBackup struct {
 	ProjectId        string
 	DeploymentID     string
+	NamespaceId      string
+	TargetClusterId  string
+	BackupConfigId   string
 	BackupConfigType *pdsv2.ConfigBackupType
 	BackupLevel      *pdsv2.ConfigBackupLevel
 	ReclaimPolicy    *pdsv2.ConfigReclaimPolicyType
@@ -42,7 +45,7 @@ func GetBackup(backup WorkflowBackup) (*automationModels.WorkFlowResponse, error
 }
 
 // ListBackup lists backup config for the deployment
-func ListBackup(backup WorkflowBackup) ([]automationModels.WorkFlowResponse, error) {
+func ListBackup(backup WorkflowBackup) ([]automationModels.PDSBackupResponse, error) {
 
 	listBackup := automationModels.WorkFlowRequest{}
 
@@ -50,6 +53,11 @@ func ListBackup(backup WorkflowBackup) ([]automationModels.WorkFlowResponse, err
 		SortBy:    automationModels.SortBy_Field(int32(25)),
 		SortOrder: automationModels.SortOrder_Value(int32(32)),
 	}
+
+	listBackup.Backup.List.BackupConfigId = backup.BackupConfigId
+	listBackup.Backup.List.NamespaceId = backup.NamespaceId
+	listBackup.Backup.List.TargetClusterId = backup.TargetClusterId
+	listBackup.Backup.List.DeploymentId = backup.DeploymentID
 
 	backupResponse, err := v2Components.PDS.ListBackup(&listBackup)
 	if err != nil {

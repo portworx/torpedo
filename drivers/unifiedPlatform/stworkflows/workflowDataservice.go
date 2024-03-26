@@ -6,6 +6,7 @@ import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"strconv"
 )
 
 type WorkflowDataService struct {
@@ -32,12 +33,12 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
-	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
-	if err != nil {
-		return nil, err
-	}
+	//imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, imageId)
+	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, "imageId")
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
 		var dataServiceVersionBuildMap = make(map[string][]string)
-		dslibs.ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	}
 
 	return deployment, nil
@@ -105,7 +106,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
 		var dataServiceVersionBuildMap = make(map[string][]string)
-		dslibs.ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	}
 	return deployment, nil
 }
@@ -194,4 +195,29 @@ func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
 
 	return deploymentName, deploymentId
 
+}
+
+func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOptions, config dslibs.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
+	log.InfoD("filesystem used %v ", config.Parameters.Fs)
+	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
+	log.InfoD("cpu requests used %v ", config.Resources.Requests.CPU)
+	log.InfoD("memory requests used %v ", config.Resources.Requests.Memory)
+	log.InfoD("storage requests used %v ", config.Resources.Requests.EphemeralStorage)
+	log.InfoD("No of nodes requested %v ", config.Replicas)
+	log.InfoD("volume group %v ", storageOp.VolumeGroup)
+
+	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Resources.Requests.CPU, "Validating CPU Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Resources.Requests.Memory, "Validating Memory Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Resources.Requests.EphemeralStorage, "Validating storage")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Resources.Limits.CPU, "Validating CPU Limits")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Resources.Limits.Memory, "Validating Memory Limits")
+	repl, err := strconv.Atoi(config.Parameters.Repl)
+	log.FailOnError(err, "failed on atoi method")
+	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
+	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
+	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
+
+	for version, build := range dataServiceVersionBuildMap {
+		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
+	}
 }

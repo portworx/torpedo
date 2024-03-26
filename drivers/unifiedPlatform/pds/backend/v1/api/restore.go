@@ -1,8 +1,11 @@
 package api
 
 import (
+	"fmt"
+	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	"github.com/portworx/torpedo/pkg/log"
+	status "net/http"
 )
 
 // CreateRestore will create restore for a given backup
@@ -18,9 +21,24 @@ func (restore *PDS_API_V1) ReCreateRestore(recretaeRestoreRequest *automationMod
 }
 
 // GetRestore will fetch restore for a given deployment
-func (restore *PDS_API_V1) GetRestore(getRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
-	log.Warnf("GetRestore is not implemented for API")
-	return &automationModels.WorkFlowResponse{}, nil
+func (restore *PDS_API_V1) GetRestore(getRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.Restore, error) {
+	restoreResponse := automationModels.Restore{}
+	ctx, restoreClient, err := restore.getRestoreClient()
+	if err != nil {
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
+	}
+
+	restrModel, res, err := restoreClient.RestoreServiceGetRestore(ctx, getRestoreRequest.Restore.Get.Id).Execute()
+	if err != nil || res.StatusCode != status.StatusOK {
+		return nil, fmt.Errorf("Error when calling `RestoreServiceGetRestore`: %v\n.Full HTTP response: %v", err, res)
+	}
+
+	err = copier.Copy(restoreResponse, restrModel)
+	if err != nil {
+		return nil, fmt.Errorf("Error occured while copying the restore response: %v\n", err)
+	}
+
+	return &restoreResponse, nil
 }
 
 // DeleteRestore will delete restore for a given deployment
