@@ -20,6 +20,8 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, data
 		return nil, err
 	}
 
+	// TODO: Wait for backup to complete is to be implemented
+
 	backupConfig.Backups[name] = createBackup.Create
 
 	return createBackup, nil

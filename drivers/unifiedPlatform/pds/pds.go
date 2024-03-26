@@ -46,11 +46,11 @@ type Catalog interface {
 }
 
 type RestoreInterface interface {
-	CreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	ReCreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GetRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	ListRestore(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	CreateRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
+	ReCreateRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
+	GetRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
+	DeleteRestore(*PDSRestoreRequest) error
+	ListRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
 }
 
 type TemplateDefinitionsInterface interface {

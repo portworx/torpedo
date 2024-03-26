@@ -1,6 +1,6 @@
 package automationModels
 
-type PDSRestore struct {
+type PDSRestoreRequest struct {
 	Create   PDSCreateRestore
 	ReCreate PDSReCreateRestore
 	Get      PDSGetRestore
@@ -8,10 +8,30 @@ type PDSRestore struct {
 	List     PDSListRestores
 }
 
+type PDSRestoreResponse struct {
+	Create   PDSRestore
+	ReCreate PDSRestore
+	Get      PDSRestore
+	Delete   PDSRestore
+	List     PDSListRestoreResponse
+}
+
+type PDSListRestores struct {
+	AccountId            string
+	TenantId             string
+	ProjectId            string
+	DeploymentId         string
+	BackupId             string
+	SortSortBy           string
+	SortSortOrder        string
+	PaginationPageNumber string
+	PaginationPageSize   string
+}
+
 type PDSCreateRestore struct {
-	NamespaceId string   `copier:"must,nopanic"`
-	ProjectId   string   `copier:"must,nopanic"`
-	Restore     *Restore `copier:"must,nopanic"`
+	NamespaceId string      `copier:"must,nopanic"`
+	ProjectId   string      `copier:"must,nopanic"`
+	Restore     *PDSRestore `copier:"must,nopanic"`
 	// SourceReferences for the restore.
 	SourceReferences *SourceReferences `copier:"must,nopanic"`
 	// Destination references for the restore.
@@ -20,7 +40,11 @@ type PDSCreateRestore struct {
 	CustomResourceName string `copier:"must,nopanic"`
 }
 
-type Restore struct {
+type PDSListRestoreResponse struct {
+	Restores []PDSRestore
+}
+
+type PDSRestore struct {
 	Meta   *Meta   `copier:"must,nopanic"`
 	Config *Config `copier:"must,nopanic"`
 	Status *Status `copier:"must,nopanic"`
@@ -31,6 +55,7 @@ type PDSReCreateRestore struct {
 	TargetClusterId string `copier:"must,nopanic"`
 	Name            string `copier:"must,nopanic"`
 	NamespaceId     string `copier:"must,nopanic"`
+	ProjectId       string `copier:"must,nopanic"`
 }
 
 type PDSGetRestore struct {
@@ -39,9 +64,4 @@ type PDSGetRestore struct {
 
 type PDSDeleteRestore struct {
 	Id string `copier:"must,nopanic"`
-}
-
-type PDSListRestores struct {
-	Sort       *Sort                       `copier:"must,nopanic"`
-	Pagination *PageBasedPaginationRequest `copier:"must,nopanic"`
 }
