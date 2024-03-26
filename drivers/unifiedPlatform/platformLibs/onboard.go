@@ -5,10 +5,9 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 )
 
-func OnboardAccount(name string, displayName string, userEmail string) (*automationModels.WorkFlowResponse, error) {
+func OnboardAccount(name string, displayName string, userEmail string) (*automationModels.PlatformOnboardAccountResponse, error) {
 
-	onboardAccountRequest := automationModels.WorkFlowRequest{}
-	onboardAccountRequest.OnboardAccount = automationModels.PlatformOnboardAccount{
+	onboardAccountRequest := automationModels.PlatformOnboardAccountRequest{
 		Register: &automationModels.PlatformRegisterAccount{
 			AccountRegistration: &automationModels.AccountRegistration{
 				Meta: &automationModels.Meta{
@@ -22,9 +21,10 @@ func OnboardAccount(name string, displayName string, userEmail string) (*automat
 		},
 	}
 
-	log.Infof("Onboard Request - [%+v]", onboardAccountRequest.OnboardAccount)
+	log.Infof("Onboard Request - [%+v]", onboardAccountRequest)
 
 	response, err := v2Components.Platform.OnboardNewAccount(&onboardAccountRequest)
+	log.Infof("Onboard Response - [%+v]", response)
 	if err != nil {
 		return response, err
 	}

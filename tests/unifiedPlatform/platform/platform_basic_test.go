@@ -6,12 +6,15 @@ import (
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dsUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	platformUtils "github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
+	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
 	"os"
 	"testing"
 )
+
+var dash *aetosutil.Dashboard
 
 var _ = BeforeSuite(func() {
 	steplog := "Get prerequisite params to run platform tests"
