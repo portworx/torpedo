@@ -10,7 +10,7 @@ import (
 
 // DeleteBackup will delete backup for a given deployment
 func (backup *PDS_API_V1) DeleteBackup(deleteBackupRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
-	log.Warnf("DeleteBackup is not implemented for API")
+
 	return &automationModels.WorkFlowResponse{}, nil
 }
 

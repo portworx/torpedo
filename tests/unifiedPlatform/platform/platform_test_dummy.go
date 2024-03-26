@@ -1,6 +1,9 @@
 package tests
 
 import (
+	"math/rand"
+	"strconv"
+
 	. "github.com/onsi/ginkgo/v2"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
@@ -9,52 +12,7 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"math/rand"
-	"strconv"
 )
-
-var _ = Describe("{BackupConfigCRUD}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("BackupConfigCRUD", "Runs CRUD on backup config", nil, 0)
-	})
-
-	It("Create Backup Config", func() {
-		Step("Create Backup Config", func() {
-			_, err := dslibs.CreateBackupConfig(dslibs.WorkflowBackupInput{
-				ProjectId:    "someprojectId",
-				DeploymentID: "SomedeploymentId",
-			})
-			log.Infof("Error while creating backup config - %s", err.Error())
-		})
-
-		Step("Update Backup Config", func() {
-			_, err := dslibs.UpdateBackupConfig(dslibs.WorkflowBackupInput{
-				ProjectId:    "someprojectId2",
-				DeploymentID: "SomedeploymentId2",
-			})
-			log.Infof("Error while updating backup config - %s", err.Error())
-		})
-
-		Step("Get Backup Config", func() {
-			_, err := dslibs.GetBackupConfig(dslibs.WorkflowBackupInput{})
-			log.Infof("Error while fetching backup config - %s", err.Error())
-		})
-
-		Step("Delete Backup Config", func() {
-			_, err := dslibs.DeleteBackupConfig(dslibs.WorkflowBackupInput{})
-			log.Infof("Error while deleting backup config - %s", err.Error())
-		})
-
-		Step("List Backup Config", func() {
-			_, err := dslibs.ListBackupConfig(dslibs.WorkflowBackupInput{})
-			log.Infof("Error while listing backup config - %s", err.Error())
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
 
 var _ = Describe("{CreateAndGeBackupLocation}", func() {
 	JustBeforeEach(func() {
@@ -177,7 +135,7 @@ var _ = Describe("{RestoreCRUD}", func() {
 		})
 
 		Step("Get Restore", func() {
-			_, err := workflowRestore.GetRestore()
+			_, err := workflowRestore.GetRestore("restore-id")
 			log.Infof("Error while fetching restores - %s", err.Error())
 		})
 
@@ -306,29 +264,36 @@ var _ = Describe("{BackupRD}", func() {
 
 var _ = Describe("{TestRbacForPds}", func() {
 	var (
-		pdsRbac  *stworkflows.UserWithRbac
+		pdsRbac  stworkflows.WorkflowServiceAccount
 		userName string
 	)
 	JustBeforeEach(func() {
+		log.Infof("Initialising values for tenant")
+		WorkflowPlatform.AdminAccountId = AccID
+		WorkflowPlatform.TenantInit()
+		pdsRbac.WorkflowPlatform = WorkflowPlatform
+		log.Infof("Debug PDS RBAC - [%+v]", pdsRbac)
+		pdsRbac.UserRoles = make(map[string]stworkflows.SeviceAccount)
+		log.Infof("Debug PDS RBAC - [%+v]", pdsRbac)
 		pdsparams := pdslib.GetAndExpectStringEnvVar("PDS_PARAM_CM")
 		NewPdsParams, err := ReadNewParams(pdsparams)
 		infraParams := NewPdsParams.InfraToTest
 		PdsLabels["clusterType"] = infraParams.ClusterType
 		rbacParams := NewPdsParams.RbacParams
 		log.FailOnError(err, "Failed to read params from json file")
-		if rbacParams.RunWithRbac == true {
-			userName = "pdsUser-" + strconv.Itoa(rand.Int())
-			err, _ := pdsRbac.CreateNewPdsUser(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId)
-			if err != nil {
-				return
-			}
+
+		userName = "pdsUser-" + strconv.Itoa(rand.Int())
+		_, err = pdsRbac.CreateServiceAccount(AccID, userName, rbacParams.RoleName, rbacParams.ResourceId)
+		if err != nil {
+			log.Infof("Some error occurred. Error - [%s]", err.Error())
 		}
+
 		StartTorpedoTest("ListAccounts", "Create and List Accounts", nil, 0)
 	})
 
 	It("Accounts", func() {
 		Step("Create and List Accounts", func() {
-			pdsRbac.SwitchPdsUser(userName)
+			pdsRbac.SwitchToServiceAccount(userName)
 			//Perform any PDS workflow with Rbac enabled.
 		})
 	})

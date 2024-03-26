@@ -1,7 +1,8 @@
 package automationModels
 
 type PlatformAccount struct {
-	Get PlatformGetAccount `copier:"must,nopanic"`
+	Get     PlatformGetAccount            `copier:"must,nopanic"`
+	Onboard PlatformOnboardAccountRequest `copier:"must,nopanic"`
 }
 
 type PlatformGetAccount struct {

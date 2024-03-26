@@ -26,11 +26,11 @@ type DeploymentConfig interface {
 }
 
 type BackupConfig interface {
-	CreateBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
-	UpdateBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GetBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
-	DeleteBackupConfig(*WorkFlowRequest) (*WorkFlowResponse, error)
-	ListBackupConfig(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	CreateBackupConfig(*PDSBackupConfigRequest) (*PDSBackupConfigResponse, error)
+	UpdateBackupConfig(*PDSBackupConfigRequest) (*PDSBackupConfigResponse, error)
+	GetBackupConfig(*PDSBackupConfigRequest) (*PDSBackupConfigResponse, error)
+	DeleteBackupConfig(*PDSBackupConfigRequest) error
+	ListBackupConfig(*PDSBackupConfigRequest) (*PDSBackupConfigResponse, error)
 }
 
 type Backup interface {

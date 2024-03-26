@@ -10,12 +10,23 @@ type ConfigBackupLevel string
 
 type ConfigReclaimPolicyType string
 
-type PDSBackupConfig struct {
+type PDSBackupConfigRequest struct {
 	Create CreatePDSBackupConfig `copier:"must,nopanic"`
 	Update UpdatePDSBackupConfig `copier:"must,nopanic"`
 	Get    GetPDSBackupConfig    `copier:"must,nopanic"`
 	Delete DeletePDSBackupConfig `copier:"must,nopanic"`
 	List   ListPDSBackupConfig   `copier:"must,nopanic"`
+}
+
+type PDSBackupConfigResponse struct {
+	Create V1BackupConfig        `copier:"must,nopanic"`
+	Update V1BackupConfig        `copier:"must,nopanic"`
+	Get    V1BackupConfig        `copier:"must,nopanic"`
+	List   ListPDSBackupResponse `copier:"must,nopanic"`
+}
+
+type ListPDSBackupResponse struct {
+	BackupConfigs []V1BackupConfig
 }
 
 type CreatePDSBackupConfig struct {
@@ -25,7 +36,9 @@ type CreatePDSBackupConfig struct {
 }
 
 type UpdatePDSBackupConfig struct {
-	BackupConfig *V1BackupConfig `copier:"must,nopanic"`
+	ID          string
+	Labels      *map[string]string `copier:"must,nopanic"`
+	Annotations *map[string]string `copier:"must,nopanic"`
 }
 
 type GetPDSBackupConfig struct {
@@ -37,8 +50,16 @@ type DeletePDSBackupConfig struct {
 }
 
 type ListPDSBackupConfig struct {
-	Pagination *PageBasedPaginationRequest `copier:"must,nopanic"`
-	Sort       *Sort                       `copier:"must,nopanic"`
+	AccountId            *string
+	TenantId             *string
+	ProjectId            *string
+	TargetClusterId      *string
+	NamespaceId          *string
+	DeploymentId         *string
+	PaginationPageNumber *string
+	PaginationPageSize   *string
+	SortSortBy           *string
+	SortSortOrder        *string
 }
 
 type V1BackupConfig struct {

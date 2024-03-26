@@ -83,7 +83,7 @@ type IamRoleBindingsInterface interface {
 type ServiceAccountsInterface interface {
 	ListAllServiceAccounts(*WorkFlowRequest) ([]WorkFlowResponse, error)
 	GetServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
-	CreateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	CreateServiceAccount(*PDSServiceAccountRequest) (*PDSServiceAccountResponse, error)
 	RegenerateServiceAccountSecret(*WorkFlowRequest) (*WorkFlowResponse, error)
 	UpdateServiceAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
 	GenerateServiceAccountAccessToken(*WorkFlowRequest) (*WorkFlowResponse, error)
@@ -99,7 +99,7 @@ type TemplatesInterface interface {
 }
 
 type Onboard interface {
-	OnboardNewAccount(*WorkFlowRequest) (*WorkFlowResponse, error)
+	OnboardNewAccount(*PlatformOnboardAccountRequest) (*PlatformOnboardAccountResponse, error)
 }
 
 type Project interface {
