@@ -6422,6 +6422,84 @@ func (k *K8s) ValidateAutopilotRuleObjects() error {
 	return nil
 }
 
+// VerifyPoolResizeARO() created and resize completed
+func (k *K8s) VerifyPoolResizeARO(ruleName apapi.AutopilotRule) (bool, error) {
+	var ruleTriggered bool
+	namespace, err := k.GetAutopilotNamespace()
+	if err != nil {
+		log.Warnf("NO Namespace")
+		return false, err
+	}
+
+	expectedAroStates := []apapi.RuleState{
+		apapi.RuleStateTriggered,
+		apapi.RuleStateActiveActionsPending,
+		apapi.RuleStateActiveActionsInProgress,
+		apapi.RuleStateActiveActionsTaken,
+	}
+
+	listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
+	if err != nil {
+		log.Warnf("No ARO  available")
+		return false, err
+	}
+	if len(listAutopilotRuleObjects.Items) == 0 {
+		log.Warnf("the list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+		return false, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+	}
+	//Find  AROs  which has matching rule Name
+	for _, aro := range listAutopilotRuleObjects.Items {
+		log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
+		if strings.Contains(aro.GetObjectMeta().GetName(), ruleName.Name) {
+			var aroStates []apapi.RuleState
+			for _, aroStatusItem := range aro.Status.Items {
+				if aroStatusItem.State == "" {
+					continue
+				}
+				if len(aroStates) == 0 {
+					aroStates = append(aroStates, aroStatusItem.State)
+				} else {
+					var existState bool
+					for _, state := range aroStates {
+						if aroStatusItem.State == state {
+							existState = true
+						}
+					}
+					if !existState {
+						aroStates = append(aroStates, aroStatusItem.State)
+					}
+				}
+			}
+			counter := len(expectedAroStates)
+			for _, expectState := range expectedAroStates {
+				for _, actualState := range aroStates {
+					if expectState == actualState {
+						counter -= 1
+					}
+				}
+			}
+			if counter == 0 {
+				log.Debugf("autopilot rule object: %s has all expected states", aro.Name)
+				ruleTriggered = true
+			} else {
+				log.Debugf("Observed ARO STATE: %v", aroStates)
+				log.Debugf("expected  ARO STATEs: %v", expectedAroStates)
+				formattedObject, _ := json.MarshalIndent(listAutopilotRuleObjects.Items, "", "\t")
+				log.Debugf("autopilot rule objects items: %s", string(formattedObject))
+				return false, fmt.Errorf("autopilot rule object: %s doesn't have all expected states", aro.Name)
+			}
+		} else {
+			log.InfoD("Rule Name observed %v", aro.GetObjectMeta().GetName())
+			log.InfoD("Rule Name observed %v", ruleName.Name)
+		}
+	}
+	if ruleTriggered {
+		return true, nil
+	}
+	return false, fmt.Errorf("No ARO found for rule: %s ", ruleName)
+}
+
+//WaitForRebalanceAROToComplete Wait for Rebalance to complete.
 func (k *K8s) WaitForRebalanceAROToComplete() error {
 	var eventCheckInterval = 60 * time.Second
 	var eventCheckTimeout = 30 * time.Minute
@@ -6430,19 +6508,16 @@ func (k *K8s) WaitForRebalanceAROToComplete() error {
 		if err != nil {
 			return nil, false, err
 		}
-
 		listAutopilotRuleObjects, err := k8sAutopilot.ListAutopilotRuleObjects(namespace)
 		if err != nil {
-			return nil, false, err
+			return nil, true, err
 		}
 		if len(listAutopilotRuleObjects.Items) == 0 {
-			//log.Warnf("the list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
-			return nil, false, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
+			return nil, true, fmt.Errorf("The list of autopilot rule objects is empty, please make sure that you have an appropriate autopilot rule")
 		}
 		// IF Reabalance summary started and it's timestamp before "ActiveActionsTaken" timestamp
 		// means rebalance has been started and action has been taken.
 		for _, aro := range listAutopilotRuleObjects.Items {
-			//var aroStates []apapi.RuleState
 			hasRebalanceStarted := false
 			var rebalanceStartedTimeStamp int64
 			log.InfoD("Rule Name %v", aro.GetObjectMeta().GetName())
@@ -6471,8 +6546,6 @@ func (k *K8s) WaitForRebalanceAROToComplete() error {
 						log.InfoD(" Expected  state: %s available but it is before Rebalance Started ", aroStatusItem.State)
 					}
 				}
-
-				log.InfoD("ARO INFO %v", aro)
 			}
 		}
 		return nil, true, fmt.Errorf("Rebalance ARO not completed or did not start yet")

@@ -348,8 +348,12 @@ type Driver interface {
 
 	// ValidateAutopilotRuleObject validates Autopilot rule object
 	ValidateAutopilotRuleObjects() error
+
 	//WaitForRebalanceAROToComplete waits for rebalance to start
 	WaitForRebalanceAROToComplete() error
+
+	//VerifyPoolResizeARO() error
+	VerifyPoolResizeARO(apRule apapi.AutopilotRule) (bool, error)
 
 	// GetWorkloadSizeFromAppSpec gets workload size from an application spec
 	GetWorkloadSizeFromAppSpec(ctx *Context) (uint64, error)

@@ -101,11 +101,19 @@ func (d *dcos) ValidateAutopilotRuleObjects() error {
 	}
 }
 
-// WaitForRebalanceToComplete validates autopilot rule objects
+// WaitForRebalanceToComplete validates autopilot rule objects for Rebalance
 func (d *dcos) WaitForRebalanceAROToComplete() error {
 	return &errors.ErrNotSupported{
 		Type:      "Function",
 		Operation: "WaitForRebalanceAROToComplete()",
+	}
+}
+
+// VerifyPoolResizeARO validates autopilot rule objects created for pool resize
+func (d *dcos) VerifyPoolResizeARO(apapi.AutopilotRule) (bool, error) {
+	return false, &errors.ErrNotSupported{
+		Type:      "Function",
+		Operation: "VerifyPoolResizeARO()",
 	}
 }
 
