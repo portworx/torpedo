@@ -410,8 +410,6 @@ func GetProvisionerDefaultSnapshotMap(cloudProvider string) map[string]string {
 	}
 
 	for provisioner, info := range provisionerMap {
-		println(info.defaultSnapshot)
-		println(provisioner)
 		if info.defaultSnapshot != "" {
 			provisionerSnapshotMap[provisioner] = info.defaultSnapshot
 		}
