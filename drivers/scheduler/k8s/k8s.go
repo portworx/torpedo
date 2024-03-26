@@ -6497,7 +6497,7 @@ func (k *K8s) VerifyPoolResizeARO(ruleName apapi.AutopilotRule) (bool, error) {
 	if ruleTriggered {
 		return true, nil
 	}
-	return false, fmt.Errorf("No ARO found for rule: %s ", ruleName)
+	return false, fmt.Errorf("No ARO found for rule: %v ", ruleName)
 }
 
 //WaitForRebalanceAROToComplete Wait for Rebalance to complete.

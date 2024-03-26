@@ -1655,7 +1655,6 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 		for i := range apRules {
 			apRules[i].Spec.ActionsCoolDownPeriod = int64(60)
 		}
-		log.InfoD("Length of Array %d ", len(apRules))
 		storageNodeIds := []string{}
 		// take first 3 (default replicaset for volumes is 3) storage node IDs, label and schedule volumes onto them
 		for _, n := range storageNodes[0:3] {
@@ -1677,9 +1676,9 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 		Step("validate rebalance jobs", func() {
 			err = Inst().S.WaitForRebalanceAROToComplete()
 			Expect(err).NotTo(HaveOccurred())
-			log.InfoD("=====Rebalance Completed ======== %v", err)
+			log.InfoD("=====Rebalance Completed ========")
 			err = Inst().V.ValidateRebalanceJobs()
-			log.InfoD("====Validate Rebalance Job ======== %v", err)
+			log.InfoD("====Validate Rebalance Job ========")
 			Expect(err).NotTo(HaveOccurred())
 		})
 		Step("validating and verifying size of storage pools", func() {
@@ -1690,8 +1689,7 @@ var _ = Describe(fmt.Sprintf("{%sRebalanceProvMeanAndPoolResize}", testSuiteName
 			aroAvailable, err = Inst().S.VerifyPoolResizeARO(apRules[1])
 			Expect(err).NotTo(HaveOccurred())
 			log.InfoD("aroAvailable value %v", aroAvailable)
-
-			log.InfoD("=====Pool resize ARO verified ======== %v", err)
+			log.InfoD("=====Pool resize ARO verified ========")
 
 		})
 		Step("destroy apps", func() {
