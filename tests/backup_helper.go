@@ -441,26 +441,26 @@ func GetProvisionerSnapshotClassesMap(cloudProvider string) map[string]string {
 }
 
 // GetApplicationSpecForProvisioner returns application specification for the specified provisioner
-func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string, applicationName string) (string, error) {
-	var speclist []string
+func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string) ([]string, error) {
+	//var speclist []string
 
 	provisionerInfo, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
 	if !ok {
-		return "", fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
+		return []string{}, fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
 	}
 
 	info, ok := provisionerInfo[provisionerName]
 	if !ok {
-		return "", fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
+		return []string{}, fmt.Errorf("provisioner %s not found for cloud provider %s", provisionerName, cloudProvider)
 	}
 
-	for _, appName := range info.appList {
+	/*	for _, appName := range info.appList {
 		if strings.Contains(appName, applicationName) {
 			speclist = append(speclist, appName)
 		}
-	}
+	}*/
 
-	return speclist[0], nil
+	return info.appList, nil
 }
 
 // Set default provider as aws

@@ -11,7 +11,6 @@ import (
 	"github.com/portworx/torpedo/drivers/scheduler"
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
-	"math/rand"
 )
 
 // This MultipleProvisionerCsiSnapshotDeleteBackupAndRestore testcase to test restore of namespaces with multiple provisioners using backup when snapshot is deleted
@@ -34,7 +33,6 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 		allAppContext                             []*scheduler.Context
 		scheduleList                              []string
 		randomStringLength                        = 10
-		appSpecList                               []string
 		scheduledAppContextsForMultipleAppSinleNs []*scheduler.Context
 		multipleProvisionerSameNsScheduleName     string
 		multipleNsSchBackupName                   string
@@ -49,19 +47,21 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 		providers = GetBackupProviders()
 
 		// Deploy application for Default backup
-		appSpecList = []string{"postgres"}
-		applicationSpecIndex := rand.Intn(len(appSpecList))
-		applicationSpec := appSpecList[applicationSpecIndex]
+		/*		appSpecList = []string{"postgres"}
+				applicationSpecIndex := rand.Intn(len(appSpecList))
+				applicationSpec := appSpecList[applicationSpecIndex]*/
 
 		// Deploy multiple application in a single namespace using different provisioner
 		taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
 		for provisioner, _ := range provisionerDefaultSnapshotClassMap {
-			appSpec, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner, applicationSpec)
+			appSpecList, err := GetApplicationSpecForProvisioner(clusterProviderName, provisioner)
 			log.FailOnError(err, fmt.Sprintf("Fetching application spec for provisioner %s", provisioner))
-			appContexts := ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)
-			appContexts[0].ReadinessTimeout = AppReadinessTimeout
-			scheduledAppContextsForMultipleAppSinleNs = append(scheduledAppContextsForMultipleAppSinleNs, appContexts...)
-			allAppContext = append(allAppContext, appContexts...)
+			for _, appSpec := range appSpecList {
+				appContexts := ScheduleApplicationsWithScheduleOptions(taskName, appSpec, provisioner)
+				appContexts[0].ReadinessTimeout = AppReadinessTimeout
+				scheduledAppContextsForMultipleAppSinleNs = append(scheduledAppContextsForMultipleAppSinleNs, appContexts...)
+				allAppContext = append(allAppContext, appContexts...)
+			}
 		}
 	})
 
@@ -141,8 +141,8 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				for _, obj := range volumeObjlist {
 					volumeNames = append(volumeNames, obj.Name)
 				}
-				log.Infof("volume name %s", volumeNames)
-				err = DeleteSnapshotsForVolumes(volumeNames)
+				log.InfoD("Deleting the snapshot present in the volumes which are backed up %s", volumeNames)
+				err = Inst().V.DeleteSnapshotsForVolumes(volumeNames, GlobalCredentialConfig)
 				log.FailOnError(err, fmt.Sprintf("Deleteing snapshot failed for volumes %v", volumeNames))
 			} else {
 				log.InfoD("Skipping this step as provisioner with default volume snapshot class is not found")

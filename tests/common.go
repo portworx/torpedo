@@ -177,9 +177,6 @@ import (
 	// import scheduler drivers to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/scheduler/iks"
 
-	"github.com/IBM/vpc-go-sdk/vpcv1"
-
-	ibmcore "github.com/IBM/go-sdk-core/v5/core"
 	// import ocp driver to invoke it's init
 	_ "github.com/portworx/torpedo/drivers/volume/ocp"
 )
@@ -5667,7 +5664,7 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
-// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes based on cluster provider
+/*// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes based on cluster provider
 func DeleteSnapshotsForVolumes(volumes []string) error {
 	var err error
 	if GetClusterProvider() == "ibm" {
@@ -5739,6 +5736,7 @@ func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 
 	return nil
 }
+*/
 
 // HaIncreaseRebootTargetNode repl increase and reboot target node
 func HaIncreaseRebootTargetNode(event *EventRecord, ctx *scheduler.Context, v *volume.Volume, storageNodeMap map[string]node.Node, errInj ErrorInjection) {

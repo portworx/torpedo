@@ -2,6 +2,7 @@ package volume
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/backup"
 	"time"
 
 	snapv1 "github.com/kubernetes-incubator/external-storage/snapshot/pkg/apis/crd/v1"
@@ -505,6 +506,8 @@ type Driver interface {
 
 	// GetPxctlStatus returns the PX status using pxctl
 	GetPxctlStatus(n node.Node) (string, error)
+
+	DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error
 }
 
 // StorageProvisionerType provisioner to be used for torpedo volumes
