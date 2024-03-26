@@ -97,7 +97,7 @@ func (c *Client) SetConfig(cfg *rest.Config) {
 
 // initClient the k8s client if uninitialized
 func (c *Client) initClient(namespace string) error {
-	// As the client needs to be intialized for
+	// As the client needs to be intialized for each namespace created and passed
 	return c.setClient(namespace)
 }
 
