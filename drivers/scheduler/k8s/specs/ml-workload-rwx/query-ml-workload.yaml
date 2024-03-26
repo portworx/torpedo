@@ -6,6 +6,8 @@ spec:
   replicas: 1
   template:
     spec:
+      imagePullSecrets:
+        - name: myregistrysecret
       containers:
       - name: ml-workload
         image: portworx/ml-workload:rent-prediction-2

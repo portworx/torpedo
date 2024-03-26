@@ -12,6 +12,8 @@ spec:
       labels:
         app: continuous-retraining
     spec:
+      imagePullSecrets:
+        - name: myregistrysecret
       containers:
         - name: ml-workload
           image: portworx/ml-workload:rent-prediction-2
