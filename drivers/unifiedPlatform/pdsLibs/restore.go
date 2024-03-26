@@ -4,14 +4,8 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
-type WorkflowRestore struct {
-	ProjectId    string
-	DeploymentID string
-	NamepsaceID  string
-}
-
 // CreateRestore creates restore for the backup
-func (restore WorkflowRestore) CreateRestore(backupId string, targetClusterId string, deploymentId string, projectId string, cloudSnapId string, backupLocationId string) (*automationModels.PDSRestoreResponse, error) {
+func CreateRestore(backupId string, targetClusterId string, deploymentId string, projectId string, cloudSnapId string, backupLocationId string) (*automationModels.PDSRestoreResponse, error) {
 
 	createRestoreRequest := automationModels.PDSRestoreRequest{
 		Create: automationModels.PDSCreateRestore{},
@@ -39,7 +33,7 @@ func (restore WorkflowRestore) CreateRestore(backupId string, targetClusterId st
 }
 
 // ReCreateRestore recreates restore of the deployment
-func (restore WorkflowRestore) ReCreateRestore(id string, targetClusterId string, name string, namespaceId string, projectId string) (*automationModels.PDSRestoreResponse, error) {
+func ReCreateRestore(id string, targetClusterId string, name string, namespaceId string, projectId string) (*automationModels.PDSRestoreResponse, error) {
 
 	recreateRestore := automationModels.PDSRestoreRequest{
 		ReCreate: automationModels.PDSReCreateRestore{},
@@ -59,7 +53,7 @@ func (restore WorkflowRestore) ReCreateRestore(id string, targetClusterId string
 }
 
 // DeleteRestore deletes restore of the deployment
-func (restore WorkflowRestore) DeleteRestore(id string) error {
+func DeleteRestore(id string) error {
 
 	deleteRestoreRequest := automationModels.PDSRestoreRequest{
 		Delete: automationModels.PDSDeleteRestore{},
@@ -75,7 +69,7 @@ func (restore WorkflowRestore) DeleteRestore(id string) error {
 }
 
 // GetBackupConfig fetches backup config for the deployment
-func (restore WorkflowRestore) GetRestore(id string) (*automationModels.PDSRestoreResponse, error) {
+func GetRestore(id string) (*automationModels.PDSRestoreResponse, error) {
 
 	getRestoreRequest := automationModels.PDSRestoreRequest{
 		Get: automationModels.PDSGetRestore{},
@@ -91,7 +85,7 @@ func (restore WorkflowRestore) GetRestore(id string) (*automationModels.PDSResto
 }
 
 // ListBackupConfig lists backup config for the deployment
-func (restore WorkflowRestore) ListRestore(accountId string, tenantId string, projectId string, deploymentId string, backupId string) (*automationModels.PDSRestoreResponse, error) {
+func ListRestore(accountId string, tenantId string, projectId string, deploymentId string, backupId string) (*automationModels.PDSRestoreResponse, error) {
 
 	listRestoreRequest := automationModels.PDSRestoreRequest{
 		List: automationModels.PDSListRestores{},
