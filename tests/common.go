@@ -5667,7 +5667,7 @@ func DeleteBucket(provider string, bucketName string) {
 	})
 }
 
-// DeleteSnapshotsForVolumes for all the volumes from the
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes based on cluster provider
 func DeleteSnapshotsForVolumes(volumes []string) error {
 	var err error
 	if GetClusterProvider() == "ibm" {
@@ -5675,10 +5675,13 @@ func DeleteSnapshotsForVolumes(volumes []string) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		return fmt.Errorf("deleting snapshots is not supported for the cluster provider : %v", GetClusterProvider())
 	}
 	return nil
 }
 
+// DeleteIbmSnapshotsForVolumes deletes snapshots for the specified volumes in ibm cloud
 func DeleteIbmSnapshotsForVolumes(volumeNames []string) error {
 	apiKey, err := GetIBMApiKey("default")
 	if err != nil {

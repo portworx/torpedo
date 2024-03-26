@@ -354,6 +354,7 @@ var (
 )
 
 // CloudProviderProvisionerSnapshotMap maps cloud provider names to their corresponding sub-maps containing provisioner-snapshot class mappings
+// TODO: Need to update the map for gke,aks and aws
 var CloudProviderProvisionerSnapshotMap = map[string]map[string]struct {
 	snapshotClasses []string // List of snapshot classes for the provisioner
 	defaultSnapshot string   // Default snapshot class for the provisioner
@@ -405,7 +406,6 @@ func GetProvisionerDefaultSnapshotMap(cloudProvider string) map[string]string {
 	provisionerSnapshotMap := make(map[string]string)
 	provisionerMap, ok := CloudProviderProvisionerSnapshotMap[cloudProvider]
 	if !ok {
-		//return provisionerSnapshotMap, nil
 		return provisionerSnapshotMap
 	}
 
@@ -442,7 +442,7 @@ func GetProvisionerSnapshotClassesMap(cloudProvider string) map[string]string {
 	return provisionerSnapshotClasses
 }
 
-// GetApplicationSpecForProvisioner returns a map for
+// GetApplicationSpecForProvisioner returns application specification for the specified provisioner
 func GetApplicationSpecForProvisioner(cloudProvider string, provisionerName string, applicationName string) (string, error) {
 	var speclist []string
 
