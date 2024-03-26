@@ -714,7 +714,7 @@ func IsPoolAddDiskSupported() (bool, error) {
 			return false, err
 		}
 
-		if pxVersion.GreaterThan(currentPxVersionOnCluster) {
+		if pxVersion.LessThan(currentPxVersionOnCluster) {
 			log.Infof("drive add to existing pool not supported for px-storev2 or px-cache pools")
 			return false, err
 		}
