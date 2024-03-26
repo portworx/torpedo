@@ -69,12 +69,14 @@ func (saGrpcV1 *PlatformGrpc) GetServiceAccount(saID *WorkFlowRequest) (*WorkFlo
 }
 
 // CreateServiceAccount return new service account model.
-func (saGrpcV1 *PlatformGrpc) CreateServiceAccount(createReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (saGrpcV1 *PlatformGrpc) CreateServiceAccount(createReq *PDSServiceAccountRequest) (*PDSServiceAccountResponse, error) {
 	ctx, client, _, err := saGrpcV1.getSAClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	saResponse := WorkFlowResponse{}
+	saResponse := PDSServiceAccountResponse{
+		Create: V1ServiceAccount{},
+	}
 	var createIamRequest *publicsaapi.CreateServiceAccountRequest
 	err = utilities.CopyStruct(&createIamRequest, createReq)
 	saModel, err := client.CreateServiceAccount(ctx, createIamRequest, grpc.PerRPCCredentials(credentials))
@@ -82,7 +84,7 @@ func (saGrpcV1 *PlatformGrpc) CreateServiceAccount(createReq *WorkFlowRequest) (
 		return nil, fmt.Errorf("Error in calling `CreateServiceAccount` api call: %v\n", err)
 	}
 	log.Infof("Value of  SA - [%v]", saModel)
-	err = utilities.CopyStruct(&saResponse, saModel)
+	err = utilities.CopyStruct(&saModel, saResponse)
 	log.Infof("Value of  SA after copy - [%v]", saResponse)
 	return &saResponse, nil
 }

@@ -1,11 +1,15 @@
 package automationModels
 
 // PDSServiceAccountRequest struct
-type PDSServiceAccount struct {
+type PDSServiceAccountRequest struct {
 	Create      CreateServiceAccounts
 	Get         GetServiceAccount
 	CreateToken CreatePdsServiceAccountToken
 	GetToken    GetServiceAccountToken
+}
+
+type PDSServiceAccountResponse struct {
+	Create V1ServiceAccount
 }
 
 type CreateServiceAccounts struct {
