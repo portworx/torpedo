@@ -808,13 +808,13 @@ var _ = Describe("{AddNewPoolWhileRebalance}", func() {
 			_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 10*time.Second)
 			log.FailOnError(err, "Error checking pool rebalance")
 
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing driver end points")
 			nodeName := nodeSelected.Name
 			nodeSelected, err = node.GetNodeByName(nodeSelected.Name)
 			log.FailOnError(err, "error getting node using name [%s]", nodeName)
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", nodeSelected.Name))
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
 			//validating add-disk rebalance
 			isjournal, err := IsJournalEnabled()
 			log.FailOnError(err, "is journal enabled check failed")
@@ -1217,7 +1217,7 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 		if len(stNodes) == 0 {
 			dash.VerifyFatal(len(stNodes) > 0, true, "Storage nodes found?")
 		}
-		volSelected, err := GetVolumeWithMinimumSize(contexts, 10)
+		volSelected, err := GetVolumeWithMinimumSize(contexts, 2)
 		log.FailOnError(err, "error identifying volume")
 		appVol, err := Inst().V.InspectVolume(volSelected.ID)
 		log.FailOnError(err, fmt.Sprintf("err inspecting vol : %s", volSelected.ID))
@@ -1235,9 +1235,36 @@ var _ = Describe("{PoolAddDriveVolResize}", func() {
 				break
 			}
 		}
-		selectedPool := stNode.StoragePools[0]
+		nodePools, err := GetPoolsDetailsOnNode(&stNode)
+		log.FailOnError(err, fmt.Sprintf("error getting pools on node %s", stNode.Name))
+
+		var nodePoolsIds []string
+		for _, pool := range nodePools {
+			nodePoolsIds = append(nodePoolsIds, pool.Uuid)
+		}
+
 		err = AddCloudDrive(stNode, -1)
 		log.FailOnError(err, "error adding cloud drive")
+
+		nodePools, err = GetPoolsDetailsOnNode(&stNode)
+
+		log.FailOnError(err, fmt.Sprintf("error getting pools on node %s", stNode.Name))
+		var nodePoolsIdsAfter []string
+		for _, pool := range nodePools {
+			nodePoolsIdsAfter = append(nodePoolsIdsAfter, pool.Uuid)
+		}
+
+		var selectedPool *api.StoragePool
+		for _, pool := range nodePools {
+			if !Contains(nodePoolsIds, pool.Uuid) {
+				selectedPool = pool
+				break
+			}
+		}
+		if selectedPool == nil {
+			log.FailOnError(fmt.Errorf("error getting new pool on node %s", stNode.Name), "Pool not found after add cloud drive for repl increase")
+
+		}
 		stepLog = "Expand volume to the expanded pool"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
@@ -1374,8 +1401,6 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 
 		err = AddCloudDrive(slNode, -1)
 		log.FailOnError(err, "error adding cloud drive")
-		err = Inst().V.RefreshDriverEndpoints()
-		log.FailOnError(err, "error refreshing end points")
 		stNodes := node.GetStorageNodes()
 		var stNode node.Node
 		for _, n := range stNodes {
@@ -2582,6 +2607,8 @@ var _ = Describe("{AddDriveWithNodeReboot}", func() {
 			log.InfoD(stepLog)
 			err = Inst().V.AddCloudDrive(&stNode, deviceSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", stNode.Name))
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
 			time.Sleep(3 * time.Second)
 			err = RebootNodeAndWaitForPxUp(stNode)
 			log.FailOnError(err, fmt.Sprintf("error rebooting node %s", stNode.Name))
@@ -4550,6 +4577,8 @@ var _ = Describe("{AddNewPoolWhileFullPoolExpanding}", func() {
 
 			err = Inst().V.AddCloudDrive(selectedNode, newSpec, -1)
 			log.FailOnError(err, fmt.Sprintf("Add cloud drive failed on node %s", selectedNode.Name))
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
 
 			err = waitForPoolToBeResized(expandedExpectedPoolSize, selectedPool.Uuid, isjournal)
 			log.FailOnError(err, fmt.Sprintf("Error waiting for poor %s resize", selectedPool.Uuid))
@@ -5523,6 +5552,8 @@ func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool
 			return false
 		}
 	}
+	err = Inst().V.RefreshDriverEndpoints()
+	log.FailOnError(err, "error refreshing driver end points")
 	return true
 }
 
@@ -5716,6 +5747,8 @@ var _ = Describe("{PoolDelete}", func() {
 			log.InfoD(stepLog)
 			err = Inst().V.AddCloudDrive(&nodeSelected, newSpec, -1)
 			log.FailOnError(err, "error adding new drive to node %s", nodeSelected.Name)
+			err = Inst().V.RefreshDriverEndpoints()
+			log.FailOnError(err, "error refreshing driver end points")
 			log.InfoD("Validate pool rebalance after drive add to the node %s", nodeSelected.Name)
 			err = ValidateDriveRebalance(nodeSelected)
 			log.FailOnError(err, "pool re-balance failed on node %s", nodeSelected.Name)
@@ -6118,6 +6151,8 @@ func addNewPools(n node.Node, numPools int) error {
 		if err := Inst().V.AddCloudDrive(&n, newSpec, -1); err != nil {
 			return fmt.Errorf("add cloud drive failed on node %s, err: %v", n.Name, err)
 		}
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing driver end points")
 
 		log.InfoD("Validate pool rebalance after drive add on node %s", n.Name)
 		if err = ValidateDriveRebalance(n); err != nil {
@@ -6334,7 +6369,7 @@ var _ = Describe("{VerifyPoolDeleteInvalidPoolID}", func() {
 		nodeDetail, err := GetNodeWithGivenPoolID(poolUUID)
 		log.FailOnError(err, "Failed to get Node Details from PoolUUID [%v]", poolUUID)
 
-		PoolDetail, err := GetPoolsDetailsOnNode(*nodeDetail)
+		PoolDetail, err := GetPoolsDetailsOnNode(nodeDetail)
 		log.FailOnError(err, "Fetching all pool details from the node [%v] failed ", nodeDetail.Name)
 
 		if IsLocalCluster(*nodeDetail) == true || IsIksCluster() == true {
@@ -6641,9 +6676,12 @@ var _ = Describe("{PoolDeleteRebalancePxState}", func() {
 		log.InfoD("Pool with UUID [%v] present in Node [%v]", poolUUID, nodeDetail.Name)
 
 		// Get Total Pools present on the Node present
-		poolDetails, err := GetPoolsDetailsOnNode(*nodeDetail)
+		poolDetails, err := GetPoolsDetailsOnNode(nodeDetail)
 		log.FailOnError(err, "Failed to get Pool Details from Node [%v]", nodeDetail.Name)
 		log.InfoD("List of Pools present in the node [%v]", poolDetails)
+		n1, err := node.GetNodeByName(nodeDetail.Name)
+		log.FailOnError(err, "Failed to get Node Details from Node Name [%v]", nodeDetail.Name)
+		nodeDetail = &n1
 
 		// Test Needs minimum of 4 Pools to be present on the Node
 		if len(poolDetails) < 4 {
@@ -7155,7 +7193,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		poolToBeResized, err := GetStoragePoolByUUID(poolUUID)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
 
-		allPoolsOnNode, err := GetPoolsDetailsOnNode(*nodeDetail)
+		allPoolsOnNode, err := GetPoolsDetailsOnNode(nodeDetail)
 		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
 
 		drvSize, err := getPoolDiskSize(poolToBeResized)
@@ -7200,7 +7238,7 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 		dash.VerifyFatal(resizeErr, nil,
 			fmt.Sprintf("Verify pool [%s] on expansion using auto option", poolUUID))
 
-		allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(*nodeDetail)
+		allPoolsOnNodeAfterResize, err := GetPoolsDetailsOnNode(nodeDetail)
 		log.FailOnError(err, fmt.Sprintf("Failed to get all Pools present in Node [%s]", nodeDetail.Name))
 		dash.VerifyFatal(len(allPoolsOnNode) <= len(allPoolsOnNodeAfterResize), true,
 			"New pool is created on trying to expand pool using add disk option")
@@ -7296,6 +7334,8 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 
 		log.FailOnError(ValidateDriveRebalance(*nodeDetail),
 			fmt.Sprintf("pool %v rebalance failed", poolUUID))
+		err = Inst().V.RefreshDriverEndpoints()
+		log.FailOnError(err, "error refreshing driver end points")
 
 	})
 	JustAfterEach(func() {
@@ -7433,8 +7473,6 @@ var _ = Describe("{AllPoolsDeleteAndCreateAndDelete}", func() {
 
 			err := AddCloudDrive(stNode, -1)
 			log.FailOnError(err, "error adding cloud drive")
-			err = Inst().V.RefreshDriverEndpoints()
-			log.FailOnError(err, "error refreshing end points")
 			stNodes := node.GetStorageNodes()
 			isStorageNode := false
 
@@ -8338,6 +8376,8 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 				poolsAfr, err := Inst().V.ListStoragePools(metav1.LabelSelector{})
 				log.FailOnError(err, "Failed to list storage pools")
 				dash.VerifyFatal(len(poolsBfr)+1, len(poolsAfr), "verify new pool is created")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "error refreshing driver end points")
 
 			})
 
@@ -8590,6 +8630,8 @@ var _ = Describe("{DriveAddAsJournal}", func() {
 				isjournal, err := IsJournalEnabled()
 				log.FailOnError(err, "Error getting journal status")
 				dash.VerifyFatal(isjournal, true, "journal device added successfully")
+				err = Inst().V.RefreshDriverEndpoints()
+				log.FailOnError(err, "error refreshing driver end points")
 			}
 		}
 	})
@@ -9505,7 +9547,7 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	poolListAfterCreate := make(map[string]int)
 
 	for _, eachNode := range nodes {
-		pools, _ := GetPoolsDetailsOnNode(eachNode)
+		pools, _ := GetPoolsDetailsOnNode(&eachNode)
 		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
 		poolList[eachNode.Name] = len(pools)
 	}
@@ -9529,7 +9571,7 @@ func CreateNewPoolsOnMultipleNodesInParallel(nodes []node.Node) error {
 	log.FailOnError(err, "error refreshing driver end points")
 
 	for _, eachNode := range nodes {
-		pools, _ := GetPoolsDetailsOnNode(eachNode)
+		pools, _ := GetPoolsDetailsOnNode(&eachNode)
 		log.InfoD("Length of pools present on Node [%v] =  [%v]", eachNode.Name, len(pools))
 		poolListAfterCreate[eachNode.Name] = len(pools)
 	}
@@ -9575,7 +9617,7 @@ var _ = Describe("{CreateNewPoolsOnClusterInParallel}", func() {
 		getNodes := node.GetNodes()
 		for _, each := range getNodes {
 			if node.IsMasterNode(each) == false {
-				sPools, err := GetPoolsDetailsOnNode(each)
+				sPools, err := GetPoolsDetailsOnNode(&each)
 				if err != nil {
 					fmt.Printf("[%v]", err)
 				}
@@ -9814,9 +9856,13 @@ var _ = Describe("{PoolExpandRebalanceShutdownNode}", func() {
 			log.FailOnError(fmt.Errorf("This test will only support onprem vms"), "is this onprem?")
 		}
 		// Get Total Pools present on the Node present
-		poolDetails, err := GetPoolsDetailsOnNode(*nodeDetail)
+		poolDetails, err := GetPoolsDetailsOnNode(nodeDetail)
+		n1, err := node.GetNodeByName(nodeDetail.Name)
 		log.FailOnError(err, "Failed to get Pool Details from Node [%v]", nodeDetail.Name)
 		log.InfoD("List of Pools present in the node [%v]", poolDetails)
+		nodeDetail = &n1
+		log.FailOnError(err, "Failed to get Node Details using name [%v]", nodeDetail.Name)
+
 		poolToBeResized, err := GetStoragePoolByUUID(poolDetails[0].Uuid)
 		drvSize, err := getPoolDiskSize(poolToBeResized)
 		log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized)
@@ -11539,3 +11585,112 @@ func getMetaDataDiskPath(n node.Node) (string, error) {
 	}
 	return path, nil
 }
+
+var _ = Describe("{NetworkDelayWhilePoolExpand}", func() {
+	/*
+	   https://portworx.atlassian.net/browse/PTX-15473
+	   1. Deploy apps
+	   2. Trigger pool expand using add drive/ resize
+	   3. Introduce network delay with the cloud provider while pool expand is in progress
+	   4. Check if the pool expand is successful
+	*/
+	JustBeforeEach(func() {
+		StartTorpedoTest("NetworkDelayWhilePoolExpand", "Network delay while pool expand", nil, 0)
+	})
+
+	var contexts []*scheduler.Context
+	var selectedNode node.Node
+
+	itLog := "NetworkDelayWhilePoolExpand"
+	It(itLog, func() {
+		log.InfoD(itLog)
+		stepLog := "schedule Application"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			//pick a random storage node
+			storageNodes := node.GetStorageNodes()
+			selectedNode = storageNodes[rand.Intn(len(storageNodes))]
+
+			AppList := Inst().AppList
+			Inst().AppList = []string{"fio-fastpath-repl1"}
+
+			var err error
+			defer func() {
+				Inst().AppList = AppList
+				err = Inst().S.RemoveLabelOnNode(selectedNode, k8s.NodeType)
+				log.FailOnError(err, "error removing label on node [%s]", selectedNode.Name)
+			}()
+			err = Inst().S.AddLabelOnNode(selectedNode, k8s.NodeType, k8s.FastpathNodeType)
+			log.FailOnError(err, fmt.Sprintf("Failed add label on node %s", selectedNode.Name))
+
+			for i := 0; i < Inst().GlobalScaleFactor; i++ {
+				contexts = append(contexts, ScheduleApplications(fmt.Sprintf("network-delay-pool-expand-%d", i))...)
+			}
+		})
+		ValidateApplications(contexts)
+		defer DestroyApps(contexts, nil)
+
+		done := make(chan bool)
+
+		stepLog = "Trigger pool expand using add drive/ resize"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+			go func() {
+				defer GinkgoRecover()
+				defer func() {
+					done <- true
+				}()
+				selectedPool, err := GetPoolWithIOsInGivenNode(selectedNode, contexts)
+				log.FailOnError(err, "Failed to get pool with IOs in given node")
+				log.InfoD("Selected pool for pool expand: %v", selectedPool.Uuid)
+
+				isJournalEnabled, _ = IsJournalEnabled()
+
+				expectedSize := selectedPool.TotalSize/units.GiB + 100
+
+				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to expand pool with add disk")
+
+				err = waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+
+				poolToResize = getStoragePool(selectedPool.Uuid)
+				expectedSize = selectedPool.TotalSize/units.GiB + 150
+
+				err = Inst().V.ExpandPool(selectedPool.Uuid, api.SdkStoragePool_RESIZE_TYPE_RESIZE_DISK, expectedSize, true)
+				log.FailOnError(err, "Failed to expand pool with add disk")
+				err = waitForPoolToBeResized(expectedSize, selectedPool.Uuid, isJournalEnabled)
+				log.FailOnError(err, "Failed to wait for pool to be resized")
+
+			}()
+
+		})
+
+		stepLog = "Introduce network delay with the cloud provider while pool expand is in progress"
+		Step(stepLog, func() {
+			log.InfoD(stepLog)
+
+			// Introduce network delay
+			Delay := 10
+			defer func() {
+				log.Infof(fmt.Sprintf("Deleting the delay of %dms from the node: %v", Delay, selectedNode.Name))
+				err := Inst().N.InjectNetworkErrorWithRebootFallback([]node.Node{selectedNode}, "delay", "del", 0, Delay)
+				dash.VerifyFatal(err, nil, fmt.Sprintf("Removing delay of %dms from nodes", Delay))
+			}()
+
+			log.Infof(fmt.Sprintf("Adding a delay of %dms to a node: %v ", Delay, selectedNode.Name))
+			err := Inst().N.InjectNetworkErrorWithRebootFallback([]node.Node{selectedNode}, "delay", "add", 0, Delay)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Adding a delay of %dms to nodes", Delay))
+
+			//Wait for pool expand to complete
+			<-done
+			log.InfoD("Successfully expanded the pool and removing network delay for the node: %v", selectedNode.Name)
+
+		})
+	})
+
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+		AfterEachTest(contexts)
+	})
+})
