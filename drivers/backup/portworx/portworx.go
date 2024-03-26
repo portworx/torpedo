@@ -81,7 +81,7 @@ func (p *portworx) String() string {
 	return DriverName
 }
 
-func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
+func GetKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error) {
 	if clusterObj.GetKubeconfig() == "" {
 		return nil, fmt.Errorf("empty cluster kubeconfig")
 	}
@@ -99,7 +99,7 @@ func getKubernetesRestConfig(clusterObj *api.ClusterObject) (*rest.Config, error
 
 // GetKubernetesInstance - Get handler to k8s cluster.
 func GetKubernetesInstance(cluster *api.ClusterObject) (core.Ops, stork.Ops, error) {
-	client, err := getKubernetesRestConfig(cluster)
+	client, err := GetKubernetesRestConfig(cluster)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2457,7 +2457,7 @@ func (p *portworx) GetRuleUid(orgID string, ctx context.Context, ruleName string
 			return ruleUid, nil
 		}
 	}
-	return "", nil
+	return "", fmt.Errorf("unable to find uid for rule [%s]", ruleName)
 }
 
 func (p *portworx) DeleteRuleForBackup(orgID string, ruleName string) error {

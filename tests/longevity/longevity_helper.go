@@ -96,6 +96,7 @@ func populateBackupDisruptiveTriggers() {
 func populateBackupIntervals() {
 	triggerInterval = map[string]map[int]time.Duration{}
 	triggerInterval[CreatePxBackup] = map[int]time.Duration{}
+	triggerInterval[CreatePxLockedBackup] = map[int]time.Duration{}
 	triggerInterval[EmailReporter] = map[int]time.Duration{}
 	triggerInterval[CreatePxBackupAndRestore] = map[int]time.Duration{}
 	triggerInterval[CreateRandomRestore] = map[int]time.Duration{}
@@ -113,6 +114,17 @@ func populateBackupIntervals() {
 	triggerInterval[CreatePxBackup][3] = 48 * baseInterval
 	triggerInterval[CreatePxBackup][2] = 54 * baseInterval
 	triggerInterval[CreatePxBackup][1] = 60 * baseInterval
+
+	triggerInterval[CreatePxLockedBackup][10] = 6 * baseInterval
+	triggerInterval[CreatePxLockedBackup][9] = 12 * baseInterval
+	triggerInterval[CreatePxLockedBackup][8] = 18 * baseInterval
+	triggerInterval[CreatePxLockedBackup][7] = 24 * baseInterval
+	triggerInterval[CreatePxLockedBackup][6] = 30 * baseInterval
+	triggerInterval[CreatePxLockedBackup][5] = 36 * baseInterval
+	triggerInterval[CreatePxLockedBackup][4] = 42 * baseInterval
+	triggerInterval[CreatePxLockedBackup][3] = 48 * baseInterval
+	triggerInterval[CreatePxLockedBackup][2] = 54 * baseInterval
+	triggerInterval[CreatePxLockedBackup][1] = 60 * baseInterval
 
 	triggerInterval[CreatePxBackupAndRestore][10] = 6 * baseInterval
 	triggerInterval[CreatePxBackupAndRestore][9] = 12 * baseInterval
@@ -219,6 +231,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
 	setUpgradeStorageDriverEndpointList(configData)
+	setVclusterFioRunOptions(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -237,6 +250,21 @@ func setEmailRecipients(configData *map[string]string) {
 	} else {
 		EmailRecipients = strings.Split(emailRecipients, ";")
 		delete(*configData, EmailRecipientsConfigMapField)
+	}
+}
+
+func setVclusterFioRunOptions(configData *map[string]string) {
+	if vclusterFioRunTime, ok := (*configData)[VclusterFioRunTimeField]; ok {
+		VclusterFioRunTime = vclusterFioRunTime
+		delete(*configData, VclusterFioRunTimeField)
+	}
+	if vclusterFioTotalIteration, ok := (*configData)[VclusterFioTotalIterationField]; ok {
+		VclusterFioTotalIteration = vclusterFioTotalIteration
+		delete(*configData, VclusterFioTotalIterationField)
+	}
+	if vclusterFioParallelApps, ok := (*configData)[VclusterFioParallelAppsField]; ok {
+		VclusterFioParallelApps = vclusterFioParallelApps
+		delete(*configData, VclusterFioParallelAppsField)
 	}
 }
 
@@ -560,6 +588,9 @@ func populateIntervals() {
 	triggerInterval[StorageFullPoolExpansion] = make(map[int]time.Duration)
 	triggerInterval[HAIncreaseWithPVCResize] = make(map[int]time.Duration)
 	triggerInterval[ReallocateSharedMount] = make(map[int]time.Duration)
+	triggerInterval[CreateAndRunFioOnVcluster] = make(map[int]time.Duration)
+	triggerInterval[CreateAndRunMultipleFioOnVcluster] = make(map[int]time.Duration)
+	triggerInterval[VolumeDriverDownVCluster] = make(map[int]time.Duration)
 
 	baseInterval := 10 * time.Minute
 
@@ -1361,6 +1392,39 @@ func populateIntervals() {
 	triggerInterval[ReallocateSharedMount][3] = 21 * baseInterval
 	triggerInterval[ReallocateSharedMount][2] = 24 * baseInterval
 	triggerInterval[ReallocateSharedMount][1] = 27 * baseInterval
+
+	triggerInterval[CreateAndRunFioOnVcluster][10] = 1 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][9] = 3 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][8] = 6 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][7] = 9 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][6] = 12 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CreateAndRunFioOnVcluster][4] = 18 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][3] = 21 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][2] = 24 * baseInterval
+	triggerInterval[CreateAndRunFioOnVcluster][1] = 27 * baseInterval
+
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][10] = 1 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][9] = 3 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][8] = 6 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][7] = 9 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][6] = 12 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][4] = 18 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][3] = 21 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][2] = 24 * baseInterval
+	triggerInterval[CreateAndRunMultipleFioOnVcluster][1] = 27 * baseInterval
+
+	triggerInterval[VolumeDriverDownVCluster][10] = 1 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][9] = 3 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][8] = 6 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][7] = 9 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][6] = 12 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][5] = 15 * baseInterval // Default global chaos level, 3 hrs
+	triggerInterval[VolumeDriverDownVCluster][4] = 18 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][3] = 21 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][2] = 24 * baseInterval
+	triggerInterval[VolumeDriverDownVCluster][1] = 27 * baseInterval
 
 	baseInterval = 300 * time.Minute
 
