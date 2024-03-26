@@ -3,6 +3,7 @@ package ocp
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/backup"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -99,6 +100,12 @@ func (o *ocp) InspectVolume(name string) (*api.Volume, error) {
 		Type:      "Function",
 		Operation: "InspectVolume()",
 	}
+}
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in ocp cluster
+func (o *ocp) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", o.String())
+	return nil
 }
 
 func init() {

@@ -3,6 +3,7 @@ package pso
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/backup"
 	"strings"
 
 	"github.com/portworx/sched-ops/k8s/core"
@@ -103,6 +104,12 @@ func (d *pso) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySp
 func (d *pso) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
 	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
 	return nil, nil
+}
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes
+func (i *pso) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", i.String())
+	return nil
 }
 
 // GetPsoNamespace returns namespace where PSO is running

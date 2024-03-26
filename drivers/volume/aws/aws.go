@@ -3,6 +3,7 @@ package aws
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
+	"github.com/portworx/torpedo/drivers/backup"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -46,6 +47,12 @@ func (d *aws) GetProxySpecForAVolume(volume *torpedovolume.Volume) (*api.ProxySp
 func (d *aws) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, error) {
 	log.Warnf("InspectCurrentCluster function has not been implemented for volume driver - %s", d.String())
 	return nil, nil
+}
+
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in aws cloud
+func (i *aws) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", i.String())
+	return nil
 }
 
 func (d *aws) Init(sched, nodeDriver, token, storageProvisioner, csiGenericDriverConfigMap string) error {
