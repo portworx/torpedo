@@ -3,7 +3,6 @@ package pso
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/backup"
 	"strings"
 
 	"github.com/portworx/sched-ops/k8s/core"
@@ -107,7 +106,7 @@ func (d *pso) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, er
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes
-func (i *pso) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+func (i *pso) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", i.String())
 	return nil
 }
