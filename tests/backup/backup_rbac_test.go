@@ -16,7 +16,7 @@ import (
 )
 
 // VerifyRBACforInfraAdmin Validates the RBAC operation for infra-admin user.
-var _ = Describe("{VerifyRBACForInfraAdmin}", func() {, Label(TestCaseLabelsMap[VerifyRBACForInfraAdmin]...), 
+var _ = Describe("{VerifyRBACForInfraAdmin}", func() {
 	var (
 		scheduledAppContexts            []*scheduler.Context
 		backupLocationMap               = make(map[string]string)
@@ -764,7 +764,7 @@ var _ = Describe("{VerifyRBACForInfraAdmin}", func() {, Label(TestCaseLabelsMap[
 })
 
 // VerifyRBACForPxAdmin Validates the RBAC operation for px-admin group user.
-var _ = Describe("{VerifyRBACForPxAdmin}", func() {, Label(TestCaseLabelsMap[VerifyRBACForPxAdmin]...), 
+var _ = Describe("{VerifyRBACForPxAdmin}", func() {
 	var (
 		scheduledAppContexts       []*scheduler.Context
 		adminBackupLocationName    string
@@ -1091,7 +1091,7 @@ var _ = Describe("{VerifyRBACForPxAdmin}", func() {, Label(TestCaseLabelsMap[Ver
 })
 
 // VerifyRBACForAppAdmin Validates the RBAC operation for app-admin user.
-var _ = Describe("{VerifyRBACForAppAdmin}", func() {, Label(TestCaseLabelsMap[VerifyRBACForAppAdmin]...), 
+var _ = Describe("{VerifyRBACForAppAdmin}", func() {
 	var (
 		scheduledAppContexts            []*scheduler.Context
 		scheduleNameMap                 = make(map[string]string)
@@ -1655,7 +1655,7 @@ var _ = Describe("{VerifyRBACForAppAdmin}", func() {, Label(TestCaseLabelsMap[Ve
 })
 
 // VerifyRBACForAppUser To verify all the RBAC operations for an app-user
-var _ = Describe("{VerifyRBACForAppUser}", func() {, Label(TestCaseLabelsMap[VerifyRBACForAppUser]...), 
+var _ = Describe("{VerifyRBACForAppUser}", func() {
 	var (
 		scheduledAppContexts            []*scheduler.Context
 		userNames                       = make([]string, 0)

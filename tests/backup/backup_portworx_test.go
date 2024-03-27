@@ -27,7 +27,7 @@ import (
 )
 
 // This test case creates a backup location with encryption
-var _ = Describe("{BackupLocationWithEncryptionKey}", func() {, Label(TestCaseLabelsMap[BackupLocationWithEncryptionKey]...), 
+var _ = Describe("{BackupLocationWithEncryptionKey}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -143,7 +143,7 @@ var _ = Describe("{BackupLocationWithEncryptionKey}", func() {, Label(TestCaseLa
 })
 
 // Change replica while restoring backup through StorageClass Mapping.
-var _ = Describe("{ReplicaChangeWhileRestore}", func() {, Label(TestCaseLabelsMap[ReplicaChangeWhileRestore]...), 
+var _ = Describe("{ReplicaChangeWhileRestore}", func() {
 	var (
 		controlChannel chan string
 		errorGroup     *errgroup.Group
@@ -307,7 +307,7 @@ var _ = Describe("{ReplicaChangeWhileRestore}", func() {, Label(TestCaseLabelsMa
 })
 
 // This testcase verifies resize after the volume is restored from a backup
-var _ = Describe("{ResizeOnRestoredVolume}", func() {, Label(TestCaseLabelsMap[ResizeOnRestoredVolume]...), 
+var _ = Describe("{ResizeOnRestoredVolume}", func() {
 	var (
 		appList              = Inst().AppList
 		scheduledAppContexts []*scheduler.Context
@@ -496,7 +496,7 @@ var _ = Describe("{ResizeOnRestoredVolume}", func() {, Label(TestCaseLabelsMap[R
 })
 
 // Restore backup from encrypted and non-encrypted backups
-var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {, Label(TestCaseLabelsMap[RestoreEncryptedAndNonEncryptedBackups]...), 
+var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appContextsToBackup  []*scheduler.Context
@@ -663,7 +663,7 @@ var _ = Describe("{RestoreEncryptedAndNonEncryptedBackups}", func() {, Label(Tes
 })
 
 // This testcase verifies schedule backups are successful while volume resize is in progress
-var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {, Label(TestCaseLabelsMap[ResizeVolumeOnScheduleBackup]...), 
+var _ = Describe("{ResizeVolumeOnScheduleBackup}", func() {
 	var (
 		appList                     = Inst().AppList
 		scheduledAppContexts        []*scheduler.Context

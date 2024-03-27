@@ -16,7 +16,7 @@ import (
 )
 
 // This testcase verifies if the backup pods are in Ready state or not
-var _ = Describe("{BackupClusterVerification}", func() {, Label(TestCaseLabelsMap[BackupClusterVerification]...), 
+var _ = Describe("{BackupClusterVerification}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartPxBackupTorpedoTest("BackupClusterVerification", "Validating backup cluster pods", nil, 0, Sagrawal, Q4FY23)
@@ -36,7 +36,7 @@ var _ = Describe("{BackupClusterVerification}", func() {, Label(TestCaseLabelsMa
 })
 
 // This is a sample test case to verify User/Group Management and role mapping
-var _ = Describe("{UserGroupManagement}", func() {, Label(TestCaseLabelsMap[UserGroupManagement]...), 
+var _ = Describe("{UserGroupManagement}", func() {
 	JustBeforeEach(func() {
 		log.Infof("No pre-setup required for this testcase")
 		StartPxBackupTorpedoTest("UserGroupManagement", "Creating users and adding them to groups", nil, 0, Mkoppal, Q4FY23)
@@ -87,7 +87,7 @@ var _ = Describe("{UserGroupManagement}", func() {, Label(TestCaseLabelsMap[User
 })
 
 // This testcase verifies basic backup rule,backup location, cloud setting
-var _ = Describe("{BasicBackupCreation}", func() {, Label(TestCaseLabelsMap[BasicBackupCreation]...), 
+var _ = Describe("{BasicBackupCreation}", func() {
 
 	var (
 		backupNames          []string
