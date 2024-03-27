@@ -35,7 +35,7 @@ func (backupConfig WorkflowPDSBackupConfig) CreateBackupConfig(name string, depl
 			log.Infof("Skipping Backup Validation")
 		}
 	} else {
-		var bkp pdslibs.WorkflowBackup
+		var bkp pdslibs.BackupParams
 		bkp.BackupConfigId = *createBackup.Create.Meta.Uid
 		bkp.TargetClusterId = backupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID
 		bkp.NamespaceId = backupConfig.WorkflowDataService.Namespace.Namespaces[backupConfig.WorkflowDataService.NamespaceName]

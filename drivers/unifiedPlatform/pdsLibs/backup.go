@@ -4,16 +4,16 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
-type WorkflowBackup struct {
-	ProjectId        string
-	DeploymentID     string
-	NamespaceId      string
-	TargetClusterId  string
-	BackupConfigId   string
+type BackupParams struct {
+	ProjectId       string
+	DeploymentID    string
+	NamespaceId     string
+	TargetClusterId string
+	BackupConfigId  string
 }
 
 // DeleteBackup deletes backup config of the deployment
-func DeleteBackup(backup WorkflowBackup) ( error) {
+func DeleteBackup(backup BackupParams) error {
 
 	deleteBackupRequest := automationModels.PDSBackupRequest{}
 
@@ -27,7 +27,7 @@ func DeleteBackup(backup WorkflowBackup) ( error) {
 }
 
 // GetBackup fetches backup config for the deployment
-func GetBackup(backup WorkflowBackup) (*automationModels.PDSBackupResponse, error) {
+func GetBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error) {
 
 	getBackupRequest := automationModels.PDSBackupRequest{}
 
@@ -42,7 +42,7 @@ func GetBackup(backup WorkflowBackup) (*automationModels.PDSBackupResponse, erro
 }
 
 // ListBackup lists backup config for the deployment
-func ListBackup(backup WorkflowBackup) ([]automationModels.PDSBackupResponse, error) {
+func ListBackup(backup BackupParams) ([]automationModels.PDSBackupResponse, error) {
 
 	listBackup := automationModels.PDSBackupRequest{}
 
@@ -50,7 +50,6 @@ func ListBackup(backup WorkflowBackup) ([]automationModels.PDSBackupResponse, er
 	listBackup.List.NamespaceId = backup.NamespaceId
 	listBackup.List.DeploymentId = backup.DeploymentID
 	listBackup.List.BackupConfigId = backup.BackupConfigId
-
 
 	backupResponse, err := v2Components.PDS.ListBackup(&listBackup)
 	if err != nil {

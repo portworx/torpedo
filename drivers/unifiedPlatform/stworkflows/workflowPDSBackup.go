@@ -12,18 +12,22 @@ type WorkflowPDSBackup struct {
 
 // GetBackupIDByName returns the ID of given backup
 func (backup WorkflowPDSBackup) GetBackupIDByName(name string, backupConfigName string, namespace string, deploymentName string) (string, error) {
-	allBackups, err := pdslibs.ListBackups(
-		*backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid,
-		backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		backup.WorkflowBackupConfig.WorkflowDataService.Namespace.Namespaces[namespace],
-		backup.WorkflowBackupConfig.WorkflowDataService.DataServiceDeployment[deploymentName],
-	)
+
+	params := pdslibs.BackupParams{
+		ProjectId:       backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
+		DeploymentID:    backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
+		NamespaceId:     backup.WorkflowBackupConfig.WorkflowDataService.Namespace.Namespaces[namespace],
+		TargetClusterId: backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
+		BackupConfigId:  *backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid,
+	}
+
+	allBackups, err := pdslibs.ListBackup(params)
 
 	if err != nil {
 		return "", err
 	}
 
-	for _, eachBackup := range allBackups.List.Backups {
+	for _, eachBackup := range allBackups {
 		if *eachBackup.Meta.Name == name {
 			return *eachBackup.Meta.Uid, nil
 		}
@@ -39,13 +43,17 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 }
 
 // ListAllBackups returns the list of all backups
-func (backup WorkflowPDSBackup) ListAllBackups(backupConfig string, namespace string, deployment string) (*automationModels.PDSBackupResponse, error) {
-	list, err := pdslibs.ListBackups(
-		*backup.WorkflowBackupConfig.Backups[backupConfig].Meta.Uid,
-		backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
-		backup.WorkflowBackupConfig.WorkflowDataService.Namespace.Namespaces[namespace],
-		backup.WorkflowBackupConfig.WorkflowDataService.DataServiceDeployment[deployment],
-	)
+func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string, namespace string, deployment string) ([]automationModels.PDSBackupResponse, error) {
+
+	params := pdslibs.BackupParams{
+		ProjectId:       backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,
+		DeploymentID:    backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
+		NamespaceId:     backup.WorkflowBackupConfig.WorkflowDataService.Namespace.Namespaces[namespace],
+		TargetClusterId: backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.ClusterUID,
+		BackupConfigId:  *backup.WorkflowBackupConfig.Backups[backupConfigName].Meta.Uid,
+	}
+
+	list, err := pdslibs.ListBackup(params)
 
 	if err != nil {
 		return nil, err

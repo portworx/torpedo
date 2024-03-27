@@ -54,11 +54,10 @@ func (backup *PdsGrpc) DeleteBackup(deleteBackupRequest *automationModels.PDSBac
 }
 
 // ListBackup will list backup for a given deployment
-func (backup *PdsGrpc) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
+func (backup *PdsGrpc) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) ([]automationModels.PDSBackupResponse, error) {
 	// log.Infof("Backup List - [%+v]", listBackupConfigRequest.BackupConfig.List)
 
-	response := automationModels.PDSBackupResponse{}
-
+	response := []automationModels.PDSBackupResponse{}
 
 	listRequest := &publicBackupapis.ListBackupsRequest{}
 	// log.Infof("Backup List - [%v]", listRequest)
@@ -81,12 +80,12 @@ func (backup *PdsGrpc) ListBackup(listBackupConfigRequest *automationModels.PDSB
 		return nil, fmt.Errorf("Error while listing the backups: %v\n", err)
 	}
 
-	err = utilities.CopyStruct(apiResponse, &response)
+	err = utilities.CopyStruct(apiResponse.Backups, &response)
 	if err != nil {
 		return nil, err
 	}
 
-	return &response, nil
+	return response, nil
 }
 
 // GetBackup will fetch backup for a given deployment
@@ -94,7 +93,6 @@ func (backup *PdsGrpc) GetBackup(getBackupConfigRequest *automationModels.PDSBac
 	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
 
 	response := &automationModels.PDSBackupResponse{}
-
 
 	getRequest := &publicBackupapis.GetBackupRequest{}
 	// log.Infof("Backup Get - [%v]", getRequest)

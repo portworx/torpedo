@@ -139,21 +139,10 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parame
 
 	wfDataService.SourceDeploymentMd5Hash[deploymentName] = chkSum
 
-	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
-		if value == true {
-			log.Infof("Skipping Workload Validation")
-		}
-	} else {
-		err := wfDataService.ValidateDataServiceWorkloads(params)
-		if err != nil {
-			return err
-		}
-	}
-
 	return dslibs.DeleteWorkloadDeployments(wlDep)
 }
 
-func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *parameters.NewPDSParams) error {
+func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *parameters.NewPDSParams, restoredDeployment *automationModels.PDSRestoreResponse) error {
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: params.LoadGen.LoadGenDepName,
@@ -166,13 +155,14 @@ func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *p
 		FailOnError:    params.LoadGen.FailOnError,
 	}
 
-	//TODO: Deployment will be updated to restored deployment once we have the restore workflow
-	chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(wfDataService.DataServiceDeployment, wkloadParams)
+	deployment := make(map[string]string)
+	deployment[*restoredDeployment.Create.Meta.Name] = *restoredDeployment.Create.Meta.Uid
+	chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
 	if err != nil {
 		return err
 	}
 
-	deploymentName, _ := GetDeploymentNameAndId(wfDataService.DataServiceDeployment)
+	deploymentName, _ := GetDeploymentNameAndId(deployment)
 
 	wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
 

@@ -18,7 +18,9 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	var (
 		workflowDataservice  stworkflows.WorkflowDataService
 		workflowBackUpConfig stworkflows.WorkflowPDSBackupConfig
+		workflowRestore      stworkflows.WorkflowPDSRestore
 		deployment           *automationModels.WorkFlowResponse
+		restoreDeployment    *automationModels.PDSRestoreResponse
 		pdsBackupConfigName  string
 		err                  error
 	)
@@ -56,10 +58,12 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 	})
 
 	It("Perform adhoc backup, restore and validate them", func() {
+		var bkpConfigResponse *automationModels.PDSBackupConfigResponse
 		workflowBackUpConfig.WorkflowDataService = workflowDataservice
 		pdsBackupConfigName = strings.ToLower("pds-qa-bkpConfig-" + utilities.RandString(5))
+
 		Step("Take Backup and validate", func() {
-			bkpConfigResponse, err := workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.PDSDeployment.V1Deployment.Meta.Uid)
+			bkpConfigResponse, err = workflowBackUpConfig.CreateBackupConfig(pdsBackupConfigName, *deployment.PDSDeployment.V1Deployment.Meta.Uid)
 			log.FailOnError(err, "Error occured while creating backupConfig")
 			log.Infof("BackupConfigName: [%s], BackupConfigId: [%s]", bkpConfigResponse.Create.Meta.Name, bkpConfigResponse.Create.Meta.Uid)
 		})
@@ -72,17 +76,34 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 		}()
 
 		Step("Perform Restore and validate", func() {
-			//TODO: Restore steps will be added once WorkFlow is available
+			workflowRestore.WorkflowDataService = workflowDataservice
+			backupUid := *bkpConfigResponse.Create.Meta.Uid
+			deploymentName := *deployment.PDSDeployment.V1Deployment.Meta.Name
+			cloudSnapId := ""
+
+			//Set the context to  the destination clusterId
+			err = SetDestinationKubeConfig()
+			log.FailOnError(err, "failed while setting dest cluster path")
+
+			destTargetCluster, err := WorkflowTargetCluster.RegisterToControlPlane(true)
+			workflowRestore.Destination.DestinationClusterId = destTargetCluster.DestinationClusterId
+
+			log.FailOnError(err, "failed while registering destination target cluster")
+
+			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
+			log.FailOnError(err, "Error while taking restore")
+			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
 		})
 
 		defer func() {
 			Step("Delete RestoredDeployment", func() {
-
+				err := workflowRestore.DeleteRestore(*restoreDeployment.Create.Meta.Uid)
+				log.FailOnError(err, "Error while deleting restore")
 			})
 		}()
 
 		Step("Validate md5hash for the restored deployments", func() {
-			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams)
+			err := workflowDataservice.ValidateDataServiceWorkloads(NewPdsParams, restoreDeployment)
 			log.FailOnError(err, "Error occured in ValidateDataServiceWorkloads method")
 		})
 

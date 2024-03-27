@@ -10,7 +10,7 @@ import (
 )
 
 // ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
-func ValidateAdhocBackup(backup WorkflowBackup) error {
+func ValidateAdhocBackup(backup BackupParams) error {
 	var bkpJobs []automationModels.PDSBackupResponse
 
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
@@ -43,18 +43,18 @@ func ValidateRestoreDeployment(restoreId, namespace string) error {
 	}
 
 	newDeployment := make(map[string]string)
-	newDeployment[*restore.Meta.Name] = restore.Config.DestinationReferences.DeploymentId
+	newDeployment[*restore.Get.Meta.Name] = restore.Get.Config.DestinationReferences.DeploymentId
 
 	err = ValidateDataServiceDeployment(newDeployment, namespace)
 	if err != nil {
 		return fmt.Errorf("error while validating restored deployment readiness")
 	}
 
-	sourceDeployment, err := v2Components.PDS.GetDeployment(restore.Config.SourceReferences.DeploymentId)
+	sourceDeployment, err := v2Components.PDS.GetDeployment(restore.Get.Config.SourceReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching source deployment object")
 	}
-	destinationDeployment, err := v2Components.PDS.GetDeployment(restore.Config.DestinationReferences.DeploymentId)
+	destinationDeployment, err := v2Components.PDS.GetDeployment(restore.Get.Config.DestinationReferences.DeploymentId)
 	if err != nil {
 		return fmt.Errorf("error while fetching destination deployment object")
 	}
@@ -106,13 +106,13 @@ func ValidateRestore(sourceDeployment, destinationDeployment *automationModels.W
 	return nil
 }
 
-func ValidateRestoreStatus(restoreId string) (*automationModels.Restore, error) {
-	var wfRestore WorkflowRestore
-	var restore *automationModels.Restore
+func ValidateRestoreStatus(restoreId string) (*automationModels.PDSRestoreResponse, error) {
+	//var wfRestore WorkflowRestore
+	var restoreResp *automationModels.PDSRestoreResponse
 
 	err := wait.Poll(restoreTimeInterval, timeOut, func() (bool, error) {
-		restore, err = wfRestore.GetRestore(restoreId)
-		state := string(*restore.Status.Phase)
+		restoreResp, err = GetRestore(restoreId)
+		state := restoreResp.Get.Status.Phase
 		if err != nil {
 			log.Errorf("failed during fetching the restore object, %v", err)
 			return false, err
@@ -126,5 +126,5 @@ func ValidateRestoreStatus(restoreId string) (*automationModels.Restore, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Error while restoring the deployment: %v\n", err)
 	}
-	return restore, nil
+	return restoreResp, nil
 }

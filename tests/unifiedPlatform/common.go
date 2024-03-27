@@ -35,6 +35,8 @@ var (
 	WorkflowTargetCluster stworkflows.WorkflowTargetCluster
 	WorkflowProject       stworkflows.WorkflowProject
 	WorkflowNamespace     stworkflows.WorkflowNamespace
+	WorkflowCc            stworkflows.WorkflowCloudCredentials
+	WorkflowbkpLoc        stworkflows.WorkflowBackupLocation
 	NewPdsParams          *parameters.NewPDSParams
 	PdsLabels             = make(map[string]string)
 )

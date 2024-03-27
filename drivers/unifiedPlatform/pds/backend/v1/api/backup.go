@@ -24,17 +24,17 @@ func (backup *PDS_API_V1) DeleteBackup(deleteBackupRequest *automationModels.PDS
 }
 
 // ListBackup will list backup for a given deployment
-func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.WorkFlowRequest) ([]automationModels.PDSBackupResponse, error) {
+func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) ([]automationModels.PDSBackupResponse, error) {
 	bkpResponse := []automationModels.PDSBackupResponse{}
 
 	ctx, bkpClient, err := backup.getBackupClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	backupConfigId := listBackupConfigRequest.Backup.List.BackupConfigId
-	namespaceId := listBackupConfigRequest.Backup.List.NamespaceId
-	targetClusterId := listBackupConfigRequest.Backup.List.TargetClusterId
-	deploymentId := listBackupConfigRequest.Backup.List.DeploymentId
+	backupConfigId := listBackupConfigRequest.List.BackupConfigId
+	namespaceId := listBackupConfigRequest.List.NamespaceId
+	targetClusterId := listBackupConfigRequest.List.TargetClusterId
+	deploymentId := listBackupConfigRequest.List.DeploymentId
 
 	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).BackupConfigId(backupConfigId).TargetClusterId(targetClusterId).NamespaceId(namespaceId).DeploymentId(deploymentId)
 
