@@ -2,7 +2,7 @@ package automationModels
 
 import "time"
 
-type PDSRestore struct {
+type PDSRestoreRequest struct {
 	Create   PDSCreateRestore
 	ReCreate PDSReCreateRestore
 	Get      PDSGetRestore
@@ -10,10 +10,30 @@ type PDSRestore struct {
 	List     PDSListRestores
 }
 
+type PDSRestoreResponse struct {
+	Create   PDSRestore
+	ReCreate PDSRestore
+	Get      PDSRestore
+	Delete   PDSRestore
+	List     PDSListRestoreResponse
+}
+
+type PDSListRestores struct {
+	AccountId            string
+	TenantId             string
+	ProjectId            string
+	DeploymentId         string
+	BackupId             string
+	SortSortBy           string
+	SortSortOrder        string
+	PaginationPageNumber string
+	PaginationPageSize   string
+}
+
 type PDSCreateRestore struct {
-	NamespaceId string   `copier:"must,nopanic"`
-	ProjectId   string   `copier:"must,nopanic"`
-	Restore     *Restore `copier:"must,nopanic"`
+	NamespaceId string      `copier:"must,nopanic"`
+	ProjectId   string      `copier:"must,nopanic"`
+	Restore     *PDSRestore `copier:"must,nopanic"`
 	// SourceReferences for the restore.
 	SourceReferences *SourceReferences `copier:"must,nopanic"`
 	// Destination references for the restore.
@@ -22,10 +42,14 @@ type PDSCreateRestore struct {
 	CustomResourceName string `copier:"must,nopanic"`
 }
 
-type Restore struct {
-	Meta   *Meta            `copier:"must,nopanic"`
-	Config *RestoreConfig   `copier:"must,nopanic"`
-	Status *Restorev1Status `copier:"must,nopanic"`
+type PDSListRestoreResponse struct {
+	Restores []PDSRestore
+}
+
+type PDSRestore struct {
+	Meta   *Meta   `copier:"must,nopanic"`
+	Config *RestoreConfig `copier:"must,nopanic"`
+	Status *Status `copier:"must,nopanic"`
 }
 
 // V1Config Desired configuration of the restore.
@@ -41,6 +65,7 @@ type PDSReCreateRestore struct {
 	TargetClusterId string `copier:"must,nopanic"`
 	Name            string `copier:"must,nopanic"`
 	NamespaceId     string `copier:"must,nopanic"`
+	ProjectId       string `copier:"must,nopanic"`
 }
 
 type PDSGetRestore struct {
@@ -51,10 +76,6 @@ type PDSDeleteRestore struct {
 	Id string `copier:"must,nopanic"`
 }
 
-type PDSListRestores struct {
-	Sort       *Sort                       `copier:"must,nopanic"`
-	Pagination *PageBasedPaginationRequest `copier:"must,nopanic"`
-}
 
 // Restorev1Status Status of the restore.
 type Restorev1Status struct {

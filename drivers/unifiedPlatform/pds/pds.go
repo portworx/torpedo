@@ -34,8 +34,8 @@ type BackupConfig interface {
 }
 
 type Backup interface {
-	DeleteBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GetBackup(*WorkFlowRequest) (*WorkFlowResponse, error)
+	DeleteBackup(*WorkFlowRequest)  error
+	GetBackup(*WorkFlowRequest) (*PDSBackupResponse, error)
 	ListBackup(*WorkFlowRequest) ([]PDSBackupResponse, error)
 }
 
@@ -46,11 +46,11 @@ type Catalog interface {
 }
 
 type RestoreInterface interface {
-	CreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	ReCreateRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	GetRestore(*WorkFlowRequest) (*Restore, error)
-	DeleteRestore(*WorkFlowRequest) (*WorkFlowResponse, error)
-	ListRestore(*WorkFlowRequest) ([]WorkFlowResponse, error)
+	CreateRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
+	ReCreateRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
+	GetRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
+	DeleteRestore(*PDSRestoreRequest) error
+	ListRestore(*PDSRestoreRequest) (*PDSRestoreResponse, error)
 }
 
 type TemplateDefinitionsInterface interface {

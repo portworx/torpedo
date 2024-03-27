@@ -27,14 +27,16 @@ func (restore *PdsGrpc) getRestoreClient() (context.Context, publicRestoreapis.R
 }
 
 // CreateRestore will create restore for a given backup
-func (restore *PdsGrpc) CreateRestore(createRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (restore *PdsGrpc) CreateRestore(createRestoreRequest *automationModels.PDSRestoreRequest) (*automationModels.PDSRestoreResponse, error) {
 	// log.Infof("Backup Create - [%+v]", createBackupConfigRequest.BackupConfig.Create)
 
-	response := &automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSRestoreResponse{
+		Create: automationModels.PDSRestore{},
+	}
 
 	createRequest := &publicRestoreapis.CreateRestoreRequest{}
 	// log.Infof("Restore Create Request - [%v], Restore Config - [%v]", createRequest, createRequest.Restore)
-	err := utilities.CopyStruct(createRestoreRequest.Restore.Create, createRequest)
+	err := utilities.CopyStruct(createRestoreRequest.Create, createRequest)
 	if err != nil {
 		return response, err
 	}
@@ -53,7 +55,7 @@ func (restore *PdsGrpc) CreateRestore(createRestoreRequest *automationModels.Wor
 		return nil, fmt.Errorf("Error while creating the restore: %v\n", err)
 	}
 
-	err = utilities.CopyStruct(apiResponse, response)
+	err = utilities.CopyStruct(apiResponse, response.Create)
 	if err != nil {
 		return response, err
 	}
@@ -62,15 +64,17 @@ func (restore *PdsGrpc) CreateRestore(createRestoreRequest *automationModels.Wor
 }
 
 // ReCreateRestore will recreate restore for a given deployment
-func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *automationModels.PDSRestoreRequest) (*automationModels.PDSRestoreResponse, error) {
 
 	// log.Infof("Backup Update - [%+v]", updateBackupConfigRequest.BackupConfig.Update)
 
-	response := &automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSRestoreResponse{
+		ReCreate: automationModels.PDSRestore{},
+	}
 
 	recreateRequest := &publicRestoreapis.RecreateRestoreRequest{}
 	// log.Infof("Restore Recretae - [%v]", recreateRequest)
-	err := utilities.CopyStruct(recretaeRestoreRequest.Restore.ReCreate, recreateRequest)
+	err := utilities.CopyStruct(recretaeRestoreRequest.ReCreate, recreateRequest)
 	if err != nil {
 		return response, err
 	}
@@ -99,14 +103,16 @@ func (restore *PdsGrpc) ReCreateRestore(recretaeRestoreRequest *automationModels
 }
 
 // GetRestore will fetch restore for a given deployment
-func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.Restore, error) {
+func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.PDSRestoreRequest) (*automationModels.PDSRestoreResponse, error) {
 	// log.Infof("Backup Get - [%+v]", getBackupConfigRequest.BackupConfig.Get)
 
-	response := &automationModels.Restore{}
+	response := &automationModels.PDSRestoreResponse{
+		Get: automationModels.PDSRestore{},
+	}
 
 	getRequest := &publicRestoreapis.GetRestoreRequest{}
 	// log.Infof("Restore Get - [%v]", getRequest)
-	err := utilities.CopyStruct(getRestoreRequest.Restore.Get, getRequest)
+	err := utilities.CopyStruct(getRestoreRequest.Get, getRequest)
 	if err != nil {
 		return response, err
 	}
@@ -135,49 +141,43 @@ func (restore *PdsGrpc) GetRestore(getRestoreRequest *automationModels.WorkFlowR
 }
 
 // DeleteRestore will delete restore for a given deployment
-func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *automationModels.WorkFlowRequest) (*automationModels.WorkFlowResponse, error) {
+func (restore *PdsGrpc) DeleteRestore(deleteRestoreRequest *automationModels.PDSRestoreRequest) error {
 	// log.Infof("Backup Delete - [%+v]", deleteBackupConfigRequest.BackupConfig.Delete)
-
-	response := &automationModels.WorkFlowResponse{}
 
 	deleteRequest := &publicRestoreapis.DeleteRestoreRequest{}
 	// log.Infof("Restore Delete - [%v]", deleteRequest)
-	err := utilities.CopyStruct(deleteRestoreRequest.Restore.Delete, deleteRequest)
+	err := utilities.CopyStruct(deleteRestoreRequest.Delete, deleteRequest)
 	if err != nil {
-		return response, err
+		return err
 	}
 	// log.Infof("Restore Delete - [%v]", deleteRequest)
 
 	ctx, client, _, err := restore.getRestoreClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting grpc client: %v\n", err)
+		return fmt.Errorf("Error while getting grpc client: %v\n", err)
 	}
 
 	ctx = WithAccountIDMetaCtx(ctx, restore.AccountId)
 
-	apiResponse, err := client.DeleteRestore(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
-	log.Infof("api response [+%v]", apiResponse)
+	_, err = client.DeleteRestore(ctx, deleteRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
-		return nil, fmt.Errorf("Error while deleting the restore: %v\n", err)
+		return fmt.Errorf("Error while deleting the restore: %v\n", err)
 	}
 
-	err = utilities.CopyStruct(apiResponse, response)
-	if err != nil {
-		return response, err
-	}
-
-	return response, nil
+	return nil
 }
 
 // ListRestore will list restores for a given deployment
-func (restore *PdsGrpc) ListRestore(listRestoresRequest *automationModels.WorkFlowRequest) ([]automationModels.WorkFlowResponse, error) {
+func (restore *PdsGrpc) ListRestore(listRestoresRequest *automationModels.PDSRestoreRequest) (*automationModels.PDSRestoreResponse, error) {
 	// log.Infof("Backup List - [%+v]", listBackupConfigRequest.BackupConfig.List)
 
-	response := []automationModels.WorkFlowResponse{}
+	response := &automationModels.PDSRestoreResponse{
+		List: automationModels.PDSListRestoreResponse{},
+	}
 
 	listRequest := &publicRestoreapis.ListRestoresRequest{}
 	// log.Infof("Restore List - [%v]", listRequest)
-	err := utilities.CopyStruct(listRestoresRequest.Restore.List, listRequest)
+	err := utilities.CopyStruct(listRestoresRequest.List, listRequest)
 	if err != nil {
 		return response, err
 	}
@@ -196,7 +196,7 @@ func (restore *PdsGrpc) ListRestore(listRestoresRequest *automationModels.WorkFl
 		return nil, fmt.Errorf("Error while listing the backupConfig: %v\n", err)
 	}
 
-	err = utilities.CopyStruct(apiResponse, response)
+	err = utilities.CopyStruct(apiResponse, response.List)
 	if err != nil {
 		return response, err
 	}

@@ -2,7 +2,6 @@ package pdslibs
 
 import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
-	pdsv2 "github.com/pure-px/platform-api-go-client/pds/v1/backupconfig"
 )
 
 type WorkflowBackup struct {
@@ -11,53 +10,47 @@ type WorkflowBackup struct {
 	NamespaceId      string
 	TargetClusterId  string
 	BackupConfigId   string
-	BackupConfigType *pdsv2.ConfigBackupType
-	BackupLevel      *pdsv2.ConfigBackupLevel
-	ReclaimPolicy    *pdsv2.ConfigReclaimPolicyType
 }
 
 // DeleteBackup deletes backup config of the deployment
-func DeleteBackup(backup WorkflowBackup) (*automationModels.WorkFlowResponse, error) {
+func DeleteBackup(backup WorkflowBackup) ( error) {
 
-	deleteBackupRequest := automationModels.WorkFlowRequest{}
+	deleteBackupRequest := automationModels.PDSBackupRequest{}
 
-	deleteBackupRequest.Backup.Delete.Id = "SomeID"
+	deleteBackupRequest.Delete.Id = backup.BackupConfigId
 
-	backupResponse, err := v2Components.PDS.DeleteBackup(&deleteBackupRequest)
+	err := v2Components.PDS.DeleteBackup(&deleteBackupRequest)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return backupResponse, err
+	return err
 }
 
 // GetBackup fetches backup config for the deployment
-func GetBackup(backup WorkflowBackup) (*automationModels.WorkFlowResponse, error) {
+func GetBackup(backup WorkflowBackup) (*automationModels.PDSBackupResponse, error) {
 
-	getBackupRequest := automationModels.WorkFlowRequest{}
+	getBackupRequest := automationModels.PDSBackupRequest{}
 
-	getBackupRequest.Backup.Get.Id = "SomeID"
+	getBackupRequest.Get.Id = backup.BackupConfigId
 
 	backupResponse, err := v2Components.PDS.GetBackup(&getBackupRequest)
 	if err != nil {
 		return nil, err
 	}
 	return backupResponse, err
+
 }
 
 // ListBackup lists backup config for the deployment
 func ListBackup(backup WorkflowBackup) ([]automationModels.PDSBackupResponse, error) {
 
-	listBackup := automationModels.WorkFlowRequest{}
+	listBackup := automationModels.PDSBackupRequest{}
 
-	listBackup.Backup.List.Sort = &automationModels.Sort{
-		SortBy:    automationModels.SortBy_Field(int32(25)),
-		SortOrder: automationModels.SortOrder_Value(int32(32)),
-	}
+	listBackup.List.TargetClusterId = backup.TargetClusterId
+	listBackup.List.NamespaceId = backup.NamespaceId
+	listBackup.List.DeploymentId = backup.DeploymentID
+	listBackup.List.BackupConfigId = backup.BackupConfigId
 
-	listBackup.Backup.List.BackupConfigId = backup.BackupConfigId
-	listBackup.Backup.List.NamespaceId = backup.NamespaceId
-	listBackup.Backup.List.TargetClusterId = backup.TargetClusterId
-	listBackup.Backup.List.DeploymentId = backup.DeploymentID
 
 	backupResponse, err := v2Components.PDS.ListBackup(&listBackup)
 	if err != nil {

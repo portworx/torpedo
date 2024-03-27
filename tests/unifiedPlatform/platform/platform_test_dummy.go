@@ -155,34 +155,6 @@ var _ = Describe("{RestoreCRUD}", func() {
 	})
 })
 
-var _ = Describe("{BackupRD}", func() {
-	JustBeforeEach(func() {
-		StartTorpedoTest("BackupRD", "Runs RD operations on backup", nil, 0)
-	})
-
-	It("Create Backup Config", func() {
-
-		Step("Get Backup Config", func() {
-			_, err := dslibs.GetBackup(dslibs.WorkflowBackup{})
-			log.Infof("Error while fetching backup - %s", err.Error())
-		})
-
-		Step("Delete Backup Config", func() {
-			_, err := dslibs.DeleteBackup(dslibs.WorkflowBackup{})
-			log.Infof("Error while deleting backup - %s", err.Error())
-		})
-
-		Step("List Backup Config", func() {
-			_, err := dslibs.ListBackup(dslibs.WorkflowBackup{})
-			log.Infof("Error while listing backup - %s", err.Error())
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
-
 //
 //var _ = Describe("{ListTenants}", func() {
 //	JustBeforeEach(func() {

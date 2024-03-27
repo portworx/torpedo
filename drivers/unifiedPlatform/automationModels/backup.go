@@ -2,7 +2,7 @@ package automationModels
 
 import "time"
 
-type PDSBackup struct {
+type PDSBackupRequest struct {
 	Delete PDSDeleteBackup `copier:"must,nopanic"`
 	List   PDSListBackup   `copier:"must,nopanic"`
 	Get    PDSGetRestore   `copier:"must,nopanic"`
@@ -18,6 +18,22 @@ type PDSDeleteBackup struct {
 	Id string `copier:"must,nopanic"`
 }
 
+type PDSListBackup struct {
+	Meta            Meta
+	Config          Config
+	Status          Backupv1Status
+	Pagination      *PageBasedPaginationRequest `copier:"must,nopanic"`
+	Sort            *Sort                       `copier:"must,nopanic"`
+	BackupConfigId  string                      `copier:"must,nopanic"`
+	TargetClusterId string                      `copier:"must,nopanic"`
+	NamespaceId     string                      `copier:"must,nopanic"`
+	DeploymentId    string                      `copier:"must,nopanic"`
+}
+
+type PDSBackupListResponse struct {
+	Backups []V1Backup
+}
+
 // V1Config Desired configuration of the Backup.
 type NewV1BackupConfig struct {
 	References *V1BackupReferences `json:"references,omitempty"`
@@ -31,20 +47,14 @@ type V1BackupReferences struct {
 	ImageId *string `json:"imageId,omitempty"`
 }
 
-type PDSListBackup struct {
-	Meta            Meta
-	Config          Config
-	Status          Backupv1Status
-	Pagination      *PageBasedPaginationRequest `copier:"must,nopanic"`
-	Sort            *Sort                       `copier:"must,nopanic"`
-	BackupConfigId  string                      `copier:"must,nopanic"`
-	TargetClusterId string                      `copier:"must,nopanic"`
-	NamespaceId     string                      `copier:"must,nopanic"`
-	DeploymentId    string                      `copier:"must,nopanic"`
-}
-
 type PDSGetBackupRequest struct {
 	Id string `copier:"must,nopanic"`
+}
+
+type V1Backup struct {
+	Meta   V1Meta         `json:"meta,omitempty"`
+	Config V1Config       `json:"config,omitempty"`
+	Status Backupv1Status `json:"status,omitempty"`
 }
 
 // Backupv1Status Status of the Backup.
