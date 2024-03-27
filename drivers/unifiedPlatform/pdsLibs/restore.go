@@ -4,25 +4,26 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
-type WorkflowRestore struct {
-	ProjectId    string
-	DeploymentID string
-	NamepsaceID  string
-}
-
 // CreateRestore creates restore for the backup
-func (restore WorkflowRestore) CreateRestore() (*automationModels.WorkFlowResponse, error) {
+func CreateRestore(backupId string, targetClusterId string, deploymentId string, projectId string, cloudSnapId string, backupLocationId string) (*automationModels.PDSRestoreResponse, error) {
 
-	createRestoreRequest := automationModels.WorkFlowRequest{}
+	createRestoreRequest := automationModels.PDSRestoreRequest{
+		Create: automationModels.PDSCreateRestore{},
+	}
 
-	createRestoreRequest.Restore.Create.SourceReferences = &automationModels.SourceReferences{
-		BackupId: "BackupID",
+	createRestoreRequest.Create.SourceReferences = &automationModels.SourceReferences{
+		BackupId:         backupId,
+		DeploymentId:     deploymentId,
+		CloudsnapId:      cloudSnapId,
+		BackupLocationId: backupLocationId,
 	}
-	createRestoreRequest.Restore.Create.DestinationReferences = &automationModels.DestinationReferences{
-		TargetClusterId: "TargetClusterID",
+	createRestoreRequest.Create.DestinationReferences = &automationModels.DestinationReferences{
+		TargetClusterId: targetClusterId,
+		DeploymentId:    deploymentId,
+		ProjectId:       projectId,
 	}
-	createRestoreRequest.Restore.Create.SourceReferences.BackupId = "SomeBackupID"
-	createRestoreRequest.Restore.Create.DestinationReferences.TargetClusterId = "SomeClusterID"
+	createRestoreRequest.Create.SourceReferences.BackupId = "SomeBackupID"
+	createRestoreRequest.Create.DestinationReferences.TargetClusterId = "SomeClusterID"
 
 	restoreResponse, err := v2Components.PDS.CreateRestore(&createRestoreRequest)
 	if err != nil {
@@ -32,11 +33,17 @@ func (restore WorkflowRestore) CreateRestore() (*automationModels.WorkFlowRespon
 }
 
 // ReCreateRestore recreates restore of the deployment
-func (restore WorkflowRestore) ReCreateRestore() (*automationModels.WorkFlowResponse, error) {
+func ReCreateRestore(id string, targetClusterId string, name string, namespaceId string, projectId string) (*automationModels.PDSRestoreResponse, error) {
 
-	recreateRestore := automationModels.WorkFlowRequest{}
+	recreateRestore := automationModels.PDSRestoreRequest{
+		ReCreate: automationModels.PDSReCreateRestore{},
+	}
 
-	recreateRestore.Restore.ReCreate.Id = "SomeID"
+	recreateRestore.ReCreate.Id = id
+	recreateRestore.ReCreate.Name = name
+	recreateRestore.ReCreate.ProjectId = projectId
+	recreateRestore.ReCreate.TargetClusterId = targetClusterId
+	recreateRestore.ReCreate.NamespaceId = namespaceId
 
 	restoreResponse, err := v2Components.PDS.ReCreateRestore(&recreateRestore)
 	if err != nil {
@@ -46,25 +53,29 @@ func (restore WorkflowRestore) ReCreateRestore() (*automationModels.WorkFlowResp
 }
 
 // DeleteRestore deletes restore of the deployment
-func (restore WorkflowRestore) DeleteRestore() (*automationModels.WorkFlowResponse, error) {
+func DeleteRestore(id string) error {
 
-	deleteRestoreRequest := automationModels.WorkFlowRequest{}
-
-	deleteRestoreRequest.Restore.Delete.Id = "SomeRestoreID"
-
-	restoreResponse, err := v2Components.PDS.DeleteRestore(&deleteRestoreRequest)
-	if err != nil {
-		return nil, err
+	deleteRestoreRequest := automationModels.PDSRestoreRequest{
+		Delete: automationModels.PDSDeleteRestore{},
 	}
-	return restoreResponse, err
+
+	deleteRestoreRequest.Delete.Id = id
+
+	err := v2Components.PDS.DeleteRestore(&deleteRestoreRequest)
+	if err != nil {
+		return err
+	}
+	return err
 }
 
 // GetBackupConfig fetches backup config for the deployment
-func (restore WorkflowRestore) GetRestore() (*automationModels.WorkFlowResponse, error) {
+func GetRestore(id string) (*automationModels.PDSRestoreResponse, error) {
 
-	getRestoreRequest := automationModels.WorkFlowRequest{}
+	getRestoreRequest := automationModels.PDSRestoreRequest{
+		Get: automationModels.PDSGetRestore{},
+	}
 
-	getRestoreRequest.Restore.Get.Id = "SomeRestoreID"
+	getRestoreRequest.Get.Id = id
 
 	restoreResponse, err := v2Components.PDS.GetRestore(&getRestoreRequest)
 	if err != nil {
@@ -74,14 +85,17 @@ func (restore WorkflowRestore) GetRestore() (*automationModels.WorkFlowResponse,
 }
 
 // ListBackupConfig lists backup config for the deployment
-func (restore WorkflowRestore) ListRestore() ([]automationModels.WorkFlowResponse, error) {
+func ListRestore(accountId string, tenantId string, projectId string, deploymentId string, backupId string) (*automationModels.PDSRestoreResponse, error) {
 
-	listRestoreRequest := automationModels.WorkFlowRequest{}
-
-	listRestoreRequest.Restore.List.Sort = &automationModels.Sort{
-		SortBy:    automationModels.SortBy_Field(int32(90)),
-		SortOrder: automationModels.SortOrder_Value(int32(15)),
+	listRestoreRequest := automationModels.PDSRestoreRequest{
+		List: automationModels.PDSListRestores{},
 	}
+
+	listRestoreRequest.List.AccountId = accountId
+	listRestoreRequest.List.TenantId = tenantId
+	listRestoreRequest.List.ProjectId = projectId
+	listRestoreRequest.List.DeploymentId = deploymentId
+	listRestoreRequest.List.BackupId = backupId
 
 	restoreResponse, err := v2Components.PDS.ListRestore(&listRestoreRequest)
 	if err != nil {
