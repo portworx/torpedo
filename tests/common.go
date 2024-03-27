@@ -11381,6 +11381,7 @@ func ValidateIBMLicense() error {
 	} else {
 		return fmt.Errorf("license validation is not supported for non-IBM cloud clusters")
 	}
+	log.Infof("Validated IBM cloud license successfully")
 	return nil
 }
 

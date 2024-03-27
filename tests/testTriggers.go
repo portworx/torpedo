@@ -5880,6 +5880,13 @@ func TriggerUpgradeVolumeDriver(contexts *[]*scheduler.Context, recordChan *chan
 				log.InfoD("Updating StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
 				Inst().StorageDriverUpgradeEndpointURL = endpoint
 				Inst().StorageDriverUpgradeEndpointVersion = version
+				if IsIksCluster() {
+					err := ValidateIBMLicense()
+					if err != nil {
+						err := fmt.Errorf("failed to validate IBM license after upgrade. Err: [%v]", err)
+						UpdateOutcome(event, err)
+					}
+				}
 			})
 			validateContexts(event, contexts)
 		}
@@ -6041,6 +6048,14 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 				log.InfoD("Updating from catalog StorageDriverUpgradeEndpoint: URL from [%s] to [%s], Version from [%s] to [%s]", Inst().StorageDriverUpgradeEndpointURL, endpoint, Inst().StorageDriverUpgradeEndpointVersion, version)
 				Inst().StorageDriverUpgradeEndpointURL = endpoint
 				Inst().StorageDriverUpgradeEndpointVersion = version
+				if IsIksCluster() {
+					err := ValidateIBMLicense()
+					if err != nil {
+						err := fmt.Errorf("failed to validate IBM license after upgrade. Err: [%v]", err)
+						UpdateOutcome(event, err)
+						return
+					}
+				}
 				updatedPXVersion, err := Inst().V.GetDriverVersionOnNode(storageNodes[0])
 				if err != nil {
 					UpdateOutcome(event, fmt.Errorf("error getting updated driver version on node [%s], Err: [%v]", storageNodes[0].Name, err))
@@ -10806,6 +10821,17 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 
 				// Printing pxctl status after the upgrade
 				PrintPxctlStatus()
+			})
+
+			Step("Validate PX license after upgrade", func() {
+				log.InfoD("Validating PX license after upgrade")
+				if Inst().S.String() == iks.SchedName {
+					err := ValidateIBMLicense()
+					if err != nil {
+						err := fmt.Errorf("failed to validate IBM license after upgrade. Err: [%v]", err)
+						UpdateOutcome(event, err)
+					}
+				}
 			})
 
 			Step("validate all apps after upgrade", func() {
