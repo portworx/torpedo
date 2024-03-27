@@ -23,7 +23,7 @@ import (
 )
 
 // This testcase verifies alternating backups between locked and unlocked bucket
-var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
+var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {, Label(TestCaseLabelsMap[BackupAlternatingBetweenLockedAndUnlockedBuckets]...), 
 	var (
 		appList        = Inst().AppList
 		credName       string
@@ -217,7 +217,7 @@ var _ = Describe("{BackupAlternatingBetweenLockedAndUnlockedBuckets}", func() {
 })
 
 // This testcase verifies resize after same original volume is restored from a backup stored in a locked bucket
-var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
+var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {, Label(TestCaseLabelsMap[LockedBucketResizeOnRestoredVolume]...), 
 	var (
 		appList              = Inst().AppList
 		backupName           string
@@ -466,7 +466,7 @@ var _ = Describe("{LockedBucketResizeOnRestoredVolume}", func() {
 })
 
 // This testcase verifies schedule backups are successful while volume resize is in progress for locked bucket
-var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
+var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {, Label(TestCaseLabelsMap[LockedBucketResizeVolumeOnScheduleBackup]...), 
 	var (
 		beforeSize                 int
 		credName                   string
@@ -722,7 +722,7 @@ var _ = Describe("{LockedBucketResizeVolumeOnScheduleBackup}", func() {
 })
 
 // DeleteLockedBucketUserObjectsFromAdmin delete backups, backup schedules, restore and cluster objects created with locked bucket from the admin
-var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
+var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {, Label(TestCaseLabelsMap[DeleteLockedBucketUserObjectsFromAdmin]...), 
 	var (
 		scheduledAppContexts                           = make([]*scheduler.Context, 0)
 		appNamespaces                                  = make([]string, 0)
@@ -1090,7 +1090,7 @@ var _ = Describe("{DeleteLockedBucketUserObjectsFromAdmin}", func() {
 })
 
 // BackupToLockedBucketWithSharedObjects creates backup with shared backup objects
-var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {
+var _ = Describe("{BackupToLockedBucketWithSharedObjects}", func() {, Label(TestCaseLabelsMap[BackupToLockedBucketWithSharedObjects]...), 
 	var (
 		preRuleName           string
 		postRuleName          string

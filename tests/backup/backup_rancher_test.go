@@ -23,7 +23,7 @@ import (
 )
 
 // This testcase takes backup of single namespace and restore to namespace in same and different project
-var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject}", func() {
+var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject}", func() {, Label(TestCaseLabelsMap[SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProject]...), 
 
 	var (
 		credName                    string
@@ -283,7 +283,7 @@ var _ = Describe("{SingleNamespaceBackupRestoreToNamespaceInSameAndDifferentProj
 })
 
 // This testcase move the ns from project to project and then to no project while restore is in progress
-var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", func() {
+var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", func() {, Label(TestCaseLabelsMap[NamespaceMoveFromProjectToProjectToNoProjectWhileRestore]...), 
 
 	var (
 		credName                 string
@@ -505,7 +505,7 @@ var _ = Describe("{NamespaceMoveFromProjectToProjectToNoProjectWhileRestore}", f
 })
 
 // This testcase takes backup and restore of multiple namespaces belonging to multiple projects
-var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
+var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {, Label(TestCaseLabelsMap[MultipleProjectsAndNamespacesBackupAndRestore]...), 
 
 	var (
 		credName                          string
@@ -898,7 +898,7 @@ var _ = Describe("{MultipleProjectsAndNamespacesBackupAndRestore}", func() {
 })
 
 // This testcase takes backup of a multiple member project with single namespace and performs different combinations of restores
-var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", func() {
+var _ = Describe("{MultipleMemberProjectBackupAndRestoreForSingleNamespace}", func() {, Label(TestCaseLabelsMap[MultipleMemberProjectBackupAndRestoreForSingleNamespace]...), 
 
 	var (
 		credName                    string

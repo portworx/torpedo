@@ -21,7 +21,7 @@ import (
 
 // IssueDeleteOfIncrementalBackupsAndRestore Issues delete of incremental backups in between and tries to restore from
 // the newest backup.
-var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
+var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {, Label(TestCaseLabelsMap[IssueDeleteOfIncrementalBackupsAndRestore]...), 
 	var (
 		credName                 string
 		clusterUid               string
@@ -209,7 +209,7 @@ var _ = Describe("{IssueDeleteOfIncrementalBackupsAndRestore}", func() {
 
 // DeleteIncrementalBackupsAndRecreateNew Delete Incremental Backups and Recreate
 // new ones
-var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
+var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {, Label(TestCaseLabelsMap[DeleteIncrementalBackupsAndRecreateNew]...), 
 	backupNames := make([]string, 0)
 	incrementalBackupNames := make([]string, 0)
 	incrementalBackupNamesRecreated := make([]string, 0)
@@ -363,7 +363,7 @@ var _ = Describe("{DeleteIncrementalBackupsAndRecreateNew}", func() {
 })
 
 // DeleteBucketVerifyCloudBackupMissing validates the backup state (CloudBackupMissing) when bucket is deleted.
-var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
+var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {, Label(TestCaseLabelsMap[DeleteBucketVerifyCloudBackupMissing]...), 
 	var (
 		scheduledAppContexts       []*scheduler.Context
 		clusterUid                 string
@@ -595,7 +595,7 @@ var _ = Describe("{DeleteBucketVerifyCloudBackupMissing}", func() {
 })
 
 // DeleteBackupAndCheckIfBucketIsEmpty delete backups and verify if contents are deleted from backup location or not
-var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {
+var _ = Describe("{DeleteBackupAndCheckIfBucketIsEmpty}", func() {, Label(TestCaseLabelsMap[DeleteBackupAndCheckIfBucketIsEmpty]...), 
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "10"))
 	var (
 		scheduledAppContexts     []*scheduler.Context
