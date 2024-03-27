@@ -2,6 +2,7 @@ package azure
 
 import (
 	"fmt"
+
 	"github.com/libopenstorage/openstorage/api"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"

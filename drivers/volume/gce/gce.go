@@ -3,6 +3,7 @@ package gce
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
+
 	"github.com/portworx/torpedo/pkg/log"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
