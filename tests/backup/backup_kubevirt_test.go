@@ -2016,7 +2016,7 @@ var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseL
 			restoreName = fmt.Sprintf("%s-%s", "restore-with-additional-disks-replace", RandomString(6))
 			restoreNames = append(restoreNames, restoreName)
 			log.InfoD("Restoring the [%s] backup", backupName)
-			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyDelete, scheduledAppContexts)
+			err = CreateRestoreWithReplacePolicyWithValidation(restoreName, backupName, make(map[string]string), DestinationClusterName, BackupOrgID, ctx, make(map[string]string), ReplacePolicyRetain, scheduledAppContexts)
 			log.FailOnError(err, "Validating restore [%s] with replace", restoreName)
 			// Waiting for VMs to restart and complete boot process otherwise the disk count will be incorrect
 			log.Infof("Waiting for VM to boot. Sleeping for %d minutes...", bootTime)
@@ -2088,8 +2088,8 @@ var _ = Describe("{KubevirtVMRestoreWithAfterChangingVMConfig}", Label(TestCaseL
 		log.Info("Destroying scheduled apps on source cluster")
 		// TODO: Need to uncomment the below code once we have data validation for kubevirt VMs implemented
 		//err = DestroyAppsWithData(scheduledAppContexts, opts, controlChannel, errorGroup)
-		DestroyApps(scheduledAppContexts, opts)
-		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+		//DestroyApps(scheduledAppContexts, opts)
+		//CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
 	})
 })
 

@@ -242,7 +242,7 @@ var _ = AfterSuite(func() {
 	defer dash.TestSetEnd()
 	defer EndTorpedoTest()
 
-	cleanup := triggerCleanup()
+	cleanup := false
 	log.InfoD(fmt.Sprintf("Cleanup state is set to %t", cleanup))
 	if cleanup {
 		ctx, err := backup.GetAdminCtxFromSecret()
