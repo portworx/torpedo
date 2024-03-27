@@ -20,7 +20,7 @@ import (
 )
 
 // DeleteSameNameObjectsByMultipleUsersFromAdmin delete backups, backup schedules, restore and cluster objects created by multiple user with same name from the admin
-var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin, Label(TestCaseLabelsMap[DeleteSameNameObjectsByMultipleUsersFromAdmin]...), }", func() { 
+var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87563
 
@@ -375,7 +375,7 @@ var _ = Describe("{DeleteSameNameObjectsByMultipleUsersFromAdmin, Label(TestCase
 })
 
 // DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin deletes user backups and restores of the deleted and inactive cluster from the admin
-var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin, Label(TestCaseLabelsMap[DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin]...), }", func() { 
+var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAdmin}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87569
 
@@ -703,7 +703,7 @@ var _ = Describe("{DeleteUserBackupsAndRestoresOfDeletedAndInActiveClusterFromAd
 })
 
 // DeleteObjectsByMultipleUsersFromNewAdmin delete backups, backup schedules, restore and cluster objects created by multiple user from the new admin
-var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin, Label(TestCaseLabelsMap[DeleteObjectsByMultipleUsersFromNewAdmin]...), }", func() { 
+var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87567
 
@@ -1082,7 +1082,7 @@ var _ = Describe("{DeleteObjectsByMultipleUsersFromNewAdmin, Label(TestCaseLabel
 })
 
 // DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin deletes failed and in-progress backups and restores of user from the admin
-var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin, Label(TestCaseLabelsMap[DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin]...), }", func() { 
+var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87564
 
@@ -1575,7 +1575,7 @@ var _ = Describe("{DeleteFailedInProgressBackupAndRestoreOfUserFromAdmin, Label(
 })
 
 // DeleteSharedBackupOfUserFromAdmin deletes backups shared by the user from the admin
-var _ = Describe("{DeleteSharedBackupOfUserFromAdmin, Label(TestCaseLabelsMap[DeleteSharedBackupOfUserFromAdmin]...), }", func() { 
+var _ = Describe("{DeleteSharedBackupOfUserFromAdmin}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87562
 
@@ -1807,7 +1807,7 @@ var _ = Describe("{DeleteSharedBackupOfUserFromAdmin, Label(TestCaseLabelsMap[De
 })
 
 // DeleteBackupOfUserNonSharedRBAC delete backups created by user from admin with non-shared RBAC resources from  px-admin.
-var _ = Describe("{DeleteBackupOfUserNonSharedRBAC, Label(TestCaseLabelsMap[DeleteBackupOfUserNonSharedRBAC]...), }", func() { 
+var _ = Describe("{DeleteBackupOfUserNonSharedRBAC}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87561
 	var (
 		userNames                      []string
@@ -2474,7 +2474,7 @@ var _ = Describe("{DeleteBackupOfUserNonSharedRBAC, Label(TestCaseLabelsMap[Dele
 })
 
 // DeleteBackupOfUserSharedRBAC delete backups created by non-admin user from px-admin with shared RBAC resources from px-admin.
-var _ = Describe("{DeleteBackupOfUserSharedRBAC, Label(TestCaseLabelsMap[DeleteBackupOfUserSharedRBAC]...), }", func() { 
+var _ = Describe("{DeleteBackupOfUserSharedRBAC}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87560
 	var (
 		periodicSchedulePolicyName       string
@@ -3055,7 +3055,7 @@ var _ = Describe("{DeleteBackupOfUserSharedRBAC, Label(TestCaseLabelsMap[DeleteB
 })
 
 // UpdatesBackupOfUserFromAdmin updates backups of non admin user from px-admin with valid/in-valid cloud account.
-var _ = Describe("{UpdatesBackupOfUserFromAdmin, Label(TestCaseLabelsMap[UpdatesBackupOfUserFromAdmin]...), }", func() { 
+var _ = Describe("{UpdatesBackupOfUserFromAdmin}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87568
 	var (
 		scheduledAppContexts           []*scheduler.Context
@@ -3301,7 +3301,7 @@ var _ = Describe("{UpdatesBackupOfUserFromAdmin, Label(TestCaseLabelsMap[Updates
 })
 
 // DeleteBackupSharedByMultipleUsersFromAdmin deletes backups non admin user from px-admin when backup is shared by multiple users.
-var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin, Label(TestCaseLabelsMap[DeleteBackupSharedByMultipleUsersFromAdmin]...), }", func() { 
+var _ = Describe("{DeleteBackupSharedByMultipleUsersFromAdmin}", func() {
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/87565
 
 	var (

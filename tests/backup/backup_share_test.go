@@ -25,7 +25,7 @@ import (
 )
 
 // This is to create multiple users and groups
-var _ = Describe("{CreateMultipleUsersAndGroups, Label(TestCaseLabelsMap[CreateMultipleUsersAndGroups]...), }", func() { 
+var _ = Describe("{CreateMultipleUsersAndGroups}", func() {
 	numberOfUsers := 20
 	numberOfGroups := 10
 	users := make([]string, 0)
@@ -145,7 +145,7 @@ var _ = Describe("{CreateMultipleUsersAndGroups, Label(TestCaseLabelsMap[CreateM
 })
 
 // Validate that user can't duplicate a shared backup without registering the cluster
-var _ = Describe("{DuplicateSharedBackup, Label(TestCaseLabelsMap[DuplicateSharedBackup]...), }", func() { 
+var _ = Describe("{DuplicateSharedBackup}", func() {
 	userName := "testuser1"
 	firstName := "firstName"
 	lastName := "lastName"
@@ -285,7 +285,7 @@ var _ = Describe("{DuplicateSharedBackup, Label(TestCaseLabelsMap[DuplicateShare
 })
 
 // DifferentAccessSameUser shares backup to user with Viewonly access who is part of group with FullAccess
-var _ = Describe("{DifferentAccessSameUser, Label(TestCaseLabelsMap[DifferentAccessSameUser]...), }", func() { 
+var _ = Describe("{DifferentAccessSameUser}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appContextsToBackup  []*scheduler.Context
@@ -439,7 +439,7 @@ var _ = Describe("{DifferentAccessSameUser, Label(TestCaseLabelsMap[DifferentAcc
 })
 
 // ShareBackupWithUsersAndGroups shares backup with multiple users and groups with different access
-var _ = Describe("{ShareBackupWithUsersAndGroups, Label(TestCaseLabelsMap[ShareBackupWithUsersAndGroups]...), }", func() { 
+var _ = Describe("{ShareBackupWithUsersAndGroups}", func() {
 	numberOfUsers := 30
 	numberOfGroups := 3
 	groupSize := 10
@@ -903,7 +903,7 @@ var _ = Describe("{ShareBackupWithUsersAndGroups, Label(TestCaseLabelsMap[ShareB
 })
 
 // ShareLargeNumberOfBackupsWithLargeNumberOfUsers shares large number of backups to large number of users
-var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers, Label(TestCaseLabelsMap[ShareLargeNumberOfBackupsWithLargeNumberOfUsers]...), }", func() { 
+var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers}", func() {
 	numberOfUsers, _ := strconv.Atoi(GetEnv(UsersToBeCreated, "200"))
 	numberOfGroups, _ := strconv.Atoi(GetEnv(GroupsToBeCreated, "100"))
 	groupSize, _ := strconv.Atoi(GetEnv(MaxUsersInGroup, "2"))
@@ -1256,7 +1256,7 @@ var _ = Describe("{ShareLargeNumberOfBackupsWithLargeNumberOfUsers, Label(TestCa
 })
 
 // CancelClusterBackupShare shares all backup at cluster level with a user group and revokes it and validate
-var _ = Describe("{CancelClusterBackupShare, Label(TestCaseLabelsMap[CancelClusterBackupShare]...), }", func() { 
+var _ = Describe("{CancelClusterBackupShare}", func() {
 	numberOfUsers := 10
 	numberOfGroups := 1
 	groupSize := 10
@@ -1807,7 +1807,7 @@ var _ = Describe("{CancelClusterBackupShare, Label(TestCaseLabelsMap[CancelClust
 })
 
 // ShareBackupAndEdit shares backup with restore and full access and edits the shared backup
-var _ = Describe("{ShareBackupAndEdit, Label(TestCaseLabelsMap[ShareBackupAndEdit]...), }", func() { 
+var _ = Describe("{ShareBackupAndEdit}", func() {
 	numberOfUsers := 2
 	users := make([]string, 0)
 	backupNames := make([]string, 0)
@@ -2048,7 +2048,7 @@ var _ = Describe("{ShareBackupAndEdit, Label(TestCaseLabelsMap[ShareBackupAndEdi
 })
 
 // SharedBackupDelete shares backup with multiple users and delete the backup
-var _ = Describe("{SharedBackupDelete, Label(TestCaseLabelsMap[SharedBackupDelete]...), }", func() { 
+var _ = Describe("{SharedBackupDelete}", func() {
 	numberOfUsers := 10
 	numberOfBackups := 10
 	users := make([]string, 0)
@@ -2253,7 +2253,7 @@ var _ = Describe("{SharedBackupDelete, Label(TestCaseLabelsMap[SharedBackupDelet
 	})
 })
 
-var _ = Describe("{ClusterBackupShareToggle, Label(TestCaseLabelsMap[ClusterBackupShareToggle]...), }", func() { 
+var _ = Describe("{ClusterBackupShareToggle}", func() {
 	var (
 		scheduledAppContexts       []*scheduler.Context
 		cloudCredUID               string
@@ -2446,7 +2446,7 @@ var _ = Describe("{ClusterBackupShareToggle, Label(TestCaseLabelsMap[ClusterBack
 
 // https://portworx.atlassian.net/browse/PB-3486
 // UI testing is need to validate that user with FullAccess cannot duplicate the backup shared
-var _ = Describe("{ShareBackupsAndClusterWithUser, Label(TestCaseLabelsMap[ShareBackupsAndClusterWithUser]...), }", func() { 
+var _ = Describe("{ShareBackupsAndClusterWithUser}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -2576,7 +2576,7 @@ var _ = Describe("{ShareBackupsAndClusterWithUser, Label(TestCaseLabelsMap[Share
 })
 
 // ShareBackupWithDifferentRoleUsers shares backup with multiple user with different access permissions and roles
-var _ = Describe("{ShareBackupWithDifferentRoleUsers, Label(TestCaseLabelsMap[ShareBackupWithDifferentRoleUsers]...), }", func() { 
+var _ = Describe("{ShareBackupWithDifferentRoleUsers}", func() {
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		bkpNamespaces            []string
@@ -2749,7 +2749,7 @@ var _ = Describe("{ShareBackupWithDifferentRoleUsers, Label(TestCaseLabelsMap[Sh
 })
 
 // DeleteSharedBackup deletes shared backups, validate that shared backups are deleted from owner
-var _ = Describe("{DeleteSharedBackup, Label(TestCaseLabelsMap[DeleteSharedBackup]...), }", func() { 
+var _ = Describe("{DeleteSharedBackup}", func() {
 	userName := "testuser-82937"
 	firstName := "firstName"
 	lastName := "lastName"
@@ -2950,7 +2950,7 @@ var _ = Describe("{DeleteSharedBackup, Label(TestCaseLabelsMap[DeleteSharedBacku
 })
 
 // ShareAndRemoveBackupLocation shares and remove backup location and add it back and verify
-var _ = Describe("{ShareAndRemoveBackupLocation, Label(TestCaseLabelsMap[ShareAndRemoveBackupLocation]...), }", func() { 
+var _ = Describe("{ShareAndRemoveBackupLocation}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -3192,7 +3192,7 @@ var _ = Describe("{ShareAndRemoveBackupLocation, Label(TestCaseLabelsMap[ShareAn
 })
 
 // ViewOnlyFullBackupRestoreIncrementalBackup shares full backup with view and incremental backup with restore access
-var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup, Label(TestCaseLabelsMap[ViewOnlyFullBackupRestoreIncrementalBackup]...), }", func() { 
+var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup}", func() {
 	backupNames := make([]string, 0)
 	userContexts := make([]context.Context, 0)
 	var scheduledAppContexts []*scheduler.Context
@@ -3407,7 +3407,7 @@ var _ = Describe("{ViewOnlyFullBackupRestoreIncrementalBackup, Label(TestCaseLab
 })
 
 // IssueMultipleRestoresWithNamespaceAndStorageClassMapping issues multiple restores with namespace and storage class mapping
-var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping, Label(TestCaseLabelsMap[IssueMultipleRestoresWithNamespaceAndStorageClassMapping]...), }", func() { 
+var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping}", func() {
 	var (
 		scheduledAppContexts []*scheduler.Context
 		appContextsToBackup  []*scheduler.Context
@@ -3676,7 +3676,7 @@ var _ = Describe("{IssueMultipleRestoresWithNamespaceAndStorageClassMapping, Lab
 })
 
 // DeleteUsersRole deletes users and roles and verify
-var _ = Describe("{DeleteUsersRole, Label(TestCaseLabelsMap[DeleteUsersRole]...), }", func() { 
+var _ = Describe("{DeleteUsersRole}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/58089
 	numberOfUsers := 80
@@ -3759,7 +3759,7 @@ var _ = Describe("{DeleteUsersRole, Label(TestCaseLabelsMap[DeleteUsersRole]...)
 })
 
 // IssueMultipleDeletesForSharedBackup deletes the shared backup by multiple users while restoring is in-progress
-var _ = Describe("{IssueMultipleDeletesForSharedBackup, Label(TestCaseLabelsMap[IssueMultipleDeletesForSharedBackup]...), }", func() { 
+var _ = Describe("{IssueMultipleDeletesForSharedBackup}", func() {
 	numberOfUsers := 6
 	users := make([]string, 0)
 	restoreNames := make([]string, 0)
@@ -3964,7 +3964,7 @@ var _ = Describe("{IssueMultipleDeletesForSharedBackup, Label(TestCaseLabelsMap[
 })
 
 // SwapShareBackup swaps backup created with same name between two users
-var _ = Describe("{SwapShareBackup, Label(TestCaseLabelsMap[SwapShareBackup]...), }", func() { 
+var _ = Describe("{SwapShareBackup}", func() {
 
 	// testrailID corresponds to: https://portworx.testrail.net/index.php?/cases/view/82940
 	numberOfUsers := 2
