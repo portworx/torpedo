@@ -144,8 +144,8 @@
   },
   "ServiceConfiguration" : {
     "HeapSize": 3,
-    "Username":"jyoti",
-    "Password" : "jyotik"
+    "KAFKA_LOG_DIRS":"/kafka/logs1",
+    "KAFKA_AUTO_CREATE_TOPICS_ENABLE": false
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1

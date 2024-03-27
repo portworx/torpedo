@@ -20,6 +20,7 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
 	//ToDo: Take configurationValue incrementation count from user/testcase
 
+	log.InfoD("cusTemp.Platform.TenantId is %v", cusTemp.Platform.TenantId)
 	//Initializing the parameters required for template generation
 	appConfigParams := pdslibs.ServiceConfiguration{
 		HeapSize: templates.ServiceConfiguration.HeapSize,
@@ -52,18 +53,28 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 		templates.ResourceConfiguration.MemoryRequest = fmt.Sprint(string(rune(newMemReq + 1)))
 	}
 	appConfig, _ := pdslibs.CreateServiceConfigTemplate(cusTemp.Platform.TenantId, appConfigParams)
-	log.InfoD("appConfig ID-  %v", appConfig.Create.Meta.Uid)
+	log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
 	appConfigId := appConfig.Create.Meta.Uid
 	cusTemp.ServiceConfigTemplateId = *appConfigId
 
 	stConfig, _ := pdslibs.CreateStorageConfigTemplate(cusTemp.Platform.TenantId, stConfigParams)
-	log.InfoD("stConfig ID-  %v", stConfig.Create.Meta.Uid)
+	log.InfoD("stConfig ID-  %v", *stConfig.Create.Meta.Uid)
 	stConfigId := stConfig.Create.Meta.Uid
 	cusTemp.StorageTemplatetId = *stConfigId
 
 	resConfig, _ := pdslibs.CreateResourceConfigTemplate(cusTemp.Platform.TenantId, resConfigParams)
-	log.InfoD("resConfig ID-  %v", resConfig.Create.Meta.Uid)
+	log.InfoD("resConfig ID-  %v", *resConfig.Create.Meta.Uid)
 	resourceConfigId := resConfig.Create.Meta.Uid
 	cusTemp.ResourceTemplateId = *stConfigId
 	return *appConfigId, *stConfigId, *resourceConfigId, nil
+}
+
+func (cusTemp *CustomTemplates) DeleteCreatedCustomPdsTemplates(tempList []string) error {
+	for _, id := range tempList {
+		err := pdslibs.DeleteTemplate(id)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

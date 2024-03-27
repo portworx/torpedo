@@ -7,7 +7,6 @@ import (
 	"github.com/portworx/torpedo/pkg/log"
 	. "github.com/portworx/torpedo/tests"
 	. "github.com/portworx/torpedo/tests/unifiedPlatform"
-	"strconv"
 	"strings"
 )
 
@@ -185,11 +184,59 @@ var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
 		_, _, resConfigIdUpdated, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, true)
 		log.FailOnError(err, "Unable to create Custom Templates for PDS")
 
-		//For Dummy test Only Will be removed once PDS build is avail
-
-		resConfigIdUpdated = strconv.Itoa(10)
 		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
 		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigIdUpdated
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			_, err := workflowDataservice.UpdateDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while updating ds")
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{IncreasePVCby1gb}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("IncreasePVCby1gb", "Deploy a dataservice and increase it Storage Size by 1gb  by applying new Storage template", nil, 0)
+	})
+	var (
+		workflowDataservice stworkflows.WorkflowDataService
+		workFlowTemplates   stworkflows.CustomTemplates
+	)
+	It("Deploy and Validate DataService", func() {
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+		})
+
+		serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+		workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+		workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+		log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		//Update Ds With New Values of Resource Templates
+		_, stConfigIdUpdated, _, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, true)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+
+		log.InfoD("Updated Storage Template ID- [updated- %v]", stConfigIdUpdated)
+		workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigIdUpdated
 		for _, ds := range NewPdsParams.DataServiceToTest {
 			_, err := workflowDataservice.UpdateDataService(ds, ds.OldImage, ds.OldVersion)
 			log.FailOnError(err, "Error while updating ds")

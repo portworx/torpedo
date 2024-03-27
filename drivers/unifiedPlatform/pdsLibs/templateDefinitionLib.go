@@ -129,6 +129,14 @@ func CreateResourceConfigTemplate(tenantId string, templateConfigs ResourceConfi
 	return templateResponse, nil
 }
 
+func DeleteTemplate(id string) error {
+	delReq := automationModels.PlatformTemplatesRequest{Delete: automationModels.DeletePlatformTemplates{Id: id}}
+	templateResponse := v2Components.Platform.DeleteTemplate(&delReq)
+	if err != nil {
+		return templateResponse
+	}
+	return nil
+}
 func GetRevisionUidForApplication() (string, error) {
 	revision, err := v2Components.PDS.GetTemplateRevisions()
 	if err != nil {
