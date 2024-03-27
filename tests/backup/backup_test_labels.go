@@ -108,6 +108,7 @@ const (
 	VerifyRBACForAppAdmin                                                              TestCaseName = "VerifyRBACForAppAdmin"
 	VerifyRBACForAppUser                                                               TestCaseName = "VerifyRBACForAppUser"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS                                   TestCaseName = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
+  KubevirtScheduledVMDelete                                                          TestCaseName = "KubevirtScheduledVMDelete"
 	BackupAndRestoreSyncDR                                                             TestCaseName = "BackupAndRestoreSyncDR"
 	ExcludeInvalidDirectoryFileBackup                                                  TestCaseName = "ExcludeInvalidDirectoryFileBackup"
 	ExcludeDirectoryFileBackup                                                         TestCaseName = "ExcludeDirectoryFileBackup"
@@ -121,6 +122,7 @@ const (
 	BackupToLockedBucketWithSharedObjects                                              TestCaseName = "BackupToLockedBucketWithSharedObjects"
 	RemoveJSONFilesFromNFSBackupLocation                                               TestCaseName = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
+
 )
 
 // Test case labels
@@ -228,6 +230,7 @@ const (
 	KubevirtInPlaceRestoreWithReplaceAndRetainLabel                                         TestCaseLabel = "KubevirtInPlaceRestoreWithReplaceAndRetain"
 	KubevirtVMRestoreWithAfterChangingVMConfigLabel                                         TestCaseLabel = "KubevirtVMRestoreWithAfterChangingVMConfig"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel                                   TestCaseLabel = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
+  KubevirtScheduledVMDeleteLabel                                                          TestCaseLabel = "KubevirtScheduledVMDelete"
 	BackupAndRestoreSyncDRLabel                                                             TestCaseLabel = "BackupAndRestoreSyncDR"
 	ExcludeInvalidDirectoryFileBackupLabel                                                  TestCaseLabel = "ExcludeInvalidDirectoryFileBackup"
 	ExcludeDirectoryFileBackupLabel                                                         TestCaseLabel = "ExcludeDirectoryFileBackup"
@@ -476,7 +479,7 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	KubevirtInPlaceRestoreWithReplaceAndRetain:                       {KubevirtInPlaceRestoreWithReplaceAndRetainLabel, KubevirtAppLabel},
 	KubevirtVMRestoreWithAfterChangingVMConfig:                       {KubevirtVMRestoreWithAfterChangingVMConfigLabel, KubevirtAppLabel},
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                 {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
-	BackupAndRestoreSyncDR:                                           {BackupAndRestoreSyncDRLabel},
+  KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},	BackupAndRestoreSyncDR:                                           {BackupAndRestoreSyncDRLabel},
 	ExcludeInvalidDirectoryFileBackup:                                {ExcludeInvalidDirectoryFileBackupLabel},
 	ExcludeDirectoryFileBackup:                                       {ExcludeDirectoryFileBackupLabel},
 	MultipleMemberProjectBackupAndRestoreForSingleNamespace:          {MultipleMemberProjectBackupAndRestoreForSingleNamespaceLabel},
