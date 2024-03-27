@@ -700,7 +700,7 @@ func ValidateContext(ctx *scheduler.Context, errChan ...*chan error) {
 
 		Step(fmt.Sprintf("validate %s app's volumes", ctx.App.Key), func() {
 			// In case of tektoncd skip the volume validation as the pods are created through jobs and not deployments or sts
-			if Contains(Inst().AppList, "tektoncd") {
+			if strings.Contains(ctx.App.Key, "tektoncd") {
 				ctx.SkipVolumeValidation = true
 			}
 			if !ctx.SkipVolumeValidation {
