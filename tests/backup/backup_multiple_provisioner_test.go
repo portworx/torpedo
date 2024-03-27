@@ -41,6 +41,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 		postRuleName                              string
 		preRuleUid                                string
 		postRuleUid                               string
+		clusterCredentials                        string
 		clusterProviderName                       = GetClusterProvider()
 		provisionerDefaultSnapshotClassMap        = GetProvisionerDefaultSnapshotMap(clusterProviderName)
 	)
@@ -159,7 +160,13 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 					volumeNames = append(volumeNames, obj.Name)
 				}
 				log.InfoD("Deleting the snapshot present in the volumes which are backed up %s", volumeNames)
-				err = Inst().V.DeleteSnapshotsForVolumes(volumeNames, GlobalCredentialConfig)
+				if GetClusterProvider() == "ibm" {
+					clusterCredentials, err = GetIBMApiKey("default")
+					if err != nil {
+						log.FailOnError(err, fmt.Sprintf("get ibm apikey %v", clusterCredentials))
+					}
+				}
+				err = Inst().V.DeleteSnapshotsForVolumes(volumeNames, clusterCredentials)
 				log.FailOnError(err, fmt.Sprintf("Deleteing snapshot failed for volumes %v", volumeNames))
 			} else {
 				log.InfoD("Skipping this step as provisioner with default volume snapshot class is not found")

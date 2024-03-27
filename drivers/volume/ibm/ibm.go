@@ -5,7 +5,6 @@ import (
 	ibmcore "github.com/IBM/go-sdk-core/v5/core"
 	"github.com/IBM/vpc-go-sdk/vpcv1"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/backup"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -100,8 +99,7 @@ func (i *ibm) InspectVolume(name string) (*api.Volume, error) {
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in ibm cloud
-func (i *ibm) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
-	apiKey := globalCredentialConfig.CloudProviders.GetIBMCredential("default").APIKey
+func (i *ibm) DeleteSnapshotsForVolumes(volumeNames []string, apiKey string) error {
 
 	// Initialize the IBM Cloud VPC service client
 	authenticator := &ibmcore.IamAuthenticator{

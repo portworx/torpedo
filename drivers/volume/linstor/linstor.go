@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/backup"
 	"time"
 
 	lclient "github.com/LINBIT/golinstor/client"
@@ -140,7 +139,7 @@ func (d *linstor) KillPXDaemon(n []node.Node, triggerOpts *driver_api.TriggerOpt
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in linstor
-func (d *linstor) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+func (d *linstor) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
 }

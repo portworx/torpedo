@@ -3,8 +3,6 @@ package gce
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/backup"
-
 	"github.com/portworx/torpedo/pkg/log"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -102,7 +100,7 @@ func (d *gce) InspectVolume(name string) (*api.Volume, error) {
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in google cloud
-func (d *gce) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+func (d *gce) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
 }

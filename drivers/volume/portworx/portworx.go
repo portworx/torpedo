@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/portworx/torpedo/drivers/backup"
 	"io/ioutil"
 	"math"
 	"net"
@@ -4397,7 +4396,7 @@ func (d *portworx) ValidateVolumeSnapshotRestore(vol string, snapshotData *snapv
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes
-func (d *pure) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+func (d *pure) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
@@ -5981,8 +5980,8 @@ func (d *portworx) UpdatePoolLabels(n node.Node, poolID string, labels map[strin
 
 }
 
-// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes
-func (d *portworx) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+// DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in google cloud
+func (d *portworx) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
 }

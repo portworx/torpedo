@@ -2,8 +2,6 @@ package azure
 
 import (
 	"fmt"
-	"github.com/portworx/torpedo/drivers/backup"
-
 	"github.com/libopenstorage/openstorage/api"
 
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
@@ -86,7 +84,7 @@ func (d *azure) InspectVolume(name string) (*api.Volume, error) {
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in azure cloud
-func (d *azure) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+func (d *azure) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
