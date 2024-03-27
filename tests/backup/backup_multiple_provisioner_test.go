@@ -36,6 +36,11 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 		scheduledAppContextsForMultipleAppSinleNs []*scheduler.Context
 		multipleProvisionerSameNsScheduleName     string
 		multipleNsSchBackupName                   string
+		appSpecList                               []string
+		preRuleName                               string
+		postRuleName                              string
+		preRuleUid                                string
+		postRuleUid                               string
 		clusterProviderName                       = GetClusterProvider()
 		provisionerDefaultSnapshotClassMap        = GetProvisionerDefaultSnapshotMap(clusterProviderName)
 	)
@@ -45,11 +50,6 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 
 		backupLocationMap = make(map[string]string)
 		providers = GetBackupProviders()
-
-		// Deploy application for Default backup
-		/*		appSpecList = []string{"postgres"}
-				applicationSpecIndex := rand.Intn(len(appSpecList))
-				applicationSpec := appSpecList[applicationSpecIndex]*/
 
 		// Deploy multiple application in a single namespace using different provisioner
 		taskName := fmt.Sprintf("%s-%s", TaskNamePrefix, RandomString(randomStringLength))
@@ -110,6 +110,23 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 			err = CreateBackupScheduleIntervalPolicy(5, schedulePolicyInterval, 5, schedulePolicyName, schedulePolicyUID, BackupOrgID, ctx, false, false)
 			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of schedule policy %s", schedulePolicyName))
 		})
+		Step(fmt.Sprintf("Create pre and post exec rules for applications from px-admin"), func() {
+			log.InfoD("Create pre and post exec rules for applications from px-admin")
+			ctx, err := backup.GetAdminCtxFromSecret()
+			log.FailOnError(err, "Fetching px-admin ctx")
+			preRuleName, postRuleName, err = CreateRuleForBackupWithMultipleApplications(BackupOrgID, appSpecList, ctx)
+			dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of pre and post exec rules for applications from px-admin"))
+			if preRuleName != "" {
+				preRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, preRuleName)
+				log.FailOnError(err, "Fetching pre backup rule [%s] uid", preRuleName)
+				log.Infof("Pre backup rule [%s] uid: [%s]", preRuleName, preRuleUid)
+			}
+			if postRuleName != "" {
+				postRuleUid, err = Inst().Backup.GetRuleUid(BackupOrgID, ctx, postRuleName)
+				log.FailOnError(err, "Fetching post backup rule [%s] uid", postRuleName)
+				log.Infof("Post backup rule [%s] uid: [%s]", postRuleName, postRuleUid)
+			}
+		})
 		Step(fmt.Sprintf("Creating schedule backup for application deployed using multiple provisioner with default volume snapshot class"), func() {
 			log.InfoD("Creating schedule backup for multiple provisioner with default volume snapshot class")
 			ctx, err := backup.GetAdminCtxFromSecret()
@@ -122,7 +139,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 					provisionerSelectDefaultVolumeSnapshotClass[key] = "Default"
 				}
 				multipleProvisionerSameNsScheduleName = fmt.Sprintf("multiple-provisioner-same-namespace-schedule-%v", RandomString(randomStringLength))
-				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, "", "", "", "", schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
+				multipleNsSchBackupName, err = CreateScheduleBackupWithValidationWithVscMapping(ctx, multipleProvisionerSameNsScheduleName, SourceClusterName, backupLocationName, backupLocationUID, scheduledAppContextsForMultipleAppSinleNs, make(map[string]string), BackupOrgID, preRuleName, preRuleUid, postRuleName, postRuleUid, schedulePolicyName, schedulePolicyUID, provisionerSelectDefaultVolumeSnapshotClass, false)
 				scheduleList = append(scheduleList, multipleProvisionerSameNsScheduleName)
 				dash.VerifyFatal(err, nil, fmt.Sprintf("Verifying creation of scheduled backup with schedule name [%s] for backup location %s", multipleNsSchBackupName, backupLocationName))
 				err = IsFullBackup(multipleNsSchBackupName, BackupOrgID, ctx)
