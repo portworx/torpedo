@@ -7719,6 +7719,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
 	masterNodes := node.GetMasterNodes()
+	// TODO: enable the log collection for charmed k8s once we get the way to ssh into worker node
 	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
