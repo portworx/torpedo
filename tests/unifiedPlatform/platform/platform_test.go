@@ -81,7 +81,7 @@ var _ = Describe("{PlatformBasicTest}", func() {
 		Step("Register Target Cluster", func() {
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
+			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
 			log.FailOnError(err, "Unable to register target cluster")
 			log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
@@ -194,7 +194,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 		Step("Register Target Cluster", func() {
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane()
+			workflowTargetCluster, err := workflowTargetCluster.RegisterToControlPlane(false)
 			log.FailOnError(err, "Unable to register target cluster")
 			log.Infof("Target cluster registered with uid - [%s]", workflowTargetCluster.ClusterUID)
 		})
@@ -258,7 +258,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowServiceAccount.SwitchToServiceAccount(projectAdmin)
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			_, err := workflowTargetCluster.RegisterToControlPlane()
+			_, err := workflowTargetCluster.RegisterToControlPlane(false)
 			// TODO: Error needs to be changed with actual error at the time of validation
 			dash.VerifyFatal(err, err, "Register target cluster failed with project admin account")
 		})
@@ -270,7 +270,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowServiceAccount.SwitchToServiceAccount(projectUser)
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			_, err := workflowTargetCluster.RegisterToControlPlane()
+			_, err := workflowTargetCluster.RegisterToControlPlane(false)
 			// TODO: Error needs to be changed with actual error at the time of validation
 			dash.VerifyFatal(err, err, "Register target cluster failed with project user account")
 		})
@@ -282,7 +282,7 @@ var _ = Describe("{PlatformRBACTest}", func() {
 			workflowServiceAccount.SwitchToServiceAccount(projectUser)
 			workflowTargetCluster.Project = workflowProject
 			log.Infof("Tenant ID [%s]", workflowTargetCluster.Project.Platform.TenantId)
-			_, err := workflowTargetCluster.RegisterToControlPlane()
+			_, err := workflowTargetCluster.RegisterToControlPlane(false)
 			// TODO: Error needs to be changed with actual error at the time of validation
 			dash.VerifyFatal(err, err, "Register target cluster failed with project user account")
 		})

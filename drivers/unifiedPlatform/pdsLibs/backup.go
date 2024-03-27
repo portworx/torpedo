@@ -4,12 +4,20 @@ import (
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 )
 
+type BackupParams struct {
+	ProjectId       string
+	DeploymentID    string
+	NamespaceId     string
+	TargetClusterId string
+	BackupConfigId  string
+}
+
 // DeleteBackup deletes backup config of the deployment
-func DeleteBackup(id string) error {
+func DeleteBackup(backup BackupParams) error {
 
 	deleteBackupRequest := automationModels.PDSBackupRequest{}
 
-	deleteBackupRequest.Delete.Id = id
+	deleteBackupRequest.Delete.Id = backup.BackupConfigId
 
 	err := v2Components.PDS.DeleteBackup(&deleteBackupRequest)
 	if err != nil {
@@ -19,11 +27,11 @@ func DeleteBackup(id string) error {
 }
 
 // GetBackup fetches backup config for the deployment
-func GetBackup(id string) (*automationModels.PDSBackupResponse, error) {
+func GetBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error) {
 
 	getBackupRequest := automationModels.PDSBackupRequest{}
 
-	getBackupRequest.Get.Id = id
+	getBackupRequest.Get.Id = backup.BackupConfigId
 
 	backupResponse, err := v2Components.PDS.GetBackup(&getBackupRequest)
 	if err != nil {
@@ -34,14 +42,14 @@ func GetBackup(id string) (*automationModels.PDSBackupResponse, error) {
 }
 
 // ListBackup lists backup config for the deployment
-func ListBackups(backupConfigId string, targetClusterId string, namespaceId string, deploymentId string) (*automationModels.PDSBackupResponse, error) {
+func ListBackup(backup BackupParams) ([]automationModels.PDSBackupResponse, error) {
 
 	listBackup := automationModels.PDSBackupRequest{}
 
-	listBackup.List.TargetClusterId = targetClusterId
-	listBackup.List.NamespaceId = namespaceId
-	listBackup.List.DeploymentId = deploymentId
-	listBackup.List.BackupConfigId = backupConfigId
+	listBackup.List.TargetClusterId = backup.TargetClusterId
+	listBackup.List.NamespaceId = backup.NamespaceId
+	listBackup.List.DeploymentId = backup.DeploymentID
+	listBackup.List.BackupConfigId = backup.BackupConfigId
 
 	backupResponse, err := v2Components.PDS.ListBackup(&listBackup)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"github.com/portworx/sched-ops/k8s/storage"
 	pdsdriver "github.com/portworx/torpedo/drivers/pds"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform"
-	"github.com/portworx/torpedo/pkg/aetosutil"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -28,7 +27,6 @@ var (
 	k8sApps    = apps.Instance()
 	k8sRbac    = rbac.Instance()
 	k8sStorage = storage.Instance()
-	dash       *aetosutil.Dashboard
 )
 
 const (
@@ -36,7 +34,12 @@ const (
 	validateDeploymentTimeInterval = 60 * time.Second
 	timeOut                        = 30 * time.Minute
 	maxtimeInterval                = 30 * time.Second
+	bkpTimeInterval                = 60 * time.Second
+	bkpMaxtimeInterval             = 10 * time.Minute
+	restoreTimeInterval            = 20 * time.Second
+	BACKUP_JOB_SUCCEEDED           = "Succeeded"
 	pdsWorkloadImage               = "portworx/pds-loadtests:sample-load-pds-qa"
+	awsS3endpoint                  = "s3.amazonaws.com"
 )
 const (
 	postgresql    = "PostgreSQL"
@@ -575,4 +578,9 @@ func int64Ptr(i int64) *int64 {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// StringPtr returns a pointer to the given string value.
+func StringPtr(s string) *string {
+	return &s
 }

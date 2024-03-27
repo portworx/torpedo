@@ -24,40 +24,36 @@ func (backup *PDS_API_V1) DeleteBackup(deleteBackupRequest *automationModels.PDS
 }
 
 // ListBackup will list backup for a given deployment
-func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
-	response := automationModels.PDSBackupResponse{
-		Get: automationModels.V1Backup{},
-	}
+func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) ([]automationModels.PDSBackupResponse, error) {
+	bkpResponse := []automationModels.PDSBackupResponse{}
 
-	ctx, backupClient, err := backup.getBackupClient()
+	ctx, bkpClient, err := backup.getBackupClient()
 	if err != nil {
-		return nil, fmt.Errorf("Error while getting updated client with auth header: %v\n", err)
+		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
 	}
-	listBackupRequest := backupClient.BackupServiceListBackups(ctx)
+	backupConfigId := listBackupConfigRequest.List.BackupConfigId
+	namespaceId := listBackupConfigRequest.List.NamespaceId
+	targetClusterId := listBackupConfigRequest.List.TargetClusterId
+	deploymentId := listBackupConfigRequest.List.DeploymentId
 
-	listBackupRequest = listBackupRequest.NamespaceId(listBackupConfigRequest.List.NamespaceId)
-	listBackupRequest = listBackupRequest.DeploymentId(listBackupConfigRequest.List.DeploymentId)
-	listBackupRequest = listBackupRequest.BackupConfigId(listBackupConfigRequest.List.BackupConfigId)
-	listBackupRequest = listBackupRequest.TargetClusterId(listBackupConfigRequest.List.TargetClusterId)
+	listBkpRequest := bkpClient.BackupServiceListBackups(ctx).BackupConfigId(backupConfigId).TargetClusterId(targetClusterId).NamespaceId(namespaceId).DeploymentId(deploymentId)
 
-	backupModel, res, err := listBackupRequest.Execute()
+	bkpModel, res, err := bkpClient.BackupServiceListBackupsExecute(listBkpRequest)
 	if err != nil || res.StatusCode != status.StatusOK {
-		return nil, fmt.Errorf("Error when calling `BackupServiceDeleteBackup`: %v\n.Full HTTP response: %v", err, res)
+		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
-	err = utilities.CopyStruct(backupModel, &response)
+	err = utilities.CopyStruct(bkpModel.Backups, &bkpResponse)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error occured while copying the backup response: %v\n", err)
 	}
 
-	return &response, err
+	return bkpResponse, nil
 }
 
 // GetBackup will fetch backup for a given deployment
 func (backup *PDS_API_V1) GetBackup(getBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
 
-	response := automationModels.PDSBackupResponse{
-		List: automationModels.PDSBackupListResponse{},
-	}
+	response := automationModels.PDSBackupResponse{}
 
 	ctx, backupClient, err := backup.getBackupClient()
 	if err != nil {

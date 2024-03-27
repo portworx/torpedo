@@ -9,20 +9,46 @@ type PDSBackupRequest struct {
 }
 
 type PDSBackupResponse struct {
-	List PDSBackupListResponse `copier:"must,nopanic"`
-	Get  V1Backup              `copier:"must,nopanic"`
+	Meta   Meta
+	Config NewV1BackupConfig
+	Status Backupv1Status
 }
 
 type PDSDeleteBackup struct {
 	Id string `copier:"must,nopanic"`
 }
 
-type PDSGetBackupRequest struct {
-	Id string `copier:"must,nopanic"`
+type PDSListBackup struct {
+	Meta            Meta
+	Config          Config
+	Status          Backupv1Status
+	Pagination      *PageBasedPaginationRequest `copier:"must,nopanic"`
+	Sort            *Sort                       `copier:"must,nopanic"`
+	BackupConfigId  string                      `copier:"must,nopanic"`
+	TargetClusterId string                      `copier:"must,nopanic"`
+	NamespaceId     string                      `copier:"must,nopanic"`
+	DeploymentId    string                      `copier:"must,nopanic"`
 }
 
 type PDSBackupListResponse struct {
 	Backups []V1Backup
+}
+
+// V1Config Desired configuration of the Backup.
+type NewV1BackupConfig struct {
+	References *V1BackupReferences `json:"references,omitempty"`
+	// BackupCapability of the deployment target when the snapshot was created.
+	BackupCapability *string `json:"backupCapability,omitempty"`
+}
+
+// V1References References to other resources.
+type V1BackupReferences struct {
+	// UID of the image of the data service which will needs to be backup .
+	ImageId *string `json:"imageId,omitempty"`
+}
+
+type PDSGetBackupRequest struct {
+	Id string `copier:"must,nopanic"`
 }
 
 type V1Backup struct {
@@ -31,23 +57,19 @@ type V1Backup struct {
 	Status Backupv1Status `json:"status,omitempty"`
 }
 
+// Backupv1Status Status of the Backup.
 type Backupv1Status struct {
-	CloudSnapId    string      `json:"cloudSnapId,omitempty"`
-	StartTime      time.Time   `json:"startTime,omitempty"`
-	CompletionTime time.Time   `json:"completionTime,omitempty"`
-	Phase          StatusPhase `json:"phase,omitempty"`
-	ErrorCode      string      `json:"errorCode,omitempty"`
-	ErrorMessage   string      `json:"errorMessage,omitempty"`
-	FileSize       string      `json:"fileSize,omitempty"`
-}
-
-type PDSListBackup struct {
-	DeploymentId         string
-	TargetClusterId      string
-	NamespaceId          string
-	BackupConfigId       string
-	PaginationPageNumber string
-	PaginationPageSize   string
-	SortSortBy           string
-	SortSortOrder        string
+	// CloudSnapID snapshot of the backup volume.
+	CloudSnapId *string `copier:"must,nopanic"`
+	// Start time of the backup.
+	StartTime *time.Time `copier:"must,nopanic"`
+	// Completion time of the backup.
+	CompletionTime *time.Time   `copier:"must,nopanic"`
+	Phase          *StatusPhase `copier:"must,nopanic"`
+	// ErrorCode if CompletionStatus is \"Failed\".
+	ErrorCode *string `copier:"must,nopanic"`
+	// ErrorMessage associated with the ErrorCode.
+	ErrorMessage *string `copier:"must,nopanic"`
+	// FileSize of the CloudSnap image.
+	FileSize *string `copier:"must,nopanic"`
 }

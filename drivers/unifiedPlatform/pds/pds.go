@@ -36,7 +36,7 @@ type BackupConfig interface {
 type Backup interface {
 	DeleteBackup(*PDSBackupRequest) error
 	GetBackup(*PDSBackupRequest) (*PDSBackupResponse, error)
-	ListBackup(*PDSBackupRequest) (*PDSBackupResponse, error)
+	ListBackup(*PDSBackupRequest) ([]PDSBackupResponse, error)
 }
 
 type Catalog interface {

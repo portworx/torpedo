@@ -29,23 +29,23 @@ func (backupConf *PDS_API_V1) getBackupConfigClient() (context.Context, *backupC
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	backupConf.BackupV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	backupConf.BackupV1APIClient.GetConfig().DefaultHeader["px-account-id"] = backupConf.AccountID
+	backupConf.BackupConfigV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	backupConf.BackupConfigV1APIClient.GetConfig().DefaultHeader["px-account-id"] = backupConf.AccountID
 	client := backupConf.BackupConfigV1APIClient.BackupConfigServiceAPI
 
 	return ctx, client, nil
 }
 
 // getBackupClient updates the header with bearer token and returns the new client
-func (backupConf *PDS_API_V1) getBackupClient() (context.Context, *backupV1.BackupServiceAPIService, error) {
+func (backup *PDS_API_V1) getBackupClient() (context.Context, *backupV1.BackupServiceAPIService, error) {
 	ctx, token, err := utils.GetBearerToken()
 
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	backupConf.BackupV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	backupConf.BackupV1APIClient.GetConfig().DefaultHeader["px-account-id"] = backupConf.AccountID
-	client := backupConf.BackupV1APIClient.BackupServiceAPI
+	backup.BackupV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	backup.BackupV1APIClient.GetConfig().DefaultHeader["px-account-id"] = backup.AccountID
+	client := backup.BackupV1APIClient.BackupServiceAPI
 
 	return ctx, client, nil
 }
@@ -57,8 +57,8 @@ func (restore *PDS_API_V1) getRestoreClient() (context.Context, *restoreV1.Resto
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error in getting bearer token: %v\n", err)
 	}
-	restore.RestoreV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
-	restore.RestoreV1APIClient.GetConfig().DefaultHeader["px-account-id"] = restore.AccountID
+	restore.BackupV1APIClient.GetConfig().DefaultHeader["Authorization"] = "Bearer " + token
+	restore.BackupV1APIClient.GetConfig().DefaultHeader["px-account-id"] = restore.AccountID
 	client := restore.RestoreV1APIClient.RestoreServiceAPI
 
 	return ctx, client, nil

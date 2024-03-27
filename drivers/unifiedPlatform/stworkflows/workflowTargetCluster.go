@@ -15,9 +15,10 @@ import (
 )
 
 type WorkflowTargetCluster struct {
-	KubeConfig string
-	Project    WorkflowProject
-	ClusterUID string
+	KubeConfig           string
+	Project              WorkflowProject
+	ClusterUID           string
+	DestinationClusterId string
 }
 
 const (
@@ -38,7 +39,7 @@ var (
 )
 
 // RegisterToControlPlane register the target cluster to control plane.
-func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowTargetCluster, error) {
+func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane(isDestinationTargetCluster bool) (*WorkflowTargetCluster, error) {
 
 	var cmd string
 	// Get Manifest from API
@@ -101,7 +102,11 @@ func (targetCluster *WorkflowTargetCluster) RegisterToControlPlane() (*WorkflowT
 		return targetCluster, fmt.Errorf("Failed to get clusterId: %v\n", err)
 	}
 
-	targetCluster.ClusterUID = clusterId
+	if isDestinationTargetCluster {
+		targetCluster.DestinationClusterId = clusterId
+	} else {
+		targetCluster.ClusterUID = clusterId
+	}
 
 	return targetCluster, nil
 }

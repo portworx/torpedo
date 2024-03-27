@@ -79,10 +79,25 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 	depInputs.Create.V1Deployment.Config.References.TargetClusterId = targetClusterId
 	depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
 	depInputs.Create.V1Deployment.Config.References.ImageId = intToPointerString(4343)
+
+	// Create instances of ProtobufAny4 and assign values to their fields
+	protobufAny := automationModels.ProtobufAny4{
+		Type: StringPtr("type.googleapis.com/path/google.protobuf.Duration"),
+		AdditionalProperties: map[string]interface{}{
+			"key1": "value1",
+			"key2": 123,
+		},
+	}
+
+	// Initialize the map for Values and add key-value pairs to it
+	values := map[string]automationModels.ProtobufAny4{
+		"someKey": protobufAny,
+	}
+
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
 		Id:              &resConfigId,
 		ResourceVersion: nil,
-		Values:          nil,
+		Values:          &values,
 	}
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
 		Id:              &appConfigId,

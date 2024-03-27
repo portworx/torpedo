@@ -6,6 +6,7 @@ import (
 	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/pkg/aetosutil"
 	"github.com/portworx/torpedo/pkg/log"
+	"strconv"
 )
 
 type WorkflowDataService struct {
@@ -13,6 +14,7 @@ type WorkflowDataService struct {
 	PDSTemplates              CustomTemplates
 	NamespaceName             string
 	DataServiceDeployment     map[string]string
+	RestoredDataServiceDeployment map[string]string
 	SkipValidatation          map[string]bool
 	SourceDeploymentMd5Hash   map[string]string
 	RestoredDeploymentMd5Hash map[string]string
@@ -41,12 +43,12 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
-	imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
-	if err != nil {
-		return nil, err
-	}
+	//imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId)
+	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, "imageId", appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +56,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
-			log.Infof("Skipping Validation")
+			log.Infof("Skipping DataService Deployment  Validation")
 		}
 	} else {
 		// Validate the sts object and health of the pds deployment
@@ -72,7 +74,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
 		var dataServiceVersionBuildMap = make(map[string][]string)
-		dslibs.ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	}
 
 	return deployment, nil
@@ -114,7 +116,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 		// Validate deployment resources
 		//TODO: Initialize the dataServiceVersionBuildMap once list ds version api is available
 		var dataServiceVersionBuildMap = make(map[string][]string)
-		dslibs.ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
+		ValidateDeploymentResources(resourceTemp, storageOp, config, ds.Replicas, dataServiceVersionBuildMap)
 	}
 	return deployment, nil
 }
@@ -146,21 +148,10 @@ func (wfDataService *WorkflowDataService) RunDataServiceWorkloads(params *parame
 
 	wfDataService.SourceDeploymentMd5Hash[deploymentName] = chkSum
 
-	if value, ok := wfDataService.SkipValidatation[ValidatePdsWorkloads]; ok {
-		if value == true {
-			log.Infof("Skipping Workload Validation")
-		}
-	} else {
-		err := wfDataService.ValidateDataServiceWorkloads(params)
-		if err != nil {
-			return err
-		}
-	}
-
 	return dslibs.DeleteWorkloadDeployments(wlDep)
 }
 
-func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *parameters.NewPDSParams) error {
+func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *parameters.NewPDSParams, restoredDeployment *automationModels.PDSRestoreResponse) error {
 	//Initializing the parameters required for workload generation
 	wkloadParams := dslibs.LoadGenParams{
 		LoadGenDepName: params.LoadGen.LoadGenDepName,
@@ -173,13 +164,14 @@ func (wfDataService *WorkflowDataService) ValidateDataServiceWorkloads(params *p
 		FailOnError:    params.LoadGen.FailOnError,
 	}
 
-	//TODO: Deployment will be updated to restored deployment once we have the restore workflow
-	chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(wfDataService.DataServiceDeployment, wkloadParams)
+	deployment := make(map[string]string)
+	deployment[*restoredDeployment.Create.Meta.Name] = *restoredDeployment.Create.Meta.Uid
+	chkSum, wlDep, err := dslibs.ReadDataAndReturnChecksum(deployment, wkloadParams)
 	if err != nil {
 		return err
 	}
 
-	deploymentName, _ := GetDeploymentNameAndId(wfDataService.DataServiceDeployment)
+	deploymentName, _ := GetDeploymentNameAndId(deployment)
 
 	wfDataService.RestoredDeploymentMd5Hash[deploymentName] = chkSum
 
@@ -203,4 +195,29 @@ func GetDeploymentNameAndId(deployment map[string]string) (string, string) {
 
 	return deploymentName, deploymentId
 
+}
+
+func ValidateDeploymentResources(resourceTemp dslibs.ResourceSettingTemplate, storageOp dslibs.StorageOptions, config dslibs.StorageClassConfig, replicas int, dataServiceVersionBuildMap map[string][]string) {
+	log.InfoD("filesystem used %v ", config.Parameters.Fs)
+	log.InfoD("storage replicas used %v ", config.Parameters.Fg)
+	log.InfoD("cpu requests used %v ", config.Resources.Requests.CPU)
+	log.InfoD("memory requests used %v ", config.Resources.Requests.Memory)
+	log.InfoD("storage requests used %v ", config.Resources.Requests.EphemeralStorage)
+	log.InfoD("No of nodes requested %v ", config.Replicas)
+	log.InfoD("volume group %v ", storageOp.VolumeGroup)
+
+	dash.VerifyFatal(resourceTemp.Resources.Requests.CPU, config.Resources.Requests.CPU, "Validating CPU Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Memory, config.Resources.Requests.Memory, "Validating Memory Request")
+	dash.VerifyFatal(resourceTemp.Resources.Requests.Storage, config.Resources.Requests.EphemeralStorage, "Validating storage")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.CPU, config.Resources.Limits.CPU, "Validating CPU Limits")
+	dash.VerifyFatal(resourceTemp.Resources.Limits.Memory, config.Resources.Limits.Memory, "Validating Memory Limits")
+	repl, err := strconv.Atoi(config.Parameters.Repl)
+	log.FailOnError(err, "failed on atoi method")
+	dash.VerifyFatal(storageOp.Replicas, int32(repl), "Validating storage replicas")
+	dash.VerifyFatal(storageOp.Filesystem, config.Parameters.Fs, "Validating filesystems")
+	dash.VerifyFatal(config.Replicas, replicas, "Validating ds node replicas")
+
+	for version, build := range dataServiceVersionBuildMap {
+		dash.VerifyFatal(config.Version, version+"-"+build[0], "validating ds build and version")
+	}
 }
