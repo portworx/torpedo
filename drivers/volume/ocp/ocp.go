@@ -102,7 +102,7 @@ func (o *ocp) InspectVolume(name string) (*api.Volume, error) {
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in ocp cluster
-func (o *ocp) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
+func (o *ocp) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", o.String())
 	return nil
 }

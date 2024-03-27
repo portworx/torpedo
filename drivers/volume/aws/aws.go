@@ -48,7 +48,7 @@ func (d *aws) InspectCurrentCluster() (*api.SdkClusterInspectCurrentResponse, er
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in aws cloud
-func (i *aws) DeleteSnapshotsForVolumes(volumeNames []string, clusterCredential string) error {
+func (i *aws) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", i.String())
 	return nil
 }
