@@ -33,7 +33,7 @@ import (
 )
 
 // BasicSelectiveRestore selects random backed-up apps and restores them
-var _ = Describe("{BasicSelectiveRestore}", func() {
+var _ = Describe("{BasicSelectiveRestore}", func() {, Label(TestCaseLabelsMap[BasicSelectiveRestore]...), 
 	var (
 		backupName           string
 		scheduledAppContexts []*scheduler.Context
@@ -158,7 +158,7 @@ var _ = Describe("{BasicSelectiveRestore}", func() {
 })
 
 // This test does custom resource backup and restore.
-var _ = Describe("{CustomResourceBackupAndRestore}", func() {
+var _ = Describe("{CustomResourceBackupAndRestore}", func() {, Label(TestCaseLabelsMap[CustomResourceBackupAndRestore]...), 
 	var scheduledAppContexts []*scheduler.Context
 	labelSelectors := make(map[string]string)
 	CloudCredUIDMap := make(map[string]string)
@@ -311,7 +311,7 @@ var _ = Describe("{CustomResourceBackupAndRestore}", func() {
 })
 
 // DeleteAllBackupObjects deletes all backed up objects
-var _ = Describe("{DeleteAllBackupObjects}", func() {
+var _ = Describe("{DeleteAllBackupObjects}", func() {, Label(TestCaseLabelsMap[DeleteAllBackupObjects]...), 
 	var (
 		appList              = Inst().AppList
 		backupName           string
@@ -525,7 +525,7 @@ var _ = Describe("{DeleteAllBackupObjects}", func() {
 })
 
 // This testcase verifies schedule backup creation with all namespaces.
-var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
+var _ = Describe("{ScheduleBackupCreationAllNS}", func() {, Label(TestCaseLabelsMap[ScheduleBackupCreationAllNS]...), 
 	var (
 		scheduledAppContexts    []*scheduler.Context
 		backupLocationName      string
@@ -780,7 +780,7 @@ var _ = Describe("{ScheduleBackupCreationAllNS}", func() {
 	})
 })
 
-var _ = Describe("{CustomResourceRestore}", func() {
+var _ = Describe("{CustomResourceRestore}", func() {, Label(TestCaseLabelsMap[CustomResourceRestore]...), 
 	var (
 		scheduledAppContexts []*scheduler.Context
 		backupLocationUID    string
@@ -929,7 +929,7 @@ var _ = Describe("{CustomResourceRestore}", func() {
 	})
 })
 
-var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
+var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {, Label(TestCaseLabelsMap[AllNSBackupWithIncludeNewNSOption]...), 
 	var (
 		scheduledAppContexts    []*scheduler.Context
 		newScheduledAppContexts []*scheduler.Context
@@ -1119,7 +1119,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 })
 
 // BackupSyncBasicTest take a good number of backups check if backup sync is working
-var _ = Describe("{BackupSyncBasicTest}", func() {
+var _ = Describe("{BackupSyncBasicTest}", func() {, Label(TestCaseLabelsMap[BackupSyncBasicTest]...), 
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "10"))
 	timeBetweenConsecutiveBackups := 10 * time.Second
 	backupNames := make([]string, 0)
@@ -1348,7 +1348,7 @@ var _ = Describe("{BackupSyncBasicTest}", func() {
 })
 
 // BackupMultipleNsWithSameLabel takes backup and restores multiple namespace having same labels
-var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
+var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {, Label(TestCaseLabelsMap[BackupMultipleNsWithSameLabel]...), 
 	var (
 		err                                      error
 		backupLocationUID                        string
@@ -1475,7 +1475,7 @@ var _ = Describe("{BackupMultipleNsWithSameLabel}", func() {
 })
 
 // MultipleCustomRestoreSameTimeDiffStorageClassMapping issues multiple custom restores at the same time using different storage class mapping
-var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func() {
+var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func() {, Label(TestCaseLabelsMap[MultipleCustomRestoreSameTimeDiffStorageClassMapping]...), 
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -1678,7 +1678,7 @@ var _ = Describe("{MultipleCustomRestoreSameTimeDiffStorageClassMapping}", func(
 })
 
 // AddMultipleNamespaceLabels add labels to multiple namespace, perform manual backup, schedule backup using namespace label selector and restore
-var _ = Describe("{AddMultipleNamespaceLabels}", func() {
+var _ = Describe("{AddMultipleNamespaceLabels}", func() {, Label(TestCaseLabelsMap[AddMultipleNamespaceLabels]...), 
 	var (
 		batchSize                                int
 		desiredNumLabels                         int
@@ -1869,7 +1869,7 @@ var _ = Describe("{AddMultipleNamespaceLabels}", func() {
 })
 
 // MultipleInPlaceRestoreSameTime issues multiple in place restores at the same time
-var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
+var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {, Label(TestCaseLabelsMap[MultipleInPlaceRestoreSameTime]...), 
 	var (
 		scheduledAppContexts []*scheduler.Context
 		bkpNamespaces        []string
@@ -2103,7 +2103,7 @@ var _ = Describe("{MultipleInPlaceRestoreSameTime}", func() {
 
 // CloudSnapsSafeWhenBackupLocationDeleteTest takes a good number of backups to check if cloud snaps are
 // safe (not deleted) if backup location is removed
-var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
+var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {, Label(TestCaseLabelsMap[CloudSnapsSafeWhenBackupLocationDeleteTest]...), 
 	numberOfBackups, _ := strconv.Atoi(GetEnv(MaxBackupsToBeCreated, "10"))
 	var (
 		scheduledAppContexts     []*scheduler.Context
@@ -2342,7 +2342,7 @@ var _ = Describe("{CloudSnapsSafeWhenBackupLocationDeleteTest}", func() {
 })
 
 // SetUnsetNSLabelDuringScheduleBackup Create multiple namespaces and set unset namespace labels during the backup schedule
-var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
+var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {, Label(TestCaseLabelsMap[SetUnsetNSLabelDuringScheduleBackup]...), 
 	var (
 		err                        error
 		backupLocationUID          string
@@ -2510,7 +2510,7 @@ var _ = Describe("{SetUnsetNSLabelDuringScheduleBackup}", func() {
 })
 
 // BackupRestoreOnDifferentK8sVersions Restores from a duplicate backup on a cluster with a different kubernetes version
-var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
+var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {, Label(TestCaseLabelsMap[BackupRestoreOnDifferentK8sVersions]...), 
 	var (
 		cloudCredUID         string
 		cloudCredName        string
@@ -2657,7 +2657,7 @@ var _ = Describe("{BackupRestoreOnDifferentK8sVersions}", func() {
 })
 
 // BackupCRsThenMultipleRestoresOnHigherK8sVersion deploys CRs via operator (CRD + webhook) -> backups them up -> creates two simultaneous restores on a cluster with higher K8s version :: one restore is Success and other PartialSuccess
-var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
+var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {, Label(TestCaseLabelsMap[BackupCRsThenMultipleRestoresOnHigherK8sVersion]...), 
 
 	var (
 		backupNames          []string
@@ -3033,7 +3033,7 @@ var _ = Describe("{BackupCRsThenMultipleRestoresOnHigherK8sVersion}", func() {
 })
 
 // ScheduleBackupDeleteAndRecreateNS Validates schedule backups when namespaces are deleted and recreated
-var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
+var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {, Label(TestCaseLabelsMap[ScheduleBackupDeleteAndRecreateNS]...), 
 	var (
 		scheduledAppContexts         []*scheduler.Context
 		cloudCredUID                 string
@@ -3207,7 +3207,7 @@ var _ = Describe("{ScheduleBackupDeleteAndRecreateNS}", func() {
 })
 
 // DeleteNSDeleteClusterRestore Validates deleted namespace is restored when the application cluster is removed and re-added
-var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
+var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {, Label(TestCaseLabelsMap[DeleteNSDeleteClusterRestore]...), 
 	var (
 		scheduledAppContexts []*scheduler.Context
 		cloudCredUID         string
@@ -3367,7 +3367,7 @@ var _ = Describe("{DeleteNSDeleteClusterRestore}", func() {
 })
 
 // AlternateBackupBetweenNfsAndS3 Validates the type of backups(Full/Incremental) when alternate backups are taken between two different backup locations of NFS and S3
-var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
+var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {, Label(TestCaseLabelsMap[AlternateBackupBetweenNfsAndS3]...), 
 	var (
 		scheduledAppContexts     []*scheduler.Context
 		sourceClusterUid         string
@@ -3519,7 +3519,7 @@ var _ = Describe("{AlternateBackupBetweenNfsAndS3}", func() {
 })
 
 // BackupNamespaceInNfsRestoredFromS3 take a backup of namespace in NFS which is restored from s3 bucket or vice-versa
-var _ = Describe("{BackupNamespaceInNfsRestoredFromS3}", func() {
+var _ = Describe("{BackupNamespaceInNfsRestoredFromS3}", func() {, Label(TestCaseLabelsMap[BackupNamespaceInNfsRestoredFromS3]...), 
 	var (
 		s3CloudCredName                     string
 		s3CloudCredUID                      string
@@ -3713,7 +3713,7 @@ var _ = Describe("{BackupNamespaceInNfsRestoredFromS3}", func() {
 })
 
 // DeleteS3ScheduleAndCreateNfsSchedule deletes s3 schedule and starts NFS schedule or vice-versa
-var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
+var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {, Label(TestCaseLabelsMap[DeleteS3ScheduleAndCreateNfsSchedule]...), 
 	var (
 		s3CloudCredName          string
 		s3CloudCredUID           string
@@ -3873,7 +3873,7 @@ var _ = Describe("{DeleteS3ScheduleAndCreateNfsSchedule}", func() {
 
 // KubeAndPxNamespacesSkipOnAllNSBackup check if namespaces like kube-system and px namespace
 // are backed up while taking a backup
-var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
+var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {, Label(TestCaseLabelsMap[KubeAndPxNamespacesSkipOnAllNSBackup]...), 
 	var (
 		scheduledAppContexts []*scheduler.Context
 		cloudCredUID         string
@@ -4144,7 +4144,7 @@ var _ = Describe("{KubeAndPxNamespacesSkipOnAllNSBackup}", func() {
 })
 
 // This TC takes 30 backups, deletes intermittent backups and validates the restores
-var _ = Describe("{IssueMultipleBackupsAndRestoreInterleavedCopies}", func() {
+var _ = Describe("{IssueMultipleBackupsAndRestoreInterleavedCopies}", func() {, Label(TestCaseLabelsMap[IssueMultipleBackupsAndRestoreInterleavedCopies]...), 
 	var (
 		scheduledAppContexts []*scheduler.Context
 		sourceClusterUid     string
