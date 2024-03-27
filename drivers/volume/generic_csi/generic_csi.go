@@ -3,8 +3,6 @@ package csi
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	"github.com/portworx/torpedo/drivers/backup"
-
 	"github.com/portworx/sched-ops/k8s/core"
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
@@ -72,7 +70,7 @@ func (d *genericCsi) Init(sched, nodeDriver, token, storageProvisioner, csiGener
 }
 
 // DeleteSnapshotsForVolumes deletes snapshots for the specified volumes in google cloud
-func (d *genericCsi) DeleteSnapshotsForVolumes(volumeNames []string, globalCredentialConfig backup.BackupCloudConfig) error {
+func (d *genericCsi) DeleteSnapshotsForVolumes(volumeNames []string, clusterProviderCredential string) error {
 	log.Warnf("DeleteSnapshotsForVolumes function has not been implemented for volume driver - %s", d.String())
 	return nil
 }
