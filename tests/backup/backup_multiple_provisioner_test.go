@@ -165,9 +165,9 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 				log.InfoD("Skipping this step as provisioner with default volume snapshot class is not found")
 			}
 		})
-		Step("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner", func() {
+		Step("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner after deleting csi snapshot", func() {
 			if multipleNsSchBackupName != "" {
-				log.InfoD("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner")
+				log.InfoD("Restoring the backup taken on singe namespace with multiple application deployed with different provisioner after deleting csi snapshot")
 				ctx, err := backup.GetAdminCtxFromSecret()
 				log.FailOnError(err, "Fetching px-central-admin ctx")
 				namespaceMappingMultiApp := make(map[string]string)
