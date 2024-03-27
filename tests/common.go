@@ -7720,7 +7720,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 	}()
 	masterNodes := node.GetMasterNodes()
 	log.Infof("master node count in cahrm k8s %v", len(masterNodes))
-	if len(masterNodes) > 0 {
+	if len(masterNodes) > 0 || GetClusterProvider() != "charm" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
