@@ -10,13 +10,14 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace                     WorkflowNamespace
-	NamespaceName                 string
-	DataServiceDeployment         map[string]string
+	Namespace                 WorkflowNamespace
+	PDSTemplates              CustomTemplates
+	NamespaceName             string
+	DataServiceDeployment     map[string]string
 	RestoredDataServiceDeployment map[string]string
-	SkipValidatation              map[string]bool
-	SourceDeploymentMd5Hash       map[string]string
-	RestoredDeploymentMd5Hash     map[string]string
+	SkipValidatation          map[string]bool
+	SourceDeploymentMd5Hash   map[string]string
+	RestoredDeploymentMd5Hash map[string]string
 }
 
 const (
@@ -32,6 +33,14 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
+	appConfigId := wfDataService.PDSTemplates.ServiceConfigTemplateId
+	resConfigId := wfDataService.PDSTemplates.ResourceTemplateId
+	stConfigId := wfDataService.PDSTemplates.StorageTemplatetId
+	log.Infof("targetClusterId [%s]", targetClusterId)
+	log.InfoD("App config Id is - [AppConfig- %v]", appConfigId)
+	log.InfoD("res config Id is - [resConfigId- %v]", resConfigId)
+	log.InfoD("st config Id is - [stConfigId- %v]", stConfigId)
+
 	log.Infof("targetClusterId [%s]", targetClusterId)
 
 	//imageId, err := dslibs.GetDataServiceImageId(ds.Name, image, version)
@@ -39,7 +48,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	//	return nil, err
 	//}
 
-	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, "imageId")
+	deployment, err := dslibs.DeployDataService(ds, namespace, projectId, targetClusterId, "imageId", appConfigId, resConfigId, stConfigId)
 	if err != nil {
 		return nil, err
 	}

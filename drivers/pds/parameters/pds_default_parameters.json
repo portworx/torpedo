@@ -100,7 +100,7 @@
     "PDSNamespace": "pds-system",
     "ServiceIdentityToken": false
   },
-  "StorageConfigurations": {
+  "StorageConfigurationsSSIE": {
     "FSType": [
       "ext4",
       "xfs"
@@ -129,6 +129,23 @@
     "Iterations": "1",
     "Timeout": "120s",
     "Replicas": 1
+  },
+  "StorageConfiguration"  :{
+    "FSType"   :      "ext4",
+    "ReplFactor":     2,
+    "StorageRequest": "1G",
+    "NewStorageSize": "5G"
+  },
+  "ResourceConfiguration" :  {
+    "CpuLimit"  :     "2",
+    "CpuRequest":     "1",
+    "MemoryLimit":    "4G",
+    "MemoryRequest":  "2G"
+  },
+  "ServiceConfiguration" : {
+    "HeapSize": 3,
+    "KAFKA_LOG_DIRS":"/kafka/logs1",
+    "KAFKA_AUTO_CREATE_TOPICS_ENABLE": false
   },
   "ResiliencyTest": {
     "CheckTillReplica": 1

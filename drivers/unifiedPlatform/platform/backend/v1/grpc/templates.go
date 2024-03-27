@@ -10,6 +10,7 @@ import (
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publictemplateapis "github.com/pure-px/apis/public/portworx/platform/template/apiv1"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // getTemplateClient updates the header with bearer token and returns the new client
@@ -59,6 +60,7 @@ func (templateGrpc *PlatformGrpc) CreateTemplates(templateReq *PlatformTemplates
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
+	tempval := structpb.Struct{}
 	createTemplateReq := publictemplateapis.CreateTemplateRequest{
 		TenantId: templateReq.Create.TenantId,
 		Template: &publictemplateapis.Template{
@@ -67,8 +69,8 @@ func (templateGrpc *PlatformGrpc) CreateTemplates(templateReq *PlatformTemplates
 				Kind:            *templateReq.Create.Template.Config.Kind,
 				SemanticVersion: *templateReq.Create.Template.Config.SemanticVersion,
 				RevisionUid:     *templateReq.Create.Template.Config.RevisionUid,
-				TemplateValues:  templateReq.Create.Template.Config.TemplateValues},
-		},
+				TemplateValues:  &tempval,
+			}},
 	}
 	apiResponse, err := templateClient.CreateTemplate(ctx, &createTemplateReq, grpc.PerRPCCredentials(credentials))
 	if err != nil {
@@ -84,6 +86,7 @@ func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplates
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
+	tempval := structpb.Struct{}
 	updateTemplateReq := publictemplateapis.UpdateTemplateRequest{
 		Id: templateReq.Update.Id,
 		Template: &publictemplateapis.Template{
@@ -92,7 +95,7 @@ func (templateGrpc *PlatformGrpc) UpdateTemplates(templateReq *PlatformTemplates
 				Kind:            *templateReq.Create.Template.Config.Kind,
 				SemanticVersion: *templateReq.Create.Template.Config.SemanticVersion,
 				RevisionUid:     *templateReq.Create.Template.Config.RevisionUid,
-				TemplateValues:  templateReq.Create.Template.Config.TemplateValues},
+				TemplateValues:  &tempval},
 		},
 	}
 	apiResponse, err := templateClient.UpdateTemplate(ctx, &updateTemplateReq, grpc.PerRPCCredentials(credentials))
