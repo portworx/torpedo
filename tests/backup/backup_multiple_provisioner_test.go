@@ -47,6 +47,10 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 	)
 
 	JustBeforeEach(func() {
+		if GetClusterProvider() != "ibm" {
+			// This test is meant to run only on IBM later will enable on other configs
+			Skip("This test is currently configured to run on IBM environments. Future iterations will enable on other configs")
+		}
 		StartPxBackupTorpedoTest("MultipleProvisionerCsiSnapshotDeleteBackupAndRestore", "Delete Csi snapshot and restore namespaces from backup", nil, 296725, Sn, Q4FY24)
 
 		backupLocationMap = make(map[string]string)
@@ -160,12 +164,7 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 					volumeNames = append(volumeNames, obj.Name)
 				}
 				log.InfoD("Deleting the snapshot present in the volumes which are backed up %s", volumeNames)
-				if GetClusterProvider() == "ibm" {
-					clusterCredentials, err = GetIBMApiKey("default")
-					if err != nil {
-						log.FailOnError(err, fmt.Sprintf("get ibm apikey %v", clusterCredentials))
-					}
-				}
+				clusterCredentials, err = GetIBMApiKey("default")
 				err = Inst().V.DeleteSnapshotsForVolumes(volumeNames, clusterCredentials)
 				log.FailOnError(err, fmt.Sprintf("Deleteing snapshot failed for volumes %v", volumeNames))
 			} else {
