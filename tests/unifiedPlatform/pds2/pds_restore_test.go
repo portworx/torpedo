@@ -90,6 +90,7 @@ var _ = Describe("{PerformRestoreToDifferentClusterSameProject}", func() {
 
 			log.FailOnError(err, "failed while registering destination target cluster")
 
+			workflowRestore.WorkflowBackupLocation = WorkflowbkpLoc
 			restoreDeployment, err = workflowRestore.CreateRestore(backupUid, deploymentName, cloudSnapId)
 			log.FailOnError(err, "Error while taking restore")
 			log.Debugf("Restored DeploymentName: [%s]", restoreDeployment.Create.Meta.Name)
