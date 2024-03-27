@@ -52,6 +52,11 @@ var (
 	labels []map[string]string
 )
 
+var (
+	// StopLongevityChan is a channel to stop longevity tests
+	StopLongevityChan = make(chan struct{})
+)
+
 // TriggerFunction represents function signature of a testTrigger
 type TriggerFunction func(*[]*scheduler.Context, *chan *EventRecord)
 
@@ -231,6 +236,7 @@ func populateDataFromConfigMap(configData *map[string]string) error {
 	setMigrationsCount(configData)
 	setCreatedBeforeTimeForNsDeletion(configData)
 	setUpgradeStorageDriverEndpointList(configData)
+	setSchedUpgradeHops(configData)
 
 	err := populateTriggers(configData)
 	if err != nil {
@@ -1632,6 +1638,13 @@ func emailEventTrigger(wg *sync.WaitGroup,
 	lastInvocationTime := start
 
 	for {
+		select {
+		case <-StopLongevityChan:
+			log.InfoD("Received stop signal. Exiting longevity test trigger [%s] loop", triggerType)
+			return
+		default:
+			// Continuing the loop as no stop signal is received
+		}
 
 		// Get next interval of when trigger should happen
 		// This interval can dynamically change by editing configMap
