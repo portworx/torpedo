@@ -3,7 +3,7 @@ package aws
 import (
 	"fmt"
 	"github.com/libopenstorage/openstorage/api"
-	
+
 	torpedovolume "github.com/portworx/torpedo/drivers/volume"
 	"github.com/portworx/torpedo/drivers/volume/portworx/schedops"
 	"github.com/portworx/torpedo/pkg/log"
