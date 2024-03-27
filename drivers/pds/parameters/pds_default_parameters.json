@@ -130,6 +130,23 @@
     "Timeout": "120s",
     "Replicas": 1
   },
+  "StorageConfiguration"  :{
+    "FSType"   :      "ext4",
+    "ReplFactor":     2,
+    "StorageRequest": "1G",
+    "NewStorageSize": "5G"
+  },
+  "ResourceConfiguration" :  {
+    "CpuLimit"  :     "2",
+    "CpuRequest":     "1",
+    "MemoryLimit":    "4G",
+    "MemoryRequest":  "2G"
+  },
+  "ServiceConfiguration" : {
+    "HeapSize": 3,
+    "Username":"jyoti",
+    "Password" : "jyotik"
+  },
   "ResiliencyTest": {
     "CheckTillReplica": 1
   },

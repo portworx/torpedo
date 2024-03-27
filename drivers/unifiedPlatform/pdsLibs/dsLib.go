@@ -63,7 +63,7 @@ func DeleteDeployment(deployment map[string]string) error {
 }
 
 // DeployDataService should be called from workflows
-func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId string) (*automationModels.WorkFlowResponse, error) {
+func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterId, imageId, appConfigId, resConfigId, stConfigId string) (*automationModels.WorkFlowResponse, error) {
 	log.Info("Data service will be deployed as per the config map passed..")
 
 	depInputs := automationModels.PDSDeploymentRequest{}
@@ -80,17 +80,17 @@ func DeployDataService(ds PDSDataService, namespaceId, projectId, targetClusterI
 	depInputs.Create.V1Deployment.Config.References.ProjectId = &projectId
 	depInputs.Create.V1Deployment.Config.References.ImageId = intToPointerString(4343)
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ResourceSettings = &automationModels.PdsTemplates{
-		Id:              intToPointerString(10),
+		Id:              &resConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].ServiceConfigurations = &automationModels.PdsTemplates{
-		Id:              intToPointerString(11),
+		Id:              &appConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}
 	depInputs.Create.V1Deployment.Config.DeploymentTopologies[0].StorageOptions = &automationModels.PdsTemplates{
-		Id:              intToPointerString(12),
+		Id:              &stConfigId,
 		ResourceVersion: nil,
 		Values:          nil,
 	}

@@ -27,6 +27,7 @@ import (
 	serviceaccountv1 "github.com/pure-px/platform-api-go-client/platform/v1/serviceaccount"
 	targetClusterv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetcluster"
 	targetClusterManifestv1 "github.com/pure-px/platform-api-go-client/platform/v1/targetclusterregistrationmanifest"
+	templatesv1 "github.com/pure-px/platform-api-go-client/platform/v1/template"
 	tenantv1 "github.com/pure-px/platform-api-go-client/platform/v1/tenant"
 	whoamiv1 "github.com/pure-px/platform-api-go-client/platform/v1/whoami"
 	"google.golang.org/grpc"
@@ -209,6 +210,12 @@ func GetPlatformRESTClientForAutomation(controlPlaneURL string, AccountId string
 	serviceAccountv1Config.Scheme = endpointURL.Scheme
 	serviceAccountv1Client := serviceaccountv1.NewAPIClient(serviceAccountv1Config)
 
+	// Creating Platform Templates api client
+	templatev1Config := templatesv1.NewConfiguration()
+	templatev1Config.Host = endpointURL.Host
+	templatev1Config.Scheme = endpointURL.Scheme
+	templatev1ConfigClient := templatesv1.NewAPIClient(templatev1Config)
+
 	return platformapi.PLATFORM_API_V1{
 		AccountV1APIClient:               accountAPIv1Client,
 		TenantV1APIClient:                tenantAPIv1Client,
@@ -222,6 +229,7 @@ func GetPlatformRESTClientForAutomation(controlPlaneURL string, AccountId string
 		TargetClusterManifestV1APIClient: targetClusterManifestAPIv1Client,
 		WhoamiV1APIClient:                whoAmIAPIv1Client,
 		ServiceAccountV1Client:           serviceAccountv1Client,
+		TemplatesV1Client:                templatev1ConfigClient,
 		AccountID:                        AccountId,
 	}, nil
 }
