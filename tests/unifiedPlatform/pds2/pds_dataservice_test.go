@@ -16,17 +16,26 @@ var _ = Describe("{DeployDataServicesOnDemandAndScaleUp}", func() {
 	})
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
+		workFlowTemplates   stworkflows.CustomTemplates
 	)
 
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
 			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
 			log.FailOnError(err, "Unable to create namespace")
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
@@ -72,17 +81,25 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 	})
 	var (
 		workflowDataservice stworkflows.WorkflowDataService
+		workFlowTemplates   stworkflows.CustomTemplates
 	)
 
 	It("Deploy and Validate DataService", func() {
 		Step("Create a PDS Namespace", func() {
 			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
 			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
 			WorkflowNamespace.Namespaces = make(map[string]string)
 			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
 			log.FailOnError(err, "Unable to create namespace")
 			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
 			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+			workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+			workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
 		})
 
 		for _, ds := range NewPdsParams.DataServiceToTest {
@@ -123,6 +140,108 @@ var _ = Describe("{UpgradeDataServiceImageAndVersion}", func() {
 		log.FailOnError(err, "Error while deleting data Service")
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{ScaleUpCpuMemLimitsOfDS}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("ScaleUpCpuMemLimitsOfDS", "Deploy a dataservice and scale up its CPU/MEM limits by editing the respective template", nil, 0)
+	})
+	var (
+		workflowDataservice stworkflows.WorkflowDataService
+		workFlowTemplates   stworkflows.CustomTemplates
+	)
+	It("Deploy and Validate DataService", func() {
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+		})
+
+		serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+		workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+		workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+		log.InfoD("Original Resource Template ID- [resTempId- %v]", resConfigId)
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		//Update Ds With New Values of Resource Templates
+		_, _, resConfigIdUpdated, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, true)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+
+		log.InfoD("Updated Resource Template ID- [updated- %v]", resConfigIdUpdated)
+		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigIdUpdated
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			_, err := workflowDataservice.UpdateDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while updating ds")
+		}
+	})
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{IncreasePVCby1gb}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("IncreasePVCby1gb", "Deploy a dataservice and increase it Storage Size by 1gb  by applying new Storage template", nil, 0)
+	})
+	var (
+		workflowDataservice stworkflows.WorkflowDataService
+		workFlowTemplates   stworkflows.CustomTemplates
+	)
+	It("Deploy and Validate DataService", func() {
+		Step("Create a PDS Namespace", func() {
+			Namespace = strings.ToLower("pds-test-ns-" + utilities.RandString(5))
+			WorkflowNamespace.TargetCluster = WorkflowTargetCluster
+			workFlowTemplates.Platform = WorkflowPlatform
+			WorkflowNamespace.Namespaces = make(map[string]string)
+			workflowNamespace, err := WorkflowNamespace.CreateNamespaces(Namespace)
+			log.FailOnError(err, "Unable to create namespace")
+			log.Infof("Namespaces created - [%s]", workflowNamespace.Namespaces)
+			log.Infof("Namespace id - [%s]", workflowNamespace.Namespaces[Namespace])
+		})
+
+		serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+		workflowDataservice.PDSTemplates.ServiceConfigTemplateId = serviceConfigId
+		workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigId
+		workflowDataservice.PDSTemplates.ResourceTemplateId = resConfigId
+
+		log.InfoD("Original Storage Template ID- [resTempId- %v]", stConfigId)
+
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			workflowDataservice.Namespace = WorkflowNamespace
+			workflowDataservice.NamespaceName = Namespace
+			_, err := workflowDataservice.DeployDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while deploying ds")
+		}
+
+		//Update Ds With New Values of Resource Templates
+		_, stConfigIdUpdated, _, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, true)
+		log.FailOnError(err, "Unable to create Custom Templates for PDS")
+
+		log.InfoD("Updated Storage Template ID- [updated- %v]", stConfigIdUpdated)
+		workflowDataservice.PDSTemplates.StorageTemplatetId = stConfigIdUpdated
+		for _, ds := range NewPdsParams.DataServiceToTest {
+			_, err := workflowDataservice.UpdateDataService(ds, ds.OldImage, ds.OldVersion)
+			log.FailOnError(err, "Error while updating ds")
+		}
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 	})

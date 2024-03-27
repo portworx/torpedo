@@ -45,6 +45,6 @@ func (platform *WorkflowPlatform) TenantInit() (*WorkflowPlatform, error) {
 	}
 
 	platform.TenantId = tenantId
-
+	log.InfoD("TenantID is- %v", platform.TenantId)
 	return platform, nil
 }

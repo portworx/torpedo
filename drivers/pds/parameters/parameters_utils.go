@@ -168,7 +168,7 @@ type NewPDSParams struct {
 	ResiliencyTest struct {
 		CheckTillReplica int32 `json:"CheckTillReplica"`
 	} `json:"ResiliencyTest"`
-	StorageConfigurations struct {
+	StorageConfigurationsSSIE struct {
 		FSType         []string
 		ReplFactor     []int32
 		NewStorageSize string
@@ -178,7 +178,24 @@ type NewPDSParams struct {
 		MemoryRequest  string
 		StorageRequest string
 		Iterations     int
-	} `json:"StorageConfigurations"`
+	} `json:"StorageConfigurationsSSIE"`
+	StorageConfiguration struct {
+		FSType         string `json:"FSType"`
+		ReplFactor     int32  `json:"ReplFactor"`
+		StorageRequest string `json:"StorageRequest"`
+		NewStorageSize string `json:"NewStorageSize"`
+	} `json:"StorageConfiguration"`
+	ResourceConfiguration struct {
+		CpuLimit      string `json:"CpuLimit"`
+		CpuRequest    string `json:"CpuRequest"`
+		MemoryLimit   string `json:"MemoryLimit"`
+		MemoryRequest string `json:"MemoryRequest"`
+	} `json:"ResourceConfiguration"`
+	ServiceConfiguration struct {
+		HeapSize int    `json:"HeapSize"`
+		Username string `json:"Username"`
+		Password string `json:"Password"`
+	} `json:"ServiceConfiguration"`
 	RbacParams struct {
 		RunWithRbac bool   //true
 		RoleName    string //Project-admin or project-user

@@ -1,7 +1,6 @@
 package automationModels
 
 import (
-	structpb "google.golang.org/protobuf/types/known/structpb"
 	"time"
 )
 
@@ -74,10 +73,10 @@ type V1Config3 struct {
 }
 
 type V1Config struct {
-	Kind            *string          `copier:"must,nopanic"`
-	SemanticVersion *string          `copier:"must,nopanic"`
-	RevisionUid     *string          `copier:"must,nopanic"`
-	TemplateValues  *structpb.Struct `copier:"must,nopanic"`
+	Kind            *string                `copier:"must,nopanic"`
+	SemanticVersion *string                `copier:"must,nopanic"`
+	RevisionUid     *string                `copier:"must,nopanic"`
+	TemplateValues  map[string]interface{} `copier:"must,nopanic"`
 }
 
 type V1Deployment struct {

@@ -19,13 +19,13 @@ type PlatformTemplatesResponse struct {
 }
 
 type CreatePlatformTemplates struct {
-	TenantId string    `copier:"must,nopanic"`
-	Template *Template `copier:"must,nopanic"`
+	TenantId string      `copier:"must,nopanic"`
+	Template *V1Template `copier:"must,nopanic"`
 }
 
 type UpdatePlatformTemplates struct {
-	Id       string    `copier:"must,nopanic"`
-	Template *Template `copier:"must,nopanic"`
+	Id       string      `copier:"must,nopanic"`
+	Template *V1Template `copier:"must,nopanic"`
 }
 
 type DeletePlatformTemplates struct {

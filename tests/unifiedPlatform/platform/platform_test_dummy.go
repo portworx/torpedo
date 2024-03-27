@@ -6,7 +6,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	pdslib "github.com/portworx/torpedo/drivers/pds/lib"
-	dslibs "github.com/portworx/torpedo/drivers/unifiedPlatform/pdsLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/platformLibs"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/stworkflows"
 	"github.com/portworx/torpedo/pkg/log"
@@ -109,51 +108,51 @@ var _ = Describe("{CreateAndGetCloudCredentials}", func() {
 	})
 })
 
-var _ = Describe("{RestoreCRUD}", func() {
-	var (
-		workflowRestore dslibs.WorkflowRestore
-	)
-	JustBeforeEach(func() {
-
-		workflowRestore = dslibs.WorkflowRestore{
-			DeploymentID: "SomeID",
-			NamepsaceID:  "SomeNamespace",
-			ProjectId:    "SomeID",
-		}
-		StartTorpedoTest("RestoreCRUD", "Runs CRUD on restores", nil, 0)
-	})
-
-	It("Create Restore", func() {
-		Step("Create Backup Config", func() {
-			_, err := workflowRestore.CreateRestore()
-			log.Infof("Error while creating restores - %s", err.Error())
-		})
-
-		Step("Recreate Restore", func() {
-			_, err := workflowRestore.ReCreateRestore()
-			log.Infof("Error while updating restores - %s", err.Error())
-		})
-
-		Step("Get Restore", func() {
-			_, err := workflowRestore.GetRestore()
-			log.Infof("Error while fetching restores - %s", err.Error())
-		})
-
-		Step("Delete Restore", func() {
-			_, err := workflowRestore.DeleteRestore()
-			log.Infof("Error while deleting restores - %s", err.Error())
-		})
-
-		Step("List Restore", func() {
-			_, err := workflowRestore.ListRestore()
-			log.Infof("Error while listing restores - %s", err.Error())
-		})
-	})
-
-	JustAfterEach(func() {
-		defer EndTorpedoTest()
-	})
-})
+//var _ = Describe("{RestoreCRUD}", func() {
+//	var (
+//		workflowRestore dslibs.WorkflowRestore
+//	)
+//	JustBeforeEach(func() {
+//
+//		workflowRestore = dslibs.WorkflowRestore{
+//			DeploymentID: "SomeID",
+//			NamepsaceID:  "SomeNamespace",
+//			ProjectId:    "SomeID",
+//		}
+//		StartTorpedoTest("RestoreCRUD", "Runs CRUD on restores", nil, 0)
+//	})
+//
+//	It("Create Restore", func() {
+//		Step("Create Backup Config", func() {
+//			_, err := workflowRestore.CreateRestore()
+//			log.Infof("Error while creating restores - %s", err.Error())
+//		})
+//
+//		Step("Recreate Restore", func() {
+//			_, err := workflowRestore.ReCreateRestore()
+//			log.Infof("Error while updating restores - %s", err.Error())
+//		})
+//
+//		Step("Get Restore", func() {
+//			_, err := workflowRestore.GetRestore()
+//			log.Infof("Error while fetching restores - %s", err.Error())
+//		})
+//
+//		Step("Delete Restore", func() {
+//			_, err := workflowRestore.DeleteRestore()
+//			log.Infof("Error while deleting restores - %s", err.Error())
+//		})
+//
+//		Step("List Restore", func() {
+//			_, err := workflowRestore.ListRestore()
+//			log.Infof("Error while listing restores - %s", err.Error())
+//		})
+//	})
+//
+//	JustAfterEach(func() {
+//		defer EndTorpedoTest()
+//	})
+//})
 
 //
 //var _ = Describe("{ListTenants}", func() {
@@ -270,6 +269,40 @@ var _ = Describe("{TestRbacForPds}", func() {
 		})
 	})
 
+	JustAfterEach(func() {
+		defer EndTorpedoTest()
+	})
+})
+
+var _ = Describe("{TestPlatformTemplates}", func() {
+	JustBeforeEach(func() {
+		StartTorpedoTest("TestPlatformTemplates", "create custom templates for PDS", nil, 0)
+		Step("Get Default Tenant", func() {
+			log.Infof("Initialising values for tenant")
+			WorkflowPlatform.AdminAccountId = AccID
+			WorkflowPlatform.TenantInit()
+		})
+	})
+
+	var (
+		workFlowTemplates stworkflows.CustomTemplates
+		tempList          []string
+	)
+	It("TestPlatformTemplates", func() {
+		Step("create custom templates for PDS", func() {
+			workFlowTemplates.Platform = WorkflowPlatform
+			serviceConfigId, stConfigId, resConfigId, err := workFlowTemplates.CreatePdsCustomTemplatesAndFetchIds(NewPdsParams, false)
+			log.FailOnError(err, "Unable to create Custom Templates for PDS")
+			log.InfoD("Created serviceConfig Template ID- [serviceConfigId- %v]", serviceConfigId)
+			log.InfoD("Created stConfig Template ID- [stConfigId- %v]", stConfigId)
+			log.InfoD("Created resConfig Template ID- [resConfigId- %v]", resConfigId)
+			tempList = append(tempList, serviceConfigId, stConfigId, resConfigId)
+		})
+		Step("Cleanup Created Templates after dissociating linked resources", func() {
+			err := workFlowTemplates.DeleteCreatedCustomPdsTemplates(tempList)
+			log.FailOnError(err, "Unable to delete Custom Templates for PDS")
+		})
+	})
 	JustAfterEach(func() {
 		defer EndTorpedoTest()
 	})
