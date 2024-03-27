@@ -168,7 +168,7 @@ type NewPDSParams struct {
 	ResiliencyTest struct {
 		CheckTillReplica int32 `json:"CheckTillReplica"`
 	} `json:"ResiliencyTest"`
-	StorageConfigurations struct {
+	StorageConfigurationsSSIE struct {
 		FSType         []string
 		ReplFactor     []int32
 		NewStorageSize string
@@ -178,7 +178,7 @@ type NewPDSParams struct {
 		MemoryRequest  string
 		StorageRequest string
 		Iterations     int
-	} `json:"StorageConfigurations"`
+	} `json:"StorageConfigurationsSSIE"`
 	StorageConfiguration struct {
 		FSType         string `json:"FSType"`
 		ReplFactor     int32  `json:"ReplFactor"`

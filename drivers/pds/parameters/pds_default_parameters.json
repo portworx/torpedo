@@ -100,7 +100,7 @@
     "PDSNamespace": "pds-system",
     "ServiceIdentityToken": false
   },
-  "StorageConfigurations": {
+  "StorageConfigurationsSSIE": {
     "FSType": [
       "ext4",
       "xfs"

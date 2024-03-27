@@ -20,7 +20,6 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 	//Todo: Mechanism to populate dynamic/Unknown key-value pairs for App config
 	//ToDo: Take configurationValue incrementation count from user/testcase
 
-	log.InfoD("cusTemp.Platform.TenantId is %v", cusTemp.Platform.TenantId)
 	//Initializing the parameters required for template generation
 	appConfigParams := pdslibs.ServiceConfiguration{
 		HeapSize: templates.ServiceConfiguration.HeapSize,
@@ -51,6 +50,10 @@ func (cusTemp *CustomTemplates) CreatePdsCustomTemplatesAndFetchIds(templates *p
 		templates.ResourceConfiguration.MemoryLimit = fmt.Sprint(string(rune(newMemLimits + 1)))
 		newMemReq, _ := strconv.Atoi(templates.ResourceConfiguration.MemoryLimit)
 		templates.ResourceConfiguration.MemoryRequest = fmt.Sprint(string(rune(newMemReq + 1)))
+
+		//create new templates with new storage Req-
+		newStorageReq, _ := strconv.Atoi(templates.StorageConfiguration.NewStorageSize)
+		templates.StorageConfiguration.StorageRequest = fmt.Sprint(string(rune(newStorageReq+1))) + "G"
 	}
 	appConfig, _ := pdslibs.CreateServiceConfigTemplate(cusTemp.Platform.TenantId, appConfigParams)
 	log.InfoD("appConfig ID-  %v", *appConfig.Create.Meta.Uid)
