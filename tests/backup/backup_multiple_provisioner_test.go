@@ -49,7 +49,8 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 	JustBeforeEach(func() {
 		if GetClusterProvider() != "ibm" {
 			// This test is meant to run only on IBM later will enable on other configs
-			Skip("This test is currently configured to run on IBM environments. Future iterations will enable on other configs")
+			log.Infof("Skipping the test.This test is currently configured to run on IBM environments. Future iterations will enable on other configs")
+			Skip("Skipping the test.This test is currently configured to run on IBM environments. Future iterations will enable on other configs")
 		}
 		StartPxBackupTorpedoTest("MultipleProvisionerCsiSnapshotDeleteBackupAndRestore", "Delete Csi snapshot and restore namespaces from backup", nil, 296725, Sn, Q4FY24)
 
@@ -188,6 +189,11 @@ var _ = Describe("{MultipleProvisionerCsiSnapshotDeleteBackupAndRestore}", func(
 		})
 	})
 	JustAfterEach(func() {
+		if GetClusterProvider() != "ibm" {
+			// This test is meant to run only on IBM later will enable on other configs
+			log.Infof("Skipping the test.This test is currently configured to run on IBM environments. Future iterations will enable on other configs")
+			Skip("Skipping the test.This test is currently configured to run on IBM environments. Future iterations will enable on other configs")
+		}
 		defer EndPxBackupTorpedoTest(scheduledAppContexts)
 		defer func() {
 			log.InfoD("switching to default context")
