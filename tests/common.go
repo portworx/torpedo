@@ -7719,7 +7719,7 @@ func EndPxBackupTorpedoTest(contexts []*scheduler.Context) {
 		log.FailOnError(err, "failed to switch context to source cluster")
 	}()
 	masterNodes := node.GetMasterNodes()
-	if len(masterNodes) > 0 && GetClusterProvider() != "charm" {
+	if len(masterNodes) > 0 && GetClusterProvider() != "charmed" {
 		log.Infof(">>>> Collecting logs for testcase : %s", currentSpecReport.FullText())
 		testCaseName := currentSpecReport.FullText()
 		matches := regexp.MustCompile(`\{([^}]+)\}`).FindStringSubmatch(currentSpecReport.FullText())
