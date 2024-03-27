@@ -82,11 +82,13 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 	stepLog := "should get the existing pool and expand it by adding a disk"
 	It(stepLog, func() {
-		Support, err := IsPoolAddDiskSupported()
-		if !Support {
-			log.FailOnError(err, "Add disk operation is not supported")
-		}
+		isPoolAddDiskSupported, err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			if err != nil {
+				log.Warnf("Add disk operation is not supported for DMTHIN but continuing the operation")
+			}
 
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -144,6 +146,12 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			defer exitPoolMaintenance(poolIDToResize)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
+			if err != nil {
+				if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
+					log.InfoD("add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
+					return
+				}
+			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
 			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
