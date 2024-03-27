@@ -396,6 +396,16 @@ const (
 	pxctlCDListCmd = "pxctl cd list"
 )
 
+const (
+	IBMHelmRepoName   = "ibm-helm-portworx"
+	IBMHelmRepoURL    = "https://raw.githubusercontent.com/portworx/ibm-helm/master/repo/stable"
+	IBMHelmValuesFile = "/tmp/values.yaml"
+)
+
+const (
+	ValidateStorageClusterTimeout = 40 * time.Minute
+)
+
 var pxRuntimeOpts string
 var pxClusterOpts string
 var PxBackupVersion string
