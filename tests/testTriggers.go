@@ -5986,6 +5986,9 @@ func TriggerUpgradeVolumeDriverFromCatalog(contexts *[]*scheduler.Context, recor
 					UpdateOutcome(event, fmt.Errorf("error updating px version in [%s]. Err: [%v]", IBMHelmValuesFile, err))
 					return
 				}
+				dashStats := make(map[string]string)
+				dashStats["upgrade-hop"] = upgradeHop
+				updateLongevityStats(UpgradeVolumeDriverFromCatalog, stats.UpgradeVolumeDriverFromCatalogEventName, dashStats)
 				cmd = fmt.Sprintf("helm upgrade portworx -n %s -f %s %s/portworx --debug", pxNamespace, IBMHelmValuesFile, IBMHelmRepoName)
 				log.Infof("Running command: %v ", cmd)
 				_, _, err = osutils.ExecShell(cmd)
@@ -10695,7 +10698,9 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 				} else {
 					log.Warnf("PDB validation skipped. Current Px-Operator version: [%s], minimum required: [%s]. Error: [%v].", opver, PDBValidationMinOpVersion, err)
 				}
-
+				dashStats := make(map[string]string)
+				dashStats["sched-upgrade-hop"] = v
+				updateLongevityStats(UpgradeCluster, stats.UpdateClusterEventName, dashStats)
 				err = Inst().S.UpgradeScheduler(v)
 				if mError != nil {
 					mError = fmt.Errorf("failed to validate PDB of px-storage during cluster upgrade. Err: [%v]", mError)
@@ -10795,6 +10800,9 @@ func TriggerUpdateCluster(contexts *[]*scheduler.Context, recordChan *chan *Even
 			})
 		}
 	})
+	err := ValidateDataIntegrity(contexts)
+	UpdateOutcome(event, err)
+	updateMetrics(*event)
 }
 
 // GetContextPVCs returns pvc from the given context
