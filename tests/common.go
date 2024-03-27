@@ -11383,3 +11383,17 @@ func ValidateIBMLicense() error {
 	}
 	return nil
 }
+
+// SplitStorageDriverUpgradeURL splits the given storage upgrade URL into endpoint and version
+// This would output: Endpoint: https://edge-install.portworx.com, Version: 3.1.1
+func SplitStorageDriverUpgradeURL(upgradeURL string) (string, string, error) {
+	parsedURL, err := url.Parse(upgradeURL)
+	if err != nil {
+		return "", "", err
+	}
+	pathSegments := strings.Split(strings.TrimSuffix(parsedURL.Path, "/"), "/")
+	pxVersion := pathSegments[len(pathSegments)-1]
+	endpoint := *parsedURL
+	endpoint.Path = strings.Join(pathSegments[:len(pathSegments)-1], "/")
+	return endpoint.String(), pxVersion, nil
+}
