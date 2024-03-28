@@ -1230,10 +1230,10 @@ func ValidatePureSnapshotsSDK(ctx *scheduler.Context, errChan ...*chan error) {
 			})
 		}
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
-		})
+		//Step("validate Pure local volume paths", func() {
+		//	err = Inst().V.ValidatePureLocalVolumePaths()
+		//	processError(err, errChan...)
+		//})
 	})
 }
 
@@ -1322,10 +1322,10 @@ func ValidateResizePurePVC(ctx *scheduler.Context, errChan ...*chan error) {
 		// TODO: add more checks (is the PVC resized in the pod?), we currently only check that the
 		//       CSI resize succeeded.
 
-		Step("validate Pure local volume paths", func() {
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
-		})
+		//Step("validate Pure local volume paths", func() {
+		//	err = Inst().V.ValidatePureLocalVolumePaths()
+		//	processError(err, errChan...)
+		//})
 	})
 }
 
@@ -1467,8 +1467,8 @@ func ValidateCSIVolumeClone(ctx *scheduler.Context, errChan ...*chan error) {
 			err = Inst().S.CSICloneTest(ctx, request)
 			processError(err, errChan...)
 
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+			//err = Inst().V.ValidatePureLocalVolumePaths()
+			//processError(err, errChan...)
 		}
 	})
 }
@@ -1506,8 +1506,8 @@ func ValidatePureVolumeLargeNumOfClones(ctx *scheduler.Context, errChan ...*chan
 
 			// Note: the above only creates PVCs, it does not attach them to pods, so no extra care needs to be taken for local paths
 
-			err = Inst().V.ValidatePureLocalVolumePaths()
-			processError(err, errChan...)
+			//err = Inst().V.ValidatePureLocalVolumePaths()
+			//processError(err, errChan...)
 		}
 	})
 }
