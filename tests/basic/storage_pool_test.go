@@ -135,8 +135,9 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
-			enterPoolMaintenanceAddDisk(poolIDToResize)
-			defer exitPoolMaintenance(poolIDToResize)
+			log.Infof("Commented out the code to add disk to the pool %s", poolIDToResize)
+			//enterPoolMaintenanceAddDisk(poolIDToResize)
+			//defer exitPoolMaintenance(poolIDToResize)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			if err != nil {
