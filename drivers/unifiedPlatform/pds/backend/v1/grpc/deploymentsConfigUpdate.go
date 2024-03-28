@@ -3,9 +3,9 @@ package grpc
 import (
 	"context"
 	"fmt"
-	"github.com/jinzhu/copier"
 	"github.com/portworx/torpedo/drivers/unifiedPlatform/automationModels"
 	. "github.com/portworx/torpedo/drivers/unifiedPlatform/utils"
+	"github.com/portworx/torpedo/drivers/utilities"
 	"github.com/portworx/torpedo/pkg/log"
 	commonapiv1 "github.com/pure-px/apis/public/portworx/common/apiv1"
 	publicdeploymentapis "github.com/pure-px/apis/public/portworx/pds/deployment/apiv1"
@@ -33,8 +33,12 @@ func (deployment *PdsGrpc) getDeploymentConfigClient() (context.Context, publicd
 	return ctx, depClient, token, nil
 }
 
-func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.WorkFlowResponse, error) {
-	depResponse := automationModels.WorkFlowResponse{}
+func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
+	depResponse := automationModels.PDSDeploymentResponse{
+		Update: automationModels.V1Deployment{},
+	}
+
+	//TODO: try copy else go with the below approach
 	updateRequest := &publicdeploymentConfigUpdate.CreateDeploymentConfigUpdateRequest{
 		DeploymentConfigUpdate: &publicdeploymentConfigUpdate.DeploymentConfigUpdate{
 			Meta: &commonapiv1.Meta{
@@ -92,7 +96,10 @@ func (deployment *PdsGrpc) UpdateDeployment(updateDeploymentRequest *automationM
 	if err != nil {
 		return nil, fmt.Errorf("Error while updating the deployment: %v\n", err)
 	}
-	copier.Copy(&depResponse, apiResponse)
+	err = utilities.CopyStruct(apiResponse, &depResponse.Update)
+	if err != nil {
+		return nil, fmt.Errorf("Error while copying the updated dep response : %v\n", err)
+	}
 
 	return &depResponse, nil
 }

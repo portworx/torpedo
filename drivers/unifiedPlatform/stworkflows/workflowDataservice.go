@@ -10,14 +10,14 @@ import (
 )
 
 type WorkflowDataService struct {
-	Namespace                 WorkflowNamespace
-	PDSTemplates              CustomTemplates
-	NamespaceName             string
-	DataServiceDeployment     map[string]string
+	Namespace                     WorkflowNamespace
+	PDSTemplates                  CustomTemplates
+	NamespaceName                 string
+	DataServiceDeployment         map[string]string
 	RestoredDataServiceDeployment map[string]string
-	SkipValidatation          map[string]bool
-	SourceDeploymentMd5Hash   map[string]string
-	RestoredDeploymentMd5Hash map[string]string
+	SkipValidatation              map[string]bool
+	SourceDeploymentMd5Hash       map[string]string
+	RestoredDeploymentMd5Hash     map[string]string
 }
 
 const (
@@ -29,7 +29,7 @@ var (
 	dash *aetosutil.Dashboard
 )
 
-func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.WorkFlowResponse, error) {
+func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
@@ -52,7 +52,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	if err != nil {
 		return nil, err
 	}
-	wfDataService.DataServiceDeployment[*deployment.PDSDeployment.V1Deployment.Meta.Name] = *deployment.PDSDeployment.V1Deployment.Meta.Uid
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
 
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
@@ -80,7 +80,7 @@ func (wfDataService *WorkflowDataService) DeployDataService(ds dslibs.PDSDataSer
 	return deployment, nil
 }
 
-func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.WorkFlowResponse, error) {
+func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataService, image, version string) (*automationModels.PDSDeploymentResponse, error) {
 	namespace := wfDataService.Namespace.Namespaces[wfDataService.NamespaceName]
 	projectId := wfDataService.Namespace.TargetCluster.Project.ProjectId
 	targetClusterId := wfDataService.Namespace.TargetCluster.ClusterUID
@@ -95,7 +95,7 @@ func (wfDataService *WorkflowDataService) UpdateDataService(ds dslibs.PDSDataSer
 	if err != nil {
 		return nil, err
 	}
-	wfDataService.DataServiceDeployment[*deployment.PDSDeployment.V1Deployment.Meta.Name] = *deployment.PDSDeployment.V1Deployment.Meta.Uid
+	wfDataService.DataServiceDeployment[*deployment.Create.Meta.Name] = *deployment.Create.Meta.Uid
 	if value, ok := wfDataService.SkipValidatation[ValidatePdsDeployment]; ok {
 		if value == true {
 			log.Infof("Skipping Validation")

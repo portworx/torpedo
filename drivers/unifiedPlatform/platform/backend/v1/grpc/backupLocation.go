@@ -38,9 +38,11 @@ func (BackupLocGrpcV1 *PlatformGrpc) getBackupLocClient() (context.Context, publ
 }
 
 // ListBackupLocations return lis of backup locations
-func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocationRequest) ([]*BackupLocationResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocationRequest) (*BackupLocationResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	bkpLocResponse := []*BackupLocationResponse{}
+	bkpLocResponse := BackupLocationResponse{
+		List: ListBackupLocation{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -54,20 +56,22 @@ func (BackupLocGrpcV1 *PlatformGrpc) ListBackupLocations(request *BackupLocation
 	for _, bkpLocation := range backupLocationModels.BackupLocations {
 		log.Infof("printing cloud provider type [%s]", bkpLocation.Config.Provider.GetCloudProvider())
 		resp := copyCloudLocationResponse(bkpLocation)
-		bkpLocResponse = append(bkpLocResponse, resp)
+		bkpLocResponse.List.BackupLocations = append(bkpLocResponse.List.BackupLocations, resp.Create)
 	}
 
 	log.Infof("Value of backupLocation after copy - [%v]", bkpLocResponse)
-	return bkpLocResponse, nil
+	return &bkpLocResponse, nil
 }
 
 // GetBackupLocation get backup location model by its ID.
-func (BackupLocGrpcV1 *PlatformGrpc) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) GetBackupLocation(getReq *WorkFlowRequest) (*BackupLocationResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	bckpLocResp := WorkFlowResponse{}
+	bckpLocResp := BackupLocationResponse{
+		Get: BackupLocation{},
+	}
 	var getRequest *publicbackuplocapi.GetBackupLocationRequest
 	err = copier.Copy(&getRequest, getReq)
 	if err != nil {
@@ -102,6 +106,10 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupL
 		},
 	}
 
+	log.Infof("bucketName [%s]", createRequest.Create.Config.BkpLocation.S3Storage.BucketName)
+	log.Infof("region [%s]", createRequest.Create.Config.BkpLocation.S3Storage.Region)
+	log.Infof("endpoint [%s]", createRequest.Create.Config.BkpLocation.S3Storage.Endpoint)
+
 	backupLocationModel, err := backupLocationClient.CreateBackupLocation(ctx, createAppRequest, grpc.PerRPCCredentials(credentials))
 	if err != nil {
 		return nil, fmt.Errorf("error when called `BackupLocationServiceCreateBackupLocation` to create backup target - %v", err)
@@ -116,9 +124,9 @@ func (BackupLocGrpcV1 *PlatformGrpc) CreateBackupLocation(createRequest *BackupL
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (BackupLocGrpcV1 *PlatformGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (BackupLocGrpcV1 *PlatformGrpc) UpdateBackupLocation(updateRequest *WorkFlowRequest) (*BackupLocationResponse, error) {
 	ctx, backupLocationClient, _, err := BackupLocGrpcV1.getBackupLocClient()
-	bckpLocResp := WorkFlowResponse{}
+	bckpLocResp := BackupLocationResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -224,7 +232,9 @@ func backupLocationConfig(request *BackupLocationRequest) *publicbackuplocapi.Co
 }
 
 func copyCloudLocationResponse(bkpLocation *publicbackuplocapi.BackupLocation) *BackupLocationResponse {
-	bkpLocResp := BackupLocationResponse{}
+	bkpLocResp := BackupLocationResponse{
+		Create: BackupLocation{},
+	}
 
 	//Test Print
 	log.Infof("bucket Name before copy [%s]", bkpLocation.Config.GetS3Storage().BucketName)

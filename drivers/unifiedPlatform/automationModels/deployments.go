@@ -1,5 +1,17 @@
 package automationModels
 
+type PDSDeploymentRequest struct {
+	Create PDSDeployment
+	Update PDSDeployment
+}
+
+type PDSDeploymentResponse struct {
+	Create V1Deployment
+	Update V1Deployment
+	Get    V1Deployment
+	List   []V1Deployment
+}
+
 type DeploymentTopology struct {
 	Name *string `copier:"must,nopanic"`
 	// Description of the deployment topology.
@@ -41,9 +53,4 @@ type PDSDeployment struct {
 	NamespaceID  string       `copier:"must,nopanic"`
 	ProjectID    string       `copier:"must,nopanic"`
 	V1Deployment V1Deployment `copier:"must,nopanic"`
-}
-
-type PDSDeploymentRequest struct {
-	Create PDSDeployment
-	Update PDSDeployment
 }

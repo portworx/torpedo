@@ -71,6 +71,23 @@ var _ = BeforeSuite(func() {
 		log.Infof("Target cluster registered with uid - [%s]", WorkflowTargetCluster.ClusterUID)
 	})
 
+	Step("Create Buckets", func() {
+		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
+			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
+			switch NewPdsParams.BackUpAndRestore.TargetLocation {
+			case "s3-comp":
+				err := platformUtils.CreateS3CompBucket(PDSBucketName)
+				log.FailOnError(err, "error while creating s3-comp bucket")
+			case "s3":
+				err := platformUtils.CreateS3Bucket(PDSBucketName)
+				log.FailOnError(err, "error while creating s3 bucket")
+			default:
+				err := platformUtils.CreateS3CompBucket(PDSBucketName)
+				log.FailOnError(err, "error while creating s3-comp bucket")
+			}
+		}
+	})
+
 	Step("Create Cloud Credential and BackUpLocation", func() {
 		log.Debugf("TenantId [%s]", WorkflowTargetCluster.Project.Platform.TenantId)
 		WorkflowCc.Platform = WorkflowPlatform
@@ -90,22 +107,6 @@ var _ = BeforeSuite(func() {
 		log.Infof("wfBkpLoc name: [%s]", wfbkpLoc.BkpLocation.Name)
 	})
 
-	Step("Create Buckets", func() {
-		if NewPdsParams.BackUpAndRestore.RunBkpAndRestrTest {
-			PDSBucketName = strings.ToLower("pds-test-buck-" + utilities.RandString(5))
-			switch NewPdsParams.BackUpAndRestore.TargetLocation {
-			case "s3-comp":
-				err := platformUtils.CreateS3CompBucket(PDSBucketName)
-				log.FailOnError(err, "error while creating s3-comp bucket")
-			case "s3":
-				err := platformUtils.CreateS3Bucket(PDSBucketName)
-				log.FailOnError(err, "error while creating s3 bucket")
-			default:
-				err := platformUtils.CreateS3CompBucket(PDSBucketName)
-				log.FailOnError(err, "error while creating s3-comp bucket")
-			}
-		}
-	})
 })
 
 var _ = AfterSuite(func() {

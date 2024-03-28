@@ -27,7 +27,7 @@ func (backup WorkflowPDSBackup) GetBackupIDByName(name string, backupConfigName 
 		return "", err
 	}
 
-	for _, eachBackup := range allBackups {
+	for _, eachBackup := range allBackups.List.Backups {
 		if *eachBackup.Meta.Name == name {
 			return *eachBackup.Meta.Uid, nil
 		}
@@ -43,7 +43,7 @@ func (backup WorkflowPDSBackup) DeleteBackup(id string) error {
 }
 
 // ListAllBackups returns the list of all backups
-func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string, namespace string, deployment string) ([]automationModels.PDSBackupResponse, error) {
+func (backup WorkflowPDSBackup) ListAllBackups(backupConfigName string, namespace string, deployment string) (*automationModels.PDSBackupResponse, error) {
 
 	params := pdslibs.BackupParams{
 		ProjectId:       backup.WorkflowBackupConfig.WorkflowDataService.Namespace.TargetCluster.Project.ProjectId,

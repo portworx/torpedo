@@ -11,9 +11,11 @@ import (
 )
 
 // ListBackupLocations return lis of backup locatiobackuploc
-func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocationRequest) ([]*BackupLocationResponse, error) {
+func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocationRequest) (*BackupLocationResponse, error) {
 	ctx, backupLocationClient, err := backuploc.getBackupLocClient()
-	backupLocResp := []*BackupLocationResponse{}
+	backupLocResp := BackupLocationResponse{
+		List: ListBackupLocation{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -27,16 +29,16 @@ func (backuploc *PLATFORM_API_V1) ListBackupLocations(request *BackupLocationReq
 		return nil, err
 	}
 	log.Infof("Value of backupLocation after copy - [%v]", backupLocResp)
-	return backupLocResp, nil
+	return &backupLocResp, nil
 }
 
 // GetBackupLocation get backup location model by its ID.
-func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (backuploc *PLATFORM_API_V1) GetBackupLocation(getReq *WorkFlowRequest) (*BackupLocationResponse, error) {
 	_, backupLocationClient, err := backuploc.getBackupLocClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
-	bckpLocResp := WorkFlowResponse{}
+	bckpLocResp := BackupLocationResponse{}
 	var getRequest backuplocation.ApiBackupLocationServiceGetBackupLocationRequest
 	err = copier.Copy(&getRequest, getReq)
 	if err != nil {
@@ -80,9 +82,9 @@ func (backuploc *PLATFORM_API_V1) CreateBackupLocation(createReq *BackupLocation
 }
 
 // UpdateBackupLocation return updated backup location model.
-func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (backuploc *PLATFORM_API_V1) UpdateBackupLocation(updateReq *WorkFlowRequest) (*BackupLocationResponse, error) {
 	_, backupLocationClient, err := backuploc.getBackupLocClient()
-	bckpLocResp := WorkFlowResponse{}
+	bckpLocResp := BackupLocationResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}

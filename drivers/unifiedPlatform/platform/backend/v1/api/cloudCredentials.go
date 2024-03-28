@@ -10,9 +10,11 @@ import (
 )
 
 // ListCloudCredentials return list of cloud credentials
-func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentials) ([]CloudCredentials, error) {
+func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
-	cloudCredsResponse := []CloudCredentials{}
+	cloudCredsResponse := CloudCredentialsResponse{
+		List: ListCloudCredentials{},
+	}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -26,11 +28,11 @@ func (cloudCred *PLATFORM_API_V1) ListCloudCredentials(request *CloudCredentials
 		return nil, err
 	}
 	log.Infof("Value of cloudCredentials after copy - [%v]", cloudCredsResponse)
-	return cloudCredsResponse, nil
+	return &cloudCredsResponse, nil
 }
 
 // GetCloudCredentials gets cloud credentials by ts id
-func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentials) (*CloudCredentialsResponse, error) {
+func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -55,7 +57,7 @@ func (cloudCred *PLATFORM_API_V1) GetCloudCredentials(getReq *CloudCredentials) 
 }
 
 // CreateCloudCredentials return newly created cloud credentials
-func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCredentials) (*CloudCredentialsResponse, error) {
+func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
@@ -79,9 +81,9 @@ func (cloudCred *PLATFORM_API_V1) CreateCloudCredentials(createRequest *CloudCre
 }
 
 // UpdateCloudCredentials return updated created cloud credentials
-func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequest) (*WorkFlowResponse, error) {
+func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *CloudCredentialsRequest) (*CloudCredentialsResponse, error) {
 	_, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
-	cloudCredsResponse := WorkFlowResponse{}
+	cloudCredsResponse := CloudCredentialsResponse{}
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
@@ -103,7 +105,7 @@ func (cloudCred *PLATFORM_API_V1) UpdateCloudCredentials(updateReq *WorkFlowRequ
 }
 
 // DeleteCloudCredential delete cloud cred model.
-func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCreds *CloudCredentials) error {
+func (cloudCred *PLATFORM_API_V1) DeleteCloudCredential(cloudCreds *CloudCredentialsRequest) error {
 	ctx, cloudCredsClient, err := cloudCred.getCloudCredentialClient()
 	if err != nil {
 		return fmt.Errorf("Error in getting context for api call: %v\n", err)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/utilities"
 	status "net/http"
 
 	"github.com/jinzhu/copier"
@@ -13,8 +14,10 @@ var (
 	DeploymentRequest deploymentV1.V1Deployment
 )
 
-func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.WorkFlowResponse, error) {
-	dsResponse := automationModels.WorkFlowResponse{}
+func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.PDSDeploymentResponse, error) {
+	dsResponse := automationModels.PDSDeploymentResponse{
+		Get: automationModels.V1Deployment{},
+	}
 	ctx, dsClient, err := ds.getDeploymentClient()
 	if err != nil {
 		return nil, fmt.Errorf("Error in getting context for backend call: %v\n", err)
@@ -25,7 +28,7 @@ func (ds *PDS_API_V1) GetDeployment(deploymentId string) (*automationModels.Work
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	err = copier.Copy(&dsResponse.PDSDeployment.V1Deployment, dsModel)
+	err = utilities.CopyStruct(dsModel, dsResponse.Get)
 	if err != nil {
 		return nil, fmt.Errorf("Error while copying create deployment response: %v\n", err)
 	}
@@ -47,15 +50,19 @@ func (ds *PDS_API_V1) DeleteDeployment(deploymentId string) error {
 	return nil
 }
 
-func (ds *PDS_API_V1) ListDeployment() (*automationModels.WorkFlowResponse, error) {
-	dsResponse := automationModels.WorkFlowResponse{}
+func (ds *PDS_API_V1) ListDeployment() (*automationModels.PDSDeploymentResponse, error) {
+	dsResponse := automationModels.PDSDeploymentResponse{
+		List: []automationModels.V1Deployment{},
+	}
 
 	return &dsResponse, nil
 }
 
 // CreateDeployment return newly created deployment model.
-func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.WorkFlowResponse, error) {
-	dsResponse := automationModels.WorkFlowResponse{}
+func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels.PDSDeploymentRequest) (*automationModels.PDSDeploymentResponse, error) {
+	dsResponse := automationModels.PDSDeploymentResponse{
+		Create: automationModels.V1Deployment{},
+	}
 	depCreateRequest := deploymentV1.ApiDeploymentServiceCreateDeploymentRequest{}
 
 	ctx, dsClient, err := ds.getDeploymentClient()
@@ -90,7 +97,7 @@ func (ds *PDS_API_V1) CreateDeployment(createDeploymentRequest *automationModels
 		return nil, fmt.Errorf("Error when calling `DeploymentServiceCreateDeployment`: %v\n.Full HTTP response: %v", err, res)
 	}
 
-	err = copier.Copy(&dsResponse.PDSDeployment.V1Deployment, dsModel)
+	err = utilities.CopyStruct(dsModel, &dsResponse.Create)
 	if err != nil {
 		return nil, fmt.Errorf("Error while copying create deployment response: %v\n", err)
 	}

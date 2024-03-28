@@ -16,7 +16,7 @@ var (
 )
 
 func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*automationModels.CloudCredentialsResponse, error) {
-	getReq := automationModels.CloudCredentials{}
+	getReq := automationModels.CloudCredentialsRequest{}
 	getReq.Get.CloudCredentialsId = credId
 	getReq.Get.IsConfigRequired = isConfigRequired
 
@@ -42,7 +42,7 @@ func GetCloudCredentials(credId, backupType string, isConfigRequired bool) (*aut
 }
 
 func DeleteCloudCredential(cloudCredentialsId string) error {
-	req := automationModels.CloudCredentials{}
+	req := automationModels.CloudCredentialsRequest{}
 	req.Get.CloudCredentialsId = cloudCredentialsId
 	err := v2Components.Platform.DeleteCloudCredential(&req)
 	if err != nil {
@@ -52,7 +52,7 @@ func DeleteCloudCredential(cloudCredentialsId string) error {
 }
 
 func CreateCloudCredentials(tenantId, backupType string) (*automationModels.CloudCredentialsResponse, error) {
-	createReq := automationModels.CloudCredentials{}
+	createReq := automationModels.CloudCredentialsRequest{}
 	credsName := strings.ToLower("pds-bkp-creds-" + utilities.RandString(5))
 	createReq.Create.TenantID = tenantId
 	createReq.Create.Meta.Name = &credsName

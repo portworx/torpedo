@@ -65,6 +65,7 @@ func (a *DataServicesServiceAPIService) DataServicesServiceGetDataServiceExecute
 
 	localVarPath := localBasePath + "/pds/v1/catalog/dataServices/{id}"
 	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
@@ -197,6 +198,7 @@ func (a *DataServicesServiceAPIService) DataServicesServiceListDataServicesExecu
 	}
 
 	localVarPath := localBasePath + "/pds/v1/catalog/dataServices"
+
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
