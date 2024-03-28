@@ -1090,6 +1090,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 	})
 
 	JustAfterEach(func() {
+
 		allContexts := append(scheduledAppContexts, newScheduledAppContexts...)
 		defer EndPxBackupTorpedoTest(allContexts)
 		defer func() {
@@ -1115,6 +1116,7 @@ var _ = Describe("{AllNSBackupWithIncludeNewNSOption}", func() {
 		err = DeleteRestore(restoreName, BackupOrgID, ctx)
 		dash.VerifySafely(err, nil, fmt.Sprintf("Deleting restore [%s]", restoreName))
 		CleanupCloudSettingsAndClusters(backupLocationMap, cloudCredName, cloudCredUID, ctx)
+
 	})
 })
 

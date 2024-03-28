@@ -430,11 +430,12 @@ func (d *portworx) init(sched, nodeDriver, token, storageProvisioner, csiGeneric
 		return err
 	}
 
-	for _, n := range node.GetStorageDriverNodes() {
-		if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
-			return err
-		}
-	}
+	//for _, n := range node.GetStorageDriverNodes() {
+	//	if err := d.WaitDriverUpOnNode(n, validatePXStartTimeout); err != nil {
+	//		//return err
+	//		log.Info("PX failed to come up on node %v", n.Name)
+	//	}
+	//}
 
 	log.Infof("The following Portworx nodes are in the cluster:")
 	for _, n := range storageNodes {
@@ -2569,7 +2570,9 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 				return nil, true, err
 			}
 			if nodeResponse.Node.MgmtIp == "" {
-				return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest, response: %v", nodeResponse)
+				//return nil, true, fmt.Errorf("got an empty MgmtIp from SdkNodeInspectRequest, response: %v", nodeResponse)
+				log.InfoD("No mgmt IP")
+				return nil, false, nil
 			}
 			return nodeResponse, false, nil
 		}
@@ -2577,7 +2580,9 @@ func (d *portworx) getPxNodes(nManagers ...api.OpenStorageNodeClient) ([]*api.St
 		if err != nil {
 			return nodes, err
 		}
-		nodes = append(nodes, nodeResp.(*api.SdkNodeInspectResponse).Node)
+		if nodeResp != nil {
+			nodes = append(nodes, nodeResp.(*api.SdkNodeInspectResponse).Node)
+		}
 	}
 	return nodes, nil
 }
