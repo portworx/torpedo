@@ -538,10 +538,6 @@ func nodePoolsExpansion(testName string) {
 
 	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
 	It(stepLog, func() {
-		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			log.FailOnError(disk_err, "Add disk operation is not supported")
-		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -1395,10 +1391,6 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 	stepLog := "should get the storageless node and add a drive"
 
 	It(stepLog, func() {
-		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			log.FailOnError(disk_err, "Add disk operation is not supported")
-		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3741,6 +3733,12 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
+			if err != nil {
+				if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
+					log.InfoD("add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
+					return
+				}
+			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
@@ -7351,10 +7349,6 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 	stepLog := "Rebalance taking long time during drive add in pool maintenance mode"
 
 	It(stepLog, func() {
-		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			log.FailOnError(disk_err, "Add disk operation is not supported")
-		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
