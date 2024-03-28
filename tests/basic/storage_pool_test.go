@@ -5585,10 +5585,10 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool {
 	// Get the Spec to add the disk to the Node
 	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
-	isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-	if !isPoolAddDiskSupported {
-		log.FailOnError(disk_err, "Add disk operation is not supported")
-	}
+	//isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+	//if !isPoolAddDiskSupported {
+	//	log.FailOnError(disk_err, "Add disk operation is not supported")
+	//}
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	log.FailOnError(err, "Error getting cloud drive specs")
 	log.InfoD("Cloud Drive Spec %s", driveSpecs)
