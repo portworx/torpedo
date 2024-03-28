@@ -9,10 +9,15 @@ type PDSBackupRequest struct {
 }
 
 type PDSBackupResponse struct {
-	Meta   Meta
-	Config NewV1BackupConfig
-	Status Backupv1Status
+	List PDSBackupListResponse `copier:"must,nopanic"`
+	Get  V1Backup              `copier:"must,nopanic"`
 }
+
+//type PDSBackupResponse struct {
+//	Meta   Meta
+//	Config NewV1BackupConfig
+//	Status Backupv1Status
+//}
 
 type PDSDeleteBackup struct {
 	Id string `copier:"must,nopanic"`

@@ -24,8 +24,10 @@ func (backup *PDS_API_V1) DeleteBackup(deleteBackupRequest *automationModels.PDS
 }
 
 // ListBackup will list backup for a given deployment
-func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) ([]automationModels.PDSBackupResponse, error) {
-	bkpResponse := []automationModels.PDSBackupResponse{}
+func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
+	bkpResponse := automationModels.PDSBackupResponse{
+		List: automationModels.PDSBackupListResponse{},
+	}
 
 	ctx, bkpClient, err := backup.getBackupClient()
 	if err != nil {
@@ -47,13 +49,15 @@ func (backup *PDS_API_V1) ListBackup(listBackupConfigRequest *automationModels.P
 		return nil, fmt.Errorf("Error occured while copying the backup response: %v\n", err)
 	}
 
-	return bkpResponse, nil
+	return &bkpResponse, nil
 }
 
 // GetBackup will fetch backup for a given deployment
 func (backup *PDS_API_V1) GetBackup(getBackupConfigRequest *automationModels.PDSBackupRequest) (*automationModels.PDSBackupResponse, error) {
 
-	response := automationModels.PDSBackupResponse{}
+	response := automationModels.PDSBackupResponse{
+		Get: automationModels.V1Backup{},
+	}
 
 	ctx, backupClient, err := backup.getBackupClient()
 	if err != nil {

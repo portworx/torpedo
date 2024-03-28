@@ -11,15 +11,15 @@ import (
 
 // ValidateAdhocBackup triggers the adhoc backup for given ds and store at the given backup target and validate them
 func ValidateAdhocBackup(backup BackupParams) error {
-	var bkpJobs []automationModels.PDSBackupResponse
+	var bkpJobs *automationModels.PDSBackupResponse
 
 	waitErr := wait.Poll(bkpTimeInterval, bkpMaxtimeInterval, func() (bool, error) {
 		bkpJobs, err = ListBackup(backup)
 		if err != nil {
 			return false, err
 		}
-		log.Infof("[Backup job: %v] Status: %v", *bkpJobs[0].Meta.Name, *bkpJobs[0].Status.Phase)
-		if *bkpJobs[0].Status.Phase == "Succeeded" {
+		log.Infof("[Backup job: %v] Status: %v", *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.Phase)
+		if *bkpJobs.List.Backups[0].Status.Phase == "Succeeded" {
 			return true, nil
 		} else {
 			return false, nil
@@ -31,7 +31,7 @@ func ValidateAdhocBackup(backup BackupParams) error {
 
 	log.Infof("Created adhoc backup successfully for %v,"+
 		" backup job: %v, backup job creation time: %v, backup job completion time: %v",
-		backup.DeploymentID, *bkpJobs[0].Meta.Name, bkpJobs[0].Status.StartTime, bkpJobs[0].Status.CompletionTime)
+		backup.DeploymentID, *bkpJobs.List.Backups[0].Meta.Name, *bkpJobs.List.Backups[0].Status.StartTime, *bkpJobs.List.Backups[0].Status.CompletionTime)
 	return nil
 }
 

@@ -42,7 +42,7 @@ func GetBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error)
 }
 
 // ListBackup lists backup config for the deployment
-func ListBackup(backup BackupParams) ([]automationModels.PDSBackupResponse, error) {
+func ListBackup(backup BackupParams) (*automationModels.PDSBackupResponse, error) {
 
 	listBackup := automationModels.PDSBackupRequest{}
 
