@@ -601,6 +601,10 @@ func PrintPxctlStatus() {
 	PrintCommandOutput("pxctl status")
 }
 
+func PrintInspectVolume(volID string) {
+	PrintCommandOutput(fmt.Sprintf("pxctl volume inspect %s", volID))
+}
+
 func PrintCommandOutput(cmnd string) {
 	output, err := Inst().N.RunCommand(node.GetStorageNodes()[0], cmnd, node.ConnectionOpts{
 		IgnoreError:     false,
@@ -5687,6 +5691,8 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
+				log.Error(err)
+				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
@@ -6044,6 +6050,8 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
+				log.Error(err)
+				UpdateOutcome(event, err)
 			}
 
 		})
@@ -7786,6 +7794,8 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
+		log.InfoD("Printing the volume inspect for the volume")
+		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
 }
