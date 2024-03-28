@@ -108,9 +108,9 @@ const (
 	VerifyRBACForAppAdmin                                                              TestCaseName = "VerifyRBACForAppAdmin"
 	VerifyRBACForAppUser                                                               TestCaseName = "VerifyRBACForAppUser"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS                                   TestCaseName = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
-  KubevirtScheduledVMDelete                                                          TestCaseName = "KubevirtScheduledVMDelete"
+	KubevirtScheduledVMDelete                                                          TestCaseName = "KubevirtScheduledVMDelete"
 	CustomBackupRestoreWithKubevirtAndNonKubevirtNS                                    TestCaseName = "CustomBackupRestoreWithKubevirtAndNonKubevirtNS"
-  BackupAndRestoreSyncDR                                                             TestCaseName = "BackupAndRestoreSyncDR"
+	BackupAndRestoreSyncDR                                                             TestCaseName = "BackupAndRestoreSyncDR"
 	ExcludeInvalidDirectoryFileBackup                                                  TestCaseName = "ExcludeInvalidDirectoryFileBackup"
 	ExcludeDirectoryFileBackup                                                         TestCaseName = "ExcludeDirectoryFileBackup"
 	MultipleProvisionerCsiSnapshotDeleteBackupAndRestore                               TestCaseName = "MultipleProvisionerCsiSnapshotDeleteBackupAndRestore"
@@ -230,9 +230,9 @@ const (
 	KubevirtInPlaceRestoreWithReplaceAndRetainLabel                                         TestCaseLabel = "KubevirtInPlaceRestoreWithReplaceAndRetain"
 	KubevirtVMRestoreWithAfterChangingVMConfigLabel                                         TestCaseLabel = "KubevirtVMRestoreWithAfterChangingVMConfig"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel                                   TestCaseLabel = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
-  KubevirtScheduledVMDeleteLabel                                                          TestCaseLabel = "KubevirtScheduledVMDelete"
+	KubevirtScheduledVMDeleteLabel                                                          TestCaseLabel = "KubevirtScheduledVMDelete"
 	CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel                                    TestCaseLabel = "CustomBackupRestoreWithKubevirtAndNonKubevirtNS"
-  BackupAndRestoreSyncDRLabel                                                             TestCaseLabel = "BackupAndRestoreSyncDR"
+	BackupAndRestoreSyncDRLabel                                                             TestCaseLabel = "BackupAndRestoreSyncDR"
 	ExcludeInvalidDirectoryFileBackupLabel                                                  TestCaseLabel = "ExcludeInvalidDirectoryFileBackup"
 	ExcludeDirectoryFileBackupLabel                                                         TestCaseLabel = "ExcludeDirectoryFileBackup"
 	MultipleProvisionerCsiSnapshotDeleteBackupAndRestoreLabel                               TestCaseLabel = "MultipleProvisionerCsiSnapshotDeleteBackupAndRestore"
@@ -482,7 +482,6 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                 {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
 	KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},
 	CustomBackupRestoreWithKubevirtAndNonKubevirtNS:                  {CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
-  KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},	BackupAndRestoreSyncDR:                                           {BackupAndRestoreSyncDRLabel},
 	ExcludeInvalidDirectoryFileBackup:                                {ExcludeInvalidDirectoryFileBackupLabel},
 	ExcludeDirectoryFileBackup:                                       {ExcludeDirectoryFileBackupLabel},
 	MultipleMemberProjectBackupAndRestoreForSingleNamespace:          {MultipleMemberProjectBackupAndRestoreForSingleNamespaceLabel},
