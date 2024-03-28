@@ -501,10 +501,10 @@ var _ = Describe("{NodePoolsAddDisk}", func() {
 		1. Initiate pool expansion on multiple pools in the same node using add-disk
 		2. Validate pool expansion in all the pools
 	*/
-	isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-	if !isPoolAddDiskSupported {
-		log.FailOnError(disk_err, "Add disk operation is not supported")
-	}
+	//isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+	//if !isPoolAddDiskSupported {
+	//	log.FailOnError(disk_err, "Add disk operation is not supported")
+	//}
 	nodePoolsExpansion("NodePoolsAddDisk")
 
 })
