@@ -142,7 +142,8 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			if err != nil {
 				if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
 					log.InfoD("add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					return
+					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
+
 				}
 			}
 			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
@@ -151,7 +152,6 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 
 		})
-
 		Step("Ensure that new pool has been expanded to the expected size", func() {
 			ValidateApplications(contexts)
 			resizedPool, err := GetStoragePoolByUUID(poolIDToResize)
