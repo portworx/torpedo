@@ -2,6 +2,7 @@ package tests
 
 import (
 	"fmt"
+	"github.com/portworx/torpedo/drivers/scheduler/iks"
 	"math"
 	"os"
 	"strconv"
@@ -227,9 +228,10 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		// upgradeExecutionThreshold determines the number of times each function needs to execute before upgrading
 		upgradeExecutionThreshold int
 		// disruptiveTriggerWrapper wraps a TriggerFunction with triggerLock to prevent concurrent execution of test triggers
-		disruptiveTriggerWrapper func(fn TriggerFunction) TriggerFunction
-		contexts                 []*scheduler.Context
-		upgradeCounter           = NewCounter[string]()
+		disruptiveTriggerWrapper   func(fn TriggerFunction) TriggerFunction
+		contexts                   []*scheduler.Context
+		upgradeCounter             = NewCounter[string]()
+		upgradeVolumeDriverTrigger string
 	)
 
 	JustBeforeEach(func() {
@@ -260,8 +262,17 @@ var _ = Describe("{UpgradeLongevity}", func() {
 		}
 		// Creating a distinct trigger to ensure upgrade is triggered after a specified number of events have occurred
 		upgradeTriggerFunction = map[string]TriggerFunction{
-			UpgradeVolumeDriver: TriggerUpgradeVolumeDriver,
-			UpgradeCluster:      TriggerUpdateCluster,
+			UpgradeCluster: TriggerUpdateCluster,
+		}
+		switch Inst().S.String() {
+		case iks.SchedName:
+			log.Infof("Setting upgradeVolumeDriverTrigger to [%s]", UpgradeVolumeDriverFromCatalog)
+			upgradeVolumeDriverTrigger = UpgradeVolumeDriverFromCatalog
+			upgradeTriggerFunction[upgradeVolumeDriverTrigger] = TriggerUpgradeVolumeDriverFromCatalog
+		default:
+			log.Infof("Setting upgradeVolumeDriverTrigger to [%s]", UpgradeVolumeDriver)
+			upgradeVolumeDriverTrigger = UpgradeVolumeDriver
+			upgradeTriggerFunction[upgradeVolumeDriverTrigger] = TriggerUpgradeVolumeDriver
 		}
 		if !populateDone {
 			tags := map[string]string{
@@ -358,7 +369,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						log.InfoD("Longevity Tests timed out with timeout %d minutes", Inst().MinRunTimeMins)
 						break
 					}
-					if upgradeCounter.GetCount(UpgradeVolumeDriver) >= len(upgradeEndpoints) && upgradeCounter.GetCount(UpgradeCluster) >= len(upgradeSchedHops) {
+					if upgradeCounter.GetCount(upgradeVolumeDriverTrigger) >= len(upgradeEndpoints) && upgradeCounter.GetCount(UpgradeCluster) >= len(upgradeSchedHops) {
 						// upgradeExecutionThreshold will be 0 when triggering only upgrades
 						if upgradeExecutionThreshold == 0 {
 							log.InfoD("All upgrades are completed. Closing StopLongevityChan")
@@ -389,11 +400,11 @@ var _ = Describe("{UpgradeLongevity}", func() {
 					if minTestExecCount >= (currentUpgradeIndex+1)*upgradeExecutionThreshold {
 						triggerType := ""
 						if currentUpgradeIndex%2 == 0 {
-							if upgradeCounter.GetCount(UpgradeVolumeDriver) < len(upgradeEndpoints) {
-								Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[upgradeCounter.GetCount(UpgradeVolumeDriver)]
-								triggerType = UpgradeVolumeDriver
+							if upgradeCounter.GetCount(upgradeVolumeDriverTrigger) < len(upgradeEndpoints) {
+								Inst().UpgradeStorageDriverEndpointList = upgradeEndpoints[upgradeCounter.GetCount(upgradeVolumeDriverTrigger)]
+								triggerType = upgradeVolumeDriverTrigger
 							} else {
-								log.Warnf("No endpoint to upgrade; index [%d] exceeds the set [%d] endpoints.", upgradeCounter.GetCount(UpgradeVolumeDriver), len(upgradeEndpoints))
+								log.Warnf("No endpoint to upgrade; index [%d] exceeds the set [%d] endpoints.", upgradeCounter.GetCount(upgradeVolumeDriverTrigger), len(upgradeEndpoints))
 								currentUpgradeIndex++
 								continue
 							}
@@ -425,6 +436,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 						Inst().UpgradeStorageDriverEndpointList = strings.Join(upgradeEndpoints, ",")
 						Inst().SchedUpgradeHops = strings.Join(upgradeSchedHops, ",")
 						upgradeCounter.Increment(triggerType)
+						ValidateApplications(contexts)
 					}
 					time.Sleep(controlLoopSleepTime)
 				}
