@@ -287,7 +287,7 @@ var _ = Describe("{UpgradeLongevity}", func() {
 			log.InfoD("Upgrade longevity tests timeout set to %d minutes", Inst().MinRunTimeMins)
 		}
 		upgradeExecutionThreshold = 1 // default value
-		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil && val > 0 {
+		if val, err := strconv.Atoi(os.Getenv("LONGEVITY_UPGRADE_EXECUTION_THRESHOLD")); err == nil {
 			upgradeExecutionThreshold = val
 		}
 		disruptiveTriggerWrapper = func(fn TriggerFunction) TriggerFunction {
