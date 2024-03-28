@@ -5854,8 +5854,6 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after repl increase ", v.Name, v.ID, v.Namespace)
-									PrintInspectVolume(v.ID)
 									err = fmt.Errorf("error in ha-increse after %s target node . Error: %v", action, err)
 									return
 								}
@@ -6010,8 +6008,6 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 								}
 								err = ValidateReplFactorUpdate(v, currRep+1)
 								if err != nil {
-									log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after repl increase ", v.Name, v.ID, v.Namespace)
-									PrintInspectVolume(v.ID)
 									err = fmt.Errorf("error in ha-increse after  source node reboot. Error: %v", err)
 									return
 								}
@@ -6055,8 +6051,6 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after repl increase ", v.Name, v.ID, v.Namespace)
-				PrintInspectVolume(v.ID)
 				log.Error(err)
 				UpdateOutcome(event, err)
 			}
