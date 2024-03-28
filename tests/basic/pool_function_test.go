@@ -923,13 +923,6 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 
 	stepLog := "Start pool expand with add-disk on node which is already in maintenance mode "
 	It(stepLog, func() {
-		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			if disk_err != nil {
-				log.Warnf("Add disk operation is not supported for DMTHIN but continuing the operation")
-			}
-
-		}
 		log.InfoD(stepLog)
 		var nodeDetail *node.Node
 		var err error

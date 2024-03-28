@@ -82,13 +82,6 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 	stepLog := "should get the existing pool and expand it by adding a disk"
 	It(stepLog, func() {
-		isPoolAddDiskSupported, err := IsPoolAddDiskSupported()
-		if !isPoolAddDiskSupported {
-			if err != nil {
-				log.Warnf("Add disk operation is not supported for DMTHIN but continuing the operation")
-			}
-
-		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -218,6 +211,7 @@ var _ = Describe("{StoragePoolExpandDiskAuto}", func() {
 				poolToBeResized, err = GetStoragePoolByUUID(poolIDToResize)
 				log.FailOnError(err, fmt.Sprintf("Failed to get pool using UUID %s", poolIDToResize))
 			} else {
+
 				log.FailOnError(err, fmt.Sprintf("pool [%s] cannot be expanded due to error: %v", poolIDToResize, err))
 			}
 		})
@@ -393,6 +387,10 @@ var _ = Describe("{PoolAddDiskReboot}", func() {
 	stepLog := "should get the existing pool and expand it by adding a disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -503,7 +501,10 @@ var _ = Describe("{NodePoolsAddDisk}", func() {
 		1. Initiate pool expansion on multiple pools in the same node using add-disk
 		2. Validate pool expansion in all the pools
 	*/
-
+	isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+	if !isPoolAddDiskSupported {
+		log.FailOnError(disk_err, "Add disk operation is not supported")
+	}
 	nodePoolsExpansion("NodePoolsAddDisk")
 
 })
@@ -537,6 +538,10 @@ func nodePoolsExpansion(testName string) {
 
 	stepLog := fmt.Sprintf("has to schedule apps, and expand it by %s", option)
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -1363,6 +1368,10 @@ var _ = Describe("{AddDriveStoragelessAndResize}", func() {
 	stepLog := "should get the storageless node and add a drive"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -1803,6 +1812,10 @@ var _ = Describe("{PoolAddDiskDiff}", func() {
 	stepLog := "should get the existing storage node and expand the pool multiple times"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2044,6 +2057,10 @@ var _ = Describe("{AddWithPXRestart}", func() {
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -2347,6 +2364,10 @@ var _ = Describe("{VolUpdateAddDisk}", func() {
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -2714,6 +2735,10 @@ var _ = Describe("{MulPoolsAddDisk}", func() {
 	stepLog := "should get the existing storage node with multiple pools and expand pools at same time using add-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 
@@ -3032,6 +3057,10 @@ var _ = Describe("{AddDiskNodeMaintenanceCycle}", func() {
 	stepLog := "should get the volume with IOs, expand the pool by add-disk and perform node maintenance cycle"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3190,6 +3219,10 @@ var _ = Describe("{AddDiskPoolMaintenanceCycle}", func() {
 	stepLog := "should get the volume with IOs, expand the pool by add-disk and perform pool maintenance cycle"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3391,6 +3424,10 @@ var _ = Describe("{NodeMaintenanceModeAddDisk}", func() {
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3618,6 +3655,10 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -3729,6 +3770,10 @@ var _ = Describe("{AddDiskNodeMaintenanceMode}", func() {
 	stepLog := "should get the existing storage node,trigger add-disk and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4080,6 +4125,10 @@ var _ = Describe("{AddDiskPoolMaintenanceMode}", func() {
 	stepLog := "should get the existing storage node and put it in maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4249,6 +4298,10 @@ var _ = Describe("{PXRestartAddDisk}", func() {
 	stepLog := "should get the existing storage node and expand the pool by add-disk"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -4787,6 +4840,10 @@ var _ = Describe("{StorageFullPoolAddDisk}", func() {
 
 	stepLog := "Create vols and make pool full"
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		selectedNode := GetNodeWithLeastSize()
 		stNodes := node.GetStorageNodes()
@@ -5501,6 +5558,10 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool {
 	// Get the Spec to add the disk to the Node
 	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
+	isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+	if !isPoolAddDiskSupported {
+		log.FailOnError(disk_err, "Add disk operation is not supported")
+	}
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	log.FailOnError(err, "Error getting cloud drive specs")
 	log.InfoD("Cloud Drive Spec %s", driveSpecs)
@@ -5561,6 +5622,10 @@ var _ = Describe("{ResizePoolDrivesInDifferentSize}", func() {
 
 	stepLog := "should get the existing storage node and expand the pool by resize-disk"
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7149,6 +7214,11 @@ var _ = Describe("{ResizeDiskAddDiskSamePool}", func() {
 	stepLog := "Resize Disk Followed by adddisk should not create a new pool"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
+
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7243,6 +7313,10 @@ var _ = Describe("{DriveAddRebalanceInMaintenance}", func() {
 	stepLog := "Rebalance taking long time during drive add in pool maintenance mode"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7563,6 +7637,10 @@ var _ = Describe("{NodeAddDiskWhileAddDiskInProgress}", func() {
 	stepLog := "should get the existing storage node and expand the pool by adding a drive while one already in progress"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -7674,6 +7752,10 @@ var _ = Describe("{NodeAddDiskWhileResizeDiskInProgress}", func() {
 	stepLog := "should get the existing storage node and expand the pool by adding a drive while one already in progress"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -8250,6 +8332,10 @@ var _ = Describe("{AddDiskAddDriveAndDeleteInstance}", func() {
 	stepLog := "should get the existing pool, expand the pool by adding disk and create a new pool and then delete the instance"
 
 	It(stepLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		log.InfoD(stepLog)
 		contexts = make([]*scheduler.Context, 0)
 		for i := 0; i < Inst().GlobalScaleFactor; i++ {
@@ -10660,6 +10746,10 @@ var _ = Describe("{HAIncreasePoolresizeAndAdddisk}", func() {
 
 	itLog := "HAIncreasePoolresizeAndAdddisk"
 	It(itLog, func() {
+		isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+		if !isPoolAddDiskSupported {
+			log.FailOnError(disk_err, "Add disk operation is not supported")
+		}
 		stepLog := "schedule Application"
 		Step(stepLog, func() {
 			log.InfoD(stepLog)
