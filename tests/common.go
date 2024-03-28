@@ -5687,8 +5687,6 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s  ", v.Name, v.ID, v.Namespace)
-				PrintInspectVolume(v.ID)
 				log.Error(err)
 				UpdateOutcome(event, err)
 				return
@@ -5781,10 +5779,6 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 							if err != nil {
 								err = fmt.Errorf("There is an error increasing repl [%v]", err.Error())
 								return
-								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after repl increase ", v.Name, v.ID, v.Namespace)
-								PrintInspectVolume(v.ID)
-								log.Errorf("There is an error increasing repl [%v]", err.Error())
-								UpdateOutcome(event, err)
 							}
 						})
 
@@ -5905,8 +5899,6 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 			log.InfoD(stepLog)
 			currRep, err = Inst().V.GetReplicationFactor(v)
 			if err != nil {
-				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s  ", v.Name, v.ID, v.Namespace)
-				PrintInspectVolume(v.ID)
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
 				return
 
