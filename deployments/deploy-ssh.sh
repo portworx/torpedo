@@ -862,6 +862,8 @@ spec:
       value: "${EKS_PX_NODEGROUP_NAME}"
     - name: IKS_CLUSTER_NAME
       value: "${IKS_CLUSTER_NAME}"
+    - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
+      value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
