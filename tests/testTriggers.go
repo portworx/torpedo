@@ -1096,9 +1096,6 @@ func haIncreaseWithErrorInjection(event *EventRecord, contexts *[]*scheduler.Con
 						}
 					}
 				}
-				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
-				PrintInspectVolume(v.ID)
-
 				if err == nil {
 					err := HaIncreaseErrorInjectionTargetNode(event, selctx, v, storageNodeMap, errorInj)
 					log.Error(err)
