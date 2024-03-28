@@ -2121,11 +2121,15 @@ func (d *portworx) ValidatePureLocalVolumePaths() error {
 
 			// Find the device for this volume
 			var device *pureLocalPathEntry
+			log.Infof("currentDevices %#v", currentDevices)
 			for _, deviceEntry := range currentDevices[foundNode.MgmtIp] {
+				log.Infof("deviceEntry: %#v", deviceEntry)
 				serial, err := GetSerialFromWWID(deviceEntry.WWID)
 				if err != nil {
 					return err
 				}
+				log.Infof("serial: %#v", serial)
+				log.Infof("GetProxySpec: %#v", strings.ToLower(v.Spec.GetProxySpec().PureBlockSpec.SerialNum))
 				if serial == strings.ToLower(v.Spec.GetProxySpec().PureBlockSpec.SerialNum) {
 					device = &deviceEntry
 					break
