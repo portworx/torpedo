@@ -2657,6 +2657,16 @@ func (d *portworx) WaitDriverUpOnNode(n node.Node, timeout time.Duration) error 
 		return "", false, nil
 	}
 	if _, err := task.DoRetryWithTimeout(t, timeout, defaultRetryInterval); err != nil {
+		log.InfoD(fmt.Sprintf("------Printing the px logs on the node:%s ----------", n.Name))
+		_, err := d.nodeDriver.RunCommand(n, "journalctl -lu portworx* -n 100 --no-pager ", node.ConnectionOpts{
+			Timeout:         crashDriverTimeout,
+			TimeBeforeRetry: defaultRetryInterval,
+			Sudo:            true,
+		})
+		if err != nil {
+			log.InfoD("Unable to obtain the px logs for the node %s", n.Name)
+		}
+
 		return fmt.Errorf("PX failed to come up on node [%s/%s], Err: %v", n.Name, n.VolDriverNodeID, err)
 	}
 
