@@ -1973,6 +1973,8 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					updateLongevityStats(PoolMaintenanceCycle, stats.PoolMaintenanceEventName, dashStats)
 					err = Inst().V.EnterPoolMaintenance(appNode)
 					if err != nil {
+						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after entering pool Maintenance", appNode.Name))
+						PrintSvPoolStatus(appNode)
 						UpdateOutcome(event, err)
 						return
 					}
@@ -1992,11 +1994,11 @@ func TriggerPoolMaintenanceCycle(contexts *[]*scheduler.Context, recordChan *cha
 					event.Event.Type += "<br>" + taskStep
 					err = Inst().V.ExitPoolMaintenance(appNode)
 					if err != nil {
+						log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after pool Maintenance", appNode.Name))
+						PrintSvPoolStatus(appNode)
 						UpdateOutcome(event, err)
 						return
 					}
-					log.InfoD(fmt.Sprintf("Printing The storage pool status on Node:%s after pool Maintenance", appNode.Name))
-					PrintSvPoolStatus(appNode)
 				})
 
 			Step("Giving few seconds for volume driver to stabilize", func() {
