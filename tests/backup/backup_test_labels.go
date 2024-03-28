@@ -109,7 +109,8 @@ const (
 	VerifyRBACForAppUser                                                               TestCaseName = "VerifyRBACForAppUser"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS                                   TestCaseName = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
   KubevirtScheduledVMDelete                                                          TestCaseName = "KubevirtScheduledVMDelete"
-	BackupAndRestoreSyncDR                                                             TestCaseName = "BackupAndRestoreSyncDR"
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNS                                    TestCaseName = "CustomBackupRestoreWithKubevirtAndNonKubevirtNS"
+  BackupAndRestoreSyncDR                                                             TestCaseName = "BackupAndRestoreSyncDR"
 	ExcludeInvalidDirectoryFileBackup                                                  TestCaseName = "ExcludeInvalidDirectoryFileBackup"
 	ExcludeDirectoryFileBackup                                                         TestCaseName = "ExcludeDirectoryFileBackup"
 	MultipleProvisionerCsiSnapshotDeleteBackupAndRestore                               TestCaseName = "MultipleProvisionerCsiSnapshotDeleteBackupAndRestore"
@@ -122,7 +123,6 @@ const (
 	BackupToLockedBucketWithSharedObjects                                              TestCaseName = "BackupToLockedBucketWithSharedObjects"
 	RemoveJSONFilesFromNFSBackupLocation                                               TestCaseName = "RemoveJSONFilesFromNFSBackupLocation"
 	CloudSnapshotMissingValidationForNFSLocation                                       TestCaseName = "CloudSnapshotMissingValidationForNFSLocation"
-
 )
 
 // Test case labels
@@ -231,7 +231,8 @@ const (
 	KubevirtVMRestoreWithAfterChangingVMConfigLabel                                         TestCaseLabel = "KubevirtVMRestoreWithAfterChangingVMConfig"
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel                                   TestCaseLabel = "DefaultBackupRestoreWithKubevirtAndNonKubevirtNS"
   KubevirtScheduledVMDeleteLabel                                                          TestCaseLabel = "KubevirtScheduledVMDelete"
-	BackupAndRestoreSyncDRLabel                                                             TestCaseLabel = "BackupAndRestoreSyncDR"
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel                                    TestCaseLabel = "CustomBackupRestoreWithKubevirtAndNonKubevirtNS"
+  BackupAndRestoreSyncDRLabel                                                             TestCaseLabel = "BackupAndRestoreSyncDR"
 	ExcludeInvalidDirectoryFileBackupLabel                                                  TestCaseLabel = "ExcludeInvalidDirectoryFileBackup"
 	ExcludeDirectoryFileBackupLabel                                                         TestCaseLabel = "ExcludeDirectoryFileBackup"
 	MultipleProvisionerCsiSnapshotDeleteBackupAndRestoreLabel                               TestCaseLabel = "MultipleProvisionerCsiSnapshotDeleteBackupAndRestore"
@@ -479,6 +480,8 @@ var TestCaseLabelsMap = map[TestCaseName][]TestCaseLabel{
 	KubevirtInPlaceRestoreWithReplaceAndRetain:                       {KubevirtInPlaceRestoreWithReplaceAndRetainLabel, KubevirtAppLabel},
 	KubevirtVMRestoreWithAfterChangingVMConfig:                       {KubevirtVMRestoreWithAfterChangingVMConfigLabel, KubevirtAppLabel},
 	DefaultBackupRestoreWithKubevirtAndNonKubevirtNS:                 {DefaultBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
+	KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},
+	CustomBackupRestoreWithKubevirtAndNonKubevirtNS:                  {CustomBackupRestoreWithKubevirtAndNonKubevirtNSLabel, KubevirtAppLabel},
   KubevirtScheduledVMDelete:                                        {KubevirtScheduledVMDeleteLabel, KubevirtAppLabel},	BackupAndRestoreSyncDR:                                           {BackupAndRestoreSyncDRLabel},
 	ExcludeInvalidDirectoryFileBackup:                                {ExcludeInvalidDirectoryFileBackupLabel},
 	ExcludeDirectoryFileBackup:                                       {ExcludeDirectoryFileBackupLabel},
