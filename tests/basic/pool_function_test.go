@@ -966,7 +966,6 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			verifyPoolSizeEqualOrLargerThanExpected(poolIDToResize, targetSizeGiB)
 		})
 	})
-
 })
 
 var _ = Describe("{StorageFullPoolExpansion}", func() {
