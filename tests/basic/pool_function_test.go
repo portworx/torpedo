@@ -947,12 +947,6 @@ var _ = Describe("{PoolExpandAddDiskInMaintenanceMode}", func() {
 			log.InfoD("Current Size of the pool %s is %d GiB. Trying to expand to %v GiB with type add-disk",
 				poolIDToResize, poolToResize.TotalSize/units.GiB, targetSizeGiB)
 			err := Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, targetSizeGiB, true)
-			if err != nil {
-				if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
-					log.InfoD("add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					return
-				}
-			}
 			dash.VerifyFatal(err, nil, "pool expansion requested successfully")
 		})
 
