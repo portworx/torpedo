@@ -703,14 +703,20 @@ func IsPoolAddDiskSupported() (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		parts := strings.Split(driverVersion, ".")
-		trimmedVersion := strings.Join(parts[:3], ".")
-		currentPxVersionOnCluster, err := semver.NewVersion(trimmedVersion)
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, err := semver.NewVersion(new_trimmedVersion)
 		if err != nil {
 			log.InfoD("[semver.NewVersion] error is", err)
 			return false, err
 		}
-		if pxVersion.LessThan(currentPxVersionOnCluster) {
+		if currentPxVersionOnCluster.GreaterThan(pxVersion) {
 			log.Infof("drive add to existing pool not supported for px-storev2 or px-cache pools")
 			err = fmt.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools ")
 			return false, err
