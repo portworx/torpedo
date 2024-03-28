@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	restoreTimeInterval    = 20 * time.Second
+	restoreTimeInterval    = 10 * time.Second
 	restoreMaxTimeInterval = 1 * time.Minute
 )
 
@@ -87,18 +87,22 @@ func (restoreClient *RestoreClient) WaitForRestoreAndValidate(restoredModel *pds
 	testName := strings.Split(currentSpecReport.FullText(), " ")[0]
 	log.Debugf("Testcase Name %v", testName)
 
+	restoreDepId := restoredModel.GetId()
+	log.Infof("restored deployment_id [%s]", restoreDepId)
+
 	if testName == "{ValidateDSHealthStatusOnNodeFailures}" {
 		log.Debugf("Updating the restoreTimeout to 2min")
 		restoreTimeOut = 2 * time.Minute
 	}
 
 	err := wait.Poll(restoreTimeInterval, restoreTimeOut, func() (bool, error) {
-		restore, err := restoreClient.Components.Restore.GetRestore(restoredModel.GetId())
-		state := restore.GetStatus()
+		log.Infof("check polling status...")
+		restore, err := restoreClient.Components.Restore.GetRestore(restoreDepId)
 		if err != nil {
 			log.Errorf("failed during fetching the restore object, %v", err)
 			return false, err
 		}
+		state := restore.GetStatus()
 		log.Infof("Restore status -  %v", state)
 		if strings.ToLower(state) != strings.ToLower("Successful") {
 			return false, nil

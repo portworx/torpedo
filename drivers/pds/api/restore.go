@@ -20,7 +20,11 @@ func (restore *Restore) GetRestore(restoreID string) (*pds.ModelsRestore, error)
 		return nil, fmt.Errorf("Error in getting context for api call: %v\n", err)
 	}
 	restoreModel, res, err := restoreClient.ApiRestoresIdGet(ctx, restoreID).Execute()
-	if err != nil && res.StatusCode != status.StatusOK {
+	fmt.Println("GetRestore response: ", res)
+	fmt.Println("RestoreModel fetched is-: ", restoreModel)
+	fmt.Println("GetRestore failed due to-: ", err)
+	if err != nil || res.StatusCode != status.StatusOK {
+
 		return nil, fmt.Errorf("Error when calling `ApiRestoresIdGet`: %v\n.Full HTTP response: %v", err, res)
 	}
 	return restoreModel, err
