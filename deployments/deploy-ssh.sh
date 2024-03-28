@@ -646,6 +646,7 @@ spec:
         --torpedo-job-name="${TORPEDO_JOB_NAME}" \
         --torpedo-job-type="${TORPEDO_JOB_TYPE}" \
         --torpedo-skip-system-checks="${TORPEDO_SKIP_SYSTEM_CHECKS}" \
+        --fa-secret="${FA_SECRET}" \
         "${APP_DESTROY_TIMEOUT_ARG}" && \
         if [ -n "${POST_TORPEDO_SCRIPT_CM_NAME}" ]; then
             bash /tmp/${POST_TORPEDO_SCRIPT_CM_NAME}/script
@@ -852,6 +853,8 @@ spec:
       value: "${IKS_PX_WORKERPOOL_NAME}"
     - name: IKS_CLUSTER_REGION
       value: "${IKS_CLUSTER_REGION}"
+    - name: LONGEVITY_UPGRADE_EXECUTION_THRESHOLD
+      value: "${LONGEVITY_UPGRADE_EXECUTION_THRESHOLD}"
   volumes: [${VOLUMES}]
   restartPolicy: Never
   serviceAccountName: torpedo-account
