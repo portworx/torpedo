@@ -587,3 +587,50 @@ func GetPxBackupNamespace(c *gin.Context) {
 	// Return the namespace in which px-backup is deployed
 	c.JSON(http.StatusOK, response)
 }
+
+// GetBackupLocationUid returns the uid of given backup location
+func GetBackupLocationUid(c *gin.Context) {
+	log.Infof("Getting backup location UID")
+	var bkpLocUidRequest struct {
+		BackupLocation string `json:"backuplocation"`
+		Username       string `json:"username"`
+		Password       string `json:"password"`
+		OrgId          string `json:"orgid"`
+	}
+
+	type bkpLocUidResponse struct {
+		Uid string `json:"uid"`
+	}
+	if !checkTorpedoInit(c) {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error in init": fmt.Errorf("error in InitInstance()"),
+		})
+		return
+	}
+
+	if err := c.BindJSON(&bkpLocUidRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error for request": err.Error()})
+		return
+	}
+
+	if len(bkpLocUidRequest.BackupLocation) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "backup location cannot be empty"})
+		return
+	}
+
+	ctx, err := backup.GetNonAdminCtx(bkpLocUidRequest.Username, bkpLocUidRequest.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	uid, err := tests.Inst().Backup.GetBackupLocationUID(ctx, bkpLocUidRequest.OrgId, bkpLocUidRequest.BackupLocation)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	response := bkpLocUidResponse{
+		Uid: uid,
+	}
+	// Return the uid of given backup location
+	c.JSON(http.StatusOK, response)
+}

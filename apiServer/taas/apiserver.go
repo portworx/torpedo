@@ -33,5 +33,6 @@ func main() {
 	router.POST("taas/stork/upgrade", utils.UpgradeStork)
 	router.DELETE("taas/deletepod", utils.DeletePod)
 	router.GET("taas/getpxbackupnamespace", utils.GetPxBackupNamespace)
+	router.GET("taas/getbackuplocationuid", utils.GetBackupLocationUid)
 	log.Fatal(router.Run(":8080"))
 }
