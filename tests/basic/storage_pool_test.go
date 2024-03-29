@@ -136,21 +136,26 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 
 			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
 			log.Infof("Commented out the code to add disk to the pool %s", poolIDToResize)
-			//enterPoolMaintenanceAddDisk(poolIDToResize)
-			//defer exitPoolMaintenance(poolIDToResize)
+			enterPoolMaintenanceAddDisk(poolIDToResize)
+			defer exitPoolMaintenance(poolIDToResize)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			if err != nil {
-				if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
-					log.InfoD("add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
+				isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+				if isPoolAddDiskSupported {
+					dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+					resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
+					dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
 
+				} else {
+					if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
+						log.InfoD(fmt.Sprintf("----drive add to existing pool not supported for px-storev2 or px-cache pools-------- Test Error:%s", disk_err))
+						Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
+
+					}
 				}
-			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 
-			resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Expected new size to be '%d' or '%d' if pool has journal", expectedSize, expectedSizeWithJournal))
+			}
 
 		})
 		Step("Ensure that new pool has been expanded to the expected size", func() {
@@ -3724,6 +3729,29 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 		log.InfoD(fmt.Sprintf("Node %s status %s", stNode.Name, status.String()))
 		stepLog = fmt.Sprintf("pool expansion to the node %s", stNode.Name)
 		Step(stepLog, func() {
+			defer func() {
+				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+				t := func() (interface{}, bool, error) {
+
+					status, err := Inst().V.GetNodePoolsStatus(*stNode)
+					if err != nil {
+						return nil, true, err
+					}
+					log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
+					if status[poolToBeResized.Uuid] == "In Maintenance" {
+						log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
+						if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
+							return nil, true, err
+						}
+					}
+
+					return nil, false, nil
+				}
+				_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
+				err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
+				log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
+				dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
+			}()
 			log.InfoD(stepLog)
 			drvSize, err := getPoolDiskSize(poolToBeResized)
 			log.FailOnError(err, "error getting drive size for pool [%s]", poolToBeResized.Uuid)
@@ -3735,37 +3763,24 @@ var _ = Describe("{PoolMaintenanceModeAddDisk}", func() {
 			log.InfoD("Current Size of the pool %s is %d", poolToBeResized.Uuid, poolToBeResized.TotalSize/units.GiB)
 			err = Inst().V.ExpandPool(poolToBeResized.Uuid, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, true)
 			if err != nil {
-				if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
-					log.InfoD("add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type")
-					return
+				isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+				if isPoolAddDiskSupported {
+					dash.VerifyFatal(err, nil, "Pool expansion init successful?")
+					resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
+					dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
+
+				} else {
+					if strings.Contains(err.Error(), "add-drive type expansion is not supported with px-storev2. Use resize-drive expansion type") {
+						log.InfoD(fmt.Sprintf("----drive add to existing pool not supported for px-storev2 or px-cache pools-------- Test Error:%s", disk_err))
+						Skip("drive add to existing pool not supported for px-storev2 or px-cache pools")
+
+					}
 				}
+
 			}
-			dash.VerifyFatal(err, nil, "Pool expansion init successful?")
-			resizeErr := waitForPoolToBeResized(expectedSize, poolToBeResized.Uuid, isjournal)
-			dash.VerifyFatal(resizeErr, nil, fmt.Sprintf("Verify pool %s on node %s expansion using add-disk", poolToBeResized.Uuid, stNode.Name))
 
 		})
-		log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
-		t := func() (interface{}, bool, error) {
 
-			status, err := Inst().V.GetNodePoolsStatus(*stNode)
-			if err != nil {
-				return nil, true, err
-			}
-			log.InfoD(fmt.Sprintf("pool %s has status %s", stNode.Name, status[poolToBeResized.Uuid]))
-			if status[poolToBeResized.Uuid] == "In Maintenance" {
-				log.InfoD(fmt.Sprintf("Exiting pool maintenance mode on node %s", stNode.Name))
-				if err := Inst().V.ExitPoolMaintenance(*stNode); err != nil {
-					return nil, true, err
-				}
-			}
-
-			return nil, false, nil
-		}
-		_, err = task.DoRetryWithTimeout(t, 5*time.Minute, 1*time.Minute)
-		err = Inst().V.WaitDriverUpOnNode(*stNode, 5*time.Minute)
-		log.FailOnError(err, fmt.Sprintf("Driver is down on node %s", stNode.Name))
-		dash.VerifyFatal(err == nil, true, fmt.Sprintf("PX is up after maintenance cycle on node %s", stNode.Name))
 		status, err = Inst().V.GetNodeStatus(*stNode)
 		log.FailOnError(err, "err getting node [%s] status", stNode.Name)
 		log.Infof(fmt.Sprintf("Node %s status %s after exit", stNode.Name, status.String()))
@@ -10115,11 +10130,39 @@ var _ = Describe("{AddDriveWithKernelPanic}", func() {
 
 func isMaintenanceModeRequiredForAddDisk() bool {
 	isDmthin, err := IsDMthin()
-	log.FailOnError(err, "error validating for dmthin check")
-	if isDmthin {
+	if err != nil {
 		return true
 	}
-
+	if isDmthin {
+		pxVersion, err := semver.NewVersion("3.1.0")
+		if err != nil {
+			return false
+		}
+		log.Infof("DMTHIN is enabled")
+		driverVersion, err := Inst().V.GetDriverVersion()
+		if err != nil {
+			return false
+		}
+		var new_trimmedVersion string
+		parts := strings.Split(driverVersion, "-")
+		trimmedVersion := strings.Split(parts[0], ".")
+		if len(trimmedVersion) > 3 {
+			new_trimmedVersion = strings.Join(trimmedVersion[:3], ".")
+		} else {
+			new_trimmedVersion = parts[0]
+		}
+		currentPxVersionOnCluster, err := semver.NewVersion(new_trimmedVersion)
+		if err != nil {
+			log.InfoD("[semver.NewVersion] error is", err)
+			return false
+		}
+		if currentPxVersionOnCluster.GreaterThan(pxVersion) {
+			err = fmt.Errorf("Maintenance Mode is not allowed for version greater than 3.1.0 ")
+			return false
+		}
+		log.Infof("drive add to existing pool supported for px-storev2 or px-cache pools")
+		return true
+	}
 	if Inst().N.String() == ssh.DriverName || Inst().N.String() == vsphere.DriverName {
 		cmd := "uname -r"
 
