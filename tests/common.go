@@ -5692,8 +5692,6 @@ func HaIncreaseErrorInjectionTargetNode(event *EventRecord, ctx *scheduler.Conte
 
 			if err != nil {
 				err = fmt.Errorf("error getting replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 				return
 			}
 			//if repl is 3 cannot increase repl for the volume
@@ -6051,8 +6049,6 @@ func HaIncreaseErrorInjectSourceNode(event *EventRecord, ctx *scheduler.Context,
 					})
 			} else {
 				err = fmt.Errorf("error getting current replication factor for volume %s, Error: %v", v.Name, err)
-				log.Error(err)
-				UpdateOutcome(event, err)
 			}
 
 		})
