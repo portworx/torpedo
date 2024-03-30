@@ -7790,12 +7790,13 @@ func CreateMultiVolumesAndAttach(wg *sync.WaitGroup, count int, nodeName string)
 		}
 		if err != nil {
 			return createdVolIDs, fmt.Errorf("failed to creared volume %s, due to error : %v ", volName, err)
+
 		}
 		volPath = fmt.Sprintf("%v", out)
 		createdVolIDs[volId] = volPath
 		log.Infof("Volume %s attached to path %s", volId, volPath)
 		count--
-		log.InfoD("Printing the volume inspect for the volume")
+		log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s  after creating the volume", volName, volId)
 		PrintInspectVolume(volId)
 	}
 	return createdVolIDs, nil
