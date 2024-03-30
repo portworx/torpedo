@@ -698,11 +698,11 @@ func IsPoolAddDiskSupported() (bool, error) {
 		return true, nil
 	}
 	if DMthin {
-		pxVersion, err := semver.NewVersion("3.1.0")
+		log.Infof("DMTHIN is enabled")
+		dmthinSupportedPxVersion, err := semver.NewVersion("3.1.0")
 		if err != nil {
 			return false, err
 		}
-		log.Infof("DMTHIN is enabled")
 		driverVersion, err := Inst().V.GetDriverVersion()
 		if err != nil {
 			return false, err
@@ -717,10 +717,11 @@ func IsPoolAddDiskSupported() (bool, error) {
 		}
 		currentPxVersionOnCluster, err := semver.NewVersion(new_trimmedVersion)
 		if err != nil {
-			log.InfoD("[semver.NewVersion] error is", err)
+			log.InfoD(fmt.Sprintf("[semver.NewVersion] error is", err))
 			return false, err
 		}
-		if currentPxVersionOnCluster.GreaterThan(pxVersion) {
+		log.InfoD(fmt.Sprintf("The current version on the cluster is :%s", currentPxVersionOnCluster))
+		if currentPxVersionOnCluster.GreaterThan(dmthinSupportedPxVersion) {
 			err = fmt.Errorf("drive add to existing pool not supported for px-storev2 or px-cache pools ")
 			return false, err
 		}

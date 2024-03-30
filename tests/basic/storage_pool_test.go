@@ -135,13 +135,15 @@ var _ = Describe("{StoragePoolExpandDiskAdd}", func() {
 			}
 
 			log.InfoD("Current Size of the pool %s is %d", poolIDToResize, poolToBeResized.TotalSize/units.GiB)
-			log.Infof("Commented out the code to add disk to the pool %s", poolIDToResize)
 			enterPoolMaintenanceAddDisk(poolIDToResize)
 			defer exitPoolMaintenance(poolIDToResize)
 
 			err = Inst().V.ExpandPool(poolIDToResize, api.SdkStoragePool_RESIZE_TYPE_ADD_DISK, expectedSize, false)
 			if err != nil {
 				isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
+				if disk_err != nil {
+
+				}
 				if isPoolAddDiskSupported {
 					dash.VerifyFatal(err, nil, "Pool expansion init successful?")
 					resizeErr := waitForPoolToBeResized(expectedSize, poolIDToResize, isjournal)
@@ -507,10 +509,6 @@ var _ = Describe("{NodePoolsAddDisk}", func() {
 		1. Initiate pool expansion on multiple pools in the same node using add-disk
 		2. Validate pool expansion in all the pools
 	*/
-	//isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-	//if !isPoolAddDiskSupported {
-	//	log.FailOnError(disk_err, "Add disk operation is not supported")
-	//}
 	nodePoolsExpansion("NodePoolsAddDisk")
 
 })
@@ -5601,10 +5599,6 @@ var _ = Describe("{PoolIncreaseSize20TB}", func() {
 func addDiskToSpecificPool(node node.Node, sizeOfDisk uint64, poolID int32) bool {
 	// Get the Spec to add the disk to the Node
 	//  if the diskSize ( sizeOfDisK ) is 0 , then Disk of default spec size will be picked
-	//isPoolAddDiskSupported, disk_err := IsPoolAddDiskSupported()
-	//if !isPoolAddDiskSupported {
-	//	log.FailOnError(disk_err, "Add disk operation is not supported")
-	//}
 	driveSpecs, err := GetCloudDriveDeviceSpecs()
 	log.FailOnError(err, "Error getting cloud drive specs")
 	log.InfoD("Cloud Drive Spec %s", driveSpecs)
