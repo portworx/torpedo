@@ -1354,6 +1354,8 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 
 				err = Inst().V.ResizeVolume(vol.ID, newSize)
 				if err != nil {
+					log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of resizing the volume", vol.Name, vol.ID, vol.Namespace)
+					PrintInspectVolume(vol.ID)
 					return err
 				}
 
@@ -1438,12 +1440,16 @@ func TriggerHAIncreasWithPVCResize(contexts *[]*scheduler.Context, recordChan *c
 						}
 						err = Inst().V.SetReplicationFactor(v, currRep, nil, nil, false, opts)
 						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failing to set replication", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
 							log.Errorf("There is a error setting repl [%v]", err.Error())
 							UpdateOutcome(event, err)
 						}
-						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
-						PrintInspectVolume(v.ID)
 						err = volumeResize(v)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failure of a volume resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 
 					})
@@ -1567,10 +1573,10 @@ func TriggerHADecrease(contexts *[]*scheduler.Context, recordChan *chan *EventRe
 							updateLongevityStats(HADecrease, stats.HADecreaseEventName, dashStats)
 							err = Inst().V.SetReplicationFactor(v, currRep-1, nil, nil, true, opts)
 							if err != nil {
+								log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after failed to  decrease repl", v.Name, v.ID, v.Namespace)
+								PrintInspectVolume(v.ID)
 								log.Errorf("There is an error decreasing repl [%v]", err.Error())
 							}
-							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
-							PrintInspectVolume(v.ID)
 							UpdateOutcome(event, err)
 						} else {
 							log.Warnf("cannot perfomr HA reduce as new repl factor is less than minimum value %v ", MinRF)
@@ -2928,6 +2934,10 @@ func TriggerVolumeResize(contexts *[]*scheduler.Context, recordChan *chan *Event
 						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
 						PrintInspectVolume(v.ID)
 						err := Inst().V.ValidateUpdateVolume(v, params)
+						if err != nil {
+							log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after vol resize", v.Name, v.ID, v.Namespace)
+							PrintInspectVolume(v.ID)
+						}
 						UpdateOutcome(event, err)
 					}
 				})
@@ -6184,8 +6194,6 @@ func getIOProfileOnVolumes(contexts *[]*scheduler.Context) (map[string]VolumeIOP
 			}
 			volumeInfo = VolumeIOProfile{v, appVol.Spec.IoProfile}
 			pvcProfileMap[v.ID] = volumeInfo
-			log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s", v.Name, v.ID, v.Namespace)
-			PrintInspectVolume(v.ID)
 		}
 	}
 	return pvcProfileMap, nil
@@ -6303,13 +6311,14 @@ func updateIOPriorityOnVolumes(contexts *[]*scheduler.Context, event *EventRecor
 					log.InfoD("COS after update %v", appVol.Spec.GetCos().SimpleString())
 					if !strings.EqualFold(requiredPriority, appVol.Spec.GetCos().SimpleString()) {
 						err = fmt.Errorf("Failed to update volume %v with expected priority %v ", v.ID, requiredPriority)
+						log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", v.Name, v.ID, v.Namespace)
+						PrintInspectVolume(v.ID)
 						UpdateOutcome(event, err)
 					}
 					log.InfoD("Update IO priority on [%v] : [%v]", v.ID, requiredPriority)
 				}
 				log.InfoD("Completed update on %v", v.ID)
-				log.Debugf("Printing the volume inspect for the volume:%s ,volID:%s and namespace:%s after io prirority update", v.Name, v.ID, v.Namespace)
-				PrintInspectVolume(v.ID)
+
 			}
 		}
 		// setIoPriority if IO priority is set to High then next iteration will be run with low.
