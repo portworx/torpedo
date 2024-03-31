@@ -2101,6 +2101,7 @@ func (d *portworx) ValidatePureLocalVolumePaths() error {
 			}
 			fadaVolumes = append(fadaVolumes, v)
 		}
+		log.Infof("List of FADA Volumes [%v]", fadaVolumes)
 
 		// For each volume, check which nodes it should be on. Remove it from the list of devices on that node. Error if we can't find it.
 		for _, v := range fadaVolumes {
@@ -2111,6 +2112,7 @@ func (d *portworx) ValidatePureLocalVolumePaths() error {
 				if n.MgmtIp == attachedOn { // TODO: RWX support
 					tempVar := n
 					foundNode = &tempVar
+					log.Infof("Found Node [%v]", foundNode)
 					break
 				}
 			}
@@ -2119,9 +2121,11 @@ func (d *portworx) ValidatePureLocalVolumePaths() error {
 				continue
 			}
 
+			logrus.Infof("Current pure devices: %+v", currentDevices)
 			// Find the device for this volume
 			var device *pureLocalPathEntry
 			for _, deviceEntry := range currentDevices[foundNode.MgmtIp] {
+				log.Infof("Checking for Device entry [%v]", deviceEntry)
 				serial, err := GetSerialFromWWID(deviceEntry.WWID)
 				if err != nil {
 					return err
