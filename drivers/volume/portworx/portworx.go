@@ -2081,6 +2081,9 @@ func (d *portworx) ValidatePureLocalVolumePaths() error {
 			}
 		}
 
+		// Sleep for 1 Min before validating the Volumes
+		time.Sleep(1 * time.Minute)
+
 		allVolNames, err := d.ListAllVolumes()
 		if err != nil {
 			return err
